@@ -1,0 +1,304 @@
+# 10 — Roadmap
+
+> Phased delivery. The MVP is the **full thin slice** (M1–M5): per-workspace import → dedup → verify →
+> masked search → reveal/export, behind self-built auth + tenant-level credits + GDPR/CCPA suppression.
+> M0 is the foundation; M7+ extends with Sales Navigator, scoring, outreach/send, integrations, and AI.
+> The customer app surface is **6-destination nav** ([11](./11-information-architecture.md)) + **tiered
+> settings** ([12](./12-settings.md)); the internal staff console is a **separate `apps/admin`** with a
+> privileged, audited cross-tenant path ([13](./13-platform-admin.md),
+> [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)) and ships on a **parallel,
+> operational track** (M3–M5 basics, M12 depth). **Credits is not a milestone** — it's a Settings area +
+> top-bar pill ([11 §1](./11-information-architecture.md), [12 §4](./12-settings.md)).
+
+> **Execution overlay:** the build-level sequencing of Phase 1 (the M0 foundation + M1–M5 MVP) —
+> scaffold order, per-milestone build breakdown, critical path, and risk call-outs — is detailed in
+> [14 — Phase 1 Execution](./14-phase-1-execution.md). This doc remains the source of truth for *what*
+> lands *when*; doc 14 only sequences *how* it gets built.
+
+## Milestone overview
+
+```mermaid
+flowchart LR
+  M0[M0 Skeleton] --> M1[M1 Import & contacts core]
+  M1 --> M2[M2 Tenancy, auth, search]
+  M2 --> M3[M3 Reveal, credits & Home]
+  M3 --> M4[M4 Enrichment, verify, scoring]
+  M4 --> M5[M5 Compliance hardening = MVP]
+  M5 --> M7[M7 Sales Navigator]
+  M5 --> M8[M8 Scoring + activity + Reports]
+  M5 --> M9[M9 Outreach + send + Inbox/Templates]
+  M5 --> M10[M10 CRM sync + Public API]
+  M5 --> M11[M11 Enterprise settings: SSO/SCIM/residency]
+  M5 --> B[Beyond: ClickHouse, AI, EU residency]
+  M3 -. operational, parallel .-> PAa[Platform admin: tenants, billing, impersonation, system-health]
+  PAa --> PAb[M12 Platform admin depth: trust/abuse, feature-flags, data-mgmt/quality]
+  M5 -. program, parallel .-> TC[Trust & compliance: SOC2/ISO readiness, data-broker registration, Trust Center]
+```
+
+**Critical path:** M1 (schema + per-workspace import/dedup) → M2 (tenancy + RLS + auth) → M3
+(reveal/billing) gates the money loop. M4 layers enrichment/verification/scoring on M1's contacts. M7+
+extend the post-MVP surface and don't block the MVP. M-numbers match the modules in
+[05 §21](./05-features-modules.md#21-feature--milestone-matrix) (H10).
+
+---
+
+## M0 — Skeleton
+**Goal:** a runnable, CI-backed AWS-native foundation across **two repos**.
+- **App monorepo** (Turborepo + **Bun workspaces**, **Biome** lint/format): `apps/{web,api,workers}`
+  boot; `packages/{db,core,auth,integrations,ui,email,search,analytics,observability,config,types}`
+  scaffolded ([01 §5](./01-tech-stack.md#5-repositories-two)); strict TS.
+- **Infra repo** (Terraform; state in S3 + DynamoDB locking): network/VPC, **Aurora PostgreSQL
+  Serverless v2 + RDS Proxy**, **ElastiCache Redis**, **Typesense cluster** (ECS), **ECS Fargate**
+  services (api/web/workers), ALB, S3, SES, ECR, observability ([01 §3](./01-tech-stack.md#3-aws-topology)).
+- **Self-built auth scaffold** ([Lucia](./decisions/ADR-0010-aws-native-self-hosted-stack.md)): session
+  middleware + `packages/auth` skeleton (password/OAuth/MFA wiring stubbed) so M1/M2 build on it.
+- Drizzle wired; first migration; `bun run db:migrate`/`db:seed`.
+- **CI/CD:** GitHub Actions → lint (Biome) → typecheck → test → build images → **ECR**; merge → staging;
+  release → **CodeDeploy** blue/green ([01 §6](./01-tech-stack.md#6-environments--cicd)).
+- `docker-compose` local: Postgres 16 (+ extensions), Redis, **Typesense**, LocalStack (S3/SES), MailHog.
+- **DoD:** `bun run dev` brings up the local stack; `/health` green on `api`; CI passes and pushes an
+  image to ECR; `bun run build` clean; `terraform plan` clean for `dev`.
+
+## M1 — Import & contacts core *(load-bearing)*
+**Goal:** per-workspace import lands deduped contacts/accounts — **no global golden record**.
+- Schema: `accounts`, `contacts`, `source_imports` (jsonb `raw_data` provenance), plus the dedup
+  unique indexes `(workspace_id, email_blind_index)` / `(workspace_id, linkedin_public_id)` /
+  `(workspace_id, sales_nav_lead_id)` (see [03](./03-database-design.md),
+  [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
+- `packages/core` import pipeline: **CSV/XLSX + manual + first enrichment provider** → column-map →
+  canonical shape → **per-workspace dedup on import** (match-within-workspace, no cross-source merge,
+  no identity resolution) → insert into the importing workspace only. Runs on the **imports** worker.
+- Each imported contact writes one `source_imports` row (`source_name` ∈
+  `apollo|zoominfo|linkedin|sales_navigator|hubspot|salesforce|clearbit|manual`, full `raw_data`,
+  `content_hash`). **No field-level lineage, no replay** ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
+- **DoD:** import a fixture CSV with deliberate duplicates **into one workspace** → one contact per
+  identity (unique index enforced), each with ≥1 `source_imports` row; the importer sees a new-vs-matched
+  summary; the **same** payload imported into a **second** workspace creates a **separate** copy.
+
+## M2 — Tenancy, auth & search
+**Goal:** users sign up, get a workspace, log in, and search their masked book.
+- **Self-built auth on Lucia** ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)):
+  email/password (Argon2id) + OAuth (Google/Microsoft via `arctic`) + **MFA (TOTP)**; SAML/OIDC seam
+  (`tenant_sso_configs`). Tables `user_sessions`, `user_oauth_accounts`, `user_mfa`,
+  `user_password_resets` ([03 §4](./03-database-design.md#4-tenancy--auth)).
+- Tenancy tree: `tenants`, `users` (incl. `is_tenant_owner`), `workspaces`, `workspace_members`
+  (roles `owner`/`admin`/`member`/`viewer`); `api_keys` seam. **`provision_new_signup(...)`** creates
+  tenant → owner user → default workspace → owner membership → audit row in one transaction
+  ([03 §10](./03-database-design.md#10-triggers--db-side-logic)).
+- **RLS via GUC:** every workspace-scoped query runs under `SET LOCAL app.current_workspace_id`
+  (+ `app.current_tenant_id`) on a non-`BYPASSRLS` role, GUC reset per RDS-Proxy checkout; the app sets
+  the same context in AsyncLocalStorage ([03 §9](./03-database-design.md#9-row-level-security)).
+- `packages/search` (`SearchPort`) over **Typesense self-hosted from day one**, fed by Aurora
+  logical-replication CDC ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)); faceted
+  **masked** search, workspace-scoped. App shell + Search/Results + basic lists/saved searches +
+  Admin/Settings shell ([04](./04-ui-ux-design.md)).
+- **DoD:** sign up → tenant + default workspace provisioned → log in (with MFA) → search → see **masked**
+  results; cross-workspace isolation verified at the **DB** layer (RLS denies foreign `workspace_id`);
+  audit entries written. **Auth-security gates (risk #5/#9):** password hashing is Argon2id; session
+  rotation + password-reset flow verified; signup **velocity / disposable-domain** limits trip;
+  `api_keys` stored **hashed + scoped**. *(Full pen-test is a global GA gate at M5.)*
+
+## M3 — Reveal & credits *(money loop)*
+**Goal:** buy credits, reveal a contact, export.
+- **Tenant credit counter:** `tenants.reveal_credit_balance` (`CHECK >= 0`) — **not** an append-only
+  ledger ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)).
+- **Per-workspace first-reveal** reveal transaction in `packages/core`, identical to
+  [07 §3](./07-billing-credits.md): `BEGIN` → `assertNotSuppressed(contact, workspace)` (in-tx,
+  unbypassable) → `INSERT contact_reveals ON CONFLICT (workspace_id, contact_id, reveal_type) DO NOTHING`
+  → if present, return owned fields and **charge 0** → else
+  `SELECT reveal_credit_balance ... FOR UPDATE`; if `< cost`, `ROLLBACK` (`INSUFFICIENT_CREDITS`); else
+  decrement; `COMMIT`; audit. Clients send an **`Idempotency-Key`** header. Pricing varies by
+  `reveal_type` and is a **placeholder** — reference [07 §1](./07-billing-credits.md), never hardcoded.
+- **Stripe top-ups:** credit-pack checkout grants credits to the tenant counter;
+  `purchases.stripe_event_id` unique → idempotent grants. Usage history from `contact_reveals` +
+  `purchases`.
+- **Suppression gate** wired live into the reveal tx; Record-detail + reveal UI; **CSV export** of
+  **owned** revealed fields (S3 signed URLs), suppression-checked + audited.
+- **Home dashboard** (first widgets): credit balance/burn, recent reveals, quick actions
+  ([11 §4.1](./11-information-architecture.md)); more widgets fill in as later surfaces land.
+- **Commercial policy** ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md),
+  [07 §1A](./07-billing-credits.md)): transparent self-serve pricing, no auto-renew traps, credits don't expire,
+  and an **account-closure export-on-exit** (no data-destroy on churn).
+- **DoD:** top up via Stripe CLI → reveal a contact once (free re-reveal in the same workspace; charged
+  again in another workspace) → export; double-webhook grants credits **once**; concurrent reveals never
+  double-charge; a reveal below balance returns `INSUFFICIENT_CREDITS` and `balance` is unchanged.
+  **Abuse gate (risk #9):** a fresh tenant is held to **payment-before-reveal** beyond the signup bonus.
+
+## M4 — Enrichment, verification & scoring
+**Goal:** thin records become rich, verified, scored records.
+- `packages/integrations` enrichment: provider adapters for **Apollo, ZoomInfo, Clearbit**, cache-first,
+  Redis rate limits + circuit breakers + cost budgets; optional **`provider_calls`** (cost/cache).
+  Writes **per-workspace** copies — **no golden-merge / confidence-waterfall** ([06](./06-enrichment-engine.md),
+  [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
+- **Email verification on reveal** + **phone validation** feeding `email_status`
+  (`unverified|valid|risky|invalid|catch_all|unknown`)/`phone_status`. Verification **drives the charge**
+  ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)): `valid` charges;
+  `invalid`/`catch_all`/`unknown` → **0 credits**; `risky` → charged-but-flagged.
+- **Lead scoring** ([ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)): versioned `scores`
+  (`icp_fit`/`intent_score`/`engagement_score`/`composite_score` 0–100 + `score_breakdown` jsonb,
+  append per re-score) + **`intent_signals`** (weighted `signal_type` ∈
+  `job_change|new_hire|funding_round|tech_install|web_visit|content_engagement|keyword_search|`
+  `linkedin_activity|sales_nav_view`). `contacts.priority_score` is a **cache** of the latest composite
+  via an `AFTER INSERT ON scores` trigger. Runs on the **enrichment**/**scoring** workers.
+- **DoD:** enrich a thin contact via a provider → fields land per-workspace with a `source_imports` row +
+  recorded cost; cache hit on repeat; reveal still charges **exactly once**; verify-on-reveal sets
+  `email_status` **and the charge follows the result** (an `invalid` reveal charges **0**,
+  [ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)); a re-score appends a `scores` row
+  and `priority_score` reflects the new composite.
+  Provider contract tests on recorded fixtures (no live spend in CI). **Lead score (quality) stays
+  distinct from `email_status` (correctness)** — never conflated.
+
+## M5 — Compliance hardening = **MVP complete**
+**Goal:** the full thin slice, launch-grade on privacy.
+- **Suppression management UI** (`suppression_list` scope ∈ `global|tenant|workspace`); the gate already
+  guards reveals (M3) and will guard sending (M9).
+- **`consent_records`**; **DSAR** intake → **access** report + **delete** workflow that **fans out**
+  across **every per-workspace copy** + `source_imports` + `contact_reveals` + `activities`, then runs a
+  **verification scan** ([08](./08-compliance.md)). DSAR fan-out across N copies is **elevated risk** (see
+  register).
+- Full audit coverage; retention jobs; PII encryption finalized; compliance launch checklist green
+  (incl. **privacy-counsel review**).
+- **DoD:** Playwright e2e of the entire loop (sign up → buy credits → search → reveal → export); a DSAR
+  delete removes the subject across **all** workspace copies + imports + reveals + caches (verification
+  passes); a suppressed contact never reveals even with credits.
+
+## M7 — Sales Navigator integration
+**Goal:** capture LinkedIn / Sales Navigator entities into a workspace.
+- `sales_nav_links` with `link_type` ∈
+  `profile|account|saved_search|lead_list|account_list|inmail_thread`; import leads/accounts (source
+  `sales_navigator`/`linkedin`), deduped on `sales_nav_lead_id` per workspace ([05 §5](./05-features-modules.md)).
+- **ToS caution:** automated LinkedIn/SN actions carry account-risk; **human-in-the-loop** capture is the
+  default ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)).
+- **DoD:** connect → capture a profile/lead-list → leads land in the workspace deduped on
+  `sales_nav_lead_id` with `source_imports` rows; assisted (non-automated) flow by default.
+
+## M8 — Lead scoring depth + activity timeline
+**Goal:** prioritize prospects and see every interaction.
+- Scoring/intent-signal surfacing in UI (model shipped in M4); re-score jobs on the **scoring** worker
+  ([ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)). **Intent signals are sourced** from **Bombora/G2/6sense**
+  feeds (`intent_signals.signal_source`) and **technographic** providers (BuiltWith/HG Insights) ([06 §2](./06-enrichment-engine.md)).
+- **Activity timeline:** `activities` (monthly-partitioned) with `activity_type` ∈
+  `email_sent|email_opened|email_clicked|email_replied|call_made|call_connected|linkedin_message|`
+  `linkedin_connected|sales_nav_inmail|meeting_held|note_added` over `channel` ∈
+  `email|phone|linkedin|sales_navigator|in-person`; `contacts.last_activity_at` maintained.
+- **Reports / analytics** ([11 §4.5](./11-information-architecture.md)): pipeline/funnel, credit usage,
+  sending & deliverability, team activity, **Data Health**, and lead-score views — ClickHouse/PostHog-backed.
+- **DoD:** a contact shows a sorted timeline of logged + system-written activities; manual note/call/
+  meeting logging works; `priority_score` and intent signals render on detail; the Reports dashboards
+  render with date/member filters and CSV export.
+
+## M9 — Outreach sequencing + send engine
+**Goal:** LeadWolf **enrolls** contacts and **sends** ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)).
+- `outreach_sequences` → `outreach_steps` (ordered: channel, delay, template); `outreach_log`
+  (enrollment + status); each send/open/click/reply lands in `activities`. `contacts.outreach_status`
+  advances (`new`→`in_sequence`→`replied`/`meeting_booked`/`disqualified`/`nurture`/`unsubscribed`).
+  Runs on the **outreach delivery** worker.
+- **Flow:** draft (AI or manual) → **review** → **send**. AI drafting **feeds the send engine** (reverses
+  the old "no email send at MVP / draft-only" stance).
+- **Templates** (library, snippets, **merge fields**, AI draft, deliverability lint) and the **Inbox +
+  Tasks** surface (unified replies + reminders) ship with the send engine ([11 §4.3/§4.4](./11-information-architecture.md)).
+- **Suppression/DNC gates sending**, suppression-checked before each send ([08](./08-compliance.md)).
+- **Sending compliance is first-class:** CAN-SPAM + GDPR/ePrivacy consent + unsubscribe +
+  physical-address footer; **deliverability** (sending domains, DKIM/SPF/DMARC, warm-up,
+  bounce/complaint → suppression). Email via **SES** (SNS→SQS feedback). LinkedIn/SN automated send
+  carries **ToS risk** — human-in-the-loop default.
+- **DoD:** enroll a revealed contact in a 2-step sequence → review → send via SES → open/click/reply
+  recorded in `activities`; every send passes suppression + appends an unsubscribe link + footer; a
+  bounce/complaint auto-suppresses the address **and credits back the original reveal if within the guarantee
+  window** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)). **Deliverability gate
+  (risk #6):** the sending domain is authenticated (**DKIM/SPF/DMARC** aligned), a **warm-up** schedule is active
+  before volume sends, and per-domain **reputation thresholds throttle/pause** sending ([08 §6](./08-compliance.md)).
+
+## M10 — CRM sync + Public REST API
+**Goal:** push data out and open the platform.
+- **CRM sync** behind `IntegrationProvider` (`packages/integrations`): **HubSpot**, **Salesforce**, then
+  **Pipedrive** — OAuth connect, field mapping, push revealed contacts/accounts/lists, sync log +
+  conflict handling; workspace-scoped connections. Runs on the **CRM sync** worker. *(Build approach open:
+  custom connectors vs a **unified integration API** like Merge.dev — [09 §11 Q5](./09-api-design.md).)*
+- **Public REST API** (`@hono/zod-openapi`): API-key-authenticated, tenant-scoped (hashed/scoped
+  `api_keys`) search/reveal/pull; reveal metered against the **tenant** counter with `Idempotency-Key`
+  honored; rate limits, usage metering, OpenAPI docs ([09](./09-api-design.md)).
+- **DoD:** connect HubSpot → push a list of revealed contacts (re-push is idempotent); an API key reveals
+  a contact metered against the tenant counter, honoring `Idempotency-Key`; OpenAPI spec published.
+
+## M11 — Enterprise settings
+**Goal:** unlock the Enterprise tier controls ([12 §4](./12-settings.md)).
+- **SSO** (SAML/OIDC via `tenant_sso_configs`) + **enforce-SSO**; **SCIM** provisioning; **IP allowlist**;
+  session/MFA/password policy; **data-residency** controls; **audit-log export**.
+- **DoD:** an enterprise tenant enables SAML SSO + SCIM; non-SSO logins are blocked when enforced; admin
+  exports the audit log; the IP allowlist denies out-of-range access.
+
+## Platform admin — *parallel operational track* (`apps/admin`)
+**Goal:** internal staff operate the platform ([13](./13-platform-admin.md),
+[ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)) — a **separate app** on its
+own track (ops need basics during M3–M5; depth ~M12), never blocking the customer MVP.
+- **Early (≈M3–M5):** tenants directory + suspend / credit-grant; global user admin; **impersonation**
+  (time-boxed/banner/audited); billing oversight; **system health** (queues/DLQ/CDC/backups);
+  immutable `platform_audit_log`; staff SSO+MFA+IP-allowlist+JIT.
+- **Depth (≈M12):** trust/abuse + deliverability dashboards; **feature flags** (global + per-tenant);
+  provider configs; **data management & quality** (DQ scorecards, bulk re-verify/re-enrich on AWS Batch,
+  DB-ops); content/comms.
+- **DoD (early):** a `super_admin` (SSO+MFA) suspends a tenant and grants credits — both audited to
+  `platform_audit_log`; a `support` user starts a time-boxed, banner-flagged impersonation; system-health
+  shows queue depth + CDC lag; the customer app/API cannot reach `/admin/*`.
+
+## Trust & compliance program — *parallel track* ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md))
+**Goal:** make the compliance differentiator **verifiable** (turn the wedge from promise to moat) and satisfy
+data-broker law — the remediation for the analysis' execution-risk drag ([15 §2](./15-gap-remediation.md)).
+- **Readiness (≈M5):** map **SOC 2 Type II / ISO 27001** controls to the existing auth/RLS/audit/encryption
+  design ([08 §15](./08-compliance.md)); publish the **Trust Center** (sub-processor list, DPA, security
+  whitepaper, cert status) in tenant compliance settings ([12 §4](./12-settings.md)).
+- **GA gate:** **US data-broker registration** (California DROP/Delete Act + applicable states) filed before GA
+  in those markets ([13 §3](./13-platform-admin.md)); from **2026-08-01**, **process DROP deletion requests**
+  (poll ≥ every 45 days) via the DSAR fan-out ([08 §4.4](./08-compliance.md#44-california-drop-data-broker-deletion-platform)).
+- **Post-MVP:** external SOC 2 / ISO audits; expand registrations; align with the EU residency posture
+  ([08 §8](./08-compliance.md)).
+- **DoD (readiness):** controls documented + mapped; Trust Center live; data-broker registration filed where
+  required; privacy-counsel sign-off ([08 §12](./08-compliance.md)).
+
+## Beyond (prioritized backlog)
+- **AI:** natural-language search (NL → validated structured query, never raw SQL) + AI outreach drafting
+  feeding the send engine (M9+); **agentic per-account research** (verify-before-write) as a 2026
+  differentiator; optional `pgvector` semantic ranking. Recommended provider: Anthropic Claude
+  ([05 §16](./05-features-modules.md)).
+- **ClickHouse event analytics:** self-hosted, fed by CDC (Debezium) once an event table (e.g.
+  `activities`) exceeds ~50M rows ([01 §1](./01-tech-stack.md#1-at-a-glance),
+  [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)).
+- **Alerts:** new-match / new-signal notifications on saved searches and tracked contacts.
+- **EU data-residency** region split (region-tagged from day one; full split when demand warrants).
+- **Seat-based subscriptions** atop credits; periodic re-verification at scale; tamper-evident audit log.
+
+---
+
+## Risk register (carried across milestones)
+
+| # | Risk | Impact | Mitigation | Owner milestone |
+|---|---|---|---|---|
+| 1 | Poor **per-workspace dedup** quality (no global identity) lets duplicate contacts coexist in one workspace | Med (UX + wasted reveals) | Match-on-import on `email_blind_index`/`linkedin_public_id`/`sales_nav_lead_id`; unique `(workspace_id, …)` indexes make exact dupes impossible; `content_hash` for identical payloads; importer new-vs-matched summary; **Splink probabilistic record linkage for the fuzzy tail** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md), [06 §9](./06-enrichment-engine.md)) | M1 (exact) / M4–M8 (Splink) |
+| 2 | **Double-charge** — a bare tenant counter lacks a ledger's reconciliation/refund history | High (trust + money) | `FOR UPDATE` on `tenants.reveal_credit_balance` + `CHECK >= 0` + unique `(workspace_id, contact_id, reveal_type)` + client `Idempotency-Key` (the required mitigations per [ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)); revisit append-only ledger if reconciliation gaps appear | M3 |
+| 3 | **Incomplete DSAR deletion** — fan-out across **N per-workspace copies** is elevated vs a single golden record | High (legal) | Single delete job that fans out across all workspace `contacts` + `source_imports` + `contact_reveals` + `activities` + caches; verification scan; auto-suppression; audit proof ([08 §4](./08-compliance.md)) | M5 |
+| 4 | Enrichment cost blowout / provider outage | Med | Cache-first, Redis rate limits, circuit breakers, daily cost budgets, charge-on-reveal; `provider_calls` cost tracking | M4 |
+| 5 | **Self-built auth** security defects (session/MFA/OAuth/SAML) | High | Lucia primitives (not hand-rolled crypto), Argon2id, rotation + reset flows, MFA, credential-stuffing/velocity monitoring, pen-test before GA, scoped/hashed `api_keys` ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)) | M2 |
+| 6 | **Sending compliance / deliverability** failure (spam complaints, blocklisting, CAN-SPAM/GDPR breach) | High (legal + domain reputation) | Suppression gate before every send; CAN-SPAM + GDPR/ePrivacy consent + unsubscribe + physical-address footer; DKIM/SPF/DMARC + warm-up; bounce/complaint → auto-suppression via SES SNS→SQS feedback | M9 |
+| 7 | **LinkedIn / Sales Navigator ToS** exposure from automated actions | High (account bans) | Human-in-the-loop (assisted) capture/send as default; no headless automation of LinkedIn/SN; rate-respecting; per-feature legal review ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)) | M7 / M9 |
+| 8 | Search engine strain / drift between Aurora and Typesense | Med | `SearchPort` abstraction; CDC search-sync worker with lag monitoring + reindex; defined scale headroom (Typesense from day one) | M2 |
+| 9 | Self-serve abuse/fraud | Med | Signup verification, disposable-domain blocking, velocity limits, payment-before-reveal for fresh tenants, Stripe Radar | M2 / M3 |
+| 10 | **Impersonation misuse / over-broad staff access** | High (privacy + trust) | Time-boxed + banner-flagged + reason-logged impersonation; least-privilege staff RBAC + JIT elevation; immutable `platform_audit_log`; periodic access reviews; customer-visibility/consent policy ([ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md), [08 §14](./08-compliance.md)) | Platform admin |
+| 11 | **Privileged-role blast radius** — the RLS-bypass cross-tenant role is a high-value target | High | Dedicated role used **only** by `apps/admin`, distinct from the app's non-`BYPASSRLS` role; staff SSO+MFA + IP allowlist; secrets in Secrets Manager + rotation; every access audited | Platform admin |
+| 12 | **Webhook delivery** failures / SSRF / secret leakage | Med | Signed payloads + delivery log + retries/backoff; egress controls/allowlist; per-tenant signing-secret rotation | M10 |
+| 13 | **Incumbent feature absorption** — CRMs/Clay fold enrichment + sequencing + compliance into the seat price (the market analysis' sole *Critical* risk) | **Critical** (existential) | Wedge discipline (stay narrow on honest + compliant + all-in-one); **CRM-neutral open API** ([09 §8](./09-api-design.md), M10); certs as a moat ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)); fair-billing wedge ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)) | Strategic / M10 |
+| 14 | **No proprietary data asset** — inherits providers' accuracy ceiling; can't win raw accuracy outright | High | Verify-on-reveal + **charge-only-for-`valid` + credit-back** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)); multi-provider waterfall; optional dedicated verification provider ([06 §11](./06-enrichment-engine.md)) | M4 |
+| 15 | **Compliance wedge unproven / cert-dependent / US-only** — the differentiator is a promise until attested | High | **Trust & certification program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)): SOC 2 / ISO readiness at M5, **data-broker registration a GA gate**, public Trust Center ([08 §15](./08-compliance.md)) | M5 / Trust track |
+| 16 | **Placeholder pricing unvalidated** vs real willingness-to-pay | Med | Transparent no-lock-in policy ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)); validate prices in early access before GA; non-expiring credits reduce commitment risk | M3 |
+
+## Definition of done (global)
+A milestone is done when: code merged + reviewed, tests green in CI (unit + integration; e2e where
+applicable), migrations applied to staging, the milestone's DoD demo passes, docs updated, and (for
+M5+) the relevant compliance checklist items are satisfied.
+
+## Sequencing notes
+- **Estimates intentionally omitted** until team size/pacing is set (an open item). The *order* and the
+  DoD gates are the commitment; durations get attached when we staff it.
+- Each milestone ends in a runnable, demoable increment — no big-bang integration.
+- M-numbers are kept in lockstep with [05 §21](./05-features-modules.md#21-feature--milestone-matrix);
+  if a module's milestone moves, update both.

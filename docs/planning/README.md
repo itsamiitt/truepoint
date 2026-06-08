@@ -1,0 +1,70 @@
+# LeadWolf — Planning Workspace
+
+This folder holds the complete design for **LeadWolf**, a **per-workspace multi-tenant prospecting
+CRM** that lets sales teams **import, reveal, score, sequence, and send** to their own contacts and
+accounts, on an **AWS-native self-hosted** stack.
+
+> **Status:** Planning. No application code exists yet. These documents are the contract we agree on
+> *before* implementation. Read them in order; each is self-contained but cross-links the others.
+
+## How to read this
+
+| # | Document | What it answers |
+|---|---|---|
+| 00 | [Overview](./00-overview.md) | What are we building, for whom, and why? Scope, personas, glossary, decision log. |
+| 01 | [Tech Stack](./01-tech-stack.md) | What technologies, and how do they run on AWS? |
+| 02 | [Architecture](./02-architecture.md) | How is the codebase and runtime organized? Services, data flow, tenancy. |
+| 03 | [Database Design](./03-database-design.md) | The clean, smart schema: tenant/workspace tenancy, per-workspace entities, RLS, indexing, partitioning. |
+| 04 | [UI/UX Design](./04-ui-ux-design.md) | The light/monochrome design system, IA, and key screens. |
+| 05 | [Features & Modules](./05-features-modules.md) | Module-by-module functional specs. |
+| 06 | [Enrichment Engine](./06-enrichment-engine.md) | Per-workspace provider enrichment, verification, lead-scoring, cost. |
+| 07 | [Billing & Credits](./07-billing-credits.md) | Tenant credit counter, per-workspace reveal, Stripe top-ups, entitlements. |
+| 08 | [Compliance](./08-compliance.md) | GDPR/CCPA, consent, suppression, DSAR, audit, retention. |
+| 09 | [API Design](./09-api-design.md) | REST resource model, auth, idempotency, public-API seams. |
+| 10 | [Roadmap](./10-roadmap.md) | Phased milestones (M0–M5 MVP + M7–M10 beyond), critical path, risks. |
+| 11 | [Information Architecture](./11-information-architecture.md) | The customer-app surface: 6-destination single-page nav + per-surface features. |
+| 12 | [Settings](./12-settings.md) | Tiered settings: user · workspace · tenant · developer (Billing & Credits here). |
+| 13 | [Platform Admin](./13-platform-admin.md) | Internal super-admin console: tenants, billing, impersonation, abuse, data-quality. |
+| 14 | [Phase 1 Execution](./14-phase-1-execution.md) | The build plan: how the M0 foundation + M1–M5 MVP get sequenced into a runnable app — scaffold order, per-milestone DoD, critical path, risks. |
+| 15 | [Gap Remediation](./15-gap-remediation.md) | How the market-gap analysis maps to corpus decisions: 16 gaps + hidden opportunities + recommendations → remediation, ADR, milestone, status. |
+| 16 | [Code Organization](./16-code-organization.md) | How source code is laid out on disk: app/package internals, the dependency graph, barrel strategy, naming, file-size, testing, config — the engineering conventions. |
+| — | [Brand Identity](./brand-identity.md) | Name/meaning, positioning, voice, logo, color, type — the LeadWolf brand system. |
+| — | [Decisions (ADRs)](./decisions/) | The *why* behind load-bearing choices. |
+
+## The one-paragraph pitch
+
+Sales teams waste time on stale, incomplete contact data scattered across tools. LeadWolf gives each
+team a **workspace** where they **import** contacts and accounts (CSV/CRM, Sales Navigator) and
+**enrich** them through external providers (Apollo, ZoomInfo, Clearbit). Each workspace owns its
+own copies — no shared golden record. Users spend **tenant credits** to **reveal** a contact's
+verified email + phone (per-workspace, first-reveal-wins), **score** prospects by ICP fit and intent,
+then **sequence** and **send** outreach from the built-in engine. **Suppression/DNC and GDPR/CCPA
+compliance** (consent, unsubscribe, DSAR) gate both reveals and sends — built into the core, not
+bolted on.
+
+## Locked decisions (summary)
+
+**Hono on Bun** (tRPC + REST) · Turborepo + Bun workspaces · Next.js 15 · **Drizzle + Aurora
+PostgreSQL Serverless v2 + RDS Proxy** · ElastiCache Redis + BullMQ · **Typesense (day one)** ·
+**Lucia auth (self-built)** · **shadcn/ui + Tailwind v4**, clean light theme · **per-workspace
+tenancy** ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)) · **tenant credit
+counter** ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)) · **outreach
+send engine** ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)) · GDPR+CCPA from
+day one · **AWS-native self-hosted**
+([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)) · **transparent no-lock-in billing**
+([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)) ·
+**charge-only-for-verified-data + credit-back**
+([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)) · **trust & certification
+program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)) · **entity resolution via
+Splink** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)).
+
+See [00-overview.md](./00-overview.md#7-decision-log) for the full decision log with rationale links,
+and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md),
+[ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md),
+[ADR-0008](./decisions/ADR-0008-lead-scoring-model.md),
+[ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md),
+[ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md),
+[ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md),
+[ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md),
+[ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), and
+[ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md).

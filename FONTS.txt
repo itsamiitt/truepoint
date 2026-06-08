@@ -1,0 +1,38 @@
+TRUEPOINT — TYPEFACES
+=====================
+
+PRIMARY · Geist
+  Used for: the wordmark, all headings and body copy.
+  Wordmark weight shift: "True" = Regular (400), "Point" = ExtraBold (800).
+  Weights in use: 300, 400, 500, 600, 700, 800.
+
+MONOSPACE · Geist Mono
+  Used for: labels, scores, metadata, eyebrows ("VERIFIED · SCORE 94").
+  Weights in use: 400, 500.
+
+Hierarchy comes from WEIGHT and SIZE only — never color.
+
+------------------------------------------------------------------
+GETTING THE FONTS
+------------------------------------------------------------------
+Geist and Geist Mono are free/open-source (SIL Open Font License 1.1),
+designed by Vercel.
+
+• Download (TTF/OTF/WOFF2 + license):
+    https://github.com/vercel/geist-font/releases
+• Google Fonts (web):
+    https://fonts.google.com/specimen/Geist
+    https://fonts.google.com/specimen/Geist+Mono
+
+WEB EMBED (what these files use)
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+CSS STACKS
+  --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+Note: the lockup SVGs reference Geist via web-font import so they render
+in a browser. For print or third-party handoff, convert the wordmark
+text to outlines first (Illustrator: Type > Create Outlines).

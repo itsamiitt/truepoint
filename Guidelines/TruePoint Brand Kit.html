@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TruePoint — Brand Kit &amp; Assets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png" />
+<meta name="theme-color" content="#2563C9" />
+<style>
+  :root {
+    --ink:#111827; --ink-2:#374151; --ink-3:#6B7280; --ink-4:#9CA3AF;
+    --surface:#fff; --surface-2:#F9FAFB; --surface-3:#F4F5F7;
+    --hairline:#F0F0F0; --hairline-2:#E5E7EB; --twilight:#0C0E1A; --twilight-2:#14182B;
+    --acc:#2563C9; --acc-700:#1E4FA3; --acc-50:#E9F0FC; --acc-dark:#5B8DEF;
+    --btn:#111827; --btn-700:#0B1220;
+    --sans:"Geist",-apple-system,sans-serif; --mono:"Geist Mono",monospace;
+    --maxw:1080px; --pad:clamp(24px,5vw,64px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;}
+  body{font-family:var(--sans);color:var(--ink);background:var(--surface);line-height:1.5;}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding-left:var(--pad);padding-right:var(--pad);}
+
+  .mark{display:block;color:var(--ink);--mark-accent:var(--acc);}
+  .mark.rev{color:#fff;--mark-accent:var(--acc-dark);}
+
+  /* top bar */
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.85);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--hairline);}
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;height:64px;}
+  .nav-mark{display:flex;align-items:center;gap:11px;}
+  .nav-mark .mark{width:24px;height:24px;}
+  .nav-word{font-size:17px;letter-spacing:-.02em;}
+  .nav-word .t1{font-weight:400;} .nav-word .t2{font-weight:700;}
+  .nav-tag{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-4);border:1px solid var(--hairline-2);border-radius:999px;padding:5px 11px;}
+
+  /* hero */
+  .khead{padding:clamp(56px,9vw,104px) 0 clamp(40px,6vw,64px);}
+  .khead .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);}
+  .khead h1{font-size:clamp(34px,6vw,60px);font-weight:600;letter-spacing:-.03em;margin:18px 0 16px;line-height:1.02;}
+  .khead p{font-size:clamp(16px,1.6vw,19px);color:var(--ink-3);max-width:58ch;line-height:1.55;}
+  .khead .dlall{margin-top:30px;}
+
+  .btn{font-family:var(--sans);font-size:14px;font-weight:500;border-radius:10px;padding:11px 18px;border:1px solid var(--hairline-2);background:#fff;color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:9px;transition:box-shadow .15s,transform .15s;}
+  .btn:hover{box-shadow:0 1px 3px rgba(17,24,39,.12);}
+  .btn.primary{background:var(--btn);border-color:var(--btn);color:#fff;}
+  .btn.primary:hover{background:var(--btn-700);border-color:var(--btn-700);}
+  .btn svg{width:16px;height:16px;}
+
+  section{border-top:1px solid var(--hairline);}
+  .band{padding:clamp(48px,7vw,80px) 0;}
+  .sec-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:30px;}
+  .sec-head .n{font-family:var(--mono);font-size:12px;color:var(--ink-3);letter-spacing:.1em;}
+  .sec-head h2{font-size:clamp(24px,3.4vw,34px);font-weight:600;letter-spacing:-.02em;}
+  .sec-head .s{font-size:15px;color:var(--ink-3);}
+
+  /* asset card */
+  .grid{display:grid;gap:20px;}
+  .g2{grid-template-columns:1fr 1fr;} .g3{grid-template-columns:repeat(3,1fr);} .g4{grid-template-columns:repeat(4,1fr);}
+  @media(max-width:860px){.g3,.g4{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:560px){.g2,.g3,.g4{grid-template-columns:1fr;}}
+
+  .acard{border:1px solid var(--hairline-2);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;}
+  .acard .stage{flex:1;min-height:150px;display:flex;align-items:center;justify-content:center;padding:28px;}
+  .stage.light{background:radial-gradient(120% 120% at 50% 0%,#fff,var(--surface-2));}
+  .stage.dark{background:var(--twilight);}
+  .stage.check{background-color:#fff;background-image:linear-gradient(45deg,#f1f1f3 25%,transparent 25%),linear-gradient(-45deg,#f1f1f3 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#f1f1f3 75%),linear-gradient(-45deg,transparent 75%,#f1f1f3 75%);background-size:18px 18px;background-position:0 0,0 9px,9px -9px,-9px 0;}
+  .acard .foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;border-top:1px solid var(--hairline);background:#fff;}
+  .acard .meta .fn{font-size:13.5px;font-weight:600;}
+  .acard .meta .fmt{font-family:var(--mono);font-size:11px;color:var(--ink-4);margin-top:3px;letter-spacing:.04em;}
+  .dl{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);border:1px solid var(--acc-50);background:var(--acc-50);border-radius:8px;padding:7px 11px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+  .dl:hover{background:var(--acc);color:#fff;border-color:var(--acc);}
+  .dl svg{width:13px;height:13px;}
+
+  .lockup-live{display:flex;align-items:center;gap:16px;}
+  .lockup-live .mark{width:54px;height:54px;}
+  .lockup-live .wm{font-size:38px;letter-spacing:-.04em;}
+  .lockup-live .wm .t1{font-weight:400;} .lockup-live .wm .t2{font-weight:800;}
+  .lockup-live.rev .wm{color:#fff;}
+
+  .mark-prev{width:96px;height:96px;}
+
+  /* context mocks */
+  .mocks{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;}
+  @media(max-width:760px){.mocks{grid-template-columns:1fr;}}
+  .mock{border:1px solid var(--hairline-2);border-radius:16px;overflow:hidden;}
+  .mock .ml{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-4);padding:13px 18px;border-bottom:1px solid var(--hairline);}
+  .mock .mb{padding:26px;display:flex;align-items:center;justify-content:center;}
+
+  /* browser tab mock */
+  .browser{width:100%;max-width:430px;border:1px solid var(--hairline-2);border-radius:12px 12px 10px 10px;overflow:hidden;box-shadow:0 8px 30px rgba(17,24,39,.08);}
+  .browser .bar{background:var(--surface-3);padding:9px 12px 0;display:flex;gap:7px;align-items:flex-end;}
+  .tab{background:#fff;border-radius:9px 9px 0 0;padding:9px 13px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);max-width:200px;box-shadow:0 -1px 2px rgba(0,0,0,.04);}
+  .tab img{width:16px;height:16px;}
+  .tab .x{margin-left:6px;color:var(--ink-4);font-size:14px;}
+  .browser .addr{background:#fff;padding:10px 14px;border-top:1px solid var(--hairline);}
+  .browser .url{background:var(--surface-3);border-radius:8px;padding:7px 12px;font-size:12.5px;color:var(--ink-3);font-family:var(--mono);}
+  .browser .page{height:60px;background:#fff;border-top:1px solid var(--hairline);}
+
+  /* phone home mock */
+  .phone{width:200px;border-radius:30px;padding:14px;background:linear-gradient(170deg,#1a1f3a,#0c0e1a 60%);box-shadow:0 14px 40px rgba(12,14,26,.4);position:relative;}
+  .phone::before{content:"";position:absolute;top:14px;left:50%;transform:translateX(-50%);width:54px;height:5px;border-radius:99px;background:rgba(255,255,255,.25);}
+  .phone .apps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px 14px;margin-top:30px;}
+  .app{display:flex;flex-direction:column;align-items:center;gap:7px;}
+  .app .ic{width:48px;height:48px;border-radius:12px;background-size:cover;box-shadow:0 3px 8px rgba(0,0,0,.3);}
+  .app .ph{background:rgba(255,255,255,.12);}
+  .app .lab{font-size:9.5px;color:rgba(255,255,255,.85);letter-spacing:.01em;}
+  .app .lab.dim{color:rgba(255,255,255,.4);}
+
+  .avatars{display:flex;gap:16px;align-items:center;flex-wrap:wrap;}
+  .av{border-radius:50%;background-size:cover;box-shadow:0 2px 6px rgba(17,24,39,.12);}
+
+  /* code */
+  .code{background:var(--twilight);border-radius:14px;padding:24px 26px;overflow:auto;margin-top:8px;}
+  .code pre{font-family:var(--mono);font-size:13px;line-height:1.7;color:#C9CEDA;white-space:pre;}
+  .code .t{color:#7C8BB0;} .code .a{color:#A99BF0;} .code .s{color:#9DD6B6;}
+
+  /* footer */
+  .foot{background:var(--twilight);color:rgba(229,231,235,.7);border-top:none;}
+  .foot .wrap{padding:56px 0;}
+  .foot .ft{display:flex;align-items:center;gap:13px;}
+  .foot .ft .mark{width:34px;height:34px;}
+  .foot .ft .w{font-size:24px;color:#fff;letter-spacing:-.03em;}
+  .foot .ft .w .t1{font-weight:400;} .foot .ft .w .t2{font-weight:800;}
+  .foot .fine{margin-top:30px;font-family:var(--mono);font-size:11.5px;color:rgba(229,231,235,.4);letter-spacing:.03em;}
+</style>
+</head>
+<body>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="tp-mark" viewBox="0 0 100 100">
+      <path d="M22 43 L50 28 L78 43" fill="none" stroke="var(--mark-accent,currentColor)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M22 60 L50 45 L78 60" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M22 77 L50 62 L78 77" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+  </svg>
+
+  <div class="topbar">
+    <div class="wrap">
+      <div class="nav-mark">
+        <svg class="mark" viewBox="0 0 100 100"><path d="M22 43 L50 28 L78 43" fill="none" stroke="var(--mark-accent, currentColor)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 60 L50 45 L78 60" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 77 L50 62 L78 77" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span class="nav-word"><span class="t1">True</span><span class="t2">Point</span></span>
+      </div>
+      <span class="nav-tag">Brand Kit · v1.0</span>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="khead">
+      <div class="eyebrow">Assets &amp; Downloads</div>
+      <h1>Everything you need to put<br/>TruePoint in the world.</h1>
+      <p>Production logo files, app icons and favicons — all carrying Cobalt on the apex point. Vector for anything that scales, PNG for anything that ships. Grab a single file below, or the whole pack.</p>
+      <div class="dlall">
+        <a class="btn primary" href="assets/" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          Download all assets
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Logo files ===== -->
+  <section>
+    <div class="wrap band">
+      <div class="sec-head"><span class="n">01</span><h2>Logo</h2><span class="s">SVG — scalable, the master format. The lockup wordmark is set in Geist.</span></div>
+
+      <div class="grid g2">
+        <div class="acard">
+          <div class="stage light">
+            <div class="lockup-live"><svg class="mark" viewBox="0 0 100 100"><path d="M22 43 L50 28 L78 43" fill="none" stroke="var(--mark-accent, currentColor)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 60 L50 45 L78 60" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 77 L50 62 L78 77" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="wm"><span class="t1">True</span><span class="t2">Point</span></span></div>
+          </div>
+          <div class="foot"><div class="meta"><div class="fn">Primary lockup</div><div class="fmt">SVG · light backgrounds</div></div>
+            <a class="dl" href="assets/truepoint-lockup.svg" download="truepoint-lockup.svg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>SVG</a>
+          </div>
+        </div>
+        <div class="acard">
+          <div class="stage dark">
+            <div class="lockup-live rev"><svg class="mark rev" viewBox="0 0 100 100"><path d="M22 43 L50 28 L78 43" fill="none" stroke="var(--mark-accent, currentColor)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 60 L50 45 L78 60" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 77 L50 62 L78 77" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="wm"><span class="t1">True</span><span class="t2">Point</span></span></div>
+          </div>
+          <div class="foot"><div class="meta"><div class="fn">Reversed lockup</div><div class="fmt">SVG · dark backgrounds</div></div>
+            <a class="dl" href="assets/truepoint-lockup-white.svg" download="truepoint-lockup-white.svg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>SVG</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid g3" style="margin-top:20px;">
+        <div class="acard">
+          <div class="stage check"><img class="mark-prev" src="assets/truepoint-mark.svg" alt="TruePoint mark"/></div>
+          <div class="foot"><div class="meta"><div class="fn">Mark · primary</div><div class="fmt">SVG · apex in cobalt</div></div>
+            <a class="dl" href="assets/truepoint-mark.svg" download="truepoint-mark.svg">SVG</a>
+          </div>
+        </div>
+        <div class="acard">
+          <div class="stage check"><img class="mark-prev" src="assets/truepoint-mark-mono.svg" alt="TruePoint mark, one color"/></div>
+          <div class="foot"><div class="meta"><div class="fn">Mark · one-color</div><div class="fmt">SVG · ink fallback</div></div>
+            <a class="dl" href="assets/truepoint-mark-mono.svg" download="truepoint-mark-mono.svg">SVG</a>
+          </div>
+        </div>
+        <div class="acard">
+          <div class="stage dark"><img class="mark-prev" src="assets/truepoint-mark-white.svg" alt="TruePoint mark, reversed"/></div>
+          <div class="foot"><div class="meta"><div class="fn">Mark · reversed</div><div class="fmt">SVG · for dark</div></div>
+            <a class="dl" href="assets/truepoint-mark-white.svg" download="truepoint-mark-white.svg">SVG</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== In context ===== -->
+  <section>
+    <div class="wrap band">
+      <div class="sec-head"><span class="n">02</span><h2>In context</h2><span class="s">How the icon behaves where people actually meet it.</span></div>
+      <div class="mocks">
+        <div class="mock">
+          <div class="ml">Browser tab &amp; favicon</div>
+          <div class="mb">
+            <div class="browser">
+              <div class="bar">
+                <div class="tab"><img src="assets/icons/favicon-32.png" alt=""/>TruePoint <span class="x">×</span></div>
+              </div>
+              <div class="addr"><div class="url">app.truepoint.com/leads</div></div>
+              <div class="page"></div>
+            </div>
+          </div>
+        </div>
+        <div class="mock">
+          <div class="ml">Home screen</div>
+          <div class="mb">
+            <div class="phone">
+              <div class="apps">
+                <div class="app"><div class="ic ph"></div><span class="lab dim">·····</span></div>
+                <div class="app"><div class="ic" style="background-image:url(assets/icons/icon-dark-512.png)"></div><span class="lab">TruePoint</span></div>
+                <div class="app"><div class="ic ph"></div><span class="lab dim">·····</span></div>
+                <div class="app"><div class="ic ph"></div><span class="lab dim">·····</span></div>
+                <div class="app"><div class="ic" style="background-image:url(assets/icons/icon-512.png)"></div><span class="lab">TruePoint</span></div>
+                <div class="app"><div class="ic ph"></div><span class="lab dim">·····</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mock" style="margin-top:20px;">
+        <div class="ml">Avatars &amp; social</div>
+        <div class="mb" style="justify-content:flex-start;gap:24px;flex-wrap:wrap;">
+          <div class="avatars">
+            <div class="av" style="width:72px;height:72px;background-image:url(assets/icons/icon-dark-512.png)"></div>
+            <div class="av" style="width:56px;height:56px;background-image:url(assets/icons/icon-512.png)"></div>
+            <div class="av" style="width:40px;height:40px;background-image:url(assets/icons/icon-dark-512.png)"></div>
+            <div class="av" style="width:28px;height:28px;background-image:url(assets/icons/icon-512.png)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Icon files ===== -->
+  <section>
+    <div class="wrap band">
+      <div class="sec-head"><span class="n">03</span><h2>App icons &amp; favicons</h2><span class="s">PNG — ready to drop in. Transparent favicons, white-bg app icons, a dark variant for avatars.</span></div>
+      <div class="grid g4">
+        <div class="acard"><div class="stage check"><img src="assets/icons/favicon-32.png" width="48" height="48" alt=""/></div><div class="foot"><div class="meta"><div class="fn">favicon-32</div><div class="fmt">PNG · 32px</div></div><a class="dl" href="assets/icons/favicon-32.png" download>PNG</a></div></div>
+        <div class="acard"><div class="stage check"><img src="assets/icons/favicon-16.png" width="32" height="32" style="image-rendering:auto" alt=""/></div><div class="foot"><div class="meta"><div class="fn">favicon-16</div><div class="fmt">PNG · 16px</div></div><a class="dl" href="assets/icons/favicon-16.png" download>PNG</a></div></div>
+        <div class="acard"><div class="stage light"><img src="assets/icons/apple-touch-icon-180.png" width="76" height="76" style="border-radius:17px" alt=""/></div><div class="foot"><div class="meta"><div class="fn">apple-touch</div><div class="fmt">PNG · 180px</div></div><a class="dl" href="assets/icons/apple-touch-icon-180.png" download>PNG</a></div></div>
+        <div class="acard"><div class="stage light"><img src="assets/icons/icon-512.png" width="76" height="76" style="border-radius:17px" alt=""/></div><div class="foot"><div class="meta"><div class="fn">icon-512</div><div class="fmt">PNG · 512px</div></div><a class="dl" href="assets/icons/icon-512.png" download>PNG</a></div></div>
+        <div class="acard"><div class="stage light"><img src="assets/icons/icon-192.png" width="64" height="64" style="border-radius:14px" alt=""/></div><div class="foot"><div class="meta"><div class="fn">icon-192</div><div class="fmt">PNG · 192px</div></div><a class="dl" href="assets/icons/icon-192.png" download>PNG</a></div></div>
+        <div class="acard"><div class="stage light"><img src="assets/icons/icon-maskable-512.png" width="76" height="76" alt=""/></div><div class="foot"><div class="meta"><div class="fn">maskable</div><div class="fmt">PNG · 512px · safe area</div></div><a class="dl" href="assets/icons/icon-maskable-512.png" download>PNG</a></div></div>
+        <div class="acard"><div class="stage dark"><img src="assets/icons/icon-dark-512.png" width="76" height="76" style="border-radius:17px" alt=""/></div><div class="foot"><div class="meta"><div class="fn">icon-dark</div><div class="fmt">PNG · 512px · avatar</div></div><a class="dl" href="assets/icons/icon-dark-512.png" download>PNG</a></div></div>
+        <div class="acard"><div class="stage check"><img src="assets/icons/mark-master-1024.png" width="76" height="76" alt=""/></div><div class="foot"><div class="meta"><div class="fn">mark-master</div><div class="fmt">PNG · 1024px</div></div><a class="dl" href="assets/icons/mark-master-1024.png" download>PNG</a></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Install ===== -->
+  <section>
+    <div class="wrap band">
+      <div class="sec-head"><span class="n">04</span><h2>Wire it up</h2><span class="s">Drop these in your &lt;head&gt;. A web manifest is included.</span></div>
+      <div class="code"><pre><span class="t">&lt;!-- favicons + app icons --&gt;</span>
+&lt;<span class="a">link</span> rel=<span class="s">"icon"</span> type=<span class="s">"image/png"</span> sizes=<span class="s">"32x32"</span> href=<span class="s">"/assets/icons/favicon-32.png"</span>&gt;
+&lt;<span class="a">link</span> rel=<span class="s">"icon"</span> type=<span class="s">"image/png"</span> sizes=<span class="s">"16x16"</span> href=<span class="s">"/assets/icons/favicon-16.png"</span>&gt;
+&lt;<span class="a">link</span> rel=<span class="s">"apple-touch-icon"</span> sizes=<span class="s">"180x180"</span> href=<span class="s">"/assets/icons/apple-touch-icon-180.png"</span>&gt;
+&lt;<span class="a">link</span> rel=<span class="s">"manifest"</span> href=<span class="s">"/assets/site.webmanifest"</span>&gt;
+&lt;<span class="a">meta</span> name=<span class="s">"theme-color"</span> content=<span class="s">"#2563C9"</span>&gt;</pre></div>
+      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
+        <a class="dl" href="assets/site.webmanifest" download="site.webmanifest">site.webmanifest</a>
+      </div>
+      <p style="font-size:13.5px;color:var(--ink-4);margin-top:22px;max-width:60ch;line-height:1.6;">Note — the lockup SVGs reference Geist via web-font import, so they render correctly in a browser. For print or third-party handoff, convert the wordmark text to outlines first.</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div class="wrap">
+      <div class="ft">
+        <svg class="mark rev" viewBox="0 0 100 100"><path d="M22 43 L50 28 L78 43" fill="none" stroke="var(--mark-accent, currentColor)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 60 L50 45 L78 60" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M22 77 L50 62 L78 77" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+        <span class="w"><span class="t1">True</span><span class="t2">Point</span></span>
+      </div>
+      <div class="fine">TruePoint · Brand Kit v1.0 · Geist + Geist Mono · Cobalt #2563C9 (fills &amp; mark) · Ink #111827 (type &amp; buttons) · apex tint #5B8DEF (dark)</div>
+    </div>
+  </footer>
+
+</body>
+</html>
