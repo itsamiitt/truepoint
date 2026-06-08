@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TruePoint — Brand Kit</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/App-icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/App-icons/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/App-icons/apple-touch-icon-180.png">
+<meta name="theme-color" content="#2563C9">
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #111827;
+    --ink-2: #374151;
+    --ink-3: #6B7280;
+    --ink-4: #9CA3AF;
+    --surface: #FFFFFF;
+    --surface-2: #F9FAFB;
+    --hairline: #F0F0F0;
+    --hairline-2: #E5E7EB;
+    --twilight: #0C0E1A;
+    --acc: #2563C9;
+    --acc-700: #1E4FA3;
+    --acc-50: #E9F0FC;
+    --sans: "Geist", -apple-system, sans-serif;
+    --mono: "Geist Mono", monospace;
+    --maxw: 960px;
+    --pad: clamp(24px, 5vw, 64px);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+  body { font-family: var(--sans); color: var(--ink); background: var(--surface); line-height: 1.5; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding-left: var(--pad); padding-right: var(--pad); }
+
+  .mark { display: block; color: var(--ink); --mark-accent: var(--acc); }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,255,255,.9); backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .topbar .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .nav-mark { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+  .nav-mark svg { width: 26px; height: 26px; }
+  .nav-word { font-size: 17px; letter-spacing: -.02em; color: var(--ink); }
+  .nav-word .t1 { font-weight: 400; }
+  .nav-word .t2 { font-weight: 700; }
+  .nav-tag { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-4); border: 1px solid var(--hairline-2); border-radius: 999px; padding: 5px 11px; }
+
+  .hero { padding: clamp(72px, 10vw, 120px) 0 clamp(48px, 7vw, 80px); }
+  .hero .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 20px; }
+  .hero h1 { font-size: clamp(36px, 6vw, 64px); font-weight: 600; letter-spacing: -.03em; line-height: 1.02; margin-bottom: 20px; }
+  .hero h1 span { color: var(--acc); }
+  .hero p { font-size: clamp(16px, 1.6vw, 19px); color: var(--ink-3); max-width: 52ch; line-height: 1.6; margin-bottom: 36px; }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: clamp(32px, 5vw, 64px) 0; border-top: 1px solid var(--hairline); }
+  @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
+
+  .card {
+    border: 1px solid var(--hairline-2); border-radius: 16px; padding: 28px 28px 24px;
+    text-decoration: none; color: var(--ink); display: flex; flex-direction: column; gap: 12px;
+    transition: box-shadow .15s, transform .15s;
+  }
+  .card:hover { box-shadow: 0 4px 20px rgba(17,24,39,.09); transform: translateY(-1px); }
+  .card .c-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--acc-50); display: flex; align-items: center; justify-content: center; }
+  .card .c-icon svg { width: 22px; height: 22px; color: var(--acc); }
+  .card h2 { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+  .card p { font-size: 14px; color: var(--ink-3); line-height: 1.55; flex: 1; }
+  .card .c-link { font-family: var(--mono); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--acc); margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+  .card .c-link svg { width: 13px; height: 13px; }
+
+  .colors-section { border-top: 1px solid var(--hairline); padding: clamp(40px, 6vw, 72px) 0; }
+  .sec-head { margin-bottom: 28px; }
+  .sec-head .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-4); margin-bottom: 8px; }
+  .sec-head h2 { font-size: clamp(22px, 3vw, 30px); font-weight: 600; letter-spacing: -.02em; }
+
+  .swatches { display: flex; gap: 12px; flex-wrap: wrap; }
+  .swatch { border-radius: 12px; padding: 16px; min-width: 130px; display: flex; flex-direction: column; gap: 20px; }
+  .swatch .s-hex { font-family: var(--mono); font-size: 12px; letter-spacing: .04em; }
+  .swatch .s-name { font-size: 13px; font-weight: 500; }
+
+  .footer { background: var(--twilight); padding: 48px 0; margin-top: 0; border-top: none; }
+  .footer .ft { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .footer .ft svg { width: 32px; height: 32px; }
+  .footer .ft .w { font-size: 22px; color: #fff; letter-spacing: -.03em; }
+  .footer .ft .w .t1 { font-weight: 400; } .footer .ft .w .t2 { font-weight: 800; }
+  .footer .fine { font-family: var(--mono); font-size: 11.5px; color: rgba(229,231,235,.4); letter-spacing: .03em; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="tp-mark" viewBox="0 0 100 100">
+    <path d="M22 43 L50 28 L78 43" fill="none" stroke="var(--mark-accent,currentColor)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M22 60 L50 45 L78 60" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M22 77 L50 62 L78 77" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+</svg>
+
+<div class="topbar">
+  <div class="wrap">
+    <a class="nav-mark" href="/">
+      <svg viewBox="0 0 100 100" class="mark">
+        <use href="#tp-mark"/>
+      </svg>
+      <span class="nav-word"><span class="t1">True</span><span class="t2">Point</span></span>
+    </a>
+    <span class="nav-tag">Brand Kit · v1.0</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="eyebrow">Brand Kit · v1.0</div>
+    <h1>The <span>TruePoint</span><br/>brand system.</h1>
+    <p>Logos, icons, colors, and guidelines for TruePoint — the intelligent prospecting CRM. Everything you need to put TruePoint in the world, correctly.</p>
+  </div>
+
+  <div class="cards">
+    <a class="card" href="/Guidelines/TruePoint%20Brand%20Identity.html">
+      <div class="c-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <path d="M3 9h18M9 21V9"/>
+        </svg>
+      </div>
+      <h2>Brand Identity</h2>
+      <p>Full brand guidelines — logo usage, color system, typography, spacing, tone of voice, and do/don't rules.</p>
+      <span class="c-link">Open guidelines <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+    </a>
+
+    <a class="card" href="/Guidelines/TruePoint%20Brand%20Kit.html">
+      <div class="c-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <path d="M7 10l5 5 5-5"/>
+          <path d="M12 15V3"/>
+        </svg>
+      </div>
+      <h2>Asset Downloads</h2>
+      <p>Production-ready logo files, app icons, and favicons. SVG masters plus PNG exports at every size.</p>
+      <span class="c-link">Browse assets <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+    </a>
+  </div>
+</div>
+
+<div class="colors-section">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="eyebrow">Color system</div>
+      <h2>Two-tone palette</h2>
+    </div>
+    <div class="swatches">
+      <div class="swatch" style="background:#111827;color:#fff;">
+        <span class="s-name" style="color:#fff;">Ink</span>
+        <span class="s-hex" style="color:rgba(255,255,255,.5);">#111827</span>
+      </div>
+      <div class="swatch" style="background:#2563C9;color:#fff;">
+        <span class="s-name" style="color:#fff;">Cobalt</span>
+        <span class="s-hex" style="color:rgba(255,255,255,.6);">#2563C9</span>
+      </div>
+      <div class="swatch" style="background:#1E4FA3;color:#fff;">
+        <span class="s-name" style="color:#fff;">Cobalt 700</span>
+        <span class="s-hex" style="color:rgba(255,255,255,.6);">#1E4FA3</span>
+      </div>
+      <div class="swatch" style="background:#E9F0FC;color:#111827;">
+        <span class="s-name">Cobalt 50</span>
+        <span class="s-hex" style="color:#6B7280;">#E9F0FC</span>
+      </div>
+      <div class="swatch" style="background:#5B8DEF;color:#fff;">
+        <span class="s-name" style="color:#fff;">Apex tint</span>
+        <span class="s-hex" style="color:rgba(255,255,255,.6);">#5B8DEF</span>
+      </div>
+      <div class="swatch" style="background:#F9FAFB;color:#111827;border:1px solid #E5E7EB;">
+        <span class="s-name">Surface</span>
+        <span class="s-hex" style="color:#6B7280;">#F9FAFB</span>
+      </div>
+      <div class="swatch" style="background:#0C0E1A;color:#fff;">
+        <span class="s-name" style="color:#fff;">Twilight</span>
+        <span class="s-hex" style="color:rgba(255,255,255,.5);">#0C0E1A</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="ft">
+      <svg viewBox="0 0 100 100" style="--mark-accent:#5B8DEF;color:#fff;">
+        <use href="#tp-mark"/>
+      </svg>
+      <span class="w"><span class="t1">True</span><span class="t2">Point</span></span>
+    </div>
+    <div class="fine">
+      TruePoint · Brand Kit v1.0 · Geist + Geist Mono<br>
+      Cobalt #2563C9 (fills &amp; mark) · Ink #111827 (type &amp; buttons) · Apex tint #5B8DEF (dark surfaces)
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
