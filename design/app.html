@@ -1,0 +1,2680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TruePoint CRM — App Design</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/App-icons/favicon-32.png"/>
+<meta name="theme-color" content="#2563C9"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ── Design tokens ── */
+:root {
+  --sidebar-bg: #f9fafb;
+  --sidebar-border: #f0f0f0;
+  --content-bg: #ffffff;
+  --nav-active: #e8e8e8;
+  --nav-hover: #f3f4f6;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --border-default: #e5e7eb;
+  --border-hairline: #f0f0f0;
+  --accent: #2563C9;
+  --accent-hover: #1E4FA3;
+  --accent-light: #E9F0FC;
+  --accent-mid: #5B8DEF;
+  --success: #16a34a;
+  --success-light: #dcfce7;
+  --warning: #d97706;
+  --warning-light: #fef3c7;
+  --danger: #dc2626;
+  --danger-light: #fee2e2;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --avatar-bg: #e5e7eb;
+  --avatar-text: #6b7280;
+  --topbar-h: 52px;
+  --sidebar-w: 220px;
+  --filter-w: 232px;
+  --detail-w: 372px;
+  --radius: 8px;
+  --radius-sm: 6px;
+  --sans: 'Geist', -apple-system, sans-serif;
+  --mono: 'Geist Mono', monospace;
+  --shadow-sm: 0 1px 2px rgba(17,24,39,.06), 0 1px 3px rgba(17,24,39,.04);
+  --shadow-md: 0 4px 12px rgba(17,24,39,.08), 0 2px 4px rgba(17,24,39,.04);
+  --shadow-lg: 0 8px 30px rgba(17,24,39,.10), 0 2px 8px rgba(17,24,39,.06);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { font-family: var(--sans); color: var(--text-primary); background: var(--content-bg); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* ── Layout shell ── */
+.shell { display: flex; height: 100vh; overflow: hidden; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  display: flex; flex-direction: column;
+  overflow: hidden; z-index: 10;
+}
+.sidebar-top { padding: 14px 12px 10px; border-bottom: 1px solid var(--border-hairline); }
+.logo-row { display: flex; align-items: center; gap: 9px; padding: 2px 4px; }
+.logo-mark { width: 22px; height: 22px; flex-shrink: 0; --mark-accent: var(--accent); }
+.logo-word { font-size: 15px; letter-spacing: -.02em; }
+.logo-word .t1 { font-weight: 400; }
+.logo-word .t2 { font-weight: 700; }
+
+.sidebar-nav { flex: 1; padding: 8px 8px; overflow-y: auto; }
+.nav-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px; border-radius: var(--radius-sm);
+  font-size: 13.5px; font-weight: 500; color: var(--text-secondary);
+  cursor: pointer; transition: background .1s, color .1s;
+  user-select: none; position: relative;
+}
+.nav-item:hover { background: var(--nav-hover); color: var(--text-primary); }
+.nav-item.active { background: var(--nav-active); color: var(--text-primary); }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+.nav-item .badge {
+  margin-left: auto; background: var(--text-primary); color: #fff;
+  font-size: 10px; font-weight: 600; border-radius: 999px;
+  padding: 1px 6px; min-width: 18px; text-align: center;
+}
+.nav-item .badge.dot {
+  width: 6px; height: 6px; border-radius: 50%; padding: 0;
+  background: var(--accent); min-width: 0;
+}
+.nav-section-label {
+  font-size: 10.5px; font-weight: 500; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-tertiary);
+  padding: 12px 10px 4px;
+}
+.nav-divider { height: 1px; background: var(--border-hairline); margin: 6px 0; }
+
+.sidebar-bottom { padding: 8px; border-top: 1px solid var(--border-hairline); }
+.workspace-switcher {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: background .1s;
+}
+.workspace-switcher:hover { background: var(--nav-hover); }
+.ws-icon {
+  width: 24px; height: 24px; border-radius: 6px;
+  background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ws-info { flex: 1; overflow: hidden; }
+.ws-name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-tenant { font-size: 11px; color: var(--text-tertiary); }
+.ws-caret { color: var(--text-tertiary); flex-shrink: 0; }
+
+.user-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: background .1s; margin-top: 2px;
+}
+.user-row:hover { background: var(--nav-hover); }
+.user-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--avatar-bg); color: var(--avatar-text);
+  font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.user-info { flex: 1; overflow: hidden; }
+.user-name { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.user-role { font-size: 11px; color: var(--text-tertiary); }
+
+/* ── Main content area ── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* ── Top bar ── */
+.topbar {
+  height: var(--topbar-h); flex-shrink: 0;
+  border-bottom: 1px solid var(--border-hairline);
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; background: var(--content-bg); z-index: 5;
+}
+.topbar-title { font-size: 14px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.topbar-divider { width: 1px; height: 18px; background: var(--border-default); flex-shrink: 0; }
+
+.search-bar {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--sidebar-bg); border: 1px solid var(--border-default);
+  border-radius: var(--radius); padding: 0 12px; height: 32px;
+  flex: 1; max-width: 340px; cursor: pointer; transition: border-color .15s;
+}
+.search-bar:hover { border-color: #d1d5db; }
+.search-bar svg { color: var(--text-tertiary); width: 14px; height: 14px; flex-shrink: 0; }
+.search-bar span { font-size: 13px; color: var(--text-tertiary); flex: 1; }
+.search-kbd { font-family: var(--mono); font-size: 10px; color: var(--text-tertiary); background: var(--content-bg); border: 1px solid var(--border-default); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+
+.topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.icon-btn {
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background .1s; color: var(--text-secondary);
+  position: relative;
+}
+.icon-btn:hover { background: var(--nav-hover); color: var(--text-primary); }
+.icon-btn svg { width: 17px; height: 17px; }
+.icon-btn .notif-dot {
+  position: absolute; top: 5px; right: 5px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent); border: 1.5px solid #fff;
+}
+
+.credit-pill {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--accent-light); border: 1px solid #c7d9f5;
+  border-radius: 999px; padding: 4px 12px 4px 9px;
+  font-size: 12.5px; font-weight: 600; color: var(--accent);
+  cursor: pointer; transition: background .15s;
+  white-space: nowrap;
+}
+.credit-pill:hover { background: #dae8fc; }
+.credit-pill svg { width: 13px; height: 13px; }
+.credit-pill.low { background: var(--warning-light); border-color: #fde68a; color: var(--warning); }
+.credit-pill.low svg { color: var(--warning); }
+
+/* ── Content body ── */
+.content-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+
+/* ── Screen management ── */
+.screen { display: none; flex: 1; overflow: hidden; }
+.screen.active { display: flex; }
+
+/* ── Home screen ── */
+#screen-home { flex-direction: column; overflow-y: auto; padding: 28px 32px; gap: 24px; }
+.home-welcome { }
+.home-welcome h1 { font-size: 22px; font-weight: 600; letter-spacing: -.02em; margin-bottom: 4px; }
+.home-welcome p { font-size: 14px; color: var(--text-secondary); }
+
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.stat-card {
+  border: 1px solid var(--border-default); border-radius: 10px;
+  padding: 18px 20px; background: var(--content-bg);
+}
+.stat-card .s-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.stat-card .s-label svg { width: 14px; height: 14px; }
+.stat-card .s-val { font-size: 26px; font-weight: 700; letter-spacing: -.03em; color: var(--text-primary); }
+.stat-card .s-delta { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
+.stat-card .s-delta.up { color: var(--success); }
+.stat-card .s-delta.down { color: var(--danger); }
+
+.home-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.home-card {
+  border: 1px solid var(--border-default); border-radius: 10px;
+  background: var(--content-bg); overflow: hidden;
+}
+.home-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 10px; border-bottom: 1px solid var(--border-hairline);
+}
+.home-card-header h3 { font-size: 13px; font-weight: 600; }
+.home-card-header .hc-action { font-size: 12px; color: var(--accent); cursor: pointer; }
+.home-card-body { padding: 0; }
+
+.task-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border-hairline);
+  font-size: 13px;
+}
+.task-item:last-child { border-bottom: none; }
+.task-check {
+  width: 16px; height: 16px; border: 1.5px solid var(--border-default); border-radius: 50%;
+  flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.task-check.done { background: var(--success); border-color: var(--success); color: #fff; }
+.task-info { flex: 1; }
+.task-info .t-main { font-weight: 500; color: var(--text-primary); }
+.task-info .t-sub { font-size: 11.5px; color: var(--text-secondary); margin-top: 1px; }
+.task-due { font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
+.task-due.overdue { color: var(--danger); font-weight: 500; }
+
+.hot-lead-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border-hairline);
+  cursor: pointer; transition: background .1s;
+}
+.hot-lead-item:last-child { border-bottom: none; }
+.hot-lead-item:hover { background: var(--sidebar-bg); }
+.hl-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--avatar-bg); color: var(--avatar-text); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.hl-info { flex: 1; }
+.hl-name { font-size: 13px; font-weight: 500; }
+.hl-sub { font-size: 11.5px; color: var(--text-secondary); }
+.score-badge {
+  font-size: 11.5px; font-weight: 700; font-family: var(--mono);
+  border-radius: 5px; padding: 2px 7px;
+}
+.score-badge.high { background: var(--text-primary); color: #fff; }
+.score-badge.med { background: #374151; color: #fff; }
+.score-badge.low-med { background: var(--avatar-bg); color: var(--text-primary); }
+.score-badge.low { background: var(--sidebar-bg); color: var(--text-secondary); border: 1px solid var(--border-default); }
+
+.activity-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border-hairline); font-size: 12.5px;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-icon { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.activity-icon.reply { background: var(--success-light); color: var(--success); }
+.activity-icon.reveal { background: var(--accent-light); color: var(--accent); }
+.activity-icon.import { background: var(--warning-light); color: var(--warning); }
+.activity-icon svg { width: 11px; height: 11px; }
+.activity-info { flex: 1; line-height: 1.4; }
+.activity-info b { font-weight: 500; color: var(--text-primary); }
+.activity-time { font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
+
+/* ── Prospect screen ── */
+#screen-prospect { flex-direction: row; }
+
+.filter-rail {
+  width: var(--filter-w); flex-shrink: 0;
+  border-right: 1px solid var(--border-hairline);
+  overflow-y: auto; padding: 14px 0;
+  background: var(--sidebar-bg);
+}
+.filter-section { padding: 0 12px 12px; }
+.filter-section + .filter-section { border-top: 1px solid var(--border-hairline); padding-top: 12px; }
+.filter-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+.filter-label button { font-size: 11px; color: var(--accent); background: none; border: none; cursor: pointer; font-family: var(--sans); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.filter-search { display: flex; align-items: center; gap: 7px; background: var(--content-bg); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 6px 10px; margin-bottom: 10px; }
+.filter-search svg { width: 13px; height: 13px; color: var(--text-tertiary); flex-shrink: 0; }
+.filter-search input { border: none; outline: none; font-size: 12.5px; font-family: var(--sans); color: var(--text-primary); width: 100%; background: transparent; }
+.filter-search input::placeholder { color: var(--text-tertiary); }
+.filter-option { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; transition: color .1s; }
+.filter-option:hover { color: var(--text-primary); }
+.filter-option input[type=checkbox] { width: 13px; height: 13px; accent-color: var(--accent); flex-shrink: 0; }
+.filter-option .fo-label { flex: 1; }
+.filter-option .fo-count { font-size: 11px; color: var(--text-tertiary); font-family: var(--mono); }
+.filter-chip-row { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.filter-chip { font-size: 11.5px; background: var(--accent-light); color: var(--accent); border: 1px solid #c7d9f5; border-radius: 999px; padding: 2px 9px 2px 7px; display: flex; align-items: center; gap: 4px; }
+.filter-chip button { background: none; border: none; cursor: pointer; color: var(--accent); font-size: 13px; padding: 0; line-height: 1; }
+
+.saved-view-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radius-sm); font-size: 12.5px; color: var(--text-secondary); cursor: pointer; transition: background .1s, color .1s; }
+.saved-view-item:hover { background: var(--nav-hover); color: var(--text-primary); }
+.saved-view-item.active { background: var(--nav-active); color: var(--text-primary); }
+.saved-view-item svg { width: 13px; height: 13px; flex-shrink: 0; }
+.saved-view-item .sv-count { margin-left: auto; font-size: 11px; color: var(--text-tertiary); font-family: var(--mono); }
+
+/* ── Results area ── */
+.results-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+.results-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border-hairline);
+  flex-shrink: 0;
+}
+.toggle-group { display: flex; background: var(--sidebar-bg); border: 1px solid var(--border-default); border-radius: var(--radius-sm); overflow: hidden; }
+.toggle-btn { padding: 5px 14px; font-size: 12.5px; font-weight: 500; cursor: pointer; background: none; border: none; font-family: var(--sans); color: var(--text-secondary); transition: background .1s, color .1s; }
+.toggle-btn.active { background: var(--content-bg); color: var(--text-primary); box-shadow: var(--shadow-sm); }
+
+.result-count { font-size: 12.5px; color: var(--text-secondary); }
+.result-count b { color: var(--text-primary); font-weight: 600; }
+.toolbar-spacer { flex: 1; }
+.toolbar-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 500;
+  cursor: pointer; border: 1px solid var(--border-default); background: var(--content-bg);
+  color: var(--text-secondary); transition: background .1s, border-color .1s, color .1s;
+  font-family: var(--sans);
+}
+.toolbar-btn:hover { background: var(--sidebar-bg); color: var(--text-primary); border-color: #d1d5db; }
+.toolbar-btn.primary { background: var(--text-primary); color: #fff; border-color: var(--text-primary); }
+.toolbar-btn.primary:hover { background: #1f2937; border-color: #1f2937; }
+.toolbar-btn svg { width: 13px; height: 13px; }
+
+/* ── Data table ── */
+.data-table-wrap { flex: 1; overflow: auto; position: relative; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--sidebar-bg); font-size: 11.5px; font-weight: 600;
+  color: var(--text-secondary); text-transform: uppercase; letter-spacing: .05em;
+  padding: 9px 12px; text-align: left;
+  border-bottom: 1px solid var(--border-default);
+  white-space: nowrap; cursor: pointer; user-select: none;
+}
+.data-table th:hover { color: var(--text-primary); }
+.data-table th:first-child { width: 36px; padding-left: 16px; }
+.data-table td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border-hairline);
+  font-size: 13px; vertical-align: middle; white-space: nowrap;
+}
+.data-table td:first-child { padding-left: 16px; }
+.data-table tr { cursor: pointer; transition: background .08s; }
+.data-table tr:hover td { background: #fafafa; }
+.data-table tr.selected td { background: #f0f6ff; }
+.data-table tr.active td { background: var(--accent-light); }
+
+input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+.contact-cell { display: flex; align-items: center; gap: 9px; }
+.c-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--avatar-bg); color: var(--avatar-text); font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.c-name { font-weight: 500; color: var(--text-primary); }
+.c-company { font-size: 12px; color: var(--text-secondary); }
+
+.masked-cell { display: flex; align-items: center; gap: 6px; }
+.masked-val { font-family: var(--mono); font-size: 12px; color: var(--text-tertiary); letter-spacing: .1em; }
+.status-glyph { width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.status-glyph.valid { background: var(--success-light); color: var(--success); }
+.status-glyph.risky { background: var(--warning-light); color: var(--warning); }
+.status-glyph.none { background: var(--sidebar-bg); color: var(--text-tertiary); border: 1px solid var(--border-default); }
+.status-glyph svg { width: 9px; height: 9px; }
+.revealed-val { font-size: 12.5px; color: var(--text-primary); }
+
+.outreach-badge { font-size: 11px; font-weight: 500; border-radius: 999px; padding: 2px 9px; white-space: nowrap; display: inline-block; }
+.outreach-badge.new { background: var(--sidebar-bg); color: var(--text-secondary); border: 1px solid var(--border-default); }
+.outreach-badge.in-seq { background: var(--accent-light); color: var(--accent); }
+.outreach-badge.replied { background: var(--success-light); color: var(--success); }
+.outreach-badge.meeting { background: var(--purple-light); color: var(--purple); }
+.outreach-badge.disq { background: var(--danger-light); color: var(--danger); }
+.outreach-badge.nurture { background: var(--warning-light); color: var(--warning); }
+
+/* ── Bulk action bar ── */
+.bulk-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: var(--text-primary); color: #fff;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px; z-index: 10;
+  border-top: 1px solid rgba(255,255,255,.1);
+  transform: translateY(100%); transition: transform .2s;
+}
+.bulk-bar.visible { transform: translateY(0); }
+.bulk-bar .bb-count { font-size: 13.5px; font-weight: 600; }
+.bulk-bar .bb-divider { width: 1px; height: 18px; background: rgba(255,255,255,.2); }
+.bulk-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--sans);
+  border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08);
+  color: #fff; transition: background .1s;
+}
+.bulk-btn:hover { background: rgba(255,255,255,.15); }
+.bulk-btn.reveal-btn { background: var(--accent); border-color: var(--accent); }
+.bulk-btn.reveal-btn:hover { background: var(--accent-hover); }
+.bulk-btn svg { width: 13px; height: 13px; }
+.bb-spacer { flex: 1; }
+.bb-clear { font-size: 12.5px; color: rgba(255,255,255,.5); cursor: pointer; }
+.bb-clear:hover { color: rgba(255,255,255,.8); }
+
+/* ── Detail panel (slide-over) ── */
+.detail-panel {
+  width: var(--detail-w); flex-shrink: 0;
+  border-left: 1px solid var(--border-hairline);
+  display: flex; flex-direction: column; overflow: hidden;
+  transition: transform .2s, width .2s;
+}
+.detail-panel.hidden { width: 0; overflow: hidden; transform: translateX(100%); }
+.detail-panel-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-bottom: 1px solid var(--border-hairline); flex-shrink: 0;
+}
+.detail-panel-header h3 { font-size: 13px; font-weight: 600; flex: 1; }
+.dp-close { cursor: pointer; color: var(--text-tertiary); transition: color .1s; }
+.dp-close:hover { color: var(--text-primary); }
+
+.detail-body { flex: 1; overflow-y: auto; }
+.dp-contact-header { padding: 20px 16px; border-bottom: 1px solid var(--border-hairline); }
+.dp-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--avatar-bg); color: var(--avatar-text); font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+.dp-name { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+.dp-title { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.dp-location { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+.dp-location svg { width: 12px; height: 12px; }
+.dp-action-row { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+.dp-btn { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 500; cursor: pointer; font-family: var(--sans); transition: background .1s; white-space: nowrap; }
+.dp-btn.primary { background: var(--text-primary); color: #fff; border: 1px solid var(--text-primary); }
+.dp-btn.primary:hover { background: #1f2937; }
+.dp-btn.secondary { background: var(--content-bg); color: var(--text-primary); border: 1px solid var(--border-default); }
+.dp-btn.secondary:hover { background: var(--sidebar-bg); }
+.dp-btn.reveal { background: var(--accent); color: #fff; border: 1px solid var(--accent); }
+.dp-btn.reveal:hover { background: var(--accent-hover); }
+
+.dp-section { padding: 14px 16px; border-bottom: 1px solid var(--border-hairline); }
+.dp-section-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 10px; }
+
+.dp-field { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+.dp-field-icon { width: 16px; height: 16px; color: var(--text-tertiary); flex-shrink: 0; }
+.dp-field-icon svg { width: 14px; height: 14px; }
+.dp-field-value { font-size: 13px; color: var(--text-primary); }
+.dp-field-value.masked { font-family: var(--mono); color: var(--text-tertiary); letter-spacing: .1em; }
+.dp-field-meta { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+
+/* Score section */
+.score-overview { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.score-component { background: var(--sidebar-bg); border-radius: var(--radius-sm); padding: 10px 12px; }
+.score-comp-label { font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 6px; }
+.score-comp-val { font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 6px; }
+.score-bar { height: 4px; border-radius: 999px; background: var(--border-default); }
+.score-bar .fill { height: 100%; border-radius: 999px; background: var(--text-primary); }
+.composite-score { background: var(--text-primary); border-radius: var(--radius-sm); padding: 14px; display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+.composite-num { font-size: 36px; font-weight: 800; color: #fff; letter-spacing: -.03em; }
+.composite-info { }
+.composite-label { font-size: 11px; color: rgba(255,255,255,.5); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.composite-sub { font-size: 12.5px; color: rgba(255,255,255,.8); margin-top: 3px; }
+
+.provenance-item { padding: 7px 0; border-bottom: 1px solid var(--border-hairline); }
+.provenance-item:last-child { border-bottom: none; }
+.prov-source { display: flex; align-items: center; gap: 7px; }
+.prov-badge { font-size: 10.5px; font-weight: 600; font-family: var(--mono); background: var(--sidebar-bg); border: 1px solid var(--border-default); border-radius: 4px; padding: 1px 6px; color: var(--text-secondary); }
+.prov-date { font-size: 11.5px; color: var(--text-tertiary); margin-top: 3px; }
+
+/* ── Sequences screen ── */
+#screen-sequences { flex-direction: column; overflow-y: auto; }
+.seq-toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border-hairline); flex-shrink: 0; }
+.seq-toolbar h2 { font-size: 15px; font-weight: 600; }
+
+.seq-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--border-hairline); }
+.seq-stat { text-align: center; padding: 14px; background: var(--sidebar-bg); border-radius: 8px; }
+.seq-stat .ss-val { font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.seq-stat .ss-label { font-size: 11.5px; color: var(--text-secondary); margin-top: 3px; }
+
+.seq-list { padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+.seq-card {
+  border: 1px solid var(--border-default); border-radius: 10px;
+  background: var(--content-bg); overflow: hidden;
+  cursor: pointer; transition: border-color .15s, box-shadow .15s;
+}
+.seq-card:hover { border-color: #d1d5db; box-shadow: var(--shadow-sm); }
+.seq-card-header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.seq-card-header .seq-name { font-size: 14px; font-weight: 600; flex: 1; }
+.seq-badge { font-size: 11px; font-weight: 500; border-radius: 999px; padding: 2px 10px; }
+.seq-badge.active { background: var(--success-light); color: var(--success); }
+.seq-badge.paused { background: var(--warning-light); color: var(--warning); }
+.seq-badge.draft { background: var(--sidebar-bg); color: var(--text-secondary); border: 1px solid var(--border-default); }
+.seq-card-meta { display: flex; gap: 24px; padding: 0 16px 14px; }
+.seq-metric { font-size: 12px; }
+.seq-metric .sm-val { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+.seq-metric .sm-label { font-size: 11.5px; color: var(--text-secondary); }
+.seq-card-footer { background: var(--sidebar-bg); border-top: 1px solid var(--border-hairline); padding: 10px 16px; display: flex; align-items: center; gap: 14px; }
+.seq-step { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+.seq-step svg { width: 13px; height: 13px; }
+.seq-step.active-step { color: var(--accent); font-weight: 500; }
+
+/* Sequence builder */
+.seq-builder { display: flex; overflow: hidden; flex: 1; }
+.seq-builder-list { width: 300px; border-right: 1px solid var(--border-hairline); overflow-y: auto; }
+.seq-builder-canvas { flex: 1; padding: 24px; overflow-y: auto; }
+.sbl-item { padding: 12px 16px; border-bottom: 1px solid var(--border-hairline); cursor: pointer; }
+.sbl-item:hover { background: var(--sidebar-bg); }
+.sbl-item.active { background: var(--accent-light); }
+.sbl-name { font-size: 13px; font-weight: 500; }
+.sbl-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+.step-card { border: 1px solid var(--border-default); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+.step-header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--sidebar-bg); border-bottom: 1px solid var(--border-hairline); }
+.step-num { width: 22px; height: 22px; border-radius: 50%; background: var(--text-primary); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.step-channel { font-size: 13px; font-weight: 600; flex: 1; }
+.step-delay { font-size: 12px; color: var(--text-secondary); }
+.step-body { padding: 14px; }
+.step-subject { font-size: 13.5px; font-weight: 600; margin-bottom: 8px; }
+.step-preview { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.add-step-btn { border: 1.5px dashed var(--border-default); border-radius: 10px; padding: 14px; text-align: center; font-size: 13px; color: var(--text-tertiary); cursor: pointer; transition: border-color .15s, color .15s; }
+.add-step-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Inbox screen ── */
+#screen-inbox { flex-direction: row; }
+.inbox-sidebar { width: 320px; border-right: 1px solid var(--border-hairline); display: flex; flex-direction: column; overflow: hidden; }
+.inbox-toolbar { padding: 12px 14px; border-bottom: 1px solid var(--border-hairline); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.inbox-filter-tabs { display: flex; gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--border-hairline); flex-shrink: 0; }
+.inbox-tab { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 999px; cursor: pointer; color: var(--text-secondary); transition: background .1s, color .1s; }
+.inbox-tab.active { background: var(--nav-active); color: var(--text-primary); }
+.inbox-list { flex: 1; overflow-y: auto; }
+.inbox-item { padding: 12px 14px; border-bottom: 1px solid var(--border-hairline); cursor: pointer; transition: background .1s; }
+.inbox-item:hover { background: var(--sidebar-bg); }
+.inbox-item.active { background: var(--accent-light); }
+.inbox-item.unread .ib-name { font-weight: 600; }
+.ib-row1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+.ib-name { font-size: 13px; color: var(--text-primary); }
+.ib-time { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; flex-shrink: 0; }
+.ib-subject { font-size: 12.5px; font-weight: 500; color: var(--text-primary); margin-bottom: 2px; }
+.ib-preview { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+.task-inbox-item { padding: 12px 14px; border-bottom: 1px solid var(--border-hairline); cursor: pointer; }
+.task-inbox-item:hover { background: var(--sidebar-bg); }
+.ti-type { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 4px; }
+.ti-title { font-size: 13px; font-weight: 500; }
+.ti-due { font-size: 12px; color: var(--danger); margin-top: 2px; font-weight: 500; }
+.ti-due.ok { color: var(--text-secondary); }
+
+.inbox-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.email-header { padding: 16px 20px; border-bottom: 1px solid var(--border-hairline); flex-shrink: 0; }
+.email-subject { font-size: 16px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 8px; }
+.email-meta { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
+.email-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--avatar-bg); color: var(--avatar-text); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.email-from { }
+.email-actions { margin-left: auto; display: flex; gap: 8px; }
+.email-thread { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
+.email-msg { border: 1px solid var(--border-default); border-radius: 10px; overflow: hidden; }
+.email-msg-header { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--sidebar-bg); border-bottom: 1px solid var(--border-hairline); font-size: 13px; }
+.email-msg-body { padding: 14px; font-size: 13.5px; line-height: 1.65; color: var(--text-primary); }
+.email-msg-body p { margin-bottom: 10px; }
+.email-msg-body p:last-child { margin-bottom: 0; }
+.reply-box { padding: 12px 16px; border-top: 1px solid var(--border-hairline); flex-shrink: 0; }
+.reply-textarea { width: 100%; border: 1px solid var(--border-default); border-radius: var(--radius); padding: 12px 14px; font-size: 13.5px; font-family: var(--sans); resize: none; outline: none; line-height: 1.6; transition: border-color .15s; color: var(--text-primary); }
+.reply-textarea:focus { border-color: var(--accent); }
+.reply-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+
+/* ── Reports screen ── */
+#screen-reports { flex-direction: column; overflow-y: auto; }
+.reports-nav { display: flex; gap: 2px; padding: 14px 20px 0; border-bottom: 1px solid var(--border-hairline); flex-shrink: 0; }
+.reports-tab { padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .1s, border-color .1s; }
+.reports-tab:hover { color: var(--text-primary); }
+.reports-tab.active { color: var(--text-primary); border-bottom-color: var(--text-primary); }
+.reports-content { padding: 20px; }
+.reports-row { display: grid; gap: 14px; margin-bottom: 20px; }
+.rr-4 { grid-template-columns: repeat(4, 1fr); }
+.rr-3 { grid-template-columns: repeat(3, 1fr); }
+.rr-2 { grid-template-columns: 1fr 1fr; }
+.metric-card { border: 1px solid var(--border-default); border-radius: 10px; padding: 18px 20px; }
+.metric-card .mc-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; }
+.metric-card .mc-val { font-size: 28px; font-weight: 700; letter-spacing: -.03em; }
+.metric-card .mc-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 5px; }
+.metric-card .mc-sub .up { color: var(--success); }
+.metric-card .mc-sub .down { color: var(--danger); }
+.chart-card { border: 1px solid var(--border-default); border-radius: 10px; padding: 18px 20px; }
+.chart-card .cc-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.chart-card .cc-title { font-size: 13.5px; font-weight: 600; }
+.chart-card .cc-sub { font-size: 12px; color: var(--text-secondary); }
+.chart-area { background: var(--sidebar-bg); border-radius: var(--radius-sm); height: 180px; display: flex; align-items: flex-end; padding: 0 12px 12px; gap: 8px; }
+.chart-bar { flex: 1; border-radius: 3px 3px 0 0; background: var(--text-primary); opacity: .12; transition: opacity .2s; cursor: pointer; }
+.chart-bar:hover { opacity: .2; }
+.chart-bar.accent { background: var(--accent); opacity: 1; }
+.chart-bar.accent:hover { opacity: .85; }
+.funnel-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-hairline); }
+.funnel-row:last-child { border-bottom: none; }
+.funnel-label { width: 120px; font-size: 13px; font-weight: 500; flex-shrink: 0; }
+.funnel-bar-wrap { flex: 1; height: 8px; background: var(--sidebar-bg); border-radius: 999px; overflow: hidden; }
+.funnel-bar-fill { height: 100%; border-radius: 999px; background: var(--text-primary); }
+.funnel-val { width: 60px; text-align: right; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.funnel-pct { width: 50px; text-align: right; font-size: 12px; color: var(--text-secondary); flex-shrink: 0; }
+
+/* ── Settings screen ── */
+#screen-settings { flex-direction: row; }
+.settings-nav { width: 200px; border-right: 1px solid var(--border-hairline); padding: 14px 0; flex-shrink: 0; overflow-y: auto; }
+.settings-nav-section { padding: 0 8px 12px; }
+.settings-nav-section + .settings-nav-section { padding-top: 12px; border-top: 1px solid var(--border-hairline); }
+.settings-nav-label { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); padding: 0 8px 6px; }
+.settings-nav-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; color: var(--text-secondary); transition: background .1s, color .1s; }
+.settings-nav-item:hover { background: var(--nav-hover); color: var(--text-primary); }
+.settings-nav-item.active { background: var(--nav-active); color: var(--text-primary); font-weight: 500; }
+
+.settings-main { flex: 1; overflow-y: auto; padding: 28px 32px; max-width: 760px; }
+.settings-section { margin-bottom: 36px; }
+.settings-section-title { font-size: 17px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 4px; }
+.settings-section-desc { font-size: 13.5px; color: var(--text-secondary); margin-bottom: 20px; }
+.settings-divider { height: 1px; background: var(--border-hairline); margin: 28px 0; }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.form-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.form-label { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+.form-hint { font-size: 12px; color: var(--text-secondary); }
+.form-input {
+  border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  padding: 8px 12px; font-size: 13.5px; font-family: var(--sans);
+  color: var(--text-primary); outline: none; transition: border-color .15s;
+  background: var(--content-bg);
+}
+.form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,201,.08); }
+.form-input:disabled { background: var(--sidebar-bg); color: var(--text-tertiary); }
+.form-select { appearance: none; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e"); background-repeat: no-repeat; background-position: right 10px center; background-size: 16px; padding-right: 36px; }
+.form-save-row { display: flex; gap: 8px; margin-top: 4px; }
+.btn { padding: 8px 16px; border-radius: var(--radius-sm); font-size: 13.5px; font-weight: 500; cursor: pointer; font-family: var(--sans); transition: background .1s, border-color .1s; }
+.btn-primary { background: var(--text-primary); color: #fff; border: 1px solid var(--text-primary); }
+.btn-primary:hover { background: #1f2937; }
+.btn-secondary { background: var(--content-bg); color: var(--text-primary); border: 1px solid var(--border-default); }
+.btn-secondary:hover { background: var(--sidebar-bg); }
+.btn-danger { background: var(--danger); color: #fff; border: 1px solid var(--danger); }
+.btn-danger:hover { background: #b91c1c; }
+.btn-accent { background: var(--accent); color: #fff; border: 1px solid var(--accent); }
+.btn-accent:hover { background: var(--accent-hover); }
+
+.members-table { width: 100%; border-collapse: collapse; }
+.members-table th { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); padding: 8px 10px; border-bottom: 1px solid var(--border-default); text-align: left; }
+.members-table td { padding: 12px 10px; border-bottom: 1px solid var(--border-hairline); font-size: 13px; vertical-align: middle; }
+.members-table tr:last-child td { border-bottom: none; }
+.member-cell { display: flex; align-items: center; gap: 9px; }
+.role-badge { font-size: 11px; font-weight: 500; border-radius: 999px; padding: 2px 9px; }
+.role-badge.owner { background: var(--accent-light); color: var(--accent); }
+.role-badge.admin { background: var(--purple-light); color: var(--purple); }
+.role-badge.member { background: var(--sidebar-bg); color: var(--text-secondary); border: 1px solid var(--border-default); }
+.role-badge.viewer { background: var(--sidebar-bg); color: var(--text-tertiary); border: 1px solid var(--border-hairline); }
+
+.billing-plan { border: 1.5px solid var(--border-default); border-radius: 10px; padding: 20px; margin-bottom: 14px; }
+.billing-plan.current { border-color: var(--accent); }
+.plan-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.plan-name { font-size: 15px; font-weight: 700; }
+.plan-current { font-size: 11px; font-weight: 600; background: var(--accent-light); color: var(--accent); border-radius: 999px; padding: 2px 9px; }
+.plan-price { font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; }
+.plan-features { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--text-secondary); }
+.plan-features .feat { display: flex; align-items: center; gap: 6px; }
+.plan-features .feat svg { width: 13px; height: 13px; color: var(--success); flex-shrink: 0; }
+
+.credit-usage-bar { height: 8px; border-radius: 999px; background: var(--border-default); overflow: hidden; margin: 8px 0; }
+.credit-usage-fill { height: 100%; border-radius: 999px; background: var(--accent); }
+.credit-usage-fill.warn { background: var(--warning); }
+.credit-usage-fill.danger { background: var(--danger); }
+
+.api-key-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border-hairline); }
+.api-key-item:last-child { border-bottom: none; }
+.api-key-info { flex: 1; }
+.api-key-name { font-size: 13px; font-weight: 500; }
+.api-key-val { font-family: var(--mono); font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+.api-key-meta { font-size: 12px; color: var(--text-tertiary); }
+
+.compliance-item { border: 1px solid var(--border-default); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+.compliance-item .ci-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.compliance-item .ci-title { font-size: 14px; font-weight: 600; flex: 1; }
+.ci-status { font-size: 11px; font-weight: 500; border-radius: 999px; padding: 2px 10px; }
+.ci-status.ok { background: var(--success-light); color: var(--success); }
+.ci-status.pending { background: var(--warning-light); color: var(--warning); }
+.ci-status.danger { background: var(--danger-light); color: var(--danger); }
+.compliance-item .ci-desc { font-size: 13px; color: var(--text-secondary); }
+
+/* ── Overlays ── */
+.overlay-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.25);
+  z-index: 100; opacity: 0; pointer-events: none; transition: opacity .2s;
+  backdrop-filter: blur(1px);
+}
+.overlay-backdrop.visible { opacity: 1; pointer-events: all; }
+
+/* Command palette */
+.command-palette {
+  position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+  width: 580px; max-width: calc(100vw - 32px);
+  background: var(--content-bg); border: 1px solid var(--border-default);
+  border-radius: 12px; box-shadow: var(--shadow-lg);
+  z-index: 200; overflow: hidden;
+}
+.cp-search { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border-hairline); }
+.cp-search svg { width: 18px; height: 18px; color: var(--text-secondary); flex-shrink: 0; }
+.cp-search input { flex: 1; border: none; outline: none; font-size: 15px; font-family: var(--sans); color: var(--text-primary); }
+.cp-search input::placeholder { color: var(--text-tertiary); }
+.cp-section-label { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); padding: 10px 16px 4px; }
+.cp-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; transition: background .1s; }
+.cp-item:hover, .cp-item.focused { background: var(--sidebar-bg); }
+.cp-item-icon { width: 28px; height: 28px; border-radius: var(--radius-sm); background: var(--sidebar-bg); border: 1px solid var(--border-default); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-secondary); }
+.cp-item-icon svg { width: 14px; height: 14px; }
+.cp-item-info { flex: 1; }
+.cp-item-name { font-size: 13.5px; font-weight: 500; }
+.cp-item-sub { font-size: 12px; color: var(--text-secondary); }
+.cp-item-kbd { font-family: var(--mono); font-size: 11px; background: var(--sidebar-bg); border: 1px solid var(--border-default); border-radius: 4px; padding: 2px 6px; color: var(--text-tertiary); }
+.cp-footer { padding: 8px 16px; border-top: 1px solid var(--border-hairline); display: flex; align-items: center; gap: 14px; font-size: 11.5px; color: var(--text-tertiary); }
+.cp-footer span { display: flex; align-items: center; gap: 5px; }
+.cp-footer .kk { font-family: var(--mono); font-size: 10px; background: var(--sidebar-bg); border: 1px solid var(--border-default); border-radius: 3px; padding: 1px 5px; }
+
+/* Import drawer */
+.import-drawer {
+  position: fixed; top: 0; right: -520px; width: 520px; height: 100vh;
+  background: var(--content-bg); border-left: 1px solid var(--border-default);
+  box-shadow: var(--shadow-lg); z-index: 150; display: flex; flex-direction: column;
+  transition: right .25s;
+}
+.import-drawer.open { right: 0; }
+.drawer-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border-hairline); flex-shrink: 0; }
+.drawer-header h2 { font-size: 15px; font-weight: 700; flex: 1; }
+.drawer-close { cursor: pointer; color: var(--text-tertiary); }
+.drawer-close:hover { color: var(--text-primary); }
+.drawer-body { flex: 1; overflow-y: auto; padding: 20px; }
+.drawer-footer { padding: 14px 20px; border-top: 1px solid var(--border-hairline); display: flex; gap: 10px; flex-shrink: 0; }
+
+.import-step-indicator { display: flex; align-items: center; gap: 0; margin-bottom: 24px; }
+.imp-step { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
+.imp-step .step-num { width: 22px; height: 22px; border-radius: 50%; background: var(--sidebar-bg); border: 1.5px solid var(--border-default); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.imp-step.active { color: var(--accent); }
+.imp-step.active .step-num { background: var(--accent); border-color: var(--accent); color: #fff; }
+.imp-step.done { color: var(--success); }
+.imp-step.done .step-num { background: var(--success); border-color: var(--success); color: #fff; }
+.imp-step-line { flex: 1; height: 1.5px; background: var(--border-default); min-width: 20px; }
+.imp-step-line.done { background: var(--success); }
+
+.upload-zone {
+  border: 2px dashed var(--border-default); border-radius: 10px;
+  padding: 40px 20px; text-align: center; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.upload-zone:hover { border-color: var(--accent); background: var(--accent-light); }
+.upload-zone svg { width: 40px; height: 40px; color: var(--text-tertiary); margin-bottom: 12px; }
+.upload-zone p { font-size: 13.5px; color: var(--text-secondary); }
+.upload-zone p b { color: var(--text-primary); }
+.source-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.source-card { border: 1.5px solid var(--border-default); border-radius: 10px; padding: 14px; cursor: pointer; transition: border-color .15s, background .15s; }
+.source-card:hover { border-color: var(--accent); background: var(--accent-light); }
+.source-card.selected { border-color: var(--accent); background: var(--accent-light); }
+.source-logo { font-size: 18px; margin-bottom: 6px; }
+.source-name { font-size: 13px; font-weight: 600; }
+.source-desc { font-size: 11.5px; color: var(--text-secondary); margin-top: 2px; }
+
+/* Reveal modal */
+.modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--content-bg); border: 1px solid var(--border-default);
+  border-radius: 12px; box-shadow: var(--shadow-lg); z-index: 200;
+  width: 420px; max-width: calc(100vw - 32px);
+  opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s;
+}
+.modal.visible { opacity: 1; pointer-events: all; transform: translate(-50%, calc(-50% - 0px)); }
+.modal-header { padding: 20px 20px 16px; border-bottom: 1px solid var(--border-hairline); }
+.modal-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.modal-subtitle { font-size: 13px; color: var(--text-secondary); }
+.modal-body { padding: 18px 20px; }
+.reveal-cost-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--sidebar-bg); border-radius: var(--radius-sm); margin-bottom: 10px; font-size: 13.5px; }
+.reveal-cost-row .rc-type { font-weight: 500; }
+.reveal-cost-row .rc-cost { font-weight: 700; font-family: var(--mono); }
+.reveal-balance { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); font-size: 13px; color: var(--text-secondary); }
+.reveal-balance .rb-after { font-weight: 600; color: var(--text-primary); }
+.reveal-policy { font-size: 12px; color: var(--text-tertiary); margin-top: 12px; line-height: 1.5; }
+.reveal-policy a { color: var(--accent); }
+.modal-footer { padding: 14px 20px; border-top: 1px solid var(--border-hairline); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* Notification panel */
+.notif-panel {
+  position: fixed; top: calc(var(--topbar-h) + 4px); right: 12px;
+  width: 340px; background: var(--content-bg);
+  border: 1px solid var(--border-default); border-radius: 10px;
+  box-shadow: var(--shadow-lg); z-index: 150;
+  opacity: 0; pointer-events: none; transition: opacity .15s;
+}
+.notif-panel.visible { opacity: 1; pointer-events: all; }
+.notif-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-hairline); }
+.notif-header h4 { font-size: 13.5px; font-weight: 700; }
+.notif-header button { font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer; font-family: var(--sans); }
+.notif-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border-hairline); cursor: pointer; transition: background .1s; }
+.notif-item:hover { background: var(--sidebar-bg); }
+.notif-item:last-child { border-bottom: none; }
+.notif-icon { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.notif-icon.reply { background: var(--success-light); color: var(--success); }
+.notif-icon.alert { background: var(--warning-light); color: var(--warning); }
+.notif-icon.info { background: var(--accent-light); color: var(--accent); }
+.notif-icon svg { width: 14px; height: 14px; }
+.notif-content { flex: 1; }
+.notif-text { font-size: 13px; line-height: 1.4; }
+.notif-text b { font-weight: 500; }
+.notif-time { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+.notif-unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 6px; }
+
+/* ── Misc utilities ── */
+.flex { display: flex; }
+.items-center { align-items: center; }
+.gap-8 { gap: 8px; }
+.ml-auto { margin-left: auto; }
+.text-muted { color: var(--text-secondary); }
+.text-tertiary { color: var(--text-tertiary); }
+.font-mono { font-family: var(--mono); }
+.text-sm { font-size: 12.5px; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.tag {
+  font-size: 11px; font-weight: 500; border-radius: 999px;
+  padding: 2px 8px; background: var(--sidebar-bg);
+  color: var(--text-secondary); border: 1px solid var(--border-default);
+}
+</style>
+</head>
+<body>
+
+<!-- SVG defs -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="tp-mark" viewBox="0 0 100 100">
+    <path d="M22 43 L50 28 L78 43" fill="none" stroke="var(--mark-accent,currentColor)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M22 60 L50 45 L78 60" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M22 77 L50 62 L78 77" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+</svg>
+
+<!-- ── App shell ── -->
+<div class="shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="logo-row">
+        <svg class="logo-mark" viewBox="0 0 100 100"><use href="#tp-mark"/></svg>
+        <span class="logo-word"><span class="t1">True</span><span class="t2">Point</span></span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-item" data-screen="home" onclick="switchScreen('home')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Home
+      </div>
+      <div class="nav-item" data-screen="prospect" onclick="switchScreen('prospect')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Prospect
+      </div>
+      <div class="nav-item" data-screen="sequences" onclick="switchScreen('sequences')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Sequences
+      </div>
+      <div class="nav-item" data-screen="inbox" onclick="switchScreen('inbox')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+        Inbox
+        <span class="badge">4</span>
+      </div>
+      <div class="nav-item" data-screen="reports" onclick="switchScreen('reports')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Reports
+      </div>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="nav-item" data-screen="settings" onclick="switchScreen('settings')" style="margin-bottom:6px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </div>
+      <div class="nav-divider"></div>
+      <!-- Workspace switcher -->
+      <div class="workspace-switcher" onclick="alert('Workspace switcher — switch between workspaces or create a new one')">
+        <div class="ws-icon">NA</div>
+        <div class="ws-info">
+          <div class="ws-name">North America ENT</div>
+          <div class="ws-tenant">Acme Sales Team</div>
+        </div>
+        <svg class="ws-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <!-- User row -->
+      <div class="user-row" onclick="alert('Account menu — profile, security, sign out')">
+        <div class="user-avatar">JD</div>
+        <div class="user-info">
+          <div class="user-name">Jordan Davis</div>
+          <div class="user-role">Member</div>
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-tertiary);flex-shrink:0"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <!-- Top bar -->
+    <header class="topbar">
+      <span class="topbar-title" id="topbar-title">Home</span>
+      <div class="topbar-divider"></div>
+      <div class="search-bar" onclick="toggleCommandPalette()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Search or jump to…</span>
+        <span class="search-kbd">⌘K</span>
+      </div>
+      <div class="topbar-actions">
+        <div class="icon-btn" onclick="toggleNotifications()" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notif-dot"></span>
+        </div>
+        <div class="credit-pill" onclick="switchScreen('settings');switchSettingsNav('billing')" title="Tenant credit balance — click for Billing & Credits">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          1,240 credits
+        </div>
+      </div>
+    </header>
+
+    <!-- Content body -->
+    <div class="content-body">
+
+      <!-- ═══════════════════ HOME ═══════════════════ -->
+      <div id="screen-home" class="screen active">
+        <div style="padding:28px 32px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:22px;">
+          <div class="home-welcome">
+            <h1>Good morning, Jordan 👋</h1>
+            <p>North America ENT workspace · Monday, June 8</p>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-card">
+              <div class="s-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Total Contacts
+              </div>
+              <div class="s-val">12,847</div>
+              <div class="s-delta up">+348 this week</div>
+            </div>
+            <div class="stat-card">
+              <div class="s-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                Revealed This Month
+              </div>
+              <div class="s-val">284</div>
+              <div class="s-delta up">+22% vs last month</div>
+            </div>
+            <div class="stat-card">
+              <div class="s-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                Active Sequences
+              </div>
+              <div class="s-val">3</div>
+              <div class="s-delta">484 contacts enrolled</div>
+            </div>
+            <div class="stat-card">
+              <div class="s-label">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                Credits Remaining
+              </div>
+              <div class="s-val">1,240</div>
+              <div class="s-delta">of 2,000 · <a href="#" style="color:var(--accent)">Top up</a></div>
+            </div>
+          </div>
+
+          <div class="home-grid">
+            <!-- Today's tasks -->
+            <div class="home-card">
+              <div class="home-card-header">
+                <h3>Today's Tasks</h3>
+                <span class="hc-action">View all</span>
+              </div>
+              <div class="home-card-body">
+                <div class="task-item">
+                  <div class="task-check"></div>
+                  <div class="task-info"><div class="t-main">Follow up with Emma Rodriguez</div><div class="t-sub">Stripe · VP Engineering</div></div>
+                  <div class="task-due overdue">Overdue</div>
+                </div>
+                <div class="task-item">
+                  <div class="task-check"></div>
+                  <div class="task-info"><div class="t-main">Review sequence reply from James Park</div><div class="t-sub">Linear · Enterprise Outreach</div></div>
+                  <div class="task-due">Due today</div>
+                </div>
+                <div class="task-item">
+                  <div class="task-check"></div>
+                  <div class="task-info"><div class="t-main">Send demo prep to Marcus Kim</div><div class="t-sub">Vercel · VP Sales</div></div>
+                  <div class="task-due">2pm</div>
+                </div>
+                <div class="task-item">
+                  <div class="task-check done">
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <div class="task-info" style="opacity:.5"><div class="t-main" style="text-decoration:line-through">Import Q2 prospect list</div><div class="t-sub">248 contacts added</div></div>
+                  <div class="task-due">Done</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hot leads -->
+            <div class="home-card">
+              <div class="home-card-header">
+                <h3>Hot Leads</h3>
+                <span class="hc-action" onclick="switchScreen('prospect')">Prospect →</span>
+              </div>
+              <div class="home-card-body">
+                <div class="hot-lead-item" onclick="switchScreen('prospect')">
+                  <div class="hl-avatar">ER</div>
+                  <div class="hl-info"><div class="hl-name">Emma Rodriguez</div><div class="hl-sub">VP Eng · Stripe</div></div>
+                  <span class="score-badge high">94</span>
+                </div>
+                <div class="hot-lead-item" onclick="switchScreen('prospect')">
+                  <div class="hl-avatar">JP</div>
+                  <div class="hl-info"><div class="hl-name">James Park</div><div class="hl-sub">Dir. Product · Linear</div></div>
+                  <span class="score-badge high">87</span>
+                </div>
+                <div class="hot-lead-item" onclick="switchScreen('prospect')">
+                  <div class="hl-avatar">SC</div>
+                  <div class="hl-info"><div class="hl-name">Sarah Chen</div><div class="hl-sub">CTO · Supabase</div></div>
+                  <span class="score-badge med">81</span>
+                </div>
+                <div class="hot-lead-item" onclick="switchScreen('prospect')">
+                  <div class="hl-avatar">MK</div>
+                  <div class="hl-info"><div class="hl-name">Marcus Kim</div><div class="hl-sub">VP Sales · Vercel</div></div>
+                  <span class="score-badge med">76</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Recent activity -->
+            <div class="home-card">
+              <div class="home-card-header">
+                <h3>Activity</h3>
+                <span class="hc-action">View all</span>
+              </div>
+              <div class="home-card-body">
+                <div class="activity-item">
+                  <div class="activity-icon reply"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></div>
+                  <div class="activity-info"><b>Emma Rodriguez</b> replied to sequence step 2</div>
+                  <div class="activity-time">2h</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-icon reveal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+                  <div class="activity-info">You revealed <b>6 contacts</b> · 6 credits spent</div>
+                  <div class="activity-time">4h</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-icon import"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+                  <div class="activity-info">Import complete · <b>248 contacts</b> added (3 dupes skipped)</div>
+                  <div class="activity-time">6h</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-icon reply"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></div>
+                  <div class="activity-info"><b>James Park</b> opened step 1 email · 3 times</div>
+                  <div class="activity-time">1d</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sequence snapshot -->
+          <div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:12px;">Sequence Performance</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+              <div style="border:1px solid var(--border-default);border-radius:10px;padding:16px;">
+                <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">Enterprise SaaS Outreach <span class="outreach-badge in-seq">Active</span></div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
+                  <div><div style="font-size:20px;font-weight:700;">247</div><div style="font-size:11px;color:var(--text-secondary);">Enrolled</div></div>
+                  <div><div style="font-size:20px;font-weight:700;color:var(--success);">31</div><div style="font-size:11px;color:var(--text-secondary);">Replied</div></div>
+                  <div><div style="font-size:20px;font-weight:700;color:var(--purple);">8</div><div style="font-size:11px;color:var(--text-secondary);">Meetings</div></div>
+                </div>
+              </div>
+              <div style="border:1px solid var(--border-default);border-radius:10px;padding:16px;">
+                <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">SMB Re-engagement <span class="outreach-badge in-seq">Active</span></div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
+                  <div><div style="font-size:20px;font-weight:700;">148</div><div style="font-size:11px;color:var(--text-secondary);">Enrolled</div></div>
+                  <div><div style="font-size:20px;font-weight:700;color:var(--success);">18</div><div style="font-size:11px;color:var(--text-secondary);">Replied</div></div>
+                  <div><div style="font-size:20px;font-weight:700;color:var(--purple);">3</div><div style="font-size:11px;color:var(--text-secondary);">Meetings</div></div>
+                </div>
+              </div>
+              <div style="border:1px solid var(--border-default);border-radius:10px;padding:16px;">
+                <div style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">EMEA Expansion Q2 <span class="outreach-badge nurture" style="background:var(--warning-light);color:var(--warning);">Paused</span></div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
+                  <div><div style="font-size:20px;font-weight:700;">89</div><div style="font-size:11px;color:var(--text-secondary);">Enrolled</div></div>
+                  <div><div style="font-size:20px;font-weight:700;color:var(--success);">7</div><div style="font-size:11px;color:var(--text-secondary);">Replied</div></div>
+                  <div><div style="font-size:20px;font-weight:700;color:var(--purple);">2</div><div style="font-size:11px;color:var(--text-secondary);">Meetings</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ═══════════════════ PROSPECT ═══════════════════ -->
+      <div id="screen-prospect" class="screen" style="position:relative;">
+
+        <!-- Filter rail -->
+        <div class="filter-rail">
+          <div class="filter-section">
+            <div class="filter-label">Saved Views</div>
+            <div class="saved-view-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              All Contacts
+              <span class="sv-count">12.8k</span>
+            </div>
+            <div class="saved-view-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              VP/C-Suite · SaaS
+              <span class="sv-count">847</span>
+            </div>
+            <div class="saved-view-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              High score, unreached
+              <span class="sv-count">312</span>
+            </div>
+            <div class="saved-view-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              ICP List – Q2 2025
+              <span class="sv-count">1.2k</span>
+            </div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Seniority <button>Clear</button></div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">C-Suite / VP</span><span class="fo-count">3,241</span></div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">Director</span><span class="fo-count">4,108</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Manager</span><span class="fo-count">3,822</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Individual Contributor</span><span class="fo-count">1,676</span></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Department</div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">Engineering</span><span class="fo-count">4,102</span></div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">Product</span><span class="fo-count">1,847</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Sales</span><span class="fo-count">2,204</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Marketing</span><span class="fo-count">1,923</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Finance</span><span class="fo-count">988</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Operations</span><span class="fo-count">783</span></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Company Size</div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">1–10</span><span class="fo-count">892</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">11–50</span><span class="fo-count">2,104</span></div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">51–200</span><span class="fo-count">3,847</span></div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">201–1,000</span><span class="fo-count">4,102</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">1,000+</span><span class="fo-count">1,902</span></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Industry</div>
+            <div class="filter-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" placeholder="Search industries…"/>
+            </div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">SaaS / Software</span><span class="fo-count">5,204</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Fintech</span><span class="fo-count">2,108</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Healthcare Tech</span><span class="fo-count">892</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">E-commerce</span><span class="fo-count">1,204</span></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Location</div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">United States</span><span class="fo-count">7,841</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">United Kingdom</span><span class="fo-count">1,204</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Canada</span><span class="fo-count">847</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Germany</span><span class="fo-count">542</span></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Data</div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Has verified email</span><span class="fo-count">9,204</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Has phone</span><span class="fo-count">5,847</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Already revealed</span><span class="fo-count">284</span></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Lead Score</div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">80–100 (High)</span><span class="fo-count">1,847</span></div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">60–79 (Medium)</span><span class="fo-count">3,204</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">40–59 (Low)</span><span class="fo-count">4,102</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">0–39 (Minimal)</span><span class="fo-count">3,694</span></div>
+          </div>
+
+          <div class="filter-section">
+            <div class="filter-label">Outreach Status</div>
+            <div class="filter-option"><input type="checkbox" checked/><span class="fo-label">New</span><span class="fo-count">7,404</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">In sequence</span><span class="fo-count">484</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Replied</span><span class="fo-count">178</span></div>
+            <div class="filter-option"><input type="checkbox"/><span class="fo-label">Meeting booked</span><span class="fo-count">43</span></div>
+          </div>
+        </div>
+
+        <!-- Results area -->
+        <div class="results-area">
+          <div class="results-toolbar">
+            <div class="toggle-group">
+              <button class="toggle-btn active" id="contacts-btn" onclick="toggleProspectView('contacts')">Contacts</button>
+              <button class="toggle-btn" id="accounts-btn" onclick="toggleProspectView('accounts')">Accounts</button>
+            </div>
+            <span class="result-count"><b>5,051</b> results</span>
+            <div class="filter-chip-row" style="margin:0">
+              <span class="filter-chip">VP/C-Suite <button onclick="this.parentElement.remove()">×</button></span>
+              <span class="filter-chip">Director <button onclick="this.parentElement.remove()">×</button></span>
+              <span class="filter-chip">SaaS <button onclick="this.parentElement.remove()">×</button></span>
+              <span class="filter-chip">51–1,000 employees <button onclick="this.parentElement.remove()">×</button></span>
+            </div>
+            <div class="toolbar-spacer"></div>
+            <button class="toolbar-btn" onclick="alert('Save current filters as a saved view / list')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              Save view
+            </button>
+            <button class="toolbar-btn" onclick="toggleImport()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Import
+            </button>
+            <button class="toolbar-btn primary" onclick="switchScreen('prospect');openDetailPanel()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Search
+            </button>
+          </div>
+
+          <div style="display:flex;flex:1;overflow:hidden;position:relative;">
+            <!-- Contacts table -->
+            <div class="data-table-wrap" id="contacts-view">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="select-all" onchange="toggleAllRows(this)"/></th>
+                    <th>Name ↕</th>
+                    <th>Title</th>
+                    <th>Company ↕</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Score ↕</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="contacts-tbody">
+                  <!-- Row 1 — revealed contact (active/detail open) -->
+                  <tr class="active" onclick="openDetailPanel()" data-id="1">
+                    <td><input type="checkbox" checked class="row-cb" onchange="updateBulkBar()"/></td>
+                    <td><div class="contact-cell"><div class="c-avatar">ER</div><div><div class="c-name">Emma Rodriguez</div></div></div></td>
+                    <td class="text-muted">VP Engineering</td>
+                    <td><div class="c-name">Stripe</div><div class="c-company">SaaS · 8,000+</div></td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="revealed-val">emma@stripe.com</span>
+                        <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      </div>
+                    </td>
+                    <td><span class="score-badge high">94</span></td>
+                    <td><span class="outreach-badge in-seq">In sequence</span></td>
+                    <td><button class="toolbar-btn" style="padding:4px 8px;font-size:12px;" onclick="event.stopPropagation();openDetailPanel()">View</button></td>
+                  </tr>
+                  <!-- Row 2 -->
+                  <tr onclick="openDetailPanel()" data-id="2">
+                    <td><input type="checkbox" checked class="row-cb" onchange="updateBulkBar()"/></td>
+                    <td><div class="contact-cell"><div class="c-avatar">JP</div><div><div class="c-name">James Park</div></div></div></td>
+                    <td class="text-muted">Director of Product</td>
+                    <td><div class="c-name">Linear</div><div class="c-company">SaaS · 51–200</div></td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph risky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                      </div>
+                    </td>
+                    <td><span class="score-badge high">87</span></td>
+                    <td><span class="outreach-badge replied">Replied</span></td>
+                    <td></td>
+                  </tr>
+                  <!-- Row 3 -->
+                  <tr onclick="openDetailPanel()" data-id="3">
+                    <td><input type="checkbox" class="row-cb" onchange="updateBulkBar()"/></td>
+                    <td><div class="contact-cell"><div class="c-avatar">SC</div><div><div class="c-name">Sarah Chen</div></div></div></td>
+                    <td class="text-muted">CTO</td>
+                    <td><div class="c-name">Supabase</div><div class="c-company">SaaS · 51–200</div></td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val text-tertiary">—</span>
+                        <div class="status-glyph none"></div>
+                      </div>
+                    </td>
+                    <td><span class="score-badge med">81</span></td>
+                    <td><span class="outreach-badge new">New</span></td>
+                    <td><button class="toolbar-btn" style="padding:4px 8px;font-size:12px;background:var(--accent);color:#fff;border-color:var(--accent)" onclick="event.stopPropagation();toggleRevealModal()">Reveal</button></td>
+                  </tr>
+                  <!-- Row 4 -->
+                  <tr onclick="openDetailPanel()" data-id="4">
+                    <td><input type="checkbox" class="row-cb" onchange="updateBulkBar()"/></td>
+                    <td><div class="contact-cell"><div class="c-avatar">MK</div><div><div class="c-name">Marcus Kim</div></div></div></td>
+                    <td class="text-muted">VP Sales</td>
+                    <td><div class="c-name">Vercel</div><div class="c-company">SaaS · 201–1,000</div></td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph risky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      </div>
+                    </td>
+                    <td><span class="score-badge med">76</span></td>
+                    <td><span class="outreach-badge meeting">Meeting booked</span></td>
+                    <td></td>
+                  </tr>
+                  <!-- Row 5 -->
+                  <tr onclick="openDetailPanel()" data-id="5">
+                    <td><input type="checkbox" class="row-cb" onchange="updateBulkBar()"/></td>
+                    <td><div class="contact-cell"><div class="c-avatar">PP</div><div><div class="c-name">Priya Patel</div></div></div></td>
+                    <td class="text-muted">Head of Growth</td>
+                    <td><div class="c-name">Notion</div><div class="c-company">SaaS · 201–1,000</div></td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph risky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                      </div>
+                    </td>
+                    <td><span class="score-badge med">71</span></td>
+                    <td><span class="outreach-badge new">New</span></td>
+                    <td><button class="toolbar-btn" style="padding:4px 8px;font-size:12px;background:var(--accent);color:#fff;border-color:var(--accent)" onclick="event.stopPropagation();toggleRevealModal()">Reveal</button></td>
+                  </tr>
+                  <!-- Row 6 -->
+                  <tr onclick="openDetailPanel()" data-id="6">
+                    <td><input type="checkbox" class="row-cb" onchange="updateBulkBar()"/></td>
+                    <td><div class="contact-cell"><div class="c-avatar">AT</div><div><div class="c-name">Alex Thompson</div></div></div></td>
+                    <td class="text-muted">Engineering Manager</td>
+                    <td><div class="c-name">Figma</div><div class="c-company">SaaS · 201–1,000</div></td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val text-tertiary">—</span>
+                        <div class="status-glyph none"></div>
+                      </div>
+                    </td>
+                    <td><span class="score-badge low-med">68</span></td>
+                    <td><span class="outreach-badge new">New</span></td>
+                    <td><button class="toolbar-btn" style="padding:4px 8px;font-size:12px;background:var(--accent);color:#fff;border-color:var(--accent)" onclick="event.stopPropagation();toggleRevealModal()">Reveal</button></td>
+                  </tr>
+                  <!-- Row 7 -->
+                  <tr onclick="openDetailPanel()" data-id="7">
+                    <td><input type="checkbox" class="row-cb" onchange="updateBulkBar()"/></td>
+                    <td><div class="contact-cell"><div class="c-avatar">JL</div><div><div class="c-name">Jordan Lee</div></div></div></td>
+                    <td class="text-muted">Director of Operations</td>
+                    <td><div class="c-name">Loom</div><div class="c-company">SaaS · 51–200</div></td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val text-tertiary">—</span>
+                        <div class="status-glyph none"></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph risky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                      </div>
+                    </td>
+                    <td><span class="score-badge low-med">55</span></td>
+                    <td><span class="outreach-badge new">New</span></td>
+                    <td></td>
+                  </tr>
+                  <!-- Row 8 -->
+                  <tr onclick="openDetailPanel()" data-id="8">
+                    <td><input type="checkbox" class="row-cb" onchange="updateBulkBar()"/></td>
+                    <td><div class="contact-cell"><div class="c-avatar">CW</div><div><div class="c-name">Chris Wilson</div></div></div></td>
+                    <td class="text-muted">VP Finance</td>
+                    <td><div class="c-name">Airtable</div><div class="c-company">SaaS · 201–1,000</div></td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      </div>
+                    </td>
+                    <td>
+                      <div class="masked-cell">
+                        <span class="masked-val">••••••••</span>
+                        <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      </div>
+                    </td>
+                    <td><span class="score-badge low">43</span></td>
+                    <td><span class="outreach-badge disq">Disqualified</span></td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+              <!-- Pagination -->
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border-hairline);font-size:13px;color:var(--text-secondary);">
+                <span>Showing 1–8 of 5,051</span>
+                <div style="display:flex;gap:4px;">
+                  <button class="toolbar-btn" style="padding:4px 10px;font-size:12px;" disabled>← Prev</button>
+                  <button class="toolbar-btn" style="padding:4px 10px;font-size:12px;background:var(--nav-active);font-weight:600;">1</button>
+                  <button class="toolbar-btn" style="padding:4px 10px;font-size:12px;">2</button>
+                  <button class="toolbar-btn" style="padding:4px 10px;font-size:12px;">3</button>
+                  <span style="padding:4px 6px;">…</span>
+                  <button class="toolbar-btn" style="padding:4px 10px;font-size:12px;">632</button>
+                  <button class="toolbar-btn" style="padding:4px 10px;font-size:12px;">Next →</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Accounts table (hidden by default) -->
+            <div class="data-table-wrap" id="accounts-view" style="display:none;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox"/></th>
+                    <th>Company ↕</th>
+                    <th>Industry</th>
+                    <th>Size</th>
+                    <th>Location</th>
+                    <th>Contacts</th>
+                    <th>Score</th>
+                    <th>Intent signals</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr onclick="openDetailPanel()"><td><input type="checkbox"/></td><td><div class="c-name">Stripe</div><div class="c-company">stripe.com</div></td><td>Fintech / Payments</td><td>8,000+</td><td>San Francisco, CA</td><td style="font-weight:600;">12</td><td><span class="score-badge high">91</span></td><td><span class="tag">Hiring surge</span> <span class="tag">Funding</span></td><td><button class="toolbar-btn" style="padding:4px 8px;font-size:12px;">View</button></td></tr>
+                  <tr onclick="openDetailPanel()"><td><input type="checkbox"/></td><td><div class="c-name">Vercel</div><div class="c-company">vercel.com</div></td><td>Developer Tools / SaaS</td><td>201–1,000</td><td>Remote / US</td><td style="font-weight:600;">7</td><td><span class="score-badge high">84</span></td><td><span class="tag">Web visit</span></td><td></td></tr>
+                  <tr onclick="openDetailPanel()"><td><input type="checkbox"/></td><td><div class="c-name">Linear</div><div class="c-company">linear.app</div></td><td>Project Management / SaaS</td><td>51–200</td><td>Remote / US</td><td style="font-weight:600;">4</td><td><span class="score-badge med">77</span></td><td><span class="tag">Job change</span></td><td></td></tr>
+                  <tr onclick="openDetailPanel()"><td><input type="checkbox"/></td><td><div class="c-name">Supabase</div><div class="c-company">supabase.com</div></td><td>Developer Tools / SaaS</td><td>51–200</td><td>Remote / US</td><td style="font-weight:600;">3</td><td><span class="score-badge med">72</span></td><td>—</td><td></td></tr>
+                  <tr onclick="openDetailPanel()"><td><input type="checkbox"/></td><td><div class="c-name">Notion</div><div class="c-company">notion.so</div></td><td>Productivity / SaaS</td><td>201–1,000</td><td>San Francisco, CA</td><td style="font-weight:600;">5</td><td><span class="score-badge med">68</span></td><td><span class="tag">Funding</span></td><td></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Detail panel -->
+            <div class="detail-panel" id="detail-panel">
+              <div class="detail-panel-header">
+                <h3>Contact Detail</h3>
+                <div style="display:flex;gap:4px;">
+                  <button class="toolbar-btn" style="padding:3px 8px;font-size:12px;" onclick="alert('Open contact in full page view')">↗ Expand</button>
+                  <span class="dp-close" onclick="closeDetailPanel()">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </span>
+                </div>
+              </div>
+              <div class="detail-body">
+                <!-- Contact header -->
+                <div class="dp-contact-header">
+                  <div class="dp-avatar">ER</div>
+                  <div class="dp-name">Emma Rodriguez</div>
+                  <div class="dp-title">VP Engineering · <a href="#" style="color:var(--accent)">Stripe</a></div>
+                  <div class="dp-location">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    San Francisco, CA · Engineering
+                  </div>
+                  <div class="dp-action-row">
+                    <button class="dp-btn secondary" onclick="alert('Add to list')">+ List</button>
+                    <button class="dp-btn secondary" onclick="switchScreen('sequences')">Enroll</button>
+                    <button class="dp-btn secondary" onclick="alert('Draft AI outreach — human review before send')">✦ Draft</button>
+                    <button class="dp-btn secondary" onclick="alert('Export this contact to CSV')">↓ CSV</button>
+                  </div>
+                </div>
+
+                <!-- Lead score -->
+                <div class="dp-section">
+                  <div class="dp-section-label">Lead Score</div>
+                  <div class="composite-score">
+                    <div class="composite-num">94</div>
+                    <div class="composite-info">
+                      <div class="composite-label">Composite</div>
+                      <div class="composite-sub">Top 8% of workspace</div>
+                    </div>
+                  </div>
+                  <div class="score-overview">
+                    <div class="score-component">
+                      <div class="score-comp-label">ICP Fit</div>
+                      <div class="score-comp-val">96</div>
+                      <div class="score-bar"><div class="fill" style="width:96%"></div></div>
+                    </div>
+                    <div class="score-component">
+                      <div class="score-comp-label">Intent</div>
+                      <div class="score-comp-val">88</div>
+                      <div class="score-bar"><div class="fill" style="width:88%"></div></div>
+                    </div>
+                    <div class="score-component">
+                      <div class="score-comp-label">Engagement</div>
+                      <div class="score-comp-val">94</div>
+                      <div class="score-bar"><div class="fill" style="width:94%"></div></div>
+                    </div>
+                    <div class="score-component">
+                      <div class="score-comp-label">Signals</div>
+                      <div class="score-comp-val">3</div>
+                      <div class="score-bar"><div class="fill" style="width:60%"></div></div>
+                    </div>
+                  </div>
+                  <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">
+                    <span class="tag">Job change ↑</span>
+                    <span class="tag">Hiring surge</span>
+                    <span class="tag">Series D funding</span>
+                  </div>
+                </div>
+
+                <!-- Contact info -->
+                <div class="dp-section">
+                  <div class="dp-section-label">Contact Info</div>
+                  <div class="dp-field">
+                    <div class="dp-field-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+                    <span class="dp-field-value">emma@stripe.com</span>
+                    <div class="dp-field-meta">
+                      <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                    </div>
+                  </div>
+                  <div class="dp-field">
+                    <div class="dp-field-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.18 2 2 0 0 1 3.59 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.91a16 16 0 0 0 6.18 6.18l1.07-.92a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
+                    <span class="dp-field-value">+1 (415) 555-0192</span>
+                    <div class="dp-field-meta">
+                      <div class="status-glyph valid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                    </div>
+                  </div>
+                  <div class="dp-field">
+                    <div class="dp-field-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg></div>
+                    <a href="#" style="color:var(--accent);font-size:13px;">linkedin.com/in/emma-rodriguez</a>
+                  </div>
+                </div>
+
+                <!-- Provenance -->
+                <div class="dp-section">
+                  <div class="dp-section-label">Data Sources</div>
+                  <div class="provenance-item">
+                    <div class="prov-source"><span class="prov-badge">Apollo</span><span style="font-size:12.5px;font-weight:500;">Enterprise import · CSV</span></div>
+                    <div class="prov-date">Imported Jun 2, 2025 · Verified Jun 4, 2025</div>
+                  </div>
+                  <div class="provenance-item">
+                    <div class="prov-source"><span class="prov-badge">ZoomInfo</span><span style="font-size:12.5px;font-weight:500;">Enrichment run · API</span></div>
+                    <div class="prov-date">Enriched Jun 3, 2025</div>
+                  </div>
+                </div>
+
+                <!-- Outreach status -->
+                <div class="dp-section">
+                  <div class="dp-section-label">Outreach</div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                    <span class="outreach-badge in-seq" style="font-size:12px;">In sequence</span>
+                    <span style="font-size:12px;color:var(--text-secondary);">Enterprise SaaS Outreach · Step 2</span>
+                  </div>
+                  <div style="font-size:12.5px;color:var(--text-secondary);">Opened step 1 · 3× · Last: Jun 6, 2025</div>
+                  <div style="font-size:12.5px;color:var(--success);margin-top:4px;font-weight:500;">Replied Jun 7, 2025 — Review in Inbox →</div>
+                </div>
+
+                <!-- Activity -->
+                <div class="dp-section">
+                  <div class="dp-section-label">Recent Activity</div>
+                  <div class="activity-item" style="padding-left:0;padding-right:0;">
+                    <div class="activity-icon reply"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></div>
+                    <div class="activity-info"><b>Replied</b> to sequence email</div>
+                    <div class="activity-time">2h ago</div>
+                  </div>
+                  <div class="activity-item" style="padding-left:0;padding-right:0;">
+                    <div class="activity-icon" style="background:var(--sidebar-bg);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+                    <div class="activity-info"><b>Opened</b> step 1 email · 3×</div>
+                    <div class="activity-time">Jun 6</div>
+                  </div>
+                  <div class="activity-item" style="padding-left:0;padding-right:0;">
+                    <div class="activity-icon reveal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+                    <div class="activity-info"><b>Revealed</b> · email + phone · 2 credits</div>
+                    <div class="activity-time">Jun 2</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bulk action bar -->
+          <div class="bulk-bar" id="bulk-bar">
+            <span class="bb-count" id="bb-count">2 selected</span>
+            <div class="bb-divider"></div>
+            <button class="bulk-btn reveal-btn" onclick="toggleRevealModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Reveal selected (2 credits)
+            </button>
+            <button class="bulk-btn" onclick="alert('Add 2 contacts to a list')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              Add to list
+            </button>
+            <button class="bulk-btn" onclick="switchScreen('sequences')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              Enroll in sequence
+            </button>
+            <button class="bulk-btn" onclick="alert('Export revealed contacts to CSV')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export CSV
+            </button>
+            <div class="bb-spacer"></div>
+            <span class="bb-clear" onclick="clearSelection()">Clear selection</span>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ═══════════════════ SEQUENCES ═══════════════════ -->
+      <div id="screen-sequences" class="screen" style="flex-direction:column;overflow-y:auto;">
+        <div class="seq-toolbar">
+          <h2>Sequences</h2>
+          <div class="toolbar-spacer"></div>
+          <button class="toolbar-btn" onclick="alert('View email sending domains, warm-up, DKIM/SPF status')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"/></svg>
+            Sending settings
+          </button>
+          <button class="toolbar-btn" onclick="alert('Browse and manage email templates')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Templates
+          </button>
+          <button class="toolbar-btn primary" onclick="alert('Create a new outreach sequence')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Sequence
+          </button>
+        </div>
+
+        <div class="seq-stats">
+          <div class="seq-stat"><div class="ss-val">3</div><div class="ss-label">Active sequences</div></div>
+          <div class="seq-stat"><div class="ss-val">484</div><div class="ss-label">Total enrolled</div></div>
+          <div class="seq-stat"><div class="ss-val" style="color:var(--success);">56</div><div class="ss-label">Replies this month</div></div>
+          <div class="seq-stat"><div class="ss-val" style="color:var(--purple);">13</div><div class="ss-label">Meetings booked</div></div>
+        </div>
+
+        <div class="seq-list">
+          <!-- Sequence 1 -->
+          <div class="seq-card" onclick="alert('Open sequence builder / drill-down')">
+            <div class="seq-card-header">
+              <div style="font-size:20px;">📧</div>
+              <span class="seq-name">Enterprise SaaS Outreach</span>
+              <span class="seq-badge active">Active</span>
+              <button class="toolbar-btn" style="font-size:12px;padding:4px 10px;" onclick="event.stopPropagation();alert('Pause sequence')">Pause</button>
+            </div>
+            <div class="seq-card-meta">
+              <div class="seq-metric"><div class="sm-val">247</div><div class="sm-label">Enrolled</div></div>
+              <div class="seq-metric"><div class="sm-val" style="color:var(--success);">31</div><div class="sm-label">Replied (12.5%)</div></div>
+              <div class="seq-metric"><div class="sm-val" style="color:var(--purple);">8</div><div class="sm-label">Meetings (3.2%)</div></div>
+              <div class="seq-metric"><div class="sm-val">34%</div><div class="sm-label">Open rate</div></div>
+              <div class="seq-metric"><div class="sm-val" style="color:var(--danger);">2</div><div class="sm-label">Bounced</div></div>
+            </div>
+            <div class="seq-card-footer">
+              <div class="seq-step active-step">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                Step 1: Email (Day 0)
+              </div>
+              <div class="seq-step">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                Step 2: Email (Day 3)
+              </div>
+              <div class="seq-step">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+                Step 3: LinkedIn (Day 7)
+              </div>
+              <div class="seq-step">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                Step 4: Email (Day 12)
+              </div>
+              <div class="seq-step">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                Step 5: Break-up (Day 18)
+              </div>
+              <div style="margin-left:auto;font-size:12px;color:var(--text-tertiary);">Sending from: jordan@company.com</div>
+            </div>
+          </div>
+
+          <!-- Sequence 2 -->
+          <div class="seq-card" onclick="alert('Open sequence builder / drill-down')">
+            <div class="seq-card-header">
+              <div style="font-size:20px;">🔁</div>
+              <span class="seq-name">SMB Re-engagement</span>
+              <span class="seq-badge active">Active</span>
+              <button class="toolbar-btn" style="font-size:12px;padding:4px 10px;" onclick="event.stopPropagation()">Edit</button>
+            </div>
+            <div class="seq-card-meta">
+              <div class="seq-metric"><div class="sm-val">148</div><div class="sm-label">Enrolled</div></div>
+              <div class="seq-metric"><div class="sm-val" style="color:var(--success);">18</div><div class="sm-label">Replied (12.2%)</div></div>
+              <div class="seq-metric"><div class="sm-val" style="color:var(--purple);">3</div><div class="sm-label">Meetings (2.0%)</div></div>
+              <div class="seq-metric"><div class="sm-val">28%</div><div class="sm-label">Open rate</div></div>
+              <div class="seq-metric"><div class="sm-val" style="color:var(--danger);">0</div><div class="sm-label">Bounced</div></div>
+            </div>
+            <div class="seq-card-footer">
+              <div class="seq-step active-step">Step 1: Email (Day 0)</div>
+              <div class="seq-step">Step 2: Email (Day 4)</div>
+              <div class="seq-step">Step 3: Break-up (Day 10)</div>
+              <div style="margin-left:auto;font-size:12px;color:var(--text-tertiary);">jordan@company.com</div>
+            </div>
+          </div>
+
+          <!-- Sequence 3 — paused -->
+          <div class="seq-card" onclick="alert('Open sequence builder / drill-down')">
+            <div class="seq-card-header">
+              <div style="font-size:20px;">🌍</div>
+              <span class="seq-name">EMEA Expansion Q2</span>
+              <span class="seq-badge paused">Paused</span>
+              <button class="toolbar-btn" style="font-size:12px;padding:4px 10px;" onclick="event.stopPropagation();alert('Resume sequence')">Resume</button>
+            </div>
+            <div class="seq-card-meta">
+              <div class="seq-metric"><div class="sm-val">89</div><div class="sm-label">Enrolled</div></div>
+              <div class="seq-metric"><div class="sm-val" style="color:var(--success);">7</div><div class="sm-label">Replied (7.9%)</div></div>
+              <div class="seq-metric"><div class="sm-val" style="color:var(--purple);">2</div><div class="sm-label">Meetings (2.2%)</div></div>
+              <div class="seq-metric"><div class="sm-val">22%</div><div class="sm-label">Open rate</div></div>
+              <div class="seq-metric"><div class="sm-val" style="color:var(--danger);">1</div><div class="sm-label">Bounced</div></div>
+            </div>
+            <div class="seq-card-footer">
+              <span style="font-size:12px;color:var(--warning);font-weight:500;">⏸ Paused — resume to continue sending</span>
+              <div style="margin-left:auto;font-size:12px;color:var(--text-tertiary);">4 steps · compliance review pending</div>
+            </div>
+          </div>
+
+          <!-- Sequence 4 — draft -->
+          <div class="seq-card" onclick="alert('Continue building this sequence')">
+            <div class="seq-card-header">
+              <div style="font-size:20px;">📝</div>
+              <span class="seq-name">Inbound Follow-up — Draft</span>
+              <span class="seq-badge draft">Draft</span>
+              <button class="toolbar-btn primary" style="font-size:12px;padding:4px 10px;" onclick="event.stopPropagation();alert('Activate sequence')">Activate</button>
+            </div>
+            <div class="seq-card-footer" style="color:var(--text-secondary);font-size:12.5px;">
+              6 steps defined · 0 enrolled · Not yet activated
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ═══════════════════ INBOX ═══════════════════ -->
+      <div id="screen-inbox" class="screen">
+        <div class="inbox-sidebar">
+          <div class="inbox-toolbar">
+            <h3 style="font-size:14px;font-weight:600;flex:1;">Inbox</h3>
+            <button class="toolbar-btn" style="font-size:12px;padding:4px 10px;">+ Task</button>
+          </div>
+          <div class="inbox-filter-tabs">
+            <span class="inbox-tab active">All (4)</span>
+            <span class="inbox-tab">Replies (2)</span>
+            <span class="inbox-tab">Tasks (2)</span>
+          </div>
+          <div class="inbox-list">
+            <!-- Unread reply -->
+            <div class="inbox-item unread active">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                <div class="unread-dot"></div>
+                <div class="ib-name">Emma Rodriguez</div>
+                <div class="ib-time" style="margin-left:auto;">2h ago</div>
+              </div>
+              <div class="ib-subject">Re: Quick question about TruePoint</div>
+              <div class="ib-preview">Thanks for reaching out! I'd be interested in learning more about how you…</div>
+            </div>
+            <!-- Task — overdue -->
+            <div class="task-inbox-item">
+              <div class="ti-type">Task</div>
+              <div class="ti-title">Follow up with Emma Rodriguez (Stripe)</div>
+              <div class="ti-due">⚠ Overdue</div>
+            </div>
+            <!-- Reply -->
+            <div class="inbox-item">
+              <div class="ib-row1">
+                <div class="ib-name">James Park</div>
+                <div class="ib-time">1d ago</div>
+              </div>
+              <div class="ib-subject">Re: TruePoint intro + discovery</div>
+              <div class="ib-preview">That sounds interesting. Can we schedule a 20-minute call next week?</div>
+            </div>
+            <!-- Task -->
+            <div class="task-inbox-item">
+              <div class="ti-type">Task</div>
+              <div class="ti-title">Send demo prep materials to Marcus Kim</div>
+              <div class="ti-due ok">Due today at 2:00pm</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="inbox-main">
+          <div class="email-header">
+            <div class="email-subject">Re: Quick question about TruePoint</div>
+            <div class="email-meta">
+              <div class="email-avatar">ER</div>
+              <div class="email-from">
+                <div style="font-weight:500;">Emma Rodriguez</div>
+                <div style="font-size:12px;color:var(--text-tertiary);">emma@stripe.com · VP Engineering at Stripe</div>
+              </div>
+              <div class="email-actions">
+                <button class="toolbar-btn" style="font-size:12px;padding:5px 10px;" onclick="alert('Book a meeting')">📅 Book meeting</button>
+                <button class="toolbar-btn" style="font-size:12px;padding:5px 10px;" onclick="alert('Mark as done and add task')">✓ Done</button>
+                <button class="toolbar-btn" style="font-size:12px;padding:5px 10px;" onclick="switchScreen('prospect')">Open contact →</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="email-thread">
+            <!-- Her reply -->
+            <div class="email-msg">
+              <div class="email-msg-header">
+                <div class="email-avatar">ER</div>
+                <div>
+                  <div style="font-weight:500;font-size:13px;">Emma Rodriguez</div>
+                  <div style="font-size:12px;color:var(--text-tertiary);">Jun 8, 2025 · 9:14am · via Enterprise SaaS Outreach, Step 2</div>
+                </div>
+              </div>
+              <div class="email-msg-body">
+                <p>Hi Jordan,</p>
+                <p>Thanks for reaching out! I've been looking for a more integrated prospecting solution — we're currently stitching together Apollo + a VA + our own CRM sync and it's a mess.</p>
+                <p>I'd be interested in learning more about how TruePoint handles the data quality side, especially the email verification and credit-back policy. We've been burned before by paying for bounced emails.</p>
+                <p>Can we find 30 minutes this week or next to connect?</p>
+                <p>Best,<br/>Emma</p>
+              </div>
+            </div>
+
+            <!-- Original message -->
+            <div class="email-msg" style="opacity:.7;">
+              <div class="email-msg-header">
+                <div class="email-avatar" style="background:var(--accent);color:#fff;">JD</div>
+                <div>
+                  <div style="font-weight:500;font-size:13px;">Jordan Davis (You)</div>
+                  <div style="font-size:12px;color:var(--text-tertiary);">Jun 6, 2025 · 8:30am · Step 2 of Enterprise SaaS Outreach</div>
+                </div>
+              </div>
+              <div class="email-msg-body">
+                <p>Hi Emma,</p>
+                <p>Following up on my previous note — I know your team is scaling engineering rapidly at Stripe, and I wanted to make sure this landed on your radar…</p>
+                <p style="color:var(--text-tertiary);font-style:italic;">[Full message — click to expand]</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="reply-box">
+            <textarea class="reply-textarea" rows="4" placeholder="Write a reply… or use a template (/) or draft with AI (⌘⏎)"></textarea>
+            <div class="reply-actions">
+              <button class="btn btn-secondary" style="font-size:13px;padding:6px 14px;" onclick="alert('Insert template')">/ Template</button>
+              <button class="btn btn-secondary" style="font-size:13px;padding:6px 14px;" onclick="alert('Draft reply with AI — human review before send')">✦ AI draft</button>
+              <div style="flex:1;"></div>
+              <button class="btn btn-secondary" style="font-size:13px;padding:6px 14px;">Schedule</button>
+              <button class="btn btn-primary" style="font-size:13px;padding:6px 14px;">Send reply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ═══════════════════ REPORTS ═══════════════════ -->
+      <div id="screen-reports" class="screen" style="flex-direction:column;">
+        <div class="reports-nav">
+          <span class="reports-tab active" onclick="switchReportsTab(this, 'pipeline')">Pipeline</span>
+          <span class="reports-tab" onclick="switchReportsTab(this, 'credits')">Credit Usage</span>
+          <span class="reports-tab" onclick="switchReportsTab(this, 'deliverability')">Deliverability</span>
+          <span class="reports-tab" onclick="switchReportsTab(this, 'team')">Team Activity</span>
+          <span class="reports-tab" onclick="switchReportsTab(this, 'datahealth')">Data Health</span>
+          <div style="flex:1;"></div>
+          <div style="display:flex;align-items:center;gap:8px;padding-bottom:12px;">
+            <select class="form-input form-select" style="font-size:12.5px;padding:5px 28px 5px 10px;height:auto;"><option>Last 30 days</option><option>Last 90 days</option><option>This quarter</option></select>
+            <button class="toolbar-btn" onclick="alert('Export report to CSV')">↓ Export</button>
+          </div>
+        </div>
+
+        <div class="reports-content" style="flex:1;overflow-y:auto;">
+          <!-- Pipeline tab content -->
+          <div id="tab-pipeline">
+            <div class="reports-row rr-4" style="margin-bottom:16px;">
+              <div class="metric-card"><div class="mc-label">Contacts imported</div><div class="mc-val">1,284</div><div class="mc-sub"><span class="up">↑ 22%</span> vs prev period</div></div>
+              <div class="metric-card"><div class="mc-label">Contacts revealed</div><div class="mc-val">284</div><div class="mc-sub"><span class="up">↑ 34%</span> vs prev period</div></div>
+              <div class="metric-card"><div class="mc-label">Enrolled in sequence</div><div class="mc-val">484</div><div class="mc-sub"><span class="up">↑ 18%</span> vs prev period</div></div>
+              <div class="metric-card"><div class="mc-label">Meetings booked</div><div class="mc-val">13</div><div class="mc-sub"><span class="up">↑ 8%</span> vs prev period</div></div>
+            </div>
+            <div class="reports-row rr-2">
+              <div class="chart-card">
+                <div class="cc-header"><div><div class="cc-title">Outreach funnel</div><div class="cc-sub">This workspace · 30 days</div></div></div>
+                <div style="padding:0 0 10px;">
+                  <div class="funnel-row"><div class="funnel-label">Imported</div><div class="funnel-bar-wrap"><div class="funnel-bar-fill" style="width:100%;background:var(--text-primary);opacity:.15;"></div></div><div class="funnel-val">1,284</div><div class="funnel-pct">100%</div></div>
+                  <div class="funnel-row"><div class="funnel-label">Revealed</div><div class="funnel-bar-wrap"><div class="funnel-bar-fill" style="width:22%"></div></div><div class="funnel-val">284</div><div class="funnel-pct">22.1%</div></div>
+                  <div class="funnel-row"><div class="funnel-label">Enrolled</div><div class="funnel-bar-wrap"><div class="funnel-bar-fill" style="width:37%"></div></div><div class="funnel-val">484</div><div class="funnel-pct">37.7%</div></div>
+                  <div class="funnel-row"><div class="funnel-label">Replied</div><div class="funnel-bar-wrap"><div class="funnel-bar-fill" style="width:11%;background:var(--success)"></div></div><div class="funnel-val">56</div><div class="funnel-pct" style="color:var(--success)">11.6%</div></div>
+                  <div class="funnel-row"><div class="funnel-label">Meeting</div><div class="funnel-bar-wrap"><div class="funnel-bar-fill" style="width:2.7%;background:var(--purple)"></div></div><div class="funnel-val">13</div><div class="funnel-pct" style="color:var(--purple)">2.7%</div></div>
+                </div>
+              </div>
+              <div class="chart-card">
+                <div class="cc-header"><div><div class="cc-title">Reveals over time</div><div class="cc-sub">Daily · 30 days</div></div></div>
+                <div class="chart-area">
+                  <div class="chart-bar" style="height:30%"></div>
+                  <div class="chart-bar" style="height:45%"></div>
+                  <div class="chart-bar" style="height:20%"></div>
+                  <div class="chart-bar" style="height:55%"></div>
+                  <div class="chart-bar" style="height:40%"></div>
+                  <div class="chart-bar accent" style="height:70%"></div>
+                  <div class="chart-bar accent" style="height:85%"></div>
+                  <div class="chart-bar" style="height:60%"></div>
+                  <div class="chart-bar" style="height:50%"></div>
+                  <div class="chart-bar" style="height:75%"></div>
+                  <div class="chart-bar" style="height:65%"></div>
+                  <div class="chart-bar" style="height:80%"></div>
+                  <div class="chart-bar" style="height:45%"></div>
+                  <div class="chart-bar" style="height:90%"></div>
+                  <div class="chart-bar accent" style="height:100%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Credits tab (hidden by default) -->
+          <div id="tab-credits" style="display:none;">
+            <div class="reports-row rr-4" style="margin-bottom:16px;">
+              <div class="metric-card"><div class="mc-label">Credits spent</div><div class="mc-val">760</div><div class="mc-sub">of 2,000 purchased</div></div>
+              <div class="metric-card"><div class="mc-label">Credits remaining</div><div class="mc-val">1,240</div><div class="mc-sub"><span class="up">62%</span> of pool</div></div>
+              <div class="metric-card"><div class="mc-label">Avg cost/reveal</div><div class="mc-val">1.0</div><div class="mc-sub">Email: 1 · Phone: 1</div></div>
+              <div class="metric-card"><div class="mc-label">Credits returned</div><div class="mc-val">4</div><div class="mc-sub">Bounce credit-backs</div></div>
+            </div>
+            <div class="chart-card">
+              <div class="cc-header"><div class="cc-title">Credit consumption by user</div></div>
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead><tr style="border-bottom:1px solid var(--border-default);"><th style="text-align:left;padding:8px 0;font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">User</th><th style="text-align:right;padding:8px 0;font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Reveals</th><th style="text-align:right;padding:8px 0;font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Credits</th><th style="text-align:right;padding:8px 0;font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Returned</th></tr></thead>
+                <tbody>
+                  <tr style="border-bottom:1px solid var(--border-hairline);"><td style="padding:10px 0;">Jordan Davis</td><td style="text-align:right;">184</td><td style="text-align:right;font-weight:600;">184</td><td style="text-align:right;color:var(--success);">+2</td></tr>
+                  <tr style="border-bottom:1px solid var(--border-hairline);"><td style="padding:10px 0;">Alex Kim</td><td style="text-align:right;">64</td><td style="text-align:right;font-weight:600;">64</td><td style="text-align:right;color:var(--success);">+2</td></tr>
+                  <tr><td style="padding:10px 0;">Sam Lee</td><td style="text-align:right;">512</td><td style="text-align:right;font-weight:600;">512</td><td style="text-align:right;">—</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Deliverability tab (hidden) -->
+          <div id="tab-deliverability" style="display:none;">
+            <div class="reports-row rr-4" style="margin-bottom:16px;">
+              <div class="metric-card"><div class="mc-label">Emails sent</div><div class="mc-val">1,108</div><div class="mc-sub">Last 30 days</div></div>
+              <div class="metric-card"><div class="mc-label">Open rate</div><div class="mc-val">31%</div><div class="mc-sub"><span class="up">↑ 4pp</span> vs benchmark</div></div>
+              <div class="metric-card"><div class="mc-label">Reply rate</div><div class="mc-val">11.6%</div><div class="mc-sub"><span class="up">↑ 2pp</span> vs prev period</div></div>
+              <div class="metric-card"><div class="mc-label">Bounce rate</div><div class="mc-val">0.5%</div><div class="mc-sub"><span class="up">↓ 0.2pp</span> excellent</div></div>
+            </div>
+            <div class="reports-row rr-2">
+              <div class="chart-card">
+                <div class="cc-header"><div class="cc-title">Domain health</div></div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:10px;background:var(--sidebar-bg);border-radius:8px;">
+                    <div style="font-weight:500;">jordan@company.com</div>
+                    <div style="display:flex;gap:6px;"><span class="tag" style="background:var(--success-light);color:var(--success);border-color:var(--success-light);">SPF ✓</span><span class="tag" style="background:var(--success-light);color:var(--success);border-color:var(--success-light);">DKIM ✓</span><span class="tag" style="background:var(--success-light);color:var(--success);border-color:var(--success-light);">DMARC ✓</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-card">
+                <div class="cc-header"><div class="cc-title">Unsubscribes</div></div>
+                <div style="font-size:13px;color:var(--text-secondary);">6 unsubscribes this month · 0.5% rate · All suppressed automatically</div>
+                <div style="margin-top:12px;font-size:13px;"><a href="#" style="color:var(--accent);">View suppression list →</a></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Team tab (hidden) -->
+          <div id="tab-team" style="display:none;">
+            <div class="reports-row rr-3">
+              <div class="metric-card"><div class="mc-label">Jordan Davis</div><div class="mc-val">184</div><div class="mc-sub">Reveals · 312 prospected</div></div>
+              <div class="metric-card"><div class="mc-label">Alex Kim</div><div class="mc-val">64</div><div class="mc-sub">Reveals · 128 prospected</div></div>
+              <div class="metric-card"><div class="mc-label">Sam Lee</div><div class="mc-val">512</div><div class="mc-sub">Reveals · 847 prospected</div></div>
+            </div>
+          </div>
+
+          <!-- Data health tab (hidden) -->
+          <div id="tab-datahealth" style="display:none;">
+            <div class="reports-row rr-4" style="margin-bottom:16px;">
+              <div class="metric-card"><div class="mc-label">Email coverage</div><div class="mc-val">87%</div><div class="mc-sub">11,177 of 12,847 contacts</div></div>
+              <div class="metric-card"><div class="mc-label">Verified emails</div><div class="mc-val">71%</div><div class="mc-sub">9,121 valid</div></div>
+              <div class="metric-card"><div class="mc-label">Phone coverage</div><div class="mc-val">54%</div><div class="mc-sub">6,937 contacts</div></div>
+              <div class="metric-card"><div class="mc-label">Duplicate flag</div><div class="mc-val">0.3%</div><div class="mc-sub">38 potential dupes</div></div>
+            </div>
+            <div class="chart-card">
+              <div class="cc-header"><div class="cc-title">Email verification status breakdown</div></div>
+              <div style="display:flex;gap:20px;font-size:13px;">
+                <div style="display:flex;align-items:center;gap:8px;padding:12px;background:var(--success-light);border-radius:8px;flex:1;"><div style="font-size:24px;font-weight:700;color:var(--success);">71%</div><div style="color:var(--success);font-weight:500;">Valid</div></div>
+                <div style="display:flex;align-items:center;gap:8px;padding:12px;background:var(--warning-light);border-radius:8px;flex:1;"><div style="font-size:24px;font-weight:700;color:var(--warning);">12%</div><div style="color:var(--warning);font-weight:500;">Risky / Catch-all</div></div>
+                <div style="display:flex;align-items:center;gap:8px;padding:12px;background:var(--sidebar-bg);border-radius:8px;flex:1;"><div style="font-size:24px;font-weight:700;color:var(--text-secondary);">16%</div><div style="color:var(--text-secondary);font-weight:500;">Unknown</div></div>
+                <div style="display:flex;align-items:center;gap:8px;padding:12px;background:var(--danger-light);border-radius:8px;flex:1;"><div style="font-size:24px;font-weight:700;color:var(--danger);">1%</div><div style="color:var(--danger);font-weight:500;">Invalid</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ═══════════════════ SETTINGS ═══════════════════ -->
+      <div id="screen-settings" class="screen">
+        <nav class="settings-nav">
+          <div class="settings-nav-section">
+            <div class="settings-nav-label">Your account</div>
+            <div class="settings-nav-item active" id="snav-profile" onclick="switchSettingsNav('profile')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              Profile
+            </div>
+            <div class="settings-nav-item" id="snav-security" onclick="switchSettingsNav('security')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Security & MFA
+            </div>
+            <div class="settings-nav-item" id="snav-notifications" onclick="switchSettingsNav('notifications')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              Notifications
+            </div>
+          </div>
+          <div class="settings-nav-section">
+            <div class="settings-nav-label">Workspace</div>
+            <div class="settings-nav-item" id="snav-workspace" onclick="switchSettingsNav('workspace')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              General
+            </div>
+            <div class="settings-nav-item" id="snav-members" onclick="switchSettingsNav('members')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              Members & Roles
+            </div>
+            <div class="settings-nav-item" id="snav-suppression" onclick="switchSettingsNav('suppression')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+              Suppression / DNC
+            </div>
+            <div class="settings-nav-item" id="snav-integrations" onclick="switchSettingsNav('integrations')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              Integrations
+            </div>
+          </div>
+          <div class="settings-nav-section">
+            <div class="settings-nav-label">Organization</div>
+            <div class="settings-nav-item" id="snav-org" onclick="switchSettingsNav('org')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              Organization
+            </div>
+            <div class="settings-nav-item" id="snav-billing" onclick="switchSettingsNav('billing')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+              Billing & Credits
+            </div>
+            <div class="settings-nav-item" id="snav-compliance" onclick="switchSettingsNav('compliance')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Compliance & DSAR
+            </div>
+          </div>
+          <div class="settings-nav-section">
+            <div class="settings-nav-label">Developer</div>
+            <div class="settings-nav-item" id="snav-apikeys" onclick="switchSettingsNav('apikeys')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              API Keys
+            </div>
+            <div class="settings-nav-item" id="snav-webhooks" onclick="switchSettingsNav('webhooks')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              Webhooks
+            </div>
+          </div>
+        </nav>
+
+        <div class="settings-main" id="settings-main">
+
+          <!-- Profile -->
+          <div id="settings-profile">
+            <div class="settings-section">
+              <div class="settings-section-title">Profile</div>
+              <div class="settings-section-desc">Your personal information and preferences.</div>
+              <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:16px;background:var(--sidebar-bg);border-radius:10px;border:1px solid var(--border-default);">
+                <div style="width:56px;height:56px;border-radius:50%;background:var(--avatar-bg);color:var(--avatar-text);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;">JD</div>
+                <div>
+                  <div style="font-size:14px;font-weight:600;">Jordan Davis</div>
+                  <div style="font-size:12.5px;color:var(--text-secondary);">Member · North America ENT workspace</div>
+                </div>
+                <button class="btn btn-secondary" style="margin-left:auto;">Change photo</button>
+              </div>
+              <div class="form-row">
+                <div class="form-field"><label class="form-label">First name</label><input class="form-input" value="Jordan" type="text"/></div>
+                <div class="form-field"><label class="form-label">Last name</label><input class="form-input" value="Davis" type="text"/></div>
+              </div>
+              <div class="form-field"><label class="form-label">Email address</label><input class="form-input" value="jordan@company.com" type="email"/></div>
+              <div class="form-row">
+                <div class="form-field"><label class="form-label">Timezone</label><select class="form-input form-select"><option selected>America/New_York (EST)</option><option>America/Los_Angeles (PST)</option><option>Europe/London (GMT)</option></select></div>
+                <div class="form-field"><label class="form-label">Locale</label><select class="form-input form-select"><option>English (US)</option><option>English (UK)</option></select></div>
+              </div>
+              <div class="form-save-row"><button class="btn btn-primary">Save changes</button></div>
+            </div>
+          </div>
+
+          <!-- Security (hidden) -->
+          <div id="settings-security" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Security</div>
+              <div class="settings-section-desc">Manage your password, MFA, and active sessions.</div>
+              <div class="form-field"><label class="form-label">Current password</label><input class="form-input" type="password" placeholder="••••••••"/></div>
+              <div class="form-row">
+                <div class="form-field"><label class="form-label">New password</label><input class="form-input" type="password" placeholder="••••••••"/></div>
+                <div class="form-field"><label class="form-label">Confirm password</label><input class="form-input" type="password" placeholder="••••••••"/></div>
+              </div>
+              <div class="form-save-row"><button class="btn btn-primary">Update password</button></div>
+              <div class="settings-divider"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;background:var(--sidebar-bg);border-radius:10px;border:1px solid var(--border-default);">
+                <div><div style="font-weight:600;font-size:14px;">Two-factor authentication</div><div style="font-size:13px;color:var(--text-secondary);margin-top:3px;">Add an extra layer of security with TOTP.</div></div>
+                <button class="btn btn-accent">Enable MFA</button>
+              </div>
+              <div class="settings-divider"></div>
+              <div style="font-size:13.5px;font-weight:600;margin-bottom:12px;">Active sessions</div>
+              <div style="border:1px solid var(--border-default);border-radius:10px;overflow:hidden;">
+                <div style="display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid var(--border-hairline);"><div style="flex:1;"><div style="font-size:13px;font-weight:500;">Chrome · macOS · San Francisco, CA</div><div style="font-size:12px;color:var(--text-secondary);">Active now · 192.168.1.x</div></div><span class="tag" style="background:var(--success-light);color:var(--success);border-color:var(--success-light);">Current</span></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:14px;"><div style="flex:1;"><div style="font-size:13px;font-weight:500;">Safari · iPhone · San Francisco, CA</div><div style="font-size:12px;color:var(--text-secondary);">Last seen Jun 7, 2025</div></div><button class="btn btn-secondary" style="font-size:12px;padding:5px 12px;">Revoke</button></div>
+              </div>
+              <div style="margin-top:10px;"><button class="btn btn-secondary" style="font-size:13px;">Sign out all other sessions</button></div>
+            </div>
+          </div>
+
+          <!-- Members -->
+          <div id="settings-members" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Members & Roles</div>
+              <div class="settings-section-desc">Manage who has access to this workspace.</div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+                <input class="form-input" type="email" placeholder="Invite by email address…" style="flex:1;"/>
+                <select class="form-input form-select" style="width:140px;"><option>Member</option><option>Admin</option><option>Viewer</option></select>
+                <button class="btn btn-primary">Send invite</button>
+              </div>
+              <table class="members-table">
+                <thead><tr><th>Member</th><th>Role</th><th>Joined</th><th>Last active</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td><div class="member-cell"><div class="user-avatar">JD</div><div><div style="font-weight:500;">Jordan Davis</div><div style="font-size:12px;color:var(--text-secondary);">jordan@company.com</div></div></div></td><td><span class="role-badge owner">Owner</span></td><td>Jan 12, 2025</td><td>Just now</td><td></td></tr>
+                  <tr><td><div class="member-cell"><div class="user-avatar">AK</div><div><div style="font-weight:500;">Alex Kim</div><div style="font-size:12px;color:var(--text-secondary);">alex@company.com</div></div></div></td><td><span class="role-badge admin">Admin</span></td><td>Feb 3, 2025</td><td>Jun 7, 2025</td><td><button class="btn btn-secondary" style="font-size:12px;padding:4px 10px;">Change role</button></td></tr>
+                  <tr><td><div class="member-cell"><div class="user-avatar">SL</div><div><div style="font-weight:500;">Sam Lee</div><div style="font-size:12px;color:var(--text-secondary);">sam@company.com</div></div></div></td><td><span class="role-badge member">Member</span></td><td>Mar 15, 2025</td><td>Jun 6, 2025</td><td><button class="btn btn-secondary" style="font-size:12px;padding:4px 10px;">Change role</button></td></tr>
+                  <tr><td><div class="member-cell"><div class="user-avatar">TW</div><div><div style="font-weight:500;">Taylor Wilson</div><div style="font-size:12px;color:var(--text-secondary);">taylor@company.com</div></div></div></td><td><span class="role-badge viewer">Viewer</span></td><td>Apr 2, 2025</td><td>May 28, 2025</td><td><button class="btn btn-secondary" style="font-size:12px;padding:4px 10px;">Change role</button></td></tr>
+                  <tr><td colspan="5"><div style="padding:8px 0;font-size:12.5px;color:var(--text-secondary);display:flex;align-items:center;gap:8px;"><span class="tag" style="background:var(--warning-light);color:var(--warning);border-color:var(--warning-light);">Pending</span> <b>robin@company.com</b> — invitation expires in 5 days <button class="btn btn-secondary" style="font-size:12px;padding:2px 10px;margin-left:auto;">Resend</button> <button class="btn btn-secondary" style="font-size:12px;padding:2px 10px;">Cancel</button></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Billing -->
+          <div id="settings-billing" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Billing & Credits</div>
+              <div class="settings-section-desc">Manage your plan, credit balance, and payment details.</div>
+
+              <div style="margin-bottom:20px;padding:16px;background:var(--sidebar-bg);border-radius:10px;border:1px solid var(--border-default);">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                  <div><span style="font-size:13px;font-weight:500;">Pro Plan</span> <span class="plan-current">Current plan</span></div>
+                  <button class="btn btn-secondary" style="font-size:12.5px;">Manage plan</button>
+                </div>
+                <div style="font-size:13px;color:var(--text-secondary);">Month-to-month · Self-serve cancellation · No auto-renew traps · Credits don't expire</div>
+              </div>
+
+              <div style="margin-bottom:20px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                  <div style="font-size:13.5px;font-weight:600;">Credit pool</div>
+                  <button class="btn btn-accent" style="font-size:12.5px;padding:6px 14px;" onclick="alert('Open credit top-up — buy 100 / 500 / 2,000 / 10,000 credits')">+ Top up credits</button>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+                  <span>1,240 of 2,000 credits remaining</span>
+                  <span style="font-weight:600;color:var(--accent);">62%</span>
+                </div>
+                <div class="credit-usage-bar"><div class="credit-usage-fill" style="width:62%"></div></div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:6px;">Shared across all workspaces · Charge only for valid, verified data · Credit-back on bounce</div>
+              </div>
+
+              <div style="border:1px solid var(--border-default);border-radius:10px;overflow:hidden;margin-bottom:20px;">
+                <div style="padding:12px 14px;border-bottom:1px solid var(--border-hairline);font-size:13px;font-weight:600;">Recent usage</div>
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                  <thead><tr style="background:var(--sidebar-bg);"><th style="text-align:left;padding:8px 14px;font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Date</th><th style="text-align:left;padding:8px 14px;font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Contact</th><th style="text-align:left;padding:8px 14px;font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Type</th><th style="text-align:right;padding:8px 14px;font-size:11.5px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Credits</th></tr></thead>
+                  <tbody>
+                    <tr style="border-bottom:1px solid var(--border-hairline);"><td style="padding:10px 14px;">Jun 8</td><td>Emma Rodriguez · Stripe</td><td>Email + Phone</td><td style="text-align:right;">−2</td></tr>
+                    <tr style="border-bottom:1px solid var(--border-hairline);"><td style="padding:10px 14px;">Jun 7</td><td>Bulk reveal · 4 contacts</td><td>Email</td><td style="text-align:right;">−4</td></tr>
+                    <tr style="border-bottom:1px solid var(--border-hairline);"><td style="padding:10px 14px;color:var(--success);font-weight:500;">Jun 5</td><td style="color:var(--success);">Bounce credit-back</td><td style="color:var(--success);">Email (invalid)</td><td style="text-align:right;color:var(--success);">+1</td></tr>
+                    <tr><td style="padding:10px 14px;">Jun 3</td><td>Top-up purchase</td><td>2,000 credit pack</td><td style="text-align:right;color:var(--success);">+2,000</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div style="padding:14px;border:1px solid var(--border-default);border-radius:10px;font-size:13px;color:var(--text-secondary);">
+                <b style="color:var(--text-primary);">Account closure policy:</b> You can export all your revealed data at any time, before or after cancelling. We will never destroy your data as leverage. <a href="#" style="color:var(--accent);">Learn more about our transparent commercial policy →</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Compliance -->
+          <div id="settings-compliance" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Compliance & Privacy</div>
+              <div class="settings-section-desc">Suppression lists, DSAR handling, consent records, and audit log.</div>
+
+              <div style="font-size:13.5px;font-weight:600;margin-bottom:12px;">Suppression / Do-Not-Contact</div>
+              <div class="compliance-item">
+                <div class="ci-header"><div class="ci-title">Workspace DNC list</div><span class="ci-status ok">Active</span></div>
+                <div class="ci-desc">142 entries · Email, domain, and phone suppression. Suppression is unbypassable — checked inside every reveal and send transaction.</div>
+                <div style="margin-top:10px;display:flex;gap:8px;"><button class="btn btn-secondary" style="font-size:12.5px;">View list</button><button class="btn btn-secondary" style="font-size:12.5px;">Import CSV</button></div>
+              </div>
+
+              <div class="settings-divider"></div>
+              <div style="font-size:13.5px;font-weight:600;margin-bottom:12px;">DSAR — Data Subject Requests</div>
+              <div class="compliance-item">
+                <div class="ci-header"><div class="ci-title">Open requests</div><span class="ci-status pending">1 pending</span></div>
+                <div class="ci-desc">DSAR deletion request received Jun 5, 2025. Fan-out across all workspace copies in progress. SLA: 30 days.</div>
+                <div style="margin-top:10px;"><button class="btn btn-secondary" style="font-size:12.5px;">View request</button></div>
+              </div>
+              <button class="btn btn-secondary" style="font-size:13px;margin-top:8px;">+ Log new DSAR intake</button>
+
+              <div class="settings-divider"></div>
+              <div style="font-size:13.5px;font-weight:600;margin-bottom:12px;">Audit log</div>
+              <div style="border:1px solid var(--border-default);border-radius:10px;overflow:hidden;">
+                <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+                  <thead><tr style="background:var(--sidebar-bg);"><th style="text-align:left;padding:8px 14px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Time</th><th style="text-align:left;padding:8px 14px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Actor</th><th style="text-align:left;padding:8px 14px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Action</th><th style="text-align:left;padding:8px 14px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Subject</th></tr></thead>
+                  <tbody>
+                    <tr style="border-bottom:1px solid var(--border-hairline);"><td style="padding:9px 14px;">Jun 8 · 9:14am</td><td>Jordan Davis</td><td>contact.reveal</td><td>Emma Rodriguez (Stripe)</td></tr>
+                    <tr style="border-bottom:1px solid var(--border-hairline);"><td style="padding:9px 14px;">Jun 7 · 4:32pm</td><td>Sam Lee</td><td>contact.bulk_reveal</td><td>4 contacts · 4 credits</td></tr>
+                    <tr style="border-bottom:1px solid var(--border-hairline);"><td style="padding:9px 14px;">Jun 5 · 11:02am</td><td>System</td><td>suppression.auto_add</td><td>bounce@example.com → DNC</td></tr>
+                    <tr><td style="padding:9px 14px;">Jun 3 · 9:00am</td><td>Jordan Davis</td><td>import.csv</td><td>248 contacts added</td></tr>
+                  </tbody>
+                </table>
+                <div style="padding:10px 14px;border-top:1px solid var(--border-hairline);"><button class="btn btn-secondary" style="font-size:12.5px;">Export full audit log</button></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- API Keys -->
+          <div id="settings-apikeys" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">API Keys</div>
+              <div class="settings-section-desc">Authenticate your applications against the TruePoint API. Keys are hashed and scoped to this tenant.</div>
+              <button class="btn btn-primary" style="margin-bottom:20px;" onclick="alert('Create a new scoped API key — name + scope selection')">+ Create API key</button>
+              <div style="border:1px solid var(--border-default);border-radius:10px;overflow:hidden;">
+                <div class="api-key-item" style="padding:14px;">
+                  <div class="api-key-info">
+                    <div class="api-key-name">Production — read:contacts, reveal</div>
+                    <div class="api-key-val">tp_live_••••••••••••••••••••••••••••3a9f</div>
+                    <div class="api-key-meta">Created Jun 1, 2025 · Last used Jun 8, 2025 · 284 calls</div>
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px;">Rotate</button>
+                    <button class="btn btn-danger" style="font-size:12px;padding:4px 10px;">Revoke</button>
+                  </div>
+                </div>
+                <div class="api-key-item" style="padding:14px;border-top:1px solid var(--border-hairline);">
+                  <div class="api-key-info">
+                    <div class="api-key-name">Dev / Sandbox — read:contacts</div>
+                    <div class="api-key-val">tp_test_••••••••••••••••••••••••••••b2c1</div>
+                    <div class="api-key-meta">Created May 15, 2025 · Never used</div>
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px;">Rotate</button>
+                    <button class="btn btn-danger" style="font-size:12px;padding:4px 10px;">Revoke</button>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:16px;padding:14px;background:var(--sidebar-bg);border-radius:10px;border:1px solid var(--border-default);font-size:13px;color:var(--text-secondary);">
+                <b style="color:var(--text-primary);">API documentation</b> is available at <a href="#" style="color:var(--accent);">docs.truepoint.com/api</a> · Rate limits apply · All reveal calls spend tenant credits and honor idempotency keys.
+              </div>
+            </div>
+          </div>
+
+          <!-- Other settings panels (hidden placeholders) -->
+          <div id="settings-notifications" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Notifications</div>
+              <div class="settings-section-desc">Choose how and when TruePoint notifies you.</div>
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--sidebar-bg);border-radius:10px;border:1px solid var(--border-default);">
+                  <div><div style="font-weight:500;font-size:13.5px;">Reply received</div><div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px;">When a contact replies to a sequence email</div></div>
+                  <div style="display:flex;gap:8px;"><label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" checked/> In-app</label><label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" checked/> Email</label></div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--sidebar-bg);border-radius:10px;border:1px solid var(--border-default);">
+                  <div><div style="font-weight:500;font-size:13.5px;">Task due</div><div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px;">30 minutes before a task is due</div></div>
+                  <div style="display:flex;gap:8px;"><label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" checked/> In-app</label><label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox"/> Email</label></div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--sidebar-bg);border-radius:10px;border:1px solid var(--border-default);">
+                  <div><div style="font-weight:500;font-size:13.5px;">Low credits</div><div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px;">When credit balance drops below 200</div></div>
+                  <div style="display:flex;gap:8px;"><label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" checked/> In-app</label><label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" checked/> Email</label></div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--sidebar-bg);border-radius:10px;border:1px solid var(--border-default);">
+                  <div><div style="font-weight:500;font-size:13.5px;">Import complete</div><div style="font-size:12.5px;color:var(--text-secondary);margin-top:2px;">When a background import finishes</div></div>
+                  <div style="display:flex;gap:8px;"><label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox" checked/> In-app</label><label style="font-size:12.5px;display:flex;align-items:center;gap:4px;"><input type="checkbox"/> Email</label></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="settings-workspace" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Workspace Settings</div>
+              <div class="settings-section-desc">General settings for the North America ENT workspace.</div>
+              <div class="form-field"><label class="form-label">Workspace name</label><input class="form-input" value="North America ENT"/></div>
+              <div class="form-field"><label class="form-label">Default timezone</label><select class="form-input form-select"><option>America/New_York</option></select></div>
+              <div class="form-field"><label class="form-label">Default data region</label><select class="form-input form-select"><option>US East (us-east-1)</option><option>US West (us-west-2)</option><option>EU West (eu-west-1) — Enterprise</option></select></div>
+              <div class="form-save-row"><button class="btn btn-primary">Save</button></div>
+            </div>
+          </div>
+          <div id="settings-suppression" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Suppression / Do-Not-Contact</div>
+              <div class="settings-section-desc">Workspace-scope DNC list. Suppression is checked inside every reveal and outbound send — it cannot be bypassed.</div>
+              <div style="display:flex;gap:10px;margin-bottom:16px;"><input class="form-input" placeholder="Enter email, domain, or phone to suppress…" style="flex:1;"/><button class="btn btn-primary">Add</button></div>
+              <button class="btn btn-secondary" style="margin-bottom:16px;">Import CSV</button>
+              <div style="border:1px solid var(--border-default);border-radius:10px;overflow:hidden;"><div style="padding:12px 14px;font-size:13px;color:var(--text-secondary);">142 entries · <span style="color:var(--text-primary);font-weight:500;">34</span> email addresses · <span style="color:var(--text-primary);font-weight:500;">88</span> domains · <span style="color:var(--text-primary);font-weight:500;">20</span> phones</div></div>
+            </div>
+          </div>
+          <div id="settings-integrations" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Integrations</div>
+              <div class="settings-section-desc">Connect TruePoint to your CRM and other tools.</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div style="border:1px solid var(--border-default);border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px;"><div style="font-size:28px;">🟠</div><div style="flex:1;"><div style="font-weight:600;">HubSpot</div><div style="font-size:12.5px;color:var(--text-secondary);">CRM sync · Team plan</div></div><button class="btn btn-secondary" style="font-size:12.5px;">Connect</button></div>
+                <div style="border:1px solid var(--border-default);border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px;"><div style="font-size:28px;">☁️</div><div style="flex:1;"><div style="font-weight:600;">Salesforce</div><div style="font-size:12.5px;color:var(--text-secondary);">CRM sync · Enterprise plan</div></div><button class="btn btn-secondary" style="font-size:12.5px;">Connect</button></div>
+                <div style="border:1px solid var(--border-default);border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px;"><div style="font-size:28px;">🔵</div><div style="flex:1;"><div style="font-weight:600;">LinkedIn Sales Nav</div><div style="font-size:12.5px;color:var(--text-secondary);">Lead import · Post-MVP</div></div><span class="tag">Coming soon</span></div>
+                <div style="border:1px solid var(--border-default);border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px;"><div style="font-size:28px;">🟢</div><div style="flex:1;"><div style="font-weight:600;">Pipedrive</div><div style="font-size:12.5px;color:var(--text-secondary);">CRM sync · Team plan</div></div><button class="btn btn-secondary" style="font-size:12.5px;">Connect</button></div>
+              </div>
+            </div>
+          </div>
+          <div id="settings-org" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Organization</div>
+              <div class="settings-section-desc">Tenant-level settings. Only the tenant owner can edit these.</div>
+              <div class="form-field"><label class="form-label">Organization name</label><input class="form-input" value="Acme Sales Team"/></div>
+              <div class="form-field"><label class="form-label">Plan</label><input class="form-input" value="Pro" disabled/></div>
+              <div class="form-field"><label class="form-label">Seat limit</label><input class="form-input" value="10" disabled/></div>
+              <div class="form-field"><label class="form-label">Default region</label><select class="form-input form-select"><option>US East (us-east-1)</option></select></div>
+              <div class="form-save-row"><button class="btn btn-primary">Save</button></div>
+            </div>
+          </div>
+          <div id="settings-webhooks" style="display:none;">
+            <div class="settings-section">
+              <div class="settings-section-title">Webhooks</div>
+              <div class="settings-section-desc">Receive real-time events when contacts are revealed, scored, or sequences change status.</div>
+              <button class="btn btn-primary" style="margin-bottom:16px;" onclick="alert('Add webhook endpoint')">+ Add endpoint</button>
+              <div style="padding:20px;border:1.5px dashed var(--border-default);border-radius:10px;text-align:center;color:var(--text-tertiary);font-size:13.5px;">No webhooks configured · Events: reveal.completed · score.updated · outreach.status_changed</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content-body -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+
+<!-- ── Overlays ── -->
+
+<!-- Backdrop -->
+<div class="overlay-backdrop" id="backdrop" onclick="closeAllOverlays()"></div>
+
+<!-- Command palette -->
+<div class="command-palette" id="command-palette">
+  <div class="cp-search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" placeholder="Search contacts, accounts, or run a command…" autofocus id="cp-input"/>
+    <span style="font-family:var(--mono);font-size:11px;color:var(--text-tertiary);padding:2px 6px;border:1px solid var(--border-default);border-radius:4px;flex-shrink:0;">Esc</span>
+  </div>
+  <div class="cp-section-label">Quick navigation</div>
+  <div class="cp-item focused" onclick="switchScreen('prospect');closeAllOverlays()">
+    <div class="cp-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+    <div class="cp-item-info"><div class="cp-item-name">Go to Prospect</div><div class="cp-item-sub">Search and filter contacts</div></div>
+    <span class="cp-item-kbd">P</span>
+  </div>
+  <div class="cp-item" onclick="switchScreen('sequences');closeAllOverlays()">
+    <div class="cp-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+    <div class="cp-item-info"><div class="cp-item-name">Go to Sequences</div><div class="cp-item-sub">Manage outreach campaigns</div></div>
+    <span class="cp-item-kbd">S</span>
+  </div>
+  <div class="cp-item" onclick="switchScreen('inbox');closeAllOverlays()">
+    <div class="cp-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
+    <div class="cp-item-info"><div class="cp-item-name">Go to Inbox</div><div class="cp-item-sub">4 unread · 2 tasks</div></div>
+    <span class="cp-item-kbd">I</span>
+  </div>
+  <div class="cp-section-label">Actions</div>
+  <div class="cp-item" onclick="toggleImport();closeAllOverlays()">
+    <div class="cp-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+    <div class="cp-item-info"><div class="cp-item-name">Import contacts</div><div class="cp-item-sub">CSV, provider, or manual</div></div>
+  </div>
+  <div class="cp-item" onclick="alert('New sequence');closeAllOverlays()">
+    <div class="cp-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+    <div class="cp-item-info"><div class="cp-item-name">Create new sequence</div><div class="cp-item-sub">Build a multi-step outreach campaign</div></div>
+  </div>
+  <div class="cp-item" onclick="switchScreen('settings');switchSettingsNav('billing');closeAllOverlays()">
+    <div class="cp-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+    <div class="cp-item-info"><div class="cp-item-name">Top up credits</div><div class="cp-item-sub">1,240 credits remaining</div></div>
+  </div>
+  <div class="cp-footer">
+    <span><span class="kk">↑↓</span> Navigate</span>
+    <span><span class="kk">↵</span> Open</span>
+    <span><span class="kk">Esc</span> Close</span>
+  </div>
+</div>
+
+<!-- Import drawer -->
+<div class="import-drawer" id="import-drawer">
+  <div class="drawer-header">
+    <h2>Import Contacts</h2>
+    <span class="drawer-close" onclick="toggleImport()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </span>
+  </div>
+  <div class="drawer-body">
+    <div class="import-step-indicator">
+      <div class="imp-step active"><div class="step-num">1</div>Source</div>
+      <div class="imp-step-line"></div>
+      <div class="imp-step"><div class="step-num">2</div>Map fields</div>
+      <div class="imp-step-line"></div>
+      <div class="imp-step"><div class="step-num">3</div>Review</div>
+      <div class="imp-step-line"></div>
+      <div class="imp-step"><div class="step-num">4</div>Import</div>
+    </div>
+
+    <div style="font-size:13.5px;font-weight:600;margin-bottom:12px;">Choose a source</div>
+
+    <div class="upload-zone" onclick="alert('File picker — CSV or XLSX upload')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <p><b>Drop a CSV or XLSX here</b>, or click to browse</p>
+      <p style="font-size:12px;margin-top:6px;">Up to 50,000 rows · Duplicate detection on import</p>
+    </div>
+
+    <div style="text-align:center;font-size:13px;color:var(--text-tertiary);padding:14px 0;">— or import from a provider —</div>
+
+    <div class="source-grid">
+      <div class="source-card selected">
+        <div class="source-logo">🌐</div>
+        <div class="source-name">Apollo</div>
+        <div class="source-desc">API key · enrich on import</div>
+      </div>
+      <div class="source-card">
+        <div class="source-logo">📊</div>
+        <div class="source-name">ZoomInfo</div>
+        <div class="source-desc">OAuth · bulk import</div>
+      </div>
+      <div class="source-card">
+        <div class="source-logo">✨</div>
+        <div class="source-name">Clearbit</div>
+        <div class="source-desc">API key · enrichment</div>
+      </div>
+      <div class="source-card">
+        <div class="source-logo">✏️</div>
+        <div class="source-name">Manual entry</div>
+        <div class="source-desc">Add contacts one by one</div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;padding:14px;background:var(--sidebar-bg);border-radius:10px;border:1px solid var(--border-default);font-size:13px;color:var(--text-secondary);">
+      <b style="color:var(--text-primary);">Import rules:</b> Contacts import into this workspace only. Duplicates (matched by email / LinkedIn ID) are detected and skipped — you'll see a new vs. matched summary before confirming. Full provenance is recorded per import.
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn btn-secondary" style="flex:1;" onclick="toggleImport()">Cancel</button>
+    <button class="btn btn-primary" style="flex:1;" onclick="alert('Proceed to field mapping step')">Next: Map fields →</button>
+  </div>
+</div>
+
+<!-- Reveal confirmation modal -->
+<div class="modal" id="reveal-modal">
+  <div class="modal-header">
+    <div class="modal-title">Confirm reveal</div>
+    <div class="modal-subtitle">Reveal Sarah Chen's contact information</div>
+  </div>
+  <div class="modal-body">
+    <div class="reveal-cost-row">
+      <span class="rc-type">📧 Email reveal</span>
+      <span class="rc-cost">1 credit</span>
+    </div>
+    <div class="reveal-cost-row">
+      <span class="rc-type">📞 Phone reveal</span>
+      <span class="rc-cost">1 credit</span>
+    </div>
+    <div style="border-top:1px solid var(--border-hairline);padding-top:10px;margin-top:4px;">
+      <div class="reveal-balance">
+        <span>Your credit balance after reveal:</span>
+        <span class="rb-after">1,238 credits</span>
+      </div>
+    </div>
+    <div class="reveal-policy">
+      You are only charged for <strong>valid, verified</strong> contact data. If a revealed email hard-bounces within our guarantee window, you receive a credit-back automatically. <a href="#">Learn more →</a>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-secondary" onclick="toggleRevealModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="alert('Reveal confirmed — contact info unlocked!');toggleRevealModal()">Reveal for 2 credits</button>
+  </div>
+</div>
+
+<!-- Notification panel -->
+<div class="notif-panel" id="notif-panel">
+  <div class="notif-header">
+    <h4>Notifications</h4>
+    <button onclick="alert('Mark all as read')">Mark all read</button>
+  </div>
+  <div class="notif-item" onclick="switchScreen('inbox');toggleNotifications()">
+    <div class="notif-icon reply"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></div>
+    <div class="notif-content">
+      <div class="notif-text"><b>Emma Rodriguez</b> replied to Enterprise SaaS Outreach step 2</div>
+      <div class="notif-time">2 hours ago</div>
+    </div>
+    <div class="notif-unread-dot"></div>
+  </div>
+  <div class="notif-item">
+    <div class="notif-icon reply"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></div>
+    <div class="notif-content">
+      <div class="notif-text"><b>James Park</b> replied to step 1 — "That sounds interesting…"</div>
+      <div class="notif-time">1 day ago</div>
+    </div>
+    <div class="notif-unread-dot"></div>
+  </div>
+  <div class="notif-item">
+    <div class="notif-icon info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+    <div class="notif-content">
+      <div class="notif-text">Import complete — <b>248 contacts</b> added, 3 dupes skipped</div>
+      <div class="notif-time">6 hours ago</div>
+    </div>
+  </div>
+  <div class="notif-item">
+    <div class="notif-icon alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+    <div class="notif-content">
+      <div class="notif-text">Credit balance below 1,500 — consider topping up</div>
+      <div class="notif-time">1 day ago</div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ── State ──
+let currentScreen = 'home';
+let detailOpen = true;
+let bulkCount = 2;
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => {
+  switchScreen('home');
+  // Pre-check 2 rows to show bulk bar
+  const cbs = document.querySelectorAll('.row-cb');
+  if (cbs[0]) cbs[0].checked = true;
+  if (cbs[1]) cbs[1].checked = true;
+});
+
+// ── Screen switching ──
+function switchScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const scr = document.getElementById('screen-' + name);
+  if (scr) scr.classList.add('active');
+  const navItem = document.querySelector(`[data-screen="${name}"]`);
+  if (navItem) navItem.classList.add('active');
+  const titles = {
+    home: 'Home', prospect: 'Prospect', sequences: 'Sequences',
+    inbox: 'Inbox', reports: 'Reports', settings: 'Settings'
+  };
+  document.getElementById('topbar-title').textContent = titles[name] || name;
+  currentScreen = name;
+  closeAllOverlays();
+}
+
+// ── Prospect view toggle ──
+function toggleProspectView(view) {
+  document.getElementById('contacts-btn').classList.toggle('active', view === 'contacts');
+  document.getElementById('accounts-btn').classList.toggle('active', view === 'accounts');
+  document.getElementById('contacts-view').style.display = view === 'contacts' ? 'block' : 'none';
+  document.getElementById('accounts-view').style.display = view === 'accounts' ? 'block' : 'none';
+  if (view === 'accounts') closeDetailPanel();
+}
+
+// ── Detail panel ──
+function openDetailPanel() {
+  document.getElementById('detail-panel').classList.remove('hidden');
+  detailOpen = true;
+}
+function closeDetailPanel() {
+  document.getElementById('detail-panel').classList.add('hidden');
+  detailOpen = false;
+  document.querySelectorAll('.data-table tr.active').forEach(r => r.classList.remove('active'));
+}
+
+// ── Bulk action bar ──
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.row-cb:checked');
+  bulkCount = checked.length;
+  const bar = document.getElementById('bulk-bar');
+  if (bulkCount > 0) {
+    bar.classList.add('visible');
+    document.getElementById('bb-count').textContent = bulkCount + ' selected';
+    const revealBtn = bar.querySelector('.reveal-btn');
+    revealBtn.textContent = '';
+    revealBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Reveal selected (${bulkCount} credit${bulkCount > 1 ? 's' : ''})`;
+  } else {
+    bar.classList.remove('visible');
+  }
+}
+function toggleAllRows(cb) {
+  document.querySelectorAll('.row-cb').forEach(r => r.checked = cb.checked);
+  updateBulkBar();
+}
+function clearSelection() {
+  document.querySelectorAll('.row-cb').forEach(r => r.checked = false);
+  document.getElementById('select-all').checked = false;
+  updateBulkBar();
+}
+
+// ── Overlays ──
+function closeAllOverlays() {
+  document.getElementById('backdrop').classList.remove('visible');
+  document.getElementById('command-palette').style.display = 'none';
+  document.getElementById('reveal-modal').classList.remove('visible');
+  document.getElementById('notif-panel').classList.remove('visible');
+  if (!document.getElementById('import-drawer').classList.contains('open')) return;
+  // keep import open if it was open
+}
+function toggleCommandPalette() {
+  const cp = document.getElementById('command-palette');
+  const backdrop = document.getElementById('backdrop');
+  const isOpen = cp.style.display === 'block';
+  if (isOpen) {
+    cp.style.display = 'none';
+    backdrop.classList.remove('visible');
+  } else {
+    cp.style.display = 'block';
+    backdrop.classList.add('visible');
+    setTimeout(() => document.getElementById('cp-input').focus(), 50);
+  }
+}
+function toggleRevealModal() {
+  const modal = document.getElementById('reveal-modal');
+  const backdrop = document.getElementById('backdrop');
+  modal.classList.toggle('visible');
+  backdrop.classList.toggle('visible', modal.classList.contains('visible'));
+}
+function toggleImport() {
+  const drawer = document.getElementById('import-drawer');
+  const backdrop = document.getElementById('backdrop');
+  const isOpen = drawer.classList.contains('open');
+  drawer.classList.toggle('open');
+  backdrop.classList.toggle('visible', !isOpen);
+}
+function toggleNotifications() {
+  const panel = document.getElementById('notif-panel');
+  const backdrop = document.getElementById('backdrop');
+  panel.classList.toggle('visible');
+  backdrop.classList.toggle('visible', panel.classList.contains('visible'));
+}
+
+// ── Reports tabs ──
+function switchReportsTab(el, tabName) {
+  document.querySelectorAll('.reports-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['pipeline','credits','deliverability','team','datahealth'].forEach(t => {
+    const el = document.getElementById('tab-' + t);
+    if (el) el.style.display = t === tabName ? 'block' : 'none';
+  });
+}
+
+// ── Settings nav ──
+function switchSettingsNav(name) {
+  document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
+  const el = document.getElementById('snav-' + name);
+  if (el) el.classList.add('active');
+  // Hide all settings panels
+  ['profile','security','notifications','workspace','members','suppression','integrations',
+   'org','billing','compliance','apikeys','webhooks'].forEach(s => {
+    const el = document.getElementById('settings-' + s);
+    if (el) el.style.display = 'none';
+  });
+  const panel = document.getElementById('settings-' + name);
+  if (panel) panel.style.display = 'block';
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', e => {
+  if (e.metaKey && e.key === 'k') { e.preventDefault(); toggleCommandPalette(); }
+  if (e.key === 'Escape') closeAllOverlays();
+});
+
+// Initialize prospect bulk bar
+setTimeout(updateBulkBar, 100);
+</script>
+</body>
+</html>

@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TruePoint — Auth Screens Design</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/App-icons/favicon-32.png"/>
+<meta name="theme-color" content="#2563C9"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --accent: #2563C9;
+  --accent-hover: #1E4FA3;
+  --accent-light: #E9F0FC;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9ca3af;
+  --border-default: #e5e7eb;
+  --border-hairline: #f0f0f0;
+  --sidebar-bg: #f9fafb;
+  --success: #16a34a;
+  --success-light: #dcfce7;
+  --danger: #dc2626;
+  --danger-light: #fee2e2;
+  --sans: 'Geist', -apple-system, sans-serif;
+  --mono: 'Geist Mono', monospace;
+  --shadow-sm: 0 1px 2px rgba(17,24,39,.06), 0 1px 3px rgba(17,24,39,.04);
+  --shadow-md: 0 4px 12px rgba(17,24,39,.08);
+  --radius: 8px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); color: var(--text-primary); -webkit-font-smoothing: antialiased; font-size: 14px; }
+
+/* ── Screen switcher (design tool) ── */
+.screen-switcher {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: var(--text-primary); color: #fff;
+  display: flex; align-items: center; gap: 0; height: 44px;
+  padding: 0 16px;
+}
+.screen-switcher .ss-label { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: rgba(255,255,255,.5); margin-right: 16px; white-space: nowrap; }
+.ss-btn { padding: 6px 14px; font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,.6); cursor: pointer; font-family: var(--sans); background: none; border: none; border-bottom: 2px solid transparent; transition: color .1s, border-color .1s; }
+.ss-btn:hover { color: rgba(255,255,255,.9); }
+.ss-btn.active { color: #fff; border-bottom-color: var(--accent); }
+.ss-spacer { flex: 1; }
+.ss-back { font-size: 12.5px; color: rgba(255,255,255,.5); text-decoration: none; transition: color .1s; }
+.ss-back:hover { color: #fff; }
+
+/* ── Screens ── */
+.screen { display: none; min-height: 100vh; padding-top: 44px; }
+.screen.active { display: flex; }
+
+/* ── Shared auth layout ── */
+.auth-split { display: flex; width: 100%; min-height: calc(100vh - 44px); }
+.auth-panel {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 48px 24px;
+}
+.auth-brand {
+  width: 420px; background: var(--text-primary);
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 48px 48px 40px; flex-shrink: 0;
+}
+.auth-form-wrap { width: 100%; max-width: 400px; }
+
+/* ── Logo ── */
+.auth-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
+.auth-logo-mark { width: 28px; height: 28px; --mark-accent: var(--accent); }
+.auth-logo-word { font-size: 18px; letter-spacing: -.02em; }
+.auth-logo-word .t1 { font-weight: 400; }
+.auth-logo-word .t2 { font-weight: 700; }
+
+/* ── Form elements ── */
+.form-title { font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 6px; }
+.form-subtitle { font-size: 14px; color: var(--text-secondary); margin-bottom: 28px; }
+.form-field { margin-bottom: 16px; }
+.form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.form-input {
+  width: 100%; border: 1px solid var(--border-default);
+  border-radius: var(--radius); padding: 10px 14px;
+  font-size: 14px; font-family: var(--sans); color: var(--text-primary);
+  outline: none; transition: border-color .15s, box-shadow .15s;
+  background: #fff;
+}
+.form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,201,.1); }
+.form-input.error { border-color: var(--danger); }
+.form-hint { font-size: 12px; color: var(--text-secondary); margin-top: 5px; }
+.form-error { font-size: 12px; color: var(--danger); margin-top: 5px; display: flex; align-items: center; gap: 4px; }
+
+.btn-block {
+  width: 100%; padding: 11px 16px; border-radius: var(--radius);
+  font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--sans);
+  transition: background .15s; border: none;
+}
+.btn-primary-block { background: var(--text-primary); color: #fff; }
+.btn-primary-block:hover { background: #1f2937; }
+.btn-accent-block { background: var(--accent); color: #fff; }
+.btn-accent-block:hover { background: var(--accent-hover); }
+.btn-outline-block {
+  background: #fff; color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+.btn-outline-block:hover { background: var(--sidebar-bg); }
+
+.divider { display: flex; align-items: center; gap: 12px; margin: 18px 0; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border-default); }
+.divider span { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
+
+.link-row { text-align: center; font-size: 13.5px; color: var(--text-secondary); margin-top: 18px; }
+.link-row a { color: var(--accent); text-decoration: none; font-weight: 500; }
+.link-row a:hover { text-decoration: underline; }
+
+.oauth-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 10px 16px; border: 1px solid var(--border-default); border-radius: var(--radius);
+  background: #fff; font-size: 14px; font-weight: 500; font-family: var(--sans);
+  cursor: pointer; transition: background .1s; color: var(--text-primary); margin-bottom: 10px;
+}
+.oauth-btn:hover { background: var(--sidebar-bg); }
+.oauth-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+/* ── Brand panel content ── */
+.brand-tagline { font-size: 28px; font-weight: 700; color: #fff; letter-spacing: -.03em; line-height: 1.2; margin-bottom: 16px; }
+.brand-sub { font-size: 15px; color: rgba(255,255,255,.5); line-height: 1.6; max-width: 32ch; }
+.brand-features { margin-top: 40px; display: flex; flex-direction: column; gap: 16px; }
+.brand-feat { display: flex; align-items: flex-start; gap: 12px; }
+.brand-feat-icon { width: 28px; height: 28px; border-radius: 8px; background: rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.brand-feat-icon svg { width: 14px; height: 14px; color: rgba(255,255,255,.7); }
+.brand-feat-title { font-size: 13.5px; font-weight: 600; color: #fff; margin-bottom: 2px; }
+.brand-feat-desc { font-size: 12.5px; color: rgba(255,255,255,.45); line-height: 1.4; }
+.brand-credit { font-size: 11.5px; color: rgba(255,255,255,.25); font-family: var(--mono); }
+
+/* ── Testimonial on login ── */
+.brand-testimonial { margin-top: 48px; padding: 20px; background: rgba(255,255,255,.06); border-radius: 10px; border: 1px solid rgba(255,255,255,.08); }
+.testimonial-text { font-size: 14px; color: rgba(255,255,255,.7); line-height: 1.6; font-style: italic; margin-bottom: 14px; }
+.testimonial-author { display: flex; align-items: center; gap: 10px; }
+.testimonial-avatar { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.15); color: rgba(255,255,255,.6); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.testimonial-name { font-size: 13px; font-weight: 600; color: rgba(255,255,255,.7); }
+.testimonial-role { font-size: 11.5px; color: rgba(255,255,255,.35); }
+
+/* ── Password strength ── */
+.password-strength { margin-top: 8px; }
+.ps-bar { height: 3px; border-radius: 999px; background: var(--border-default); overflow: hidden; }
+.ps-fill { height: 100%; border-radius: 999px; transition: width .3s, background .3s; }
+.ps-label { font-size: 11.5px; color: var(--text-tertiary); margin-top: 4px; }
+
+/* ── Onboarding ── */
+.onboard-shell {
+  width: 100%; min-height: calc(100vh - 44px);
+  background: var(--sidebar-bg);
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start; padding: 48px 24px 80px;
+}
+.onboard-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 40px; }
+.onboard-progress { display: flex; align-items: center; gap: 0; margin-bottom: 40px; }
+.ob-step { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--text-tertiary); }
+.ob-step .step-circle { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--border-default); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; background: #fff; }
+.ob-step.done { color: var(--success); }
+.ob-step.done .step-circle { background: var(--success); border-color: var(--success); color: #fff; }
+.ob-step.active { color: var(--text-primary); }
+.ob-step.active .step-circle { background: var(--text-primary); border-color: var(--text-primary); color: #fff; }
+.ob-line { flex: 1; height: 1.5px; background: var(--border-default); min-width: 40px; max-width: 80px; }
+.ob-line.done { background: var(--success); }
+.onboard-card {
+  width: 100%; max-width: 520px;
+  background: #fff; border: 1px solid var(--border-default);
+  border-radius: 12px; padding: 32px; box-shadow: var(--shadow-md);
+}
+.onboard-card h2 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 6px; }
+.onboard-card .oc-sub { font-size: 14px; color: var(--text-secondary); margin-bottom: 24px; }
+.onboard-nav { display: flex; gap: 10px; margin-top: 24px; }
+
+/* ── MFA screen ── */
+.mfa-code-row { display: flex; gap: 10px; justify-content: center; margin: 20px 0; }
+.mfa-digit {
+  width: 52px; height: 60px; border: 1.5px solid var(--border-default); border-radius: var(--radius);
+  font-size: 24px; font-weight: 700; text-align: center; outline: none;
+  font-family: var(--mono); color: var(--text-primary); transition: border-color .15s;
+}
+.mfa-digit:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,201,.1); }
+
+/* ── SSO screen ── */
+.sso-domain-row { display: flex; gap: 10px; align-items: flex-end; }
+.sso-prefix { font-size: 14px; color: var(--text-secondary); padding-bottom: 10px; white-space: nowrap; }
+
+/* ── Misc ── */
+.checkbox-row { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+.checkbox-row input { margin-top: 1px; accent-color: var(--accent); width: 15px; height: 15px; flex-shrink: 0; }
+.checkbox-row a { color: var(--accent); }
+.tag { font-size: 11px; font-weight: 500; border-radius: 999px; padding: 2px 8px; background: var(--sidebar-bg); color: var(--text-secondary); border: 1px solid var(--border-default); display: inline-block; }
+.success-box { background: var(--success-light); border: 1px solid #86efac; border-radius: var(--radius); padding: 12px 14px; font-size: 13px; color: var(--success); display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="tp-mark" viewBox="0 0 100 100">
+    <path d="M22 43 L50 28 L78 43" fill="none" stroke="var(--mark-accent,currentColor)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M22 60 L50 45 L78 60" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M22 77 L50 62 L78 77" fill="none" stroke="currentColor" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+</svg>
+
+<!-- Screen switcher -->
+<div class="screen-switcher">
+  <span class="ss-label">Auth screens</span>
+  <button class="ss-btn active" onclick="showScreen('login')">Login</button>
+  <button class="ss-btn" onclick="showScreen('signup')">Sign up</button>
+  <button class="ss-btn" onclick="showScreen('mfa')">MFA</button>
+  <button class="ss-btn" onclick="showScreen('sso')">SSO</button>
+  <button class="ss-btn" onclick="showScreen('forgot')">Forgot password</button>
+  <button class="ss-btn" onclick="showScreen('onboard-1')">Onboard (1)</button>
+  <button class="ss-btn" onclick="showScreen('onboard-2')">Onboard (2)</button>
+  <button class="ss-btn" onclick="showScreen('onboard-3')">Onboard (3)</button>
+  <button class="ss-btn" onclick="showScreen('onboard-4')">Onboard (4)</button>
+  <div class="ss-spacer"></div>
+  <a href="/design/" class="ss-back">← Design index</a>
+</div>
+
+
+<!-- ════════════════════ LOGIN ════════════════════ -->
+<div class="screen active" id="screen-login">
+  <div class="auth-split">
+    <!-- Brand panel -->
+    <div class="auth-brand">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:56px;">
+          <svg class="auth-logo-mark" viewBox="0 0 100 100" style="--mark-accent:#5B8DEF;color:#fff;"><use href="#tp-mark"/></svg>
+          <span style="font-size:18px;letter-spacing:-.02em;color:#fff;"><span style="font-weight:400;">True</span><span style="font-weight:700;">Point</span></span>
+        </div>
+        <div class="brand-tagline">Find, reveal, and reach your best prospects.</div>
+        <div class="brand-sub">End-to-end B2B prospecting in one place — import, enrich, verify, reveal, sequence, and send.</div>
+        <div class="brand-testimonial">
+          <div class="testimonial-text">"We replaced Apollo + a VA + manual CRM syncing with TruePoint. The credit-back policy alone saved us hundreds in wasted spend on invalid emails."</div>
+          <div class="testimonial-author">
+            <div class="testimonial-avatar">RK</div>
+            <div>
+              <div class="testimonial-name">Rachel Kim</div>
+              <div class="testimonial-role">Head of Sales · Raycast</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="brand-credit">TruePoint · Transparent pricing · No lock-in</div>
+    </div>
+    <!-- Form -->
+    <div class="auth-panel">
+      <div class="auth-form-wrap">
+        <div class="auth-logo" style="margin-bottom:32px;">
+          <svg class="auth-logo-mark" viewBox="0 0 100 100"><use href="#tp-mark"/></svg>
+        </div>
+        <div class="form-title">Welcome back</div>
+        <div class="form-subtitle">Sign in to your TruePoint workspace</div>
+
+        <button class="oauth-btn">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+          Continue with Google
+        </button>
+        <button class="oauth-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          Continue with GitHub
+        </button>
+
+        <div class="divider"><span>or sign in with email</span></div>
+
+        <div class="form-field">
+          <label class="form-label">Email address</label>
+          <input class="form-input" type="email" value="jordan@company.com" placeholder="you@company.com"/>
+        </div>
+        <div class="form-field">
+          <label class="form-label" style="display:flex;justify-content:space-between;"><span>Password</span> <a href="#" style="color:var(--accent);font-weight:400;" onclick="showScreen('forgot');return false;">Forgot?</a></label>
+          <input class="form-input" type="password" value="••••••••••" placeholder="Your password"/>
+        </div>
+
+        <button class="btn-block btn-primary-block" style="margin-top:6px;">Sign in</button>
+
+        <div class="link-row">Don't have an account? <a href="#" onclick="showScreen('signup');return false;">Create one free →</a></div>
+
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border-hairline);text-align:center;">
+          <div style="font-size:12.5px;color:var(--text-tertiary);">Using SSO? <a href="#" style="color:var(--accent);" onclick="showScreen('sso');return false;">Sign in with your organization →</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════ SIGN UP ════════════════════ -->
+<div class="screen" id="screen-signup">
+  <div class="auth-split">
+    <div class="auth-brand">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:56px;">
+          <svg class="auth-logo-mark" viewBox="0 0 100 100" style="--mark-accent:#5B8DEF;color:#fff;"><use href="#tp-mark"/></svg>
+          <span style="font-size:18px;letter-spacing:-.02em;color:#fff;"><span style="font-weight:400;">True</span><span style="font-weight:700;">Point</span></span>
+        </div>
+        <div class="brand-tagline">Find and reach your best prospects.</div>
+        <div class="brand-sub">Free to start. 25 reveal credits on signup. No credit card required.</div>
+        <div class="brand-features">
+          <div class="brand-feat">
+            <div class="brand-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+            <div><div class="brand-feat-title">Reveal verified contacts</div><div class="brand-feat-desc">Email + phone, verified on reveal. Credit-back on bounce.</div></div>
+          </div>
+          <div class="brand-feat">
+            <div class="brand-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+            <div><div class="brand-feat-title">Outreach that converts</div><div class="brand-feat-desc">Multi-step sequences with AI drafting + human review.</div></div>
+          </div>
+          <div class="brand-feat">
+            <div class="brand-feat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+            <div><div class="brand-feat-title">Compliance first</div><div class="brand-feat-desc">GDPR + CCPA suppression built in — not bolted on.</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="brand-credit">TruePoint · 25 free credits on signup · No auto-renew traps</div>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-form-wrap">
+        <div class="auth-logo" style="margin-bottom:32px;">
+          <svg class="auth-logo-mark" viewBox="0 0 100 100"><use href="#tp-mark"/></svg>
+        </div>
+        <div class="form-title">Create your account</div>
+        <div class="form-subtitle">Start with 25 free reveal credits. No card required.</div>
+
+        <button class="oauth-btn">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+          Sign up with Google
+        </button>
+
+        <div class="divider"><span>or sign up with email</span></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+          <div class="form-field" style="margin-bottom:0;"><label class="form-label">First name</label><input class="form-input" type="text" placeholder="Jane"/></div>
+          <div class="form-field" style="margin-bottom:0;"><label class="form-label">Last name</label><input class="form-input" type="text" placeholder="Smith"/></div>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Work email</label>
+          <input class="form-input" type="email" placeholder="jane@company.com"/>
+          <div class="form-hint">Use your company email — we verify it before revealing contacts.</div>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Organization name</label>
+          <input class="form-input" type="text" placeholder="Acme Inc."/>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" placeholder="At least 12 characters" id="signup-pw" oninput="updateStrength(this.value)"/>
+          <div class="password-strength">
+            <div class="ps-bar"><div class="ps-fill" id="ps-fill" style="width:0%;background:var(--danger);"></div></div>
+            <div class="ps-label" id="ps-label">Enter a password</div>
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox"/>
+          <span>I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>. I understand that contacts are workspace-scoped and I'm responsible for lawful use.</span>
+        </div>
+
+        <button class="btn-block btn-primary-block">Create account → get 25 free credits</button>
+        <div class="link-row">Already have an account? <a href="#" onclick="showScreen('login');return false;">Sign in →</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════ MFA ════════════════════ -->
+<div class="screen" id="screen-mfa">
+  <div class="auth-split">
+    <div class="auth-brand">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:56px;">
+          <svg class="auth-logo-mark" viewBox="0 0 100 100" style="--mark-accent:#5B8DEF;color:#fff;"><use href="#tp-mark"/></svg>
+          <span style="font-size:18px;letter-spacing:-.02em;color:#fff;"><span style="font-weight:400;">True</span><span style="font-weight:700;">Point</span></span>
+        </div>
+        <div class="brand-tagline">Your account is protected.</div>
+        <div class="brand-sub">TruePoint supports TOTP two-factor authentication, backup codes, and — for enterprise — SAML/OIDC SSO enforced at the tenant level.</div>
+        <div style="margin-top:32px;padding:20px;background:rgba(255,255,255,.06);border-radius:10px;border:1px solid rgba(255,255,255,.08);">
+          <div style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:10px;">Security policy</div>
+          <div style="display:flex;flex-direction:column;gap:7px;font-size:13px;color:rgba(255,255,255,.5);">
+            <div style="display:flex;align-items:center;gap:8px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> TOTP (Authenticator app)</div>
+            <div style="display:flex;align-items:center;gap:8px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Backup codes (8 codes, single-use)</div>
+            <div style="display:flex;align-items:center;gap:8px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Sessions expire on inactivity</div>
+            <div style="display:flex;align-items:center;gap:8px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> SAML/OIDC SSO (Enterprise)</div>
+          </div>
+        </div>
+      </div>
+      <div class="brand-credit">TruePoint · Security & Compliance</div>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-form-wrap" style="text-align:center;">
+        <div style="width:56px;height:56px;border-radius:16px;background:var(--text-primary);display:flex;align-items:center;justify-content:center;margin:0 auto 24px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <div class="form-title" style="text-align:left;">Two-factor authentication</div>
+        <div class="form-subtitle" style="text-align:left;">Enter the 6-digit code from your authenticator app.</div>
+
+        <div class="mfa-code-row">
+          <input class="mfa-digit" maxlength="1" value="4"/>
+          <input class="mfa-digit" maxlength="1" value="8"/>
+          <input class="mfa-digit" maxlength="1" value="3"/>
+          <input class="mfa-digit" maxlength="1" style="border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,201,.1);" value=""/>
+          <input class="mfa-digit" maxlength="1"/>
+          <input class="mfa-digit" maxlength="1"/>
+        </div>
+
+        <button class="btn-block btn-primary-block">Verify and sign in</button>
+        <div style="margin-top:16px;text-align:center;">
+          <a href="#" style="font-size:13.5px;color:var(--accent);">Use a backup code instead →</a>
+        </div>
+        <div style="margin-top:12px;text-align:center;">
+          <a href="#" style="font-size:13.5px;color:var(--text-tertiary);" onclick="showScreen('login');return false;">← Back to sign in</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════ SSO ════════════════════ -->
+<div class="screen" id="screen-sso">
+  <div class="auth-split">
+    <div class="auth-brand">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:56px;">
+          <svg class="auth-logo-mark" viewBox="0 0 100 100" style="--mark-accent:#5B8DEF;color:#fff;"><use href="#tp-mark"/></svg>
+          <span style="font-size:18px;letter-spacing:-.02em;color:#fff;"><span style="font-weight:400;">True</span><span style="font-weight:700;">Point</span></span>
+        </div>
+        <div class="brand-tagline">Enterprise SSO — one login, full control.</div>
+        <div class="brand-sub">TruePoint supports SAML 2.0 and OIDC SSO, configurable per tenant. Enforce SSO to prevent password sign-in. Available on Enterprise plans.</div>
+      </div>
+      <div class="brand-credit">TruePoint Enterprise · SSO + SCIM provisioning</div>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-form-wrap">
+        <div class="auth-logo" style="margin-bottom:32px;">
+          <svg class="auth-logo-mark" viewBox="0 0 100 100"><use href="#tp-mark"/></svg>
+        </div>
+        <div class="form-title">Sign in with SSO</div>
+        <div class="form-subtitle">Enter your work email or organization domain to be redirected to your identity provider.</div>
+
+        <div class="form-field">
+          <label class="form-label">Work email or organization domain</label>
+          <input class="form-input" type="email" placeholder="you@company.com" value="jordan@stripe.com"/>
+          <div class="form-hint">We'll detect your SSO provider from your domain.</div>
+        </div>
+
+        <button class="btn-block btn-primary-block" style="margin-bottom:16px;">Continue with SSO →</button>
+
+        <div style="padding:14px;background:var(--sidebar-bg);border-radius:var(--radius);border:1px solid var(--border-default);font-size:13px;color:var(--text-secondary);">
+          <b style="color:var(--text-primary);">stripe.com</b> uses <b style="color:var(--text-primary);">Okta SAML 2.0</b> — you'll be redirected to your identity provider to authenticate.
+        </div>
+
+        <div class="link-row" style="margin-top:20px;">Not using SSO? <a href="#" onclick="showScreen('login');return false;">Sign in with email →</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════ FORGOT PASSWORD ════════════════════ -->
+<div class="screen" id="screen-forgot">
+  <div class="auth-split">
+    <div class="auth-brand">
+      <div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:56px;">
+          <svg class="auth-logo-mark" viewBox="0 0 100 100" style="--mark-accent:#5B8DEF;color:#fff;"><use href="#tp-mark"/></svg>
+          <span style="font-size:18px;letter-spacing:-.02em;color:#fff;"><span style="font-weight:400;">True</span><span style="font-weight:700;">Point</span></span>
+        </div>
+        <div class="brand-tagline">Reset your password securely.</div>
+        <div class="brand-sub">We'll send a reset link to your verified email address. The link expires in 30 minutes.</div>
+      </div>
+      <div class="brand-credit">TruePoint · Secure password reset</div>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-form-wrap">
+        <div class="auth-logo" style="margin-bottom:32px;">
+          <svg class="auth-logo-mark" viewBox="0 0 100 100"><use href="#tp-mark"/></svg>
+        </div>
+        <div class="form-title">Forgot your password?</div>
+        <div class="form-subtitle">Enter your email and we'll send you a reset link.</div>
+
+        <div class="success-box">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Reset link sent to jordan@company.com — check your inbox. (This is a design example.)
+        </div>
+
+        <div class="form-field">
+          <label class="form-label">Email address</label>
+          <input class="form-input" type="email" value="jordan@company.com" placeholder="you@company.com"/>
+        </div>
+
+        <button class="btn-block btn-primary-block" style="margin-bottom:16px;">Send reset link</button>
+        <div class="link-row"><a href="#" onclick="showScreen('login');return false;">← Back to sign in</a></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════ ONBOARDING — Step 1: Email verification ════════════════════ -->
+<div class="screen" id="screen-onboard-1">
+  <div class="onboard-shell">
+    <div class="onboard-logo">
+      <svg width="22" height="22" viewBox="0 0 100 100" style="--mark-accent:var(--accent);"><use href="#tp-mark"/></svg>
+      <span style="font-size:16px;letter-spacing:-.02em;"><span style="font-weight:400;">True</span><span style="font-weight:700;">Point</span></span>
+    </div>
+
+    <div class="onboard-progress">
+      <div class="ob-step active"><div class="step-circle">1</div>Verify email</div>
+      <div class="ob-line"></div>
+      <div class="ob-step"><div class="step-circle">2</div>Workspace</div>
+      <div class="ob-line"></div>
+      <div class="ob-step"><div class="step-circle">3</div>First import</div>
+      <div class="ob-line"></div>
+      <div class="ob-step"><div class="step-circle">4</div>First reveal</div>
+    </div>
+
+    <div class="onboard-card">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="width:56px;height:56px;border-radius:16px;background:var(--accent-light);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        </div>
+        <h2>Check your inbox</h2>
+        <p class="oc-sub">We sent a verification link to <b>jordan@company.com</b>. Click it to confirm your email and unlock your 25 free credits.</p>
+      </div>
+      <div style="padding:16px;background:var(--sidebar-bg);border-radius:var(--radius);border:1px solid var(--border-default);font-size:13px;color:var(--text-secondary);text-align:center;margin-bottom:16px;">
+        Didn't receive it? Check your spam folder, or
+        <a href="#" style="color:var(--accent);font-weight:500;">resend the email</a>.
+      </div>
+      <div style="font-size:13px;color:var(--text-tertiary);text-align:center;">
+        Wrong email? <a href="#" style="color:var(--accent);" onclick="showScreen('signup');return false;">Go back and change it →</a>
+      </div>
+      <div class="onboard-nav" style="justify-content:center;margin-top:20px;">
+        <button class="btn-block btn-primary-block" style="max-width:280px;" onclick="showScreen('onboard-2')">I've verified my email →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════ ONBOARDING — Step 2: Workspace setup ════════════════════ -->
+<div class="screen" id="screen-onboard-2">
+  <div class="onboard-shell">
+    <div class="onboard-logo">
+      <svg width="22" height="22" viewBox="0 0 100 100" style="--mark-accent:var(--accent);"><use href="#tp-mark"/></svg>
+      <span style="font-size:16px;letter-spacing:-.02em;"><span style="font-weight:400;">True</span><span style="font-weight:700;">Point</span></span>
+    </div>
+
+    <div class="onboard-progress">
+      <div class="ob-step done"><div class="step-circle"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>Verify email</div>
+      <div class="ob-line done"></div>
+      <div class="ob-step active"><div class="step-circle">2</div>Workspace</div>
+      <div class="ob-line"></div>
+      <div class="ob-step"><div class="step-circle">3</div>First import</div>
+      <div class="ob-line"></div>
+      <div class="ob-step"><div class="step-circle">4</div>First reveal</div>
+    </div>
+
+    <div class="onboard-card">
+      <h2>Set up your workspace</h2>
+      <p class="oc-sub">A workspace is your team's prospecting space — it contains your contacts, lists, sequences, and scores. You can create more later.</p>
+
+      <div class="form-field">
+        <label class="form-label">Workspace name</label>
+        <input class="form-input" type="text" value="North America Sales" placeholder="e.g. US Sales Team, EMEA Q2"/>
+        <div class="form-hint">Tip: name it after a region, campaign, or team — each workspace is fully isolated.</div>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Your organization name</label>
+        <input class="form-input" type="text" value="Acme Inc."/>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Timezone</label>
+        <select class="form-input" style="appearance:none;background-image:url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e\");background-repeat:no-repeat;background-position:right 10px center;background-size:16px;padding-right:36px;">
+          <option selected>America/New_York (EST)</option>
+          <option>America/Los_Angeles (PST)</option>
+          <option>Europe/London (GMT)</option>
+          <option>Europe/Berlin (CET)</option>
+        </select>
+      </div>
+
+      <div class="onboard-nav">
+        <button class="btn-block btn-outline-block" onclick="showScreen('onboard-1')">← Back</button>
+        <button class="btn-block btn-primary-block" onclick="showScreen('onboard-3')">Create workspace →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════ ONBOARDING — Step 3: First import ════════════════════ -->
+<div class="screen" id="screen-onboard-3">
+  <div class="onboard-shell">
+    <div class="onboard-logo">
+      <svg width="22" height="22" viewBox="0 0 100 100" style="--mark-accent:var(--accent);"><use href="#tp-mark"/></svg>
+      <span style="font-size:16px;letter-spacing:-.02em;"><span style="font-weight:400;">True</span><span style="font-weight:700;">Point</span></span>
+    </div>
+
+    <div class="onboard-progress">
+      <div class="ob-step done"><div class="step-circle"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>Verify email</div>
+      <div class="ob-line done"></div>
+      <div class="ob-step done"><div class="step-circle"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>Workspace</div>
+      <div class="ob-line done"></div>
+      <div class="ob-step active"><div class="step-circle">3</div>First import</div>
+      <div class="ob-line"></div>
+      <div class="ob-step"><div class="step-circle">4</div>First reveal</div>
+    </div>
+
+    <div class="onboard-card">
+      <h2>Import your first contacts</h2>
+      <p class="oc-sub">Start by importing contacts into your workspace. Duplicates are detected automatically — you'll see a summary before we finalize anything.</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+        <div style="border:1.5px solid var(--accent);border-radius:10px;padding:16px;background:var(--accent-light);cursor:pointer;">
+          <div style="font-size:24px;margin-bottom:8px;">📄</div>
+          <div style="font-size:13.5px;font-weight:600;margin-bottom:4px;">CSV / Excel</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Upload a spreadsheet of contacts</div>
+        </div>
+        <div style="border:1.5px solid var(--border-default);border-radius:10px;padding:16px;cursor:pointer;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border-default)'">
+          <div style="font-size:24px;margin-bottom:8px;">🌐</div>
+          <div style="font-size:13.5px;font-weight:600;margin-bottom:4px;">Apollo</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Connect and import from Apollo</div>
+        </div>
+        <div style="border:1.5px solid var(--border-default);border-radius:10px;padding:16px;cursor:pointer;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border-default)'">
+          <div style="font-size:24px;margin-bottom:8px;">📊</div>
+          <div style="font-size:13.5px;font-weight:600;margin-bottom:4px;">ZoomInfo</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Connect and import from ZoomInfo</div>
+        </div>
+        <div style="border:1.5px solid var(--border-default);border-radius:10px;padding:16px;cursor:pointer;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border-default)'">
+          <div style="font-size:24px;margin-bottom:8px;">✏️</div>
+          <div style="font-size:13.5px;font-weight:600;margin-bottom:4px;">Manual entry</div>
+          <div style="font-size:12px;color:var(--text-secondary);">Add contacts one by one</div>
+        </div>
+      </div>
+
+      <!-- Simulated import success -->
+      <div style="background:var(--sidebar-bg);border:1px solid var(--border-default);border-radius:10px;padding:14px;font-size:13px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-weight:600;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Import complete
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
+          <div style="background:#fff;border-radius:6px;padding:8px;"><div style="font-size:18px;font-weight:700;">248</div><div style="font-size:11.5px;color:var(--text-secondary);">Added</div></div>
+          <div style="background:#fff;border-radius:6px;padding:8px;"><div style="font-size:18px;font-weight:700;color:var(--warning);">3</div><div style="font-size:11.5px;color:var(--text-secondary);">Dupes skipped</div></div>
+          <div style="background:#fff;border-radius:6px;padding:8px;"><div style="font-size:18px;font-weight:700;color:var(--danger);">0</div><div style="font-size:11.5px;color:var(--text-secondary);">Errors</div></div>
+        </div>
+      </div>
+
+      <div class="onboard-nav">
+        <button class="btn-block btn-outline-block" onclick="showScreen('onboard-2')">← Back</button>
+        <button class="btn-block btn-primary-block" onclick="showScreen('onboard-4')">Search and reveal →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════ ONBOARDING — Step 4: First reveal ════════════════════ -->
+<div class="screen" id="screen-onboard-4">
+  <div class="onboard-shell">
+    <div class="onboard-logo">
+      <svg width="22" height="22" viewBox="0 0 100 100" style="--mark-accent:var(--accent);"><use href="#tp-mark"/></svg>
+      <span style="font-size:16px;letter-spacing:-.02em;"><span style="font-weight:400;">True</span><span style="font-weight:700;">Point</span></span>
+    </div>
+
+    <div class="onboard-progress">
+      <div class="ob-step done"><div class="step-circle"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>Verify email</div>
+      <div class="ob-line done"></div>
+      <div class="ob-step done"><div class="step-circle"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>Workspace</div>
+      <div class="ob-line done"></div>
+      <div class="ob-step done"><div class="step-circle"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>First import</div>
+      <div class="ob-line done"></div>
+      <div class="ob-step active"><div class="step-circle">4</div>First reveal</div>
+    </div>
+
+    <div class="onboard-card" style="max-width:580px;">
+      <h2>You're ready — make your first reveal 🎉</h2>
+      <p class="oc-sub">You have <b>25 free credits</b>. Here's your first imported contact. Click Reveal to unlock their verified email address.</p>
+
+      <!-- Mini contact card -->
+      <div style="border:1px solid var(--border-default);border-radius:10px;overflow:hidden;margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid var(--border-hairline);">
+          <div style="width:40px;height:40px;border-radius:50%;background:#e5e7eb;color:#6b7280;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;">ER</div>
+          <div>
+            <div style="font-size:14px;font-weight:600;">Emma Rodriguez</div>
+            <div style="font-size:13px;color:var(--text-secondary);">VP Engineering · Stripe</div>
+          </div>
+          <div style="margin-left:auto;font-size:24px;font-weight:800;letter-spacing:-.03em;">94 <span style="font-size:11px;font-weight:500;color:var(--text-secondary);">/ 100</span></div>
+        </div>
+        <div style="padding:14px;display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;">
+            <div style="font-family:var(--mono);font-size:13px;color:var(--text-tertiary);letter-spacing:.1em;">••••••••••••••</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:3px;">Email address — not yet revealed</div>
+          </div>
+          <button class="btn-block btn-accent-block" style="width:auto;padding:8px 18px;white-space:nowrap;">Reveal (1 credit)</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px;font-size:13px;">
+        <div style="text-align:center;padding:12px;background:var(--sidebar-bg);border-radius:8px;">
+          <div style="font-size:20px;font-weight:700;color:var(--accent);">25</div>
+          <div style="color:var(--text-secondary);font-size:12px;">Free credits remaining</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--sidebar-bg);border-radius:8px;">
+          <div style="font-size:20px;font-weight:700;">248</div>
+          <div style="color:var(--text-secondary);font-size:12px;">Contacts imported</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--sidebar-bg);border-radius:8px;">
+          <div style="font-size:20px;font-weight:700;">0</div>
+          <div style="color:var(--text-secondary);font-size:12px;">Credits used so far</div>
+        </div>
+      </div>
+
+      <div style="padding:12px 14px;background:var(--accent-light);border-radius:var(--radius);border:1px solid #c7d9f5;font-size:13px;color:var(--accent);margin-bottom:20px;">
+        <b>Credit-back guarantee:</b> You're only charged for valid, deliverable emails. If a revealed email bounces, we credit you back automatically.
+      </div>
+
+      <div class="onboard-nav">
+        <button class="btn-block btn-outline-block" onclick="showScreen('onboard-3')">← Back</button>
+        <a href="/design/app.html" style="flex:1;display:block;">
+          <button class="btn-block btn-primary-block" style="width:100%;">Go to Prospect → Start searching</button>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.ss-btn').forEach(b => b.classList.remove('active'));
+  const scr = document.getElementById('screen-' + name);
+  if (scr) scr.classList.add('active');
+  const btns = document.querySelectorAll('.ss-btn');
+  btns.forEach(b => { if (b.textContent.toLowerCase().replace(/\s+/g,'').includes(name.replace('-','').toLowerCase().replace('onboard','onboard(').replace(/(\d)$/,'$1)'))) b.classList.add('active'); });
+}
+
+function updateStrength(val) {
+  const fill = document.getElementById('ps-fill');
+  const label = document.getElementById('ps-label');
+  if (!fill || !label) return;
+  let score = 0;
+  if (val.length >= 8) score++;
+  if (val.length >= 12) score++;
+  if (/[A-Z]/.test(val)) score++;
+  if (/[0-9]/.test(val)) score++;
+  if (/[^A-Za-z0-9]/.test(val)) score++;
+  const configs = [
+    { w: '0%', c: 'var(--danger)', l: 'Enter a password' },
+    { w: '20%', c: 'var(--danger)', l: 'Too short' },
+    { w: '40%', c: 'var(--warning)', l: 'Weak — add numbers or symbols' },
+    { w: '60%', c: 'var(--warning)', l: 'Fair — add uppercase or symbols' },
+    { w: '80%', c: 'var(--success)', l: 'Good password' },
+    { w: '100%', c: 'var(--success)', l: 'Strong password ✓' },
+  ];
+  const cfg = configs[score] || configs[0];
+  fill.style.width = cfg.w;
+  fill.style.background = cfg.c;
+  label.textContent = cfg.l;
+  label.style.color = cfg.c;
+}
+</script>
+</body>
+</html>
