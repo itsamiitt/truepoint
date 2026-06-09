@@ -83,7 +83,7 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: "node_modules" },
-    exclude: { path: "(\\.test\\.[tj]sx?$|\\.d\\.ts$|/__tests__/|/__cassettes__/)" },
+    exclude: { path: "(\\.test\\.[tj]sx?$|\\.itest\\.[tj]sx?$|\\.d\\.ts$|/__tests__/|/__cassettes__/)" },
     tsPreCompilationDeps: true,
     enhancedResolveOptions: {
       exportsFields: ["exports"],

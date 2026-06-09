@@ -6,6 +6,8 @@ import { cors } from "hono/cors";
 import { appOrigins } from "@leadwolf/config";
 import { onError } from "./middleware/error.ts";
 import { authRoutes } from "./features/auth/index.ts";
+import { importRoutes } from "./features/import/index.ts";
+import { revealRoutes } from "./features/reveal/index.ts";
 
 export const app = new Hono();
 
@@ -14,3 +16,5 @@ app.use("*", cors({ origin: [...appOrigins()], credentials: true }));
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 app.route("/api/v1/auth", authRoutes);
+app.route("/api/v1/imports", importRoutes);
+app.route("/api/v1/contacts", revealRoutes);

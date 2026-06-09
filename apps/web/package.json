@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@leadwolf/types": "workspace:*",
     "@leadwolf/ui": "workspace:*",
     "next": "15.1.2",
     "react": "19.0.0",

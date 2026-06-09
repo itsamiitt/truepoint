@@ -1,0 +1,4 @@
+# bunfig.toml — Bun config. The test preload seeds a valid dummy environment so packages/config's
+# fail-fast appEnvSchema validates during `bun test` (unit tests never open a real DB/Redis connection).
+[test]
+preload = ["./test/setup.ts"]

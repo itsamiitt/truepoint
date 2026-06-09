@@ -7,7 +7,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
-    "migrate": "drizzle-kit migrate"
+    "migrate": "drizzle-kit generate && bun run src/migrate.ts",
+    "seed": "bun run src/seed.ts"
   },
   "dependencies": {
     "@leadwolf/config": "workspace:*",
@@ -16,7 +17,9 @@
     "postgres": "3.4.5"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "^10.13.0",
     "drizzle-kit": "0.28.1",
+    "testcontainers": "^10.13.0",
     "typescript": "5.7.2"
   }
 }

@@ -14,3 +14,13 @@ export {
   workspaceRepository,
   type WorkspaceSummary,
 } from "./repositories/workspaceRepository.ts";
+export { accountRepository, type AccountUpsertInput } from "./repositories/accountRepository.ts";
+export {
+  contactRepository,
+  type ContactWriteValues,
+  type DedupKeys,
+} from "./repositories/contactRepository.ts";
+export {
+  sourceImportRepository,
+  type SourceImportInput,
+} from "./repositories/sourceImportRepository.ts";

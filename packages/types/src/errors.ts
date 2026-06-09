@@ -108,3 +108,10 @@ export class NotFoundError extends AppError {
     super({ status: 404, code: "not_found", title: "Not found", detail });
   }
 }
+
+/** An import row (or its column mapping) failed validation — carries the offending row index(es). */
+export class ImportValidationError extends AppError {
+  constructor(detail?: string, extensions?: Record<string, unknown>) {
+    super({ status: 422, code: "import_validation_error", title: "Import is invalid", detail, extensions });
+  }
+}

@@ -4,7 +4,7 @@
 const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
-  transpilePackages: ["@leadwolf/ui"],
+  transpilePackages: ["@leadwolf/ui", "@leadwolf/types"],
 };
 
 export default nextConfig;

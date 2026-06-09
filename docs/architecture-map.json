@@ -41,8 +41,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 65,
-  "fileSetHash": "sha256:5531e79c460cac11973490ce7393f64500891b4d8b6605411ffa6dffc2af6802",
+  "fileCount": 101,
+  "fileSetHash": "sha256:816b7e4b87303d244150251ccb6b4ee7a97f9dad336ce506d900a2ab8cda9061",
   "features": {
     "auth": {
       "web": [],
@@ -54,6 +54,57 @@
       "core": [],
       "db": [
         "packages/db/src/repositories/userRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
+    "import": {
+      "web": [
+        "apps/web/src/features/import/api.ts",
+        "apps/web/src/features/import/components/ContactsTable.tsx",
+        "apps/web/src/features/import/components/ImportPage.tsx",
+        "apps/web/src/features/import/components/ImportWizard.tsx",
+        "apps/web/src/features/import/hooks/useContacts.ts",
+        "apps/web/src/features/import/hooks/useImport.ts",
+        "apps/web/src/features/import/index.ts",
+        "apps/web/src/features/import/types.ts"
+      ],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/import/index.ts",
+        "apps/api/src/features/import/routes.ts"
+      ],
+      "core": [
+        "packages/core/src/import/blindIndex.ts",
+        "packages/core/src/import/columnMap.ts",
+        "packages/core/src/import/contentHash.ts",
+        "packages/core/src/import/dedupHelpers.test.ts",
+        "packages/core/src/import/encryptPii.ts",
+        "packages/core/src/import/normalize.test.ts",
+        "packages/core/src/import/normalize.ts",
+        "packages/core/src/import/parseFile.test.ts",
+        "packages/core/src/import/parseFile.ts",
+        "packages/core/src/import/runImport.ts"
+      ],
+      "db": [
+        "packages/db/src/repositories/sourceImportRepository.ts"
+      ],
+      "workers": [
+        "apps/workers/src/queues/imports.ts"
+      ],
+      "integrations": []
+    },
+    "reveal": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/reveal/index.ts",
+        "apps/api/src/features/reveal/routes.ts"
+      ],
+      "core": [],
+      "db": [
+        "packages/db/src/repositories/accountRepository.ts",
+        "packages/db/src/repositories/contactRepository.ts"
       ],
       "workers": [],
       "integrations": []
@@ -112,6 +163,7 @@
     ],
     "apps/web/app": [
       "apps/web/src/app/auth/callback/page.tsx",
+      "apps/web/src/app/import/page.tsx",
       "apps/web/src/app/layout.tsx",
       "apps/web/src/app/page.tsx"
     ],
@@ -119,6 +171,10 @@
       "apps/web/src/lib/authClient.ts",
       "apps/web/src/lib/pkce.ts",
       "apps/web/src/lib/publicConfig.ts"
+    ],
+    "apps/workers": [
+      "apps/workers/src/index.ts",
+      "apps/workers/src/register.ts"
     ],
     "packages/auth": [
       "packages/auth/src/code.ts",
@@ -140,15 +196,24 @@
       "packages/config/src/env.ts",
       "packages/config/src/index.ts"
     ],
+    "packages/core": [
+      "packages/core/src/index.ts"
+    ],
     "packages/db": [
       "packages/db/drizzle.config.ts",
+      "packages/db/src/applyMigrations.ts",
       "packages/db/src/client.ts",
       "packages/db/src/index.ts",
+      "packages/db/src/migrate.ts",
       "packages/db/src/schema/auth.ts",
-      "packages/db/src/schema/index.ts"
+      "packages/db/src/schema/contacts.ts",
+      "packages/db/src/schema/index.ts",
+      "packages/db/src/seed.ts",
+      "packages/db/test/import.itest.ts"
     ],
     "packages/types": [
       "packages/types/src/auth.ts",
+      "packages/types/src/contacts.ts",
       "packages/types/src/errors.ts",
       "packages/types/src/index.ts"
     ],

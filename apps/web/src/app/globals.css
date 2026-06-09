@@ -41,3 +41,78 @@ body {
 .app-muted {
   color: var(--tp-ink-3);
 }
+
+/* Import wizard + contacts table (import feature slice). */
+.lw-card {
+  margin-top: 24px;
+  padding: 20px;
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+}
+.lw-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.lw-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.lw-field select,
+.lw-field input {
+  height: 36px;
+  padding: 0 8px;
+  font: inherit;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+}
+.lw-mapper {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 16px 0;
+}
+.lw-group {
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 8px 12px 12px;
+}
+.lw-group legend {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tp-ink-3);
+}
+.lw-summary {
+  margin-top: 14px;
+  font-size: 14px;
+}
+.lw-errors {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--tp-ink-3);
+}
+.lw-error {
+  margin-top: 12px;
+  color: #b42318;
+}
+.lw-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.lw-table th,
+.lw-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--tp-hairline-2);
+}
+.lw-table th {
+  color: var(--tp-ink-3);
+  font-weight: 600;
+}

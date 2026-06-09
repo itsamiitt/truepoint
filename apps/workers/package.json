@@ -1,20 +1,19 @@
 {
-  "name": "@leadwolf/api",
+  "name": "@leadwolf/workers",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run --hot src/server.ts",
-    "start": "bun run src/server.ts",
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@leadwolf/auth": "workspace:*",
     "@leadwolf/config": "workspace:*",
     "@leadwolf/core": "workspace:*",
-    "@leadwolf/db": "workspace:*",
     "@leadwolf/types": "workspace:*",
-    "hono": "4.6.13"
+    "bullmq": "^5.0.0",
+    "ioredis": "5.4.1"
   },
   "devDependencies": { "typescript": "5.7.2" }
 }
