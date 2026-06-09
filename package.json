@@ -1,0 +1,27 @@
+{
+  "name": "leadwolf",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.1.34",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "lint:boundaries": "depcruise apps packages",
+    "arch:map": "node .claude/hooks/gen-architecture-map.mjs",
+    "db:migrate": "bun run --filter @leadwolf/db migrate",
+    "db:seed": "bun run --filter @leadwolf/db seed"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "dependency-cruiser": "16.4.2",
+    "turbo": "2.3.3",
+    "typescript": "5.7.2"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

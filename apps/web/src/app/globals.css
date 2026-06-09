@@ -1,0 +1,43 @@
+/* globals.css — minimal app-shell styles for the round-trip demo, built from the TruePoint tokens. */
+@import "@leadwolf/ui/tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+  font-family: var(--font-sans);
+}
+.app-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 20px;
+}
+.app-button {
+  height: 40px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 500;
+  color: #fff;
+  background: var(--tp-btn);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.app-button:hover {
+  background: var(--tp-btn-700);
+}
+.app-pre {
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow: auto;
+}
+.app-muted {
+  color: var(--tp-ink-3);
+}

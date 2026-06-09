@@ -20,6 +20,8 @@ The team chose an **AWS-native, self-hosted** posture: if AWS offers a managed e
 
 **Auth: self-built on Lucia + Postgres + Redis** (replaces Better-Auth/Auth.js). Libraries (not services): `lucia`, `arctic` (OAuth), `@node-rs/argon2`, `@oslojs/otp` (TOTP MFA), `@node-saml/node-saml` (SAML SSO), `rate-limiter-flexible`. New tables: `user_sessions`, `user_oauth_accounts`, `user_mfa`, `user_password_resets`, `tenant_sso_configs` (see [03 §9](../03-database-design.md)).
 
+> **Auth transport amended by [ADR-0016](./ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md) (2026-06-08):** the session is no longer a Lucia cookie on the app domain. Auth runs on a dedicated origin `auth.truepoint.in` as an internal IdP/BFF — the Lucia session stays the durable, refresh-backed session **there**, and the app domain receives short-lived in-memory access tokens via a single-use cross-domain code exchange. The Lucia/arctic/OTP/SAML/argon2 choices above are unchanged. Full design: [17](../17-authentication.md).
+
 **Email/files:** SES (transactional, via React Email) with SNS→SQS bounce/complaint handling; S3 for all objects (pre-signed up/downloads, CloudFront for public assets).
 
 **Observability (self-hosted):** GlitchTip (errors), PostHog (product analytics, on EC2), CloudWatch + Grafana (metrics/logs), X-Ray (tracing), CloudWatch Synthetics (uptime).

@@ -9,18 +9,21 @@
 
 | Scope | Editable by | Backed by |
 |---|---|---|
-| **User** | the user (self) | `users`, `user_sessions`, `user_mfa`, `user_oauth_accounts`, `sending_identities`* |
-| **Workspace** | workspace `owner`/`admin` | `workspaces`, `workspace_members`, `suppression_list`, integrations* |
-| **Tenant** | `users.is_tenant_owner` / billing admin | `tenants`, `tenant_sso_configs`, `purchases`, `consent_records`, `dsar_requests`, `audit_log` |
-| **Developer** | tenant admin+ | `api_keys`, `webhooks`* |
+| **User** | the user (self) | `users`, `user_sessions`, `user_mfa`/`user_mfa_methods`, `webauthn_credentials`, `trusted_devices`, `user_oauth_accounts`, `sending_identities`* |
+| **Workspace** | workspace `owner`/`admin` | `workspaces`, `workspace_members`, `workspace_auth_policies`, `suppression_list`, integrations* |
+| **Tenant** | `users.is_tenant_owner` / billing admin | `tenants`, `tenant_domains`, `tenant_sso_configs`, `tenant_auth_policies`, `scim_tokens`, `purchases`, `consent_records`, `dsar_requests`, `audit_log` |
+| **Developer** | tenant admin+ | `api_keys`, `oauth_app_clients`, `webhooks`* |
 
 `*` = table flagged as a follow-up [03](./03-database-design.md) amendment (see [11 §6](./11-information-architecture.md) / [§6 below](#6-schema--open-items)).
 
 ## 2. User settings *(all users — Free+)*
 
 - **Profile** — name, avatar, email, timezone, locale.
-- **Security** — password (Argon2id), **MFA/TOTP** enroll + backup codes, **active sessions/devices** +
-  sign-out-everywhere ([03 §4](./03-database-design.md#4-tenancy--auth)).
+- **Security** *(served on `auth.truepoint.in/account/security`, [17 §10](./17-authentication.md#10-screens-components--settings-surfaces))* —
+  password (Argon2id) + strength meter; **MFA methods** (TOTP / SMS / email / **WebAuthn passkey**) +
+  **recovery codes** (view/regenerate); **passwordless / magic link**; **active sessions** +
+  sign-out-everywhere; **trusted devices** (revoke); **login history** (event, location, device,
+  timestamp, **origin_domain**) ([03 §4](./03-database-design.md#4-tenancy--auth)).
 - **Notifications** — per-channel prefs (in-app/email): replies, task-due, low-credits, weekly digest.
 - **Sending identity** — connect the user's email/LinkedIn for sending, signature, display name
   (feeds Sequences, [ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)). *(M9)*
@@ -31,6 +34,11 @@
 - **General** — name, slug, default region, timezone, branding. *(M2)*
 - **Members & roles** — invite, set per-workspace role (`owner`/`admin`/`member`/`viewer`), remove
   (DSAR-aware on user deletion); pending invites. *(M2)*
+- **Authentication** *(admin)* — workspace **MFA enforcement** (off/optional/**required**), **allowed
+  login methods**, **session timeout**, and **IP allowlist** (`workspace_auth_policies`); may only
+  **tighten** the tenant policy, never relax it
+  ([ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md),
+  [17 §4](./17-authentication.md#4-multi-tenancy-auth-model)). *(M11)*
 - **ICP & scoring config** — default ICP definition + score weights (drives Scores, [ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)). *(M4/M8)*
 - **Sending & deliverability** — per-workspace **sending domains** + **DKIM/SPF/DMARC** status,
   **warm-up**, daily send limits, **unsubscribe footer + physical address**. *(M9)*
@@ -49,8 +57,13 @@
   self-serve cancellation, no auto-renew traps, and **account-closure data export** (no data-destroy on churn).
 - **Workspaces** *(Team+)* — create/archive, limits, default workspace. *(M2)*
 - **Members directory** — tenant-wide users, deactivate, assign tenant-role (`is_tenant_owner`). *(M2)*
-- **Security & access** *(Enterprise)* — **SSO (SAML/OIDC** via `tenant_sso_configs`), **SCIM**
-  provisioning, **enforce-SSO**, **IP allowlist**, session/MFA policy, password policy. *(M11)*
+- **Security & access** *(Enterprise)* — guided **SSO wizard** (SAML 2.0 / OIDC via `tenant_sso_configs`)
+  with **ACS URL + Entity ID displayed** (`auth.truepoint.in` values), metadata upload/URL, **attribute
+  mapping** (email/name/role/department), **JIT toggle + default role**, and a **test-connection** tool;
+  **SCIM** provisioning + token management (`scim_tokens`); **domain claiming + verification**
+  (`tenant_domains`); **enforce-SSO**, **IP allowlist**, session/MFA/password policy
+  (`tenant_auth_policies`, [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)).
+  Full design [17 §8](./17-authentication.md#8-sso--scim-architecture). *(M11)*
 - **Compliance & data** — global/tenant **suppression**, **DSAR** intake & status, **consent records**,
   **retention controls**, **data residency** (region), **audit-log viewer + export**, sub-processor
   list ([08](./08-compliance.md)). *(M5; export + residency Enterprise/M11)*
@@ -61,7 +74,12 @@
 ## 5. Developer settings *(tenant admin+ — Team+/Enterprise)*
 
 - **API keys** — tenant-scoped, **hashed + scoped**, create/rotate/revoke, usage. *(seam M2, API M10)*
-- **Webhooks** — outbound events `reveal.completed` / `score.updated` / `outreach.status_changed`;
+- **OAuth apps** — register OAuth clients (`oauth_app_clients`); **redirect URIs must be
+  `auth.truepoint.in` origins**; client id/secret, CORS allow-list (no wildcard), scopes
+  ([17 §1](./17-authentication.md#1-service-boundary--domains),
+  [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)). *(M11)*
+- **Webhooks** — outbound events `reveal.completed` / `score.updated` / `outreach.status_changed` and
+  **auth events** (`auth.event` — login/MFA/SSO/device, [09 §10](./09-api-design.md#10-webhooks-outbound-post-mvp));
   signing secret, **delivery log + retries**. *(M10)*
 - **API docs & sandbox** — OpenAPI reference + sandbox keys. *(M10)*
 
@@ -88,7 +106,11 @@
 
 New tables/fields these settings imply, flagged as a follow-up [03](./03-database-design.md) amendment
 (not silently assumed): `sending_identities`, `integrations` (+ OAuth tokens), `webhooks` (+ delivery
-log), `notification_prefs`. SSO/SCIM use `tenant_sso_configs` (exists) + a SCIM provisioning table.
+log), `notification_prefs`. The **auth & security** settings (SSO/OIDC, SCIM, auth policy, domain claiming,
+passkeys, trusted devices, OAuth apps) are now **defined** in
+[03 §4](./03-database-design.md#4-tenancy--auth) ([17](./17-authentication.md)): `tenant_domains`,
+`tenant_sso_configs`, `scim_tokens`, `tenant_auth_policies`/`workspace_auth_policies`,
+`webauthn_credentials`, `trusted_devices`, `user_mfa_methods`, `oauth_app_clients`.
 
 **Open questions:** per-user personal tokens policy (tenant-controlled?); notification-prefs storage
-(table vs `users.settings` jsonb); SCIM scope at MVP-Enterprise.
+(table vs `users.settings` jsonb); SCIM scope at MVP-Enterprise ([17 open Q5](./17-authentication.md#open-questions)).

@@ -1,0 +1,42 @@
+# Local development stack (01 §9). `bun run dev` runs the apps against these services.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: leadwolf
+      POSTGRES_PASSWORD: leadwolf
+      POSTGRES_DB: leadwolf
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadwolf"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  typesense:
+    image: typesense/typesense:27.1
+    command: ["--data-dir", "/data", "--api-key", "dev", "--enable-cors"]
+    ports: ["8108:8108"]
+    volumes:
+      - tsdata:/data
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports: ["1025:1025", "8025:8025"]
+
+  localstack:
+    image: localstack/localstack:3
+    environment:
+      SERVICES: s3,ses
+    ports: ["4566:4566"]
+
+volumes:
+  pgdata:
+  tsdata:

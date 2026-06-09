@@ -64,10 +64,21 @@ flowchart TB
 
 ## 1. Auth & Tenancy — *MVP (M2)*
 
+- **Dedicated auth origin (`auth.truepoint.in`).** Authentication runs as an internal **IdP/BFF** on a
+  separate origin ([17](./17-authentication.md),
+  [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)): the durable
+  **Lucia** session + a rotating refresh cookie stay there; after login the app domain gets a single-use
+  60 s **PKCE code** exchanged for a short-lived in-memory **access JWT**. Login is **progressive
+  (identifier-first)** with domain→tenant/SSO routing
+  ([ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md)).
 - **Self-built auth on Lucia** ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)):
-  email/password (Argon2id) + OAuth (Google/Microsoft via `arctic`); **MFA** (TOTP) and **SAML/OIDC**
-  SSO (via `node-saml`, per-tenant `tenant_sso_configs`) for enterprise. Sessions in
-  `user_sessions` (Postgres + Redis).
+  email/password (Argon2id) + OAuth (Google/Microsoft via `arctic`); **MFA** (TOTP / SMS / email /
+  **WebAuthn passkey** + recovery codes, `user_mfa_methods`) and **SAML 2.0 / OIDC** SSO (via `node-saml`,
+  per-tenant `tenant_sso_configs`) with **JIT provisioning** + **SCIM** (`scim_tokens`) for enterprise.
+  **Trusted-device** registry ("trust 30 days") and per-scope **auth policy** (MFA enforcement / allowed
+  methods / IP allowlist / session timeout, strictest-wins,
+  [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)). Sessions in `user_sessions`
+  (Postgres + Redis).
 - **Self-serve signup** provisions the whole tree in one transaction via `provision_new_signup(...)`:
   **tenant → owner user → default workspace → owner membership → audit row**
   ([03 §10](./03-database-design.md#10-triggers--db-side-logic)).
@@ -82,8 +93,10 @@ flowchart TB
 - **Abuse guards (self-serve):** email verification, disposable-domain blocking, signup-velocity
   limits, optional payment-before-reveal for fresh tenants.
 - **Data:** `tenants`, `users`, `workspaces`, `workspace_members`, `user_sessions`,
-  `user_oauth_accounts`, `user_mfa`, `user_password_resets`, `tenant_sso_configs`, `api_keys`. See
-  [03 §4](./03-database-design.md#4-tenancy--auth).
+  `user_oauth_accounts`, `user_mfa`/`user_mfa_methods`, `user_mfa_recovery_codes`, `webauthn_credentials`,
+  `trusted_devices`, `user_password_resets`, `auth_email_tokens`, `tenant_domains`, `tenant_sso_configs`,
+  `tenant_auth_policies`/`workspace_auth_policies`, `scim_tokens`, `oauth_app_clients`, `api_keys`. See
+  [03 §4](./03-database-design.md#4-tenancy--auth) and the full design in [17](./17-authentication.md).
 
 ## 2. Workspaces — *MVP (M2)*
 
@@ -329,7 +342,7 @@ Surfaces introduced by the IA ([11](./11-information-architecture.md)) — panel
 
 | Module | M1 | M2 | M3 | M4 | M5 | Post-MVP |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|
-| Auth & tenancy | | ● | | | | SSO/MFA depth |
+| Auth & tenancy (auth.* IdP, progressive login) | | ● | | | | SSO/SCIM/passkey depth (M11) |
 | Workspaces | | ● | | | | |
 | Import (CSV + providers) | ● | | | | | more sources |
 | Enrichment | | | | ● | | more providers |
@@ -353,7 +366,7 @@ Surfaces introduced by the IA ([11](./11-information-architecture.md)) — panel
 | Templates | | | | | | ● (M9) |
 | Notifications | | | ● | | | |
 | Data Health | | | | ● | | ● depth (M8) |
-| Enterprise settings (SSO/SCIM/residency) | | | | | | ● (M11) |
+| Enterprise settings (SSO/SCIM/auth-policy/residency) | | | | | | ● (M11) |
 | Platform admin (internal, separate track) | | | ops | | ops | ● depth (M12) |
 | Trust & certification program (SOC 2/ISO/registration — separate track) | | | | | ● readiness | ● certs + registration |
 | Alerts | | | | | | Beyond |

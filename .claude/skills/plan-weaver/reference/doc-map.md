@@ -32,6 +32,7 @@
 | 14 | `docs/planning/14-phase-1-execution.md` |
 | 15 | `docs/planning/15-gap-remediation.md` |
 | 16 | `docs/planning/16-code-organization.md` |
+| 17 | `docs/planning/17-authentication.md` |
 | brand | `docs/planning/brand-identity.md` |
 | ADR-1 | `decisions/ADR-0001-orm-drizzle.md` |
 | ADR-2 | `decisions/ADR-0002-search-postgres-then-engine.md` |
@@ -48,6 +49,9 @@
 | ADR-13 | `decisions/ADR-0013-charge-for-verified-data-credit-back.md` |
 | ADR-14 | `decisions/ADR-0014-trust-and-certification-program.md` |
 | ADR-15 | `decisions/ADR-0015-entity-resolution-dedup-engine.md` |
+| ADR-16 | `decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md` |
+| ADR-17 | `decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md` |
+| ADR-18 | `decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md` |
 | (input) | `docs/planning/proposals/2026-05-29-multi-tenant-schema.md` (adopted) |
 
 ## 2. Adjacency list (doc → docs/ADRs it references)
@@ -56,37 +60,41 @@
 
 | Doc | References |
 |---|---|
-| README | 00–16, brand, decisions/ |
-| 00 | 01, ADR-1..11, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 16 (decision log §7 + open Qs §8) |
-| 01 | 03, 04, 10, ADR-1, ADR-2, ADR-10 |
+| README | 00–17, brand, decisions/ |
+| 00 | 01, ADR-1..18, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 16, 17 (decision log §7 + open Qs §8) |
+| 01 | 03, 04, 10, 17, ADR-1, ADR-2, ADR-10, ADR-16 |
 | 02 | 01, 03, 06, 08, 16, ADR-6, ADR-10 |
-| 03 | 06, 07, 08, ADR-1, ADR-2, ADR-6, ADR-7, ADR-8, ADR-9, ADR-10 |
+| 03 | 06, 07, 08, 17, ADR-1, ADR-2, ADR-6, ADR-7, ADR-8, ADR-9, ADR-10, ADR-16, ADR-17, ADR-18 |
 | 04 | (self-contained; others reference it for design tokens) + workspace switcher → 02/05 |
-| 05 | 03, 04, 06, 07, 08, 09, 10, ADR-6, ADR-8, ADR-9 |
+| 05 | 03, 04, 06, 07, 08, 09, 10, 17, ADR-6, ADR-8, ADR-9, ADR-16, ADR-17, ADR-18 |
 | 06 | 03, 07, 08, ADR-8 |
 | 07 | 03, 06, 08, 09, ADR-7 |
-| 08 | 03, 06, 07, 09, ADR-6, ADR-9 |
-| 09 | 03, 07, 08, ADR-10 |
-| 10 | 01, 03, 05, 06, 07, 08, 09, ADR-2, ADR-6, ADR-7, ADR-8, ADR-9, ADR-10 (risk register) |
+| 08 | 03, 06, 07, 09, 17, ADR-6, ADR-9 |
+| 09 | 03, 07, 08, 17, ADR-10, ADR-16, ADR-17, ADR-18 |
+| 10 | 01, 03, 05, 06, 07, 08, 09, 17, ADR-2, ADR-6, ADR-7, ADR-8, ADR-9, ADR-10, ADR-16, ADR-17, ADR-18 (risk register) |
 | ADR-6 | 02, 03 (supersedes ADR-3, ADR-5) |
 | ADR-7 | 07, 03 (supersedes ADR-4) |
 | ADR-8 | 03, 06 |
 | ADR-9 | 05, 09, 08 |
-| ADR-10 | 01, 02 |
+| ADR-10 | 01, 02 (auth transport amended by ADR-16) |
 | ADR-11 | 13, 02, 03 |
 | ADR-12 | 07, 00 |
 | ADR-13 | 07, 06, 03 |
 | ADR-14 | 08, 10 |
 | ADR-15 | 03, 06 |
+| ADR-16 | 17, 09, 01 (amends ADR-10 auth transport) |
+| ADR-17 | 17, 03, 12 |
+| ADR-18 | 17, 12, 03 |
 | 11 | 02, 04, 05, 06, 07, 08, 09, 10, 12, 13, ADR-2, ADR-6, ADR-8, ADR-9, ADR-10 |
-| 12 | 03, 07, 08, 09, 11, ADR-6 |
+| 12 | 03, 07, 08, 09, 11, 17, ADR-6, ADR-16, ADR-17, ADR-18 |
 | 13 | 01, 02, 03, 06, 08, 09, 10, ADR-10, ADR-11 |
 | 14 | 01, 02, 03, 04, 05, 07, 08, 10, 16, brand, ADR-2, ADR-6, ADR-7, ADR-10 |
 | 15 | 00, 03, 05, 06, 07, 08, 09, 10, 12, 13, ADR-12, ADR-13, ADR-14 (gap-remediation overlay; links out to ../market-analysis/) |
 | 16 | 00, 01, 02, 11, 13, 14, ADR-2, ADR-6, ADR-10, ADR-11 (engineering-conventions overlay; details 02 §1 on-disk layout) |
+| 17 | 03, 04, 05, 08, 09, 11, 12, 13, ADR-6, ADR-10, ADR-11, ADR-16, ADR-17, ADR-18 (auth/identity service on auth.truepoint.in) |
 | brand | 04, 08, 11 |
 
-**Bidirectional pairs:** 00↔ADRs; 03↔ADR-6/7/8/9/10; 05↔10 (matrix↔roadmap); 07↔08↔09 (reveal+send path); 11↔04 (IA↔nav); 11↔12↔13 (app surface); 13↔ADR-11; 10↔14 (roadmap↔execution); 02↔16, 14↔16 (architecture↔code-organization); 04↔brand (design↔brand); 07↔ADR-12/13, 08↔ADR-14, 06↔ADR-13, 03↔ADR-13 (remediation decisions); 10↔15, 05↔15 (gap remediation); 03↔ADR-15, 06↔ADR-15 (entity resolution); superseded↔superseding (ADR-3/5↔ADR-6, ADR-4↔ADR-7).
+**Bidirectional pairs:** 00↔ADRs; 03↔ADR-6/7/8/9/10; 05↔10 (matrix↔roadmap); 07↔08↔09 (reveal+send path); 11↔04 (IA↔nav); 11↔12↔13 (app surface); 13↔ADR-11; 10↔14 (roadmap↔execution); 02↔16, 14↔16 (architecture↔code-organization); 04↔brand (design↔brand); 07↔ADR-12/13, 08↔ADR-14, 06↔ADR-13, 03↔ADR-13 (remediation decisions); 10↔15, 05↔15 (gap remediation); 03↔ADR-15, 06↔ADR-15 (entity resolution); superseded↔superseding (ADR-3/5↔ADR-6, ADR-4↔ADR-7); 17↔03/05/09/12 (auth ↔ schema/features/API/settings); 00↔ADR-16/17/18; 03↔ADR-16; ADR-10↔ADR-16 (auth transport amended).
 
 > **Doc 14 (Phase 1 Execution)** is an execution *overlay*: it sequences the build of M0–M5 and must
 > agree with 05 §21 / 10 (H10) but introduces no new milestone scope. **`brand-identity.md`** is the
@@ -120,6 +128,8 @@
 | **H11** | Navigation model (6 destinations; **Credits not a tab**) | 04 §3 == 11 §2; 05 modules; 09 resources |
 | **H12** | Platform privileged access (RLS-bypass role + `platform_audit_log` + impersonation) | 13, ADR-11, 03 §9, 08 |
 | **H13** | Charge-by-verified-result + credit-back (charge set by `email_status`; bounce → `credit.adjust`) | 07 §3, 09 §3.2, 06 §9, 03 §8, 05 §7, 10 (M4/M9 DoD), 08 §5 (audit action), ADR-13 |
+| **H14** | Auth origin + cross-domain token model (dedicated `auth.truepoint.in` IdP; PKCE code → in-memory access JWT + refresh cookie on auth origin; JWKS) | 17 §1/§3/§5, 09 §1/§4, 03 §4, 05 §1, 10 (M0/M2 + risk #17), ADR-16 |
+| **H15** | Auth policy + MFA enforcement (tenant/workspace, strictest-wins; allowed methods, IP allowlist, session timeout) | 17 §4/§7, 12 §3/§4, 03 §4, ADR-18 |
 
 ## 5. Shared-vocabulary index (definition → usages)
 
@@ -135,7 +145,7 @@
 | `signal_type` (intent) | 03 §6 (intent_signals) | 06, 09 |
 | `activity_type` + `channel` + `outcome` | 03 §7 (activities) | 05, 09 |
 | outreach `status`/`platform` (sequences) | 03 §7 (outreach_log/sequences) | 05, 09, ADR-9 |
-| audit actions (closed enum, incl. `credit.adjust`) | 03 §7 (audit_log) / 08 §5 | 08 §5, 07 §3/§7, 03 §8, 09 §3.2 |
+| audit actions (closed enum, incl. `credit.adjust` + auth events `login.*/mfa.*/token.*/sso.*/device.*/session.revoked/code.*/signup/oauth.link`; `audit_log.origin_domain`) | 03 §7 (audit_log) / 08 §5 | 08 §5, 07 §3/§7, 03 §8, 09 §3.2, 17 §9 |
 | commercial policy (transparent, no-lock-in, export-on-exit) | ADR-12 / 07 §1A | 00 §7, 05 §11, 12 §4, 10 (M3) |
 | charge-by-verified-result + credit-back | ADR-13 / 07 §3 | 03 §8, 05 §7, 06 §9, 09 §3.2, 10 (M4/M9) |
 | trust & certification program (SOC 2/ISO/registration/Trust Center) | ADR-14 / 08 §15 | 00 §7, 10 (Trust track), 12 §4, 13 §3 |
@@ -146,7 +156,10 @@
 | tenancy session GUCs (`app.current_tenant_id`, `app.current_workspace_id`) | 03 §9 / 02 §4 | ADR-6, ADR-10 |
 | `email_blind_index` (HMAC for uniqueness over encrypted PII) | 03 §2/§5 | 08 |
 | partitioned tables (`activities,audit_log,contact_reveals,intent_signals,scores,source_imports,outreach_log,provider_calls`) | 03 §12 | 01 §3, 02 |
-| auth tables (`user_sessions,user_oauth_accounts,user_mfa,user_password_resets,tenant_sso_configs`) | 03 §4 | 05 §1, 09 §4, ADR-10 |
+| auth tables (`user_sessions,user_oauth_accounts,user_mfa`/`user_mfa_methods,user_mfa_recovery_codes,webauthn_credentials,trusted_devices,user_password_resets,auth_email_tokens,tenant_domains,tenant_sso_configs,tenant_auth_policies,workspace_auth_policies,scim_tokens,oauth_app_clients`) | 03 §4 | 05 §1, 09 §4, 12 §1–§5, 17, ADR-10, ADR-16 |
+| auth origin + token model (dedicated `auth.truepoint.in` IdP; 60 s PKCE code → in-memory 15 min access JWT + rotating refresh cookie on auth origin; JWKS) | 17 §1/§3/§5 / ADR-16 | 09 §1/§4, 03 §4, 05 §1, 10 (M0/M2) |
+| progressive identifier-first login + domain→tenant/SSO routing (`tenant_domains`) | 17 §2/§4 / ADR-17 | 09 §2, 03 §4, 12 §4 |
+| auth policy + MFA enforcement levels (tenant/workspace, strictest-wins) | 17 §4/§7 / ADR-18 | 12 §3/§4, 03 §4 |
 | stack: Hono/Bun, Aurora SLv2+RDS Proxy, Typesense, Lucia, ClickHouse, SES, Terraform/ECS | 01 §1 (canonical) | 02, 09, 10, ADR-10, ADR-2 |
 | 6-destination nav (Home/Prospect/Sequences/Inbox/Reports/Settings); **Credits not a tab** | 11 §2 | 04 §3, 05, 09 |
 | plan tiers (free/pro/team/enterprise) | 12 §6 | 03 (`tenants.plan`), 07 |
@@ -170,12 +183,15 @@
 | ADR-7 | Per-workspace reveal + credit counter | Accepted | 07, 03 | 00, 07, 03 §8 |
 | ADR-8 | Lead-scoring / intelligence model | Accepted | 03, 06 | 00, 05 §16, 06, 11 |
 | ADR-9 | Outreach engine (enroll & send) | Accepted | 05, 09, 08 | 00, 05, 08, 09, 11 |
-| ADR-10 | AWS-native self-hosted stack (build auth) | Accepted | 01, 02 | 00, 01, 02, 09, 10, 13 |
+| ADR-10 | AWS-native self-hosted stack (build auth) | Accepted (auth transport amended by ADR-16) | 01, 02 | 00, 01, 02, 09, 10, 13, 17, ADR-16 |
 | ADR-11 | Platform-admin console & privileged access | Accepted | 13, 02, 03 | 00, 13, 02, 08, 09 |
 | ADR-12 | Transparent no-lock-in commercial policy | Accepted | 07, 00 | 00, 05, 07, 12, 15 |
 | ADR-13 | Charge-for-verified-data + credit-back | Accepted | 07, 06, 03 | 00, 03, 05, 06, 07, 09, 10, 15 |
 | ADR-14 | Trust & certification program | Accepted | 08, 10 | 00, 08, 10, 12, 13, 15 |
 | ADR-15 | Entity resolution / dedup engine (Splink) | Accepted | 03, 06 | 00, 03, 06, 10 |
+| ADR-16 | Dedicated auth origin + cross-domain token exchange | Accepted | 17, 09, 01 | 00, 03, 05, 09, 10, 12, 17, README (amends ADR-10) |
+| ADR-17 | Progressive identifier-first login + domain tenant routing | Accepted | 17, 03, 12 | 00, 05, 09, 10, 12, 17, README |
+| ADR-18 | Auth policy + MFA enforcement model | Accepted | 17, 12, 03 | 00, 05, 10, 12, 17, README |
 
 **ADR rules:** new significant decision → new ADR + 00 §7 row + lead-doc edit (tripod). Superseding a
 locked ADR → set old `Status: Superseded by ADR-NNNN` + reciprocal link, never overwrite the body.

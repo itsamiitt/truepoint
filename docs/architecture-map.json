@@ -1,0 +1,210 @@
+{
+  "status": "live",
+  "generatedBy": ".claude/hooks/gen-architecture-map.mjs",
+  "generatedFrom": [
+    "docs/planning/16-code-organization.md",
+    "docs/planning/02-architecture.md",
+    "docs/planning/05-features-modules.md",
+    "docs/planning/11-information-architecture.md"
+  ],
+  "roots": [
+    "apps",
+    "packages"
+  ],
+  "domains": [
+    "activity",
+    "admin-settings",
+    "ai",
+    "alerts",
+    "api-public",
+    "auth",
+    "billing",
+    "compliance",
+    "crm-sync",
+    "data-health",
+    "enrichment",
+    "export",
+    "home",
+    "import",
+    "inbox",
+    "lists",
+    "notifications",
+    "outreach",
+    "prospect",
+    "reports",
+    "reveal",
+    "sales-navigator",
+    "scoring",
+    "search",
+    "sequences",
+    "settings",
+    "templates",
+    "workspaces"
+  ],
+  "fileCount": 65,
+  "fileSetHash": "sha256:5531e79c460cac11973490ce7393f64500891b4d8b6605411ffa6dffc2af6802",
+  "features": {
+    "auth": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/auth/index.ts",
+        "apps/api/src/features/auth/routes.ts"
+      ],
+      "core": [],
+      "db": [
+        "packages/db/src/repositories/userRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
+    "workspaces": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [
+        "packages/db/src/repositories/workspaceRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    }
+  },
+  "shared": {
+    "apps/api": [
+      "apps/api/src/app.ts",
+      "apps/api/src/server.ts"
+    ],
+    "apps/api/middleware": [
+      "apps/api/src/middleware/authn.ts",
+      "apps/api/src/middleware/error.ts",
+      "apps/api/src/middleware/tenancy.ts"
+    ],
+    "apps/auth": [
+      "apps/auth/src/middleware.ts"
+    ],
+    "apps/auth/app": [
+      "apps/auth/src/app/.well-known/jwks.json/route.ts",
+      "apps/auth/src/app/layout.tsx",
+      "apps/auth/src/app/login/actions.ts",
+      "apps/auth/src/app/login/page.tsx",
+      "apps/auth/src/app/mfa/actions.ts",
+      "apps/auth/src/app/mfa/page.tsx",
+      "apps/auth/src/app/page.tsx",
+      "apps/auth/src/app/password/actions.ts",
+      "apps/auth/src/app/password/page.tsx",
+      "apps/auth/src/app/token/exchange/route.ts",
+      "apps/auth/src/app/token/refresh/route.ts",
+      "apps/auth/src/app/workspace/actions.ts",
+      "apps/auth/src/app/workspace/page.tsx"
+    ],
+    "apps/auth/lib": [
+      "apps/auth/src/lib/clientIp.ts",
+      "apps/auth/src/lib/cookies.ts",
+      "apps/auth/src/lib/cors.ts",
+      "apps/auth/src/lib/domainResolver.ts",
+      "apps/auth/src/lib/finishLogin.ts"
+    ],
+    "apps/auth/shared": [
+      "apps/auth/src/shared/AuthShell.tsx",
+      "apps/auth/src/shared/BrandLockup.tsx",
+      "apps/auth/src/shared/OtpInput.tsx"
+    ],
+    "apps/web/app": [
+      "apps/web/src/app/auth/callback/page.tsx",
+      "apps/web/src/app/layout.tsx",
+      "apps/web/src/app/page.tsx"
+    ],
+    "apps/web/lib": [
+      "apps/web/src/lib/authClient.ts",
+      "apps/web/src/lib/pkce.ts",
+      "apps/web/src/lib/publicConfig.ts"
+    ],
+    "packages/auth": [
+      "packages/auth/src/code.ts",
+      "packages/auth/src/flow.ts",
+      "packages/auth/src/identifierLookup.ts",
+      "packages/auth/src/index.ts",
+      "packages/auth/src/login.ts",
+      "packages/auth/src/loginTransaction.ts",
+      "packages/auth/src/mfa.ts",
+      "packages/auth/src/mfaVerify.ts",
+      "packages/auth/src/password.ts",
+      "packages/auth/src/policy.ts",
+      "packages/auth/src/refresh.ts",
+      "packages/auth/src/secrets.ts",
+      "packages/auth/src/session.ts",
+      "packages/auth/src/token.ts"
+    ],
+    "packages/config": [
+      "packages/config/src/env.ts",
+      "packages/config/src/index.ts"
+    ],
+    "packages/db": [
+      "packages/db/drizzle.config.ts",
+      "packages/db/src/client.ts",
+      "packages/db/src/index.ts",
+      "packages/db/src/schema/auth.ts",
+      "packages/db/src/schema/index.ts"
+    ],
+    "packages/types": [
+      "packages/types/src/auth.ts",
+      "packages/types/src/errors.ts",
+      "packages/types/src/index.ts"
+    ],
+    "packages/ui": [
+      "packages/ui/src/cn.ts",
+      "packages/ui/src/index.ts"
+    ]
+  },
+  "unassigned": [
+    "apps/auth/next.config.mjs",
+    "apps/web/next.config.mjs"
+  ],
+  "warnings": [],
+  "dependencies": {
+    "types": [],
+    "config": [
+      "types"
+    ],
+    "db": [
+      "types",
+      "config"
+    ],
+    "search": [
+      "types",
+      "config"
+    ],
+    "email": [
+      "types",
+      "config"
+    ],
+    "ui": [
+      "types"
+    ],
+    "analytics": [
+      "types",
+      "config"
+    ],
+    "observability": [
+      "types",
+      "config"
+    ],
+    "auth": [
+      "db",
+      "types",
+      "config"
+    ],
+    "core": [
+      "db",
+      "search",
+      "types",
+      "config"
+    ],
+    "integrations": [
+      "core",
+      "types",
+      "config"
+    ]
+  }
+}

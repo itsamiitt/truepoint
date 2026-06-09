@@ -44,14 +44,18 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
 
 ## M0 — Skeleton
 **Goal:** a runnable, CI-backed AWS-native foundation across **two repos**.
-- **App monorepo** (Turborepo + **Bun workspaces**, **Biome** lint/format): `apps/{web,api,workers}`
-  boot; `packages/{db,core,auth,integrations,ui,email,search,analytics,observability,config,types}`
+- **App monorepo** (Turborepo + **Bun workspaces**, **Biome** lint/format): `apps/{web,auth,api,workers}`
+  boot (`auth` = the dedicated **`auth.truepoint.in`** IdP origin — [17](./17-authentication.md),
+  [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md));
+  `packages/{db,core,auth,integrations,ui,email,search,analytics,observability,config,types}`
   scaffolded ([01 §5](./01-tech-stack.md#5-repositories-two)); strict TS.
 - **Infra repo** (Terraform; state in S3 + DynamoDB locking): network/VPC, **Aurora PostgreSQL
   Serverless v2 + RDS Proxy**, **ElastiCache Redis**, **Typesense cluster** (ECS), **ECS Fargate**
   services (api/web/workers), ALB, S3, SES, ECR, observability ([01 §3](./01-tech-stack.md#3-aws-topology)).
 - **Self-built auth scaffold** ([Lucia](./decisions/ADR-0010-aws-native-self-hosted-stack.md)): session
-  middleware + `packages/auth` skeleton (password/OAuth/MFA wiring stubbed) so M1/M2 build on it.
+  middleware + `packages/auth` skeleton (password/OAuth/MFA wiring stubbed) + the **`apps/auth`** origin
+  shell with `/token/exchange`·`/token/refresh`·`/.well-known/jwks.json` stubbed, so M1/M2 build on it
+  ([17 §3](./17-authentication.md#3-cross-domain-token-contract)).
 - Drizzle wired; first migration; `bun run db:migrate`/`db:seed`.
 - **CI/CD:** GitHub Actions → lint (Biome) → typecheck → test → build images → **ECR**; merge → staging;
   release → **CodeDeploy** blue/green ([01 §6](./01-tech-stack.md#6-environments--cicd)).
@@ -77,10 +81,18 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
 
 ## M2 — Tenancy, auth & search
 **Goal:** users sign up, get a workspace, log in, and search their masked book.
+- **Auth origin & progressive login:** authentication is served from **`auth.truepoint.in`** (the IdP/BFF,
+  `apps/auth`); login is **identifier-first** with domain→tenant/SSO routing
+  ([ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md)). After
+  login the app domain receives a single-use 60 s **PKCE code** exchanged (`/token/exchange`) for a 15 min
+  in-memory **access JWT**; the rotating refresh cookie + Lucia session stay on the auth origin; `apps/api`
+  validates the JWT via JWKS ([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md),
+  [17](./17-authentication.md)). Security headers (HSTS / XFO=DENY / nonce-CSP / nosniff / Referrer) on `auth.*`.
 - **Self-built auth on Lucia** ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)):
-  email/password (Argon2id) + OAuth (Google/Microsoft via `arctic`) + **MFA (TOTP)**; SAML/OIDC seam
-  (`tenant_sso_configs`). Tables `user_sessions`, `user_oauth_accounts`, `user_mfa`,
-  `user_password_resets` ([03 §4](./03-database-design.md#4-tenancy--auth)).
+  email/password (Argon2id) + OAuth (Google/Microsoft via `arctic`) + **MFA (TOTP**; SMS/email/WebAuthn +
+  recovery codes land with the M11 depth**)**; SAML/OIDC seam (`tenant_sso_configs`). Tables `user_sessions`,
+  `user_oauth_accounts`, `user_mfa`/`user_mfa_methods`, `user_password_resets`, `auth_email_tokens`,
+  `tenant_domains` ([03 §4](./03-database-design.md#4-tenancy--auth)).
 - Tenancy tree: `tenants`, `users` (incl. `is_tenant_owner`), `workspaces`, `workspace_members`
   (roles `owner`/`admin`/`member`/`viewer`); `api_keys` seam. **`provision_new_signup(...)`** creates
   tenant → owner user → default workspace → owner membership → audit row in one transaction
@@ -92,11 +104,14 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
   logical-replication CDC ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)); faceted
   **masked** search, workspace-scoped. App shell + Search/Results + basic lists/saved searches +
   Admin/Settings shell ([04](./04-ui-ux-design.md)).
-- **DoD:** sign up → tenant + default workspace provisioned → log in (with MFA) → search → see **masked**
-  results; cross-workspace isolation verified at the **DB** layer (RLS denies foreign `workspace_id`);
-  audit entries written. **Auth-security gates (risk #5/#9):** password hashing is Argon2id; session
-  rotation + password-reset flow verified; signup **velocity / disposable-domain** limits trip;
-  `api_keys` stored **hashed + scoped**. *(Full pen-test is a global GA gate at M5.)*
+- **DoD:** sign up → tenant + default workspace provisioned → **log in (with MFA) on `auth.truepoint.in`**
+  → the app domain **exchanges the 60 s code for an access JWT** (refresh cookie scoped to the auth origin;
+  **silent refresh** works without re-login) → search → see **masked** results; cross-workspace isolation
+  verified at the **DB** layer (RLS denies foreign `workspace_id`); audit entries written with
+  `origin_domain`. **Auth-security gates (risk #5/#9/#17):** password hashing is Argon2id; session rotation
+  + password-reset flow verified; signup **velocity / disposable-domain** limits trip; `api_keys` stored
+  **hashed + scoped**; a **reused / expired / wrong-IP code is rejected**, no account enumeration, and
+  progressive lockout trips. *(Full pen-test is a global GA gate at M5.)*
 
 ## M3 — Reveal & credits *(money loop)*
 **Goal:** buy credits, reveal a contact, export.
@@ -223,10 +238,16 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
 
 ## M11 — Enterprise settings
 **Goal:** unlock the Enterprise tier controls ([12 §4](./12-settings.md)).
-- **SSO** (SAML/OIDC via `tenant_sso_configs`) + **enforce-SSO**; **SCIM** provisioning; **IP allowlist**;
-  session/MFA/password policy; **data-residency** controls; **audit-log export**.
-- **DoD:** an enterprise tenant enables SAML SSO + SCIM; non-SSO logins are blocked when enforced; admin
-  exports the audit log; the IP allowlist denies out-of-range access.
+- **SSO** (SAML 2.0 / OIDC via `tenant_sso_configs`) with **JIT provisioning** + **enforce-SSO**; **SCIM**
+  provisioning (`scim_tokens`); **domain claiming/verification** (`tenant_domains`); **WebAuthn passkeys**
+  + **trusted devices**; per-scope **auth policy** (MFA enforcement / allowed methods / IP allowlist /
+  session timeout, strictest-wins — `tenant_auth_policies`/`workspace_auth_policies`,
+  [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)); **OAuth apps**
+  (`oauth_app_clients`); **data-residency** controls; **audit-log export**. Design [17](./17-authentication.md).
+- **DoD:** an enterprise tenant claims + verifies a domain, enables SAML/OIDC SSO + SCIM (a deprovision
+  via SCIM revokes access), registers a passkey, and sets MFA-required; non-SSO logins are blocked when
+  enforced; a workspace policy can only **tighten** the tenant policy; admin exports the audit log; the IP
+  allowlist denies out-of-range access.
 
 ## Platform admin — *parallel operational track* (`apps/admin`)
 **Goal:** internal staff operate the platform ([13](./13-platform-admin.md),
@@ -278,7 +299,7 @@ data-broker law — the remediation for the analysis' execution-risk drag ([15 �
 | 2 | **Double-charge** — a bare tenant counter lacks a ledger's reconciliation/refund history | High (trust + money) | `FOR UPDATE` on `tenants.reveal_credit_balance` + `CHECK >= 0` + unique `(workspace_id, contact_id, reveal_type)` + client `Idempotency-Key` (the required mitigations per [ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)); revisit append-only ledger if reconciliation gaps appear | M3 |
 | 3 | **Incomplete DSAR deletion** — fan-out across **N per-workspace copies** is elevated vs a single golden record | High (legal) | Single delete job that fans out across all workspace `contacts` + `source_imports` + `contact_reveals` + `activities` + caches; verification scan; auto-suppression; audit proof ([08 §4](./08-compliance.md)) | M5 |
 | 4 | Enrichment cost blowout / provider outage | Med | Cache-first, Redis rate limits, circuit breakers, daily cost budgets, charge-on-reveal; `provider_calls` cost tracking | M4 |
-| 5 | **Self-built auth** security defects (session/MFA/OAuth/SAML) | High | Lucia primitives (not hand-rolled crypto), Argon2id, rotation + reset flows, MFA, credential-stuffing/velocity monitoring, pen-test before GA, scoped/hashed `api_keys` ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)) | M2 |
+| 5 | **Self-built auth** security defects (session/MFA/OAuth/SAML) | High | Lucia primitives (not hand-rolled crypto), Argon2id, rotation + reset flows, MFA, **progressive lockout + bot detection at the identifier step + impossible-travel detection + no account enumeration**, credential-stuffing/velocity monitoring, pen-test before GA, scoped/hashed `api_keys` ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md), [17 §6](./17-authentication.md#6-security-layers)) | M2 |
 | 6 | **Sending compliance / deliverability** failure (spam complaints, blocklisting, CAN-SPAM/GDPR breach) | High (legal + domain reputation) | Suppression gate before every send; CAN-SPAM + GDPR/ePrivacy consent + unsubscribe + physical-address footer; DKIM/SPF/DMARC + warm-up; bounce/complaint → auto-suppression via SES SNS→SQS feedback | M9 |
 | 7 | **LinkedIn / Sales Navigator ToS** exposure from automated actions | High (account bans) | Human-in-the-loop (assisted) capture/send as default; no headless automation of LinkedIn/SN; rate-respecting; per-feature legal review ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)) | M7 / M9 |
 | 8 | Search engine strain / drift between Aurora and Typesense | Med | `SearchPort` abstraction; CDC search-sync worker with lag monitoring + reindex; defined scale headroom (Typesense from day one) | M2 |
@@ -290,6 +311,7 @@ data-broker law — the remediation for the analysis' execution-risk drag ([15 �
 | 14 | **No proprietary data asset** — inherits providers' accuracy ceiling; can't win raw accuracy outright | High | Verify-on-reveal + **charge-only-for-`valid` + credit-back** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)); multi-provider waterfall; optional dedicated verification provider ([06 §11](./06-enrichment-engine.md)) | M4 |
 | 15 | **Compliance wedge unproven / cert-dependent / US-only** — the differentiator is a promise until attested | High | **Trust & certification program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)): SOC 2 / ISO readiness at M5, **data-broker registration a GA gate**, public Trust Center ([08 §15](./08-compliance.md)) | M5 / Trust track |
 | 16 | **Placeholder pricing unvalidated** vs real willingness-to-pay | Med | Transparent no-lock-in policy ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)); validate prices in early access before GA; non-expiring credits reduce commitment risk | M3 |
+| 17 | **Cross-domain token exchange / IdP boundary** — code interception/replay, open redirect, CSRF, refresh-token theft across `auth.*`↔`app.*` | High (account takeover) | Single-use 60 s **IP-bound + PKCE** code validated server-side before any token; access JWT **in memory only**; refresh token **HttpOnly/Secure/SameSite=Strict** cookie scoped to the auth origin, **rotated + reuse-detected** (family revoke); CORS **allow-list, no wildcard**; `sid` denylist for fast revoke; auth security headers (HSTS / XFO=DENY / nonce-CSP / nosniff / Referrer) ([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md), [17 §3/§6](./17-authentication.md#3-cross-domain-token-contract)) | M2 |
 
 ## Definition of done (global)
 A milestone is done when: code merged + reviewed, tests green in CI (unit + integration; e2e where

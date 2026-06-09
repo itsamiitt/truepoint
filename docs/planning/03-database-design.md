@@ -14,7 +14,11 @@
 ## 1. Layers
 
 - **Tenancy:** `tenants`, `users`, `workspaces`, `workspace_members` (+ auth: `user_sessions`,
-  `user_oauth_accounts`, `user_mfa`, `user_password_resets`, `tenant_sso_configs`).
+  `user_oauth_accounts`, `user_mfa`/`user_mfa_methods`, `user_password_resets`, `tenant_sso_configs`;
+  **auth-origin extension** — `tenant_domains`, `trusted_devices`, `webauthn_credentials`,
+  `auth_email_tokens`, `tenant_auth_policies`, `workspace_auth_policies`, `scim_tokens`,
+  `oauth_app_clients` — [17](./17-authentication.md),
+  [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)).
 - **Data:** `accounts`, `contacts`, `contact_reveals`, `sales_nav_links`, `source_imports`,
   `lists`, `list_members`, `saved_searches`, `api_keys`.
 - **Intelligence:** `scores`, `intent_signals`.
@@ -98,6 +102,7 @@ CREATE TABLE users (
   password_hash varchar(255),                                  -- Argon2id; null if SSO-only
   auth_provider varchar(50) NOT NULL DEFAULT 'password',       -- password|google|microsoft|saml
   is_tenant_owner boolean NOT NULL DEFAULT false,              -- tenant-level billing/admin capability
+  scim_external_id varchar(255),                               -- set by SCIM provisioning (see 17 §8)
   last_login_at timestamptz,
   status        varchar(50) NOT NULL DEFAULT 'active',         -- active|invited|suspended
   created_at    timestamptz NOT NULL DEFAULT now(),
@@ -140,12 +145,18 @@ CREATE TABLE workspace_members (
 
 ```sql
 CREATE TABLE user_sessions (
-  id         varchar(255) PRIMARY KEY,                 -- session token id
-  user_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  expires_at timestamptz NOT NULL,
-  ip_address inet,
-  user_agent varchar(500),
-  created_at timestamptz NOT NULL DEFAULT now()
+  id                varchar(255) PRIMARY KEY,          -- Lucia session id (durable, on auth origin)
+  user_id           uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  device_id         uuid,                              -- per-device tracking (→ trusted_devices)
+  refresh_token_hash varchar(255),                     -- opaque refresh token, rotating + reuse-detected
+  rotated_from      varchar(255),                      -- prior session id in the refresh family
+  app_origin        varchar(255),                      -- originating app origin for this session
+  expires_at        timestamptz NOT NULL,
+  last_seen_at      timestamptz,
+  revoked_at        timestamptz,                       -- set on logout / admin revoke / reuse-detection
+  ip_address        inet,
+  user_agent        varchar(500),
+  created_at        timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE user_oauth_accounts (
   id               uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
@@ -166,13 +177,117 @@ CREATE TABLE user_password_resets (
   expires_at timestamptz NOT NULL, used_at timestamptz
 );
 CREATE TABLE tenant_sso_configs (
-  tenant_id    uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
-  provider     varchar(50) NOT NULL, metadata_url text, metadata_xml text,
-  enabled      boolean NOT NULL DEFAULT false, enforced boolean NOT NULL DEFAULT false,
-  created_at   timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+  tenant_id        uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+  protocol         varchar(10) NOT NULL DEFAULT 'saml' CHECK (protocol IN ('saml','oidc')),
+  provider         varchar(50) NOT NULL,
+  metadata_url     text, metadata_xml text,             -- SAML
+  oidc_issuer      text, oidc_client_id varchar(255), oidc_client_secret_enc bytea, -- OIDC (secret encrypted)
+  attribute_mapping jsonb NOT NULL DEFAULT '{}',         -- email|name|role|department → assertion claims
+  jit_enabled      boolean NOT NULL DEFAULT true,        -- provision users on first SSO login
+  default_role     varchar(50) NOT NULL DEFAULT 'member',-- JIT default workspace role
+  enabled          boolean NOT NULL DEFAULT false, enforced boolean NOT NULL DEFAULT false,
+  created_at       timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
 ```
-> OAuth/refresh tokens and TOTP secrets are encrypted at rest (KMS envelope), like PII.
+> OAuth/refresh tokens, OIDC client secrets, and TOTP/WebAuthn secrets are encrypted at rest (KMS
+> envelope), like PII.
+
+**Auth-origin extension tables** ([17](./17-authentication.md);
+[ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md),
+[ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md),
+[ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)):
+
+```sql
+-- Domain claiming → tenant + SSO routing (progressive identifier-first login, ADR-0017)
+CREATE TABLE tenant_domains (
+  id                 uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id          uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  domain             citext NOT NULL UNIQUE,             -- verified domain → exactly one tenant
+  verification_token varchar(255), dns_txt_record text,
+  status             varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','verified','failed')),
+  verified_at        timestamptz, created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Trusted-device registry ("trust this device 30 days") + per-device session metadata
+CREATE TABLE trusted_devices (
+  id                 uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  user_id            uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  fingerprint_hash   varchar(255) NOT NULL,
+  name               varchar(255), last_ip inet, last_geo varchar(100),
+  trusted_until      timestamptz,                        -- MFA-skip window
+  revoked_at         timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, fingerprint_hash)
+);
+
+-- Multiple MFA methods per user (generalizes single-secret user_mfa) + recovery codes
+CREATE TABLE user_mfa_methods (
+  id           uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type         varchar(20) NOT NULL CHECK (type IN ('totp','sms','email','webauthn')),
+  secret_enc   bytea, label varchar(100),               -- TOTP/SMS/email secret (encrypted)
+  verified_at  timestamptz, last_used_at timestamptz, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE user_mfa_recovery_codes (
+  id          uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  user_id     uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash   varchar(255) NOT NULL, used_at timestamptz, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE webauthn_credentials (
+  id            uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  user_id       uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  credential_id bytea NOT NULL UNIQUE, public_key bytea NOT NULL,
+  sign_count    bigint NOT NULL DEFAULT 0, transports varchar(100), aaguid uuid,
+  name          varchar(255), created_at timestamptz NOT NULL DEFAULT now(), last_used_at timestamptz
+);
+
+-- Magic-link + email-OTP tokens (generalizes user_password_resets; resolves on auth.*/verify)
+CREATE TABLE auth_email_tokens (
+  token_hash varchar(255) PRIMARY KEY,
+  user_id    uuid REFERENCES users(id) ON DELETE CASCADE,  -- null for pre-signup verification
+  email      citext NOT NULL,
+  purpose    varchar(20) NOT NULL CHECK (purpose IN ('magic_link','email_otp','verify')),
+  expires_at timestamptz NOT NULL, consumed_at timestamptz, ip_address inet,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Per-scope auth policy (strictest-wins; workspace may only tighten — ADR-0018)
+CREATE TABLE tenant_auth_policies (
+  tenant_id       uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+  mfa_enforcement varchar(10) NOT NULL DEFAULT 'optional' CHECK (mfa_enforcement IN ('off','optional','required')),
+  allowed_methods jsonb NOT NULL DEFAULT '["password","oauth","magic_link","sso","passkey"]',
+  disable_social  boolean NOT NULL DEFAULT false, require_sso boolean NOT NULL DEFAULT false,
+  ip_allowlist    cidr[], session_timeout interval, updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE workspace_auth_policies (
+  workspace_id    uuid PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  tenant_id       uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  mfa_enforcement varchar(10) CHECK (mfa_enforcement IN ('off','optional','required')), -- may only tighten tenant
+  allowed_methods jsonb, ip_allowlist cidr[], session_timeout interval,
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+-- SCIM provisioning bearer tokens (tenant-scoped) + OAuth/dev app clients (CORS allow-list source)
+CREATE TABLE scim_tokens (
+  id         uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id  uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  token_hash varchar(255) NOT NULL, scopes jsonb NOT NULL DEFAULT '[]',
+  last_used_at timestamptz, revoked_at timestamptz, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE oauth_app_clients (
+  id                 uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id          uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name               varchar(255) NOT NULL,
+  client_id          varchar(255) NOT NULL UNIQUE, client_secret_hash varchar(255),
+  redirect_uris      text[] NOT NULL,                    -- must be auth.truepoint.in origins
+  allowed_origins    text[] NOT NULL,                    -- CORS allow-list for /token/* (no wildcard)
+  scopes             jsonb NOT NULL DEFAULT '[]', created_at timestamptz NOT NULL DEFAULT now()
+);
+```
+> The **cross-domain authorization code** and the **refresh-token lookup** are **ephemeral, held in Redis**
+> with a TTL (code 60 s; refresh per `session_timeout`) — **not** Postgres tables — so issuance/validation
+> scale horizontally at 1M DAU ([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md),
+> [17 §3/§5](./17-authentication.md#3-cross-domain-token-contract)). JWT signing keys live in Secrets
+> Manager (KMS) and rotate; the public set is served at `auth.truepoint.in/.well-known/jwks.json`.
 
 ## 5. Data layer
 
@@ -249,7 +364,7 @@ CREATE UNIQUE INDEX uniq_contacts_ws_salesnav ON contacts (workspace_id, sales_n
 - **`activities`**: `id · tenant_id · workspace_id · contact_id · performed_by_user_id · activity_type · channel(email|phone|linkedin|sales_navigator|in-person) · subject · body · outcome · metadata jsonb · occurred_at · created_at`.
 - **`outreach_sequences`** (workspace-scoped definitions) → **`outreach_steps`** (ordered steps: channel, delay, template) — the **send engine** definitions.
 - **`outreach_log`** (enrollment + status): `id · tenant_id · workspace_id · contact_id · sequence_id? · enrolled_by_user_id · campaign_name · platform(klaviyo|apollo|salesloft|outreach|linkedin|ses|manual) · external_campaign_id · status(enrolled|active|replied|completed|unsubscribed|bounced) · enrolled_at · sent_at · replied_at`.
-- **`audit_log`**: `id · tenant_id · workspace_id?(null=tenant-level) · actor_user_id?(null=system) · action · entity_type · entity_id · metadata jsonb · ip_address inet · user_agent · occurred_at` (append-only, monthly-partitioned).
+- **`audit_log`**: `id · tenant_id · workspace_id?(null=tenant-level) · actor_user_id?(null=system) · action · entity_type · entity_id · metadata jsonb · ip_address inet · user_agent · origin_domain · occurred_at` (append-only, monthly-partitioned). **`origin_domain`** records the acting origin (`auth.truepoint.in` vs the originating app origin) per event ([17 §9](./17-authentication.md#9-audit--events)). The closed `action` enum additionally covers **auth events** — `login.success/failure/locked`, `mfa.challenge/success/failure`, `password.reset.request/complete`, `sso.initiated/callback`, `token.issued/refresh/revoke`, `device.trusted/revoked`, `session.revoked`, `code.issued/exchanged`, `signup`, `oauth.link` — alongside the reveal/send/suppression/DSAR/credit actions ([08 §5](./08-compliance.md)).
 
 ## 8. Billing & compliance
 
@@ -259,7 +374,7 @@ CREATE UNIQUE INDEX uniq_contacts_ws_salesnav ON contacts (workspace_id, sales_n
 
 ## 9. Row-level security
 
-RLS on every workspace-scoped table; policy `USING (workspace_id = current_setting('app.current_workspace_id')::uuid)`. Tenant-scoped tables (tenants/users/api_keys/purchases/audit_log tenant rows) use `app.current_tenant_id`. The API sets `SET LOCAL app.current_tenant_id` + `app.current_workspace_id` per request after auth; queries run as a non-`BYPASSRLS` role; **RDS Proxy** (transaction pooling) requires the GUC be set within the transaction and reset on checkout.
+RLS on every workspace-scoped table; policy `USING (workspace_id = current_setting('app.current_workspace_id')::uuid)`. Tenant-scoped tables (tenants/users/api_keys/purchases/audit_log tenant rows, plus the auth-origin tenant tables `tenant_domains`/`tenant_auth_policies`/`tenant_sso_configs`/`scim_tokens`/`oauth_app_clients`) use `app.current_tenant_id`; `workspace_auth_policies` is workspace-scoped. The **user-scoped auth tables** (`user_sessions`/`trusted_devices`/`user_mfa_methods`/`user_mfa_recovery_codes`/`webauthn_credentials`/`auth_email_tokens`) are owned by the auth service (`apps/auth`) and accessed by `user_id`, before any workspace is selected. The API sets `SET LOCAL app.current_tenant_id` + `app.current_workspace_id` per request after auth; queries run as a non-`BYPASSRLS` role; **RDS Proxy** (transaction pooling) requires the GUC be set within the transaction and reset on checkout.
 
 **Privileged staff path (internal only).** The super-admin console `apps/admin` ([13](./13-platform-admin.md)) performs audited cross-tenant reads under a **dedicated privileged role** that **bypasses workspace RLS** — *distinct* from the app's non-`BYPASSRLS` role and used by no customer-facing service. Every such access is written to an immutable **`platform_audit_log`**; impersonation is time-boxed and banner-flagged ([ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)).
 

@@ -1,0 +1,110 @@
+// errors.ts — RFC 9457 Problem Details and the typed error classes the whole platform throws (09 §6).
+// A handler renders any AppError via toProblemDetails(); we never leak internals or PII in errors.
+
+const ERROR_BASE = "https://leadwolf.dev/errors/";
+
+export interface ProblemDetails {
+  type: string;
+  title: string;
+  status: number;
+  code: string;
+  detail?: string;
+  [ext: string]: unknown;
+}
+
+/** Base for every expected, mapped error. `code` is the stable machine-readable identifier. */
+export class AppError extends Error {
+  readonly status: number;
+  readonly code: string;
+  readonly title: string;
+  readonly extensions: Record<string, unknown>;
+
+  constructor(args: {
+    status: number;
+    code: string;
+    title: string;
+    detail?: string;
+    extensions?: Record<string, unknown>;
+  }) {
+    super(args.detail ?? args.title);
+    this.name = new.target.name;
+    this.status = args.status;
+    this.code = args.code;
+    this.title = args.title;
+    this.extensions = args.extensions ?? {};
+  }
+
+  toProblemDetails(): ProblemDetails {
+    return {
+      type: `${ERROR_BASE}${this.code}`,
+      title: this.title,
+      status: this.status,
+      code: this.code,
+      ...(this.message && this.message !== this.title ? { detail: this.message } : {}),
+      ...this.extensions,
+    };
+  }
+}
+
+export class ValidationError extends AppError {
+  constructor(detail?: string, extensions?: Record<string, unknown>) {
+    super({ status: 422, code: "validation_error", title: "Invalid request", detail, extensions });
+  }
+}
+
+/**
+ * Generic authentication failure. Deliberately uniform: the same error covers bad password, unknown
+ * account, locked account, and expired challenge — auth never reveals which step failed (17 §2/§6).
+ */
+export class InvalidCredentialsError extends AppError {
+  constructor() {
+    super({ status: 401, code: "invalid_credentials", title: "Check your credentials" });
+  }
+}
+
+export class MfaRequiredError extends AppError {
+  constructor(methods: readonly string[]) {
+    super({
+      status: 401,
+      code: "mfa_required",
+      title: "Additional verification required",
+      extensions: { methods },
+    });
+  }
+}
+
+/** Cross-domain code exchange failed validation (reused/expired/wrong-IP/PKCE/origin) — ADR-0016. */
+export class InvalidAuthCodeError extends AppError {
+  constructor() {
+    super({ status: 400, code: "invalid_auth_code", title: "Authorization code is invalid or expired" });
+  }
+}
+
+export class InvalidTokenError extends AppError {
+  constructor() {
+    super({ status: 401, code: "invalid_token", title: "Token is invalid or expired" });
+  }
+}
+
+export class ForbiddenError extends AppError {
+  constructor(code = "forbidden", detail?: string) {
+    super({ status: 403, code, title: "Not allowed", detail });
+  }
+}
+
+export class RateLimitedError extends AppError {
+  constructor(retryAfterSeconds: number) {
+    super({
+      status: 429,
+      code: "rate_limited",
+      title: "Too many attempts",
+      extensions: { retryAfterSeconds },
+    });
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(detail?: string) {
+    super({ status: 404, code: "not_found", title: "Not found", detail });
+  }
+}

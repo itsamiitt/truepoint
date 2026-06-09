@@ -28,6 +28,7 @@ accounts, on an **AWS-native self-hosted** stack.
 | 14 | [Phase 1 Execution](./14-phase-1-execution.md) | The build plan: how the M0 foundation + M1–M5 MVP get sequenced into a runnable app — scaffold order, per-milestone DoD, critical path, risks. |
 | 15 | [Gap Remediation](./15-gap-remediation.md) | How the market-gap analysis maps to corpus decisions: 16 gaps + hidden opportunities + recommendations → remediation, ADR, milestone, status. |
 | 16 | [Code Organization](./16-code-organization.md) | How source code is laid out on disk: app/package internals, the dependency graph, barrel strategy, naming, file-size, testing, config — the engineering conventions. |
+| 17 | [Authentication](./17-authentication.md) | The `auth.truepoint.in` identity service: progressive identifier-first login, cross-domain tokens, MFA, SSO/SCIM, trusted devices, auth policy. |
 | — | [Brand Identity](./brand-identity.md) | Name/meaning, positioning, voice, logo, color, type — the LeadWolf brand system. |
 | — | [Decisions (ADRs)](./decisions/) | The *why* behind load-bearing choices. |
 
@@ -56,7 +57,12 @@ day one · **AWS-native self-hosted**
 **charge-only-for-verified-data + credit-back**
 ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)) · **trust & certification
 program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)) · **entity resolution via
-Splink** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)).
+Splink** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)) ·
+**dedicated auth origin (`auth.truepoint.in` IdP) + cross-domain tokens**
+([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)) ·
+**progressive identifier-first login**
+([ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md)) ·
+**auth policy / MFA enforcement** ([ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)).
 
 See [00-overview.md](./00-overview.md#7-decision-log) for the full decision log with rationale links,
 and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md),
@@ -66,5 +72,8 @@ and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-worksp
 [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md),
 [ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md),
 [ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md),
-[ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), and
-[ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md).
+[ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md),
+[ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md),
+[ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md),
+[ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md), and
+[ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md).

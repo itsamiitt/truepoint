@@ -12,7 +12,7 @@
 |---|---|
 | Style | **tRPC** (internal app) + **REST/OpenAPI** (`@hono/zod-openapi`, public); resource-oriented JSON |
 | Base path (REST) | `/api/v1` (versioned from day one); tRPC mounted at `/trpc` |
-| Auth (dashboard) | **Lucia** session cookie (httpOnly, secure, SameSite) — self-built ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)) |
+| Auth (dashboard) | **Access JWT** (15 min, in-memory) minted by the `auth.truepoint.in` IdP, validated by `apps/api` via JWKS; the durable Lucia session + rotating refresh cookie stay on the auth origin ([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md), [17](./17-authentication.md)) |
 | Auth (machine/public) | `Authorization: Bearer <api_key>` (hashed, prefixed, scoped) |
 | Tenancy | `tenant_id` + `workspace_id` derived from auth context (**never** from the client body) |
 | Workspace scope | active workspace via session/`X-Workspace-Id` (dashboard) or key→workspace (public); sets `app.current_tenant_id` + `app.current_workspace_id` ([03 §9](./03-database-design.md#9-row-level-security)) |
@@ -32,18 +32,25 @@ last-line guarantee that a handler can't read across workspaces ([03 §9](./03-d
 ## 2. Resource model
 
 ```
+# ── Identity provider on auth.truepoint.in (apps/auth, 17) — NOT /api/v1; mints the app's access JWT ──
+/login                          POST: identifier → domain lookup → routed step (no enumeration, ADR-0017)
 /auth/signup                    POST: provision tenant + owner user + default workspace
-/auth/login                     POST: password login → Lucia session
-/auth/logout                    POST: invalidate session
-/auth/session                   GET:  current session/user
-/auth/oauth/:provider           GET:  begin OAuth (Google/Microsoft via arctic)
-/auth/oauth/:provider/callback  GET:  OAuth callback → session
-/auth/mfa/enroll                POST: begin TOTP enrollment (user_mfa)
-/auth/mfa/verify                POST: verify TOTP / consume backup code
-/auth/password/forgot           POST: issue reset token (user_password_resets)
-/auth/password/reset            POST: consume token, set new password
-/auth/saml/:tenant/login        GET:  begin SAML SSO (tenant_sso_configs)
-/auth/saml/:tenant/acs          POST: SAML assertion consumer (node-saml)
+/auth/password                  POST: password login → session on the auth origin
+/auth/logout                    POST: revoke session + refresh family
+/auth/mfa/enroll                POST: begin TOTP/SMS/email/WebAuthn enrollment (user_mfa_methods)
+/auth/mfa/verify                POST: verify factor / consume recovery code; "trust device 30d"
+/auth/magic                     POST: send magic link / email OTP (auth_email_tokens)
+/verify                         GET:  validate magic-link / OTP token (expired/used states)
+/auth/oauth/:provider           GET:  begin social OAuth (Google/Microsoft via arctic)
+/oauth/callback                 GET:  social OAuth callback → session
+/auth/password/forgot|reset     POST: issue / consume password-reset token
+/sso/saml/callback              POST: SAML ACS (node-saml) → JIT provisioning
+/sso/oidc/callback              GET:  OIDC redirect_uri → code exchange → JIT
+/token/exchange                 POST: single-use 60s code (+PKCE) → access JWT (15m)  [ADR-0016]
+/token/refresh                  POST: rotate refresh cookie → new access JWT (silent refresh)
+/.well-known/jwks.json          GET:  public signing keys (apps/api validates JWTs against this)
+/scim/v2/*                      SCIM 2.0 user lifecycle (scim_tokens bearer; Enterprise)
+# app domain (apps/web): GET /auth/callback receives the code, exchanges it, holds the JWT in memory
 
 /tenants/me                     GET:  current tenant (plan, seat_limit, workspace_limit, balance)
 /tenants/me/api-keys            create/list/revoke scoped keys (tenant-scoped)
@@ -253,13 +260,23 @@ Credits are **granted only by the webhook**, incrementing the tenant counter `te
 
 ## 4. Auth & authorization
 
-- **Dashboard:** **Lucia** session cookie (httpOnly, secure, SameSite); sessions in `user_sessions`
-  (Postgres + Redis). CSRF protection on mutations. OAuth via **arctic** (`user_oauth_accounts`), MFA
-  TOTP (`user_mfa`), password reset (`user_password_resets`), enterprise **SAML** via node-saml
-  (`tenant_sso_configs`). Tables: [03 §4](./03-database-design.md#4-tenancy--auth),
-  [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md).
-- **SSO:** Google/Microsoft OAuth + SAML/OIDC; SSO users map to a tenant via verified domain or invite,
-  then to a workspace via `workspace_members`.
+- **Dashboard:** authentication runs on a dedicated origin **`auth.truepoint.in`** (the IdP/BFF —
+  [17](./17-authentication.md), [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)).
+  The durable **Lucia** session + a rotating **refresh cookie** (HttpOnly · Secure · SameSite=Strict) stay
+  on the auth origin (`user_sessions`, Postgres + Redis). After login the app domain receives a single-use
+  60 s **PKCE code** and exchanges it (`/token/exchange`) for a short-lived **access JWT** (15 min,
+  in-memory only); `apps/api` validates the JWT statelessly via JWKS, then resolves tenant/workspace and
+  sets the RLS GUCs. **Silent refresh** hits `/token/refresh`. Login is **progressive/identifier-first**
+  ([ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md)); MFA is
+  TOTP/SMS/email/WebAuthn (`user_mfa_methods`); per-scope **auth policy** (MFA enforcement, allowed methods,
+  IP allowlist, session timeout) resolves strictest-wins
+  ([ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)). Tables:
+  [03 §4](./03-database-design.md#4-tenancy--auth).
+- **SSO:** Google/Microsoft OAuth + **SAML 2.0 / OIDC**; ACS/redirect resolve on `auth.truepoint.in`
+  (`/sso/saml/callback`, `/sso/oidc/callback`). SSO users map to a tenant via a **verified domain**
+  (`tenant_domains`) or invite, then to a workspace via `workspace_members`; first login **JIT-provisions**
+  per `tenant_sso_configs.default_role`, and **SCIM 2.0** (`scim_tokens`) syncs lifecycle
+  ([17 §8](./17-authentication.md#8-sso--scim-architecture)).
 - **Machine/public:** `api_keys` (hashed, prefixed, **tenant-scoped**, bound to a workspace). Scopes
   gate endpoints (`search:read`, `reveal:write`, `outreach:write`, `export:write`, …). Reveals via the
   API spend the **tenant's** credits and are metered.
@@ -335,6 +352,7 @@ in MVP, but the event vocabulary is reserved now:
 | `enrichment.completed` | an on-demand enrichment job finishes |
 | `import.completed` | a `source_imports` job finishes (counts, dedup outcome) |
 | `list.updated` | a list's membership changes |
+| `auth.event` | an auth event of interest fires (suspicious login, MFA enrolled, SSO/device change) — [17 §9](./17-authentication.md#9-audit--events) |
 
 ## 11. Open questions
 

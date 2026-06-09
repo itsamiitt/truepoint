@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/check-architecture-map.mjs\"",
+            "timeout": 30,
+            "statusMessage": "Checking architecture map is current..."
+          }
+        ]
+      }
+    ]
+  }
+}

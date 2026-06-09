@@ -101,6 +101,10 @@ email/sequencing send engine is now IN scope — see ADR-0009 — reversing the 
 | **Impersonation** | Audited, time-boxed, banner-flagged staff "login-as" a tenant user for support. |
 | **Feature flag** | Platform-controlled toggle (global or per-tenant) for gating/rolling out features. |
 | **Data Health** | Customer-facing view of record quality (verification status, staleness, duplicates). |
+| **Auth origin (IdP)** | The dedicated `auth.truepoint.in` service that authenticates users and issues tokens; the app domain holds no credentials ([17](./17-authentication.md), [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)). |
+| **Access / refresh token** | Short-lived in-memory **access JWT** (15 min) used by the app; long-lived **refresh** token (rotating, HttpOnly cookie) held only on the auth origin ([17 §5](./17-authentication.md#5-session-token--device-architecture)). |
+| **Auth policy** | Per-scope (tenant/workspace) MFA-enforcement / allowed-methods / IP-allowlist / session-timeout rules, resolved **strictest-wins** ([ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)). |
+| **Trusted device** | A device a user marks trusted (30-day MFA-skip window) in the device registry ([17 §5](./17-authentication.md#5-session-token--device-architecture)). |
 
 ## 7. Decision log
 
@@ -120,7 +124,10 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 | Analytics | ClickHouse (self-hosted) via CDC when needed | → [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md) |
 | Hosting | **AWS-native, self-hosted** (ECS Fargate, S3, SES, Terraform) | Control + cost at scale → [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md) |
 | UI | shadcn/ui + Tailwind, clean light theme | Distinctive minimal brand → [04](./04-ui-ux-design.md) |
-| Auth | **Self-built on Lucia** (password/OAuth/MFA/SAML) | Data ownership, no per-MAU cost → [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md), [03 §4](./03-database-design.md) |
+| Auth | **Self-built on Lucia** (password/OAuth/MFA/SAML); served from a dedicated **`auth.truepoint.in`** IdP origin | Data ownership, no per-MAU cost → [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md), [17](./17-authentication.md), [03 §4](./03-database-design.md) |
+| Auth origin & tokens | Dedicated `auth.truepoint.in` IdP/BFF; single-use PKCE code → in-memory 15-min access JWT + rotating refresh cookie on the auth origin | Cross-domain auth boundary; minimal app-domain credential exposure; **amends [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md) auth transport** → [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md), [17](./17-authentication.md) |
+| Login UX | **Progressive (identifier-first)**; domain→tenant/SSO routing via verified `tenant_domains` | Adapts the second step per org; enforced-SSO; no enumeration → [ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md), [17 §2](./17-authentication.md) |
+| Auth policy | MFA enforcement + allowed methods + IP allowlist + session timeout (tenant/workspace, **strictest-wins**) | One predictable composition; a parent policy is a hard floor → [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md), [17 §4](./17-authentication.md) |
 | Tenancy | **Tenant → workspace → member**; per-workspace data; RLS via GUC | → [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md) (supersedes ADR-0005) |
 | Data model | **Per-workspace contact/account copies**; provenance via `source_imports` | → [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md) (supersedes ADR-0003) |
 | Credit model | **Tenant credit counter + per-workspace first-reveal** | → [ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md) (supersedes ADR-0004), [07](./07-billing-credits.md) |
@@ -154,5 +161,5 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 6. **Outreach sending compliance/deliverability** — sending domains, CAN-SPAM/GDPR consent, LinkedIn/SN ToS for automated send ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)).
 7. **Cross-workspace "tenant search"** read layer — in scope? ([10 Beyond](./10-roadmap.md)).
 8. **AI provider** — Anthropic Claude recommended for NL search + outreach drafting ([05](./05-features-modules.md)).
-9. **Self-built auth hardening** — credential-stuffing monitoring, key rotation ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)). *SOC 2 / ISO 27001 scope is now owned by the **Trust & certification program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), [08 §15](./08-compliance.md)).*
+9. **Self-built auth hardening** — credential-stuffing monitoring, key rotation ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)). *The auth **security layers** (progressive lockout, bot detection, impossible-travel, no-enumeration) and **JWKS key rotation** are now specified in [17 §5/§6](./17-authentication.md#6-security-layers); the cross-domain token boundary is [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md), with residual auth Qs in [17 open questions](./17-authentication.md#open-questions). SOC 2 / ISO 27001 scope is owned by the **Trust & certification program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), [08 §15](./08-compliance.md)).*
 10. **Gap remediation** — the market-gap analysis ([../market-analysis/](../market-analysis/)) is translated into corpus changes in [15 — Gap Remediation](./15-gap-remediation.md); residual GTM items (support SLAs, credit-back window, cert sequencing) are tracked there.

@@ -1,0 +1,22 @@
+{
+  "name": "@leadwolf/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "generate": "drizzle-kit generate",
+    "migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@leadwolf/config": "workspace:*",
+    "@leadwolf/types": "workspace:*",
+    "drizzle-orm": "0.36.4",
+    "postgres": "3.4.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.28.1",
+    "typescript": "5.7.2"
+  }
+}

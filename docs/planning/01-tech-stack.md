@@ -79,7 +79,8 @@ Separate ECS Fargate service (same codebase, different entry point), consuming *
 **App monorepo** (Turborepo + Bun workspaces, Biome):
 ```
 crm/
-  apps/{web (Next.js), api (Hono tRPC+REST), workers (BullMQ),
+  apps/{web (Next.js), auth (auth.truepoint.in IdP — dedicated origin, [17](./17-authentication.md), [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)),
+        api (Hono tRPC+REST), workers (BullMQ),
         admin (internal super-admin console — own staff auth/RBAC, separate ECS service [13](./13-platform-admin.md), [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md))}
   packages/{db (Drizzle), core (scoring/dedup/reveal), auth (Lucia/OAuth/SAML),
             integrations (SF/HubSpot/Apollo/ZoomInfo), ui (shadcn), email (React Email+SES),

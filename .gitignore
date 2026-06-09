@@ -1,0 +1,15 @@
+# Claude Code hook state (not source; per-machine)
+.claude/.arch-map-nudge
+
+# Node / Turborepo (the planned monorepo stack — ignored ahead of first code)
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+coverage/
+
+# Env & secrets (never commit real values; .env.example documents the shape)
+.env
+.env.*
+!.env.example

@@ -1,0 +1,19 @@
+{
+  "name": "@leadwolf/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@leadwolf/config": "workspace:*",
+    "@leadwolf/db": "workspace:*",
+    "@leadwolf/types": "workspace:*",
+    "@node-rs/argon2": "2.0.2",
+    "@oslojs/encoding": "1.1.0",
+    "@oslojs/otp": "1.0.0",
+    "ioredis": "5.4.1",
+    "jose": "5.9.6"
+  },
+  "devDependencies": { "typescript": "5.7.2" }
+}

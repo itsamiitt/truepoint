@@ -130,18 +130,25 @@ penalties (data-side research
 ## 5. Audit logging
 
 - Append-only `audit_log` records every reveal, send/enroll, export, suppression change, consent
-  change, DSAR action, role/member change, and API-key use. **Monthly range-partitioned**, append-only
+  change, DSAR action, role/member change, API-key use, and **auth event** (login/MFA/SSO/token/device —
+  [17 §9](./17-authentication.md#9-audit--events)). **Monthly range-partitioned**, append-only
   (no UPDATE/DELETE); retained per the retention schedule; tamper-evident hash-chaining optional
   (post-MVP).
 - **Shape** ([03 §7](./03-database-design.md#7-activity--outreach-layer-adr-0009)): `id`, `tenant_id`,
   `workspace_id` **(nullable — null = tenant-level action)**, `actor_user_id` **(nullable — null =
   system/automation)**, `action`, `entity_type`, `entity_id`, `metadata jsonb`, `ip_address inet`,
-  `user_agent`, `occurred_at`.
+  `user_agent`, `origin_domain` **(auth origin vs originating app origin per event —
+  [17 §9](./17-authentication.md#9-audit--events))**, `occurred_at`.
 - **Closed `action` enum** (one value set, no free-text): `reveal`, `reveal.blocked`, `export`,
   `send`, `enroll`, `unsubscribe`, `suppression.add`, `suppression.remove`, `consent.record`,
   `consent.withdraw`, `dsar.access`, `dsar.delete`, `dsar.rectify`, `member.add`, `member.update`,
-  `member.remove`, `apikey.use`, `credit.adjust`. `entity_type` names the target table (`contact`,
-  `workspace`, `suppression_list`, `dsar_request`, `tenant`, …); `entity_id` is its UUID.
+  `member.remove`, `apikey.use`, `credit.adjust`, plus the **auth events** `login.success`,
+  `login.failure`, `login.locked`, `mfa.challenge`, `mfa.success`, `mfa.failure`,
+  `password.reset.request`, `password.reset.complete`, `sso.initiated`, `sso.callback`, `token.issued`,
+  `token.refresh`, `token.revoke`, `device.trusted`, `device.revoked`, `session.revoked`, `code.issued`,
+  `code.exchanged`, `signup`, `oauth.link` ([17 §9](./17-authentication.md#9-audit--events)).
+  `entity_type` names the target table (`contact`, `workspace`, `suppression_list`, `dsar_request`,
+  `tenant`, `user`, `session`, …); `entity_id` is its UUID.
 - **`credit.adjust`** records every change to `tenants.reveal_credit_balance` that is **not** a normal
   reveal/top-up: admin grants/adjustments + chargeback reversals ([07 §6/§7](./07-billing-credits.md)) and the
   automated **credit-back-on-bounce** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).

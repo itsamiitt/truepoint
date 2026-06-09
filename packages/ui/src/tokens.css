@@ -1,0 +1,71 @@
+/*
+ * tokens.css — TruePoint design tokens (authoritative source: /colors.css + docs/planning/04 §3,
+ * brand-identity.md). Light theme only; Cobalt is a FILL/logo color, never text. Imported once by every
+ * app shell (auth.* and app.*). Extend the Tailwind theme from these variables — do not fork them.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap");
+
+:root {
+  /* Typography (FONTS.txt) — hierarchy comes from weight + size, never color. */
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Neutrals — text */
+  --tp-ink: #111827;
+  --tp-ink-2: #374151;
+  --tp-ink-3: #6b7280;
+  --tp-ink-4: #9ca3af;
+
+  /* Surfaces */
+  --tp-surface: #ffffff;
+  --tp-surface-2: #f9fafb;
+  --tp-surface-3: #f4f5f7;
+
+  /* Borders / hairlines */
+  --tp-hairline: #f0f0f0;
+  --tp-hairline-2: #e5e7eb;
+
+  /* Brand accent — Cobalt: FILLS and logo only, never text */
+  --tp-cobalt: #2563c9;
+  --tp-cobalt-700: #1e4fa3;
+  --tp-cobalt-50: #e9f0fc;
+  --tp-cobalt-tint: #5b8def;
+
+  /* Special surfaces */
+  --tp-twilight: #0c0e1a;
+
+  /* Primary action button = Ink (white text), hover darker */
+  --tp-btn: #111827;
+  --tp-btn-700: #0b1220;
+
+  /* Semantic (rare, intentional) — product UI accent + status (04 §3) */
+  --accent: #4f46e5;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+
+  /* Nav/interaction states */
+  --nav-active-fill: #e8e8e8;
+  --nav-hover-fill: #f3f4f6;
+
+  /* Shape */
+  --radius: 8px;
+
+  /* Focus ring — subtle grey, not glowing (04 §7) */
+  --focus-ring: #9ca3af;
+}
+
+html {
+  font-family: var(--font-sans);
+  color: var(--tp-ink);
+  background: var(--tp-surface);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Keyboard-first: a single, subtle focus ring (no neon). */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
