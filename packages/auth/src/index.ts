@@ -34,6 +34,44 @@ export {
   type DomainResolver,
   type DomainRouting,
 } from "./identifierLookup.ts";
+export { verifyTurnstile } from "./botCheck.ts";
+export { checkIdentifierRate, checkRequestRate } from "./rateLimit.ts";
+export {
+  createEmailVerification,
+  verifyEmailCode,
+  type EmailTokenPurpose,
+} from "./emailVerification.ts";
+export {
+  createSignupTransaction,
+  getSignupTransaction,
+  patchSignupTransaction,
+  deleteSignupTransaction,
+  type SignupTransaction,
+  type SignupTransactionInput,
+} from "./signupTransaction.ts";
+export {
+  provisionIdentity,
+  type ProvisionIdentityInput,
+  type ProvisionedIdentity,
+  type Placement,
+} from "./registration.ts";
+export {
+  createInvitation,
+  acceptInvitationToken,
+  type CreateInvitationInput,
+  type AcceptInvitationResult,
+} from "./invitations.ts";
+export { getSsoProvider } from "./sso/providers.ts";
+export { signMockAssertion } from "./sso/mockIdp.ts";
+export { provisionSsoIdentity } from "./sso/jit.ts";
+export type { SsoConfig, SsoAssertion, SsoInitiation, SsoProvider } from "./sso/types.ts";
+export {
+  createSsoTransaction,
+  getSsoTransaction,
+  deleteSsoTransaction,
+  type SsoTransaction,
+  type SsoTransactionInput,
+} from "./ssoTransaction.ts";
 export { verifyTotp, matchRecoveryCode } from "./mfa.ts";
 export {
   resolveEffectivePolicy,

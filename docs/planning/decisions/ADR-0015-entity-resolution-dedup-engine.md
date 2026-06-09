@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-06-02
 - **Context doc:** [03-database-design.md](../03-database-design.md), [06-enrichment-engine.md](../06-enrichment-engine.md)
+- **Amended by:** [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md) (2026-06-09) — entity resolution is now **global / cross-source** at the master-graph layer (deterministic keys → **blocking + MinHash/LSH** candidate generation → **Splink** scoring → survivorship), not within-workspace only. The within-workspace Splink dedup below still applies to the **overlay**; the engine choice (Splink) is unchanged.
 
 ## Context
 
@@ -55,3 +56,4 @@ heuristics"). Batch fits the DQ subsystem, which is already async and AWS-Batch-
 
 Real-time or **cross-source/global** identity resolution at scale becomes a requirement (re-evaluate
 Senzing, and note that global resolution would reopen [ADR-0006](./ADR-0006-per-workspace-multitenant-model.md)).
+**→ Triggered (2026-06-09): [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md) makes ER global/cross-source** at the master-graph layer (blocking + LSH + Splink at billions; Senzing reconsidered for real-time ER as a future option). This reopened ADR-0006 as designed.

@@ -19,6 +19,8 @@ export interface IssuedSession {
 
 export interface SessionContext {
   userId: string;
+  tenantId?: string;
+  workspaceId?: string;
   appOrigin?: string;
   deviceId?: string;
   ipAddress?: string;
@@ -32,6 +34,8 @@ export async function createSession(ctx: SessionContext): Promise<IssuedSession>
   await sessionRepository.create({
     id: sessionId,
     userId: ctx.userId,
+    tenantId: ctx.tenantId,
+    workspaceId: ctx.workspaceId,
     refreshTokenHash: hashRefreshToken(refreshToken),
     expiresAt,
     appOrigin: ctx.appOrigin,
@@ -55,6 +59,8 @@ export async function rotateSession(
     next: {
       id: sessionId,
       userId: ctx.userId,
+      tenantId: ctx.tenantId,
+      workspaceId: ctx.workspaceId,
       refreshTokenHash: hashRefreshToken(refreshToken),
       expiresAt,
       appOrigin: ctx.appOrigin,

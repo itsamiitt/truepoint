@@ -32,7 +32,6 @@ export async function submitPassword(formData: FormData): Promise<void> {
 
   const { id: txnId, txn } = await createLoginTransaction({
     userId: user.userId,
-    tenantId: user.tenantId,
     appOrigin,
     codeChallenge,
     state,
@@ -47,8 +46,9 @@ export async function submitPassword(formData: FormData): Promise<void> {
     maxAge: LOGIN_TXN_MAX_AGE,
   });
 
-  const step = await resolveNextStep(txn);
+  const step = await resolveNextStep(txnId, txn);
   if (step === "mfa") redirect("/mfa");
+  if (step === "org") redirect("/org");
   if (step === "workspace") redirect("/workspace");
   await finishLogin(txnId, txn);
 }

@@ -33,8 +33,10 @@ last-line guarantee that a handler can't read across workspaces ([03 §9](./03-d
 
 ```
 # ── Identity provider on auth.truepoint.in (apps/auth, 17) — NOT /api/v1; mints the app's access JWT ──
-/login                          POST: identifier → domain lookup → routed step (no enumeration, ADR-0017)
-/auth/signup                    POST: provision tenant + owner user + default workspace
+/login                          POST: email|username → exists? → routed step OR /signup (Turnstile+rate-limit, ADR-0020)
+/auth/signup                    POST: register → verify email → place by domain/invite/new-org (ADR-0019/0020)
+/auth/org                       POST: select active org (tenant_member) when the identity is in >1 org
+/invitations/accept             POST: accept a pending invite → tenant_member + workspace_member
 /auth/password                  POST: password login → session on the auth origin
 /auth/logout                    POST: revoke session + refresh family
 /auth/mfa/enroll                POST: begin TOTP/SMS/email/WebAuthn enrollment (user_mfa_methods)
@@ -116,9 +118,11 @@ last-line guarantee that a handler can't read across workspaces ([03 §9](./03-d
 ```
 
 Resource names follow the corpus-wide rename ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)):
-**`organizations`→`tenants`, `persons`→`contacts`, `companies`→`accounts`**. Contacts/accounts are
-**per-workspace copies** — there is no global golden record, so a contact id is only meaningful within
-its workspace.
+**`organizations`→`tenants`, `persons`→`contacts`, `companies`→`accounts`**. A `contacts`/`accounts` id is a
+**workspace overlay** over a Layer-0 **master entity** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)):
+`/search/*` queries the **global master graph** (masked), and a **reveal** materializes/links an overlay copy
+in the active workspace. The overlay id is workspace-scoped; the underlying `master_person_id` /
+`master_company_id` is global but is never the API's addressing key.
 
 ### 2.1 Internal staff API (`/admin/*`) — separate service
 
@@ -167,14 +171,26 @@ POST /api/v1/search/contacts
       "emailStatus":"valid", "emailMasked":"j••••@acme.com",
       "phonePresent": true, "priorityScore": 82, "revealed": false }
   ],
+  "facets": {
+    "seniority": { "vp": 540, "c_suite": 210 },
+    "employeeBand": { "51-200": 612, "201-500": 668 },
+    "locationCountry": { "US": 980, "DE": 300 }
+  },
   "next_cursor": "...",
   "total_estimate": 1280
 }
 ```
-No PII (real email/phone) is returned here — only **masked previews + status + facets**. Search is
-served by **Typesense** behind `SearchPort`, fed by Aurora CDC ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md));
-the index carries non-PII facets only (`email_domain`, `email_status`, `seniority_level`,
-`priority_score`, …), never decrypted PII. Results are scoped to the active workspace by RLS.
+No PII (real email/phone) is returned here — only **masked previews + status + facet counts**. Search runs
+over the **global master graph** (the billions-row shared universe — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md))
+on **OpenSearch** behind `SearchPort` ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md) amended),
+fed by Aurora CDC; the index carries **non-PII facets only** (`email_domain`, `email_status`,
+`seniority_level`, `employee_band`, `industry`, `location_country`, `has_email`, `priority_score`, …), never
+decrypted PII. Filters **post as a body** (not query-string); **pagination is `search_after` cursoring**
+(never deep offset) so it holds at billions; **facet counts** come from `terms`/`range` aggregations
+(ClickHouse backs the heavy high-cardinality counts). Per-key **rate limits + quotas** apply
+([§5](#5-idempotency--concurrency), [§8](#8-public-api-readiness-post-mvp-seams-now)). The universe is shared;
+what a workspace *owns* (revealed/overlay state) is RLS-scoped — search flags which hits are already revealed
+in the active workspace.
 
 ### 3.2 Reveal (spends tenant credits, idempotent) — H1
 ```http
@@ -216,6 +232,10 @@ tenants SET reveal_credit_balance = balance - cost`; `COMMIT`; audit. The first 
 for the `(workspace_id, contact_id)` flips ownership (`is_revealed`, `revealed_by_user_id`,
 `revealed_at`) via the idempotent trigger ([03 §10](./03-database-design.md#10-triggers--db-side-logic)).
 
+- **Sourced from the master channel:** the unlocked email/phone is read from the Layer-0
+  `master_emails`/`master_phones` for the hit's `master_person_id` and **copied into the workspace overlay**
+  ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)); verification still drives the charge
+  (below).
 - **First-reveal-wins, per workspace:** re-revealing the **same workspace copy** is **0** credits
   (`alreadyOwned: true`); the **same human in another workspace** is charged again (each workspace owns
   its own copy — [ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)).
@@ -284,7 +304,7 @@ Credits are **granted only by the webhook**, incrementing the tenant counter `te
   - **Workspace role** on `workspace_members` (`owner/admin/member/viewer`) gates data actions in the
     active workspace (e.g. `viewer` can search/read but not reveal/enroll; `member`+ can reveal;
     `admin`+ manages members/sequences).
-  - **Tenant-level billing/admin capability** `users.is_tenant_owner` (orthogonal to workspace role)
+  - **Tenant-level billing/admin capability** `tenant_members.is_tenant_owner` (orthogonal to workspace role)
     gates tenant-wide actions: billing/checkout, plan + entitlements, API keys, SSO config, workspace
     creation/deletion. A workspace `owner` is **not** automatically a tenant owner.
 

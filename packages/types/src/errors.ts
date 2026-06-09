@@ -109,6 +109,17 @@ export class NotFoundError extends AppError {
   }
 }
 
+/**
+ * A registration conflict — the chosen email or username is already taken (ADR-0020). Registration
+ * deliberately reveals existence (unlike the uniform credential error), so the `code` is specific
+ * (`email_taken` | `username_taken`) and the UI maps it to a precise field-level message.
+ */
+export class ConflictError extends AppError {
+  constructor(code: "email_taken" | "username_taken", detail?: string) {
+    super({ status: 409, code, title: "Already in use", detail });
+  }
+}
+
 /** An import row (or its column mapping) failed validation — carries the offending row index(es). */
 export class ImportValidationError extends AppError {
   constructor(detail?: string, extensions?: Record<string, unknown>) {

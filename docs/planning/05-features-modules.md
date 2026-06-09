@@ -2,8 +2,9 @@
 
 > **Model:** per-workspace multi-tenant prospecting CRM
 > ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)). Each **tenant** has
-> **workspaces**; each workspace owns its **own** contacts/accounts — imported + enriched, then scored,
-> revealed, and sequenced. There is **no global golden record** and **no identity-resolution/merge**.
+> **workspaces**; each workspace curates its **own overlay** contacts/accounts — imported + enriched, then
+> scored, revealed, and sequenced — over a system-owned **global master graph** (an entity-resolved universe
+> everyone searches and reveals from). Two layers, [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md).
 
 Each module below lists its purpose, key behaviors, the data it touches, and which milestone it lands
 in. "MVP" = the full thin slice (M1–M5). See [10-roadmap.md](./10-roadmap.md) for sequencing.
@@ -69,8 +70,14 @@ flowchart TB
   [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)): the durable
   **Lucia** session + a rotating refresh cookie stay there; after login the app domain gets a single-use
   60 s **PKCE code** exchanged for a short-lived in-memory **access JWT**. Login is **progressive
-  (identifier-first)** with domain→tenant/SSO routing
-  ([ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md)).
+  (identifier-first)** — the identifier accepts **email or username**, resolves whether the identity
+  **exists** (Turnstile + rate-limit gated), and branches to SSO / password / passkey / magic, or to
+  **registration** ([ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md),
+  [ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)).
+- **Global identity, many orgs** ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)):
+  a person is **one** `users` identity (global-unique email + optional username) that belongs to many
+  tenants via **`tenant_members`**; after primary auth they pick **org** then **workspace** (single options
+  auto-select).
 - **Self-built auth on Lucia** ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)):
   email/password (Argon2id) + OAuth (Google/Microsoft via `arctic`); **MFA** (TOTP / SMS / email /
   **WebAuthn passkey** + recovery codes, `user_mfa_methods`) and **SAML 2.0 / OIDC** SSO (via `node-saml`,
@@ -79,12 +86,14 @@ flowchart TB
   methods / IP allowlist / session timeout, strictest-wins,
   [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)). Sessions in `user_sessions`
   (Postgres + Redis).
-- **Self-serve signup** provisions the whole tree in one transaction via `provision_new_signup(...)`:
-  **tenant → owner user → default workspace → owner membership → audit row**
-  ([03 §10](./03-database-design.md#10-triggers--db-side-logic)).
+- **Hybrid registration** ([ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)):
+  after email verification (`auth_email_tokens`), a new identity is placed by **verified company domain**
+  (`tenant_domains.join_policy` — `auto_join`/`request_access`), else a **pending invite** (`invitations`)
+  → accept, else **`provision_new_signup`** creates a new org (tenant → default workspace → owner
+  `tenant_member` → owner `workspace_member` → audit) ([03 §10](./03-database-design.md#10-triggers--db-side-logic)).
 - **Tenant vs workspace authority:** a **tenant** is the paying org (plan, `seat_limit`,
   `workspace_limit`, `reveal_credit_balance`). The **tenant-level owner/billing** capability lives on
-  `users.is_tenant_owner` and governs billing, workspace creation, limits, and suspension —
+  `tenant_members.is_tenant_owner` and governs billing, workspace creation, limits, and suspension —
   **distinct** from a user's per-workspace role.
 - **Per-workspace roles** (on `workspace_members`): `owner`/`admin`/`member`/`viewer`.
   - workspace **owner/admin:** manage members, workspace settings, suppression, API keys, CRM connections.
@@ -92,7 +101,8 @@ flowchart TB
   - **viewer:** search + view revealed data; no reveal/send/export.
 - **Abuse guards (self-serve):** email verification, disposable-domain blocking, signup-velocity
   limits, optional payment-before-reveal for fresh tenants.
-- **Data:** `tenants`, `users`, `workspaces`, `workspace_members`, `user_sessions`,
+- **Data:** `tenants`, `users` (global identity), `tenant_members`, `workspaces`, `workspace_members`,
+  `invitations`, `user_sessions`,
   `user_oauth_accounts`, `user_mfa`/`user_mfa_methods`, `user_mfa_recovery_codes`, `webauthn_credentials`,
   `trusted_devices`, `user_password_resets`, `auth_email_tokens`, `tenant_domains`, `tenant_sso_configs`,
   `tenant_auth_policies`/`workspace_auth_policies`, `scim_tokens`, `oauth_app_clients`, `api_keys`. See
@@ -137,9 +147,10 @@ flowchart TB
   [06](./06-enrichment-engine.md).
 - Enrichment is a **system cost**, never charged to users directly — users pay only on **reveal** (§8).
   Optional **`provider_calls`** tracks provider cost/cache-hit per call.
-- The old global **enrichment waterfall / golden-merge / confidence model is removed**; enrichment now
-  writes per-workspace copies and records source trust only via `source_imports`
-  ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
+- Enrichment writes the **workspace overlay** copy (+ per-import `source_imports`) **and** a `source_records`
+  row that the **global entity-resolution** pipeline merges into a golden record
+  ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)); cross-source survivorship is the
+  master graph's job, not a per-workspace merge ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
 
 ## 5. Sales Navigator integration — *Post-MVP (M7)*
 
@@ -153,14 +164,18 @@ flowchart TB
 
 ## 6. Search & Results — *MVP (M2/M3)*
 
-- Faceted search over the workspace's **own masked** contacts/accounts: title, seniority, department,
-  account, headcount, industry, location, has-email/has-phone, `outreach_status`, `priority_score`. UI
-  spec in [04 §5](./04-ui-ux-design.md).
+- Faceted **masked** search — at MVP over the workspace's overlay; on the scale track over the **global
+  master graph** (the shared universe — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)):
+  title, seniority, department, company, headcount band, industry, location, technologies,
+  has-email/has-phone, `outreach_status`, `priority_score`; results flag which hits are already revealed in
+  the workspace. UI spec in [04 §5](./04-ui-ux-design.md).
 - Results table: masked contact columns + status glyphs; bulk select. **Saved searches** persisted and
   re-runnable.
-- Backed by `packages/search` (`SearchPort`); **Typesense self-hosted from day one**, fed by Aurora
-  logical-replication CDC ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md),
-  [01 §1](./01-tech-stack.md#1-at-a-glance)). All queries are workspace-scoped via RLS.
+- Backed by `packages/search` (`SearchPort`): **Typesense** (overlay, day one) + **OpenSearch** (global
+  master graph, scale track), fed by Aurora logical-replication CDC
+  ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md) amended by
+  [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), [01 §1](./01-tech-stack.md#1-at-a-glance)).
+  Overlay queries are workspace-scoped via RLS; universe search returns masked rows only.
 
 ## 7. Record Detail + Reveal — *MVP (M3)*
 

@@ -3,6 +3,7 @@
 - **Status:** Superseded by [ADR-0006](./ADR-0006-per-workspace-multitenant-model.md) (2026-05-29)
 - **Date:** 2026-05-29
 - **Superseded note:** The 2026-05-29 repositioning to a per-workspace prospecting CRM replaced the global raw→provenance→golden model with per-workspace contact copies whose provenance is captured by `source_imports`. ADR-0006 documents the consciously-accepted losses (field-level provenance, replay/unmerge, cross-source dedup, provable DSAR-by-source). This body is retained as the record of what was traded away.
+- **Revived (as hybrid) by:** [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md) (2026-06-09) — reinstates the raw→provenance→golden layering as the **master graph** (`source_records` → `match_clusters` → `master_persons`/`master_companies`) *beneath* the per-workspace overlay. The losses listed above are recovered at the master layer (cross-source dedup, replay/unmerge, provable DSAR-by-identity); the overlay keeps per-import `source_imports`.
 - **Context doc:** [03-database-design.md](../03-database-design.md), [08-compliance.md](../08-compliance.md)
 
 ## Context

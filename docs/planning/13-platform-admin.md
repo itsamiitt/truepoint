@@ -54,7 +54,7 @@
    per-state registrations); **DROP deletion-request processing** (poll ≥ every 45 days → DSAR fan-out,
    [08 §4.4](./08-compliance.md#44-california-drop-data-broker-deletion-platform)); + **Trust Center content**
    management ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), [08 §15](./08-compliance.md)).
-9. **System health & ops** — service health (ECS/Aurora/Redis/Typesense/ClickHouse); **queue depth +
+9. **System health & ops** — service health (ECS/Aurora/Redis/Typesense/OpenSearch/ClickHouse); **queue depth +
    DLQ**; worker/job status; error rates (GlitchTip); **CDC lag**; SES bounce/complaint; uptime;
    deep-links to Grafana/X-Ray; **maintenance mode** + status-page/banner control.
 10. **Content & comms** — system/email templates; **in-app announcements/banners**; changelog/release

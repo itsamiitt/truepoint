@@ -5,14 +5,27 @@ export * as schema from "./schema/index.ts";
 export {
   userRepository,
   sessionRepository,
+  authEmailTokenRepository,
   type UserRecord,
   type SessionRecord,
   type CreateSessionInput,
   type MfaMethodRecord,
+  type CreateEmailTokenInput,
 } from "./repositories/userRepository.ts";
 export {
   workspaceRepository,
+  tenantMemberRepository,
+  tenantDomainRepository,
+  tenantRepository,
+  tenantSsoConfigRepository,
+  invitationRepository,
   type WorkspaceSummary,
+  type TenantMembership,
+  type DomainResolution,
+  type SsoConfigRecord,
+  type PendingInvitation,
+  type InvitationByToken,
+  type CreateInvitationInput,
 } from "./repositories/workspaceRepository.ts";
 export { accountRepository, type AccountUpsertInput } from "./repositories/accountRepository.ts";
 export {

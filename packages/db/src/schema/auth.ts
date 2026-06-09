@@ -43,26 +43,40 @@ export const tenants = pgTable("tenants", {
   updatedAt: updatedAt(),
 });
 
-export const users = pgTable(
-  "users",
+// users is the GLOBAL identity — one row per person (ADR-0019). Org membership lives in tenant_members.
+export const users = pgTable("users", {
+  id: id(),
+  email: citext("email").notNull().unique(), // global-unique (was UNIQUE(tenant_id,email))
+  username: citext("username").unique(), // optional global-unique login alias
+  fullName: varchar("full_name", { length: 255 }),
+  avatarUrl: varchar("avatar_url", { length: 500 }),
+  passwordHash: varchar("password_hash", { length: 255 }), // Argon2id; null if SSO-only / passkey-only
+  authProvider: varchar("auth_provider", { length: 50 }).notNull().default("password"),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }), // required before status='active'
+  scimExternalId: varchar("scim_external_id", { length: 255 }),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  status: varchar("status", { length: 50 }).notNull().default("active"), // active|pending|suspended
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+// A person's membership in an org (the user↔tenant link; carries the tenant-level owner capability — H8).
+export const tenantMembers = pgTable(
+  "tenant_members",
   {
     id: id(),
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
-    email: citext("email").notNull(),
-    fullName: varchar("full_name", { length: 255 }),
-    avatarUrl: varchar("avatar_url", { length: 500 }),
-    passwordHash: varchar("password_hash", { length: 255 }), // Argon2id; null if SSO-only
-    authProvider: varchar("auth_provider", { length: 50 }).notNull().default("password"),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     isTenantOwner: boolean("is_tenant_owner").notNull().default(false),
-    scimExternalId: varchar("scim_external_id", { length: 255 }),
-    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-    status: varchar("status", { length: 50 }).notNull().default("active"),
+    status: varchar("status", { length: 50 }).notNull().default("active"), // active|invited|removed
+    invitedByUserId: uuid("invited_by_user_id"),
     createdAt: createdAt(),
-    updatedAt: updatedAt(),
   },
-  (t) => ({ uniqEmail: uniqueIndex("uniq_users_tenant_email").on(t.tenantId, t.email) }),
+  (t) => ({ uniqMember: uniqueIndex("uniq_tenant_member").on(t.tenantId, t.userId) }),
 );
 
 export const workspaces = pgTable(
@@ -112,6 +126,7 @@ export const tenantDomains = pgTable("tenant_domains", {
   verificationToken: varchar("verification_token", { length: 255 }),
   dnsTxtRecord: text("dns_txt_record"),
   status: varchar("status", { length: 20 }).notNull().default("pending"), // pending|verified|failed
+  joinPolicy: varchar("join_policy", { length: 20 }).notNull().default("sso_only"), // sso_only|auto_join|request_access
   verifiedAt: timestamp("verified_at", { withTimezone: true }),
   createdAt: createdAt(),
 });
@@ -121,6 +136,8 @@ export const userSessions = pgTable("user_sessions", {
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  tenantId: uuid("tenant_id"), // the org this session is active in (chosen at login; ADR-0019)
+  workspaceId: uuid("workspace_id"), // the active workspace (null until selected)
   deviceId: uuid("device_id"),
   refreshTokenHash: varchar("refresh_token_hash", { length: 255 }), // rotating, reuse-detected
   rotatedFrom: varchar("rotated_from", { length: 255 }),
@@ -197,4 +214,33 @@ export const tenantAuthPolicies = pgTable("tenant_auth_policies", {
   ipAllowlist: text("ip_allowlist").array(),
   sessionTimeoutSeconds: integer("session_timeout_seconds"),
   updatedAt: updatedAt(),
+});
+
+// Pending invitations to join an org/workspace (accepted at registration → tenant_member + workspace_member).
+export const invitations = pgTable("invitations", {
+  id: id(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }), // null = tenant-level
+  email: citext("email").notNull(),
+  role: varchar("role", { length: 50 }).notNull().default("member"),
+  isTenantOwner: boolean("is_tenant_owner").notNull().default(false),
+  tokenHash: varchar("token_hash", { length: 255 }).notNull().unique(),
+  invitedByUserId: uuid("invited_by_user_id"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
+// Email verification + magic-link + email-OTP tokens (resolve on auth.*/verify).
+export const authEmailTokens = pgTable("auth_email_tokens", {
+  tokenHash: varchar("token_hash", { length: 255 }).primaryKey(),
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }), // null for pre-signup verify
+  email: citext("email").notNull(),
+  purpose: varchar("purpose", { length: 20 }).notNull(), // verify|magic_link|email_otp
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  ipAddress: text("ip_address"),
+  createdAt: createdAt(),
 });

@@ -28,6 +28,12 @@ and its `tenant_sso_configs`. Unclaimed/personal domains fall through to passwor
 - Full flow + state machine: [17 §2](../17-authentication.md#2-progressive-identifier-first-login),
   [§4](../17-authentication.md#4-multi-tenancy-auth-model). Domain claiming UI: [12 §4](../12-settings.md#4-tenant-settings-tenant-owner--billing--tier-as-noted).
 
+> **No-enumeration clause amended by [ADR-0020](./ADR-0020-existence-revealing-identifier-first-and-registration.md)
+> (2026-06-09):** the identifier step now accepts an email **or username**, **reveals** whether an account
+> exists to branch login-vs-**registration**, and mitigates enumeration with Cloudflare Turnstile +
+> per-IP/per-identifier rate-limiting (the *credential* step stays uniform). Identifier-first + verified-domain
+> SSO routing below are **unchanged**.
+
 ## Rationale
 
 Identifier-first is the standard enterprise pattern (Google/Okta/Microsoft) because the right second step

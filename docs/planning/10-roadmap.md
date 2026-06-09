@@ -64,17 +64,19 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
   image to ECR; `bun run build` clean; `terraform plan` clean for `dev`.
 
 ## M1 — Import & contacts core *(load-bearing)*
-**Goal:** per-workspace import lands deduped contacts/accounts — **no global golden record**.
+**Goal:** per-workspace import lands deduped **overlay** contacts/accounts (the global master graph + cross-source ER are a later scale track — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
 - Schema: `accounts`, `contacts`, `source_imports` (jsonb `raw_data` provenance), plus the dedup
   unique indexes `(workspace_id, email_blind_index)` / `(workspace_id, linkedin_public_id)` /
   `(workspace_id, sales_nav_lead_id)` (see [03](./03-database-design.md),
   [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
 - `packages/core` import pipeline: **CSV/XLSX + manual + first enrichment provider** → column-map →
-  canonical shape → **per-workspace dedup on import** (match-within-workspace, no cross-source merge,
-  no identity resolution) → insert into the importing workspace only. Runs on the **imports** worker.
+  canonical shape → **per-workspace dedup on import** (overlay match-within-workspace; global cross-source ER
+  is the master-graph track — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) → insert
+  into the importing workspace only. Runs on the **imports** worker.
 - Each imported contact writes one `source_imports` row (`source_name` ∈
   `apollo|zoominfo|linkedin|sales_navigator|hubspot|salesforce|clearbit|manual`, full `raw_data`,
-  `content_hash`). **No field-level lineage, no replay** ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
+  `content_hash`). The overlay has **no field-level lineage**; the master graph's `source_records` adds it on
+  the later track ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md), [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
 - **DoD:** import a fixture CSV with deliberate duplicates **into one workspace** → one contact per
   identity (unique index enforced), each with ≥1 `source_imports` row; the importer sees a new-vs-matched
   summary; the **same** payload imported into a **second** workspace creates a **separate** copy.
@@ -93,17 +95,18 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
   recovery codes land with the M11 depth**)**; SAML/OIDC seam (`tenant_sso_configs`). Tables `user_sessions`,
   `user_oauth_accounts`, `user_mfa`/`user_mfa_methods`, `user_password_resets`, `auth_email_tokens`,
   `tenant_domains` ([03 §4](./03-database-design.md#4-tenancy--auth)).
-- Tenancy tree: `tenants`, `users` (incl. `is_tenant_owner`), `workspaces`, `workspace_members`
+- Tenancy tree: `tenants`, **global** `users`, `tenant_members` (incl. `is_tenant_owner`), `workspaces`, `workspace_members`, `invitations`
   (roles `owner`/`admin`/`member`/`viewer`); `api_keys` seam. **`provision_new_signup(...)`** creates
   tenant → owner user → default workspace → owner membership → audit row in one transaction
   ([03 §10](./03-database-design.md#10-triggers--db-side-logic)).
 - **RLS via GUC:** every workspace-scoped query runs under `SET LOCAL app.current_workspace_id`
   (+ `app.current_tenant_id`) on a non-`BYPASSRLS` role, GUC reset per RDS-Proxy checkout; the app sets
   the same context in AsyncLocalStorage ([03 §9](./03-database-design.md#9-row-level-security)).
-- `packages/search` (`SearchPort`) over **Typesense self-hosted from day one**, fed by Aurora
+- `packages/search` (`SearchPort`) over **Typesense self-hosted from day one** (overlay search), fed by Aurora
   logical-replication CDC ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)); faceted
-  **masked** search, workspace-scoped. App shell + Search/Results + basic lists/saved searches +
-  Admin/Settings shell ([04](./04-ui-ux-design.md)).
+  **masked** search, workspace-scoped — the billions-row **global master-graph search runs on OpenSearch** on
+  the later scale track ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)). App shell +
+  Search/Results + basic lists/saved searches + Admin/Settings shell ([04](./04-ui-ux-design.md)).
 - **DoD:** sign up → tenant + default workspace provisioned → **log in (with MFA) on `auth.truepoint.in`**
   → the app domain **exchanges the 60 s code for an access JWT** (refresh cookie scoped to the auth origin;
   **silent refresh** works without re-login) → search → see **masked** results; cross-workspace isolation
@@ -167,10 +170,11 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
 **Goal:** the full thin slice, launch-grade on privacy.
 - **Suppression management UI** (`suppression_list` scope ∈ `global|tenant|workspace`); the gate already
   guards reveals (M3) and will guard sending (M9).
-- **`consent_records`**; **DSAR** intake → **access** report + **delete** workflow that **fans out**
-  across **every per-workspace copy** + `source_imports` + `contact_reveals` + `activities`, then runs a
-  **verification scan** ([08](./08-compliance.md)). DSAR fan-out across N copies is **elevated risk** (see
-  register).
+- **`consent_records`**; **DSAR** intake → **access** report + **delete** workflow that resolves the
+  **golden identity** then purges the master record (+ `source_records`/`match_links`/channels) and
+  **cascades** across **every overlay copy** + `source_imports` + `contact_reveals` + `activities`, then runs
+  a **verification scan** ([08 §4](./08-compliance.md)). The golden identity makes find-everywhere provable;
+  cost still scales with overlay copies + master shards (see register).
 - Full audit coverage; retention jobs; PII encryption finalized; compliance launch checklist green
   (incl. **privacy-counsel review**).
 - **DoD:** Playwright e2e of the entire loop (sign up → buy credits → search → reveal → export); a DSAR
@@ -285,6 +289,10 @@ data-broker law — the remediation for the analysis' execution-risk drag ([15 �
 - **ClickHouse event analytics:** self-hosted, fed by CDC (Debezium) once an event table (e.g.
   `activities`) exceeds ~50M rows ([01 §1](./01-tech-stack.md#1-at-a-glance),
   [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)).
+- **Global master graph at scale ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)):** the
+  billions-row shared universe — **Citus**-sharded golden store + **S3/Iceberg** lake + batch **ER**
+  (blocking/MinHash-LSH/Splink on Spark/Athena) + **OpenSearch** masked search + **ClickHouse** facet counts;
+  built on this scale track once volume + the data-broker posture ([08 §15](./08-compliance.md)) warrant it.
 - **Alerts:** new-match / new-signal notifications on saved searches and tracked contacts.
 - **EU data-residency** region split (region-tagged from day one; full split when demand warrants).
 - **Seat-based subscriptions** atop credits; periodic re-verification at scale; tamper-evident audit log.
@@ -295,20 +303,22 @@ data-broker law — the remediation for the analysis' execution-risk drag ([15 �
 
 | # | Risk | Impact | Mitigation | Owner milestone |
 |---|---|---|---|---|
-| 1 | Poor **per-workspace dedup** quality (no global identity) lets duplicate contacts coexist in one workspace | Med (UX + wasted reveals) | Match-on-import on `email_blind_index`/`linkedin_public_id`/`sales_nav_lead_id`; unique `(workspace_id, …)` indexes make exact dupes impossible; `content_hash` for identical payloads; importer new-vs-matched summary; **Splink probabilistic record linkage for the fuzzy tail** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md), [06 §9](./06-enrichment-engine.md)) | M1 (exact) / M4–M8 (Splink) |
+| 1 | **Entity-resolution quality at billions** — weak blocking/thresholds let duplicates or **false merges** into the global master graph (and dupes into a workspace overlay) | High (data trust + wasted reveals) | Deterministic keys (email blind index/domain/LinkedIn id/phone) + **blocking + MinHash/LSH** + **Splink** scoring + **survivorship**; manual-review queue for low-confidence merges; reversible merges via `source_records`; overlay unique `(workspace_id, …)` indexes for exact dupes; importer new-vs-matched summary ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md) amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), [06 §9](./06-enrichment-engine.md)) | M1 (overlay exact) / master-graph ER track |
 | 2 | **Double-charge** — a bare tenant counter lacks a ledger's reconciliation/refund history | High (trust + money) | `FOR UPDATE` on `tenants.reveal_credit_balance` + `CHECK >= 0` + unique `(workspace_id, contact_id, reveal_type)` + client `Idempotency-Key` (the required mitigations per [ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)); revisit append-only ledger if reconciliation gaps appear | M3 |
-| 3 | **Incomplete DSAR deletion** — fan-out across **N per-workspace copies** is elevated vs a single golden record | High (legal) | Single delete job that fans out across all workspace `contacts` + `source_imports` + `contact_reveals` + `activities` + caches; verification scan; auto-suppression; audit proof ([08 §4](./08-compliance.md)) | M5 |
+| 3 | **Incomplete DSAR deletion** — must purge the golden identity **and** every overlay copy | High (legal) | Resolve the **golden identity** (provable find-everywhere) → delete master record + `source_records` + `match_links` + channels, then **cascade** to all overlay `contacts` + `source_imports` + `contact_reveals` + `activities` + caches; verification scan; global suppression; audit proof ([08 §4](./08-compliance.md)) | M5 |
 | 4 | Enrichment cost blowout / provider outage | Med | Cache-first, Redis rate limits, circuit breakers, daily cost budgets, charge-on-reveal; `provider_calls` cost tracking | M4 |
 | 5 | **Self-built auth** security defects (session/MFA/OAuth/SAML) | High | Lucia primitives (not hand-rolled crypto), Argon2id, rotation + reset flows, MFA, **progressive lockout + bot detection at the identifier step + impossible-travel detection + no account enumeration**, credential-stuffing/velocity monitoring, pen-test before GA, scoped/hashed `api_keys` ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md), [17 §6](./17-authentication.md#6-security-layers)) | M2 |
 | 6 | **Sending compliance / deliverability** failure (spam complaints, blocklisting, CAN-SPAM/GDPR breach) | High (legal + domain reputation) | Suppression gate before every send; CAN-SPAM + GDPR/ePrivacy consent + unsubscribe + physical-address footer; DKIM/SPF/DMARC + warm-up; bounce/complaint → auto-suppression via SES SNS→SQS feedback | M9 |
 | 7 | **LinkedIn / Sales Navigator ToS** exposure from automated actions | High (account bans) | Human-in-the-loop (assisted) capture/send as default; no headless automation of LinkedIn/SN; rate-respecting; per-feature legal review ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)) | M7 / M9 |
-| 8 | Search engine strain / drift between Aurora and Typesense | Med | `SearchPort` abstraction; CDC search-sync worker with lag monitoring + reindex; defined scale headroom (Typesense from day one) | M2 |
+| 8 | Search strain / drift between Aurora and the search indexes (**OpenSearch** global, **Typesense** overlay) at billions | Med | `SearchPort` abstraction; CDC search-sync worker with lag monitoring + reindex; sharded OpenSearch + ClickHouse for facet counts; defined scale headroom ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | M2 |
 | 9 | Self-serve abuse/fraud | Med | Signup verification, disposable-domain blocking, velocity limits, payment-before-reveal for fresh tenants, Stripe Radar | M2 / M3 |
 | 10 | **Impersonation misuse / over-broad staff access** | High (privacy + trust) | Time-boxed + banner-flagged + reason-logged impersonation; least-privilege staff RBAC + JIT elevation; immutable `platform_audit_log`; periodic access reviews; customer-visibility/consent policy ([ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md), [08 §14](./08-compliance.md)) | Platform admin |
 | 11 | **Privileged-role blast radius** — the RLS-bypass cross-tenant role is a high-value target | High | Dedicated role used **only** by `apps/admin`, distinct from the app's non-`BYPASSRLS` role; staff SSO+MFA + IP allowlist; secrets in Secrets Manager + rotation; every access audited | Platform admin |
 | 12 | **Webhook delivery** failures / SSRF / secret leakage | Med | Signed payloads + delivery log + retries/backoff; egress controls/allowlist; per-tenant signing-secret rotation | M10 |
 | 13 | **Incumbent feature absorption** — CRMs/Clay fold enrichment + sequencing + compliance into the seat price (the market analysis' sole *Critical* risk) | **Critical** (existential) | Wedge discipline (stay narrow on honest + compliant + all-in-one); **CRM-neutral open API** ([09 §8](./09-api-design.md), M10); certs as a moat ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)); fair-billing wedge ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)) | Strategic / M10 |
-| 14 | **No proprietary data asset** — inherits providers' accuracy ceiling; can't win raw accuracy outright | High | Verify-on-reveal + **charge-only-for-`valid` + credit-back** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)); multi-provider waterfall; optional dedicated verification provider ([06 §11](./06-enrichment-engine.md)) | M4 |
+| 14 | **No proprietary data asset** — inherits providers' accuracy ceiling; can't win raw accuracy outright | High | Verify-on-reveal + **charge-only-for-`valid` + credit-back** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)); multi-provider waterfall; optional dedicated verification provider ([06 §11](./06-enrichment-engine.md)); over time the **global master graph** + opt-in co-op build toward a proprietary asset ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | M4 |
+| 15 | **Data-broker compliance** — operating a global universe makes CA Delete Act/DROP registration + state broker laws **core and GA-gating** | High (legal/GA) | Broker registration before GA; DROP polling → DSAR fan-out ([08 §4.4](./08-compliance.md)); global suppression at both layers; opt-in/disclosed co-op; counsel review ([08 §15](./08-compliance.md), [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | M5 / Trust track |
+| 16 | **Billions-scale infra cost/ops** — Citus shards + S3/Iceberg lake + OpenSearch + ClickHouse + ER pipeline are a large surface | Med | Staged by milestone (single-writer Aurora + Typesense until volume warrants); `SearchPort`/lake abstractions; cost dashboards; shard cutover tracked as an open question ([03 §13](./03-database-design.md), [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | Post-MVP |
 | 15 | **Compliance wedge unproven / cert-dependent / US-only** — the differentiator is a promise until attested | High | **Trust & certification program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)): SOC 2 / ISO readiness at M5, **data-broker registration a GA gate**, public Trust Center ([08 §15](./08-compliance.md)) | M5 / Trust track |
 | 16 | **Placeholder pricing unvalidated** vs real willingness-to-pay | Med | Transparent no-lock-in policy ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)); validate prices in early access before GA; non-expiring credits reduce commitment risk | M3 |
 | 17 | **Cross-domain token exchange / IdP boundary** — code interception/replay, open redirect, CSRF, refresh-token theft across `auth.*`↔`app.*` | High (account takeover) | Single-use 60 s **IP-bound + PKCE** code validated server-side before any token; access JWT **in memory only**; refresh token **HttpOnly/Secure/SameSite=Strict** cookie scoped to the auth origin, **rotated + reuse-detected** (family revoke); CORS **allow-list, no wildcard**; `sid` denylist for fast revoke; auth security headers (HSTS / XFO=DENY / nonce-CSP / nosniff / Referrer) ([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md), [17 §3/§6](./17-authentication.md#3-cross-domain-token-contract)) | M2 |

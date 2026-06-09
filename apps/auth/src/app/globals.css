@@ -143,6 +143,27 @@ body {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+/* The resend control is a real <button> styled as a link — strip the native button chrome. */
+button.auth-link {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.auth-note {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  background: var(--tp-surface-3);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 0 0 16px;
+}
+.auth-label-hint {
+  font-weight: 400;
+  color: var(--tp-ink-4);
+}
 .auth-checkbox {
   display: flex;
   align-items: center;

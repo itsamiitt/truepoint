@@ -52,6 +52,9 @@
 | ADR-16 | `decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md` |
 | ADR-17 | `decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md` |
 | ADR-18 | `decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md` |
+| ADR-19 | `decisions/ADR-0019-global-identity-and-tenant-membership.md` |
+| ADR-20 | `decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md` |
+| ADR-21 | `decisions/ADR-0021-global-master-graph-and-overlay.md` |
 | (input) | `docs/planning/proposals/2026-05-29-multi-tenant-schema.md` (adopted) |
 
 ## 2. Adjacency list (doc → docs/ADRs it references)
@@ -61,18 +64,18 @@
 | Doc | References |
 |---|---|
 | README | 00–17, brand, decisions/ |
-| 00 | 01, ADR-1..18, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 16, 17 (decision log §7 + open Qs §8) |
+| 00 | 01, ADR-1..20, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 16, 17 (decision log §7 + open Qs §8) |
 | 01 | 03, 04, 10, 17, ADR-1, ADR-2, ADR-10, ADR-16 |
-| 02 | 01, 03, 06, 08, 16, ADR-6, ADR-10 |
-| 03 | 06, 07, 08, 17, ADR-1, ADR-2, ADR-6, ADR-7, ADR-8, ADR-9, ADR-10, ADR-16, ADR-17, ADR-18 |
+| 02 | 01, 03, 06, 08, 16, ADR-6, ADR-10, ADR-19 |
+| 03 | 06, 07, 08, 17, ADR-1, ADR-2, ADR-6, ADR-7, ADR-8, ADR-9, ADR-10, ADR-16, ADR-17, ADR-18, ADR-19, ADR-20, ADR-21 |
 | 04 | (self-contained; others reference it for design tokens) + workspace switcher → 02/05 |
-| 05 | 03, 04, 06, 07, 08, 09, 10, 17, ADR-6, ADR-8, ADR-9, ADR-16, ADR-17, ADR-18 |
+| 05 | 03, 04, 06, 07, 08, 09, 10, 17, ADR-6, ADR-8, ADR-9, ADR-16, ADR-17, ADR-18, ADR-19, ADR-20 |
 | 06 | 03, 07, 08, ADR-8 |
 | 07 | 03, 06, 08, 09, ADR-7 |
 | 08 | 03, 06, 07, 09, 17, ADR-6, ADR-9 |
-| 09 | 03, 07, 08, 17, ADR-10, ADR-16, ADR-17, ADR-18 |
+| 09 | 03, 07, 08, 17, ADR-10, ADR-16, ADR-17, ADR-18, ADR-19, ADR-20 |
 | 10 | 01, 03, 05, 06, 07, 08, 09, 17, ADR-2, ADR-6, ADR-7, ADR-8, ADR-9, ADR-10, ADR-16, ADR-17, ADR-18 (risk register) |
-| ADR-6 | 02, 03 (supersedes ADR-3, ADR-5) |
+| ADR-6 | 02, 03 (supersedes ADR-3, ADR-5; user scoping amended by ADR-19) |
 | ADR-7 | 07, 03 (supersedes ADR-4) |
 | ADR-8 | 03, 06 |
 | ADR-9 | 05, 09, 08 |
@@ -83,18 +86,21 @@
 | ADR-14 | 08, 10 |
 | ADR-15 | 03, 06 |
 | ADR-16 | 17, 09, 01 (amends ADR-10 auth transport) |
-| ADR-17 | 17, 03, 12 |
+| ADR-17 | 17, 03, 12 (no-enumeration amended by ADR-20) |
 | ADR-18 | 17, 12, 03 |
+| ADR-19 | 17, 03, 02, 05 (amends ADR-6 user scoping) |
+| ADR-20 | 17, 03, 09, 12 (amends ADR-17 no-enumeration) |
+| ADR-21 | 02, 03, 06, 08, 09, 10 (two-layer master graph + overlay; reopens ADR-6; revives ADR-3/5; amends ADR-2/15) |
 | 11 | 02, 04, 05, 06, 07, 08, 09, 10, 12, 13, ADR-2, ADR-6, ADR-8, ADR-9, ADR-10 |
-| 12 | 03, 07, 08, 09, 11, 17, ADR-6, ADR-16, ADR-17, ADR-18 |
+| 12 | 03, 07, 08, 09, 11, 17, ADR-6, ADR-16, ADR-17, ADR-18, ADR-19, ADR-20 |
 | 13 | 01, 02, 03, 06, 08, 09, 10, ADR-10, ADR-11 |
 | 14 | 01, 02, 03, 04, 05, 07, 08, 10, 16, brand, ADR-2, ADR-6, ADR-7, ADR-10 |
 | 15 | 00, 03, 05, 06, 07, 08, 09, 10, 12, 13, ADR-12, ADR-13, ADR-14 (gap-remediation overlay; links out to ../market-analysis/) |
 | 16 | 00, 01, 02, 11, 13, 14, ADR-2, ADR-6, ADR-10, ADR-11 (engineering-conventions overlay; details 02 §1 on-disk layout) |
-| 17 | 03, 04, 05, 08, 09, 11, 12, 13, ADR-6, ADR-10, ADR-11, ADR-16, ADR-17, ADR-18 (auth/identity service on auth.truepoint.in) |
+| 17 | 03, 04, 05, 08, 09, 11, 12, 13, ADR-6, ADR-10, ADR-11, ADR-16, ADR-17, ADR-18, ADR-19, ADR-20 (auth/identity service on auth.truepoint.in) |
 | brand | 04, 08, 11 |
 
-**Bidirectional pairs:** 00↔ADRs; 03↔ADR-6/7/8/9/10; 05↔10 (matrix↔roadmap); 07↔08↔09 (reveal+send path); 11↔04 (IA↔nav); 11↔12↔13 (app surface); 13↔ADR-11; 10↔14 (roadmap↔execution); 02↔16, 14↔16 (architecture↔code-organization); 04↔brand (design↔brand); 07↔ADR-12/13, 08↔ADR-14, 06↔ADR-13, 03↔ADR-13 (remediation decisions); 10↔15, 05↔15 (gap remediation); 03↔ADR-15, 06↔ADR-15 (entity resolution); superseded↔superseding (ADR-3/5↔ADR-6, ADR-4↔ADR-7); 17↔03/05/09/12 (auth ↔ schema/features/API/settings); 00↔ADR-16/17/18; 03↔ADR-16; ADR-10↔ADR-16 (auth transport amended).
+**Bidirectional pairs:** 00↔ADRs; 03↔ADR-6/7/8/9/10; 05↔10 (matrix↔roadmap); 07↔08↔09 (reveal+send path); 11↔04 (IA↔nav); 11↔12↔13 (app surface); 13↔ADR-11; 10↔14 (roadmap↔execution); 02↔16, 14↔16 (architecture↔code-organization); 04↔brand (design↔brand); 07↔ADR-12/13, 08↔ADR-14, 06↔ADR-13, 03↔ADR-13 (remediation decisions); 10↔15, 05↔15 (gap remediation); 03↔ADR-15, 06↔ADR-15 (entity resolution); superseded↔superseding (ADR-3/5↔ADR-6, ADR-4↔ADR-7); 17↔03/05/09/12 (auth ↔ schema/features/API/settings); 00↔ADR-16/17/18; 03↔ADR-16; ADR-10↔ADR-16 (auth transport amended); 17↔ADR-19/20; ADR-6↔ADR-19 (user scoping amended); ADR-17↔ADR-20 (no-enumeration amended); 00↔ADR-19/20; **03/02/06/08↔ADR-21** (two-layer master graph + overlay), ADR-21↔ADR-2/6/15 (amends), ADR-21↔ADR-3/5 (revives as hybrid); 00↔ADR-21.
 
 > **Doc 14 (Phase 1 Execution)** is an execution *overlay*: it sequences the build of M0–M5 and must
 > agree with 05 §21 / 10 (H10) but introduces no new milestone scope. **`brand-identity.md`** is the
@@ -122,7 +128,9 @@
 | **H5** | Suppression — gates reveal **and** send; scopes global/tenant/workspace | 03 §8, 08 §3, ADR-9 |
 | **H6** | DSAR delete fan-out across per-workspace copies + source_imports + contact_reveals + activities | 08 §4, 03 §5 |
 | **H7** | `email_status` enum (`unverified,valid,risky,invalid,catch_all,unknown`) | 03 §5, 06 §9, 07 §3/§11, 09 §3 |
-| **H8** | Roles: workspace roles on `workspace_members` + a distinct tenant-level owner/billing capability | 03 §4, 02 §5, 05 §1, 09 §4 |
+| **H8** | Roles: workspace roles on `workspace_members` + the tenant-level owner capability on **`tenant_members.is_tenant_owner`** (moved off `users` by ADR-19) | 03 §4, 02 §5, 05 §1, 09 §4 |
+| **H16** | Global identity: `users` is global (email/username unique); membership in `tenant_members`; per-workspace **data** model unchanged | 03 §4/§9, 02 §4/§5, 05 §1/§2, 09 §4, 17 §4, ADR-19 |
+| **H17** | Two-layer data: global master graph (Layer 0, system-owned, **not** RLS) + per-workspace overlay (Layer 1, RLS); reveal sources the master channel; global ER (blocking/LSH/Splink) | 03 §5/§9/§12, 02 §3.1/§3.3/§4/§6, 06 §1/§9, 09 §2/§3, 08 §1/§4, 00 §6/§7, ADR-21 |
 | **H9** | RLS via `SET LOCAL app.current_workspace_id` + `app.current_tenant_id` (non-BYPASSRLS role, RDS Proxy GUC reset) | 03 §9, 02 §4, ADR-6, ADR-10 |
 | **H10** | Milestone assignment of a feature | 05 (matrix) + 10 (M0–M… detail) |
 | **H11** | Navigation model (6 destinations; **Credits not a tab**) | 04 §3 == 11 §2; 05 modules; 09 resources |
@@ -136,7 +144,9 @@
 | Term | Definition | Usages |
 |---|---|---|
 | workspace roles (`owner/admin/member/viewer`) | 03 §4 (`workspace_members.role`) | 02 §5, 05 §1, 09 §4 |
-| tenant-level owner/billing capability | 03 §4 (`users.is_tenant_owner`) | 02 §5, 05 §1 |
+| tenant-level owner/billing capability | 03 §4 (`tenant_members.is_tenant_owner` — moved off `users` by ADR-19) | 02 §5, 05 §1, 09 §4 |
+| global identity + tenant membership (`users` global; `tenant_members`; `invitations`; `tenant_domains.join_policy`) | 03 §4 / ADR-19 | 02 §4/§5, 05 §1/§2, 09 §4, 12, 17 §4 |
+| registration model (hybrid: verified-domain join / pending invite / new org; identifier reveals existence) | 17 §2 / ADR-20 | 03 §4, 05 §1, 09 §2, 12 §3/§4 |
 | `email_status` enum | 03 §5 | 06 §9, 07 §3/§11, 09 §3 |
 | `phone_status` | 03 §5 | 06 §7, 09 §3 |
 | `reveal_type` (`email/phone/full_profile`) | 03 §5 (contact_reveals) | 07 §1/§3, 09 §3 |
@@ -149,7 +159,9 @@
 | commercial policy (transparent, no-lock-in, export-on-exit) | ADR-12 / 07 §1A | 00 §7, 05 §11, 12 §4, 10 (M3) |
 | charge-by-verified-result + credit-back | ADR-13 / 07 §3 | 03 §8, 05 §7, 06 §9, 09 §3.2, 10 (M4/M9) |
 | trust & certification program (SOC 2/ISO/registration/Trust Center) | ADR-14 / 08 §15 | 00 §7, 10 (Trust track), 12 §4, 13 §3 |
-| entity-resolution engine (Splink; within-workspace fuzzy dedup) | ADR-15 / 06 §9 | 03 §14, 10 (risk #1), 00 §7 |
+| entity-resolution engine (Splink; **global/cross-source** ER at Layer 0 + within-workspace overlay dedup) | ADR-15 / ADR-21 / 06 §9 | 03 §5.1/§14, 10 (risk #1), 00 §7 |
+| two-layer data: global master graph (Layer 0, system-owned, golden records + `source_records`/`match_links`) + per-workspace overlay (Layer 1) | ADR-21 / 03 §5.1 | 02 §3.1/§3.3/§4/§6, 06 §1/§9, 09 §2/§3, 08 §1/§4, 00 §6/§7, 10 |
+| OpenSearch (global master-graph search) + Typesense (overlay search) | ADR-2 (amended by ADR-21) / 01 §1 | 02 §3.3, 03 §12, 09 §3, 10 |
 | intent/technographic data sources (Bombora/G2/6sense; BuiltWith/HG Insights) | 06 §2 | 03 §6 (`intent_signals.signal_source`), 05 §9/§16, 10 (M8), ADR-8 |
 | DROP data-broker deletion intake (→ DSAR fan-out) | 08 §4.4 | 08 §15, 13 §3, 10 (Trust track), ADR-14 |
 | `source_name` (imports) / `data_source` (reveals) | 03 §5 | 06 §2/§8 |
@@ -158,7 +170,7 @@
 | partitioned tables (`activities,audit_log,contact_reveals,intent_signals,scores,source_imports,outreach_log,provider_calls`) | 03 §12 | 01 §3, 02 |
 | auth tables (`user_sessions,user_oauth_accounts,user_mfa`/`user_mfa_methods,user_mfa_recovery_codes,webauthn_credentials,trusted_devices,user_password_resets,auth_email_tokens,tenant_domains,tenant_sso_configs,tenant_auth_policies,workspace_auth_policies,scim_tokens,oauth_app_clients`) | 03 §4 | 05 §1, 09 §4, 12 §1–§5, 17, ADR-10, ADR-16 |
 | auth origin + token model (dedicated `auth.truepoint.in` IdP; 60 s PKCE code → in-memory 15 min access JWT + rotating refresh cookie on auth origin; JWKS) | 17 §1/§3/§5 / ADR-16 | 09 §1/§4, 03 §4, 05 §1, 10 (M0/M2) |
-| progressive identifier-first login + domain→tenant/SSO routing (`tenant_domains`) | 17 §2/§4 / ADR-17 | 09 §2, 03 §4, 12 §4 |
+| progressive identifier-first login (email/username; **existence-revealed → login/register**; domain→SSO routing) | 17 §2/§4 / ADR-17, ADR-20 | 09 §2, 03 §4, 12 §4 |
 | auth policy + MFA enforcement levels (tenant/workspace, strictest-wins) | 17 §4/§7 / ADR-18 | 12 §3/§4, 03 §4 |
 | stack: Hono/Bun, Aurora SLv2+RDS Proxy, Typesense, Lucia, ClickHouse, SES, Terraform/ECS | 01 §1 (canonical) | 02, 09, 10, ADR-10, ADR-2 |
 | 6-destination nav (Home/Prospect/Sequences/Inbox/Reports/Settings); **Credits not a tab** | 11 §2 | 04 §3, 05, 09 |
@@ -175,11 +187,11 @@
 | ADR | Title | Status | Context | Referenced by |
 |---|---|---|---|---|
 | ADR-1 | Drizzle ORM | Accepted | 01, 03 | 00, 01, 03 |
-| ADR-2 | Typesense search from day one | Accepted (amended) | 01, 03 | 00, 01, 03 §12, 10 |
-| ADR-3 | Three-layer data model | **Superseded by ADR-6** | 03, 08 | (historical) |
+| ADR-2 | Typesense search from day one | Accepted (amended; global index → OpenSearch by ADR-21) | 01, 03 | 00, 01, 03 §12, 10, ADR-21 |
+| ADR-3 | Three-layer data model | **Superseded by ADR-6; revived (hybrid) by ADR-21** | 03, 08 | (historical; revived as Layer 0 by ADR-21) |
 | ADR-4 | Append-only credit ledger | **Superseded by ADR-7** | 07, 03 | (historical; revival path) |
-| ADR-5 | Global shared contact DB | **Superseded by ADR-6** | 02, 03 | (historical) |
-| ADR-6 | Per-workspace multi-tenant model | Accepted | 02, 03 | 00, 02 §4, 03, 05, 08 |
+| ADR-5 | Global shared contact DB | **Superseded by ADR-6; revived (hybrid) by ADR-21** | 02, 03 | (historical; revived as Layer 0 by ADR-21) |
+| ADR-6 | Per-workspace multi-tenant model | Accepted (user scoping amended by ADR-19; no-global-golden reopened by ADR-21) | 02, 03 | 00, 02 §4, 03, 05, 08, ADR-19, ADR-21 |
 | ADR-7 | Per-workspace reveal + credit counter | Accepted | 07, 03 | 00, 07, 03 §8 |
 | ADR-8 | Lead-scoring / intelligence model | Accepted | 03, 06 | 00, 05 §16, 06, 11 |
 | ADR-9 | Outreach engine (enroll & send) | Accepted | 05, 09, 08 | 00, 05, 08, 09, 11 |
@@ -188,10 +200,13 @@
 | ADR-12 | Transparent no-lock-in commercial policy | Accepted | 07, 00 | 00, 05, 07, 12, 15 |
 | ADR-13 | Charge-for-verified-data + credit-back | Accepted | 07, 06, 03 | 00, 03, 05, 06, 07, 09, 10, 15 |
 | ADR-14 | Trust & certification program | Accepted | 08, 10 | 00, 08, 10, 12, 13, 15 |
-| ADR-15 | Entity resolution / dedup engine (Splink) | Accepted | 03, 06 | 00, 03, 06, 10 |
+| ADR-15 | Entity resolution / dedup engine (Splink) | Accepted (made global/cross-source by ADR-21) | 03, 06 | 00, 03, 06, 10, ADR-21 |
 | ADR-16 | Dedicated auth origin + cross-domain token exchange | Accepted | 17, 09, 01 | 00, 03, 05, 09, 10, 12, 17, README (amends ADR-10) |
-| ADR-17 | Progressive identifier-first login + domain tenant routing | Accepted | 17, 03, 12 | 00, 05, 09, 10, 12, 17, README |
+| ADR-17 | Progressive identifier-first login + domain tenant routing | Accepted (no-enumeration amended by ADR-20) | 17, 03, 12 | 00, 05, 09, 10, 12, 17, README, ADR-20 |
 | ADR-18 | Auth policy + MFA enforcement model | Accepted | 17, 12, 03 | 00, 05, 10, 12, 17, README |
+| ADR-19 | Global identity + tenant membership | Accepted | 17, 03 | 00, 02, 03, 05, 09, 12, 17, README (amends ADR-6 user scoping) |
+| ADR-20 | Existence-revealing identifier-first + registration | Accepted | 17, 03, 12 | 00, 03, 05, 09, 17, README (amends ADR-17 no-enumeration) |
+| ADR-21 | Global master graph + per-workspace overlay (two-layer) | Accepted | 02, 03, 06, 08 | 00, 02, 03, 06, 08, 09, 10, README (reopens ADR-6; revives ADR-3/5; amends ADR-2/15) |
 
 **ADR rules:** new significant decision → new ADR + 00 §7 row + lead-doc edit (tripod). Superseding a
 locked ADR → set old `Status: Superseded by ADR-NNNN` + reciprocal link, never overwrite the body.

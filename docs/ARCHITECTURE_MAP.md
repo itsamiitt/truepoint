@@ -5,9 +5,12 @@
 > from the JSON (generated); do not edit paths here by hand.** One-line purposes and the Mermaid graph are
 > authored here. Maintained by the [`enterprise-architecture`](../.claude/skills/enterprise-architecture/SKILL.md) skill.
 
-> **Live end-to-end — auth round-trip + the M1 import vertical.** 101 source files, 0 warnings, 2
-> framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes). **M2 auth** threads
-> password → MFA → workspace and mints/validates the access JWT. **M1 Import & Contacts Core** now lands a
+> **Live end-to-end — auth round-trip + M1 import + the global-identity redesign (ADR-0019/0020).** 130 source files, 0 warnings, 2
+> framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes). **M2 auth** is now
+> global-identity (`users` global + `tenant_members`): the identifier takes email/username and either threads
+> sign-in (password → MFA → **org** → workspace) or branches to **registration** (email → emailed-code
+> **verify** → profile → hybrid org placement: auto-join verified domain / accept invite / found a new org),
+> minting/validating the access JWT (the session carries its scope). **M1 Import & Contacts Core** now lands a
 > full vertical: a per-workspace CSV import dedupes contacts/accounts (encrypted PII + blind index) with
 > `source_imports` provenance, behind RLS, surfaced by a masked contacts list + import wizard. `apps/admin`
 > remains a **target**. Design: [10-roadmap.md](./planning/10-roadmap.md) M1,
@@ -29,7 +32,7 @@ packages/                       # side-effect-free libraries, each exported via 
   auth/    src/                 # self-built auth primitives (no HTTP)
 apps/                           # deployable processes (thin transport adapters)
   api/   src/                   # Hono on Bun — validates the access JWT; never issues tokens  [LIVE]
-    middleware/{authn,tenancy,error}.ts  features/{auth,import,reveal}/  app.ts  server.ts
+    middleware/{authn,tenancy,error,rateLimit}.ts  features/{auth,import,reveal}/  app.ts  server.ts
   auth/  src/                   # auth.truepoint.in IdP (Next 15) — screens + /token/* + JWKS  [LIVE]
   web/   src/                   # app.truepoint.in (Next 15) — /auth/callback + the import wizard  [LIVE]
     app/{page,import,auth/callback}  features/import/  lib/{authClient,pkce,publicConfig}
@@ -57,13 +60,26 @@ apps/                           # deployable processes (thin transport adapters)
   dedup lookups/writes + masked list — the only place that touches contact/account SQL)
 - **targets:** the reveal transaction + credits (M3) land in this same slice
 
-### auth — *M2* ([05 §1](./planning/05-features-modules.md), [17](./planning/17-authentication.md))
+### auth — *M2, global identity* ([05 §1](./planning/05-features-modules.md), [17](./planning/17-authentication.md), ADR-0019/0020)
 - **api:** `apps/api/src/features/auth/{routes,index}.ts` (GET `/api/v1/auth/session` from verified claims)
-- **db:** `packages/db/src/repositories/userRepository.ts` (user/identity aggregate: users + sessions)
-- **shared primitives:** `packages/auth/*`; **IdP origin:** `apps/auth/*`; **app-domain:** `apps/web` callback + token client
+- **db:** `packages/db/src/repositories/userRepository.ts` (global user/identity: users + sessions +
+  `authEmailTokenRepository` for email-verification codes); `workspaceRepository.ts` `tenantSsoConfigRepository`
+- **shared primitives:** `packages/auth/*` — login (`identifierLookup`/`login`/`flow`), `botCheck`/`rateLimit`
+  anti-abuse (Turnstile in `apps/auth/src/shared/TurnstileWidget.tsx`), **registration**
+  (`registration` provisioning + `emailVerification` codes + `signupTransaction`), **invitations**
+  (`invitations` — mint a link token + accept-by-token; new invitees auto-accept by email at signup), and
+  **SSO** (`sso/{types,providers,mockIdp,jit}` + `ssoTransaction` — one provider seam over OIDC/SAML with a
+  dev mock IdP; callback JIT-provisions the identity + membership)
+- **IdP origin:** `apps/auth/*` screens — sign-in (identifier → password → mfa → **org** → workspace, with
+  `app/org/*` the org selector), **registration** (`app/signup/*` + `app/verify`, mailed via `lib/mailer`),
+  and **SSO** (`app/sso/*` handoff + `oidc`/`saml` callbacks + dev `mock` IdP, via `lib/{ssoConfig,completeSso}`)
+  + `/token/*` + JWKS
+- **app-domain:** `apps/web` callback + in-memory token client
 
 ### workspaces — *M2* ([05 §2](./planning/05-features-modules.md))
-- **db:** `packages/db/src/repositories/workspaceRepository.ts` (RLS-scoped list of a user's workspaces)
+- **db:** `packages/db/src/repositories/workspaceRepository.ts` — RLS-scoped workspaces plus the
+  **tenant-membership / domain / invitation** repos and **new-org provisioning** (`tenantRepository`
+  + `tenantMemberRepository.joinOrg`) for registration placement (the `tenant_members` model, ADR-0019/0020)
 
 _Remaining domains (`search`, `lists`, `enrichment`, `scoring`, `billing`, `outreach`, `compliance`, … +
 the 6 web destinations) have **no code yet**; targets in [05](./planning/05-features-modules.md) +
@@ -82,7 +98,7 @@ the 6 web destinations) have **no code yet**; targets in [05](./planning/05-feat
 | **Inbox** | inbox | `/inbox`, `/tasks` |
 | **Reports** | reports, data-health | `/reports/*` |
 | **Settings** | admin-settings, billing, compliance, api-public, **auth** | `/settings/*`, `/billing` |
-| **(auth origin)** | auth | `auth.truepoint.in/login · /password · /token/* · /.well-known/jwks.json` |
+| **(auth origin)** | auth | `auth.truepoint.in/login · /password · /signup · /verify · /sso · /sso/{oidc,saml}/callback · /org · /token/* · /.well-known/jwks.json` |
 
 ## DEPENDENCY section (which packages depend on which)
 
@@ -132,7 +148,8 @@ flowchart TD
 - **`packages/core`** — `index.ts` (public surface: `runImport`, `parseImportFile`, `blindIndex`, `encrypt/decryptPii`);
   domain code under `src/import/` is bucketed to the `import` feature.
 - **`packages/auth`** — the self-built auth primitives + `index.ts`.
-- **`apps/api`** — `app.ts`, `server.ts`; **`apps/api/middleware`** — `authn.ts`, `tenancy.ts`, `error.ts`.
+- **`apps/api`** — `app.ts`, `server.ts`; **`apps/api/middleware`** — `authn.ts`, `tenancy.ts`, `error.ts`,
+  `rateLimit.ts` (coarse per-caller throttle via the shared `packages/auth` limiter).
 - **`apps/auth`** — `middleware.ts` + `app/` screens/token endpoints + `shared/` + `lib/` (see JSON).
 - **`apps/web/app`** — `layout`, `page`, `import/page` (the wizard route), `auth/callback`;
   **`apps/web/lib`** — `authClient`, `pkce`, `publicConfig`. (The import slice lives under `features/import/`.)

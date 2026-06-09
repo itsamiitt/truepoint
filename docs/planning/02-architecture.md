@@ -1,8 +1,10 @@
 # 02 — Architecture
 
-> How LeadWolf is laid out and how a request becomes data: two repos, a handful of ECS services, and
-> hard per-workspace isolation. Stack rationale in [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md);
-> tenancy model in [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md).
+> How LeadWolf is laid out and how a request becomes data: two repos, a handful of ECS services, and a
+> **two-layer** data model — a system-owned **global master graph** (Layer 0) beneath hard
+> **per-workspace** overlays (Layer 1). Stack rationale in [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md);
+> tenancy in [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md); the master graph in
+> [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md).
 
 ## 1. Repositories & layout
 
@@ -56,8 +58,10 @@ barrel/public-interface strategy, naming, and file-size targets — is specified
 ## 2. Runtime services
 
 All run on **ECS Fargate** behind an ALB ([01 §3](./01-tech-stack.md)). There is **no standalone
-scraper service** — the proprietary collection engine was removed; data enters per workspace via import
-+ enrichment providers ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
+scraper service** — the proprietary collection engine was removed; data enters via import + enrichment
+providers (+ public registries and a future opt-in co-op), feeding **both** the per-workspace overlay and
+the **global master graph** ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md),
+[ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
 
 | Service | Runtime | Responsibility | Scales on |
 |---|---|---|---|
@@ -75,10 +79,13 @@ elevation) and a **dedicated privileged DB role**. It is **staff-only, not custo
 domain, separate ALB target) and is *never* the customer app behind a flag — see
 [13](./13-platform-admin.md) and [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md).
 
-**Worker queues:** **enrichment** (Apollo/ZoomInfo/Clearbit), **scoring** (lead scores + intent
+**Worker queues:** **enrichment** (Apollo/ZoomInfo/Clearbit), **entity-resolution** (ingest → normalize →
+block/LSH → Splink → survivorship → golden record; batch on AWS Batch / Spark —
+[ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)), **scoring** (lead scores + intent
 signals), **imports** (CSV/XLSX → per-workspace dedup → insert), **CRM sync** (Salesforce/HubSpot/
 Pipedrive), **outreach delivery/send** (sequences → SES; LinkedIn/Sales-Nav human-in-the-loop),
-**webhook delivery**, **search-sync** (Aurora logical-replication CDC → Typesense).
+**webhook delivery**, **search-sync** (Aurora CDC → **OpenSearch** (global) + **Typesense** (overlay) +
+**ClickHouse**).
 
 ## 3. Request & job flow
 
@@ -87,7 +94,10 @@ Pipedrive), **outreach delivery/send** (sequences → SES; LinkedIn/Sales-Nav hu
 The reveal is the load-bearing money path. It is described identically here, in
 [07 §3](./07-billing-credits.md), [08 §3](./08-compliance.md), and [09 §3](./09-api-design.md).
 Credits are a **tenant counter** (`tenants.reveal_credit_balance`); reveal is **per-workspace,
-first-reveal-wins** ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)).
+first-reveal-wins** ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)). The
+unlocked email/phone now comes from the **master channel** (`master_emails`/`master_phones`,
+[ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)), copied into the workspace overlay on
+first reveal.
 
 ```
 BEGIN;  -- SET LOCAL app.current_tenant_id + app.current_workspace_id already applied
@@ -143,17 +153,21 @@ sequenceDiagram
   W->>DB: upsert contact (workspace-scoped) + source_imports.raw_data (per-import provenance)
 ```
 
-There is **no golden-record merge and no field-level provenance**: each import appends a
-`source_imports` row holding the raw payload, and contacts are per-workspace copies
-([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
+Each import/enrichment writes the **workspace overlay** copy (+ per-import `source_imports`) **and** appends
+a `source_records` row to the **global master graph**, which the **entity-resolution** pipeline matches into
+a golden record (§3.3); the overlay copy references the resolved `master_person_id` / `master_company_id`
+([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
 
 ### 3.3 CDC, search & analytics
 
-Aurora **logical replication** feeds a **search-sync** worker that indexes contacts/accounts into
-**Typesense** (behind `SearchPort`) from day one ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)).
-When an event table (e.g. `activities`) crosses ~50M rows, the same CDC stream (Debezium) fans out to
-**self-hosted ClickHouse** for event analytics. Search returns **masked** rows; PII unmasks only through
-the reveal transaction (§3.1).
+Aurora **logical replication** feeds a **search-sync** worker. The **global master graph** indexes into
+**OpenSearch** — a sharded inverted index with facet/range aggregations and `search_after` cursoring, sized
+for the billions-row universe ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)); the
+smaller **per-workspace overlay** stays on **Typesense** (both behind `SearchPort`,
+[ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md) amended). High-cardinality facet counts and
+event analytics offload to **self-hosted ClickHouse** via the same CDC stream (Debezium). Search returns
+**masked** rows only; PII (a `master_emails`/`master_phones` channel) unmasks solely through the reveal
+transaction (§3.1).
 
 ### 3.4 Realtime
 
@@ -166,19 +180,27 @@ instances so any connected `api` task can serve a given subscriber.
 See [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md) for the full rationale
 (supersedes ADR-0005).
 
-- **Tenancy chain:** `tenant → workspace → workspace_member → user`. A **tenant** is the paying org
-  (plan, `seat_limit`, `workspace_limit`, `reveal_credit_balance`). A **workspace** is the
-  data-isolation + collaboration scope. A **user** belongs to one tenant and is granted per-workspace
-  access via `workspace_members`.
-- **Per-workspace data, no global contact DB.** Each workspace owns its **own** copies of `contacts`
-  and `accounts` (carrying both `tenant_id` and `workspace_id`); they are **not** shared across
-  workspaces. There is no shared golden record. Provenance is per-import via `source_imports.raw_data`
-  (no field-level lineage, no cross-source dedup/merge, no replay). Dedup is per-workspace via unique
-  `(workspace_id, email_blind_index)` / `(workspace_id, linkedin_public_id)` / `(workspace_id,
-  sales_nav_lead_id)`.
+- **Tenancy chain:** a **global `users` identity** belongs to many **tenants** via `tenant_members`,
+  each tenant has **workspaces**, and per-workspace access is `workspace_members`
+  ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)). A **tenant** is the paying
+  org (plan, `seat_limit`, `workspace_limit`, `reveal_credit_balance`); a **workspace** is the
+  data-isolation + collaboration scope.
+- **Two-layer data ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** **Layer 0 —
+  global master graph:** a system-owned, globally entity-resolved universe (`master_persons`/
+  `master_companies` + `source_records`/`match_links`), **not** workspace-RLS-scoped, reachable only via
+  masked search + paid reveal. **Layer 1 — per-workspace overlay:** each workspace owns its `contacts`/
+  `accounts` copies (carrying `tenant_id` + `workspace_id`, referencing a `master_*_id`), isolated by RLS,
+  with per-import `source_imports` provenance and per-workspace dedup uniques
+  `(workspace_id, email_blind_index)` / `(workspace_id, linkedin_public_id)` /
+  `(workspace_id, sales_nav_lead_id)`. Cross-source dedup / merge / replay happen **globally** at Layer 0
+  (the ER pipeline), not per-workspace.
 - **Isolation:** Postgres **Row-Level Security**. Workspace-scoped tables use
   `USING (workspace_id = current_setting('app.current_workspace_id')::uuid)`; tenant-scoped tables
-  (`tenants`, `users`, `api_keys`, `purchases`, tenant-level `audit_log`) use `app.current_tenant_id`.
+  (`tenants`, `tenant_members`, `api_keys`, `purchases`, tenant-level `audit_log`) use
+  `app.current_tenant_id` — the **global `users` identity is auth-service-owned, not tenant-RLS-scoped**,
+  and the **Layer-0 master-graph tables** (`master_*` / `source_records` / `match_links`) are
+  **system-owned, not RLS-scoped** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) —
+  reachable only via masked search + paid reveal.
   The `api` runs `SET LOCAL app.current_tenant_id` + `app.current_workspace_id` per request under a
   non-`BYPASSRLS` role. **RDS Proxy** transaction pooling resets the GUC per checkout, so it must be set
   inside the transaction. App-layer **AsyncLocalStorage** context carries the same IDs as
@@ -189,9 +211,9 @@ See [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md) for the 
   ([13](./13-platform-admin.md), [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)).
 
 ```
-Tenant-scoped:    tenants, users, api_keys, purchases, stripe_customers, tenant_sso_configs,
-                  user_sessions / user_oauth_accounts / user_mfa / user_password_resets,
-                  tenant-level audit_log rows
+Global identity:  users (+ user_sessions / user_oauth_accounts / user_mfa / trusted_devices)
+Tenant-scoped:    tenants, tenant_members, tenant_domains, invitations, api_keys, purchases,
+                  stripe_customers, tenant_sso_configs, tenant-level audit_log rows
 Workspace-scoped: workspaces, workspace_members, contacts, accounts, source_imports,
                   contact_reveals, activities, scores, intent_signals, lists, saved_searches,
                   outreach_sequences / outreach_steps / outreach_log, suppression_list (workspace),
@@ -202,13 +224,13 @@ Workspace-scoped: workspaces, workspace_members, contacts, accounts, source_impo
 
 Authorization splits in two: a **workspace role** (`owner`/`admin`/`member`/`viewer` on
 `workspace_members`) governs data access within a workspace, while the distinct **tenant-level**
-capability (`users.is_tenant_owner`) governs billing, workspace creation, and seat/workspace limits.
+capability (`tenant_members.is_tenant_owner`) governs billing, workspace creation, and seat/workspace limits.
 
 | Concern | Mechanism | Package / where |
 |---|---|---|
 | AuthN | Self-built auth: Lucia sessions + OAuth/MFA/SAML; hashed API keys | `auth`, `api` middleware |
 | Workspace AuthZ | Role check (`owner`/`admin`/`member`/`viewer`) on `workspace_members` | `api` middleware |
-| Tenant AuthZ | `users.is_tenant_owner` for billing / workspace / seat-limit actions | `api` middleware, `core` |
+| Tenant AuthZ | `tenant_members.is_tenant_owner` for billing / workspace / seat-limit actions | `api` middleware, `core` |
 | Tenancy isolation | `SET LOCAL` GUC (RLS) + AsyncLocalStorage context | `api`, `db` |
 | Entitlements/quota | Middleware runs *before* the credit check | `core` |
 | Idempotency | `Idempotency-Key` header + DB unique keys | `api`, `core` |
@@ -224,11 +246,13 @@ the rule that domain logic stays in `core` (HTTP-agnostic) while `apps/api` stay
 
 ## 6. Data flow guarantees (the contract)
 
-1. **Every contact carries its workspace and a per-import provenance row.** All writes to `contacts`/
-   `accounts` are workspace-scoped; each import appends `source_imports.raw_data`. There is no golden
-   record and no field-level lineage ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
-2. **Import, manual entry, and provider enrichment share one path** — `normalize → per-workspace dedup
-   → upsert` (see [03](./03-database-design.md) and [06](./06-enrichment-engine.md)).
+1. **Two layers, one resolved universe.** The system-owned **master graph** holds golden records +
+   `source_records` evidence (global ER — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md));
+   every **overlay** `contacts`/`accounts` write is workspace-scoped, references its `master_*_id`, and
+   appends per-import `source_imports.raw_data`.
+2. **Import, manual entry, and provider enrichment share one path** — `normalize → per-workspace dedup →
+   upsert overlay`, **and** append a `source_records` row that the global ER pipeline resolves into the
+   master graph (see [03](./03-database-design.md) and [06](./06-enrichment-engine.md)).
 3. **Money mutations are transactional and idempotent.** The reveal decrements the tenant counter under
    `FOR UPDATE` in one transaction (§3.1), keyed by `(workspace_id, contact_id, reveal_type)` +
    `Idempotency-Key`; Stripe top-ups are idempotent on `purchases.stripe_event_id`

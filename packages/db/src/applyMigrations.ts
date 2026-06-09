@@ -35,6 +35,16 @@ const BOOTSTRAP = `
   GRANT USAGE ON SCHEMA public TO leadwolf_app;
 `;
 
+// Table/sequence privileges for the app role, applied AFTER tables exist (RLS still gates which rows it sees).
+const GRANTS = `
+  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO leadwolf_app;
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_app;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO leadwolf_app;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO leadwolf_app;
+`;
+
 async function exists(path: string): Promise<boolean> {
   try {
     await stat(path);
@@ -58,6 +68,8 @@ export async function applyMigrations(connectionString: string): Promise<void> {
     for (const file of files) {
       await sql.unsafe(await readFile(join(rlsFolder, file), "utf8"));
     }
+    // Grant the non-BYPASSRLS app role access to the now-created tables/sequences (RLS still gates rows).
+    await sql.unsafe(GRANTS);
   } finally {
     await sql.end();
   }

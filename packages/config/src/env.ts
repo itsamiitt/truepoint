@@ -31,6 +31,9 @@ export const appEnvSchema = z.object({
 
   BLIND_INDEX_KEY: z.string().min(8),
 
+  // Cloudflare Turnstile secret for the identifier step (ADR-0020). Optional: absent → dev passes, prod fails.
+  TURNSTILE_SECRET: z.string().optional(),
+
   TYPESENSE_URL: z.string().url().optional(),
   TYPESENSE_API_KEY: z.string().optional(),
   SMTP_URL: z.string().optional(),

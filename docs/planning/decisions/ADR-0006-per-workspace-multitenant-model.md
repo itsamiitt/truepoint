@@ -4,6 +4,7 @@
 - **Date:** 2026-05-29
 - **Context doc:** [02-architecture.md](../02-architecture.md), [03-database-design.md](../03-database-design.md)
 - **Supersedes:** [ADR-0005](./ADR-0005-multi-tenancy-and-global-contact-db.md) (global shared contact DB) and [ADR-0003](./ADR-0003-three-layer-data-model.md) (three-layer raw/provenance/golden model)
+- **Amended by:** [ADR-0019](./ADR-0019-global-identity-and-tenant-membership.md) (user-scoping → global identity + `tenant_members`); [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md) (the *no-global-golden-record* clause **reopened** — a global master graph is added as **Layer 0**; the per-workspace model below stands as the **Layer 1 overlay**)
 
 ## Context
 
@@ -23,6 +24,12 @@ This requires a tenancy layer the prior ADRs didn't have and reverses two locked
 **Data ownership:** contacts and accounts are **per-workspace copies** carrying both `tenant_id` (denormalized) and `workspace_id`. No global golden record. Provenance for each contact is captured by `source_imports` (raw source payload per import) rather than a per-field lineage graph.
 
 **Isolation:** Postgres **RLS** keyed by a session GUC — `SET LOCAL app.current_workspace_id` (and `app.current_tenant_id` for tenant-scoped tables) — **plus** the retained app-layer AsyncLocalStorage context (belt-and-suspenders). Queries run under a non-`BYPASSRLS` role; the GUC is reset per pooled connection (PgBouncer transaction mode note).
+
+> **User identity amended by [ADR-0019](./ADR-0019-global-identity-and-tenant-membership.md) (2026-06-09):**
+> a user is now a **global identity** (`users` is global; one login across many orgs), and org membership
+> moved to a new **`tenant_members`** table (carrying `is_tenant_owner` + status). The per-workspace **data**
+> model, RLS, and the `provision_new_signup` tree above are **unchanged** — only the user↔tenant scoping
+> (`tenant → workspace → workspace_member → user`) changed to `identity ↦ many tenant_members ↦ workspaces`.
 
 ## Rationale
 
@@ -48,4 +55,4 @@ The founders chose to optimize for per-team curation and control over a shared a
 - **Future:** a read-only cross-workspace/cross-tenant "tenant search" could aggregate overlays later (see [10 Beyond](../10-roadmap.md)).
 
 ## Revisit if
-DSAR fan-out cost, duplicate-storage cost, or the lack of a shared asset becomes painful — revisit the hybrid model (the superseded ADR-0005/0003 bodies are the starting point).
+DSAR fan-out cost, duplicate-storage cost, or the lack of a shared asset becomes painful — revisit the hybrid model (the superseded ADR-0005/0003 bodies are the starting point). **→ Triggered (2026-06-09): [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md) adopts the hybrid — a global master graph (Layer 0) beneath this per-workspace overlay (Layer 1).**

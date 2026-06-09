@@ -8,8 +8,11 @@
 > ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)) — **Lucia / arctic / @oslojs/otp /
 > @node-saml/node-saml / @node-rs/argon2 / rate-limiter-flexible** — extended for cross-domain tokens
 > ([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)), progressive
-> login ([ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md)),
-> and per-scope auth policy ([ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)).
+> login + **email/username, existence-reveal & registration**
+> ([ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md),
+> [ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)), **global
+> identity** ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)), and per-scope auth
+> policy ([ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)).
 > Tables in [03 §4](./03-database-design.md#4-tenancy--auth); API surface in
 > [09 §4](./09-api-design.md#4-auth--authorization); settings in [12](./12-settings.md).
 
@@ -41,49 +44,60 @@ to `packages/auth`/`packages/core`/`packages/db` and holds **no application busi
 
 ## 2. Progressive (identifier-first) login
 
-Entry is always **`auth.truepoint.in/login`**. The identifier step resolves the email's domain
-([§4](#4-multi-tenancy-auth-model)) and routes to exactly one Step-2 path. Error messages are **generic**
-— never reveal which factor failed or whether an account exists ("check your credentials"), so the
-identifier step does not leak account existence.
+Entry is always **`auth.truepoint.in/login`**. The identifier accepts an **email *or* username** (an
+optional global-unique alias — [ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)).
+The step **resolves whether the identity exists** and branches: an existing identity routes to the right
+Step-2, an unknown one starts **registration** (`/signup`). Revealing existence is a deliberate trade for the
+registration UX, **mitigated** by an invisible **Turnstile** + per-IP/per-identifier rate-limiting +
+progressive lockout ([ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md),
+[§6](#6-security-layers)). The **credential** step stays uniform — it never reveals *why* it failed. **MFA**
+runs right after primary auth; **org** then **workspace** selection follow ([§4](#4-multi-tenancy-auth-model)).
 
 ```mermaid
 flowchart TD
-  L[/login — identifier/] -->|email| LK{domain lookup}
+  L[/login — email or username + Turnstile/] --> EX{identity exists?}
+  EX -->|no| SU[/signup → verify → placement/]
+  EX -->|yes| RT{auth method}
+  RT -->|domain SSO enforced| SSO[/sso handoff/]
+  RT -->|password set| PW[/password + passkey/]
+  RT -->|passwordless| ML[/magic link/]
   L -->|Continue with Google| OA[/oauth/callback/]
-  LK -->|claimed domain, SSO enforced| SSO[/sso handoff/]
-  LK -->|claimed domain, password ok| PW[/password/]
-  LK -->|passwordless / no password set| ML[/magic link sent/]
-  LK -->|personal / unclaimed| PW
-  PW -->|passkey present| WK[WebAuthn prompt]
-  PW -->|ok| MFA{MFA required?}
-  WK --> MFA
-  OA --> MFA
-  ML --> V[/verify/] --> MFA
-  SSO --> CB[/sso callback + JIT/] --> MFA
+  SSO --> CB[/sso/{oidc,saml}/callback + JIT/]
+  PW --> PA{primary auth ok?}
+  ML --> V[/verify/] --> PA
+  OA --> PA
+  CB --> PA
+  SU --> PA
+  PA -->|yes| MFA{MFA required?}
   MFA -->|yes| CH[/mfa challenge/]
-  MFA -->|no| WS{multiple workspaces?}
-  CH -->|ok / trust device 30d| WS
-  CH -.->|recovery code| WS
+  MFA -->|no| ORG
+  CH -->|ok / trust device 30d| ORG{member of >1 org?}
+  ORG -->|yes| OS[/org selector/]
+  ORG -->|no| WS{>1 workspace?}
+  OS --> WS
   WS -->|yes| SEL[/workspace selector/]
   WS -->|no| ISS[issue 60s code]
   SEL --> ISS
   ISS --> APP[app.truepoint.in/auth/callback → exchange]
-  PW -.invalid x N.-> LOCK[progressive lockout]
-  CH -.invalid x N.-> LOCK
+  PA -.invalid x N.-> LOCK[progressive lockout]
 ```
 
 **Paths from the identifier step:**
-- **2A · Password** — email shown as a locked chip with back-nav; show/hide; forgot-password link;
-  passkey prompt if a `webauthn_credentials` row exists for the user/device.
-- **2B · SSO handoff** — "Your organization uses SSO"; redirect to the IdP with `RelayState`/`state`;
+- **Exists → 2A · Password** — email/username shown as a locked chip with back-nav; show/hide;
+  forgot-password link; passkey prompt if a `webauthn_credentials` row exists.
+- **Exists → 2B · SSO handoff** — "Your organization uses SSO"; redirect to the IdP with `RelayState`/`state`;
   misconfiguration falls back to a support path, never a blank error.
-- **2C · Magic link** — confirmation that mail was sent; resend with a cooldown timer; opens on `/verify`.
-- **2D · Verify** (`/verify`) — validates the magic-link/OTP token on load; `expired` / `already-used`
-  states; auto-redirect on success.
+- **Exists → 2C · Magic link** (`/magic` → `/verify`) — confirmation that mail was sent; resend with a
+  cooldown; `/verify` validates the `auth_email_tokens` token (`expired`/`already-used` states).
 - **Social OAuth** — "Continue with Google/Microsoft" via `arctic`; resolves on `/oauth/callback`.
+- **Not registered → Registration** (`/signup`): (1) **email** (prefilled) → verify via `auth_email_tokens`
+  (OTP/link) on `/verify`; (2) **profile** — name, optional username (unique), password *or* passkey;
+  (3) **org placement** ([§4](#4-multi-tenancy-auth-model)) — verified company domain → join; pending invite →
+  accept; else create a **new org**.
 
-Each path is an explicit state machine with `idle → submitting → challenge → error → success` transitions;
-every transition that fails authentication routes to the generic error and increments the lockout counters
+After primary auth, **MFA** (identity-level) runs first, then **org selection** (if the identity belongs to
+more than one org), then **workspace selection** (if the chosen org has more than one) — single options
+auto-select. Every failed credential attempt routes to the generic error and increments the lockout counters
 ([§6](#6-security-layers)).
 
 ## 3. Cross-domain token contract
@@ -119,19 +133,30 @@ held in **Redis** (TTL), not a Postgres table, so it scales horizontally with 1M
 
 ## 4. Multi-tenancy auth model
 
-- **Tenant resolution from email domain.** A new **`tenant_domains`** table (claimed + DNS-TXT verified)
-  maps a verified domain → `tenant_id` and that tenant's SSO config. The identifier step looks up the
-  domain to choose the Step-2 path. Unclaimed/personal domains fall through to password / social / magic.
-- **Per-tenant SSO** via the extended **`tenant_sso_configs`** (SAML 2.0 + OIDC; metadata, attribute
-  mapping, JIT, default role, `enforced`) — see [§8](#8-sso--scim-architecture).
-- **Per-workspace roles** are unchanged and assigned post-authentication: `workspace_members.role ∈
-  owner|admin|member|viewer`; the tenant-level capability `users.is_tenant_owner` stays **orthogonal**
-  (the two-axis RBAC of [09 §4](./09-api-design.md#4-auth--authorization), drift hazard **H8**). A user with
-  no workspace yet is routed to workspace creation/selection before a code is issued.
+- **Global identity, many orgs** ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)):
+  a person is **one** identity (`users` — global-unique email + optional username + credentials/MFA) that
+  belongs to **many** tenants via **`tenant_members`** (carrying `is_tenant_owner` + `status`); each tenant
+  has many workspaces. The identifier lookup is a single global query, before any tenant context.
+- **Tenant resolution from email domain.** **`tenant_domains`** (claimed + DNS-TXT verified) maps a verified
+  domain → `tenant_id` + that tenant's SSO config, and carries a **`join_policy`** (`sso_only` / `auto_join` /
+  `request_access`) governing how a new matching email is placed at registration. The identifier step uses it
+  to choose the Step-2 path (SSO when enforced). Unclaimed/personal domains fall through to password / social / magic.
+- **Org placement at registration** (the hybrid model, [ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)):
+  verified domain `auto_join` → create a `tenant_member` (default role); `request_access` → pending; else a
+  **pending `invitations`** row for the email → accept (its tenant/workspace/role); else → **`provisionNewSignup`**
+  (tenant + default workspace + owner `tenant_member` + owner `workspace_member` + audit, one tx).
+- **Post-auth selection:** **org selector** if the identity has >1 active `tenant_member`; then **workspace
+  selector** if the chosen tenant has >1 accessible workspace (single options auto-select). The chosen
+  `tenant_id` + `workspace_id` bind into the session + the cross-domain code; "switch org/workspace" re-issues a token.
+- **Per-tenant SSO** via **`tenant_sso_configs`** (SAML 2.0 + OIDC; metadata, attribute mapping, JIT, default
+  role, `enforced`) — see [§8](#8-sso--scim-architecture).
+- **Two-axis RBAC** (drift hazard **H8**): per-workspace `workspace_members.role ∈ owner|admin|member|viewer`,
+  and the **tenant-level** capability **`tenant_members.is_tenant_owner`** (moved off `users` by ADR-0019) —
+  orthogonal ([09 §4](./09-api-design.md#4-auth--authorization)).
 - **Auth-policy overrides** (`tenant_auth_policies` / `workspace_auth_policies`,
   [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)): enforce MFA, restrict allowed
-  methods, disable social login, require SSO, IP allowlist (CIDR), session timeout. The **effective policy
-  is the strictest** of the applicable tenant + workspace scopes.
+  methods, disable social login, require SSO, IP allowlist (CIDR), session timeout — **strictest** of the
+  applicable tenant + workspace scopes.
 
 ## 5. Session, token & device architecture
 
@@ -152,11 +177,14 @@ rotation never invalidates live tokens.
 
 ## 6. Security layers
 
-- **Brute-force / progressive lockout** — `rate-limiter-flexible` with **per-IP and per-account** counters
-  in Redis; exponential backoff → captcha escalation → temporary account lock. Every auth endpoint is
-  rate-limited ([09 §1](./09-api-design.md#1-conventions)).
-- **No account enumeration** — identifier, password, reset, and magic-link responses are indistinguishable
-  for existing vs non-existing accounts.
+- **Brute-force / progressive lockout** — `rate-limiter-flexible` with **per-IP and per-identifier** counters
+  in Redis; exponential backoff → captcha escalation → temporary lock. Every auth endpoint is rate-limited
+  ([09 §1](./09-api-design.md#1-conventions)).
+- **Identifier existence is revealed, but throttled** ([ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)) —
+  the identifier step branches login vs **registration**, so it *does* reveal whether an identity exists. This
+  is gated by an invisible **Turnstile** + per-IP/per-identifier rate-limiting + lockout (enumeration is
+  slow/throttled, not impossible). The **credential** step (password/SSO/magic) stays uniform — it never
+  reveals *why* it failed.
 - **Bot detection at the identifier step** — invisible challenge (Turnstile/hCaptcha), velocity checks,
   **disposable-domain blocking** (reuses the existing `signupGuards`, [05 §1](./05-features-modules.md#1-auth--tenancy--mvp-m2)),
   honeypot field.
@@ -182,8 +210,9 @@ rotation never invalidates live tokens.
 - **SAML 2.0** SP-initiated **and** IdP-initiated (`@node-saml/node-saml`); **OIDC / OAuth 2.0**.
 - **Fixed callback URLs (shown in the admin UI):** ACS `https://auth.truepoint.in/sso/saml/callback`;
   OIDC redirect `https://auth.truepoint.in/sso/oidc/callback`; plus the Entity ID.
-- **JIT provisioning** on first SSO login (creates the `users` row + default-role membership per
-  `tenant_sso_configs.default_role`); **attribute mapping** for email/name/role/department.
+- **JIT provisioning** on first SSO login (creates the `users` identity if new + a `tenant_member` +
+  default-role `workspace_member` per `tenant_sso_configs.default_role`); **attribute mapping** for
+  email/name/role/department.
 - **SCIM 2.0** lifecycle (provision / update / deprovision) via **`scim_tokens`** +
   `users.scim_external_id`.
 - **Per-tenant management UI** ([12 §4](./12-settings.md#4-tenant-settings-tenant-owner--billing--tier-as-noted)):
@@ -207,7 +236,8 @@ New closed `action` values (added to the audit-actions enum): `login.success`, `
 
 **On `auth.truepoint.in` (`apps/auth`)** — all SSR with no-JS initial render, mobile-first at 375 px,
 keyboard-first, WCAG 2.1 AA, using the existing design tokens ([04](./04-ui-ux-design.md)):
-`/login`, `/password`, `/sso`, `/magic`, `/verify`, `/mfa`, `/workspace`, `/forgot`, `/reset`, `/signup`,
+`/login` (email or username + Turnstile), `/password`, `/sso`, `/magic`, `/verify`, `/mfa`, `/org`,
+`/workspace`, `/forgot`, `/reset`, `/signup` (multi-step: email → verify → profile → org placement),
 `/oauth/callback`, `/sso/saml/callback`, `/sso/oidc/callback`, `/token/exchange`, `/token/refresh`,
 `/.well-known/jwks.json`, and **Account Security** (`/account/security`): password + strength meter, active
 sessions, MFA enrollment wizard (TOTP QR / SMS / WebAuthn), recovery codes view/regenerate, trusted
@@ -237,7 +267,9 @@ only.
   [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md),
   [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md),
   [ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md),
-  [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md).
+  [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md),
+  [ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md),
+  [ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md).
 - **Linked from:** [00 §7](./00-overview.md#7-decision-log), [05 §1](./05-features-modules.md#1-auth--tenancy--mvp-m2),
   [09 §4](./09-api-design.md#4-auth--authorization), [10 M2/M11](./10-roadmap.md), [12](./12-settings.md), README.
 
@@ -246,7 +278,11 @@ only.
    immediate per-request revocation outweighs stateless validation (today handled by the `sid` denylist, §5).
 2. **Silent-refresh transport** — background `fetch` (chosen, compatible with `X-Frame-Options: DENY`) vs a
    hidden iframe; revisit only if a browser blocks same-site credentialed fetch.
-3. **Bot/CAPTCHA vendor** — Cloudflare Turnstile vs hCaptcha at the identifier step (cost/UX).
+3. **Bot/CAPTCHA vendor** — **Cloudflare Turnstile** chosen at the identifier step
+   ([ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)); hCaptcha
+   remains a fallback if cost/UX warrants.
+6. **Username normalization** — case-folding (citext) + reserved-name list + min length for the optional
+   global-unique username alias ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)).
 4. **Trusted-device fingerprinting** — signal set and privacy posture for the 30-day trust window.
 5. **SCIM scope at MVP-Enterprise** — full lifecycle vs provision/deprovision only (carried from
    [12 §7](./12-settings.md#7-schema--open-items)).

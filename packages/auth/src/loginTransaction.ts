@@ -13,19 +13,19 @@ const key = (id: string) => `logintxn:${id}`;
 
 export interface LoginTransaction {
   userId: string;
-  tenantId: string;
   appOrigin: string;
   codeChallenge: string;
   state: string;
   clientIp: string;
   mfaVerified: boolean;
+  tenantId?: string; // chosen at the org-selection step (ADR-0019)
   workspaceId?: string;
   createdAt: number;
 }
 
 export type LoginTransactionInput = Pick<
   LoginTransaction,
-  "userId" | "tenantId" | "appOrigin" | "codeChallenge" | "state" | "clientIp"
+  "userId" | "appOrigin" | "codeChallenge" | "state" | "clientIp"
 >;
 
 export async function createLoginTransaction(

@@ -36,8 +36,9 @@ accounts, on an **AWS-native self-hosted** stack.
 
 Sales teams waste time on stale, incomplete contact data scattered across tools. LeadWolf gives each
 team a **workspace** where they **import** contacts and accounts (CSV/CRM, Sales Navigator) and
-**enrich** them through external providers (Apollo, ZoomInfo, Clearbit). Each workspace owns its
-own copies — no shared golden record. Users spend **tenant credits** to **reveal** a contact's
+**enrich** them through external providers (Apollo, ZoomInfo, Clearbit). Each workspace curates its own
+**overlay** copies over a shared **global master graph** that everyone searches and reveals from
+([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)). Users spend **tenant credits** to **reveal** a contact's
 verified email + phone (per-workspace, first-reveal-wins), **score** prospects by ICP fit and intent,
 then **sequence** and **send** outreach from the built-in engine. **Suppression/DNC and GDPR/CCPA
 compliance** (consent, unsubscribe, DSAR) gate both reveals and sends — built into the core, not
@@ -46,7 +47,8 @@ bolted on.
 ## Locked decisions (summary)
 
 **Hono on Bun** (tRPC + REST) · Turborepo + Bun workspaces · Next.js 15 · **Drizzle + Aurora
-PostgreSQL Serverless v2 + RDS Proxy** · ElastiCache Redis + BullMQ · **Typesense (day one)** ·
+PostgreSQL Serverless v2 + RDS Proxy** (Citus-sharded at scale) · ElastiCache Redis + BullMQ ·
+**Typesense (overlay) + OpenSearch (global master graph)** ·
 **Lucia auth (self-built)** · **shadcn/ui + Tailwind v4**, clean light theme · **per-workspace
 tenancy** ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)) · **tenant credit
 counter** ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)) · **outreach
@@ -62,7 +64,13 @@ Splink** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)) ·
 ([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)) ·
 **progressive identifier-first login**
 ([ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md)) ·
-**auth policy / MFA enforcement** ([ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)).
+**auth policy / MFA enforcement** ([ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)) ·
+**global identity + tenant membership**
+([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)) ·
+**existence-revealing identifier-first + registration**
+([ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)) ·
+**global master graph + per-workspace overlay**
+([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
 
 See [00-overview.md](./00-overview.md#7-decision-log) for the full decision log with rationale links,
 and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md),
@@ -75,5 +83,8 @@ and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-worksp
 [ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md),
 [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md),
 [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md),
-[ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md), and
-[ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md).
+[ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md),
+[ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md),
+[ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md),
+[ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md), and
+[ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md).

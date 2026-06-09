@@ -1,23 +1,29 @@
 # 06 — Enrichment Engine
 
-> How LeadWolf fills out a workspace's **own** contacts/accounts. Data enters **per-workspace** via
-> **import** (CSV/CRM/Sales Navigator) and **enrichment providers** (Apollo, ZoomInfo, Clearbit) called by
-> enrichment workers. There is **no global golden record** and **no field-level merge**
-> ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md), supersedes the old
-> raw/provenance/golden pipeline) — provenance is the per-import `source_imports` row. Implemented in
-> `packages/enrichment-sdk` + the enrichment/import BullMQ workers ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)).
+> How LeadWolf builds and fills the data. Two layers ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)):
+> the **global master graph** (the shared, entity-resolved universe — Layer 0) and each workspace's
+> **overlay** copies (Layer 1). Data enters via **import** (CSV/CRM/Sales Navigator), **enrichment providers**
+> (Apollo, ZoomInfo, Clearbit), public registries, and a future opt-in co-op — every record lands as a
+> `source_records` row that the **entity-resolution** pipeline (§9) matches into a golden record, while the
+> calling workspace also gets an overlay copy (+ per-import `source_imports`). Implemented in
+> `packages/enrichment-sdk` + the enrichment/import/ER BullMQ workers ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)).
 
 ## 1. Principles
 
-- **Per-workspace, on-import.** Enrichment writes into the **calling workspace's** `contacts`/`accounts`
-  copies only ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)); nothing is shared
-  across workspaces and there is no cross-source merge or replay.
+- **Two layers ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** Every record feeds
+  the **global master graph** (entity-resolved golden records — Layer 0) **and** the **calling workspace's**
+  overlay copy (Layer 1). Cross-source dedup / merge / survivorship happen **globally** at Layer 0; the
+  overlay keeps workspace-private notes/scores/reveal state.
 - **Cache-first, cost-aware.** Never pay twice for the same provider answer; try cheap/likely sources first.
 - **Charge on reveal, not enrichment.** Enrichment cost is a system metric
   (`provider_calls.cost_micros`); users pay credits only when they **reveal**
   ([07 §1](./07-billing-credits.md), [07 §3](./07-billing-credits.md)).
-- **Every import is provenance.** Each import writes one `source_imports` row holding the raw source
-  payload (`raw_data` jsonb) — the only lineage record under this model (no `field_provenance`).
+- **Provenance at both layers.** The master graph keeps immutable `source_records` (per-source raw evidence
+  feeding ER — the field-contributing lineage the per-workspace-only model deliberately lacked); the overlay
+  keeps a per-import `source_imports` row.
+- **Co-op is opt-in + disclosed.** Workspace-imported data feeds the shared universe **only** under an
+  explicit, disclosed opt-in / contract — **off by default** (a privacy-disclosure obligation; data-side
+  research [../research/sales-intelligence-data-research.md](../research/sales-intelligence-data-research.md) §1).
 - **Correctness ≠ quality.** Verification (`email_status`) is field **correctness**; lead scoring
   ([§7](#7-lead-scoring--intent-signals)) is prospect **quality**. Never conflate the two
   ([ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)).
@@ -33,11 +39,13 @@
 | **Technographic** | Workers call **BuiltWith / HG Insights / Wappalyzer** to fill an account's tech stack | provenance via `provider_calls`; enriches account technographic fields + emits `tech_install` signals |
 | **Intent data** | Co-op / signal feeds — **Bombora** (B2B intent co-op), **G2**, **6sense** — keyed to accounts/domains | not a contact source; populates `intent_signals` (`signal_source = bombora`/`g2`/`6sense`) |
 
-All **contact** channels land through the same import/enrich workers and dedup **within the workspace** on
-`(workspace_id, email_blind_index)` / `(workspace_id, linkedin_public_id)` /
-`(workspace_id, sales_nav_lead_id)` ([03 §5](./03-database-design.md#5-data-layer)). The old proprietary
-web-scraper engine and global golden pipeline were **removed**
-([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)). **Technographic and intent providers
+All **contact** channels land through the same workers: they append a `source_records` row to the **global
+master graph** (deduped globally by the ER pipeline, §9) **and** upsert the **calling workspace's** overlay
+copy, deduped within the workspace on `(workspace_id, email_blind_index)` /
+`(workspace_id, linkedin_public_id)` / `(workspace_id, sales_nav_lead_id)`
+([03 §5](./03-database-design.md#5-data-layer)). The proprietary web-scraper engine stays **removed**; the
+global golden pipeline is **back as Layer 0** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md),
+reviving [ADR-0005](./decisions/ADR-0005-multi-tenancy-and-global-contact-db.md)/[ADR-0003](./decisions/ADR-0003-three-layer-data-model.md)). **Technographic and intent providers
 enrich *accounts* and emit *signals*, not new contacts** — their provenance lives in `provider_calls` and
 `intent_signals.signal_source` (feeding scoring, [ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)),
 not in `source_imports` (data-side research:
@@ -104,10 +112,12 @@ flowchart TB
    `expectedHitRate` is learned over time from `provider_calls` (per provider × field).
 3. **Sequential waterfall** — call provider; `hit` → stop; otherwise next. (A "parallel-cheap" mode is
    allowed for low-cost providers when latency matters.)
-4. **Persist** — every response writes a `source_imports` row (`raw_data` verbatim) +
-   `provider_calls` (cost/latency/cache_hit). The workspace's `contacts`/`accounts` copy is upserted
-   transactionally; conflicting values on re-enrich are last-writer-wins within the workspace (no
-   cross-source merge, no `merge_log`).
+4. **Persist** — every response writes a `source_records` row to the **master graph** (raw payload +
+   extracted match keys, for global ER, §9) **and** a per-import `source_imports` row in the overlay, +
+   `provider_calls` (cost/latency/cache_hit). The workspace's `contacts`/`accounts` overlay copy is upserted
+   transactionally and linked to the resolved `master_*_id`; conflicting values in the **overlay** are
+   last-writer-wins within the workspace, while **cross-source merge/survivorship** is the master graph's job
+   (§9), not the overlay's.
 
 ## 5. Caching
 
@@ -201,11 +211,23 @@ A per-record **data-quality subsystem** (flagged as a [03 §14](./03-database-de
 - **DQ rules & jobs:** `data_quality_rules` (validation + per-field **freshness SLAs** + confidence
   thresholds) drive `verification_jobs`. **Bulk re-verification / re-enrichment** runs on **AWS Batch**
   ([01 §4](./01-tech-stack.md#4-background-workers)).
-- **Dedup:** exact-match unique indexes (`email_blind_index` / `linkedin_public_id` / `sales_nav_lead_id`)
-  catch identical-key dupes at import; the **fuzzy tail** (name+account variants, missing key) is resolved by
-  **Splink** (MIT probabilistic record linkage — [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md))
-  running as a batch job that fills `dedupe_candidates` with match probabilities; `is_duplicate_of` links the
-  survivor. (No cross-workspace/global merge — [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md).)
+- **Entity resolution (global — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** The
+  master graph dedups the **whole universe**, not one workspace, in five stages:
+  1. **Normalize** — email lowercasing + plus-addressing stripped; **registrable domain** via the Public
+     Suffix List; phone → **E.164** (libphonenumber); name/title canonicalization.
+  2. **Deterministic match** on strong keys (email blind index, domain, LinkedIn id, phone) — the ~95%
+     common case, resolved synchronously.
+  3. **Blocking + MinHash/LSH** candidate generation so we never compare billions² — only same-block pairs
+     (cuts comparisons to a fraction of a percent).
+  4. **Splink** (Fellegi-Sunter) probabilistic scoring of the **fuzzy tail** — name+company variants, missing
+     key ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md) amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
+  5. **Clustering + survivorship** → the golden value per field (most-recent × most-corroborated ×
+     highest-trust source).
+  New records match **incrementally** against same-block candidates of the existing golden set (not a full
+  re-resolution); `match_links.is_duplicate_of` links merged survivors, low-confidence merges route to a
+  **manual review queue**, and `source_records` keeps every merge **reversible** (un-merge). Batch ER runs on
+  Spark/Athena over the S3/Iceberg lake. The **overlay** still dedups within a workspace on its blind-index
+  uniques at import ([03 §11](./03-database-design.md#11-integrity-rules)).
 - **Surfacing:** customers see a **Data Health** view in Reports + a per-record quality badge
   ([11 §4.5](./11-information-architecture.md)); staff get platform-wide DQ ops + DB management in the
   admin console ([13](./13-platform-admin.md)).
@@ -230,7 +252,7 @@ A per-record **data-quality subsystem** (flagged as a [03 §14](./03-database-de
 2. Exact freshness SLA per field for re-verification (e.g. emails re-verified every 90 days)?
 3. Sales Navigator capture posture — how far does "operator-assisted" extend before it becomes ToS risk
    (cross-ref [08 §11](./08-compliance.md#11-collection--channel-legality-ties-to-06-2))?
-4. Per-workspace dedup quality without a global identity — exact-match indexes at import + **Splink**
-   probabilistic linkage for the fuzzy tail ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md),
-   §9); remaining: blocking-rule + match-threshold tuning per dataset
+4. **Global entity-resolution quality** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) —
+   deterministic keys + **blocking/MinHash-LSH** + **Splink** at billions (§9); remaining: blocking-rule +
+   match-threshold tuning per dataset, and the manual-review-queue workflow for low-confidence merges
    ([03 §13](./03-database-design.md#13-open-questions)).

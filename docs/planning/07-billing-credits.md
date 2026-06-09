@@ -85,7 +85,9 @@ Schema: [03 §8](./03-database-design.md#8-billing--compliance).
 The single source of truth for charging. Described **identically** in [08 §3](./08-compliance.md) and
 [09 §3](./09-api-design.md). Idempotency comes from the unique `contact_reveals (workspace_id,
 contact_id, reveal_type)`; the in-transaction suppression gate is unbypassable; the tenant counter is
-serialized with `FOR UPDATE`.
+serialized with `FOR UPDATE`. The unlocked email/phone is read from the Layer-0 **master channel**
+(`master_emails`/`master_phones`) and copied into the workspace overlay
+([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)); the credit accounting below is unchanged.
 
 ```sql
 BEGIN;

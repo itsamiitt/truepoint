@@ -25,6 +25,8 @@ export async function submitMfa(formData: FormData): Promise<void> {
 
   await patchLoginTransaction(txnId, { mfaVerified: true });
   const verified = { ...txn, mfaVerified: true };
-  if ((await resolveNextStep(verified)) === "workspace") redirect("/workspace");
+  const step = await resolveNextStep(txnId, verified);
+  if (step === "org") redirect("/org");
+  if (step === "workspace") redirect("/workspace");
   await finishLogin(txnId, verified);
 }

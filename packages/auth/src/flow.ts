@@ -1,27 +1,38 @@
-// flow.ts — the login state machine after primary auth (17 §2). resolveNextStep decides whether MFA or
-// workspace selection is still required; finalizeLogin runs ONLY when all factors pass — it opens the
-// durable session and issues the single-use cross-domain code. Keeps session/code creation out of the
-// transport layer.
+// flow.ts — the login state machine after primary auth (17 §2). resolveNextStep decides MFA → org →
+// workspace; finalizeLogin runs ONLY when all factors pass — it resolves the active org + workspace, opens
+// the durable session (carrying that scope), and issues the single-use cross-domain code. (ADR-0019/0020.)
 
 import { env } from "@leadwolf/config";
-import { userRepository, workspaceRepository } from "@leadwolf/db";
+import { tenantMemberRepository, userRepository, workspaceRepository } from "@leadwolf/db";
+import { InvalidCredentialsError } from "@leadwolf/types";
 import { issueCode } from "./code.ts";
-import type { LoginTransaction } from "./loginTransaction.ts";
+import { type LoginTransaction, patchLoginTransaction } from "./loginTransaction.ts";
 import { createSession } from "./session.ts";
 
-export type LoginStep = "mfa" | "workspace" | "complete";
+export type LoginStep = "mfa" | "org" | "workspace" | "complete";
 
-export async function resolveNextStep(txn: LoginTransaction): Promise<LoginStep> {
+export async function resolveNextStep(txnId: string, txn: LoginTransaction): Promise<LoginStep> {
   // MFA: required when the user has a verified method enrolled (user opt-in). Tenant/workspace policy
-  // enforcement (mfa_enforcement = required) layers on top once those policy repos are wired (ADR-0018).
+  // enforcement layers on top once the policy repos are wired (ADR-0018).
   if (!txn.mfaVerified) {
     const methods = await userRepository.listMfaMethods(txn.userId);
     if (methods.some((m) => m.verifiedAt)) return "mfa";
   }
-  // Workspace: prompt only when the user can access more than one (a single one auto-selects at finalize).
+
+  // Org: pick when the identity belongs to >1 org; a single membership auto-selects (persisted, no UI step).
+  let tenantId = txn.tenantId;
+  if (!tenantId) {
+    const orgs = await tenantMemberRepository.listForUser(txn.userId);
+    if (orgs.length > 1) return "org";
+    tenantId = orgs[0]?.tenantId;
+    if (!tenantId) return "complete"; // no membership (edge) — finalizeLogin surfaces it
+    await patchLoginTransaction(txnId, { tenantId });
+  }
+
+  // Workspace: pick when the chosen org has >1 accessible workspace; a single one auto-selects.
   if (!txn.workspaceId) {
-    const workspaces = await workspaceRepository.listForUser(txn.tenantId, txn.userId);
-    if (workspaces.length > 1) return "workspace";
+    const ws = await workspaceRepository.listForUser(tenantId, txn.userId);
+    if (ws.length > 1) return "workspace";
   }
   return "complete";
 }
@@ -38,14 +49,24 @@ export async function finalizeLogin(
   txn: LoginTransaction,
   ctx: { userAgent?: string },
 ): Promise<FinalizedLogin> {
+  // Resolve the active org (explicit or single membership) and workspace (explicit or single).
+  let tenantId = txn.tenantId;
+  if (!tenantId) {
+    const orgs = await tenantMemberRepository.listForUser(txn.userId);
+    tenantId = orgs[0]?.tenantId;
+  }
+  if (!tenantId) throw new InvalidCredentialsError(); // no org membership — cannot complete
+
   let workspaceId = txn.workspaceId;
   if (!workspaceId) {
-    const ws = await workspaceRepository.listForUser(txn.tenantId, txn.userId);
+    const ws = await workspaceRepository.listForUser(tenantId, txn.userId);
     if (ws.length === 1) workspaceId = ws[0]?.id;
   }
 
   const session = await createSession({
     userId: txn.userId,
+    tenantId,
+    workspaceId,
     appOrigin: txn.appOrigin,
     ipAddress: txn.clientIp,
     userAgent: ctx.userAgent,
@@ -54,7 +75,7 @@ export async function finalizeLogin(
 
   const code = await issueCode({
     userId: txn.userId,
-    tenantId: txn.tenantId,
+    tenantId,
     sessionId: session.sessionId,
     appOrigin: txn.appOrigin,
     clientIp: txn.clientIp,

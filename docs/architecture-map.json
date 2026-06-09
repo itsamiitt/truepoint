@@ -41,8 +41,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 101,
-  "fileSetHash": "sha256:816b7e4b87303d244150251ccb6b4ee7a97f9dad336ce506d900a2ab8cda9061",
+  "fileCount": 130,
+  "fileSetHash": "sha256:d03d5a2cf8d72b47b08f38057e3d6a010b7b977404813673106fc6de197ea92c",
   "features": {
     "auth": {
       "web": [],
@@ -129,6 +129,7 @@
     "apps/api/middleware": [
       "apps/api/src/middleware/authn.ts",
       "apps/api/src/middleware/error.ts",
+      "apps/api/src/middleware/rateLimit.ts",
       "apps/api/src/middleware/tenancy.ts"
     ],
     "apps/auth": [
@@ -141,25 +142,42 @@
       "apps/auth/src/app/login/page.tsx",
       "apps/auth/src/app/mfa/actions.ts",
       "apps/auth/src/app/mfa/page.tsx",
+      "apps/auth/src/app/org/actions.ts",
+      "apps/auth/src/app/org/page.tsx",
       "apps/auth/src/app/page.tsx",
       "apps/auth/src/app/password/actions.ts",
       "apps/auth/src/app/password/page.tsx",
+      "apps/auth/src/app/signup/actions.ts",
+      "apps/auth/src/app/signup/page.tsx",
+      "apps/auth/src/app/signup/profile/page.tsx",
+      "apps/auth/src/app/sso/actions.ts",
+      "apps/auth/src/app/sso/mock/actions.ts",
+      "apps/auth/src/app/sso/mock/page.tsx",
+      "apps/auth/src/app/sso/oidc/callback/route.ts",
+      "apps/auth/src/app/sso/page.tsx",
+      "apps/auth/src/app/sso/saml/callback/route.ts",
       "apps/auth/src/app/token/exchange/route.ts",
       "apps/auth/src/app/token/refresh/route.ts",
+      "apps/auth/src/app/verify/actions.ts",
+      "apps/auth/src/app/verify/page.tsx",
       "apps/auth/src/app/workspace/actions.ts",
       "apps/auth/src/app/workspace/page.tsx"
     ],
     "apps/auth/lib": [
       "apps/auth/src/lib/clientIp.ts",
+      "apps/auth/src/lib/completeSso.ts",
       "apps/auth/src/lib/cookies.ts",
       "apps/auth/src/lib/cors.ts",
       "apps/auth/src/lib/domainResolver.ts",
-      "apps/auth/src/lib/finishLogin.ts"
+      "apps/auth/src/lib/finishLogin.ts",
+      "apps/auth/src/lib/mailer.ts",
+      "apps/auth/src/lib/ssoConfig.ts"
     ],
     "apps/auth/shared": [
       "apps/auth/src/shared/AuthShell.tsx",
       "apps/auth/src/shared/BrandLockup.tsx",
-      "apps/auth/src/shared/OtpInput.tsx"
+      "apps/auth/src/shared/OtpInput.tsx",
+      "apps/auth/src/shared/TurnstileWidget.tsx"
     ],
     "apps/web/app": [
       "apps/web/src/app/auth/callback/page.tsx",
@@ -177,19 +195,30 @@
       "apps/workers/src/register.ts"
     ],
     "packages/auth": [
+      "packages/auth/src/botCheck.ts",
       "packages/auth/src/code.ts",
+      "packages/auth/src/emailVerification.ts",
       "packages/auth/src/flow.ts",
       "packages/auth/src/identifierLookup.ts",
       "packages/auth/src/index.ts",
+      "packages/auth/src/invitations.ts",
       "packages/auth/src/login.ts",
       "packages/auth/src/loginTransaction.ts",
       "packages/auth/src/mfa.ts",
       "packages/auth/src/mfaVerify.ts",
       "packages/auth/src/password.ts",
       "packages/auth/src/policy.ts",
+      "packages/auth/src/rateLimit.ts",
       "packages/auth/src/refresh.ts",
+      "packages/auth/src/registration.ts",
       "packages/auth/src/secrets.ts",
       "packages/auth/src/session.ts",
+      "packages/auth/src/signupTransaction.ts",
+      "packages/auth/src/sso/jit.ts",
+      "packages/auth/src/sso/mockIdp.ts",
+      "packages/auth/src/sso/providers.ts",
+      "packages/auth/src/sso/types.ts",
+      "packages/auth/src/ssoTransaction.ts",
       "packages/auth/src/token.ts"
     ],
     "packages/config": [

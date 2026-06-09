@@ -3,31 +3,31 @@
 // one domain → auth). Returns typed domain records, never raw rows; the raw refresh token never touches
 // the DB (only its hash). findByEmail is the pre-tenant identifier lookup under the auth-service role (17 §1).
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "../client.ts";
-import { userMfaMethods, users, userSessions } from "../schema/auth.ts";
+import { authEmailTokens, userMfaMethods, users, userSessions } from "../schema/auth.ts";
 
-// ── Users ────────────────────────────────────────────────────────────────────────────────────────────
+// ── Users (global identity — ADR-0019; org membership is in tenantMemberRepository) ──────────────────────
 export interface UserRecord {
   id: string;
-  tenantId: string;
   email: string;
+  username: string | null;
   fullName: string | null;
   passwordHash: string | null;
   authProvider: string;
-  isTenantOwner: boolean;
+  emailVerifiedAt: Date | null;
   status: string;
 }
 
 type UserRow = typeof users.$inferSelect;
 const toUser = (r: UserRow): UserRecord => ({
   id: r.id,
-  tenantId: r.tenantId,
   email: r.email,
+  username: r.username,
   fullName: r.fullName,
   passwordHash: r.passwordHash,
   authProvider: r.authProvider,
-  isTenantOwner: r.isTenantOwner,
+  emailVerifiedAt: r.emailVerifiedAt,
   status: r.status,
 });
 
@@ -42,6 +42,54 @@ export const userRepository = {
     const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
     const row = rows[0];
     return row ? toUser(row) : null;
+  },
+
+  // Identifier-first lookup: an email OR the optional username alias resolves to one global identity (ADR-0020).
+  async findByEmailOrUsername(identifier: string): Promise<UserRecord | null> {
+    const rows = await db
+      .select()
+      .from(users)
+      .where(or(eq(users.email, identifier), eq(users.username, identifier)))
+      .limit(1);
+    const row = rows[0];
+    return row ? toUser(row) : null;
+  },
+
+  async usernameExists(username: string): Promise<boolean> {
+    const rows = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
+    return rows.length > 0;
+  },
+
+  // Create a global identity at registration (ADR-0020). email_verified_at is set because /signup proves
+  // the email before this runs; the unique(email)/unique(username) constraints are the race backstop.
+  async create(input: {
+    email: string;
+    fullName: string;
+    username?: string;
+    passwordHash?: string;
+    authProvider?: string;
+    emailVerifiedAt?: Date;
+  }): Promise<string> {
+    const [row] = await db
+      .insert(users)
+      .values({
+        email: input.email,
+        fullName: input.fullName,
+        username: input.username,
+        passwordHash: input.passwordHash,
+        authProvider: input.authProvider ?? "password",
+        emailVerifiedAt: input.emailVerifiedAt ?? null,
+        status: input.emailVerifiedAt ? "active" : "pending",
+      })
+      .returning({ id: users.id });
+    return row!.id;
+  },
+
+  async markEmailVerified(id: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ emailVerifiedAt: new Date(), status: "active", updatedAt: new Date() })
+      .where(eq(users.id, id));
   },
 
   async touchLastLogin(id: string): Promise<void> {
@@ -71,6 +119,8 @@ export interface MfaMethodRecord {
 export interface SessionRecord {
   id: string;
   userId: string;
+  tenantId: string | null;
+  workspaceId: string | null;
   deviceId: string | null;
   appOrigin: string | null;
   expiresAt: Date;
@@ -82,6 +132,8 @@ export interface CreateSessionInput {
   userId: string;
   refreshTokenHash: string;
   expiresAt: Date;
+  tenantId?: string;
+  workspaceId?: string;
   appOrigin?: string;
   deviceId?: string;
   ipAddress?: string;
@@ -92,6 +144,8 @@ type SessionRow = typeof userSessions.$inferSelect;
 const toSession = (r: SessionRow): SessionRecord => ({
   id: r.id,
   userId: r.userId,
+  tenantId: r.tenantId,
+  workspaceId: r.workspaceId,
   deviceId: r.deviceId,
   appOrigin: r.appOrigin,
   expiresAt: r.expiresAt,
@@ -141,5 +195,58 @@ export const sessionRepository = {
       .where(eq(userSessions.userId, userId))
       .orderBy(desc(userSessions.createdAt));
     return rows.map(toSession);
+  },
+};
+
+// ── Email verification / magic-link / email-OTP tokens (part of the identity aggregate — ADR-0020) ──────
+// Only the token HASH is stored; the raw code lives only in the email. The hash is the PK, so re-sending a
+// code for the same (email, purpose) first clears the prior unconsumed token. Consumption is atomic.
+export interface CreateEmailTokenInput {
+  tokenHash: string;
+  email: string;
+  userId?: string;
+  purpose: "verify" | "magic_link" | "email_otp";
+  expiresAt: Date;
+  ipAddress?: string;
+}
+
+export const authEmailTokenRepository = {
+  async create(input: CreateEmailTokenInput): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(authEmailTokens)
+        .where(
+          and(
+            eq(authEmailTokens.email, input.email),
+            eq(authEmailTokens.purpose, input.purpose),
+            isNull(authEmailTokens.consumedAt),
+          ),
+        );
+      await tx.insert(authEmailTokens).values({
+        tokenHash: input.tokenHash,
+        email: input.email,
+        userId: input.userId,
+        purpose: input.purpose,
+        expiresAt: input.expiresAt,
+        ipAddress: input.ipAddress,
+      });
+    });
+  },
+
+  // Atomically consume a still-valid token: marks it used and returns true only if it was unconsumed and
+  // unexpired (single-use). The token_hash already binds email+purpose+code, so a hit is fully validated.
+  async consume(tokenHash: string): Promise<boolean> {
+    const rows = await db
+      .update(authEmailTokens)
+      .set({ consumedAt: new Date() })
+      .where(
+        and(
+          eq(authEmailTokens.tokenHash, tokenHash),
+          isNull(authEmailTokens.consumedAt),
+          gt(authEmailTokens.expiresAt, new Date()),
+        ),
+      )
+      .returning({ tokenHash: authEmailTokens.tokenHash });
+    return rows.length > 0;
   },
 };

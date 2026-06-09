@@ -29,15 +29,19 @@ export async function refreshAccessToken(args: {
   const user = await userRepository.findById(session.userId);
   if (!user || user.status !== "active") throw new InvalidTokenError();
 
+  if (!session.tenantId) throw new InvalidTokenError();
   const issued = await rotateSession(session.id, {
     userId: user.id,
+    tenantId: session.tenantId,
+    workspaceId: session.workspaceId ?? undefined,
     appOrigin: args.audience,
     deviceId: session.deviceId ?? undefined,
   });
 
   const { token, expiresIn } = await mintAccessToken({
     userId: user.id,
-    tenantId: user.tenantId,
+    tenantId: session.tenantId,
+    workspaceId: session.workspaceId ?? undefined,
     sessionId: issued.sessionId,
     audience: args.audience,
   });

@@ -1,25 +1,32 @@
 # 03 — Database Design
 
-> **Model:** per-workspace multi-tenant CRM ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
-> Each **tenant** has **workspaces**; each workspace owns its **own** contacts/accounts. There is **no
-> global golden record** — provenance is per-import (`source_imports`). PostgreSQL 16 on **Aurora
-> Serverless v2 + RDS Proxy** ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)),
-> Drizzle ORM ([ADR-0001](./decisions/ADR-0001-orm-drizzle.md)). DDL is illustrative; Drizzle defs live
-> in `packages/db`.
+> **Model:** a **two-layer** data design ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
+> **Layer 0 — global master graph** (§5.1): a system-owned, **billions-scale**, globally entity-resolved
+> universe of people + companies (golden records + the raw evidence behind them) that every tenant searches
+> (masked) and reveals from. **Layer 1 — per-workspace overlay** (§5.2): each **workspace** owns its curated
+> copy (notes/scores/reveal state), referencing a master entity, isolated by RLS
+> ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)). PostgreSQL 16 on **Aurora
+> Serverless v2 + RDS Proxy** ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)), the master
+> graph **Citus-sharded** at the top end (§12); Drizzle ORM ([ADR-0001](./decisions/ADR-0001-orm-drizzle.md)).
+> DDL is illustrative; Drizzle defs live in `packages/db`.
 >
-> **Supersedes the prior three-layer/global design.** See superseded
-> [ADR-0003](./decisions/ADR-0003-three-layer-data-model.md) /
-> [ADR-0005](./decisions/ADR-0005-multi-tenancy-and-global-contact-db.md) for what was traded away.
+> **Revives the global / three-layer design as Layer 0.** [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)
+> reopens ADR-0006's *no-global-golden-record* clause and brings back the spirit of
+> [ADR-0003](./decisions/ADR-0003-three-layer-data-model.md) (raw→provenance→golden) /
+> [ADR-0005](./decisions/ADR-0005-multi-tenancy-and-global-contact-db.md) (global contact DB) — now as one
+> layer of a hybrid, not the exclusive model.
 
 ## 1. Layers
 
-- **Tenancy:** `tenants`, `users`, `workspaces`, `workspace_members` (+ auth: `user_sessions`,
+- **Tenancy:** `tenants`, **`users`** (global identity — [ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)),
+  `tenant_members`, `workspaces`, `workspace_members`, `invitations` (+ auth: `user_sessions`,
   `user_oauth_accounts`, `user_mfa`/`user_mfa_methods`, `user_password_resets`, `tenant_sso_configs`;
   **auth-origin extension** — `tenant_domains`, `trusted_devices`, `webauthn_credentials`,
   `auth_email_tokens`, `tenant_auth_policies`, `workspace_auth_policies`, `scim_tokens`,
   `oauth_app_clients` — [17](./17-authentication.md),
   [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md)).
-- **Data:** `accounts`, `contacts`, `contact_reveals`, `sales_nav_links`, `source_imports`,
+- **Global master graph (Layer 0 — system-owned, [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)):** `master_persons`, `master_companies`, `master_emails`, `master_phones`, `master_employment`, `source_records`, `match_links`.
+- **Per-workspace overlay (Layer 1):** `accounts`, `contacts`, `contact_reveals`, `sales_nav_links`, `source_imports`,
   `lists`, `list_members`, `saved_searches`, `api_keys`.
 - **Intelligence:** `scores`, `intent_signals`.
 - **Activity & outreach:** `activities`, `outreach_sequences`, `outreach_steps`, `outreach_log`,
@@ -44,13 +51,15 @@
 | Timestamps | `timestamptz`, default `now()`; soft-delete via `deleted_at` where needed |
 | High-volume tables | **range-partitioned by month**: `activities`, `audit_log`, `contact_reveals`, `intent_signals`, `scores`, `source_imports`, `outreach_log`, `provider_calls` |
 | Extensions | `pgcrypto`, `citext`, `pg_trgm`, `pg_uuidv7` (or app v7); `pgvector` later for semantic search |
+| Global master graph (Layer 0) | **system-owned** (not workspace-RLS, §9); reached only via masked search + paid reveal; **hash-sharded** (Citus) by entity / blocking key at billions; raw `source_records` offload to an S3/Iceberg lake (§12) — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md) |
 
 ## 3. ER overview
 
 ```mermaid
 erDiagram
   tenants ||--o{ workspaces : has
-  tenants ||--o{ users : has
+  tenants ||--o{ tenant_members : has
+  users ||--o{ tenant_members : "belongs to"
   workspaces ||--o{ workspace_members : has
   users ||--o{ workspace_members : "member of"
   users ||--o{ user_sessions : has
@@ -70,7 +79,7 @@ erDiagram
   outreach_sequences ||--o{ outreach_steps : has
 ```
 
-Three clusters: **tenancy/auth** (tenant→workspace→member→user + sessions/SSO), the **per-workspace data graph** (accounts/contacts and everything hanging off a contact), and **billing/compliance** (tenant-level credits + suppression/consent/DSAR).
+Three clusters: **tenancy/auth** (global `users` ↔ `tenant_members` ↔ tenant→workspace→workspace_member, + sessions/SSO — [ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)), the **per-workspace data graph** (accounts/contacts and everything hanging off a contact), and **billing/compliance** (tenant-level credits + suppression/consent/DSAR).
 
 ## 4. Tenancy & auth
 
@@ -93,21 +102,34 @@ CREATE TABLE tenants (
   updated_at            timestamptz NOT NULL DEFAULT now()
 );
 
+-- users is the GLOBAL identity — one row per person ([ADR-0019]). Org membership lives in tenant_members.
 CREATE TABLE users (
   id            uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
-  tenant_id     uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  email         citext NOT NULL,
+  email         citext NOT NULL UNIQUE,                        -- GLOBAL unique (was UNIQUE(tenant_id,email))
+  username      citext UNIQUE,                                 -- optional global-unique login alias
   full_name     varchar(255),
   avatar_url    varchar(500),
-  password_hash varchar(255),                                  -- Argon2id; null if SSO-only
-  auth_provider varchar(50) NOT NULL DEFAULT 'password',       -- password|google|microsoft|saml
-  is_tenant_owner boolean NOT NULL DEFAULT false,              -- tenant-level billing/admin capability
+  password_hash varchar(255),                                  -- Argon2id; null if SSO-only / passkey-only
+  auth_provider varchar(50) NOT NULL DEFAULT 'password',       -- password|google|microsoft|saml|oidc
+  email_verified_at timestamptz,                               -- required before status='active'
   scim_external_id varchar(255),                               -- set by SCIM provisioning (see 17 §8)
   last_login_at timestamptz,
-  status        varchar(50) NOT NULL DEFAULT 'active',         -- active|invited|suspended
+  status        varchar(50) NOT NULL DEFAULT 'active',         -- active|pending|suspended
   created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (tenant_id, email)
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+-- A person's membership in an org (the user↔tenant link; carries the tenant-level owner capability — H8).
+CREATE TABLE tenant_members (
+  id                 uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id          uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  user_id            uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  is_tenant_owner    boolean NOT NULL DEFAULT false,           -- billing/admin capability (moved off users)
+  status             varchar(50) NOT NULL DEFAULT 'active'     -- active|invited|removed
+                       CHECK (status IN ('active','invited','removed')),
+  invited_by_user_id uuid REFERENCES users(id),
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, user_id)
 );
 
 CREATE TABLE workspaces (
@@ -198,14 +220,31 @@ CREATE TABLE tenant_sso_configs (
 [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)):
 
 ```sql
--- Domain claiming → tenant + SSO routing (progressive identifier-first login, ADR-0017)
+-- Domain claiming → tenant + SSO routing + registration placement (ADR-0017, ADR-0020)
 CREATE TABLE tenant_domains (
   id                 uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
   tenant_id          uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   domain             citext NOT NULL UNIQUE,             -- verified domain → exactly one tenant
   verification_token varchar(255), dns_txt_record text,
   status             varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','verified','failed')),
+  join_policy        varchar(20) NOT NULL DEFAULT 'sso_only'   -- how a new matching email is placed (ADR-0020)
+                       CHECK (join_policy IN ('sso_only','auto_join','request_access')),
   verified_at        timestamptz, created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Pending invitations to join an org/workspace (accepted at registration → tenant_member + workspace_member)
+CREATE TABLE invitations (
+  id                 uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id          uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  workspace_id       uuid REFERENCES workspaces(id) ON DELETE CASCADE,  -- null = tenant-level invite
+  email              citext NOT NULL,
+  role               varchar(50) NOT NULL DEFAULT 'member'
+                       CHECK (role IN ('owner','admin','member','viewer')),
+  is_tenant_owner    boolean NOT NULL DEFAULT false,
+  token_hash         varchar(255) NOT NULL UNIQUE,
+  invited_by_user_id uuid REFERENCES users(id),
+  expires_at         timestamptz NOT NULL,
+  accepted_at        timestamptz, created_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- Trusted-device registry ("trust this device 30 days") + per-device session metadata
@@ -291,11 +330,128 @@ CREATE TABLE oauth_app_clients (
 
 ## 5. Data layer
 
+Two layers ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)): the **global master
+graph** (§5.1) is the system-owned shared universe; the **per-workspace overlay** (§5.2) is each workspace's
+curated copy referencing it. A workspace reaches the master graph only through **masked search** (§9,
+[09 §3](./09-api-design.md)) and the **paid reveal** path ([07 §3](./07-billing-credits.md)).
+
+### 5.1 Global master graph (Layer 0 — system-owned)
+
+The globally entity-resolved universe of people + companies: **golden records** + the raw evidence behind
+them. Built and owned by the entity-resolution pipeline ([06 §9](./06-enrichment-engine.md)); **not**
+workspace-RLS-scoped (§9). Encrypted contact channels (`master_emails`/`master_phones`) are never returned by
+search — only by a paid reveal, which copies the value into the calling workspace's overlay.
+
+```sql
+-- prospect↔company linking lives in master_employment (current + past); the strongest match key is
+-- email-domain → company primary_domain/alt_domains (registrable domain via the Public Suffix List).
+
+CREATE TABLE master_companies (
+  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  primary_domain      citext UNIQUE,                  -- registrable domain (PSL); the strongest company key
+  alt_domains         citext[] NOT NULL DEFAULT '{}', -- redirects, acquired brands, country TLDs
+  name                varchar(255) NOT NULL,
+  name_normalized     citext,                         -- legal-suffix-stripped + casefolded (no-domain fallback)
+  linkedin_company_id varchar(255) UNIQUE,
+  parent_company_id   uuid REFERENCES master_companies(id),     -- subsidiary → parent hierarchy
+  industry varchar(100), sub_industry varchar(100),
+  employee_count int, employee_band varchar(20),      -- band ('11-50','51-200',…) is the search facet
+  revenue_range varchar(50),
+  technographics jsonb NOT NULL DEFAULT '{}',          -- detected tech stack (BuiltWith/HG Insights)
+  hq_country varchar(100), hq_city varchar(100),
+  data_quality_score int CHECK (data_quality_score BETWEEN 0 AND 100),
+  region char(2), jurisdiction char(2),
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX gin_master_companies_name ON master_companies USING gin (name_normalized gin_trgm_ops);
+
+CREATE TABLE master_persons (
+  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  linkedin_public_id  varchar(255) UNIQUE,            -- strongest person key
+  full_name           varchar(255), first_name varchar(100), last_name varchar(100),
+  current_company_id  uuid REFERENCES master_companies(id),     -- denormalized from the current employment edge
+  job_title varchar(255),
+  seniority_level varchar(50) CHECK (seniority_level IS NULL OR seniority_level IN
+                    ('c_suite','vp','director','manager','ic','other')),
+  department varchar(100), location_country varchar(100), location_city varchar(100),
+  has_email boolean NOT NULL DEFAULT false,           -- precomputed search facets (no join at query time)
+  has_phone boolean NOT NULL DEFAULT false,
+  data_quality_score int CHECK (data_quality_score BETWEEN 0 AND 100),
+  is_suppressed boolean NOT NULL DEFAULT false,       -- global suppression/objection mirror; gates reveal (08 §3)
+  region char(2), jurisdiction char(2),
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX gin_master_persons_name ON master_persons USING gin (full_name gin_trgm_ops);
+CREATE INDEX idx_master_persons_company ON master_persons (current_company_id);
+
+CREATE TABLE master_employment (                       -- person↔company link, current + past
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  master_person_id  uuid NOT NULL REFERENCES master_persons(id) ON DELETE CASCADE,
+  master_company_id uuid NOT NULL REFERENCES master_companies(id) ON DELETE CASCADE,
+  title varchar(255), department varchar(100), seniority_level varchar(50),
+  is_current boolean NOT NULL DEFAULT true, started_on date, ended_on date,
+  UNIQUE (master_person_id, master_company_id, started_on)
+);
+CREATE INDEX idx_employment_current ON master_employment (master_person_id) WHERE is_current;
+
+CREATE TABLE master_emails (                           -- verifiable channel, separated from the person record
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  master_person_id  uuid NOT NULL REFERENCES master_persons(id) ON DELETE CASCADE,
+  email_enc         bytea NOT NULL,                    -- encrypted; revealed only via the paid reveal path
+  email_blind_index bytea NOT NULL UNIQUE,             -- HMAC; GLOBAL dedup + DSAR/suppression lookup key
+  email_domain      citext,
+  email_status      varchar(20) NOT NULL DEFAULT 'unverified'
+                      CHECK (email_status IN ('unverified','valid','risky','invalid','catch_all','unknown')),
+  source_count int NOT NULL DEFAULT 1,                 -- corroboration (survivorship input)
+  last_verified_at timestamptz, verification_source varchar(50), is_primary boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE master_phones (
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  master_person_id  uuid NOT NULL REFERENCES master_persons(id) ON DELETE CASCADE,
+  phone_enc         bytea NOT NULL,
+  phone_blind_index bytea NOT NULL UNIQUE,             -- HMAC over E.164 (libphonenumber-normalized)
+  line_type varchar(20), phone_status varchar(50),
+  source_count int NOT NULL DEFAULT 1, last_verified_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE source_records (                          -- immutable per-source raw evidence feeding ER (lineage)
+  id                  uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  source_name         varchar(50) NOT NULL,            -- apollo|zoominfo|clearbit|coop|public_registry|…
+  content_hash        bytea NOT NULL UNIQUE,           -- sha256(canonical payload) → idempotent ingest
+  raw_data            jsonb NOT NULL,                  -- verbatim source payload
+  match_keys          jsonb NOT NULL DEFAULT '{}',     -- extracted normalized keys (email_bi, domain, li_id, phone)
+  resolved_person_id  uuid REFERENCES master_persons(id),       -- set by the ER pipeline
+  resolved_company_id uuid REFERENCES master_companies(id),
+  lawful_basis_snapshot jsonb, region char(2),
+  ingested_at         timestamptz NOT NULL DEFAULT now()        -- range-partitioned by month; bulk to S3/Iceberg lake
+);
+
+CREATE TABLE match_links (                             -- ER output: which source_records form which golden entity
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  entity_type       varchar(10) NOT NULL CHECK (entity_type IN ('person','company')),
+  cluster_id        uuid NOT NULL,                     -- the golden entity id (master_persons/master_companies.id)
+  source_record_id  uuid NOT NULL REFERENCES source_records(id) ON DELETE CASCADE,
+  match_probability numeric(4,3) CHECK (match_probability BETWEEN 0 AND 1),  -- Splink (Fellegi-Sunter)
+  match_method      varchar(20) NOT NULL,              -- deterministic|splink|manual
+  is_duplicate_of   uuid,                              -- survivor link when two clusters merge
+  review_status     varchar(20) NOT NULL DEFAULT 'auto'
+                      CHECK (review_status IN ('auto','pending','confirmed','rejected')),  -- low-confidence → review queue
+  resolved_at       timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_match_links_cluster ON match_links (entity_type, cluster_id);
+```
+
+### 5.2 Per-workspace overlay (Layer 1)
+
 ```sql
 CREATE TABLE accounts (
   id                    uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
   tenant_id             uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   workspace_id          uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  master_company_id     uuid REFERENCES master_companies(id),   -- overlay → Layer-0 golden company (ADR-0021)
   name                  varchar(255) NOT NULL,
   domain                citext,
   linkedin_company_url  varchar(500), sales_nav_account_url varchar(500),
@@ -306,12 +462,14 @@ CREATE TABLE accounts (
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX uniq_accounts_ws_domain ON accounts (workspace_id, domain) WHERE domain IS NOT NULL;
+CREATE INDEX idx_accounts_master ON accounts (master_company_id) WHERE master_company_id IS NOT NULL;
 
 CREATE TABLE contacts (
   id                    uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
   tenant_id             uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   workspace_id          uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   account_id            uuid REFERENCES accounts(id) ON DELETE SET NULL,
+  master_person_id      uuid REFERENCES master_persons(id),     -- overlay → Layer-0 golden person (ADR-0021)
   first_name varchar(100), last_name varchar(100),
   email_enc             bytea,                                  -- encrypted; masked until reveal
   email_blind_index     bytea,                                  -- HMAC(email) for uniqueness/lookups
@@ -342,6 +500,7 @@ CREATE TABLE contacts (
 CREATE UNIQUE INDEX uniq_contacts_ws_email ON contacts (workspace_id, email_blind_index) WHERE email_blind_index IS NOT NULL;
 CREATE UNIQUE INDEX uniq_contacts_ws_linkedin ON contacts (workspace_id, linkedin_public_id) WHERE linkedin_public_id IS NOT NULL;
 CREATE UNIQUE INDEX uniq_contacts_ws_salesnav ON contacts (workspace_id, sales_nav_lead_id) WHERE sales_nav_lead_id IS NOT NULL;
+CREATE INDEX idx_contacts_master ON contacts (master_person_id) WHERE master_person_id IS NOT NULL;
 ```
 
 **`contact_reveals`** (event log; first per `(workspace_id,contact_id)` sets ownership — [ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)):
@@ -374,7 +533,9 @@ CREATE UNIQUE INDEX uniq_contacts_ws_salesnav ON contacts (workspace_id, sales_n
 
 ## 9. Row-level security
 
-RLS on every workspace-scoped table; policy `USING (workspace_id = current_setting('app.current_workspace_id')::uuid)`. Tenant-scoped tables (tenants/users/api_keys/purchases/audit_log tenant rows, plus the auth-origin tenant tables `tenant_domains`/`tenant_auth_policies`/`tenant_sso_configs`/`scim_tokens`/`oauth_app_clients`) use `app.current_tenant_id`; `workspace_auth_policies` is workspace-scoped. The **user-scoped auth tables** (`user_sessions`/`trusted_devices`/`user_mfa_methods`/`user_mfa_recovery_codes`/`webauthn_credentials`/`auth_email_tokens`) are owned by the auth service (`apps/auth`) and accessed by `user_id`, before any workspace is selected. The API sets `SET LOCAL app.current_tenant_id` + `app.current_workspace_id` per request after auth; queries run as a non-`BYPASSRLS` role; **RDS Proxy** (transaction pooling) requires the GUC be set within the transaction and reset on checkout.
+RLS on every workspace-scoped table; policy `USING (workspace_id = current_setting('app.current_workspace_id')::uuid)`. Tenant-scoped tables (tenants/api_keys/purchases/audit_log tenant rows, the membership table `tenant_members`, plus the auth-origin tenant tables `tenant_domains`/`invitations`/`tenant_auth_policies`/`tenant_sso_configs`/`scim_tokens`/`oauth_app_clients`) use `app.current_tenant_id`; `workspace_auth_policies` is workspace-scoped. **`users` is the GLOBAL identity** ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)) — **not** tenant-RLS-scoped; it and the **user-scoped auth tables** (`user_sessions`/`trusted_devices`/`user_mfa_methods`/`user_mfa_recovery_codes`/`webauthn_credentials`/`auth_email_tokens`) are owned by the auth service (`apps/auth`) and accessed by `user_id`, before any tenant/workspace is selected. The API sets `SET LOCAL app.current_tenant_id` + `app.current_workspace_id` per request after auth; queries run as a non-`BYPASSRLS` role; **RDS Proxy** (transaction pooling) requires the GUC be set within the transaction and reset on checkout.
+
+**Layer-0 master graph is system-owned** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)). The `master_*` / `source_records` / `match_links` tables are **not** workspace-RLS-scoped — no customer-facing query reads them directly. Only the **ER pipeline**, **search-sync**, and the **reveal** service touch them (under their own least-privilege roles); customers reach the universe solely through **masked global search** (no PII leaves the index) and the **paid reveal** path, which decrypts a `master_emails`/`master_phones` channel only inside the reveal transaction (§10, [09 §3](./09-api-design.md)).
 
 **Privileged staff path (internal only).** The super-admin console `apps/admin` ([13](./13-platform-admin.md)) performs audited cross-tenant reads under a **dedicated privileged role** that **bypasses workspace RLS** — *distinct* from the app's non-`BYPASSRLS` role and used by no customer-facing service. Every such access is written to an immutable **`platform_audit_log`**; impersonation is time-boxed and banner-flagged ([ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)).
 
@@ -385,29 +546,56 @@ Convention: keep business logic in the app; use triggers only for invariants tha
 2. **Score sync** — `AFTER INSERT ON scores`: `contacts.priority_score = NEW.composite_score`.
 3. **`updated_at`** — `BEFORE UPDATE` on tenants/users/workspaces/accounts/contacts/sales_nav_links.
 
-`provision_new_signup(...)` creates tenant → owner user → default workspace → owner membership → audit row in one transaction.
+`provision_new_signup(identity, ...)` creates (or reuses) the global `users` identity → tenant → default workspace → **owner `tenant_member`** (`is_tenant_owner = true`) → owner `workspace_member` → audit row, in one transaction ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md), [ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)).
 
 ## 11. Integrity rules
 
 - `tenants.reveal_credit_balance >= 0` (CHECK) — overdraft impossible.
 - Unique `contact_reveals (workspace_id, contact_id, reveal_type)` — reveal idempotency (app also sends `Idempotency-Key`).
-- Unique `(workspace_id, email_blind_index)` / `(workspace_id, linkedin_public_id)` / `(workspace_id, sales_nav_lead_id)` — per-workspace dedup.
+- Unique `(workspace_id, email_blind_index)` / `(workspace_id, linkedin_public_id)` / `(workspace_id, sales_nav_lead_id)` — per-workspace overlay dedup.
+- **Master graph (global) dedup keys** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)): unique `master_companies.primary_domain` / `master_companies.linkedin_company_id` / `master_persons.linkedin_public_id` / `master_emails.email_blind_index` / `master_phones.phone_blind_index`; unique `source_records.content_hash` — idempotent ingest.
 - Unique `purchases.stripe_event_id` — idempotent top-ups.
 - One default workspace per tenant (partial unique).
 - RLS on all workspace-scoped tables.
 
-## 12. Partitioning & scale (100M+)
+## 12. Indexing, partitioning & scale (overlay 100M+, master graph billions)
 
-UUID v7 keys for append locality. Range-partition by month: `activities`, `audit_log`, `contact_reveals`, `intent_signals`, `scores`, `source_imports`, `outreach_log`, `provider_calls`. Aurora Serverless v2 auto-scales compute; read replica/reader endpoint for analytics; search offloaded to **Typesense** ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)); heavy event analytics offloaded to **ClickHouse** via CDC ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)).
+**Indexing strategy.** UUID v7 PKs everywhere for append locality. Beyond the PKs: **B-tree** on every
+match/dedup key and FK; **GIN + `pg_trgm`** for fuzzy name/company search (`master_persons.full_name`,
+`master_companies.name_normalized`) so typo-tolerant lookups don't table-scan (a trigram GIN index turns an
+unindexed wildcard scan from seconds into low-ms); **composite** indexes for the hot multi-attribute filter
+combos (e.g. `(workspace_id, outreach_status, priority_score)`); **partial** indexes where a predicate is
+always present (the per-workspace dedup uniques `WHERE … IS NOT NULL`, `idx_employment_current WHERE
+is_current`, `idx_*_master WHERE … IS NOT NULL`); **covering** (`INCLUDE`) indexes for the masked list
+projection so result reads are index-only. ER **blocking keys** (e.g. `metaphone(last_name)+domain`) are
+materialized columns with their own indexes. Heavy faceted filtering is **not** served from Postgres — it
+lives in the search index (below).
+
+**Partitioning.** Range-partition by month: `activities`, `audit_log`, `contact_reveals`, `intent_signals`,
+`scores`, `source_imports`, `outreach_log`, `provider_calls`, **and `source_records`** (the master evidence
+log).
+
+**Master-graph scale (billions, [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** The
+golden tables outgrow a single Aurora writer, so **shard horizontally with Citus** by a hash of the entity /
+blocking key — co-locating a cluster's `source_records` + `match_links` + golden row on one shard so
+resolution and reveal stay node-local. Bulk raw evidence lives in an **S3 + Iceberg** lake; batch ER (Splink)
+runs on **Spark/Athena** over the lake and writes golden rows back. The **masked search index** is
+**OpenSearch** (sharded inverted index, facet/range aggregations, `search_after` cursoring) behind
+`SearchPort` ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md) amended); **ClickHouse** serves
+high-cardinality facet counts at billions. Aurora Serverless v2 auto-scales the overlay; the **search-sync**
+worker fans Aurora logical-replication CDC out to OpenSearch + ClickHouse
+([02 §3.3](./02-architecture.md#33-cdc-search--analytics)).
 
 ## 13. Open questions
 
 1. **PII vs proposal's plaintext:** we keep `email_enc/phone_enc` + `email_blind_index` for GDPR/CCPA; confirm the blind-index (HMAC w/ KMS key) approach for per-workspace uniqueness.
 2. **Reveal pricing by `reveal_type`** (email vs phone vs full_profile) — final credit costs ([07 §1](./07-billing-credits.md)).
-3. **Per-workspace dedup quality** without a global identity — match-on-import heuristics (email blind index, linkedin id, sales_nav id).
-4. **Cross-workspace / cross-tenant "tenant search"** read layer — in scope? ([10 Beyond](./10-roadmap.md)).
-5. **DSAR fan-out** across N per-workspace copies + `source_imports`/`contact_reveals`/`activities` — deletion procedure + SLA ([08 §4](./08-compliance.md)).
+3. **Global entity-resolution quality** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), [06 §9](./06-enrichment-engine.md)) — deterministic keys + blocking/MinHash-LSH + Splink at billions; remaining: blocking-rule + match-threshold tuning per dataset, and the manual-review-queue workflow for low-confidence merges.
+4. ~~Cross-workspace "tenant search" read layer~~ — **Resolved:** the global master graph ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) **is** the shared search layer; every tenant searches the universe (masked) and reveals into its overlay.
+5. **DSAR fan-out** now deletes the **golden identity + its `source_records` + every overlay copy** — procedure + SLA ([08 §4](./08-compliance.md)); the golden identity makes "find everywhere" provable.
 6. **Billing hardening:** ADR-0007 counter risks — when to reintroduce an append-only ledger.
+7. **Citus sharding cutover** — at what master-graph size do we move the golden tables from a single Aurora writer to Citus shards? (the overlay stays on Aurora.)
+8. **Co-op / contributory ingestion** — if/when workspace-imported data feeds the master graph, the opt-in + disclosure model ([06 §1](./06-enrichment-engine.md)); **off by default**.
 
 ## 14. Planned schema additions (app-surface & platform)
 
@@ -420,11 +608,15 @@ forthcoming** (their own migration) — not yet defined above, not silently assu
 (CRM/Slack connections + encrypted OAuth tokens), `sending_identities` (per-user/workspace send-from
 addresses + DKIM status).
 
-**Data quality:** record-level fields on `contacts`/`accounts` — `last_verified_at`,
-`verification_source`, `data_quality_score` (0–100, distinct from lead score and `email_status`),
-`is_duplicate_of`; tables `data_quality_rules`, `verification_jobs`, `dedupe_candidates` (the last
-populated by **Splink** probabilistic record linkage — [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md))
-([06](./06-enrichment-engine.md)).
+**Data quality & entity resolution:** record-level fields (`last_verified_at`, `verification_source`,
+`data_quality_score` 0–100 — distinct from lead score and `email_status`) live on the **master** records
+(§5.1) and mirror onto overlay copies; tables `data_quality_rules`, `verification_jobs`. **Global entity
+resolution** is the `source_records` → `match_links` → golden-record pipeline (§5.1): deterministic keys +
+**blocking / MinHash-LSH** candidate generation + **Splink** probabilistic scoring + **survivorship**, run as
+batch jobs (Spark/Athena over the lake — [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)
+amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), [06 §9](./06-enrichment-engine.md)).
+`match_links.is_duplicate_of` links merged survivors; low-confidence merges route to a manual review queue.
+(The overlay still dedups within a workspace on its blind-index uniques, §11.)
 
 **Platform scope** ([13](./13-platform-admin.md), [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)):
 `staff_users`, `staff_roles`/`staff_permissions`, `impersonation_sessions`, **`platform_audit_log`**

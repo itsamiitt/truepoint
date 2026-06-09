@@ -10,13 +10,15 @@
 1. **Suppression is unbypassable.** The suppression check runs **inside** the reveal **and the outbound
    send** transaction, not merely as a guard — no code path can reveal *or message* a suppressed
    contact ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)).
-2. **Provenance is per-import.** Each contact's source history lives in `source_imports.raw_data`
-   (the raw payload per import) — there is **no field-level lineage** and **no global golden record**
-   ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)). DSAR access/deletion is
-   answered by **enumerating per-workspace copies**, not by replaying a lineage graph.
+2. **Two-layer provenance ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** The
+   **master graph** holds the golden identity + immutable `source_records` (per-source evidence); each
+   workspace **overlay** keeps its per-import `source_imports.raw_data`. DSAR is answered by resolving the
+   **one golden identity** and then purging it + its `source_records` + **every overlay copy** — the golden
+   identity makes "find everywhere" *provable* (a strength the per-workspace-only model lacked).
 3. **Lawful basis is recorded, per subject, per jurisdiction.**
-4. **Deletion is complete and verifiable** by fanning out across **every per-workspace copy** + its
-   `source_imports`/`contact_reveals`/`activities`/`outreach_log`, then a verification scan.
+4. **Deletion is complete and verifiable** by resolving the **golden identity**, then purging it + its
+   `source_records` + **every overlay copy** (with `source_imports`/`contact_reveals`/`activities`/
+   `outreach_log`), then a verification scan ([§4.2](#42-delete-the-hard-one--fans-out-across-every-copy)).
 5. **Everything meaningful is audited**, append-only.
 6. **Storage limitation:** retain only what we can justify; re-verify or purge.
 
@@ -82,32 +84,36 @@ flowchart LR
 ```
 
 ### 4.1 Access
-There is **no global golden record** — the subject may exist as **many independent per-workspace
-copies**. We assemble the `scope_report` by **enumerating every `contacts` copy** matching the subject
-(by `email_blind_index` / `linkedin_public_id` / `sales_nav_lead_id` / phone, across all workspaces)
-and, per copy, joining: its `source_imports` (the raw payload + `source_name` that brought it in),
-`contact_reveals` (who revealed it, when, which fields), `activities` (sends/opens/clicks/replies), and
-relevant `audit_log` rows. Delivered to the verified subject. *(Cross-workspace enumeration runs as a
-privileged DSAR job — it must read across RLS boundaries, see [§9](#9-security-controls-supporting-compliance).)*
+We resolve the subject to a **single golden identity** in the master graph (by
+`master_emails.email_blind_index` / `master_phones.phone_blind_index` / `linkedin_public_id`), then assemble
+the `scope_report` from **both layers**: the **master** record + its `source_records` (every source that
+contributed) + `master_emails`/`master_phones`; **and** every per-workspace **overlay** `contacts` copy
+linked to that `master_person_id` (or matching by blind index), joining each copy's `source_imports` (the raw
+payload + `source_name` that brought it in), `contact_reveals` (who revealed it, when, which fields),
+`activities` (sends/opens/clicks/replies), and relevant `audit_log` rows. The golden identity makes the
+enumeration **complete and provable**. Delivered to the verified subject. *(Cross-workspace + master
+enumeration runs as a privileged DSAR job — it reads across RLS boundaries and the system-owned master graph,
+see [§9](#9-security-controls-supporting-compliance).)*
 
 ### 4.2 Delete (the hard one — fans out across every copy)
-Because each workspace holds its own copy, deletion **cannot** target one row — a single `dsar-delete`
-BullMQ job **fans out** across all of them, idempotent and verifiable:
-1. **Find every copy:** all `contacts` rows for the subject across **all workspaces/tenants**.
-2. **Per copy, tombstone + null PII** (`deleted_at`, null/zero `email_enc`/`phone_enc`/name columns).
-3. **Anonymize/delete `source_imports`** for each copy — purge PII from `raw_data`.
-4. **Purge dependent rows:** `contact_reveals`, `activities`, and `outreach_log` (enrollment/send
-   history) for each copy; plus Redis entries and any `provider_calls` referencing the subject.
-5. **Add a `global`-scope suppression row** keyed on the subject (so no workspace re-imports or
-   re-enriches them, and no send can reach them).
-6. **Audit** the deletion (append-only proof; one row per copy touched).
-7. **Verification scan** confirms no residual PII for the subject across **all** copies +
-   `source_imports`/`contact_reveals`/`activities`/`outreach_log` + caches; the job isn't `completed`
-   until the scan passes.
+Deletion targets the **one golden identity** and cascades; a single `dsar-delete` BullMQ job is idempotent
+and verifiable:
+1. **Resolve the golden identity** in the master graph (by blind index / LinkedIn id) → `master_person_id`.
+2. **Purge the master record:** delete/tombstone `master_persons` + `master_emails`/`master_phones` (the
+   encrypted channels) + its `source_records` + `match_links` — so the universe no longer holds the subject
+   and the ER pipeline can't re-form the cluster.
+3. **Cascade to every overlay copy** linked to that `master_person_id` (or matching by blind index) across
+   **all workspaces/tenants**: tombstone + null PII (`deleted_at`, null `email_enc`/`phone_enc`/name), purge
+   its `source_imports`, `contact_reveals`, `activities`, `outreach_log`, Redis entries, and `provider_calls`.
+4. **Add a `global`-scope suppression row** (and set `master_persons.is_suppressed`) so no source, co-op, or
+   re-enrichment re-imports the subject, and no send can reach them.
+5. **Audit** the deletion (append-only proof; one row per master + overlay touched).
+6. **Verification scan** confirms no residual PII across the master record + `source_records` + **all** overlay
+   copies + their dependents + caches; the job isn't `completed` until the scan passes.
 
-> Deletion completeness comes from **enumerating copies**, not from a lineage graph. **Cost & SLA are
-> elevated** — fan-out scales with the number of workspaces holding a copy; the verification scan must
-> sweep every shard/partition. Track the SLA as an open question ([§13](#13-open-questions)).
+> Deletion completeness now comes from the **single golden identity** (find-everywhere is *provable*) plus the
+> overlay cascade — not from enumerating copies blind. **Cost & SLA** still scale with the number of overlay
+> copies + master shards the scan must sweep; track the SLA as an open question ([§13](#13-open-questions)).
 
 ### 4.3 Rectify
 Correct the field on **each per-workspace copy** that holds it (there is no merge step under the
@@ -240,8 +246,11 @@ Re-verification keeps data accurate (accuracy principle); suppression + DSAR pro
 
 ## 11. Collection & channel legality (ties to [06 §2](./06-enrichment-engine.md#2-source-channels-how-data-enters-a-workspace))
 
-The proprietary web-scraper / global-collection pipeline is **removed** — data enters each workspace by
-**import + enrichment providers (Apollo/ZoomInfo/Clearbit) + Sales Navigator + CSV/CRM**
+The proprietary web-**scraper** stays **removed**, but LeadWolf now **builds a global master graph**
+([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) from **import + enrichment providers
+(Apollo/ZoomInfo/Clearbit) + public registries + Sales Navigator + CSV/CRM + a future opt-in co-op** — so it
+is squarely a **data broker / vendor** (see [§15](#15-trust--certification-program-adr-0014)), not only a
+per-workspace CRM. Data still also lands in each workspace overlay
 ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md), [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
 
 - **Per-source legal / ToS review** before enabling any source in production — each provider's licence
@@ -322,7 +331,9 @@ reveal **and** send [§3](#3-suppression--do-not-contact-dnc) + DSAR fan-out [§
   [§9](#9-security-controls-supporting-compliance)). **Readiness begins at M5** (compliance hardening); external
   audit follows post-MVP ([10](./10-roadmap.md)). This owns what was the SOC2-scope open question
   ([00 §8.9](./00-overview.md#8-open-questions)).
-- **US data-broker registration + DROP processing** — the California **Delete Act / DROP** (live 2026-01-01,
+- **US data-broker registration + DROP processing** — operating a **global master graph**
+  ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) makes data-broker status **core, not
+  contingent**. The California **Delete Act / DROP** (live 2026-01-01,
   per-day penalties) and applicable state laws require a contact-data business to **register**; registration is a
   **GA gate** in those markets. Beyond registering, brokers must **process DROP deletion requests from
   2026-08-01** (poll ≥ every 45 days) — wired into the DSAR delete fan-out

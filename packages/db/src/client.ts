@@ -20,9 +20,15 @@ export interface TenantScope {
   workspaceId?: string;
 }
 
-/** Run `fn` inside a transaction with the RLS GUCs set LOCAL — the only sanctioned scoped-query path. */
+/**
+ * Run `fn` inside a transaction with the RLS GUCs set LOCAL — the only sanctioned scoped-query path.
+ * `SET LOCAL ROLE leadwolf_app` drops to the **non-BYPASSRLS** app role for the scope of the tx, so RLS is
+ * actually enforced even when the base connection is privileged (the documented dev/superuser case). Both
+ * the role and the GUCs are transaction-local (RDS-Proxy-safe). 03 §9, architecture-contract §6.
+ */
 export async function withTenantTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE leadwolf_app`);
     await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${scope.tenantId}, true)`);
     if (scope.workspaceId) {
       await tx.execute(sql`SELECT set_config('app.current_workspace_id', ${scope.workspaceId}, true)`);

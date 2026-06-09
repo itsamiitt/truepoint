@@ -1,43 +1,55 @@
-// identifierLookup.ts — Step 1 of progressive login (ADR-0017): email → domain → routed Step-2, WITHOUT
-// leaking whether the account exists. Routing is by VERIFIED domain only (never by user existence), so the
-// response is identical for known and unknown accounts. Unclaimed/personal domains fall through to password.
+// identifierLookup.ts — Step 1 of progressive login (ADR-0017/0020). Resolves an email OR username to a
+// global identity and REVEALS whether it exists to branch login vs registration. For an existing identity it
+// routes by the canonical email's verified domain (SSO when enforced) else password/magic; unknown → register.
+// The credential step stays uniform — only this step reveals existence (gated by Turnstile + rate-limit).
 
-import { identifierResultSchema, type IdentifierResult } from "@leadwolf/types";
+import { userRepository } from "@leadwolf/db";
+import { type IdentifierResult, identifierResultSchema } from "@leadwolf/types";
 
 export interface DomainRouting {
   tenantId: string;
   tenantName: string;
+  joinPolicy: string; // sso_only | auto_join | request_access
   ssoEnforced: boolean;
-  ssoProvider?: "saml" | "oidc";
+  ssoProtocol: string | null; // saml | oidc
 }
 
-/** Resolve a verified domain → tenant SSO routing, or null if unclaimed. Injected to keep this pure and
- *  testable; the live resolver reads tenant_domains + tenant_sso_configs via repositories. */
+/** Resolve a verified email domain → tenant + SSO routing, or null if unclaimed. Injected for testability;
+ *  the live resolver reads tenant_domains + tenant_sso_configs (apps/auth/lib/domainResolver). */
 export type DomainResolver = (domain: string) => Promise<DomainRouting | null>;
 
 export async function lookupIdentifier(
-  email: string,
+  identifier: string,
   resolveDomain: DomainResolver,
 ): Promise<IdentifierResult> {
-  const at = email.lastIndexOf("@");
-  const domain = at >= 0 ? email.slice(at + 1).toLowerCase() : "";
+  const id = identifier.trim();
+  const user = await userRepository.findByEmailOrUsername(id);
+
+  // Canonical email: an existing identity's email, or the identifier itself if it was an email.
+  const email = user ? user.email : id.includes("@") ? id.toLowerCase() : null;
+  const at = email ? email.lastIndexOf("@") : -1;
+  const domain = at >= 0 ? email!.slice(at + 1).toLowerCase() : "";
   const routing = domain ? await resolveDomain(domain) : null;
 
+  // SSO-enforced domain wins for everyone on it — existing OR first-time (the callback JIT-provisions the
+  // new identity). This is checked BEFORE the unknown→register branch so SSO users never hit registration.
   if (routing?.ssoEnforced) {
     return identifierResultSchema.parse({
-      method: "sso",
+      route: "sso",
+      email: email ?? undefined,
       tenantId: routing.tenantId,
       tenantName: routing.tenantName,
-      ssoProvider: routing.ssoProvider,
+      ssoProvider: routing.ssoProtocol === "oidc" ? "oidc" : "saml",
     });
   }
-  if (routing) {
-    return identifierResultSchema.parse({
-      method: "password",
-      tenantId: routing.tenantId,
-      tenantName: routing.tenantName,
-    });
+
+  // Unknown identity (and not an SSO domain) → registration. Carry the email if the identifier was one.
+  if (!user) {
+    return identifierResultSchema.parse({ route: "register", email: email ?? undefined });
   }
-  // Unclaimed / personal domain: render password (with social + magic-link also offered on the screen).
-  return identifierResultSchema.parse({ method: "password" });
+  if (user.passwordHash) {
+    return identifierResultSchema.parse({ route: "password", email: user.email });
+  }
+  // No password set → passwordless (magic link).
+  return identifierResultSchema.parse({ route: "magic", email: user.email });
 }

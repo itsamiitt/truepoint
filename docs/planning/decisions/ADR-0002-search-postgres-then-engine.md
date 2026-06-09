@@ -4,6 +4,7 @@
 - **Date:** 2026-05-29
 - **Context doc:** [01-tech-stack.md](../01-tech-stack.md), [03-database-design.md](../03-database-design.md)
 - **Amendment note:** The original decision was *Postgres-native search first, dedicated engine later*. With the AWS-native stack decision ([ADR-0010](./ADR-0010-aws-native-self-hosted-stack.md)) and the 100M+ target, the team adopts **self-hosted Typesense from day one**. The `SearchPort` abstraction is retained; the "start on Postgres" timing is dropped. Original reasoning kept below as history.
+- **Amended by:** [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md) (2026-06-09) — the **global master-graph** search index (billions of rows, the shared universe) moves to **OpenSearch** behind the same `SearchPort`; **Typesense** is retained for the smaller **per-workspace overlay** search + dev. The day-one search decision stands for the overlay; the billions-row global universe exceeds Typesense's envelope.
 
 ## Context
 
@@ -40,7 +41,7 @@ interface SearchPort {
 - **Mitigation:** Terraform-managed cluster, automated snapshots, monitored CDC lag; `SearchPort` lets us fall back to a Postgres implementation for tiny/dev environments.
 
 ## Revisit if
-Typesense can't serve a needed query shape or scale — swap the `SearchPort` implementation to OpenSearch (no caller changes).
+Typesense can't serve a needed query shape or scale — swap the `SearchPort` implementation to OpenSearch (no caller changes). **→ Triggered (2026-06-09) for the global master-graph index by [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md): the billions-row shared universe runs on OpenSearch; Typesense stays for the overlay.**
 
 ---
 

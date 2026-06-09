@@ -16,6 +16,7 @@ export default async function WorkspacePage({ searchParams }: { searchParams: Se
   const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;
   const txn = txnId ? await getLoginTransaction(txnId) : null;
   if (!txn) redirect("/login");
+  if (!txn.tenantId) redirect("/org");
 
   const workspaces = await workspaceRepository.listForUser(txn.tenantId, txn.userId);
 

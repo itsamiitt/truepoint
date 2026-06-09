@@ -3,6 +3,7 @@
 - **Status:** Superseded by [ADR-0006](./ADR-0006-per-workspace-multitenant-model.md) (2026-05-29)
 - **Date:** 2026-05-29
 - **Superseded note:** The 2026-05-29 multi-tenant proposal replaced the global shared contact DB with a **per-workspace** model (each workspace owns its own contacts/accounts) and added a workspace layer. This body is retained as the record of the original shared-asset rationale that ADR-0006 consciously trades away.
+- **Revived (as hybrid) by:** [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md) (2026-06-09) — reinstates a **global shared contact DB as Layer 0** (the master graph) *beneath* the ADR-0006 per-workspace overlay. The shared-asset rationale below is **live again**, now as one layer of a two-layer model rather than the exclusive design.
 - **Context doc:** [02-architecture.md](../02-architecture.md), [03-database-design.md](../03-database-design.md)
 
 ## Context

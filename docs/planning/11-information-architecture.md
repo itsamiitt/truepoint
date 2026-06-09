@@ -82,8 +82,9 @@ One surface = **Search + Contacts + Accounts + Lists**.
   has-email/phone, **lead score**, `outreach_status`, list membership) + **Saved Views / Lists**
   (static & dynamic) selector.
 - **Center grid:** virtualized; **segmented toggle Contacts ⇄ Accounts**; masked email/phone with
-  **status + score glyphs**; column config + density toggle. Backed by Typesense, workspace-scoped,
-  masked ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)).
+  **status + score glyphs**; column config + density toggle. Backed by `SearchPort` — **OpenSearch**
+  (global master graph) + **Typesense** (overlay), masked ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)
+  amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
 - **Right slide-over — record detail:** identity · **score + breakdown** ([ADR-0008](./decisions/ADR-0008-lead-scoring-model.md))
   · **per-import provenance** (`source_imports`) + a **Data Health badge** (verification status,
   staleness, duplicate flag — see [06](./06-enrichment-engine.md)) · **reveal** (inline, spends tenant

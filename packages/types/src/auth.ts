@@ -19,13 +19,16 @@ export const identifierSchema = z.object({
 });
 export type IdentifierInput = z.infer<typeof identifierSchema>;
 
-/** The routed Step-2 the identifier screen should render. Never leaks whether the account exists. */
+/** Where the identifier step routes. REVEALS existence to branch login vs registration (ADR-0020). */
+export const identifierRoute = z.enum(["password", "sso", "passkey", "magic", "register"]);
+export type IdentifierRoute = z.infer<typeof identifierRoute>;
+
 export const identifierResultSchema = z.object({
-  method: authMethod,
+  route: identifierRoute,
+  email: z.string().email().optional(), // canonical email (a username resolves to its email), when known
   tenantId: z.string().uuid().optional(),
   tenantName: z.string().optional(),
   ssoProvider: z.enum(["saml", "oidc"]).optional(),
-  hasPasskey: z.boolean().default(false),
 });
 export type IdentifierResult = z.infer<typeof identifierResultSchema>;
 
@@ -47,9 +50,32 @@ export const mfaVerifySchema = z.object({
 });
 export type MfaVerifyInput = z.infer<typeof mfaVerifySchema>;
 
-// ── Step 4: workspace selection ──────────────────────────────────────────────────────────────────────
+// ── Step 4: org + workspace selection (ADR-0019) ──────────────────────────────────────────────────────
+export const orgSelectionSchema = z.object({ tenantId: z.string().uuid() });
+export type OrgSelectionInput = z.infer<typeof orgSelectionSchema>;
+
 export const workspaceSelectionSchema = z.object({ workspaceId: z.string().uuid() });
 export type WorkspaceSelectionInput = z.infer<typeof workspaceSelectionSchema>;
+
+// ── Identifier alias + registration (ADR-0019/0020) ──────────────────────────────────────────────────
+export const usernameSchema = z
+  .string()
+  .min(3)
+  .max(32)
+  .regex(/^[a-zA-Z0-9_.-]+$/);
+
+export const loginIdentifierSchema = z.object({
+  identifier: z.string().min(1).max(320), // an email or the optional username alias
+});
+export type LoginIdentifierInput = z.infer<typeof loginIdentifierSchema>;
+
+export const signupSchema = z.object({
+  email: z.string().email().max(320),
+  fullName: z.string().min(1).max(255),
+  username: usernameSchema.optional(),
+  password: z.string().min(8).max(256),
+});
+export type SignupInput = z.infer<typeof signupSchema>;
 
 // ── Cross-domain token exchange (ADR-0016) ───────────────────────────────────────────────────────────
 export const tokenExchangeSchema = z.object({

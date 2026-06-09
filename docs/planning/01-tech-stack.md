@@ -15,12 +15,13 @@
 | Backend | **Hono on Bun** | ECS Fargate behind ALB |
 | API style | **tRPC** (internal app) + **REST/OpenAPI** (`@hono/zod-openapi`, public) | — |
 | ORM | **Drizzle** ([ADR-0001](./decisions/ADR-0001-orm-drizzle.md)) | — |
-| Primary DB | PostgreSQL 16 on **Aurora Serverless v2** | Managed |
+| Primary DB | PostgreSQL 16 on **Aurora Serverless v2** (**Citus**-sharded for the billions-row master graph — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | Managed |
 | Pooling | **RDS Proxy** (transaction pooling, IAM auth) | Managed |
-| Search | **Typesense, self-hosted** ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)) | ECS Fargate |
+| Search | **OpenSearch** (global master graph) + **Typesense** (overlay), self-hosted ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md) amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | ECS Fargate |
 | Cache/queue | **Redis 7** (ElastiCache, cluster mode) + **BullMQ** | Managed |
 | Realtime | Postgres LISTEN/NOTIFY + SSE; Redis pub/sub fan-out | API service |
-| Event analytics | **ClickHouse, self-hosted** (when an event table >~50M rows / >2s) via CDC | EC2 |
+| Event analytics + facet counts | **ClickHouse, self-hosted** (event tables >~50M rows; high-cardinality master-graph facet counts) via CDC | EC2 |
+| Data lake / batch ER | **S3 + Iceberg/Parquet**; Splink on **Spark/Athena** over raw `source_records` ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | Native |
 | Auth | **Self-built on Lucia** + Postgres + Redis ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)) | API service |
 | Files | S3 (pre-signed up/download; CloudFront for public) | Native |
 | Email | SES (React Email; SNS→SQS bounce/complaint) | Native |
@@ -39,7 +40,7 @@
 
 - **Hono on Bun (not NestJS/Fastify):** lighter, faster, container-friendly; tRPC gives end-to-end types to the Next.js app, `@hono/zod-openapi` serves the public REST API. DI/guard concerns (tenancy, RBAC, audit) become middleware. (Supersedes the earlier NestJS rationale.)
 - **Aurora Serverless v2 + RDS Proxy:** PG16-compatible (our schema runs unchanged), auto-scaling ACUs, Multi-AZ, PITR, logical replication for CDC; RDS Proxy gives PgBouncer-style transaction pooling so ephemeral ECS tasks don't exhaust connections. **RLS** is set per request via `SET LOCAL app.current_workspace_id` (see [03 §9](./03-database-design.md)).
-- **Typesense from day one** behind `SearchPort`, fed by Aurora logical-replication CDC ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)).
+- **OpenSearch (global master graph, billions) + Typesense (overlay)** behind `SearchPort`, fed by Aurora logical-replication CDC ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md) amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)); ClickHouse backs high-cardinality facet counts.
 - **Self-built auth (Lucia):** zero per-MAU cost + full data ownership, at the cost of ~6–12 eng-weeks + ongoing security upkeep ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)). Tables in [03 §4](./03-database-design.md).
 - **Drizzle retained** ([ADR-0001](./decisions/ADR-0001-orm-drizzle.md)): SQL-first control for RLS, partial indexes, partitioning.
 
@@ -72,7 +73,7 @@ The internal **`apps/admin`** console (separate ECS service) connects under a **
 
 ## 4. Background workers
 
-Separate ECS Fargate service (same codebase, different entry point), consuming **BullMQ** on Redis; auto-scales on queue-depth metric. Worker types: **enrichment** (Apollo/ZoomInfo/Clearbit), **scoring**, **imports** (CSV/XLSX → dedup → insert), **CRM sync** (Salesforce/HubSpot/Pipedrive), **outreach delivery** (→ SES or external sequencer), **webhook delivery**, **search-sync** (CDC → Typesense). One-off heavy jobs (full re-score, bulk re-enrich) run on **AWS Batch**.
+Separate ECS Fargate service (same codebase, different entry point), consuming **BullMQ** on Redis; auto-scales on queue-depth metric. Worker types: **enrichment** (Apollo/ZoomInfo/Clearbit), **entity-resolution** (global ER: normalize → blocking/MinHash-LSH → Splink → survivorship — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)), **scoring**, **imports** (CSV/XLSX → dedup → insert), **CRM sync** (Salesforce/HubSpot/Pipedrive), **outreach delivery** (→ SES or external sequencer), **webhook delivery**, **search-sync** (CDC → OpenSearch + Typesense + ClickHouse). One-off heavy jobs (full re-score, bulk re-enrich, **batch ER on Spark/Athena over the lake**) run on **AWS Batch**.
 
 ## 5. Repositories (two)
 

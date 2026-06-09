@@ -11,7 +11,7 @@
 |---|---|---|
 | **User** | the user (self) | `users`, `user_sessions`, `user_mfa`/`user_mfa_methods`, `webauthn_credentials`, `trusted_devices`, `user_oauth_accounts`, `sending_identities`* |
 | **Workspace** | workspace `owner`/`admin` | `workspaces`, `workspace_members`, `workspace_auth_policies`, `suppression_list`, integrations* |
-| **Tenant** | `users.is_tenant_owner` / billing admin | `tenants`, `tenant_domains`, `tenant_sso_configs`, `tenant_auth_policies`, `scim_tokens`, `purchases`, `consent_records`, `dsar_requests`, `audit_log` |
+| **Tenant** | `tenant_members.is_tenant_owner` / billing admin | `tenants`, `tenant_domains`, `tenant_sso_configs`, `tenant_auth_policies`, `scim_tokens`, `purchases`, `consent_records`, `dsar_requests`, `audit_log` |
 | **Developer** | tenant admin+ | `api_keys`, `oauth_app_clients`, `webhooks`* |
 
 `*` = table flagged as a follow-up [03](./03-database-design.md) amendment (see [11 §6](./11-information-architecture.md) / [§6 below](#6-schema--open-items)).
@@ -32,8 +32,10 @@
 ## 3. Workspace settings *(owner/admin — Free+, multi-workspace Team+)*
 
 - **General** — name, slug, default region, timezone, branding. *(M2)*
-- **Members & roles** — invite, set per-workspace role (`owner`/`admin`/`member`/`viewer`), remove
-  (DSAR-aware on user deletion); pending invites. *(M2)*
+- **Members & roles** — invite by email (creates an `invitations` row + emailed accept link, with
+  expiry/resend), set per-workspace role (`owner`/`admin`/`member`/`viewer`), remove (DSAR-aware); pending +
+  accepted invites. Accept lands the global identity as a `tenant_member` + `workspace_member`
+  ([ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)). *(M2)*
 - **Authentication** *(admin)* — workspace **MFA enforcement** (off/optional/**required**), **allowed
   login methods**, **session timeout**, and **IP allowlist** (`workspace_auth_policies`); may only
   **tighten** the tenant policy, never relax it
@@ -56,12 +58,13 @@
   **Transparent, no-lock-in terms** ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)):
   self-serve cancellation, no auto-renew traps, and **account-closure data export** (no data-destroy on churn).
 - **Workspaces** *(Team+)* — create/archive, limits, default workspace. *(M2)*
-- **Members directory** — tenant-wide users, deactivate, assign tenant-role (`is_tenant_owner`). *(M2)*
+- **Members directory** — tenant-wide members (`tenant_members`), invite/deactivate, assign tenant-role
+  (`is_tenant_owner`). *(M2)*
 - **Security & access** *(Enterprise)* — guided **SSO wizard** (SAML 2.0 / OIDC via `tenant_sso_configs`)
   with **ACS URL + Entity ID displayed** (`auth.truepoint.in` values), metadata upload/URL, **attribute
   mapping** (email/name/role/department), **JIT toggle + default role**, and a **test-connection** tool;
   **SCIM** provisioning + token management (`scim_tokens`); **domain claiming + verification**
-  (`tenant_domains`); **enforce-SSO**, **IP allowlist**, session/MFA/password policy
+  (`tenant_domains`) with a **join policy** (`sso_only` / `auto_join` / `request_access`, [ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)); **enforce-SSO**, **IP allowlist**, session/MFA/password policy
   (`tenant_auth_policies`, [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)).
   Full design [17 §8](./17-authentication.md#8-sso--scim-architecture). *(M11)*
 - **Compliance & data** — global/tenant **suppression**, **DSAR** intake & status, **consent records**,

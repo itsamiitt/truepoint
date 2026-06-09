@@ -45,12 +45,18 @@ ALTER TABLE tenant_auth_policies ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_auth_policy_isolation ON tenant_auth_policies
   USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
 
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-CREATE POLICY users_tenant_isolation ON users
+-- tenant_members + invitations: tenant-scoped for the app role (read under withTenantTx).
+ALTER TABLE tenant_members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_members_isolation ON tenant_members
   USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
 
--- Auth-service boundary (17 §1): the identifier-first lookup must read `users` / `user_sessions` /
--- `user_mfa_methods` / `trusted_devices` BEFORE any tenant context exists. Those reads run as the
--- dedicated auth-service role (apps/auth), not the app's tenant-scoped role; a permissive policy for that
--- role (and the user_id-scoped policies for the session/MFA/device tables) is granted in the auth-role
--- migration, kept separate from the customer app's non-BYPASSRLS role.
+ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY invitations_isolation ON invitations
+  USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+
+-- Global identity (ADR-0019): `users` is NOT tenant-RLS-scoped — one row per person, read by the auth service
+-- before any tenant is chosen. The auth service also reads the membership graph (`tenant_members` by user_id)
+-- and verified `tenant_domains` PRE-tenant under its own (privileged) connection; the customer app's
+-- non-BYPASSRLS `leadwolf_app` role only ever sees rows for the active tenant via the GUC above. The
+-- user-scoped auth tables (`user_sessions`/`user_mfa_methods`/`trusted_devices`/`auth_email_tokens`) are
+-- likewise auth-service-owned, keyed by user_id.
