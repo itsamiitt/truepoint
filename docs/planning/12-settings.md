@@ -11,7 +11,7 @@
 |---|---|---|
 | **User** | the user (self) | `users`, `user_sessions`, `user_mfa`/`user_mfa_methods`, `webauthn_credentials`, `trusted_devices`, `user_oauth_accounts`, `sending_identities`* |
 | **Workspace** | workspace `owner`/`admin` | `workspaces`, `workspace_members`, `workspace_auth_policies`, `suppression_list`, integrations* |
-| **Tenant** | `tenant_members.is_tenant_owner` / billing admin | `tenants`, `tenant_domains`, `tenant_sso_configs`, `tenant_auth_policies`, `scim_tokens`, `purchases`, `consent_records`, `dsar_requests`, `audit_log` |
+| **Tenant** | `tenant_members.org_role` — `owner` (all), `billing_admin` (billing), `security_admin` (SSO/auth policy), `compliance_admin` (suppression/DSAR/retention) ([ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)) | `tenants`, `tenant_domains`, `tenant_sso_configs`, `tenant_auth_policies`, `scim_tokens`, `purchases`, `consent_records`, `dsar_requests`, `audit_log` |
 | **Developer** | tenant admin+ | `api_keys`, `oauth_app_clients`, `webhooks`* |
 
 `*` = table flagged as a follow-up [03](./03-database-design.md) amendment (see [11 §6](./11-information-architecture.md) / [§6 below](#7-schema--open-items)).
@@ -133,4 +133,4 @@ passkeys, trusted devices, OAuth apps) are now **defined** in
 `webauthn_credentials`, `trusted_devices`, `user_mfa_methods`, `oauth_app_clients`.
 
 **Open questions:** per-user personal tokens policy (tenant-controlled?); notification-prefs storage
-(table vs `users.settings` jsonb); SCIM scope at MVP-Enterprise ([17 open Q5](./17-authentication.md#open-questions)).
+(table vs `users.settings` jsonb); SCIM scope at MVP-Enterprise ([17 open Q6](./17-authentication.md#open-questions)).

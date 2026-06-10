@@ -95,7 +95,13 @@ Splink** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)) ·
 **workflow automation engine**
 ([ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md)) ·
 **event backbone & real-time**
-([ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md)).
+([ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md)) ·
+**record customization (custom fields/stages/tags)**
+([ADR-0028](./decisions/ADR-0028-record-customization-layer.md)) ·
+**credit ledger + leases**
+([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)) ·
+**tenant org roles**
+([ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)).
 
 See [00-overview.md](./00-overview.md#7-decision-log) for the full decision log with rationale links,
 and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md),
@@ -117,5 +123,8 @@ and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-worksp
 [ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md),
 [ADR-0024](./decisions/ADR-0024-performance-slos-and-capacity-model.md),
 [ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md),
-[ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md), and
-[ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md).
+[ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md),
+[ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md),
+[ADR-0028](./decisions/ADR-0028-record-customization-layer.md),
+[ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md), and
+[ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md).

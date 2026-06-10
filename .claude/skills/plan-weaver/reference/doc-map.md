@@ -79,6 +79,9 @@
 | ADR-25 | `decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md` |
 | ADR-26 | `decisions/ADR-0026-workflow-automation-engine.md` |
 | ADR-27 | `decisions/ADR-0027-real-time-delivery-and-event-backbone.md` |
+| ADR-28 | `decisions/ADR-0028-record-customization-layer.md` |
+| ADR-29 | `decisions/ADR-0029-credit-ledger-and-lease-decrement.md` |
+| ADR-30 | `decisions/ADR-0030-granular-tenant-org-roles.md` |
 | (input) | `docs/planning/proposals/2026-05-29-multi-tenant-schema.md` (adopted) |
 
 ## 2. Adjacency list (doc → docs/ADRs it references)
@@ -87,7 +90,7 @@
 
 | Doc | References |
 |---|---|
-| README | 00–17, brand, decisions/ |
+| README | 00–29, departments/, brand, decisions/ |
 | 00 | 01, ADR-1..20, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 16, 17 (decision log §7 + open Qs §8) |
 | 01 | 03, 04, 10, 17, ADR-1, ADR-2, ADR-10, ADR-16 |
 | 02 | 01, 03, 06, 08, 16, ADR-6, ADR-10, ADR-19 |
@@ -142,6 +145,9 @@
 | ADR-25 | 22, 06 |
 | ADR-26 | 27, 05 |
 | ADR-27 | 20, 02 |
+| ADR-28 | 05, 03 (record customization; 28 G-REV cluster) |
+| ADR-29 | 07, 03 (amends ADR-7 — executes its revisit path; 28 G-BIL-1/2) |
+| ADR-30 | 03, 17, 12 (amends ADR-19 capability model; resolves drift F-4; 28 G-AUTH-10) |
 
 **Bidirectional pairs:** 00↔ADRs; 03↔ADR-6/7/8/9/10; 05↔10 (matrix↔roadmap); 07↔08↔09 (reveal+send path); 11↔04 (IA↔nav); 11↔12↔13 (app surface); 13↔ADR-11; 10↔14 (roadmap↔execution); 02↔16, 14↔16 (architecture↔code-organization); 04↔brand (design↔brand); 07↔ADR-12/13, 08↔ADR-14, 06↔ADR-13, 03↔ADR-13 (remediation decisions); 10↔15, 05↔15 (gap remediation); 03↔ADR-15, 06↔ADR-15 (entity resolution); superseded↔superseding (ADR-3/5↔ADR-6, ADR-4↔ADR-7); 17↔03/05/09/12 (auth ↔ schema/features/API/settings); 00↔ADR-16/17/18; 03↔ADR-16; ADR-10↔ADR-16 (auth transport amended); 17↔ADR-19/20; ADR-6↔ADR-19 (user scoping amended); ADR-17↔ADR-20 (no-enumeration amended); 00↔ADR-19/20; **03/02/06/08↔ADR-21** (two-layer master graph + overlay), ADR-21↔ADR-2/6/15 (amends), ADR-21↔ADR-3/5 (revives as hybrid); 00↔ADR-21.
 **New (2026-06-10):** 25↔departments/, 25↔03/05/07/11/12/24/27 (departments); 23↔05/06/08/09/16/20/27 (AI);
@@ -150,6 +156,10 @@
 00↔ADR-22..27; 03↔ADR-22/25; 05↔ADR-23/26; 02↔ADR-24/27; 22↔ADR-25; 27↔ADR-26; 25↔ADR-22; 23↔ADR-23.
 **Audit overlay (2026-06-10):** 28↔29 (audit ↔ settings catalog); README↔28/29 (index). 28/29 link *out*
 to the whole corpus one-way — no reciprocal links required from 00–27 (overlay convention, like 14/15).
+**Remediation Pass 1 (2026-06-10):** ADR-28/29/30 + tripod rows (00 §7); 05 §7↔03 §14↔10 M8 (record
+customization); 07 §2↔03 §8↔10 M11/M12↔02 §3.1 (ledger + leases); H8 propagated to org_role across
+03/02/05/09/12/17; audit-enum extension in 03 §7 + 08 §5; 08 §16 (breach notification) ↔ 19 §5; risk
+register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
 
 > **Doc 14 (Phase 1 Execution)** is an execution *overlay*: it sequences the build of M0–M5 and must
 > agree with 05 §21 / 10 (H10) but introduces no new milestone scope. **`brand-identity.md`** is the
@@ -166,7 +176,7 @@ to the whole corpus one-way — no reciprocal links required from 00–27 (overl
 | **README index + locked-decisions summary** | README | Update on doc add/rename + when locked decisions change. |
 | **Stack table** | 01 §1 (canonical) ; mirrored rows in 00 §7 | Stack change → update 01 §1 AND 00 §7. |
 
-## 4. Critical drift hazards (H1–H10) — "edit these together"
+## 4. Critical drift hazards (H1–H23) — "edit these together"
 
 | ID | Concept | Locations that must stay consistent |
 |---|---|---|
@@ -177,7 +187,7 @@ to the whole corpus one-way — no reciprocal links required from 00–27 (overl
 | **H5** | Suppression — gates reveal **and** send; scopes global/tenant/workspace | 03 §8, 08 §3, ADR-9 |
 | **H6** | DSAR delete fan-out across per-workspace copies + source_imports + contact_reveals + activities | 08 §4, 03 §5 |
 | **H7** | `email_status` enum (`unverified,valid,risky,invalid,catch_all,unknown`) | 03 §5, 06 §9, 07 §3/§11, 09 §3 |
-| **H8** | Roles: workspace roles on `workspace_members` + the tenant-level owner capability on **`tenant_members.is_tenant_owner`** (moved off `users` by ADR-19) | 03 §4, 02 §5, 05 §1, 09 §4 |
+| **H8** | Roles: workspace roles on `workspace_members` + the tenant-level capability on **`tenant_members.org_role`** (`owner|billing_admin|security_admin|compliance_admin|member` — ADR-30; membership moved off `users` by ADR-19; `is_tenant_owner` = compat alias for `owner`) | 03 §4, 02 §5, 05 §1, 09 §4, 12 §1, 17 §4 |
 | **H16** | Global identity: `users` is global (email/username unique); membership in `tenant_members`; per-workspace **data** model unchanged | 03 §4/§9, 02 §4/§5, 05 §1/§2, 09 §4, 17 §4, ADR-19 |
 | **H17** | Two-layer data: global master graph (Layer 0, system-owned, **not** RLS) + per-workspace overlay (Layer 1, RLS); reveal sources the master channel; global ER (blocking/LSH/Splink) | 03 §5/§9/§12, 02 §3.1/§3.3/§4/§6, 06 §1/§9, 09 §2/§3, 08 §1/§4, 00 §6/§7, ADR-21 |
 | **H9** | RLS via `SET LOCAL app.current_workspace_id` + `app.current_tenant_id` (non-BYPASSRLS role, RDS Proxy GUC reset) | 03 §9, 02 §4, ADR-6, ADR-10 |
@@ -199,7 +209,7 @@ to the whole corpus one-way — no reciprocal links required from 00–27 (overl
 | Term | Definition | Usages |
 |---|---|---|
 | workspace roles (`owner/admin/member/viewer`) | 03 §4 (`workspace_members.role`) | 02 §5, 05 §1, 09 §4 |
-| tenant-level owner/billing capability | 03 §4 (`tenant_members.is_tenant_owner` — moved off `users` by ADR-19) | 02 §5, 05 §1, 09 §4 |
+| tenant org roles (`owner/billing_admin/security_admin/compliance_admin/member`) | 03 §4 (`tenant_members.org_role` — ADR-30; `is_tenant_owner` compat alias; membership moved off `users` by ADR-19) | 02 §5, 05 §1, 09 §4, 12 §1, 17 §4 |
 | global identity + tenant membership (`users` global; `tenant_members`; `invitations`; `tenant_domains.join_policy`) | 03 §4 / ADR-19 | 02 §4/§5, 05 §1/§2, 09 §4, 12, 17 §4 |
 | registration model (hybrid: verified-domain join / pending invite / new org; identifier reveals existence) | 17 §2 / ADR-20 | 03 §4, 05 §1, 09 §2, 12 §3/§4 |
 | `email_status` enum | 03 §5 | 06 §9, 07 §3/§11, 09 §3 |
@@ -210,7 +220,7 @@ to the whole corpus one-way — no reciprocal links required from 00–27 (overl
 | `signal_type` (intent) | 03 §6 (intent_signals) | 06, 09 |
 | `activity_type` + `channel` + `outcome` | 03 §7 (activities) | 05, 09 |
 | outreach `status`/`platform` (sequences) | 03 §7 (outreach_log/sequences) | 05, 09, ADR-9 |
-| audit actions (closed enum, incl. `credit.adjust` + auth events `login.*/mfa.*/token.*/sso.*/device.*/session.revoked/code.*/signup/oauth.link`; `audit_log.origin_domain`) | 03 §7 (audit_log) / 08 §5 | 08 §5, 07 §3/§7, 03 §8, 09 §3.2, 17 §9 |
+| audit actions (closed enum, incl. `credit.adjust` + auth events `login.*/mfa.*/token.*/sso.*/device.*/session.revoked/code.*/signup/oauth.link` + record/config mutations `contact.*/account.*/list.*/sequence.*/template.*/settings.update/automation.rule.*`; `audit_log.origin_domain`) | 03 §7 (audit_log) / 08 §5 | 08 §5, 07 §3/§7, 03 §8, 09 §3.2, 17 §9, 02 §6 |
 | commercial policy (transparent, no-lock-in, export-on-exit) | ADR-12 / 07 §1A | 00 §7, 05 §11, 12 §4, 10 (M3) |
 | charge-by-verified-result + credit-back | ADR-13 / 07 §3 | 03 §8, 05 §7, 06 §9, 09 §3.2, 10 (M4/M9) |
 | trust & certification program (SOC 2/ISO/registration/Trust Center) | ADR-14 / 08 §15 | 00 §7, 10 (Trust track), 12 §4, 13 §3 |
@@ -243,6 +253,9 @@ to the whole corpus one-way — no reciprocal links required from 00–27 (overl
 | event backbone (`outbox`; domain events; SSE/WebSocket) | 20 / ADR-27 / 03 §14 | 02 §3, 09 §10, 18 §9, 26, 27 |
 | performance SLOs + error budgets + capacity (latency budgets, Citus cutover) | 18 / ADR-24 | 02 §9, 19, 09, 10 (M12), 00 §6 |
 | `saved_views` / `segments` (smart segments) | 03 §5.2/§14 / 24 | 05 §8, 11 §4.2, 27 |
+| record customization (`custom_field_definitions` + `custom_fields` jsonb, `pipeline_stages`→`outreach_status` map, `tags`/`record_tags`) | 03 §14 / ADR-28 | 05 §7/§21, 10 (M8), 24, 29 §6, 00 §6 |
+| `credit_ledger` (M11; counter = derived cache) + `credit_leases` (M12) | ADR-29 / 07 §2 | 03 §8/§14, 05 §11, 02 §3.1, 10 (M11/M12 + risk #2), 00 §6/§7 |
+| `mailbox_connections` (reply ingestion; M9 design gate) | 03 §14 | 05 §20, 10 (M9), 00 §8 Q11 |
 
 ## 6. ADR registry
 
@@ -254,7 +267,7 @@ to the whole corpus one-way — no reciprocal links required from 00–27 (overl
 | ADR-4 | Append-only credit ledger | **Superseded by ADR-7** | 07, 03 | (historical; revival path) |
 | ADR-5 | Global shared contact DB | **Superseded by ADR-6; revived (hybrid) by ADR-21** | 02, 03 | (historical; revived as Layer 0 by ADR-21) |
 | ADR-6 | Per-workspace multi-tenant model | Accepted (user scoping amended by ADR-19; no-global-golden reopened by ADR-21) | 02, 03 | 00, 02 §4, 03, 05, 08, ADR-19, ADR-21 |
-| ADR-7 | Per-workspace reveal + credit counter | Accepted | 07, 03 | 00, 07, 03 §8 |
+| ADR-7 | Per-workspace reveal + credit counter | Accepted (amended by ADR-0029 — ledger M11 + leases M12) | 07, 03 | 00, 07, 03 §8, ADR-29 |
 | ADR-8 | Lead-scoring / intelligence model | Accepted | 03, 06 | 00, 05 §16, 06, 11 |
 | ADR-9 | Outreach engine (enroll & send) | Accepted | 05, 09, 08 | 00, 05, 08, 09, 11 |
 | ADR-10 | AWS-native self-hosted stack (build auth) | Accepted (auth transport amended by ADR-16) | 01, 02 | 00, 01, 02, 09, 10, 13, 17, ADR-16 |
@@ -266,7 +279,7 @@ to the whole corpus one-way — no reciprocal links required from 00–27 (overl
 | ADR-16 | Dedicated auth origin + cross-domain token exchange | Accepted | 17, 09, 01 | 00, 03, 05, 09, 10, 12, 17, README (amends ADR-10) |
 | ADR-17 | Progressive identifier-first login + domain tenant routing | Accepted (no-enumeration amended by ADR-20) | 17, 03, 12 | 00, 05, 09, 10, 12, 17, README, ADR-20 |
 | ADR-18 | Auth policy + MFA enforcement model | Accepted | 17, 12, 03 | 00, 05, 10, 12, 17, README |
-| ADR-19 | Global identity + tenant membership | Accepted | 17, 03 | 00, 02, 03, 05, 09, 12, 17, README (amends ADR-6 user scoping) |
+| ADR-19 | Global identity + tenant membership | Accepted (org-role capability amended by ADR-0030) | 17, 03 | 00, 02, 03, 05, 09, 12, 17, README (amends ADR-6 user scoping) |
 | ADR-20 | Existence-revealing identifier-first + registration | Accepted | 17, 03, 12 | 00, 03, 05, 09, 17, README (amends ADR-17 no-enumeration) |
 | ADR-21 | Global master graph + per-workspace overlay (two-layer) | Accepted | 02, 03, 06, 08 | 00, 02, 03, 06, 08, 09, 10, README (reopens ADR-6; revives ADR-3/5; amends ADR-2/15) |
 | ADR-22 | Departments/teams as intra-workspace segmentation | Accepted (additive to ADR-6/19) | 25, 03 | 00, 03, 05, 07, 09, 12, 25, README |
@@ -275,6 +288,9 @@ to the whole corpus one-way — no reciprocal links required from 00–27 (overl
 | ADR-25 | Data freshness, decay & re-verification lifecycle | Accepted | 22, 06 | 00, 03, 06, 07, 08, 10, 22, README |
 | ADR-26 | Workflow automation engine | Accepted | 27, 05 | 00, 03, 05, 09, 12, 27, README |
 | ADR-27 | Real-time delivery & event backbone | Accepted | 20, 02 | 00, 02, 03, 09, 18, 20, 26, 27, README |
+| ADR-28 | Record customization layer (custom fields, stages, tags) | Accepted | 05, 03 | 00, 03 §14, 05 §7/§21, 10 (M8), 24, 28, 29, README |
+| ADR-29 | Credit ledger reintroduction & lease-based decrement | Accepted (amends ADR-7) | 07, 03 | 00, 02 §3.1, 03 §8/§14, 05 §11, 07 §2/§8/§11, 10 (M11/M12 + risk #2), 28, README |
+| ADR-30 | Granular tenant org roles | Accepted (amends ADR-19) | 03, 17 | 00, 02 §5, 03 §4, 05 §1, 08 §16, 09 §4, 12 §1, 17 §4, 10 (M11), 28, 29, README |
 
 **ADR rules:** new significant decision → new ADR + 00 §7 row + lead-doc edit (tripod). Superseding a
 locked ADR → set old `Status: Superseded by ADR-NNNN` + reciprocal link, never overwrite the body.

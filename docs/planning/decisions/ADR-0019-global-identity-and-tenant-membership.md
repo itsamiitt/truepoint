@@ -1,6 +1,6 @@
 # ADR-0019 — Global identity + tenant membership
 
-- **Status:** Accepted
+- **Status:** Accepted (tenant-capability model amended by [ADR-0030](./ADR-0030-granular-tenant-org-roles.md) — `tenant_members.org_role` replaces the owner boolean; global identity unchanged)
 - **Date:** 2026-06-09
 - **Context doc:** [17-authentication.md](../17-authentication.md), [03-database-design.md](../03-database-design.md)
 - **Amends:** [ADR-0006](./ADR-0006-per-workspace-multitenant-model.md) (the *user-scoping* clause only; the per-workspace **data** model stands)

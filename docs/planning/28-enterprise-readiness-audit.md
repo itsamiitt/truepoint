@@ -642,6 +642,16 @@ Trust track ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)
 Checklist run per `consistency-checklist`: **verdict `warn`** — no broken links found in sampled link
 checks; the issues below are numbering/vocabulary drift needing small fixes (reported, **not** applied):
 
+> **Status — Remediation Pass 1 (2026-06-10): all nine findings closed.** F-1 fixed (duplicate rows
+> renumbered **#23/#24**, moved to the register tail — the [15 §6](./15-gap-remediation.md) "risk rows
+> 13–16" citation stays valid); F-2 fixed (17 open questions now 1–6); F-3 fixed (DDL comment aligned to
+> the [12 §6](./12-settings.md) tiers); F-4 resolved by
+> [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md); F-5 reworded ("calls logged") pending
+> the G-TEL-1 decision ([00 §8 Q13](./00-overview.md)); F-6 fixed (doc-map + checklist updated); F-7
+> footnoted in [10](./10-roadmap.md) sequencing notes; F-8 closed by the audit-enum extension
+> ([03 §7](./03-database-design.md) + [08 §5](./08-compliance.md)); F-9 closed (`classify_reply` added to
+> [23 §2/§3](./23-ai-intelligence-layer.md)). The table below is preserved as the audit record.
+
 ```
 consistency: warn
 checks:
@@ -668,6 +678,19 @@ checks:
 | F-9 | `ai_task_type` lacks the classification task the SDR module's triage assumes | [23 §2](./23-ai-intelligence-layer.md) vs [departments/02 §4](./departments/02-sdr.md) | G-AI-1 / G-INB-2 |
 
 ## 12. Prioritized gap register (consolidated)
+
+> **Status — Remediation Pass 1 (2026-06-10).** The seven Criticals are now wired into the plan:
+> **G-REV-5/6/7** → [ADR-0028](./decisions/ADR-0028-record-customization-layer.md) (record customization,
+> M8); **G-BIL-1/2** → [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md) (ledger M11,
+> leases M12; risk #2 updated); **G-AUTH-10** →
+> [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md) (org roles, M11; H8 propagated);
+> **G-CMP-1** → audit-enum extension ([03 §7](./03-database-design.md), [08 §5](./08-compliance.md), M5);
+> **G-CMP-2** → [08 §16](./08-compliance.md) breach-notification workflow + checklist + Trust-track
+> readiness; **G-INT-1** → M9 design gate ([10](./10-roadmap.md), [03 §14](./03-database-design.md),
+> [00 §8 Q11](./00-overview.md)); **G-UX-1** → M11 decision gate ([00 §8 Q12](./00-overview.md));
+> **G-TEL-1** → [00 §8 Q13](./00-overview.md) (exclusion stands until decided). G-INB-2 landed early
+> (`classify_reply`, [23 §2](./23-ai-intelligence-layer.md)). **High/Medium/Low gaps below remain open**
+> — Pass 2 candidates, sequenced per the recommendation at the end of this section.
 
 **Critical (7).**
 

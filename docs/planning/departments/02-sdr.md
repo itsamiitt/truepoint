@@ -13,8 +13,9 @@ managers (`manager`/`lead`). `department_type = sdr`.
   → activity pack.
 
 ## 3. Dashboard & KPIs
-Dials/emails sent, opens/clicks/replies, meetings booked + held, sequence performance, reveal→meeting
-conversion, daily activity vs. goal, credit burn vs. **team budget**.
+Calls logged (manual — telephony itself is out of scope, [00 §4](../00-overview.md))/emails sent,
+opens/clicks/replies, meetings booked + held, sequence performance, reveal→meeting conversion, daily
+activity vs. goal, credit burn vs. **team budget**.
 
 ## 4. Workflows & automations (`27`)
 - **Auto-enroll** new segment members (high-intent) into the right play.

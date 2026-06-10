@@ -28,6 +28,7 @@ picks the model per `ai_task_type`:
 | `summarize` | Haiku 4.5 / Sonnet 4.6 | account/contact briefs |
 | `research_agent` | Opus 4.8 | multi-step web research + synthesis |
 | `extract_fields` | Haiku 4.5 | unstructured → structured |
+| `classify_reply` | Haiku 4.5 | reply-intent triage (Inbox/SDR — [28 §3.13](./28-enterprise-readiness-audit.md)) |
 | `embed` | embedding model | semantic vectors (§4) |
 
 Routing balances cost/latency/quality (`19 §8` FinOps); **prompt caching** + `ai_cache` dedupe repeated
@@ -43,6 +44,7 @@ work.
 | **Summarization** | account/contact briefs ("why this account matters now") | grounded in owned data + signals |
 | **Agentic account research** | multi-step public-web research → brief (funding, hiring, tech, news) | findings **verified** before becoming fields/signals; isolated browsing |
 | **AI extraction/cleaning** | parse unstructured text (job posts, signatures, registry docs) → structured fields | confidence-scored; low-confidence routes to review |
+| **Reply classification** | label inbound replies (positive / objection / OOO / unsubscribe / bounce) to drive Inbox triage + automation | confidence-gated; auto-actions only above a configured floor, else human triage |
 | **Signal-to-play** | turn a signal into a recommended play executed by the automation engine (`27`) | runs under automation guardrails (`H21`) |
 
 ## 4. Grounding & semantic search

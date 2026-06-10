@@ -151,8 +151,10 @@ held in **Redis** (TTL), not a Postgres table, so it scales horizontally with 1M
 - **Per-tenant SSO** via **`tenant_sso_configs`** (SAML 2.0 + OIDC; metadata, attribute mapping, JIT, default
   role, `enforced`) — see [§8](#8-sso--scim-architecture).
 - **Two-axis RBAC** (drift hazard **H8**): per-workspace `workspace_members.role ∈ owner|admin|member|viewer`,
-  and the **tenant-level** capability **`tenant_members.is_tenant_owner`** (moved off `users` by ADR-0019) —
-  orthogonal ([09 §4](./09-api-design.md#4-auth--authorization)).
+  and the **tenant-level** capability **`tenant_members.org_role`**
+  (`owner|billing_admin|security_admin|compliance_admin|member` — membership moved off `users` by
+  ADR-0019; granular roles by [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)) — orthogonal
+  ([09 §4](./09-api-design.md#4-auth--authorization)).
 - **Auth-policy overrides** (`tenant_auth_policies` / `workspace_auth_policies`,
   [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)): enforce MFA, restrict allowed
   methods, disable social login, require SSO, IP allowlist (CIDR), session timeout — **strictest** of the
@@ -283,8 +285,8 @@ only.
 3. **Bot/CAPTCHA vendor** — **Cloudflare Turnstile** chosen at the identifier step
    ([ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)); hCaptcha
    remains a fallback if cost/UX warrants.
-6. **Username normalization** — case-folding (citext) + reserved-name list + min length for the optional
+4. **Username normalization** — case-folding (citext) + reserved-name list + min length for the optional
    global-unique username alias ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)).
-4. **Trusted-device fingerprinting** — signal set and privacy posture for the 30-day trust window.
-5. **SCIM scope at MVP-Enterprise** — full lifecycle vs provision/deprovision only (carried from
+5. **Trusted-device fingerprinting** — signal set and privacy posture for the 30-day trust window.
+6. **SCIM scope at MVP-Enterprise** — full lifecycle vs provision/deprovision only (carried from
    [12 §7](./12-settings.md#7-schema--open-items)).

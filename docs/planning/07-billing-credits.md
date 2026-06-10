@@ -71,12 +71,13 @@ reveal idempotency with the unique constraint on `contact_reveals (workspace_id,
 reveal_type)`; require a client `Idempotency-Key` on money endpoints; make Stripe top-ups idempotent on
 `purchases.stripe_event_id`; keep the in-transaction suppression gate.
 
-> **Documented future hardening:** the append-only **double-entry ledger** (`credit_ledger` +
-> materialized `credit_balances`, `balance == SUM(delta)`) is the safer alternative we may revisit —
-> see superseded [ADR-0004](./decisions/ADR-0004-credit-ledger-idempotency.md) and the *Revisit if* note
-> in [ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md) (the counter can become
-> a read-only cache of the ledger). Triggered by billing disputes, double-charge incidents, or finance's
-> need for an auditable trail.
+> **Committed hardening ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)):** the
+> append-only **`credit_ledger`** (`balance == SUM(delta)`) lands at **M11** — executing ADR-0007's
+> *Revisit if* path and the spirit of superseded
+> [ADR-0004](./decisions/ADR-0004-credit-ledger-idempotency.md) — after which the counter is a **derived
+> cache** of the ledger; **lease-based decrement** (workspace/team credit leases) follows at **M12** to
+> relieve the tenant-row hot lock for high-concurrency tenants. Until M11 the counter model below is
+> authoritative.
 
 Schema: [03 §8](./03-database-design.md#8-billing--compliance).
 
@@ -214,7 +215,9 @@ A scheduled `billing-recon` worker asserts, per tenant:
   where credit-backs and admin adjustments are the `credit.adjust` audit entries (§7,
   [08 §5](./08-compliance.md)). **Caveat:** a counter has **no `balance == SUM(delta)` invariant**, so drift
   can't be fully proven from the counter alone — the `credit.adjust` entries must be reconstructed from the
-  audit log, not a delta column; this is the reconciliation gap the ledger would close (§2).
+  audit log, not a delta column; this is the reconciliation gap the **M11 ledger closes**
+  ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md), §2): from M11 the recon worker
+  asserts the invariant directly against `credit_ledger`.
 
 ## 9. Reporting
 
@@ -236,9 +239,9 @@ A scheduled `billing-recon` worker asserts, per tenant:
 1. **Reveal pricing by `reveal_type`** (email vs phone vs full_profile), pack sizes/prices, signup
    bonus, expiry. *(Placeholders in §1; the pricing **policy** — transparent, no-lock-in — is decided in
    [ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md) / §1A.)*
-2. **Billing hardening:** when to reintroduce the append-only ledger to close the counter's
-   reconciliation / refund-history / idempotency gaps
-   ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md) *Revisit if*).
+2. ~~**Billing hardening:** when to reintroduce the append-only ledger.~~ **Resolved** —
+   [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md): `credit_ledger` at **M11**
+   (counter becomes a derived cache), lease-based decrement at **M12** (§2).
 3. Subscription plans (seat-based) on top of credits — when? (Post-MVP; tenant entitlements already
    support it.)
 4. ~~Policy on charging for `risky`/`catch_all` emails (charge, discount, or warn-only?).~~ **Resolved**

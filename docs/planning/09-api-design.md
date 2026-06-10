@@ -304,9 +304,12 @@ Credits are **granted only by the webhook**, incrementing the tenant counter `te
   - **Workspace role** on `workspace_members` (`owner/admin/member/viewer`) gates data actions in the
     active workspace (e.g. `viewer` can search/read but not reveal/enroll; `member`+ can reveal;
     `admin`+ manages members/sequences).
-  - **Tenant-level billing/admin capability** `tenant_members.is_tenant_owner` (orthogonal to workspace role)
-    gates tenant-wide actions: billing/checkout, plan + entitlements, API keys, SSO config, workspace
-    creation/deletion. A workspace `owner` is **not** automatically a tenant owner.
+  - **Tenant-level capability** `tenant_members.org_role`
+    (`owner|billing_admin|security_admin|compliance_admin|member` —
+    [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md); orthogonal to workspace role) gates
+    tenant-wide actions by duty: `billing_admin` → billing/checkout + plan; `security_admin` → API keys +
+    SSO config + auth policy; `compliance_admin` → suppression/DSAR/retention; `owner` → everything incl.
+    workspace creation/deletion. A workspace `owner` is **not** automatically a tenant owner.
 
 ## 5. Idempotency & concurrency
 

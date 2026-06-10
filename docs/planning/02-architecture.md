@@ -133,8 +133,9 @@ sequenceDiagram
 **Known risks (per [ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)):** a
 bare counter lacks the ledger's reconciliation/refund history. The required mitigations are the
 `FOR UPDATE` + `CHECK (reveal_credit_balance >= 0)` + the `(workspace_id, contact_id, reveal_type)`
-unique constraint + the client `Idempotency-Key` header. Pricing per `reveal_type` is a placeholder —
-reference [07 §1](./07-billing-credits.md), never hardcode it.
+unique constraint + the client `Idempotency-Key` header; the append-only ledger + lease decrement are
+committed at M11/M12 ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)). Pricing per
+`reveal_type` is a placeholder — reference [07 §1](./07-billing-credits.md), never hardcode it.
 
 ### 3.2 Asynchronous (import / enrichment / scoring)
 
@@ -224,13 +225,15 @@ Workspace-scoped: workspaces, workspace_members, contacts, accounts, source_impo
 
 Authorization splits in two: a **workspace role** (`owner`/`admin`/`member`/`viewer` on
 `workspace_members`) governs data access within a workspace, while the distinct **tenant-level**
-capability (`tenant_members.is_tenant_owner`) governs billing, workspace creation, and seat/workspace limits.
+capability (`tenant_members.org_role` — `owner|billing_admin|security_admin|compliance_admin|member`,
+[ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md); `is_tenant_owner` is the compat alias for
+`owner`) governs billing, security/SSO, compliance, workspace creation, and seat/workspace limits.
 
 | Concern | Mechanism | Package / where |
 |---|---|---|
 | AuthN | Self-built auth: Lucia sessions + OAuth/MFA/SAML; hashed API keys | `auth`, `api` middleware |
 | Workspace AuthZ | Role check (`owner`/`admin`/`member`/`viewer`) on `workspace_members` | `api` middleware |
-| Tenant AuthZ | `tenant_members.is_tenant_owner` for billing / workspace / seat-limit actions | `api` middleware, `core` |
+| Tenant AuthZ | `tenant_members.org_role` (owner/billing/security/compliance — [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)) for org-scope actions | `api` middleware, `core` |
 | Tenancy isolation | `SET LOCAL` GUC (RLS) + AsyncLocalStorage context | `api`, `db` |
 | Entitlements/quota | Middleware runs *before* the credit check | `core` |
 | Idempotency | `Idempotency-Key` header + DB unique keys | `api`, `core` |

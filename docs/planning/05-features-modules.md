@@ -92,9 +92,11 @@ flowchart TB
   → accept, else **`provision_new_signup`** creates a new org (tenant → default workspace → owner
   `tenant_member` → owner `workspace_member` → audit) ([03 §10](./03-database-design.md#10-triggers--db-side-logic)).
 - **Tenant vs workspace authority:** a **tenant** is the paying org (plan, `seat_limit`,
-  `workspace_limit`, `reveal_credit_balance`). The **tenant-level owner/billing** capability lives on
-  `tenant_members.is_tenant_owner` and governs billing, workspace creation, limits, and suspension —
-  **distinct** from a user's per-workspace role.
+  `workspace_limit`, `reveal_credit_balance`). The **tenant-level capability** lives on
+  **`tenant_members.org_role`** (`owner|billing_admin|security_admin|compliance_admin|member` —
+  [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md); `is_tenant_owner` is the compat alias
+  for `owner` during migration) and governs billing, security/SSO, compliance, workspace creation,
+  limits, and suspension — **distinct** from a user's per-workspace role.
 - **Per-workspace roles** (on `workspace_members`): `owner`/`admin`/`member`/`viewer`.
   - workspace **owner/admin:** manage members, workspace settings, suppression, API keys, CRM connections.
   - **member:** import, search, reveal (spends **tenant** credits), score, sequence, export.
@@ -203,6 +205,13 @@ flowchart TB
   only `valid` data is charged (`invalid`/`catch_all`/`unknown` → **0**); a charged email that hard-bounces in the
   guarantee window is **credited back**. Surfaced in the reveal confirmation + usage history ([04 §5](./04-ui-ux-design.md)).
 - **Data:** `contacts`, `contact_reveals`, `tenants.reveal_credit_balance`, `source_imports`.
+- **Record customization** *(M8 —
+  [ADR-0028](./decisions/ADR-0028-record-customization-layer.md))*: workspaces define **custom fields**
+  (`custom_field_definitions` + typed-jsonb values on `contacts`/`accounts`), **pipeline stages**
+  (workspace-named stages each mapping to one canonical `outreach_status` value — the enum stays the
+  system vocabulary), and **tags** (`tags`/`record_tags`). All three are first-class in search facets,
+  import column mapping, CRM-sync field mapping, automation conditions, exports, and the public API
+  ([03 §14](./03-database-design.md)).
 
 ## 8. Lists & Saved Searches — *MVP (M2/M3)*
 
@@ -246,7 +255,9 @@ flowchart TB
   in the 6-destination rail.
 - **Tenant credit counter:** `tenants.reveal_credit_balance` (`CHECK >= 0`) is authoritative — **not** an
   append-only ledger ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)).
-  Decremented inside the reveal transaction with `FOR UPDATE` (§7).
+  Decremented inside the reveal transaction with `FOR UPDATE` (§7). The append-only **`credit_ledger`**
+  lands at **M11** (the counter becomes a derived cache) with **lease-based decrement** at M12 for
+  high-concurrency tenants ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)).
 - **Top-ups:** Stripe credit-pack checkout grants credits to the tenant counter; `purchases.stripe_event_id`
   unique → idempotent grants. **Usage history** from `contact_reveals` + `purchases`.
 - Pricing varies by `reveal_type` and is a **placeholder** — see
@@ -352,7 +363,7 @@ Surfaces introduced by the IA ([11](./11-information-architecture.md)) — panel
 
 - **Home** *(M3→)* — workspace cockpit: today's tasks, recent replies, hot leads, sequence snapshot, credit balance/burn, recent imports, activity feed, quick actions ([11 §4.1](./11-information-architecture.md)).
 - **Reports / Analytics** *(M8)* — pipeline/funnel, credit usage, sending & deliverability, team activity, Data Health, lead-score views; ClickHouse/PostHog-backed ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md), [11 §4.5](./11-information-architecture.md)).
-- **Inbox + Tasks** *(M9)* — unified replies (email/LinkedIn) + tasks/reminders; assign/snooze/done; quick reply; convert reply → task / meeting / disqualify ([11 §4.4](./11-information-architecture.md)).
+- **Inbox + Tasks** *(M9)* — unified replies (email/LinkedIn) + tasks/reminders; assign/snooze/done; quick reply; convert reply → task / meeting / disqualify ([11 §4.4](./11-information-architecture.md)). Replies enter via the **mailbox-sync** ingestion path (`mailbox_connections`, [03 §14](./03-database-design.md); build-vs-vendor decided before the M9 build — [00 §8](./00-overview.md), [10 M9](./10-roadmap.md)).
 - **Templates** *(M9)* — message templates + snippets + merge fields + AI draft + deliverability lint; a panel within Sequences ([11 §4.3](./11-information-architecture.md)).
 - **Notifications** *(M3→)* — in-app/email notices (replies, tasks, low credits, imports done, DSAR); prefs in user settings ([12 §2](./12-settings.md)).
 - **Data Health** *(M4/M8)* — customer view of data quality (verification status, staleness, duplicates) in Reports + a per-record badge; deepened in [06](./06-enrichment-engine.md), platform DQ ops in [13](./13-platform-admin.md).
@@ -372,6 +383,7 @@ Surfaces introduced by the IA ([11](./11-information-architecture.md)) — panel
 | Lists & saved searches | | ● | ● | | | alerts |
 | Intelligence / lead scoring | | | | ● (model) | | ● depth/UI (M8) |
 | Activity timeline | | | | | | ● (M8) |
+| Record customization (custom fields, stages, tags — [ADR-0028](./decisions/ADR-0028-record-customization-layer.md)) | | | | | | ● (M8) |
 | Credits & billing | | | ● | | | seat billing |
 | Export | | | ● | | | |
 | Outreach sequencing + send | | | | | | ● (M9) |

@@ -135,6 +135,9 @@ email/sequencing send engine is now IN scope — see ADR-0009 — reversing the 
 | **SLO / error budget** | A latency/availability target + its monthly failure allowance; budget burn gates risky releases ([18](./18-scalability-performance.md), [19](./19-observability-reliability.md)). |
 | **Freshness SLA** | Per-field re-verify cadence (e.g. email 90d) driving `freshness_status` + scheduled re-verification ([22](./22-data-quality-freshness-lifecycle.md), [ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md)). |
 | **Domain event / outbox** | A versioned fact published via a **transactional outbox**; the source of truth for async consumers + real-time ([20](./20-event-driven-realtime-backbone.md)). |
+| **Custom field / Stage / Tag** | Workspace-defined record customization: typed custom fields (jsonb values), pipeline **stages** mapping onto the canonical `outreach_status`, and tags ([ADR-0028](./decisions/ADR-0028-record-customization-layer.md)). |
+| **Credit ledger / lease** | The M11 append-only `credit_ledger` (`balance == SUM(delta)`; counter becomes a derived cache) and the M12 workspace/team **credit leases** that relieve the tenant-counter hot row ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)). |
+| **Org role** | A member's tenant-scope capability — `owner`/`billing_admin`/`security_admin`/`compliance_admin`/`member` on `tenant_members.org_role` ([ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)); orthogonal to workspace + team roles. |
 
 ## 7. Decision log
 
@@ -193,16 +196,29 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 | Automation | **Trigger→condition→action engine** (signal-to-play); suppression-gated, idempotent, audited | Cross-module + department workflows → [ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md), [27](./27-workflow-automation-engine.md) |
 | Search UX | Advanced faceted filters (incl. **intent**), saved views, smart segments, instant masked search | Apollo/ZoomInfo-grade exploration → [24](./24-advanced-search-exploration-ux.md) |
 | Integrations & delivery | Bidirectional CRM + native apps, webhooks, **reverse-ETL**, Chrome ext, SMS, export center | No-lock-in delivery → [26](./26-integrations-data-delivery.md), [ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md) |
+| Record customization | **Custom fields (typed-jsonb values) + pipeline-stage layer + tags**, workspace-defined, M8 | CRM-grade modeling without opening shared vocab → [ADR-0028](./decisions/ADR-0028-record-customization-layer.md), [05 §7](./05-features-modules.md) |
+| Billing hardening | **Append-only `credit_ledger` at M11** (counter → derived cache) + **credit leases at M12** | Provable accounting + hot-row relief; executes ADR-0007's revisit path → [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md), [07 §2](./07-billing-credits.md) |
+| Tenant org roles | **`tenant_members.org_role`** — `owner`/`billing_admin`/`security_admin`/`compliance_admin`/`member` (M11) | Delegated administration → [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md), [03 §4](./03-database-design.md) |
 
 ## 8. Open questions (tracked, resolved during doc review or early milestones)
 
 1. **Reveal pricing by `reveal_type`** — credit cost for email vs phone vs full_profile; pack sizes; signup bonus. (Placeholders in [07](./07-billing-credits.md).) *Pricing **policy** is now decided — transparent, no-lock-in ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)) + charge-only-for-`valid` with credit-back ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)); the concrete **numbers** stay placeholders.*
 2. **PII uniqueness over encryption** — confirm the `email_blind_index` (HMAC) approach for per-workspace dedup ([03 §13](./03-database-design.md)).
 3. **Global entity-resolution quality** — deterministic keys + blocking/LSH + Splink at billions ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), [06 §9](./06-enrichment-engine.md), [03 §13](./03-database-design.md)).
-4. **Billing hardening** — when to reintroduce an append-only ledger over the counter ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)).
+4. ~~**Billing hardening** — when to reintroduce an append-only ledger over the counter~~ — **Resolved:**
+   `credit_ledger` at **M11** (counter → derived cache) + lease-based decrement at **M12**
+   ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md), [07 §2](./07-billing-credits.md)).
 5. **DSAR fan-out** procedure + SLA across N per-workspace copies ([08 §4](./08-compliance.md)).
 6. **Outreach sending compliance/deliverability** — sending domains, CAN-SPAM/GDPR consent, LinkedIn/SN ToS for automated send ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)).
 7. ~~Cross-workspace "tenant search" read layer~~ — **Resolved:** the global master graph **is** the shared search layer; every tenant searches the universe (masked) and reveals into its overlay ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
 8. ~~**AI provider**~~ — **Resolved:** Anthropic Claude behind `AiPort` (Opus 4.8 / Sonnet 4.6 / Haiku 4.5), assistive + agentic with human-in-the-loop, grounding/RAG, eval/safety, and per-tenant metering ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md), [23](./23-ai-intelligence-layer.md)).
 9. **Self-built auth hardening** — credential-stuffing monitoring, key rotation ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)). *The auth **security layers** (progressive lockout, bot detection, impossible-travel, no-enumeration) and **JWKS key rotation** are now specified in [17 §5/§6](./17-authentication.md#6-security-layers); the cross-domain token boundary is [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md), with residual auth Qs in [17 open questions](./17-authentication.md#open-questions). SOC 2 / ISO 27001 scope is owned by the **Trust & certification program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), [08 §15](./08-compliance.md)).*
-10. **Gap remediation** — the market-gap analysis ([../market-analysis/](../market-analysis/)) is translated into corpus changes in [15 — Gap Remediation](./15-gap-remediation.md); residual GTM items (support SLAs, credit-back window, cert sequencing) are tracked there.
+10. **Gap remediation** — the market-gap analysis ([../market-analysis/](../market-analysis/)) is translated into corpus changes in [15 — Gap Remediation](./15-gap-remediation.md); residual GTM items (support SLAs, credit-back window, cert sequencing) are tracked there. *The 2026-06-10 **enterprise audit** ([28](./28-enterprise-readiness-audit.md)) extends this: its Pass-1 remediation landed as [ADR-0028](./decisions/ADR-0028-record-customization-layer.md)/[0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)/[0030](./decisions/ADR-0030-granular-tenant-org-roles.md) + the audit-enum/breach-notification amendments; remaining High/Medium gaps are tracked in [28 §12](./28-enterprise-readiness-audit.md).*
+11. **Reply-ingestion approach (M9 gate)** — direct Gmail API / Microsoft Graph mailbox sync vs a unified
+    email-API vendor for capturing replies into Inbox (`mailbox_connections`, [03 §14](./03-database-design.md);
+    [28 §3.11](./28-enterprise-readiness-audit.md) G-INT-1). Decide before the M9 build.
+12. **i18n/l10n architecture + GA locales** — message-catalog stack, locale formats, template
+    localization; decide by **M11** ([28 §3.25](./28-enterprise-readiness-audit.md) G-UX-1).
+13. **Telephony / dialer** — schedule a CPaaS-based calling module (behind a `CallPort`, reusing the
+    suppression/consent/audit/budget rails) or re-affirm the [§4](#4-scope) exclusion
+    ([28 §3.24](./28-enterprise-readiness-audit.md) G-TEL-1). The exclusion stands until decided.

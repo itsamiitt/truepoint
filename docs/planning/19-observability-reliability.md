@@ -46,7 +46,9 @@ by customer. PII never enters logs/traces (encrypted fields stay masked, `03 §2
 - **Lifecycle:** detect → triage (severity) → mitigate → communicate (Status page, `13`) → resolve →
   **blameless postmortem** with action items tracked to closure.
 - **Runbooks** (in the infra repo, linked here) for: DB failover, replica lag, queue/DLQ backlog, search
-  reindex, provider/AI outage, credential rotation, suppression/DSAR escalation.
+  reindex, provider/AI outage, credential rotation, suppression/DSAR escalation, and the
+  **privacy-incident / breach-notification** workflow ([08 §16](./08-compliance.md) owns the statutory
+  duties; this lifecycle owns containment).
 
 ## 6. Disaster recovery
 

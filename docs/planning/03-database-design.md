@@ -91,7 +91,7 @@ CREATE TABLE tenants (
   id                    uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
   name                  varchar(255) NOT NULL,
   slug                  citext NOT NULL UNIQUE,
-  plan                  varchar(50) NOT NULL DEFAULT 'free',   -- free|starter|growth|enterprise
+  plan                  varchar(50) NOT NULL DEFAULT 'free',   -- free|pro|team|enterprise (tiers: 12 §6)
   seat_limit            int NOT NULL DEFAULT 1,
   workspace_limit       int,                                   -- null = unlimited
   reveal_credit_balance int NOT NULL DEFAULT 0 CHECK (reveal_credit_balance >= 0),
@@ -124,7 +124,9 @@ CREATE TABLE tenant_members (
   id                 uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
   tenant_id          uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id            uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  is_tenant_owner    boolean NOT NULL DEFAULT false,           -- billing/admin capability (moved off users)
+  is_tenant_owner    boolean NOT NULL DEFAULT false,           -- compat alias: org_role='owner' (ADR-0030; dropped post-migration)
+  org_role           varchar(20) NOT NULL DEFAULT 'member'     -- granular org capability (ADR-0030, M11)
+                       CHECK (org_role IN ('owner','billing_admin','security_admin','compliance_admin','member')),
   status             varchar(50) NOT NULL DEFAULT 'active'     -- active|invited|removed
                        CHECK (status IN ('active','invited','removed')),
   invited_by_user_id uuid REFERENCES users(id),
@@ -573,11 +575,11 @@ CREATE INDEX idx_contacts_master ON contacts (master_person_id) WHERE master_per
 - **`activities`**: `id · tenant_id · workspace_id · contact_id · performed_by_user_id · activity_type · channel(email|phone|linkedin|sales_navigator|in-person) · subject · body · outcome · metadata jsonb · occurred_at · created_at`.
 - **`outreach_sequences`** (workspace-scoped definitions) → **`outreach_steps`** (ordered steps: channel, delay, template) — the **send engine** definitions.
 - **`outreach_log`** (enrollment + status): `id · tenant_id · workspace_id · contact_id · sequence_id? · enrolled_by_user_id · campaign_name · platform(klaviyo|apollo|salesloft|outreach|linkedin|ses|manual) · external_campaign_id · status(enrolled|active|replied|completed|unsubscribed|bounced) · enrolled_at · sent_at · replied_at`.
-- **`audit_log`**: `id · tenant_id · workspace_id?(null=tenant-level) · actor_user_id?(null=system) · action · entity_type · entity_id · metadata jsonb · ip_address inet · user_agent · origin_domain · occurred_at` (append-only, monthly-partitioned). **`origin_domain`** records the acting origin (`auth.truepoint.in` vs the originating app origin) per event ([17 §9](./17-authentication.md#9-audit--events)). The closed `action` enum additionally covers **auth events** — `login.success/failure/locked`, `mfa.challenge/success/failure`, `password.reset.request/complete`, `sso.initiated/callback`, `token.issued/refresh/revoke`, `device.trusted/revoked`, `session.revoked`, `code.issued/exchanged`, `signup`, `oauth.link` — alongside the reveal/send/suppression/DSAR/credit actions ([08 §5](./08-compliance.md)).
+- **`audit_log`**: `id · tenant_id · workspace_id?(null=tenant-level) · actor_user_id?(null=system) · action · entity_type · entity_id · metadata jsonb · ip_address inet · user_agent · origin_domain · occurred_at` (append-only, monthly-partitioned). **`origin_domain`** records the acting origin (`auth.truepoint.in` vs the originating app origin) per event ([17 §9](./17-authentication.md#9-audit--events)). The closed `action` enum additionally covers **auth events** — `login.success/failure/locked`, `mfa.challenge/success/failure`, `password.reset.request/complete`, `sso.initiated/callback`, `token.issued/refresh/revoke`, `device.trusted/revoked`, `session.revoked`, `code.issued/exchanged`, `signup`, `oauth.link` — and **record/config mutations** — `contact.create/update/delete`, `account.create/update/delete`, `list.create/update/delete`, `sequence.create/update/delete`, `template.create/update/delete`, `settings.update`, `automation.rule.create/update/delete` — alongside the reveal/send/suppression/DSAR/credit actions ([08 §5](./08-compliance.md)), so the [02 §6](./02-architecture.md) every-mutation-audited contract is expressible within the closed enum.
 
 ## 8. Billing & compliance
 
-- **Credits:** `tenants.reveal_credit_balance` (counter, `CHECK >= 0`) is authoritative ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)); decremented inside the reveal transaction with `FOR UPDATE`. `stripe_customers` (tenant↔Stripe), `purchases` (`stripe_event_id` unique → idempotent top-ups). The charge amount is set by the **verified result** — `valid` charges, `invalid`/`catch_all`/`unknown` → `contact_reveals.credits_consumed = 0`; a hard bounce within the guarantee window **credits the balance back** via an audited counter adjustment (audit action `credit.adjust`, [08 §5](./08-compliance.md)) — **no new table** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).
+- **Credits:** `tenants.reveal_credit_balance` (counter, `CHECK >= 0`) is authoritative ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)); decremented inside the reveal transaction with `FOR UPDATE`. The append-only **`credit_ledger`** (M11) makes the counter a derived cache, with **lease-based decrement** (M12) for hot tenants ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md), §14). `stripe_customers` (tenant↔Stripe), `purchases` (`stripe_event_id` unique → idempotent top-ups). The charge amount is set by the **verified result** — `valid` charges, `invalid`/`catch_all`/`unknown` → `contact_reveals.credits_consumed = 0`; a hard bounce within the guarantee window **credits the balance back** via an audited counter adjustment (audit action `credit.adjust`, [08 §5](./08-compliance.md)) — **no new table** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).
 - **Compliance ([08](./08-compliance.md)):** `suppression_list` (scope global|tenant|workspace; match email|domain|phone|contact_id) — **now gates both reveals and outreach sending** ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)); `consent_records` (lawful basis per subject/jurisdiction); `dsar_requests` (access/delete/rectify; delete fans out across all per-workspace copies).
 - **`provider_calls`** (optional, enrichment cost/cache): `provider_name · request_hash unique · cost_micros · cache_hit · called_at` — workspace-scoped cost tracking for the enrichment workers ([06](./06-enrichment-engine.md)).
 
@@ -704,3 +706,19 @@ existing `lists`/`saved_searches` (§5.2).
 `data_quality_score = round(100 × (0.4·completeness + 0.3·verification + 0.3·freshness))`; per-record
 `last_verified_at` + `freshness_status` (`fresh|aging|stale|expired`) on master + overlay (§5.2);
 `verification_jobs`/`data_quality_rules` (above) drive scheduled re-verify by per-field SLA.
+
+**Record customization** ([ADR-0028](./decisions/ADR-0028-record-customization-layer.md), M8):
+`custom_field_definitions` (workspace-scoped, per `entity_type`, typed + validated, capped per plan) with
+values in a GIN-indexed `custom_fields jsonb` column on `contacts`/`accounts`; `pipeline_stages`
+(workspace stages, each mapping to one canonical `outreach_status` value — the enum stays the shared
+vocabulary); `tags` + `record_tags`. All flow into search facets, import/CRM mapping, automation
+conditions, and exports.
+
+**Billing hardening** ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)):
+`credit_ledger` (M11 — append-only entries per grant/spend/credit-back/adjustment; `balance ==
+SUM(delta)` invariant; the counter becomes a derived cache) and `credit_leases` (M12 —
+workspace/team-level pre-allocated blocks relieving the tenant-counter hot row).
+
+**Inbox ingestion** (design gate before the M9 build — [10 M9](./10-roadmap.md)): `mailbox_connections`
+(per-user mailbox OAuth state + sync cursors for reply capture into `activities`/Inbox); build-vs-vendor
+open ([00 §8](./00-overview.md)).

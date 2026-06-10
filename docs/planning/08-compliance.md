@@ -152,7 +152,12 @@ penalties (data-side research
   `login.failure`, `login.locked`, `mfa.challenge`, `mfa.success`, `mfa.failure`,
   `password.reset.request`, `password.reset.complete`, `sso.initiated`, `sso.callback`, `token.issued`,
   `token.refresh`, `token.revoke`, `device.trusted`, `device.revoked`, `session.revoked`, `code.issued`,
-  `code.exchanged`, `signup`, `oauth.link` ([17 §9](./17-authentication.md#9-audit--events)).
+  `code.exchanged`, `signup`, `oauth.link` ([17 §9](./17-authentication.md#9-audit--events)), plus the
+  **record/config mutation actions** `contact.create/update/delete`, `account.create/update/delete`,
+  `list.create/update/delete`, `sequence.create/update/delete`, `template.create/update/delete`,
+  `settings.update`, and `automation.rule.create/update/delete` — added so the
+  [02 §6](./02-architecture.md) "every mutating, externally-meaningful action is audited" contract is
+  expressible within the closed enum ([28 §3.17](./28-enterprise-readiness-audit.md)).
   `entity_type` names the target table (`contact`, `workspace`, `suppression_list`, `dsar_request`,
   `tenant`, `user`, `session`, …); `entity_id` is its UUID.
 - **`credit.adjust`** records every change to `tenants.reveal_credit_balance` that is **not** a normal
@@ -292,6 +297,8 @@ per-workspace CRM. Data still also lands in each workspace overlay
 - [ ] **Trust & certification ([§15](#15-trust--certification-program-adr-0014)):** SOC 2 Type II / ISO 27001
       readiness underway; **US data-broker registration** (CA DROP/Delete Act + applicable states) filed before
       GA in those markets; public **Trust Center** (sub-processor list, DPA, security whitepaper, cert status) live.
+- [ ] **Breach notification ([§16](#16-privacy-incident--breach-notification)):** privacy-incident
+      runbook tested (game-day); counsel-approved regulator/subject/customer templates on file.
 - [ ] **Privacy counsel review of the whole program.**
 
 ## 13. Open questions
@@ -352,3 +359,22 @@ reveal **and** send [§3](#3-suppression--do-not-contact-dnc) + DSAR fan-out [§
   settings ([12 §4](./12-settings.md)).
 - **Attest the wedge** — the "we govern *your* compliant use end-to-end" positioning is mapped to the published
   attestations so it is **verifiable**, not asserted.
+
+## 16. Privacy incident & breach notification
+
+A personal-data breach carries **statutory notification duties** (GDPR Art. 33/34: supervisory authority
+within **72 hours** of awareness, data subjects without undue delay when the risk is high; US state laws
+with their own clocks; customer notification per the DPA). This is a legal obligation distinct from — and
+joined to — the engineering incident-response lifecycle ([19 §5](./19-observability-reliability.md)).
+
+- **Workflow:** detect (alerting, anomaly signals, report intake) → **assess** (is personal data
+  affected? scope, subjects, jurisdictions, severity) → contain/mitigate → **notify** (regulator ≤ 72 h
+  where GDPR applies; affected subjects when high-risk; affected tenants per DPA terms; state-law
+  timelines tracked per jurisdiction) → remediate → blameless postmortem with compliance sign-off.
+- **Roles:** the staff `compliance_officer` owns assessment + notifications (with counsel); SRE owns
+  containment ([19 §5](./19-observability-reliability.md)); affected tenants' compliance admins
+  ([ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)) are the customer-side recipients.
+- **Evidence:** every step is logged (assessment record, decision rationale, notification timestamps) in
+  `platform_audit_log` — the artifact regulators and SOC 2 auditors ask for.
+- **Readiness:** counsel-approved notification templates + a tested runbook (game-day exercised) are a
+  **Trust-track readiness item** ([10](./10-roadmap.md)); the checklist gate is §12.

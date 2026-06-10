@@ -24,7 +24,7 @@
 
 ## D. Matrix ↔ roadmap parity (H10)
 - [ ] Each module in the `05` feature→milestone matrix has the **same** milestone as its `10`
-      milestone definition (current set: M0–M5 MVP + M7–M10 beyond).
+      milestone definition (current set: M0–M5 MVP + M7–M16 beyond; there is no M6).
 - [ ] Each module in the matrix is actually described in `05 §1–§N`.
 - **Fix:** align the matrix cell and the roadmap detail; add a missing module description.
 

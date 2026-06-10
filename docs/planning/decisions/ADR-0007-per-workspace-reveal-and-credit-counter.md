@@ -1,6 +1,6 @@
 # ADR-0007 — Per-workspace reveal & tenant credit counter
 
-- **Status:** Accepted
+- **Status:** Accepted (amended by [ADR-0029](./ADR-0029-credit-ledger-and-lease-decrement.md) — the *Revisit if* path is now committed: append-only ledger at M11, lease-based decrement at M12; reveal semantics unchanged)
 - **Date:** 2026-05-29
 - **Context doc:** [07-billing-credits.md](../07-billing-credits.md), [03-database-design.md](../03-database-design.md)
 - **Supersedes:** [ADR-0004](./ADR-0004-credit-ledger-idempotency.md) (append-only ledger, idempotent reveals)
