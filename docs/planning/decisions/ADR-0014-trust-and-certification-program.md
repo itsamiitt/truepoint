@@ -20,7 +20,7 @@ Two forces make a formal program non-optional:
    where required ([market research](../../market-analysis/01-market-research.md) §4,
    hidden opening #1).
 
-Recommendations R2 and R6; resolves the SOC2-scope open question ([00 §8.9](../00-overview.md#8-open-questions)).
+Recommendations R2 and R6; resolves the SOC2-scope open question ([00 §8.9](../00-overview.md#8-open-questions-tracked-resolved-during-doc-review-or-early-milestones)).
 The single most distinctive opening — *gating the buyer's **own** compliant use end-to-end* (suppression on
 reveal **and** send + DSAR fan-out + audit, [08 §3/§4/§6](../08-compliance.md)) — only becomes a **moat** when
 it is independently **attested**.

@@ -34,7 +34,7 @@ LeadWolf commits to a **transparent, no-lock-in commercial policy**:
    true low-end competitor. The exact number is a placeholder ([07 §1](../07-billing-credits.md)).
 
 This ADR sets **policy and commitments**; concrete prices, pack sizes, and the signup bonus remain **placeholders
-pending the pricing decision** ([07 §1](../07-billing-credits.md), [00 §8](../00-overview.md#8-open-questions)).
+pending the pricing decision** ([07 §1](../07-billing-credits.md), [00 §8](../00-overview.md#8-open-questions-tracked-resolved-during-doc-review-or-early-milestones)).
 
 ## Rationale
 

@@ -47,7 +47,7 @@ gaps and the **highest-ranked recommendations** via three new decisions —
 | **6.1** CRM-agnostic / open API | 🔶 M10 | Affirmed as the **anti-absorption** position (CRM-neutral, API-first) | [09 §8](./09-api-design.md), [10 M10](./10-roadmap.md) | M10 |
 | **6.2** Deliverability & sender-reputation discipline | 🔶 M9 | Hardened to a **first-class subsystem** (domains, DKIM/SPF/DMARC, warm-up, throttle, bounce→suppression) | [08 §6](./08-compliance.md), [10 M9](./10-roadmap.md) | M9 |
 | **6.3** In-transaction compliance gating reveal **and** send | ✅ covered (send half M9) | Affirmed as the flagship moat; made **verifiable** via certs | [ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md), [ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), [08 §3](./08-compliance.md) | M5 reveal / M9 send |
-| **7.1** Responsive post-sale support | ⚪ open | **Documented service commitment** (§4) + tier SLA + in-app support surface | [§4 below](#4-post-sale-support--success), [12 §6](./12-settings.md), [13 §3](./13-platform-admin.md) | M3→ |
+| **7.1** Responsive post-sale support | ⚪ open | **Documented service commitment** (§4) + tier SLA + in-app support surface | [§4 below](#4-post-sale-support--success-gap-71--newly-documented), [12 §6](./12-settings.md), [13 §3](./13-platform-admin.md) | M3→ |
 | **7.2** Honest, auditable metrics & data-handling | 🔶 partial | **Trust Center** + published attestations + append-only audit | [ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), [08 §15](./08-compliance.md) | M5 → program |
 
 ## 3. Hidden-opportunity remediation (analysis §10)
@@ -111,7 +111,7 @@ change; uses existing surfaces):
 - **[10](./10-roadmap.md):** Trust & Compliance program track + M9 deliverability DoD + risk rows 13–16.
 - **[12](./12-settings.md):** Trust Center + data export-on-exit/account-closure + support.
 - **[13](./13-platform-admin.md):** certification & data-broker-registration tracking in compliance ops.
-- **[00 §8](./00-overview.md#8-open-questions):** resolved pricing-policy (partial) and SOC2-scope questions.
+- **[00 §8](./00-overview.md#8-open-questions-tracked-resolved-during-doc-review-or-early-milestones):** resolved pricing-policy (partial) and SOC2-scope questions.
 
 **Enterprise-extension pass (2026-06-10)** — a full-corpus audit added scale/AI/department depth:
 - **New docs** [18](./18-scalability-performance.md)–[27](./27-workflow-automation-engine.md) +

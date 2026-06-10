@@ -14,7 +14,7 @@
 | **Tenant** | `tenant_members.is_tenant_owner` / billing admin | `tenants`, `tenant_domains`, `tenant_sso_configs`, `tenant_auth_policies`, `scim_tokens`, `purchases`, `consent_records`, `dsar_requests`, `audit_log` |
 | **Developer** | tenant admin+ | `api_keys`, `oauth_app_clients`, `webhooks`* |
 
-`*` = table flagged as a follow-up [03](./03-database-design.md) amendment (see [11 §6](./11-information-architecture.md) / [§6 below](#6-schema--open-items)).
+`*` = table flagged as a follow-up [03](./03-database-design.md) amendment (see [11 §6](./11-information-architecture.md) / [§6 below](#7-schema--open-items)).
 
 ## 2. User settings *(all users — Free+)*
 
@@ -120,7 +120,7 @@
 | Audit-log export | — | — | — | ✅ |
 | SLA / priority support | — | — | — | ✅ |
 
-*(Tiers/limits are placeholders pending pricing — see [07 §1](./07-billing-credits.md) and [00 §8](./00-overview.md#8-open-questions).)*
+*(Tiers/limits are placeholders pending pricing — see [07 §1](./07-billing-credits.md) and [00 §8](./00-overview.md#8-open-questions-tracked-resolved-during-doc-review-or-early-milestones).)*
 
 ## 7. Schema & open items
 

@@ -297,7 +297,12 @@ flowchart TB
   rate limits, OpenAPI docs. Seams (API keys, idempotency, metering) exist from MVP. See
   [09](./09-api-design.md).
 
-## 16. AI features — *Post-MVP (M9+)*
+## 16. AI features — *Post-MVP (M14)*
+
+Full design — `AiPort` (Anthropic Claude), model routing, conversational **copilot**, **semantic search**,
+agentic research, **guardrails + eval/safety**, and per-tenant metering — is
+[23](./23-ai-intelligence-layer.md) ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md),
+resolving the provider open question). Highlights:
 
 - **Natural-language search:** "VPs of Eng at 50–200 person EU fintechs" → a validated structured query
   object (LLM never emits raw SQL); runs against the workspace's own data. Recommended provider:

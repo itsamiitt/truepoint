@@ -8,6 +8,10 @@
 > self-hosted stack ([ADR-0010]). The earlier global-golden-DB / three-layer / ledger design is
 > superseded — see the ADR registry (§6).
 >
+> **Extended 2026-06-10:** docs **18–27** + **`departments/`** and **ADR-0022–0027** add scale/SRE,
+> event/real-time, data acquisition & freshness, AI, advanced-search UX, departments/teams, integrations,
+> and automation.
+>
 > Shorthand: `NN` = `docs/planning/NN-*.md`; `ADR-N` = `docs/planning/decisions/ADR-000N-*.md`.
 
 ## 1. Files
@@ -33,6 +37,17 @@
 | 15 | `docs/planning/15-gap-remediation.md` |
 | 16 | `docs/planning/16-code-organization.md` |
 | 17 | `docs/planning/17-authentication.md` |
+| 18 | `docs/planning/18-scalability-performance.md` |
+| 19 | `docs/planning/19-observability-reliability.md` |
+| 20 | `docs/planning/20-event-driven-realtime-backbone.md` |
+| 21 | `docs/planning/21-data-acquisition-sourcing.md` |
+| 22 | `docs/planning/22-data-quality-freshness-lifecycle.md` |
+| 23 | `docs/planning/23-ai-intelligence-layer.md` |
+| 24 | `docs/planning/24-advanced-search-exploration-ux.md` |
+| 25 | `docs/planning/25-departments-teams-workspaces.md` |
+| 26 | `docs/planning/26-integrations-data-delivery.md` |
+| 27 | `docs/planning/27-workflow-automation-engine.md` |
+| departments | `docs/planning/departments/` (README + 11 modules) |
 | brand | `docs/planning/brand-identity.md` |
 | ADR-1 | `decisions/ADR-0001-orm-drizzle.md` |
 | ADR-2 | `decisions/ADR-0002-search-postgres-then-engine.md` |
@@ -55,6 +70,12 @@
 | ADR-19 | `decisions/ADR-0019-global-identity-and-tenant-membership.md` |
 | ADR-20 | `decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md` |
 | ADR-21 | `decisions/ADR-0021-global-master-graph-and-overlay.md` |
+| ADR-22 | `decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md` |
+| ADR-23 | `decisions/ADR-0023-ai-provider-and-intelligence-architecture.md` |
+| ADR-24 | `decisions/ADR-0024-performance-slos-and-capacity-model.md` |
+| ADR-25 | `decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md` |
+| ADR-26 | `decisions/ADR-0026-workflow-automation-engine.md` |
+| ADR-27 | `decisions/ADR-0027-real-time-delivery-and-event-backbone.md` |
 | (input) | `docs/planning/proposals/2026-05-29-multi-tenant-schema.md` (adopted) |
 
 ## 2. Adjacency list (doc → docs/ADRs it references)
@@ -99,8 +120,29 @@
 | 16 | 00, 01, 02, 11, 13, 14, ADR-2, ADR-6, ADR-10, ADR-11 (engineering-conventions overlay; details 02 §1 on-disk layout) |
 | 17 | 03, 04, 05, 08, 09, 11, 12, 13, ADR-6, ADR-10, ADR-11, ADR-16, ADR-17, ADR-18, ADR-19, ADR-20 (auth/identity service on auth.truepoint.in) |
 | brand | 04, 08, 11 |
+| 18 | 01, 02, 03, 09, 10, 19, 20, ADR-24, ADR-10, ADR-21 |
+| 19 | 01, 02, 10, 13, 18, 20, 23, ADR-10, ADR-24 |
+| 20 | 02, 03, 09, 18, 19, 23, 26, 27, ADR-27, ADR-21 |
+| 21 | 06, 03, 08, 22, 10, 13, ADR-21, ADR-15 |
+| 22 | 06, 03, 08, 07, 13, 20, 21, 10, ADR-25, ADR-15 |
+| 23 | 05, 06, 03, 08, 09, 16, 20, 27, 10, ADR-23, ADR-8 |
+| 24 | 04, 05, 11, 09, 18, 20, 25, 27, 03, ADR-21 |
+| 25 | 02, 03, 05, 07, 09, 11, 12, 24, 27, departments/, ADR-22 |
+| 26 | 05, 09, 20, 24, 27, 12, 08, ADR-12 |
+| 27 | 20, 03, 05, 22, 23, 24, 25, 26, 09, 12, 08, ADR-26 |
+| departments/ | 25 (+ 24, 27, 23, 22, 08, 06, 07, 12, 17) |
+| ADR-22 | 25, 03 (additive to ADR-6/ADR-19; no tenancy tier) |
+| ADR-23 | 23, 05 (resolves 00 §8 Q8) |
+| ADR-24 | 18, 02 |
+| ADR-25 | 22, 06 |
+| ADR-26 | 27, 05 |
+| ADR-27 | 20, 02 |
 
 **Bidirectional pairs:** 00↔ADRs; 03↔ADR-6/7/8/9/10; 05↔10 (matrix↔roadmap); 07↔08↔09 (reveal+send path); 11↔04 (IA↔nav); 11↔12↔13 (app surface); 13↔ADR-11; 10↔14 (roadmap↔execution); 02↔16, 14↔16 (architecture↔code-organization); 04↔brand (design↔brand); 07↔ADR-12/13, 08↔ADR-14, 06↔ADR-13, 03↔ADR-13 (remediation decisions); 10↔15, 05↔15 (gap remediation); 03↔ADR-15, 06↔ADR-15 (entity resolution); superseded↔superseding (ADR-3/5↔ADR-6, ADR-4↔ADR-7); 17↔03/05/09/12 (auth ↔ schema/features/API/settings); 00↔ADR-16/17/18; 03↔ADR-16; ADR-10↔ADR-16 (auth transport amended); 17↔ADR-19/20; ADR-6↔ADR-19 (user scoping amended); ADR-17↔ADR-20 (no-enumeration amended); 00↔ADR-19/20; **03/02/06/08↔ADR-21** (two-layer master graph + overlay), ADR-21↔ADR-2/6/15 (amends), ADR-21↔ADR-3/5 (revives as hybrid); 00↔ADR-21.
+**New (2026-06-10):** 25↔departments/, 25↔03/05/07/11/12/24/27 (departments); 23↔05/06/08/09/16/20/27 (AI);
+18↔02/10/19/20, 19↔18/20/13, 20↔02/03/09/18/26/27 (scale/SRE/events); 21↔06/08/22, 22↔06/03/07/08/21
+(data acquisition/freshness); 24↔04/05/11 (search UX); 26↔05/09/27; 27↔20/22/23/24/25/26 (automation);
+00↔ADR-22..27; 03↔ADR-22/25; 05↔ADR-23/26; 02↔ADR-24/27; 22↔ADR-25; 27↔ADR-26; 25↔ADR-22; 23↔ADR-23.
 
 > **Doc 14 (Phase 1 Execution)** is an execution *overlay*: it sequences the build of M0–M5 and must
 > agree with 05 §21 / 10 (H10) but introduces no new milestone scope. **`brand-identity.md`** is the
@@ -138,6 +180,12 @@
 | **H13** | Charge-by-verified-result + credit-back (charge set by `email_status`; bounce → `credit.adjust`) | 07 §3, 09 §3.2, 06 §9, 03 §8, 05 §7, 10 (M4/M9 DoD), 08 §5 (audit action), ADR-13 |
 | **H14** | Auth origin + cross-domain token model (dedicated `auth.truepoint.in` IdP; PKCE code → in-memory access JWT + refresh cookie on auth origin; JWKS) | 17 §1/§3/§5, 09 §1/§4, 03 §4, 05 §1, 10 (M0/M2 + risk #17), ADR-16 |
 | **H15** | Auth policy + MFA enforcement (tenant/workspace, strictest-wins; allowed methods, IP allowlist, session timeout) | 17 §4/§7, 12 §3/§4, 03 §4, ADR-18 |
+| **H18** | Departments/teams: `teams`/`team_members`/`team_role`/`department_type` + record-visibility (`workspace/team/owner`) + per-team budgets; intra-workspace **authz** layered on workspace RLS (no new scope) | 03 §4/§5.2/§9, 25, 05 (matrix), 07 §5, 09 §4, 12 §3, ADR-22 |
+| **H19** | AI human-in-the-loop + grounding + audit: AI reads revealed/owned + masked master only; review-before-send/persist; `ai_requests` audit; eval/safety harness | 23, 05 §16, 03 §14, 08 §10, 09 §10, 16 §11, ADR-23 |
+| **H20** | Data freshness: `data_quality_score = round(100×(0.4·completeness+0.3·verification+0.3·freshness))` + per-field freshness SLAs + `freshness_status` + `verification_jobs` | 22 §2/§3, 06 §9, 03 §5.2/§14, 08 §7, 07 §5, 10 (M13), ADR-25 |
+| **H21** | Automation engine: `automation_trigger`/`automation_action` enums + suppression-gated + idempotent + per-team policies + `automation_runs` | 27, 03 §14, 05 (matrix), 09 §10, 12 §3, 08 §11, ADR-26 |
+| **H22** | Performance SLOs / error budgets (latency budgets, freshness SLOs, capacity, Citus cutover) | 18 §2/§8, 02 §9, 09, 19 §2, 10 (M12), ADR-24 |
+| **H23** | Event backbone: transactional `outbox` + idempotent consumers + DLQ/backpressure + SSE/WebSocket; per-entity ordering | 20, 02 §3, 03 §12/§14, 09 §10, 18 §9, ADR-27 |
 
 ## 5. Shared-vocabulary index (definition → usages)
 
@@ -181,6 +229,13 @@
 | privileged cross-tenant role + `platform_audit_log` | ADR-11 / 03 §9 | 02, 08, 13 |
 | data-quality fields (`last_verified_at,verification_source,data_quality_score,is_duplicate_of`) + DQ tables | 03 (DQ amendment) / 06 | 11 (Data Health), 13 |
 | **pending schema** (`tasks,templates,notifications,webhooks,integrations,sending_identities`; platform: `staff_users,impersonation_sessions,platform_audit_log,feature_flags,plan_templates,provider_configs,announcements,abuse_flags,system_status`) | 11/12/13 (flagged) | 03 (follow-up amendment) |
+| departments/teams (`department_type`, `team_role`, `record_visibility`; `teams`/`team_members`/`team_credit_budgets`) | 03 §4/§5.2 / ADR-22 | 25, 05, 07 §5, 09 §4, 12 §3, 00 §6 |
+| AI layer (`AiPort` + Claude Opus 4.8/Sonnet 4.6/Haiku 4.5; `ai_task_type`; `ai_requests`/`ai_evals`/`ai_cache`; pgvector `embeddings`) | ADR-23 / 23 / 03 §14 | 05 §16, 16 §11, 06 §9, 08 §10, 09, 01 §1, 00 §6/§8 |
+| `data_quality_score` formula + `freshness_status` + freshness SLAs | 22 §2/§3 / ADR-25 / 03 §5.2/§14 | 06 §9, 03, 13 §3, 07 §5, 10 (M13), 00 §6 |
+| automation (`automation_trigger`/`automation_action`; `automation_rules`/`automation_runs`) | 03 §14 / ADR-26 / 27 | 05, 09 §10, 12 §3, 08 §11, 25 §7 |
+| event backbone (`outbox`; domain events; SSE/WebSocket) | 20 / ADR-27 / 03 §14 | 02 §3, 09 §10, 18 §9, 26, 27 |
+| performance SLOs + error budgets + capacity (latency budgets, Citus cutover) | 18 / ADR-24 | 02 §9, 19, 09, 10 (M12), 00 §6 |
+| `saved_views` / `segments` (smart segments) | 03 §5.2/§14 / 24 | 05 §8, 11 §4.2, 27 |
 
 ## 6. ADR registry
 
@@ -207,6 +262,12 @@
 | ADR-19 | Global identity + tenant membership | Accepted | 17, 03 | 00, 02, 03, 05, 09, 12, 17, README (amends ADR-6 user scoping) |
 | ADR-20 | Existence-revealing identifier-first + registration | Accepted | 17, 03, 12 | 00, 03, 05, 09, 17, README (amends ADR-17 no-enumeration) |
 | ADR-21 | Global master graph + per-workspace overlay (two-layer) | Accepted | 02, 03, 06, 08 | 00, 02, 03, 06, 08, 09, 10, README (reopens ADR-6; revives ADR-3/5; amends ADR-2/15) |
+| ADR-22 | Departments/teams as intra-workspace segmentation | Accepted (additive to ADR-6/19) | 25, 03 | 00, 03, 05, 07, 09, 12, 25, README |
+| ADR-23 | AI provider & intelligence architecture (Anthropic Claude) | Accepted (resolves 00 §8 Q8) | 23, 05 | 00, 01, 05, 06, 08, 09, 16, 23, README |
+| ADR-24 | Performance SLOs, capacity & scale-hardening | Accepted | 18, 02 | 00, 02, 09, 10, 18, 19, README |
+| ADR-25 | Data freshness, decay & re-verification lifecycle | Accepted | 22, 06 | 00, 03, 06, 07, 08, 10, 22, README |
+| ADR-26 | Workflow automation engine | Accepted | 27, 05 | 00, 03, 05, 09, 12, 27, README |
+| ADR-27 | Real-time delivery & event backbone | Accepted | 20, 02 | 00, 02, 03, 09, 18, 20, 26, 27, README |
 
 **ADR rules:** new significant decision → new ADR + 00 §7 row + lead-doc edit (tripod). Superseding a
 locked ADR → set old `Status: Superseded by ADR-NNNN` + reciprocal link, never overwrite the body.

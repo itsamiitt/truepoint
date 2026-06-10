@@ -70,7 +70,7 @@
       **coverage**, **staleness** (past freshness SLA), **duplicate** detection, bounce/invalid rates;
       per-provider **accuracy & cost-per-valid-field** scorecards.
     - **Database management / ops** — Drizzle **migration status**; **partition** management (the
-      monthly-partitioned tables, [03 §12](./03-database-design.md#12-partitioning--scale-100m)); index
+      monthly-partitioned tables, [03 §12](./03-database-design.md#12-indexing-partitioning--scale-overlay-100m-master-graph-billions)); index
       & **slow-query** health (Performance Insights); bloat/vacuum; **storage per tenant**; Aurora
       **ACU + read-replica** status; **RDS Proxy** pool stats; **CDC lag**; **backup/PITR** status.
     - **Hygiene jobs** — bulk **re-verification / re-enrichment** (AWS Batch); dedup/merge tools; purge

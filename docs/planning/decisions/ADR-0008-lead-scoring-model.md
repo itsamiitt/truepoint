@@ -28,7 +28,7 @@ A naming hazard must be settled up front: LeadWolf previously used "confidence" 
 ## Consequences
 
 - **Positive:** explainable, versioned scoring; clear separation from data correctness; per-workspace tunability.
-- **Negative:** `scores` grows quickly (every re-score) → time-partition it ([03 §12](../03-database-design.md#12-partitioning--scale-100m)); the sync trigger couples `scores` writes to `contacts` (kept tiny/idempotent).
+- **Negative:** `scores` grows quickly (every re-score) → time-partition it ([03 §12](../03-database-design.md#12-indexing-partitioning--scale-overlay-100m-master-graph-billions)); the sync trigger couples `scores` writes to `contacts` (kept tiny/idempotent).
 - **AI tie-in:** the AI/ICP features in [05 §16](../05-features-modules.md) compute against this model; NL-search ranking can use these scores.
 
 ## Revisit if

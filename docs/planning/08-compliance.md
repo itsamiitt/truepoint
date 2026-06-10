@@ -338,7 +338,7 @@ reveal **and** send [§3](#3-suppression--do-not-contact-dnc) + DSAR fan-out [§
   [03 §9](./03-database-design.md#9-row-level-security), audit-log [§5](#5-audit-logging), KMS encryption
   [§9](#9-security-controls-supporting-compliance)). **Readiness begins at M5** (compliance hardening); external
   audit follows post-MVP ([10](./10-roadmap.md)). This owns what was the SOC2-scope open question
-  ([00 §8.9](./00-overview.md#8-open-questions)).
+  ([00 §8.9](./00-overview.md#8-open-questions-tracked-resolved-during-doc-review-or-early-milestones)).
 - **US data-broker registration + DROP processing** — operating a **global master graph**
   ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) makes data-broker status **core, not
   contingent**. The California **Delete Act / DROP** (live 2026-01-01,

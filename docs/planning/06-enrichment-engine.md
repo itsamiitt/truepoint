@@ -140,7 +140,7 @@ provider cost/cache for the enrichment workers, not user-facing billing
 - **Idempotency:** enrichment jobs carry an idempotency key; `provider_calls.request_hash` unique +
   Redis in-flight lock prevent duplicate **paid** calls under retries/concurrency.
 - **Cost control:** per-provider + global **daily cost budgets** with alerts; the breaker can be tripped
-  by budget exhaustion. All spend is observable (cost-per-reveal dashboard, [§9](#9-metrics-the-economics-dashboard)).
+  by budget exhaustion. All spend is observable (cost-per-reveal dashboard, [§9](#10-metrics-the-economics-dashboard)).
 
 ## 7. Lead scoring & intent signals
 
