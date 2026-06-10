@@ -10,7 +10,8 @@
 >
 > **Extended 2026-06-10:** docs **18–27** + **`departments/`** and **ADR-0022–0027** add scale/SRE,
 > event/real-time, data acquisition & freshness, AI, advanced-search UX, departments/teams, integrations,
-> and automation.
+> and automation. Docs **28–29** are an **enterprise-readiness audit overlay** (findings + settings/admin
+> catalog — recommendations only, no locked decisions; gap IDs `G-…`, drift findings `F-…` in 28 §11).
 >
 > Shorthand: `NN` = `docs/planning/NN-*.md`; `ADR-N` = `docs/planning/decisions/ADR-000N-*.md`.
 
@@ -47,6 +48,8 @@
 | 25 | `docs/planning/25-departments-teams-workspaces.md` |
 | 26 | `docs/planning/26-integrations-data-delivery.md` |
 | 27 | `docs/planning/27-workflow-automation-engine.md` |
+| 28 | `docs/planning/28-enterprise-readiness-audit.md` *(audit overlay — findings/recommendations, no decisions)* |
+| 29 | `docs/planning/29-settings-administration-architecture.md` *(audit companion — settings + admin catalog)* |
 | departments | `docs/planning/departments/` (README + 11 modules) |
 | brand | `docs/planning/brand-identity.md` |
 | ADR-1 | `decisions/ADR-0001-orm-drizzle.md` |
@@ -130,6 +133,8 @@
 | 25 | 02, 03, 05, 07, 09, 11, 12, 24, 27, departments/, ADR-22 |
 | 26 | 05, 09, 20, 24, 27, 12, 08, ADR-12 |
 | 27 | 20, 03, 05, 22, 23, 24, 25, 26, 09, 12, 08, ADR-26 |
+| 28 | 00–27, departments/, 29 (audit overlay; cites ADR-7/13/14/18/22–27; reports drift, edits nothing) |
+| 29 | 28, 12, 13, 17, 22, 23, 25, 26, 27, 08, ADR-18, ADR-22 |
 | departments/ | 25 (+ 24, 27, 23, 22, 08, 06, 07, 12, 17) |
 | ADR-22 | 25, 03 (additive to ADR-6/ADR-19; no tenancy tier) |
 | ADR-23 | 23, 05 (resolves 00 §8 Q8) |
@@ -143,6 +148,8 @@
 18↔02/10/19/20, 19↔18/20/13, 20↔02/03/09/18/26/27 (scale/SRE/events); 21↔06/08/22, 22↔06/03/07/08/21
 (data acquisition/freshness); 24↔04/05/11 (search UX); 26↔05/09/27; 27↔20/22/23/24/25/26 (automation);
 00↔ADR-22..27; 03↔ADR-22/25; 05↔ADR-23/26; 02↔ADR-24/27; 22↔ADR-25; 27↔ADR-26; 25↔ADR-22; 23↔ADR-23.
+**Audit overlay (2026-06-10):** 28↔29 (audit ↔ settings catalog); README↔28/29 (index). 28/29 link *out*
+to the whole corpus one-way — no reciprocal links required from 00–27 (overlay convention, like 14/15).
 
 > **Doc 14 (Phase 1 Execution)** is an execution *overlay*: it sequences the build of M0–M5 and must
 > agree with 05 §21 / 10 (H10) but introduces no new milestone scope. **`brand-identity.md`** is the
