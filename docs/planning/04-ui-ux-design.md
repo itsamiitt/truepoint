@@ -144,7 +144,11 @@ exposes tenant-level billing for the **tenant owner**.
 
 ## 5. Key screen — Search & Results (specified first)
 
-The most-used screen and the first we fully design/build.
+The most-used screen and the first we fully design/build. The **full advanced-exploration spec** — facet
+interactions (multi-select, AND/OR, preset bundles, recent searches), **intent/technographic facets**,
+instant search, **saved views**, and **smart segments** — is
+[24](./24-advanced-search-exploration-ux.md); **department personas** set default filters/views per team
+([25 §3](./25-departments-teams-workspaces.md)).
 
 ```
 ┌─ Filters (rail) ─┐ ┌─ Results ─────────────────────────────────────────────┐
@@ -166,8 +170,8 @@ The most-used screen and the first we fully design/build.
 - **Row click → detail drawer/page** (record detail + reveal).
 - **Bulk actions:** select rows → "Reveal selected (N credits)" shows the exact cost and remaining
   balance before confirming; "Add to list"; "Export CSV" (only revealed rows export contact fields).
-- **Filters** map to the structured search query (and later to AI natural-language → filters).
-- **Saved search:** persist the current filter set (`saved_searches`).
+- **Filters** map to the structured search query (and to AI natural-language → filters, [23](./23-ai-intelligence-layer.md)).
+- **Saved search:** persist the current filter set (`saved_searches`); **saved views** + **smart segments** in [24](./24-advanced-search-exploration-ux.md).
 - **Empty/zero states:** quiet, instructional; no illustrations heavier than a single muted glyph.
 
 ### Reveal interaction (within detail or bulk)

@@ -19,9 +19,11 @@
 | Pooling | **RDS Proxy** (transaction pooling, IAM auth) | Managed |
 | Search | **OpenSearch** (global master graph) + **Typesense** (overlay), self-hosted ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md) amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | ECS Fargate |
 | Cache/queue | **Redis 7** (ElastiCache, cluster mode) + **BullMQ** | Managed |
-| Realtime | Postgres LISTEN/NOTIFY + SSE; Redis pub/sub fan-out | API service |
+| Realtime | **SSE/WebSocket** gateway + Postgres LISTEN/NOTIFY; Redis pub/sub fan-out; **transactional outbox** ([20](./20-event-driven-realtime-backbone.md), [ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md)) | API service |
 | Event analytics + facet counts | **ClickHouse, self-hosted** (event tables >~50M rows; high-cardinality master-graph facet counts) via CDC | EC2 |
 | Data lake / batch ER | **S3 + Iceberg/Parquet**; Splink on **Spark/Athena** over raw `source_records` ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | Native |
+| AI / LLM | **Anthropic Claude** (Opus 4.8 / Sonnet 4.6 / Haiku 4.5) behind `AiPort` ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)) | Anthropic API |
+| Vector / semantic | **pgvector** embeddings (semantic search / RAG — [23](./23-ai-intelligence-layer.md)) | Aurora |
 | Auth | **Self-built on Lucia** + Postgres + Redis ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)) | API service |
 | Files | S3 (pre-signed up/download; CloudFront for public) | Native |
 | Email | SES (React Email; SNS→SQS bounce/complaint) | Native |
@@ -31,6 +33,8 @@
 | Errors | **GlitchTip** (self-hosted, Sentry-protocol) | ECS |
 | Product analytics | **PostHog** (self-hosted) | EC2 |
 | Metrics/logs/trace | CloudWatch + **Grafana** + X-Ray | Native + EC2 |
+| Load/perf testing | **k6** (load/soak/spike vs SLOs — [18](./18-scalability-performance.md)) | CI |
+| Cost / FinOps | Cost Explorer + Budgets/anomaly alerts; per-tenant attribution ([19 §8](./19-observability-reliability.md)) | Native |
 | Heavy batch jobs | **AWS Batch** (Fargate) | Native |
 | IaC | **Terraform** (separate infra repo; state in S3 + DynamoDB) | — |
 | CI/CD | GitHub Actions → **ECR** → **CodeDeploy** blue/green | — |

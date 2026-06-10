@@ -45,16 +45,29 @@
 - **Sending & deliverability** — per-workspace **sending domains** + **DKIM/SPF/DMARC** status,
   **warm-up**, daily send limits, **unsubscribe footer + physical address**. *(M9)*
 - **Suppression / DNC** — workspace-scope list + CSV import ([08 §3](./08-compliance.md)). *(M5)*
-- **Integrations** — CRM connect (HubSpot/Salesforce/Pipedrive), Sales Navigator, Slack/Teams
-  notifications, BYO enrichment-provider keys. *(M7/M10)*
+- **Integrations** — CRM connect (HubSpot/Salesforce/Pipedrive) + native apps, Sales Navigator,
+  Slack/Teams app, **reverse-ETL/warehouse**, **Chrome extension**, **SMS** channel, BYO
+  enrichment-provider keys ([26](./26-integrations-data-delivery.md)). *(M7/M10/M16)*
 - **Import defaults** — dedup rules, default field mapping. *(M1)*
+- **Teams & departments** — create teams (`department_type`), assign members + **team roles**, configure
+  **personas** (default dashboards/views), **record-visibility** defaults, and **per-team credit budgets**
+  ([25](./25-departments-teams-workspaces.md), [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)). *(M15)*
+- **Automation** — build trigger→condition→action plays + recipe library; per-team automation policies;
+  **dry-run** ([27](./27-workflow-automation-engine.md)). *(M16)*
+- **AI assistant** — enable/disable AI features, guardrails, **BYO model key**, per-team AI budgets
+  ([23](./23-ai-intelligence-layer.md)). *(M14)*
+- **Data freshness & retention** — per-field re-verify cadence + retention/purge policy
+  ([22](./22-data-quality-freshness-lifecycle.md)). *(M13)*
+- **Export policies** — row caps + frequency limits + approval for large exports
+  ([26 §8](./26-integrations-data-delivery.md)). *(M16)*
 
 ## 4. Tenant settings *(tenant owner / billing — tier as noted)*
 
 - **Organization** — tenant name, logo, default region. *(M1)*
 - **Billing & Credits** *(Free+)* — plan tier, seats, workspace limit, **Stripe customer portal**,
   invoices, payment method; **credit pool** balance, **top-up** (packs), **auto-recharge**,
-  **cross-workspace allocation** policy, usage history. *(M3)* — the top-bar credit pill deep-links here.
+  **cross-workspace / per-team budget allocation** ([25 §5](./25-departments-teams-workspaces.md)),
+  usage history. *(M3)* — the top-bar credit pill deep-links here.
   **Transparent, no-lock-in terms** ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)):
   self-serve cancellation, no auto-renew traps, and **account-closure data export** (no data-destroy on churn).
 - **Workspaces** *(Team+)* — create/archive, limits, default workspace. *(M2)*
@@ -96,6 +109,10 @@
 | Sequences + send | — | ✅ | ✅ | ✅ |
 | Reports / analytics | basic | ✅ | ✅ | ✅ |
 | Integrations (CRM) | — | — | ✅ | ✅ |
+| AI assistant (copilot / drafting) | — | ✅ | ✅ | ✅ |
+| Departments / teams + budgets | — | — | ✅ | ✅ |
+| Automation plays | — | — | ✅ | ✅ |
+| Reverse-ETL / warehouse | — | — | — | ✅ |
 | Public API + webhooks | — | — | ✅ | ✅ |
 | SSO / SCIM | — | — | — | ✅ |
 | IP allowlist / session policy | — | — | — | ✅ |

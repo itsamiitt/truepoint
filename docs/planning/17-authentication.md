@@ -264,6 +264,8 @@ only.
   [05 §1](./05-features-modules.md#1-auth--tenancy--mvp-m2), [08 §5](./08-compliance.md),
   [09 §1](./09-api-design.md#1-conventions), [09 §4](./09-api-design.md#4-auth--authorization),
   [11](./11-information-architecture.md), [12](./12-settings.md), [13](./13-platform-admin.md),
+  [19](./19-observability-reliability.md) (infra key-rotation cadence), [25](./25-departments-teams-workspaces.md)
+  (department/team is **authz** — app-level — not authn; JWT `sub`/`tid`/`wid` claims unchanged),
   [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md),
   [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md),
   [ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md),

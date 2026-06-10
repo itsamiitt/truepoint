@@ -113,6 +113,18 @@ change; uses existing surfaces):
 - **[13](./13-platform-admin.md):** certification & data-broker-registration tracking in compliance ops.
 - **[00 §8](./00-overview.md#8-open-questions):** resolved pricing-policy (partial) and SOC2-scope questions.
 
+**Enterprise-extension pass (2026-06-10)** — a full-corpus audit added scale/AI/department depth:
+- **New docs** [18](./18-scalability-performance.md)–[27](./27-workflow-automation-engine.md) +
+  [departments/](./departments/) (11 modules); **new ADRs**
+  [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)–[ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md);
+  **roadmap** milestones **M12–M16** + risks #18–22 ([10](./10-roadmap.md)).
+- **Gaps closed:** scale/SRE depth + event/real-time backbone; the **AI intelligence layer**;
+  freshness/coverage SLAs; **department/team workspaces**; advanced search UX; governance controls
+  (role-gating, per-team budgets, export caps); integrations breadth; the automation engine.
+- **New differentiators:** AI research-agent + **signal-to-play**, conversational **copilot**, **freshness
+  guarantees**, **lawful-basis lineage** ("provenance you can show an auditor"), no-lock-in **reverse-ETL**,
+  department/manager **performance intelligence**, deliverability cockpit, Chrome-extension + SMS.
+
 ## Links
 - **Links to:** [00](./00-overview.md), [03](./03-database-design.md), [05](./05-features-modules.md),
   [06](./06-enrichment-engine.md), [07](./07-billing-credits.md), [08](./08-compliance.md),

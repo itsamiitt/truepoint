@@ -46,6 +46,13 @@ notifications bell.
 Everything else is a **panel/drawer/segment**, never a tab: record detail · reveal · enrich · enroll ·
 import wizard · template editor · score breakdown · list management · saved views · settings.
 
+**Departments/teams** layer on as **personas**, not new destinations ([25 §3](./25-departments-teams-workspaces.md),
+**H11**): a **team switcher** sits beside the workspace switcher, and a member's active team sets the
+default Home dashboard, Prospect filters/saved-views/segments ([24](./24-advanced-search-exploration-ux.md)),
+and Reports pack. The **AI copilot** is a top-bar/`cmdk` surface ([23](./23-ai-intelligence-layer.md));
+**automation** build + run-status live in Settings and per-surface panels ([27](./27-workflow-automation-engine.md)) —
+the six destinations and **Credits-not-a-tab** stand.
+
 ## 3. Layout shell
 
 ```

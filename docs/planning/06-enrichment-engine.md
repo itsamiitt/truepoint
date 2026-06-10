@@ -198,16 +198,22 @@ sales_navigator` records the raw payload as provenance.
   (resolves §11 Q1; data-side research
   [../research/sales-intelligence-data-research.md](../research/sales-intelligence-data-research.md) §3).
 - **Periodic re-verification** (post-MVP): scheduled jobs re-check fields older than a freshness SLA;
-  `last_verified_at` drives ordering.
+  `last_verified_at` drives ordering. Per-field **freshness SLAs**, `freshness_status`, the decay model,
+  and coverage/match-rate targets are specified in [22](./22-data-quality-freshness-lifecycle.md)
+  ([ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md)); sourcing breadth,
+  provider vetting/DPA, and the lawful-basis lineage in [21](./21-data-acquisition-sourcing.md). **AI
+  extraction** (unstructured → fields) is in [23 §3](./23-ai-intelligence-layer.md).
 
 ### Data-quality scoring, dedup & re-verification
 
 A per-record **data-quality subsystem** (flagged as a [03 §14](./03-database-design.md#14-planned-schema-additions-app-surface--platform) amendment):
 
 - **DQ fields** on `contacts`/`accounts`: `last_verified_at`, `verification_source`,
-  **`data_quality_score`** (0–100 record-health: completeness × freshness × verification — **distinct**
-  from the *lead score* (prospect quality, [ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)) and
-  from `email_status`/`phone_status` (field correctness)), and `is_duplicate_of`.
+  **`data_quality_score`** (0–100 record-health — **formula now defined** in
+  [22 §2](./22-data-quality-freshness-lifecycle.md): `round(100 × (0.4·completeness + 0.3·verification +
+  0.3·freshness))`; **distinct** from the *lead score* (prospect quality,
+  [ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)) and from `email_status`/`phone_status` (field
+  correctness)), `freshness_status`, and `is_duplicate_of`.
 - **DQ rules & jobs:** `data_quality_rules` (validation + per-field **freshness SLAs** + confidence
   thresholds) drive `verification_jobs`. **Bulk re-verification / re-enrichment** runs on **AWS Batch**
   ([01 §4](./01-tech-stack.md#4-background-workers)).

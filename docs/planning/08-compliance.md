@@ -243,6 +243,13 @@ Re-verification keeps data accurate (accuracy principle); suppression + DSAR pro
   ToS / acceptable-use review before enabling, and the data they surface
   (`sales_nav_links`, `activities` of `channel = sales_navigator|linkedin`) is a **PII/DSAR surface**
   that the access/delete fan-out must cover ([§4](#4-dsar--data-subject-access-requests)).
+- The **provider vetting + DPA/sub-processor framework** (due diligence, residency, opt-out honoring, the
+  `provider_configs` compliance gate) and the **lawful-basis lineage chain** are specified in
+  [21 §4/§5](./21-data-acquisition-sourcing.md). **AI (Anthropic Claude)** is a sub-processor under DPA;
+  AI is grounded in revealed/owned data only, `ai_requests` logs are in **DSAR scope**
+  ([§4](#4-dsar--data-subject-access-requests)), and **no customer data trains the model** without
+  explicit terms ([23 §8](./23-ai-intelligence-layer.md)). **Automation** actions are suppression-gated +
+  audited (`automation_runs`, [27](./27-workflow-automation-engine.md)).
 
 ## 11. Collection & channel legality (ties to [06 §2](./06-enrichment-engine.md#2-source-channels-how-data-enters-a-workspace))
 
@@ -256,7 +263,8 @@ per-workspace CRM. Data still also lands in each workspace overlay
 - **Per-source legal / ToS review** before enabling any source in production — each provider's licence
   and each channel's ToS (notably **LinkedIn / Sales Navigator**, both source *and* send channel) is
   reviewed and independently pausable.
-- **Lawful-basis snapshot** captured per import in `source_imports` at ingest time.
+- **Lawful-basis snapshot** captured per import in `source_imports` at ingest time, forming the
+  **lawful-basis lineage chain** queryable for DSAR/audit ([21 §5](./21-data-acquisition-sourcing.md)).
 - No collection of **special-category** data; B2B contact data only.
 - **`activities` and `outreach_log` are PII/DSAR surfaces too:** message bodies, recipients, and
   engagement events hold personal data and are covered by the DSAR access/delete fan-out

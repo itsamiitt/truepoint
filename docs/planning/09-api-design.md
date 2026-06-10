@@ -338,8 +338,8 @@ Stable machine-readable `code` for every error; never leak internal details or P
 
 - URI versioning (`/api/v1`) for REST; tRPC versions with the app it ships in. Additive changes are
   non-breaking; breaking changes bump the version.
-- Deprecations announced via `Sunset` header + changelog; minimum support window once the public API
-  is live.
+- Deprecations announced via `Sunset` header + changelog; a documented **minimum support window of
+  ≥ 6 months** for a deprecated version once the public API is live.
 
 ## 8. Public API readiness (post-MVP, seams now)
 
@@ -347,7 +347,12 @@ Built so the public API is mostly *exposing* what already exists:
 - API keys + scopes (schema + admin UI) exist from M2.
 - Idempotency + metering exist from M3.
 - **The same service layer powers tRPC and REST** (thin handlers over `packages/core`/`packages/db`).
-- Add: per-key rate limits/quotas, hosted OpenAPI docs, usage-based billing hooks, sandbox keys.
+- Add: per-key rate limits/quotas (**incl. per-tenant global-search quotas**, [18 §9](./18-scalability-performance.md)),
+  hosted OpenAPI docs, usage-based billing hooks, sandbox keys, **SSE streaming**
+  ([20 §8](./20-event-driven-realtime-backbone.md)), and resource groups for **teams**
+  ([25](./25-departments-teams-workspaces.md)), **AI** ([23](./23-ai-intelligence-layer.md)),
+  **automation** ([27](./27-workflow-automation-engine.md)), and **saved-views/segments**
+  ([24](./24-advanced-search-exploration-ux.md)).
 - **CRM-neutral by design (strategic).** The public API + CRM sync ([10 M10](./10-roadmap.md)) keep LeadWolf an
   **open, CRM-agnostic layer** — the most defensible counter to incumbent feature-absorption (the market
   analysis' sole Critical risk — [10 risk #13](./10-roadmap.md), recommendation R8) and a low-noise acquisition
@@ -362,7 +367,9 @@ Built so the public API is mostly *exposing* what already exists:
 ## 10. Webhooks (outbound, post-MVP)
 
 For customers: subscribe to events with signed payloads, retries with backoff, and a delivery log. Not
-in MVP, but the event vocabulary is reserved now:
+in MVP, but the event vocabulary is reserved now. These ride the **domain-events catalog / transactional
+outbox** ([20 §2](./20-event-driven-realtime-backbone.md)); **reverse-ETL** + native apps live in
+[26](./26-integrations-data-delivery.md):
 
 | Event | Fires when |
 |---|---|
@@ -371,6 +378,8 @@ in MVP, but the event vocabulary is reserved now:
 | `outreach.status_changed` | an enrollment's `status` or a contact's `outreach_status` changes ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)) |
 | `enrichment.completed` | an on-demand enrichment job finishes |
 | `import.completed` | a `source_imports` job finishes (counts, dedup outcome) |
+| `signal.received` | an intent signal is ingested (`signal_type`, account/contact) — feeds automation ([27](./27-workflow-automation-engine.md)) |
+| `verification.completed` | a `verification_jobs` run finishes (freshness + credit-back, [22](./22-data-quality-freshness-lifecycle.md)) |
 | `list.updated` | a list's membership changes |
 | `auth.event` | an auth event of interest fires (suspicious login, MFA enrolled, SSO/device change) — [17 §9](./17-authentication.md#9-audit--events) |
 

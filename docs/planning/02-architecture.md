@@ -299,6 +299,14 @@ Observability is **self-hosted / AWS-native** ([ADR-0010](./decisions/ADR-0010-a
 | Business | **Grafana** dashboards | cost-per-reveal, credit-balance drift, daily reveals, verify pass-rate |
 | Uptime | CloudWatch Synthetics | public-surface canaries |
 
+The **full SLO + error-budget framework**, per-endpoint latency budgets, capacity model, caching policy,
+and FinOps cost attribution are specified in [18](./18-scalability-performance.md) /
+[19](./19-observability-reliability.md) ([ADR-0024](./decisions/ADR-0024-performance-slos-and-capacity-model.md));
+the **event backbone + real-time delivery** (outbox, DLQ/backpressure, SSE/WebSocket) in
+[20](./20-event-driven-realtime-backbone.md) ([ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md)).
+New domains — `ai`, `automation`, `realtime`, `dataops`, `departments` — follow the same modular-monolith
+boundaries ([16](./16-code-organization.md)).
+
 ## 10. Build & deploy
 
 - **Turborepo** caches `lint/typecheck/test/build` by content hash (local + remote cache in CI);
@@ -310,7 +318,8 @@ Observability is **self-hosted / AWS-native** ([ADR-0010](./decisions/ADR-0010-a
 - **Migrations:** Drizzle Kit generates SQL migrations; per-PR test DB → `staging` on merge → prod on
   release; expand/contract for zero-downtime schema changes at scale.
 - **Partitioning:** high-volume tables are **range-partitioned by month** — `activities`, `audit_log`,
-  `contact_reveals`, `intent_signals`, `scores`, `source_imports`, `outreach_log`, `provider_calls`
-  ([03 §11](./03-database-design.md)).
+  `contact_reveals`, `intent_signals`, `scores`, `source_imports`, `outreach_log`, `provider_calls`,
+  `source_records`, and the new `outbox`, `ai_requests`, `automation_runs`
+  ([03 §12](./03-database-design.md#12-indexing-partitioning--scale-overlay-100m-master-graph-billions)).
 - **Infra:** all AWS resources defined in the **Terraform** infra repo (state in S3 + DynamoDB); one
   AWS account per environment via AWS Organizations ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)).

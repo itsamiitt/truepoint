@@ -13,7 +13,9 @@
 **Phase 1 = M0 foundation + M1–M5 MVP.** At the end of Phase 1 a customer can self-serve the whole core
 loop — sign up → import → masked search → reveal (credits + Stripe) → export — hardened with enrichment/
 scoring (M4) and GDPR/CCPA compliance/DSAR (M5). The milestone definitions and DoDs are unchanged from
-[10](./10-roadmap.md); this doc only sequences them.
+[10](./10-roadmap.md); this doc only sequences them. The new post-MVP tracks (**M12** scale/SRE, **M13**
+data-intelligence, **M14** AI, **M15** departments, **M16** automation/integrations — [10](./10-roadmap.md))
+are **out of Phase-1 scope** and do not alter the M0–M5 plan below.
 
 Two phase-level decisions (logged in [00 §7](./00-overview.md#7-decision-log)):
 

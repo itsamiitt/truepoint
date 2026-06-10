@@ -56,7 +56,9 @@
    management ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), [08 §15](./08-compliance.md)).
 9. **System health & ops** — service health (ECS/Aurora/Redis/Typesense/OpenSearch/ClickHouse); **queue depth +
    DLQ**; worker/job status; error rates (GlitchTip); **CDC lag**; SES bounce/complaint; uptime;
-   deep-links to Grafana/X-Ray; **maintenance mode** + status-page/banner control.
+   deep-links to Grafana/X-Ray; **maintenance mode** + status-page/banner control. **SLOs/error budgets +
+   FinOps cost attribution** and **DR runbook + drills** are specified in
+   [18](./18-scalability-performance.md)/[19](./19-observability-reliability.md).
 10. **Content & comms** — system/email templates; **in-app announcements/banners**; changelog/release
     notes; terms/privacy version management.
 11. **Platform audit log** — every staff action (impersonation, grants, suspensions, config changes) —
@@ -75,6 +77,11 @@
       stale/unverified; bulk field corrections; GDPR **retention sweeps**; orphan cleanup.
     - **DQ rules & config** — validation rules; **freshness SLA per field**; confidence/quality
       thresholds; auto-suppress-on-bounce; **per-source trust weights** ([06](./06-enrichment-engine.md)).
+    - **ER manual-review queue** — low-confidence merges with merge/unmerge + audit ([22 §6](./22-data-quality-freshness-lifecycle.md)).
+14. **AI & automation ops** — AI usage + **cost per tenant** (`ai_requests`); **eval/safety** dashboards +
+    CI regression gates, prompt/model version + rollout, content-safety flags ([23 §6](./23-ai-intelligence-layer.md));
+    **automation oversight** (rule runs/errors, loop/abuse guards via `automation_runs`,
+    [27](./27-workflow-automation-engine.md)); per-tenant AI/automation budgets.
 
 > The **customer-facing** counterpart is the **Data Health** surface in Reports + per-record quality
 > badge ([11 §4.5](./11-information-architecture.md)); this console is the platform-wide DQ + DB-ops view.

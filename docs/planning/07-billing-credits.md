@@ -176,6 +176,13 @@ sequenceDiagram
   entitlements are orthogonal: a plan may include a monthly quota *and* allow credit top-ups.
 - Feature gating examples: API access, CRM sync, AI/outreach features, export row caps — all `features`
   flags.
+- **Per-team credit budgets** (`team_credit_budgets`): a tenant/RevOps allocates a slice of the tenant
+  pool to a **department**, checked **in-tx** at reveal next to the counter (`H2`) — a `hard_cap` team is
+  blocked at budget while soft budgets warn/report ([25 §5](./25-departments-teams-workspaces.md),
+  [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)). This **is** the
+  cross-workspace allocation policy referenced in [12 §4](./12-settings.md).
+- **AI usage metering** (`ai_requests`): tokens → cost per tenant, optional **AI credits**, and
+  per-tenant/workspace AI budgets with circuit-breakers ([23 §7](./23-ai-intelligence-layer.md)).
 
 ## 6. Self-serve abuse & fraud guards
 

@@ -235,18 +235,24 @@ Per [14 §2](./14-phase-1-execution.md):
 
 ## 11. AI / LLM isolation
 
-The planned NL-search and outreach-drafting features ([05](./05-features-modules.md)) call an LLM
-provider (Anthropic Claude is the recommendation under the open question in
-[00 §8 #8](./00-overview.md#8-open-questions-tracked-resolved-during-doc-review-or-early-milestones) —
-**still open**). Whatever provider is chosen, isolate it so it stays testable and swappable:
+The AI features ([23](./23-ai-intelligence-layer.md)) call an LLM provider — **now decided: Anthropic
+Claude behind an `AiPort`** ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md),
+resolving [00 §8 #8](./00-overview.md#8-open-questions-tracked-resolved-during-doc-review-or-early-milestones)).
+Isolate it so it stays testable and swappable:
 
-- The provider sits **behind a `core` port** (e.g. `core/ports/LlmPort`), implemented by an adapter (in
-  `integrations/` or a dedicated `packages/ai`) and injected at the app composition root — same pattern
-  as `SearchPort`.
+- The provider sits **behind a `core` port** (`core/ports/AiPort`), implemented by a dedicated
+  **`packages/ai`** adapter (a model router over Opus 4.8 / Sonnet 4.6 / Haiku 4.5) and injected at the
+  app composition root — same pattern as `SearchPort`.
 - **Prompts are versioned artifacts**, not inline string literals: keep them in files/constants under
   the owning domain (e.g. `core/<domain>/prompts/`) with a version tag, so changes are reviewable.
 - Tests run against **mocked/recorded** provider responses (cassettes, like enrichment providers) — no
-  live spend, deterministic CI.
+  live spend, deterministic CI. An **eval/safety harness** (`ai_evals`) gates prompt/model changes
+  ([23 §6](./23-ai-intelligence-layer.md)).
+- **New domains** keep the same boundaries: `packages/ai` (AI), `packages/automation` (the rules engine,
+  [27](./27-workflow-automation-engine.md)), `packages/realtime` (SSE + outbox relay,
+  [20](./20-event-driven-realtime-backbone.md)), `packages/dataops` (freshness/ER jobs,
+  [22](./22-data-quality-freshness-lifecycle.md)); **departments/teams** are a `core` domain (no new app)
+  with persona config in `apps/web` ([25](./25-departments-teams-workspaces.md)).
 
 ## Links
 - **Links to:** [00 §7/§8](./00-overview.md), [01 §5](./01-tech-stack.md),
@@ -262,5 +268,5 @@ provider (Anthropic Claude is the recommendation under the open question in
 ## Open questions
 1. **`@leadwolf/*` package scope name** — confirm the npm scope used in `package.json`/import paths
    (placeholder `@leadwolf` used here).
-2. **AI provider & home** — provider choice is open ([00 §8 #8](./00-overview.md)); once decided,
-   confirm whether the LLM adapter lives in `packages/integrations` or a dedicated `packages/ai`.
+2. ~~**AI provider & home**~~ — **Resolved:** Anthropic Claude behind `AiPort` in a dedicated
+   **`packages/ai`** ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md), [23](./23-ai-intelligence-layer.md)).
