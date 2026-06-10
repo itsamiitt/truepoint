@@ -67,6 +67,14 @@ auth (self-built) + workspace RBAC, with GDPR/CCPA suppression + DSAR.
 Sales Navigator integration, intelligence/lead-scoring, activity timeline, **outreach sequencing + send
 engine** ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)), HubSpot/Salesforce/Pipedrive
 sync, Public REST API, AI NL-search + AI outreach drafting, ClickHouse analytics, EU data-residency split.
+Beyond the MVP we also build the **AI intelligence layer** ([23](./23-ai-intelligence-layer.md)),
+**department/team experiences** ([25](./25-departments-teams-workspaces.md)), a **workflow-automation
+engine** ([27](./27-workflow-automation-engine.md)), the **real-time/event backbone**
+([20](./20-event-driven-realtime-backbone.md)), **scale-hardening + SRE**
+([18](./18-scalability-performance.md)/[19](./19-observability-reliability.md)), deeper **data
+acquisition/freshness** ([21](./21-data-acquisition-sourcing.md)/[22](./22-data-quality-freshness-lifecycle.md)),
+**advanced search UX** ([24](./24-advanced-search-exploration-ux.md)), and **integrations breadth**
+([26](./26-integrations-data-delivery.md)).
 
 ### Explicitly out of scope (for now)
 Dialer/telephony, a data-marketplace storefront beyond in-app credit purchase, mobile apps. *(Note: an
@@ -119,6 +127,14 @@ email/sequencing send engine is now IN scope — see ADR-0009 — reversing the 
 | **Global identity** | One `users` row per person (global-unique email + optional username + credentials/MFA) that belongs to many orgs via `tenant_members` ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)). |
 | **Tenant member** | A person's membership in an org (`tenant_members`); carries `is_tenant_owner` + status. The tenant-level capability moved here from `users`. |
 | **Org / workspace selection** | Post-auth steps: pick org (if in >1 `tenant_member`) then workspace (if >1) before the cross-domain code is issued ([17 §4](./17-authentication.md#4-multi-tenancy-auth-model)). |
+| **Team / Department** | An **intra-workspace** grouping (`teams`, `department_type`) with a persona, team role, and credit budget — the unit of department experience; shares the workspace data pool ([ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md), [25](./25-departments-teams-workspaces.md)). |
+| **Persona** | The department-tailored view (default dashboard/filters/tabs) a member's **active team** selects over the 6-destination surface ([25 §3](./25-departments-teams-workspaces.md)). |
+| **Record visibility** | `workspace`/`team`/`owner` scope on an overlay record; restricts read/write *within* the shared workspace pool (`H18`, [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)). |
+| **AI copilot** | The grounded, human-reviewed assistant (NL search, drafting, summarize, research) on **Anthropic Claude** behind `AiPort` ([23](./23-ai-intelligence-layer.md)). |
+| **Automation play** | A **trigger → condition → action** rule (signal-to-play) run by the automation engine; suppression-gated + audited ([27](./27-workflow-automation-engine.md)). |
+| **SLO / error budget** | A latency/availability target + its monthly failure allowance; budget burn gates risky releases ([18](./18-scalability-performance.md), [19](./19-observability-reliability.md)). |
+| **Freshness SLA** | Per-field re-verify cadence (e.g. email 90d) driving `freshness_status` + scheduled re-verification ([22](./22-data-quality-freshness-lifecycle.md), [ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md)). |
+| **Domain event / outbox** | A versioned fact published via a **transactional outbox**; the source of truth for async consumers + real-time ([20](./20-event-driven-realtime-backbone.md)). |
 
 ## 7. Decision log
 
@@ -167,6 +183,16 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 | Platform admin | Separate internal console (`apps/admin`) + privileged audited access | → [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md), [13](./13-platform-admin.md) |
 | Execution (Phase 1) | **Phase 1 = M0 foundation + M1–M5 MVP**; **local-first infra** (author Terraform, defer live AWS); one migration per milestone | → [14](./14-phase-1-execution.md), [10](./10-roadmap.md), [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md) |
 | Code organization | **Feature-based, layered, small-file**; per-package public `index.ts`; enforced import graph (apps never import apps; no deep imports; acyclic via ports) | Maintainable & AI-friendly → [16](./16-code-organization.md), [02 §1](./02-architecture.md) |
+| Departments & teams | **Teams inside one workspace** — department personas, team roles, record-visibility, per-team credit budgets (no new tenancy tier) | Department UX, reuses RLS/roles → [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md), [25](./25-departments-teams-workspaces.md) |
+| AI & intelligence | **Anthropic Claude** behind `AiPort`; assistive + agentic, **human-in-the-loop**, grounded, metered | AI is table-stakes; safe + swappable → [ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md), [23](./23-ai-intelligence-layer.md) |
+| Performance & scale | **Explicit SLOs + error budgets + capacity model** (latency budgets, cache policy, Citus cutover) | Testable "fast at scale" → [ADR-0024](./decisions/ADR-0024-performance-slos-and-capacity-model.md), [18](./18-scalability-performance.md) |
+| Observability & SRE | SLOs/error budgets, alerting, incident + DR runbooks, chaos, FinOps cost attribution | Keep it up at scale → [19](./19-observability-reliability.md) |
+| Event & real-time | **Transactional outbox + idempotent consumers + SSE/WebSocket gateway** | Reliable async + live UI → [ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md), [20](./20-event-driven-realtime-backbone.md) |
+| Data freshness | **Per-field freshness SLAs + scheduled re-verify + `data_quality_score` formula** | Deliverable data; honest credit-back → [ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md), [22](./22-data-quality-freshness-lifecycle.md) |
+| Data acquisition | Provider waterfall + public registries + opt-in co-op; vetting/DPA + **lawful-basis lineage** | Lawful, defensible coverage → [21](./21-data-acquisition-sourcing.md) |
+| Automation | **Trigger→condition→action engine** (signal-to-play); suppression-gated, idempotent, audited | Cross-module + department workflows → [ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md), [27](./27-workflow-automation-engine.md) |
+| Search UX | Advanced faceted filters (incl. **intent**), saved views, smart segments, instant masked search | Apollo/ZoomInfo-grade exploration → [24](./24-advanced-search-exploration-ux.md) |
+| Integrations & delivery | Bidirectional CRM + native apps, webhooks, **reverse-ETL**, Chrome ext, SMS, export center | No-lock-in delivery → [26](./26-integrations-data-delivery.md), [ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md) |
 
 ## 8. Open questions (tracked, resolved during doc review or early milestones)
 
@@ -177,6 +203,6 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 5. **DSAR fan-out** procedure + SLA across N per-workspace copies ([08 §4](./08-compliance.md)).
 6. **Outreach sending compliance/deliverability** — sending domains, CAN-SPAM/GDPR consent, LinkedIn/SN ToS for automated send ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)).
 7. ~~Cross-workspace "tenant search" read layer~~ — **Resolved:** the global master graph **is** the shared search layer; every tenant searches the universe (masked) and reveals into its overlay ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
-8. **AI provider** — Anthropic Claude recommended for NL search + outreach drafting ([05](./05-features-modules.md)).
+8. ~~**AI provider**~~ — **Resolved:** Anthropic Claude behind `AiPort` (Opus 4.8 / Sonnet 4.6 / Haiku 4.5), assistive + agentic with human-in-the-loop, grounding/RAG, eval/safety, and per-tenant metering ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md), [23](./23-ai-intelligence-layer.md)).
 9. **Self-built auth hardening** — credential-stuffing monitoring, key rotation ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)). *The auth **security layers** (progressive lockout, bot detection, impossible-travel, no-enumeration) and **JWKS key rotation** are now specified in [17 §5/§6](./17-authentication.md#6-security-layers); the cross-domain token boundary is [ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md), with residual auth Qs in [17 open questions](./17-authentication.md#open-questions). SOC 2 / ISO 27001 scope is owned by the **Trust & certification program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), [08 §15](./08-compliance.md)).*
 10. **Gap remediation** — the market-gap analysis ([../market-analysis/](../market-analysis/)) is translated into corpus changes in [15 — Gap Remediation](./15-gap-remediation.md); residual GTM items (support SLAs, credit-back window, cert sequencing) are tracked there.

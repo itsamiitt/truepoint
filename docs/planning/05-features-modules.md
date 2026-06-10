@@ -362,7 +362,7 @@ Surfaces introduced by the IA ([11](./11-information-architecture.md)) — panel
 | Import (CSV + providers) | ● | | | | | more sources |
 | Enrichment | | | | ● | | more providers |
 | Sales Navigator | | | | | | ● (M7) |
-| Search & results | | ● | | | | NL search |
+| Search & results (+ advanced faceted UX [24](./24-advanced-search-exploration-ux.md)) | | ● | | | | adv. UX + NL (M8/M14) |
 | Record detail + reveal | | | ● | | | |
 | Lists & saved searches | | ● | ● | | | alerts |
 | Intelligence / lead scoring | | | | ● (model) | | ● depth/UI (M8) |
@@ -372,7 +372,7 @@ Surfaces introduced by the IA ([11](./11-information-architecture.md)) — panel
 | Outreach sequencing + send | | | | | | ● (M9) |
 | CRM sync | | | | | | ● (M10) |
 | Public API | | (seams) | (seams) | | | ● (M10) |
-| AI features | | | | | | ● (M9+) |
+| AI intelligence — NL/semantic search, copilot, drafting, research ([23](./23-ai-intelligence-layer.md)) | | | | | | ● (M14) |
 | Compliance/DSAR | | scaffold | suppression check | | ● | |
 | Admin/settings | | ● | billing | | compliance UI | |
 | Home (dashboard) | | | ● | | | widgets grow |
@@ -382,9 +382,14 @@ Surfaces introduced by the IA ([11](./11-information-architecture.md)) — panel
 | Notifications | | | ● | | | |
 | Data Health | | | | ● | | ● depth (M8) |
 | Enterprise settings (SSO/SCIM/auth-policy/residency) | | | | | | ● (M11) |
-| Platform admin (internal, separate track) | | | ops | | ops | ● depth (M12) |
+| Platform admin (internal, separate track) | | | ops | | ops | ● depth (parallel) |
 | Trust & certification program (SOC 2/ISO/registration — separate track) | | | | | ● readiness | ● certs + registration |
 | Alerts | | | | | | Beyond |
+| Scalability, SRE & event backbone (SLOs, caching, outbox, SSE, FinOps — [18](./18-scalability-performance.md)/[19](./19-observability-reliability.md)/[20](./20-event-driven-realtime-backbone.md)) | | | ops | | ops | ● (M12) |
+| Data acquisition & freshness (registries, co-op, DPAs, re-verify, coverage — [21](./21-data-acquisition-sourcing.md)/[22](./22-data-quality-freshness-lifecycle.md)) | ● (base) | | | ● (verify) | | ● (M13) |
+| Departments & teams (personas, record-visibility, per-team budgets — [25](./25-departments-teams-workspaces.md)) | | | | | | ● (M15) |
+| Workflow automation engine (signal-to-play, recipes — [27](./27-workflow-automation-engine.md)) | | | | | | ● (M16) |
+| Integrations breadth (reverse-ETL, native CRM apps, Chrome ext, SMS — [26](./26-integrations-data-delivery.md)) | | | | | | ● (M16) |
 
 > Data quality / email-phone verification on reveal lands with **Enrichment (M4)** and is detailed in
 > [06](./06-enrichment-engine.md); it feeds `email_status`/`phone_status` (correctness), distinct from

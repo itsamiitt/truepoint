@@ -29,6 +29,17 @@ accounts, on an **AWS-native self-hosted** stack.
 | 15 | [Gap Remediation](./15-gap-remediation.md) | How the market-gap analysis maps to corpus decisions: 16 gaps + hidden opportunities + recommendations → remediation, ADR, milestone, status. |
 | 16 | [Code Organization](./16-code-organization.md) | How source code is laid out on disk: app/package internals, the dependency graph, barrel strategy, naming, file-size, testing, config — the engineering conventions. |
 | 17 | [Authentication](./17-authentication.md) | The `auth.truepoint.in` identity service: progressive identifier-first login, cross-domain tokens, MFA, SSO/SCIM, trusted devices, auth policy. |
+| 18 | [Scalability & Performance](./18-scalability-performance.md) | SLOs/latency budgets, capacity model, caching, read-scaling, Citus cutover, backpressure, load tests. |
+| 19 | [Observability & Reliability](./19-observability-reliability.md) | Telemetry, SLO/error budgets, alerting, incident response, DR, chaos, FinOps cost attribution. |
+| 20 | [Event-Driven & Real-Time Backbone](./20-event-driven-realtime-backbone.md) | Domain events, transactional outbox, queues/DLQ, idempotency, CDC, SSE/WebSocket. |
+| 21 | [Data Acquisition & Sourcing](./21-data-acquisition-sourcing.md) | Source channels, ingestion cadence, provider vetting/DPA, lawful-basis lineage, co-op. |
+| 22 | [Data Quality, Freshness & Lifecycle](./22-data-quality-freshness-lifecycle.md) | `data_quality_score`, freshness SLAs, re-verification, coverage/ER targets, retention. |
+| 23 | [AI & Intelligence Layer](./23-ai-intelligence-layer.md) | Claude behind `AiPort`: NL search, copilot, drafting, research agent, RAG, guardrails. |
+| 24 | [Advanced Search & Exploration UX](./24-advanced-search-exploration-ux.md) | Faceted filters, saved views, smart segments, instant masked search, result actions. |
+| 25 | [Departments, Teams & Workspaces](./25-departments-teams-workspaces.md) | Teams-in-workspace, personas, record-visibility, per-team budgets, dashboards → departments/. |
+| 26 | [Integrations & Data Delivery](./26-integrations-data-delivery.md) | CRM sync + native apps, webhooks, reverse-ETL, Chrome extension, SMS, export center. |
+| 27 | [Workflow Automation Engine](./27-workflow-automation-engine.md) | Trigger→condition→action plays, recipe library, guardrails, `automation_runs`. |
+| — | [Department Modules](./departments/) | Per-department specs: Sales, SDR, BDR, Marketing, CS, Support, Ops/RevOps, Compliance, Finance, HR, Admin. |
 | — | [Brand Identity](./brand-identity.md) | Name/meaning, positioning, voice, logo, color, type — the LeadWolf brand system. |
 | — | [Decisions (ADRs)](./decisions/) | The *why* behind load-bearing choices. |
 
@@ -70,7 +81,19 @@ Splink** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)) ·
 **existence-revealing identifier-first + registration**
 ([ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md)) ·
 **global master graph + per-workspace overlay**
-([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).
+([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) ·
+**departments as intra-workspace teams**
+([ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)) ·
+**AI on Anthropic Claude**
+([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)) ·
+**performance SLOs & capacity**
+([ADR-0024](./decisions/ADR-0024-performance-slos-and-capacity-model.md)) ·
+**data-freshness lifecycle**
+([ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md)) ·
+**workflow automation engine**
+([ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md)) ·
+**event backbone & real-time**
+([ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md)).
 
 See [00-overview.md](./00-overview.md#7-decision-log) for the full decision log with rationale links,
 and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md),
@@ -86,5 +109,11 @@ and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-worksp
 [ADR-0017](./decisions/ADR-0017-progressive-identifier-first-login-and-domain-tenant-routing.md),
 [ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md),
 [ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md),
-[ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md), and
-[ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md).
+[ADR-0020](./decisions/ADR-0020-existence-revealing-identifier-first-and-registration.md),
+[ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md),
+[ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md),
+[ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md),
+[ADR-0024](./decisions/ADR-0024-performance-slos-and-capacity-model.md),
+[ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md),
+[ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md), and
+[ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md).

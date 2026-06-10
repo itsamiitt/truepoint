@@ -161,6 +161,44 @@ CREATE TABLE workspace_members (
   CHECK ((status = 'active') = (joined_at IS NOT NULL)),
   UNIQUE (workspace_id, user_id)
 );
+
+-- Departments/teams INSIDE a workspace (intra-workspace segmentation — ADR-0022, H18). NOT a tenancy tier.
+CREATE TABLE teams (
+  id              uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id       uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  workspace_id    uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  department_type varchar(40) NOT NULL                                        -- shared vocab (00 §6, 25)
+                    CHECK (department_type IN ('sales','sdr','bdr','marketing','customer_success',
+                      'support','operations','compliance','finance','people_hr','administration','custom')),
+  name            varchar(255) NOT NULL,
+  parent_team_id  uuid REFERENCES teams(id) ON DELETE SET NULL,               -- optional nesting (25)
+  settings        jsonb NOT NULL DEFAULT '{}',
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (workspace_id, name)
+);
+
+CREATE TABLE team_members (
+  id           uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  team_id      uuid NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id      uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,          -- implies a workspace_member
+  team_role    varchar(20) NOT NULL DEFAULT 'member'                          -- orthogonal to workspace role (H8)
+                 CHECK (team_role IN ('manager','lead','member','viewer')),
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (team_id, user_id)
+);
+
+-- Per-team slice of the TENANT credit pool (soft/hard allocation — ADR-0022/ADR-0007, H2/H18).
+CREATE TABLE team_credit_budgets (
+  id             uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  team_id        uuid NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  workspace_id   uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  period         char(7) NOT NULL,                                            -- 'YYYY-MM'
+  budget_credits int NOT NULL CHECK (budget_credits >= 0),
+  spent_credits  int NOT NULL DEFAULT 0 CHECK (spent_credits >= 0),
+  hard_cap       boolean NOT NULL DEFAULT false,                              -- true → block at budget
+  UNIQUE (team_id, period)
+);
 ```
 
 **Auth tables** (self-built Lucia — [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)):
@@ -459,6 +497,11 @@ CREATE TABLE accounts (
   employee_count int, revenue_range varchar(50),
   hq_country varchar(100), hq_city varchar(100),
   icp_fit_score int CHECK (icp_fit_score BETWEEN 0 AND 100),
+  owner_user_id uuid REFERENCES users(id),                     -- record owner (ADR-0022, H18)
+  assigned_team_id uuid REFERENCES teams(id) ON DELETE SET NULL,
+  visibility varchar(20) NOT NULL DEFAULT 'workspace'          -- record_visibility (ADR-0022, H18)
+                CHECK (visibility IN ('workspace','team','owner')),
+  data_quality_score int CHECK (data_quality_score BETWEEN 0 AND 100),  -- freshness/quality (ADR-0025, 22)
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX uniq_accounts_ws_domain ON accounts (workspace_id, domain) WHERE domain IS NOT NULL;
@@ -491,6 +534,13 @@ CREATE TABLE contacts (
   is_revealed boolean NOT NULL DEFAULT false,
   revealed_by_user_id uuid REFERENCES users(id),               -- first revealer (per-workspace ownership)
   revealed_at timestamptz,
+  owner_user_id uuid REFERENCES users(id),                     -- record owner (assignment/territory — ADR-0022, H18)
+  assigned_team_id uuid REFERENCES teams(id) ON DELETE SET NULL,
+  visibility varchar(20) NOT NULL DEFAULT 'workspace'          -- record_visibility (ADR-0022, H18)
+                CHECK (visibility IN ('workspace','team','owner')),
+  last_verified_at timestamptz,                                -- per-record freshness (ADR-0025, 22)
+  data_quality_score int CHECK (data_quality_score BETWEEN 0 AND 100),
+  freshness_status varchar(20) CHECK (freshness_status IS NULL OR freshness_status IN ('fresh','aging','stale','expired')),
   jurisdiction char(2), region char(2) NOT NULL DEFAULT 'US',
   last_activity_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
@@ -535,6 +585,8 @@ CREATE INDEX idx_contacts_master ON contacts (master_person_id) WHERE master_per
 
 RLS on every workspace-scoped table; policy `USING (workspace_id = current_setting('app.current_workspace_id')::uuid)`. Tenant-scoped tables (tenants/api_keys/purchases/audit_log tenant rows, the membership table `tenant_members`, plus the auth-origin tenant tables `tenant_domains`/`invitations`/`tenant_auth_policies`/`tenant_sso_configs`/`scim_tokens`/`oauth_app_clients`) use `app.current_tenant_id`; `workspace_auth_policies` is workspace-scoped. **`users` is the GLOBAL identity** ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)) — **not** tenant-RLS-scoped; it and the **user-scoped auth tables** (`user_sessions`/`trusted_devices`/`user_mfa_methods`/`user_mfa_recovery_codes`/`webauthn_credentials`/`auth_email_tokens`) are owned by the auth service (`apps/auth`) and accessed by `user_id`, before any tenant/workspace is selected. The API sets `SET LOCAL app.current_tenant_id` + `app.current_workspace_id` per request after auth; queries run as a non-`BYPASSRLS` role; **RDS Proxy** (transaction pooling) requires the GUC be set within the transaction and reset on checkout.
 
+**Intra-workspace team visibility** (departments — [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md), **H18**). Departments are **not** a new RLS scope — workspace RLS still isolates by `app.current_workspace_id`. Records with `visibility IN ('team','owner')` are **further** restricted *within* the workspace by an app-layer authz filter (and an optional supplementary RLS predicate keyed on `assigned_team_id`/`owner_user_id` against the request's team context), used by Finance/HR/Compliance ([25 §4](./25-departments-teams-workspaces.md)). Default `visibility='workspace'` is readable by the whole workspace; `teams`/`team_members` themselves are workspace-RLS-scoped.
+
 **Layer-0 master graph is system-owned** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)). The `master_*` / `source_records` / `match_links` tables are **not** workspace-RLS-scoped — no customer-facing query reads them directly. Only the **ER pipeline**, **search-sync**, and the **reveal** service touch them (under their own least-privilege roles); customers reach the universe solely through **masked global search** (no PII leaves the index) and the **paid reveal** path, which decrypts a `master_emails`/`master_phones` channel only inside the reveal transaction (§10, [09 §3](./09-api-design.md)).
 
 **Privileged staff path (internal only).** The super-admin console `apps/admin` ([13](./13-platform-admin.md)) performs audited cross-tenant reads under a **dedicated privileged role** that **bypasses workspace RLS** — *distinct* from the app's non-`BYPASSRLS` role and used by no customer-facing service. Every such access is written to an immutable **`platform_audit_log`**; impersonation is time-boxed and banner-flagged ([ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)).
@@ -572,8 +624,8 @@ materialized columns with their own indexes. Heavy faceted filtering is **not** 
 lives in the search index (below).
 
 **Partitioning.** Range-partition by month: `activities`, `audit_log`, `contact_reveals`, `intent_signals`,
-`scores`, `source_imports`, `outreach_log`, `provider_calls`, **and `source_records`** (the master evidence
-log).
+`scores`, `source_imports`, `outreach_log`, `provider_calls`, `source_records` (the master evidence
+log), **and the new event/AI/automation logs `outbox`, `ai_requests`, `automation_runs`** (§14).
 
 **Master-graph scale (billions, [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** The
 golden tables outgrow a single Aurora writer, so **shard horizontally with Citus** by a hash of the entity /
@@ -590,11 +642,11 @@ worker fans Aurora logical-replication CDC out to OpenSearch + ClickHouse
 
 1. **PII vs proposal's plaintext:** we keep `email_enc/phone_enc` + `email_blind_index` for GDPR/CCPA; confirm the blind-index (HMAC w/ KMS key) approach for per-workspace uniqueness.
 2. **Reveal pricing by `reveal_type`** (email vs phone vs full_profile) — final credit costs ([07 §1](./07-billing-credits.md)).
-3. **Global entity-resolution quality** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), [06 §9](./06-enrichment-engine.md)) — deterministic keys + blocking/MinHash-LSH + Splink at billions; remaining: blocking-rule + match-threshold tuning per dataset, and the manual-review-queue workflow for low-confidence merges.
+3. **Global entity-resolution quality** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), [06 §9](./06-enrichment-engine.md)) — deterministic keys + blocking/MinHash-LSH + Splink at billions; blocking-rule + match-threshold tuning per dataset and the manual-review-queue workflow are **now specified** in [22 §6](./22-data-quality-freshness-lifecycle.md) (quality targets in [22 §5](./22-data-quality-freshness-lifecycle.md)).
 4. ~~Cross-workspace "tenant search" read layer~~ — **Resolved:** the global master graph ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) **is** the shared search layer; every tenant searches the universe (masked) and reveals into its overlay.
 5. **DSAR fan-out** now deletes the **golden identity + its `source_records` + every overlay copy** — procedure + SLA ([08 §4](./08-compliance.md)); the golden identity makes "find everywhere" provable.
 6. **Billing hardening:** ADR-0007 counter risks — when to reintroduce an append-only ledger.
-7. **Citus sharding cutover** — at what master-graph size do we move the golden tables from a single Aurora writer to Citus shards? (the overlay stays on Aurora.)
+7. **Citus sharding cutover** — at what master-graph size do we move the golden tables from a single Aurora writer to Citus shards? (the overlay stays on Aurora.) **Threshold specified** in [18 §8](./18-scalability-performance.md) (~500M golden rows or sustained writer pressure).
 8. **Co-op / contributory ingestion** — if/when workspace-imported data feeds the master graph, the opt-in + disclosure model ([06 §1](./06-enrichment-engine.md)); **off by default**.
 
 ## 14. Planned schema additions (app-surface & platform)
@@ -625,3 +677,30 @@ amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), 
 `system_status`. Time-based partitioning applies to `platform_audit_log` and `verification_jobs`
 (per §12). DB-management views read from Postgres catalogs / Performance Insights / CloudWatch — mostly
 dashboards, not new schema.
+
+**Departments & teams** ([25](./25-departments-teams-workspaces.md), [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)):
+`teams`, `team_members`, `team_credit_budgets` (defined in §4); overlay rows carry
+`owner_user_id`/`assigned_team_id`/`visibility` (`record_visibility`, §5.2). New shared-vocab enums:
+`department_type`, `team_role`, `record_visibility`.
+
+**Events & real-time** ([20](./20-event-driven-realtime-backbone.md), [ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md)):
+`outbox` (transactional outbox — append a row in the writer's tx; relay publishes; month-partitioned, §12).
+
+**AI & intelligence** ([23](./23-ai-intelligence-layer.md), [ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)):
+`ai_requests` (metered call log: task/model/tokens/cost/grounded-sources/review-status; month-partitioned),
+`ai_evals` (eval/safety golden sets), `ai_cache` (prompt+grounding-hash keyed). **`embeddings`** uses the
+`pgvector` extension for semantic retrieval. New enum: `ai_task_type`.
+
+**Automation** ([27](./27-workflow-automation-engine.md), [ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md)):
+`automation_rules` (trigger + JSON conditions + ordered actions, workspace/team-scoped, dry-run),
+`automation_runs` (append-only execution log; month-partitioned). New enums: `automation_trigger`,
+`automation_action`.
+
+**Search / exploration** ([24](./24-advanced-search-exploration-ux.md)): `saved_views` (per-user/team column
++ sort layouts, shareable) and `segments` (dynamic smart segments with scheduled refresh) — alongside the
+existing `lists`/`saved_searches` (§5.2).
+
+**Data freshness** ([22](./22-data-quality-freshness-lifecycle.md), [ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md)):
+`data_quality_score = round(100 × (0.4·completeness + 0.3·verification + 0.3·freshness))`; per-record
+`last_verified_at` + `freshness_status` (`fresh|aging|stale|expired`) on master + overlay (§5.2);
+`verification_jobs`/`data_quality_rules` (above) drive scheduled re-verify by per-field SLA.

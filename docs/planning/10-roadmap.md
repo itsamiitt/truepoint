@@ -253,14 +253,82 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
   enforced; a workspace policy can only **tighten** the tenant policy; admin exports the audit log; the IP
   allowlist denies out-of-range access.
 
+## M12 — Scale-hardening, SRE & event backbone
+**Goal:** meet the performance contract at scale and operate it ([18](./18-scalability-performance.md),
+[19](./19-observability-reliability.md), [20](./20-event-driven-realtime-backbone.md)).
+- **SLOs + error budgets** ([ADR-0024](./decisions/ADR-0024-performance-slos-and-capacity-model.md)):
+  per-endpoint latency budgets ([18 §2](./18-scalability-performance.md)); k6 load/soak/spike tests;
+  caching tiers + **invalidate-on-write**; read replicas + ClickHouse for analytics; **Citus cutover**
+  threshold ([18 §8](./18-scalability-performance.md)).
+- **Event backbone** ([ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md)):
+  transactional `outbox` (commit⇒publish) + idempotent consumers + DLQ/retry + **backpressure**;
+  **SSE/WebSocket** real-time gateway (RLS/visibility-scoped).
+- **Observability/SRE**: metrics/logs/traces, alerting, on-call, **DR runbook + verified restore**,
+  chaos/game-days, **FinOps** cost attribution ([19](./19-observability-reliability.md)).
+- **DoD:** load test meets the [18 §2](./18-scalability-performance.md) p95 budgets at target concurrency;
+  a crash between commit and publish loses **no** event (outbox) and re-delivery is idempotent; DLQ +
+  backpressure demoed; a DR drill restores within **RTO 1h / RPO 5m**; SLO dashboards + error-budget
+  alerts live; per-tenant cost attribution reported.
+
+## M13 — Data intelligence (acquisition + quality & freshness)
+**Goal:** lawful coverage and fresh, defensible data ([21](./21-data-acquisition-sourcing.md),
+[22](./22-data-quality-freshness-lifecycle.md)).
+- **Acquisition breadth:** public registries + EU providers + **opt-in co-op**; **provider vetting/DPA**
+  + sub-processor register + **lawful-basis lineage** ([21](./21-data-acquisition-sourcing.md)).
+- **Freshness lifecycle** ([ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md)):
+  per-field freshness SLAs + `verification_jobs` (re-verify/re-enrich, priority by decay/use);
+  `data_quality_score` formula; decay + purge.
+- **Coverage/ER quality:** email/phone coverage + match-precision/false-merge targets
+  ([22 §5](./22-data-quality-freshness-lifecycle.md)); **manual-review queue** + merge/unmerge UI.
+- **DoD:** a scheduled re-verify run updates `freshness_status` and **credits back** confirmed bounces;
+  coverage/match-rate dashboards meet [22 §5](./22-data-quality-freshness-lifecycle.md) thresholds (alert
+  on breach); the ER manual-review queue operates with audit; a DSAR shows the lawful-basis lineage.
+
+## M14 — AI intelligence layer
+**Goal:** ship the assistive AI surface ([23](./23-ai-intelligence-layer.md),
+[ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)).
+- `AiPort` (**Anthropic Claude**) + model router; **NL→structured search**; **conversational copilot**
+  (grounded, cited); **generative drafting** (human-review-before-send); **summarization**; **semantic
+  search** (pgvector); **agentic research** (verify-before-write); **AI extraction**; **signal-to-play**
+  (via `27`).
+- **Guardrails:** content safety + prompt-injection mitigations; **eval/safety harness** gating releases;
+  per-tenant budgets + metering (`ai_requests`); AI audit + DSAR scope.
+- **DoD:** NL search returns a **validated** query run under RLS + team visibility; the copilot answers
+  with citations and never surfaces **unrevealed** PII; a drafted message **requires approval** before
+  send (suppression-checked); the eval harness blocks a seeded regression in CI; AI spend is metered per
+  tenant; AI artifacts appear in DSAR scope.
+
+## M15 — Departments & teams
+**Goal:** department-tailored experiences ([25](./25-departments-teams-workspaces.md),
+[departments/](./departments/), [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)).
+- `teams`/`team_members`/`team_role`/`department_type`; **personas** over the 6 destinations (**H11**
+  intact); **record-visibility** (`workspace|team|owner`); **per-team credit budgets** enforced at reveal
+  (next to the tenant counter); department **dashboards + report packs**; the 11 department modules.
+- **DoD:** a workspace runs ≥2 department personas with distinct dashboards/default views; a `team`/`owner`
+  -visibility record is **hidden from other teams** while default `workspace` records stay shared; a
+  `hard_cap` team is **blocked at budget** while the tenant pool still has credits; a manager sees the team
+  rollup + per-member; every department action is audited.
+
+## M16 — Automation & integrations breadth
+**Goal:** signal-to-play automation + open delivery ([27](./27-workflow-automation-engine.md),
+[26](./26-integrations-data-delivery.md)).
+- **Automation engine** ([ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md)):
+  trigger→condition→action; recipe library; per-team policies; **dry-run**;
+  **suppression-gated + idempotent + audited** (`automation_runs`).
+- **Integrations:** bidirectional CRM + **native apps**, **reverse-ETL**/warehouse, **Chrome extension**,
+  **SMS** channel, Slack/Teams app, **export center + limits/policies**.
+- **DoD:** a funding-signal play routes + enrolls a contact — suppression-respected, **idempotent on
+  re-delivery**, logged to `automation_runs`; a smart segment reverse-ETLs to a warehouse; the Chrome
+  extension reveals + adds a contact under budget; an export over the cap requires approval.
+
 ## Platform admin — *parallel operational track* (`apps/admin`)
 **Goal:** internal staff operate the platform ([13](./13-platform-admin.md),
 [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)) — a **separate app** on its
-own track (ops need basics during M3–M5; depth ~M12), never blocking the customer MVP.
+own track (ops need basics during M3–M5; depth runs in parallel post-MVP), never blocking the customer MVP.
 - **Early (≈M3–M5):** tenants directory + suspend / credit-grant; global user admin; **impersonation**
   (time-boxed/banner/audited); billing oversight; **system health** (queues/DLQ/CDC/backups);
   immutable `platform_audit_log`; staff SSO+MFA+IP-allowlist+JIT.
-- **Depth (≈M12):** trust/abuse + deliverability dashboards; **feature flags** (global + per-tenant);
+- **Depth (parallel, post-MVP):** trust/abuse + deliverability dashboards; **feature flags** (global + per-tenant);
   provider configs; **data management & quality** (DQ scorecards, bulk re-verify/re-enrich on AWS Batch,
   DB-ops); content/comms.
 - **DoD (early):** a `super_admin` (SSO+MFA) suspends a tenant and grants credits — both audited to
@@ -282,17 +350,19 @@ data-broker law — the remediation for the analysis' execution-risk drag ([15 �
   required; privacy-counsel sign-off ([08 §12](./08-compliance.md)).
 
 ## Beyond (prioritized backlog)
-- **AI:** natural-language search (NL → validated structured query, never raw SQL) + AI outreach drafting
-  feeding the send engine (M9+); **agentic per-account research** (verify-before-write) as a 2026
-  differentiator; optional `pgvector` semantic ranking. Recommended provider: Anthropic Claude
-  ([05 §16](./05-features-modules.md)).
+- **AI:** now a **scheduled track — M14** ([23](./23-ai-intelligence-layer.md),
+  [ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)): NL → validated
+  structured query (never raw SQL), conversational copilot, AI drafting (human-reviewed) feeding the send
+  engine, **agentic per-account research** (verify-before-write), `pgvector` semantic search — on
+  **Anthropic Claude** behind `AiPort` ([05 §16](./05-features-modules.md)).
 - **ClickHouse event analytics:** self-hosted, fed by CDC (Debezium) once an event table (e.g.
   `activities`) exceeds ~50M rows ([01 §1](./01-tech-stack.md#1-at-a-glance),
   [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)).
 - **Global master graph at scale ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)):** the
   billions-row shared universe — **Citus**-sharded golden store + **S3/Iceberg** lake + batch **ER**
   (blocking/MinHash-LSH/Splink on Spark/Athena) + **OpenSearch** masked search + **ClickHouse** facet counts;
-  built on this scale track once volume + the data-broker posture ([08 §15](./08-compliance.md)) warrant it.
+  built on this scale track once volume + the data-broker posture ([08 §15](./08-compliance.md)) warrant it
+  (scale-hardening sequenced in **M12** — [18 §8](./18-scalability-performance.md)).
 - **Alerts:** new-match / new-signal notifications on saved searches and tracked contacts.
 - **EU data-residency** region split (region-tagged from day one; full split when demand warrants).
 - **Seat-based subscriptions** atop credits; periodic re-verification at scale; tamper-evident audit log.
@@ -322,6 +392,11 @@ data-broker law — the remediation for the analysis' execution-risk drag ([15 �
 | 15 | **Compliance wedge unproven / cert-dependent / US-only** — the differentiator is a promise until attested | High | **Trust & certification program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)): SOC 2 / ISO readiness at M5, **data-broker registration a GA gate**, public Trust Center ([08 §15](./08-compliance.md)) | M5 / Trust track |
 | 16 | **Placeholder pricing unvalidated** vs real willingness-to-pay | Med | Transparent no-lock-in policy ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)); validate prices in early access before GA; non-expiring credits reduce commitment risk | M3 |
 | 17 | **Cross-domain token exchange / IdP boundary** — code interception/replay, open redirect, CSRF, refresh-token theft across `auth.*`↔`app.*` | High (account takeover) | Single-use 60 s **IP-bound + PKCE** code validated server-side before any token; access JWT **in memory only**; refresh token **HttpOnly/Secure/SameSite=Strict** cookie scoped to the auth origin, **rotated + reuse-detected** (family revoke); CORS **allow-list, no wildcard**; `sid` denylist for fast revoke; auth security headers (HSTS / XFO=DENY / nonce-CSP / nosniff / Referrer) ([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md), [17 §3/§6](./17-authentication.md#3-cross-domain-token-contract)) | M2 |
+| 18 | **AI safety / cost** — hallucination, **prompt-injection** on agentic browsing, runaway LLM spend | High (trust + cost) | Grounded RAG with **cited sources**; **human-in-the-loop** before any send/persist; treat fetched web text as untrusted; **eval/safety harness** gates releases in CI; per-tenant budgets + circuit breakers + prompt caching ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md), [23](./23-ai-intelligence-layer.md)) | M14 |
+| 19 | **Stale data / decay** — data ages, bounce rate rises, the credit-back guarantee erodes margin | High (trust + money) | Per-field **freshness SLAs** + scheduled re-verify (priority by decay/use); `data_quality_score` + Data Health; coverage/bounce dashboards with alerts ([ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md), [22](./22-data-quality-freshness-lifecycle.md)) | M13 |
+| 20 | **Department permission complexity** — record-visibility + team budgets add authz surface and bug risk | Med (privacy + correctness) | Default `visibility=workspace`; app-layer filter + **optional** RLS predicate (no new RLS scope); budgets checked **in-tx** next to the counter; tests + audit ([ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md), [25](./25-departments-teams-workspaces.md), [03 §9](./03-database-design.md)) | M15 |
+| 21 | **Automation loops / abuse** — a rule's action re-triggers itself or floods sends | Med | **Idempotency** on `(rule_id,event_id,entity_id)`; loop/recursion guards; per-workspace rate limits; **suppression gate** on every contact action; dry-run + staged enable; `automation_runs` observability ([ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md), [27](./27-workflow-automation-engine.md)) | M16 |
+| 22 | **Event-backbone reliability** — dropped events or unbounded queue growth break the freshness SLOs | High | **Transactional outbox** (commit⇒publish) + idempotent consumers; **DLQ** + alerts; **backpressure** (shed/slow producers); per-entity ordering ([ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md), [20](./20-event-driven-realtime-backbone.md)) | M12 |
 
 ## Definition of done (global)
 A milestone is done when: code merged + reviewed, tests green in CI (unit + integration; e2e where
