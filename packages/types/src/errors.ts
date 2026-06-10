@@ -76,7 +76,11 @@ export class MfaRequiredError extends AppError {
 /** Cross-domain code exchange failed validation (reused/expired/wrong-IP/PKCE/origin) — ADR-0016. */
 export class InvalidAuthCodeError extends AppError {
   constructor() {
-    super({ status: 400, code: "invalid_auth_code", title: "Authorization code is invalid or expired" });
+    super({
+      status: 400,
+      code: "invalid_auth_code",
+      title: "Authorization code is invalid or expired",
+    });
   }
 }
 
@@ -123,6 +127,32 @@ export class ConflictError extends AppError {
 /** An import row (or its column mapping) failed validation — carries the offending row index(es). */
 export class ImportValidationError extends AppError {
   constructor(detail?: string, extensions?: Record<string, unknown>) {
-    super({ status: 422, code: "import_validation_error", title: "Import is invalid", detail, extensions });
+    super({
+      status: 422,
+      code: "import_validation_error",
+      title: "Import is invalid",
+      detail,
+      extensions,
+    });
+  }
+}
+
+/** The tenant credit balance can't cover the reveal — 402 with balance + required so the UI can prompt (09 §6). */
+export class InsufficientCreditsError extends AppError {
+  constructor(balance: number, required: number) {
+    super({
+      status: 402,
+      code: "insufficient_credits",
+      title: "Insufficient credits",
+      detail: `This reveal costs ${required} credit${required === 1 ? "" : "s"}; balance is ${balance}.`,
+      extensions: { balance, required },
+    });
+  }
+}
+
+/** The contact is on a suppression/DNC list — reveals and sends are blocked, regardless of credits (08 §3). */
+export class SuppressedError extends AppError {
+  constructor(reason?: string) {
+    super({ status: 403, code: "suppressed", title: "Contact is suppressed", detail: reason });
   }
 }

@@ -41,8 +41,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 130,
-  "fileSetHash": "sha256:d03d5a2cf8d72b47b08f38057e3d6a010b7b977404813673106fc6de197ea92c",
+  "fileCount": 148,
+  "fileSetHash": "sha256:f62cd19dac74054ae3ca4188b9ffab4324cd233e6ed976e9539f55175296eca0",
   "features": {
     "auth": {
       "web": [],
@@ -54,6 +54,40 @@
       "core": [],
       "db": [
         "packages/db/src/repositories/userRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
+    "billing": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/billing/index.ts",
+        "apps/api/src/features/billing/routes.ts"
+      ],
+      "core": [
+        "packages/core/src/billing/grantFromStripe.ts",
+        "packages/core/src/billing/stripeWebhook.test.ts",
+        "packages/core/src/billing/stripeWebhook.ts"
+      ],
+      "db": [
+        "packages/db/src/repositories/creditRepository.ts",
+        "packages/db/src/repositories/idempotencyRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
+    "compliance": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/compliance/assertNotSuppressed.ts",
+        "packages/core/src/compliance/writeAudit.ts"
+      ],
+      "db": [
+        "packages/db/src/repositories/auditRepository.ts",
+        "packages/db/src/repositories/suppressionRepository.ts"
       ],
       "workers": [],
       "integrations": []
@@ -101,10 +135,13 @@
         "apps/api/src/features/reveal/index.ts",
         "apps/api/src/features/reveal/routes.ts"
       ],
-      "core": [],
+      "core": [
+        "packages/core/src/reveal/revealContact.ts"
+      ],
       "db": [
         "packages/db/src/repositories/accountRepository.ts",
-        "packages/db/src/repositories/contactRepository.ts"
+        "packages/db/src/repositories/contactRepository.ts",
+        "packages/db/src/repositories/revealRepository.ts"
       ],
       "workers": [],
       "integrations": []
@@ -129,6 +166,7 @@
     "apps/api/middleware": [
       "apps/api/src/middleware/authn.ts",
       "apps/api/src/middleware/error.ts",
+      "apps/api/src/middleware/idempotency.ts",
       "apps/api/src/middleware/rateLimit.ts",
       "apps/api/src/middleware/tenancy.ts"
     ],
@@ -235,13 +273,17 @@
       "packages/db/src/index.ts",
       "packages/db/src/migrate.ts",
       "packages/db/src/schema/auth.ts",
+      "packages/db/src/schema/billing.ts",
       "packages/db/src/schema/contacts.ts",
       "packages/db/src/schema/index.ts",
       "packages/db/src/seed.ts",
-      "packages/db/test/import.itest.ts"
+      "packages/db/test/import.itest.ts",
+      "packages/db/test/itestDb.ts",
+      "packages/db/test/reveal.itest.ts"
     ],
     "packages/types": [
       "packages/types/src/auth.ts",
+      "packages/types/src/billing.ts",
       "packages/types/src/contacts.ts",
       "packages/types/src/errors.ts",
       "packages/types/src/index.ts"

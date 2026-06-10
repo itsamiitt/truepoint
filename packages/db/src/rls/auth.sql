@@ -1,6 +1,6 @@
 -- auth.sql — Row-Level Security for the tenancy/auth tables (03 §9, ADR-0006). Applied after the Drizzle
 -- migration creates the tables. Policies key off transaction-LOCAL GUCs set by withTenantTx() under a
--- NON-BYPASSRLS application role; current_setting(..., true) returns NULL when unset, so an unscoped
+-- NON-BYPASSRLS application role; NULLIF(current_setting(..., true), '') treats unset AND ''-reset GUCs as no-scope, so an unscoped
 -- query reads nothing. RDS Proxy resets GUCs per checkout, hence they are set inside the transaction.
 
 -- Required extensions (idempotent). uuid_generate_v7 comes from pg_uuidv7; fall back to an app function
@@ -25,34 +25,34 @@ $$ LANGUAGE sql VOLATILE;
 -- Tenant-scoped tables: isolated by app.current_tenant_id.
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 CREATE POLICY workspaces_tenant_isolation ON workspaces
-  USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 ALTER TABLE workspace_members ENABLE ROW LEVEL SECURITY;
 CREATE POLICY members_tenant_isolation ON workspace_members
   USING (workspace_id IN (
-    SELECT id FROM workspaces WHERE tenant_id = current_setting('app.current_tenant_id', true)::uuid
+    SELECT id FROM workspaces WHERE tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
   ));
 
 ALTER TABLE tenant_domains ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_domains_isolation ON tenant_domains
-  USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 ALTER TABLE tenant_sso_configs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_sso_isolation ON tenant_sso_configs
-  USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 ALTER TABLE tenant_auth_policies ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_auth_policy_isolation ON tenant_auth_policies
-  USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 -- tenant_members + invitations: tenant-scoped for the app role (read under withTenantTx).
 ALTER TABLE tenant_members ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_members_isolation ON tenant_members
-  USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY invitations_isolation ON invitations
-  USING (tenant_id = current_setting('app.current_tenant_id', true)::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 -- Global identity (ADR-0019): `users` is NOT tenant-RLS-scoped — one row per person, read by the auth service
 -- before any tenant is chosen. The auth service also reads the membership graph (`tenant_members` by user_id)

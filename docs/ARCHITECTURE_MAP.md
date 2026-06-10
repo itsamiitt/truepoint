@@ -5,34 +5,42 @@
 > from the JSON (generated); do not edit paths here by hand.** One-line purposes and the Mermaid graph are
 > authored here. Maintained by the [`enterprise-architecture`](../.claude/skills/enterprise-architecture/SKILL.md) skill.
 
-> **Live end-to-end — auth round-trip + M1 import + the global-identity redesign (ADR-0019/0020).** 130 source files, 0 warnings, 2
-> framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes). **M2 auth** is now
-> global-identity (`users` global + `tenant_members`): the identifier takes email/username and either threads
-> sign-in (password → MFA → **org** → workspace) or branches to **registration** (email → emailed-code
-> **verify** → profile → hybrid org placement: auto-join verified domain / accept invite / found a new org),
-> minting/validating the access JWT (the session carries its scope). **M1 Import & Contacts Core** now lands a
-> full vertical: a per-workspace CSV import dedupes contacts/accounts (encrypted PII + blind index) with
-> `source_imports` provenance, behind RLS, surfaced by a masked contacts list + import wizard. `apps/admin`
-> remains a **target**. Design: [10-roadmap.md](./planning/10-roadmap.md) M1,
-> [14-phase-1-execution.md §3.2](./planning/14-phase-1-execution.md), [03 §5](./planning/03-database-design.md), ADR-0006.
+> **Live end-to-end — auth round-trip + M1 import + M3 reveal & credits (the money loop).** 148 source
+> files, 0 warnings, 2 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes).
+> **M2 auth** is global-identity (`users` global + `tenant_members`): identifier-first sign-in
+> (password → MFA → **org** → workspace) or registration with hybrid org placement, minting/validating the
+> access JWT. **M1 Import & Contacts Core**: per-workspace CSV import dedupes contacts/accounts (encrypted
+> PII + blind index) with `source_imports` provenance, behind RLS, surfaced by a masked list + import
+> wizard. **M3 Reveal & Credits** lands the monetized path (07 §3): the suppression-gated, idempotent,
+> `FOR UPDATE`-serialized reveal transaction against the tenant credit counter, the append-only `audit_log`
+> (closed action enum), the suppression/DNC list, Stripe webhook top-ups (idempotent on
+> `stripe_event_id`), the Idempotency-Key replay store, and the credits balance/usage API — proven by the
+> Testcontainers/external-PG DoD suite (`reveal.itest.ts`: 9 invariants incl. N-concurrent no-double-charge
+> and fail-closed RLS). `apps/admin` remains a **target**. Design: [10-roadmap.md](./planning/10-roadmap.md)
+> M1–M3, [14 §3.4](./planning/14-phase-1-execution.md), [07 §3](./planning/07-billing-credits.md),
+> [08 §3/§5](./planning/08-compliance.md), ADR-0006/0007.
 
 ## Repo tree (live; `apps/admin` is a target)
 
 ```
 packages/                       # side-effect-free libraries, each exported via one index.ts  [LIVE]
-  types/   src/{errors,auth,contacts}.ts # RFC-9457 errors + auth/contacts Zod contracts (leaf)
-  config/  src/env.ts           # zod-validated env (the ONLY process.env reader; BLIND_INDEX_KEY lives here)
+  types/   src/{errors,auth,contacts,billing}.ts # RFC-9457 errors + auth/contacts/billing Zod contracts (leaf)
+  config/  src/env.ts           # zod-validated env (ONLY process.env reader; BLIND_INDEX_KEY, REVEAL_COST_*, STRIPE_WEBHOOK_SECRET)
   ui/      src/{tokens.css,cn}  # TruePoint tokens + class helper
   db/      src/                 # Drizzle schema + RLS + repositories (the ONLY data access)  [LIVE]
-    schema/{auth,contacts}.ts  rls/{auth,contacts}.sql  client.ts(withTenantTx)
-    applyMigrations.ts migrate.ts seed.ts  repositories/{user,workspace,account,contact,sourceImport}Repository.ts
-    test/import.itest.ts        # Testcontainers DoD proof (dedup + isolation)
-  core/    src/import/          # domain logic: the import pipeline + dedup/PII primitives             [LIVE]
-    runImport · parseFile · columnMap · normalize · blindIndex · encryptPii · contentHash
+    schema/{auth,contacts,billing}.ts  rls/{auth,contacts,billing}.sql  client.ts(withTenantTx · closeDb)
+    applyMigrations.ts migrate.ts seed.ts
+    repositories/{user,workspace,account,contact,sourceImport,reveal,credit,suppression,audit,idempotency}Repository.ts
+    test/{itestDb.ts,import.itest.ts,reveal.itest.ts}  # DoD proofs (Testcontainers or ITEST_DATABASE_URL)
+  core/    src/                 # domain logic                                                          [LIVE]
+    import/      runImport · parseFile · columnMap · normalize · blindIndex · encryptPii · contentHash
+    reveal/      revealContact (THE money tx: suppress-gate → claim → FOR UPDATE charge → audit)
+    billing/     stripeWebhook (verify/sign/parse) · grantFromStripe (idempotent grant)
+    compliance/  assertNotSuppressed (in-tx DNC gate) · writeAudit (same-tx audit writer)
   auth/    src/                 # self-built auth primitives (no HTTP)
 apps/                           # deployable processes (thin transport adapters)
   api/   src/                   # Hono on Bun — validates the access JWT; never issues tokens  [LIVE]
-    middleware/{authn,tenancy,error,rateLimit}.ts  features/{auth,import,reveal}/  app.ts  server.ts
+    middleware/{authn,tenancy,error,rateLimit,idempotency}.ts  features/{auth,import,reveal,billing}/  app.ts  server.ts
   auth/  src/                   # auth.truepoint.in IdP (Next 15) — screens + /token/* + JWKS  [LIVE]
   web/   src/                   # app.truepoint.in (Next 15) — /auth/callback + the import wizard  [LIVE]
     app/{page,import,auth/callback}  features/import/  lib/{authClient,pkce,publicConfig}
@@ -54,11 +62,29 @@ apps/                           # deployable processes (thin transport adapters)
 - **web:** `apps/web/src/features/import/*` (ImportWizard + ContactsTable + ImportPage, hooks, api.ts) →
   route `apps/web/src/app/import/page.tsx`
 
-### reveal — *M1 masked reads; reveal tx in M3* ([05 §6/§7](./planning/05-features-modules.md), [03 §5](./planning/03-database-design.md))
-- **api:** `apps/api/src/features/reveal/{routes,index}.ts` (GET `/api/v1/contacts` — masked, RLS-scoped list)
-- **db:** `packages/db/src/repositories/{account,contact}Repository.ts` (account upsert-by-domain; contact
-  dedup lookups/writes + masked list — the only place that touches contact/account SQL)
-- **targets:** the reveal transaction + credits (M3) land in this same slice
+### reveal — *M1 masked reads + M3 money loop* ([05 §7](./planning/05-features-modules.md), [07 §3](./planning/07-billing-credits.md), ADR-0007)
+- **core:** `packages/core/src/reveal/revealContact.ts` — THE monetized transaction (07 §3, H1/H2):
+  in-tx suppression gate → idempotent claim (`ON CONFLICT DO NOTHING` on the unique
+  `(workspace, contact, reveal_type)`) → `FOR UPDATE` charge against `tenants.reveal_credit_balance` →
+  same-tx audit; free re-reveal of an owned copy; config-injected `revealCostFor` (never hardcoded)
+- **api:** `apps/api/src/features/reveal/{routes,index}.ts` (GET `/api/v1/contacts` masked list;
+  POST `/api/v1/contacts/:id/reveal` behind the Idempotency-Key replay middleware)
+- **db:** `packages/db/src/repositories/{account,contact}Repository.ts` (overlay reads/writes, masked list);
+  `revealRepository.ts` (contact-for-reveal + the idempotent claim + usage list)
+
+### billing — *M3 credits + Stripe* ([07 §2/§4](./planning/07-billing-credits.md))
+- **core:** `packages/core/src/billing/stripeWebhook.ts` (HMAC signature verify + `signStripePayload` test
+  helper + `parseCreditGrantEvent`), `grantFromStripe.ts` (grant exactly once per `stripe_event_id`)
+- **api:** `apps/api/src/features/billing/{routes,index}.ts` — POST `/api/v1/billing/webhook`
+  (signature-verified, the ONLY credit-grant path) + GET `/api/v1/credits/{balance,usage}`
+- **db:** `packages/db/src/repositories/creditRepository.ts` (lock/decrement/read the tenant counter +
+  `grantFromEvent` system tx), `idempotencyRepository.ts` (stored-response replay for money endpoints)
+
+### compliance — *M3 gate + audit (suppression UI lands M5)* ([08 §3/§5](./planning/08-compliance.md))
+- **core:** `packages/core/src/compliance/assertNotSuppressed.ts` (the unbypassable in-tx DNC gate used by
+  reveal now and send at M9), `writeAudit.ts` (same-tx audit writer; closed action enum from types)
+- **db:** `packages/db/src/repositories/suppressionRepository.ts` (scope-aware match + CRUD),
+  `auditRepository.ts` (insert-only; table is append-only via DB trigger)
 
 ### auth — *M2, global identity* ([05 §1](./planning/05-features-modules.md), [17](./planning/17-authentication.md), ADR-0019/0020)
 - **api:** `apps/api/src/features/auth/{routes,index}.ts` (GET `/api/v1/auth/session` from verified claims)
@@ -81,8 +107,8 @@ apps/                           # deployable processes (thin transport adapters)
   **tenant-membership / domain / invitation** repos and **new-org provisioning** (`tenantRepository`
   + `tenantMemberRepository.joinOrg`) for registration placement (the `tenant_members` model, ADR-0019/0020)
 
-_Remaining domains (`search`, `lists`, `enrichment`, `scoring`, `billing`, `outreach`, `compliance`, … +
-the 6 web destinations) have **no code yet**; targets in [05](./planning/05-features-modules.md) +
+_Remaining domains (`search`, `lists`, `enrichment`, `scoring`, `outreach`, … + the 6 web destinations)
+have **no code yet**; targets in [05](./planning/05-features-modules.md) +
 [11 §6](./planning/11-information-architecture.md)._
 
 ## Destinations cross-reference (6 web destinations → domains; + the auth origin)
@@ -138,18 +164,25 @@ flowchart TD
 
 ## Shared / platform areas (live)
 
-- **`packages/types`** — `errors.ts` (RFC-9457 + `ImportValidationError`), `auth.ts`, `contacts.ts` (data +
-  import Zod schemas: `sourceName`, `emailStatus`, `ColumnMapping`, `ImportSummary`, `MaskedContact`), `index.ts`.
-- **`packages/config`** — `env.ts` (the only `process.env` reader; holds `BLIND_INDEX_KEY`), `index.ts`.
+- **`packages/types`** — `errors.ts` (RFC-9457 + `ImportValidationError`/`InsufficientCreditsError`/
+  `SuppressedError`), `auth.ts`, `contacts.ts`, `billing.ts` (`revealType`, suppression scopes, the **closed
+  `auditAction` enum** — source of truth mirrored by the SQL CHECK), `index.ts`.
+- **`packages/config`** — `env.ts` (the only `process.env` reader; `BLIND_INDEX_KEY`, the `REVEAL_COST_*`
+  placeholders per 07 §1, `STRIPE_WEBHOOK_SECRET`), `index.ts`.
 - **`packages/ui`** — `tokens.css`, `cn.ts`, `index.ts`.
-- **`packages/db`** — `client.ts` (`withTenantTx` GUC helper), `applyMigrations.ts` (bootstrap → drizzle →
-  RLS), `migrate.ts`, `seed.ts`, `schema/{auth,contacts}.ts`, `schema/index.ts`, `drizzle.config.ts`, `index.ts`,
-  `test/import.itest.ts`. (RLS in `src/rls/{auth,contacts}.sql` — `.sql`, not counted source files.)
-- **`packages/core`** — `index.ts` (public surface: `runImport`, `parseImportFile`, `blindIndex`, `encrypt/decryptPii`);
-  domain code under `src/import/` is bucketed to the `import` feature.
+- **`packages/db`** — `client.ts` (`withTenantTx` GUC helper + `closeDb` graceful drain), `applyMigrations.ts`
+  (bootstrap → drizzle → RLS), `migrate.ts`, `seed.ts`, `schema/{auth,contacts,billing}.ts`, `schema/index.ts`,
+  `drizzle.config.ts`, `index.ts`, `test/{itestDb.ts,import.itest.ts,reveal.itest.ts}` (`itestDb` provisions
+  Testcontainers **or** an external server via `ITEST_DATABASE_URL`; run itest files in **separate**
+  processes — the db client is a module singleton). RLS in `src/rls/{auth,contacts,billing}.sql` — policies
+  use the `NULLIF(current_setting(…, true), '')::uuid` idiom so unset/reset GUCs **fail closed** to zero
+  rows; `billing.sql` also carries the reveal-ownership trigger + the audit_log append-only trigger.
+- **`packages/core`** — `index.ts` (public surface: import pipeline + `revealContact`, `assertNotSuppressed`,
+  `writeAudit`, `grantFromStripe`, stripe webhook helpers); domain code bucketed per feature above.
 - **`packages/auth`** — the self-built auth primitives + `index.ts`.
 - **`apps/api`** — `app.ts`, `server.ts`; **`apps/api/middleware`** — `authn.ts`, `tenancy.ts`, `error.ts`,
-  `rateLimit.ts` (coarse per-caller throttle via the shared `packages/auth` limiter).
+  `rateLimit.ts`, `idempotency.ts` (Idempotency-Key stored-response replay for money endpoints; the DB
+  uniques remain the real double-charge guard).
 - **`apps/auth`** — `middleware.ts` + `app/` screens/token endpoints + `shared/` + `lib/` (see JSON).
 - **`apps/web/app`** — `layout`, `page`, `import/page` (the wizard route), `auth/callback`;
   **`apps/web/lib`** — `authClient`, `pkce`, `publicConfig`. (The import slice lives under `features/import/`.)

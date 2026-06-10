@@ -2,10 +2,10 @@
 // opens a tenant/workspace-scoped transaction. It sets the RLS GUCs LOCAL to the transaction (RDS Proxy
 // transaction pooling resets them per checkout, so they must be set in-tx). 03 §9, architecture-contract §6.
 
+import { env } from "@leadwolf/config";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { env } from "@leadwolf/config";
 import * as schema from "./schema/index.ts";
 
 // `prepare: false` is required for transaction-pooling proxies (RDS Proxy / PgBouncer).
@@ -14,6 +14,12 @@ const client = postgres(env.DATABASE_URL, { max: 10, prepare: false });
 export const db = drizzle(client, { schema });
 export type Db = typeof db;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** Drain the shared pool — graceful shutdown for apps/workers and test teardown (open sockets otherwise
+ * keep the process alive). Safe to call once at the end of a process's life; not for per-request use. */
+export async function closeDb(): Promise<void> {
+  await client.end({ timeout: 5 });
+}
 
 export interface TenantScope {
   tenantId: string;
@@ -31,7 +37,9 @@ export async function withTenantTx<T>(scope: TenantScope, fn: (tx: Tx) => Promis
     await tx.execute(sql`SET LOCAL ROLE leadwolf_app`);
     await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${scope.tenantId}, true)`);
     if (scope.workspaceId) {
-      await tx.execute(sql`SELECT set_config('app.current_workspace_id', ${scope.workspaceId}, true)`);
+      await tx.execute(
+        sql`SELECT set_config('app.current_workspace_id', ${scope.workspaceId}, true)`,
+      );
     }
     return fn(tx);
   });

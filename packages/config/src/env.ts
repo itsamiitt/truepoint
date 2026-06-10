@@ -31,6 +31,16 @@ export const appEnvSchema = z.object({
 
   BLIND_INDEX_KEY: z.string().min(8),
 
+  // Reveal pricing by reveal_type — PLACEHOLDERS per 07 §1, injected from config and never hardcoded in
+  // code paths (14 §5.7). The verified-result charge policy (ADR-0013) adjusts these at M4.
+  REVEAL_COST_EMAIL: z.coerce.number().int().min(0).default(1),
+  REVEAL_COST_PHONE: z.coerce.number().int().min(0).default(1),
+  REVEAL_COST_FULL_PROFILE: z.coerce.number().int().min(0).default(1),
+
+  // Stripe webhook signing secret (whsec_…). Optional in dev/test (Stripe CLI prints one per
+  // `stripe listen`); the webhook route fails closed when it is absent.
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
   // Cloudflare Turnstile secret for the identifier step (ADR-0020). Optional: absent → dev passes, prod fails.
   TURNSTILE_SECRET: z.string().optional(),
 
@@ -44,7 +54,9 @@ export type AppEnv = z.infer<typeof appEnvSchema>;
 function loadEnv(): AppEnv {
   const parsed = appEnvSchema.safeParse(process.env);
   if (!parsed.success) {
-    const issues = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+    const issues = parsed.error.issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   return Object.freeze(parsed.data);

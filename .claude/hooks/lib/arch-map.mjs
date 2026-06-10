@@ -31,6 +31,7 @@ export const REPO_DOMAIN = {
   source_import: "import", sourceImport: "import", suppression: "compliance", tenant: "billing",
   user: "auth", workspace: "workspaces", "api_key": "api-public", apiKey: "api-public",
   purchase: "billing", activity: "activity",
+  reveal: "reveal", credit: "billing", audit: "compliance", idempotency: "billing",
 };
 export const PROVIDER_DOMAIN = {
   salesforce: "crm-sync", hubspot: "crm-sync", pipedrive: "crm-sync", apollo: "enrichment",

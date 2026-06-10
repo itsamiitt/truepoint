@@ -1,19 +1,19 @@
-// import.itest.ts — the M1 Definition-of-Done proof, on a real Postgres 16 via Testcontainers (10/14 §3.2).
-// REQUIRES Docker, and that `drizzle-kit generate` has produced src/migrations (run `bun run db:migrate`
-// once, or `bun run --filter @leadwolf/db generate`). Named *.itest.ts so default `bun test` skips it;
-// run explicitly: `bun test packages/db/test/import.itest.ts`.
+// import.itest.ts — the M1 Definition-of-Done proof, on a real Postgres 16 (10/14 §3.2): Testcontainers by
+// default, or an external server via ITEST_DATABASE_URL (see itestDb.ts). Requires generated src/migrations
+// (`bun run --filter @leadwolf/db generate`). Named *.itest.ts so default `bun test` skips it; run
+// explicitly: `bun test packages/db/test/import.itest.ts`.
 //
 // Proves: (1) per-workspace dedup → one contact per identity; (2) the same payload in another workspace is
 // a separate copy, the first untouched; (3) re-import is idempotent; (4) RLS isolates workspaces for the
 // non-BYPASSRLS leadwolf_app role and fails closed when the GUC is unset.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import postgres from "postgres";
+import { type ItestDb, startItestDb } from "./itestDb.ts";
 
-type RunImportFn = (typeof import("@leadwolf/core"))["runImport"];
+type RunImportFn = typeof import("@leadwolf/core")["runImport"];
 
-let container: StartedPostgreSqlContainer;
+let dbHandle: ItestDb;
 let runImport: RunImportFn;
 let admin: ReturnType<typeof postgres>;
 let appUrl: string;
@@ -33,17 +33,51 @@ const MAPPING = {
 
 // 5 rows, 3 distinct identities: 3 "jane" variants (case + plus-tag) collapse to one contact.
 const DUPES = [
-  { Email: "jane@acme.com", "First Name": "Jane", "Last Name": "Doe", Company: "Acme", Domain: "acme.com" },
-  { Email: "JANE@acme.com", "First Name": "Jane", "Last Name": "Doe", Company: "Acme", Domain: "acme.com" },
-  { Email: "jane+sales@acme.com", "First Name": "Jane", "Last Name": "Doe", Company: "Acme", Domain: "acme.com" },
-  { Email: "john@acme.com", "First Name": "John", "Last Name": "Roe", Company: "Acme", Domain: "acme.com" },
-  { Email: "mary@globex.com", "First Name": "Mary", "Last Name": "Sue", Company: "Globex", Domain: "globex.com" },
+  {
+    Email: "jane@acme.com",
+    "First Name": "Jane",
+    "Last Name": "Doe",
+    Company: "Acme",
+    Domain: "acme.com",
+  },
+  {
+    Email: "JANE@acme.com",
+    "First Name": "Jane",
+    "Last Name": "Doe",
+    Company: "Acme",
+    Domain: "acme.com",
+  },
+  {
+    Email: "jane+sales@acme.com",
+    "First Name": "Jane",
+    "Last Name": "Doe",
+    Company: "Acme",
+    Domain: "acme.com",
+  },
+  {
+    Email: "john@acme.com",
+    "First Name": "John",
+    "Last Name": "Roe",
+    Company: "Acme",
+    Domain: "acme.com",
+  },
+  {
+    Email: "mary@globex.com",
+    "First Name": "Mary",
+    "Last Name": "Sue",
+    Company: "Globex",
+    Domain: "globex.com",
+  },
 ];
 
-async function seedWorkspace(slug: string): Promise<{ tenantId: string; workspaceId: string; ownerId: string }> {
+// Global-identity seeding (ADR-0019): users is global; org membership lives in tenant_members.
+async function seedWorkspace(
+  slug: string,
+): Promise<{ tenantId: string; workspaceId: string; ownerId: string }> {
   const [t] = await admin`INSERT INTO tenants (name, slug) VALUES (${slug}, ${slug}) RETURNING id`;
-  const [u] = await admin`
-    INSERT INTO users (tenant_id, email, is_tenant_owner) VALUES (${t!.id}, ${`owner@${slug}.test`}, true) RETURNING id`;
+  const [u] = await admin`INSERT INTO users (email) VALUES (${`owner@${slug}.test`}) RETURNING id`;
+  await admin`
+    INSERT INTO tenant_members (tenant_id, user_id, is_tenant_owner) VALUES (${t!.id}, ${u!.id}, true)`;
   const [w] = await admin`
     INSERT INTO workspaces (tenant_id, name, slug, is_default, created_by_user_id)
     VALUES (${t!.id}, ${slug}, ${slug}, true, ${u!.id}) RETURNING id`;
@@ -51,27 +85,23 @@ async function seedWorkspace(slug: string): Promise<{ tenantId: string; workspac
 }
 
 async function countContacts(workspaceId: string): Promise<number> {
-  const [r] = await admin`SELECT count(*)::int AS n FROM contacts WHERE workspace_id = ${workspaceId}`;
+  const [r] =
+    await admin`SELECT count(*)::int AS n FROM contacts WHERE workspace_id = ${workspaceId}`;
   return (r as { n: number }).n;
 }
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer("postgres:16")
-    .withUsername("leadwolf")
-    .withPassword("leadwolf")
-    .withDatabase("leadwolf")
-    .start();
+  dbHandle = await startItestDb("import");
 
-  const adminUrl = container.getConnectionUri();
-  // Bind the app's config/db client to the container BEFORE importing @leadwolf/core.
-  process.env.DATABASE_URL = adminUrl;
+  // Bind the app's config/db client to the test database BEFORE importing @leadwolf/core.
+  process.env.DATABASE_URL = dbHandle.adminUrl;
   process.env.BLIND_INDEX_KEY = "itest-blind-index-key-0123456789";
-  appUrl = `postgres://leadwolf_app:leadwolf_app@${container.getHost()}:${container.getPort()}/leadwolf`;
+  appUrl = dbHandle.appUrl;
 
   const { applyMigrations } = await import("../src/applyMigrations.ts");
-  await applyMigrations(adminUrl);
+  await applyMigrations(dbHandle.adminUrl);
 
-  admin = postgres(adminUrl, { max: 2, onnotice: () => {} });
+  admin = postgres(dbHandle.adminUrl, { max: 2, onnotice: () => {} });
   ({ tenantId: tenantA, workspaceId: wsA, ownerId: ownerA } = await seedWorkspace("acme"));
   ({ tenantId: tenantB, workspaceId: wsB } = await seedWorkspace("globex"));
 
@@ -79,8 +109,11 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
+  // Drain the @leadwolf/db singleton pool first — its open sockets otherwise keep the runner alive.
+  const { closeDb } = await import("@leadwolf/db");
+  await closeDb();
   await admin?.end();
-  await container?.stop();
+  await dbHandle?.stop();
 });
 
 describe("M1 import & dedup DoD", () => {
