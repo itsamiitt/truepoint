@@ -12,6 +12,35 @@ export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
 export { assertNotSuppressed, type SuppressionKeys } from "./compliance/assertNotSuppressed.ts";
 export { writeAudit, type AuditEntryInput } from "./compliance/writeAudit.ts";
+
+export {
+  enrichContact,
+  type EnrichContactInput,
+  type EnrichContactResult,
+} from "./enrichment/enrichContact.ts";
+export type {
+  EnrichmentProvider,
+  EnrichRequest,
+  EnrichSubject,
+  ProviderResult,
+  ProviderFieldResult,
+} from "./enrichment/providerPort.ts";
+export { requestHash } from "./enrichment/requestHash.ts";
+export { runWaterfall, orderProviders, resetBreakers } from "./enrichment/waterfall.ts";
+
+export {
+  passThroughVerifier,
+  staticVerifier,
+  type EmailVerifierPort,
+} from "./data-health/emailVerifier.ts";
+export { chargeFor, type ChargeInput } from "./data-health/chargeFor.ts";
+export { validatePhone } from "./data-health/validatePhone.ts";
+
+export {
+  computeScore,
+  type ComputeScoreInput,
+  type ComputeScoreResult,
+} from "./scoring/computeScore.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,

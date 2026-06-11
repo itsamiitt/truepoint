@@ -156,3 +156,15 @@ export class SuppressedError extends AppError {
     super({ status: 403, code: "suppressed", title: "Contact is suppressed", detail: reason });
   }
 }
+
+/** The enrichment daily cost budget is exhausted — calls pause until the window resets (06 §6). */
+export class ProviderBudgetExceededError extends AppError {
+  constructor(detail?: string) {
+    super({
+      status: 429,
+      code: "enrichment_budget_exhausted",
+      title: "Enrichment budget exhausted",
+      detail,
+    });
+  }
+}

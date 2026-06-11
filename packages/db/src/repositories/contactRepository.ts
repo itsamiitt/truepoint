@@ -3,9 +3,9 @@
 // self-contained masked list the API/search surfaces read. PII (email/phone) is stored encrypted; this
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
-import { and, desc, eq } from "drizzle-orm";
 import type { MaskedContact } from "@leadwolf/types";
-import { withTenantTx, type TenantScope, type Tx } from "../client.ts";
+import { and, desc, eq } from "drizzle-orm";
+import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
 
 /** The dedup keys, in priority order: a match on any identifies the same person within the workspace. */
@@ -29,6 +29,8 @@ export interface ContactWriteValues {
   seniorityLevel?: string | null;
   department?: string | null;
   phoneEnc?: Uint8Array | null;
+  emailStatus?: string; // verification result (06 §9; NOT NULL column) — set by verify-on-reveal / enrichment
+  phoneStatus?: string | null;
   linkedinUrl?: string | null;
   linkedinPublicId?: string | null;
   salesNavProfileUrl?: string | null;
@@ -44,12 +46,21 @@ function definedOnly<T extends object>(v: T): Partial<T> {
 
 export const contactRepository = {
   /** Find an existing contact in the workspace by the first dedup key that hits (email → linkedin → sales-nav). */
-  async findByDedupKeys(tx: Tx, workspaceId: string, keys: DedupKeys): Promise<{ id: string } | null> {
+  async findByDedupKeys(
+    tx: Tx,
+    workspaceId: string,
+    keys: DedupKeys,
+  ): Promise<{ id: string } | null> {
     if (keys.emailBlindIndex) {
       const r = await tx
         .select({ id: contacts.id })
         .from(contacts)
-        .where(and(eq(contacts.workspaceId, workspaceId), eq(contacts.emailBlindIndex, keys.emailBlindIndex)))
+        .where(
+          and(
+            eq(contacts.workspaceId, workspaceId),
+            eq(contacts.emailBlindIndex, keys.emailBlindIndex),
+          ),
+        )
         .limit(1);
       if (r[0]) return r[0];
     }
@@ -57,7 +68,12 @@ export const contactRepository = {
       const r = await tx
         .select({ id: contacts.id })
         .from(contacts)
-        .where(and(eq(contacts.workspaceId, workspaceId), eq(contacts.linkedinPublicId, keys.linkedinPublicId)))
+        .where(
+          and(
+            eq(contacts.workspaceId, workspaceId),
+            eq(contacts.linkedinPublicId, keys.linkedinPublicId),
+          ),
+        )
         .limit(1);
       if (r[0]) return r[0];
     }
@@ -65,7 +81,12 @@ export const contactRepository = {
       const r = await tx
         .select({ id: contacts.id })
         .from(contacts)
-        .where(and(eq(contacts.workspaceId, workspaceId), eq(contacts.salesNavLeadId, keys.salesNavLeadId)))
+        .where(
+          and(
+            eq(contacts.workspaceId, workspaceId),
+            eq(contacts.salesNavLeadId, keys.salesNavLeadId),
+          ),
+        )
         .limit(1);
       if (r[0]) return r[0];
     }
@@ -80,17 +101,47 @@ export const contactRepository = {
 
   /** Merge non-undefined fields into an existing contact (sparse re-imports never wipe known values). */
   async update(tx: Tx, id: string, values: Partial<ContactWriteValues>): Promise<void> {
-    await tx.update(contacts).set({ ...definedOnly(values), updatedAt: new Date() }).where(eq(contacts.id, id));
+    await tx
+      .update(contacts)
+      .set({ ...definedOnly(values), updatedAt: new Date() })
+      .where(eq(contacts.id, id));
+  },
+
+  /** The non-PII inputs the rule-based scorer reads (ADR-0008). Tx-aware: composed in the score tx. */
+  async getScoringInputs(
+    tx: Tx,
+    contactId: string,
+  ): Promise<{
+    seniorityLevel: string | null;
+    jobTitle: string | null;
+    emailDomain: string | null;
+    hasEmail: boolean;
+  } | null> {
+    const rows = await tx
+      .select({
+        seniorityLevel: contacts.seniorityLevel,
+        jobTitle: contacts.jobTitle,
+        emailDomain: contacts.emailDomain,
+        emailEnc: contacts.emailEnc,
+      })
+      .from(contacts)
+      .where(eq(contacts.id, contactId))
+      .limit(1);
+    const r = rows[0];
+    return r
+      ? {
+          seniorityLevel: r.seniorityLevel,
+          jobTitle: r.jobTitle,
+          emailDomain: r.emailDomain,
+          hasEmail: r.emailEnc != null,
+        }
+      : null;
   },
 
   /** Masked, workspace-scoped list for the search/results + post-import surfaces. Never returns PII. */
   async listByWorkspace(scope: TenantScope, limit = 100): Promise<MaskedContact[]> {
     return withTenantTx(scope, async (tx) => {
-      const rows = await tx
-        .select()
-        .from(contacts)
-        .orderBy(desc(contacts.createdAt))
-        .limit(limit);
+      const rows = await tx.select().from(contacts).orderBy(desc(contacts.createdAt)).limit(limit);
       return rows.map((r) => ({
         id: r.id,
         firstName: r.firstName,

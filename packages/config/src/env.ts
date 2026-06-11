@@ -41,6 +41,20 @@ export const appEnvSchema = z.object({
   // `stripe listen`); the webhook route fails closed when it is absent.
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
 
+  // Charge policy for `risky` verification results — ADR-0013: charged-but-flagged by default.
+  REVEAL_CHARGE_RISKY: z
+    .string()
+    .optional()
+    .transform((v) => v !== "false"),
+
+  // Enrichment provider keys (06 §3). Absent → that adapter reports `miss` and the waterfall skips it.
+  APOLLO_API_KEY: z.string().optional(),
+  ZOOMINFO_API_KEY: z.string().optional(),
+  CLEARBIT_API_KEY: z.string().optional(),
+
+  // Global daily enrichment cost budget in micro-dollars (06 §6); exhaustion trips the budget breaker.
+  ENRICH_DAILY_BUDGET_MICROS: z.coerce.number().int().positive().default(50_000_000),
+
   // Cloudflare Turnstile secret for the identifier step (ADR-0020). Optional: absent → dev passes, prod fails.
   TURNSTILE_SECRET: z.string().optional(),
 

@@ -6,8 +6,10 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authRoutes } from "./features/auth/index.ts";
 import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
+import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { importRoutes } from "./features/import/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
+import { scoringRoutes } from "./features/scoring/index.ts";
 import { onError } from "./middleware/error.ts";
 import { rateLimit } from "./middleware/rateLimit.ts";
 
@@ -22,5 +24,7 @@ app.use("/api/*", rateLimit);
 app.route("/api/v1/auth", authRoutes);
 app.route("/api/v1/imports", importRoutes);
 app.route("/api/v1/contacts", revealRoutes);
+app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal
 app.route("/api/v1/billing", billingRoutes);
 app.route("/api/v1/credits", creditsRoutes);
+app.route("/api/v1/enrichment", enrichmentRoutes);

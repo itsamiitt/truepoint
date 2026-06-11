@@ -5,8 +5,14 @@
 > from the JSON (generated); do not edit paths here by hand.** One-line purposes and the Mermaid graph are
 > authored here. Maintained by the [`enterprise-architecture`](../.claude/skills/enterprise-architecture/SKILL.md) skill.
 
-> **Live end-to-end — auth round-trip + M1 import + M3 reveal & credits (the money loop).** 148 source
-> files, 0 warnings, 2 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes).
+> **Live end-to-end — auth round-trip + M1 import + M3 reveal & credits + M4 enrichment/verification/
+> scoring.** 174 source files, 0 warnings, 2 framework-root files unbucketed
+> (`apps/{auth,web}/next.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
+> (port in core, Apollo/ZoomInfo/Clearbit adapters in the now-live `packages/integrations`, cache-first +
+> budget breaker + waterfall), **verify-on-reveal driving the ADR-0013 charge** (verification runs BEFORE
+> the FOR UPDATE window; `valid` charges, `invalid`/`catch_all`/`unknown` charge 0, `risky` configurable),
+> and the versioned `scores` + `intent_signals` intelligence layer with the priority_score sync trigger —
+> proven by `intel.itest.ts` (6 invariants) with the M3 suite still green under the new flow.
 > **M2 auth** is global-identity (`users` global + `tenant_members`): identifier-first sign-in
 > (password → MFA → **org** → workspace) or registration with hybrid org placement, minting/validating the
 > access JWT. **M1 Import & Contacts Core**: per-workspace CSV import dedupes contacts/accounts (encrypted
@@ -28,24 +34,30 @@ packages/                       # side-effect-free libraries, each exported via 
   config/  src/env.ts           # zod-validated env (ONLY process.env reader; BLIND_INDEX_KEY, REVEAL_COST_*, STRIPE_WEBHOOK_SECRET)
   ui/      src/{tokens.css,cn}  # TruePoint tokens + class helper
   db/      src/                 # Drizzle schema + RLS + repositories (the ONLY data access)  [LIVE]
-    schema/{auth,contacts,billing}.ts  rls/{auth,contacts,billing}.sql  client.ts(withTenantTx · closeDb)
+    schema/{auth,contacts,billing,intel}.ts  rls/{auth,contacts,billing,intel}.sql  client.ts(withTenantTx · closeDb)
     applyMigrations.ts migrate.ts seed.ts
-    repositories/{user,workspace,account,contact,sourceImport,reveal,credit,suppression,audit,idempotency}Repository.ts
-    test/{itestDb.ts,import.itest.ts,reveal.itest.ts}  # DoD proofs (Testcontainers or ITEST_DATABASE_URL)
+    repositories/{user,workspace,account,contact,sourceImport,reveal,credit,suppression,audit,
+                  idempotency,score,intentSignal,providerCall}Repository.ts
+    test/{itestDb.ts,import.itest.ts,reveal.itest.ts,intel.itest.ts}  # DoD proofs (Testcontainers or ITEST_DATABASE_URL)
   core/    src/                 # domain logic                                                          [LIVE]
     import/      runImport · parseFile · columnMap · normalize · blindIndex · encryptPii · contentHash
-    reveal/      revealContact (THE money tx: suppress-gate → claim → FOR UPDATE charge → audit)
+    reveal/      revealContact (verify-first money tx: verify → suppress-gate → claim → charge → audit)
     billing/     stripeWebhook (verify/sign/parse) · grantFromStripe (idempotent grant)
     compliance/  assertNotSuppressed (in-tx DNC gate) · writeAudit (same-tx audit writer)
+    enrichment/  providerPort (06 §3 contract) · waterfall (order/breaker) · requestHash · enrichContact
+    data-health/ emailVerifier (port + passThrough/static) · chargeFor (ADR-0013) · validatePhone
+    scoring/     computeScore (rule-based v1, appends versioned scores — ADR-0008)
   auth/    src/                 # self-built auth primitives (no HTTP)
+  integrations/ src/enrichment/ # vendor adapters implementing core's port (httpProvider + apollo/zoominfo/clearbit)  [LIVE]
 apps/                           # deployable processes (thin transport adapters)
   api/   src/                   # Hono on Bun — validates the access JWT; never issues tokens  [LIVE]
-    middleware/{authn,tenancy,error,rateLimit,idempotency}.ts  features/{auth,import,reveal,billing}/  app.ts  server.ts
+    middleware/{authn,tenancy,error,rateLimit,idempotency}.ts
+    features/{auth,import,reveal,billing,enrichment,scoring}/  app.ts  server.ts
   auth/  src/                   # auth.truepoint.in IdP (Next 15) — screens + /token/* + JWKS  [LIVE]
   web/   src/                   # app.truepoint.in (Next 15) — /auth/callback + the import wizard  [LIVE]
     app/{page,import,auth/callback}  features/import/  lib/{authClient,pkce,publicConfig}
-  workers/ src/                 # Bun + BullMQ — the imports queue calls core.runImport            [LIVE]
-    index.ts  register.ts  queues/imports.ts
+  workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring queues             [LIVE]
+    index.ts  register.ts  queues/{imports,enrichment,scoring}.ts
   admin/                        # internal staff console                                          [TARGET]
 ```
 
@@ -86,6 +98,31 @@ apps/                           # deployable processes (thin transport adapters)
 - **db:** `packages/db/src/repositories/suppressionRepository.ts` (scope-aware match + CRUD),
   `auditRepository.ts` (insert-only; table is append-only via DB trigger)
 
+### enrichment — *M4, provider waterfall* ([06](./planning/06-enrichment-engine.md))
+- **core:** `packages/core/src/enrichment/providerPort.ts` (the 06 §3 contract — core OWNS the port),
+  `waterfall.ts` (trust÷cost ordering + per-provider circuit breaker), `requestHash.ts` (normalized cache
+  key), `enrichContact.ts` (cache-first → budget breaker → waterfall → overlay upsert + `source_imports`
+  provenance + `provider_calls` cost row, one tx)
+- **integrations:** `packages/integrations/src/enrichment/{httpProvider,providers}.ts` — Apollo/ZoomInfo/
+  Clearbit VendorSpecs over one HTTP shape; injectable `fetchJson` → contract tests on recorded fixtures,
+  zero live spend; a missing API key is a permanent `miss`
+- **db:** `packages/db/src/repositories/providerCallRepository.ts` (cache lookup + cost ledger + daily-spend
+  sum for the budget breaker)
+- **api:** `apps/api/src/features/enrichment/*` (POST `/api/v1/enrichment/:entity/:id`, inline like M1
+  import; bulk diverts to the queue) · **workers:** `apps/workers/src/queues/enrichment.ts`
+
+### data-health — *M4 verification* ([06 §9](./planning/06-enrichment-engine.md), ADR-0013)
+- **core:** `packages/core/src/data-health/emailVerifier.ts` (the dedicated-verifier port; passThrough until
+  a vendor is chosen — 06 §11 Q1 — plus a static fixture verifier), `chargeFor.ts` (the ADR-0013
+  charge-by-verified-result mapping, exhaustively unit-tested), `validatePhone.ts` (E.164 sanity)
+
+### scoring — *M4 model (depth/UI M8)* ([ADR-0008](./planning/decisions/ADR-0008-lead-scoring-model.md))
+- **core:** `packages/core/src/scoring/computeScore.ts` (rule-based v1: ICP fit + intent signals; appends a
+  versioned `scores` row with an explanatory breakdown; the DB trigger syncs `contacts.priority_score`)
+- **db:** `packages/db/src/repositories/{score,intentSignal}Repository.ts`
+- **api:** `apps/api/src/features/scoring/*` (GET `/contacts/:id/scores`, POST `/contacts/:id/rescore`)
+  · **workers:** `apps/workers/src/queues/scoring.ts`
+
 ### auth — *M2, global identity* ([05 §1](./planning/05-features-modules.md), [17](./planning/17-authentication.md), ADR-0019/0020)
 - **api:** `apps/api/src/features/auth/{routes,index}.ts` (GET `/api/v1/auth/session` from verified claims)
 - **db:** `packages/db/src/repositories/userRepository.ts` (global user/identity: users + sessions +
@@ -107,8 +144,8 @@ apps/                           # deployable processes (thin transport adapters)
   **tenant-membership / domain / invitation** repos and **new-org provisioning** (`tenantRepository`
   + `tenantMemberRepository.joinOrg`) for registration placement (the `tenant_members` model, ADR-0019/0020)
 
-_Remaining domains (`search`, `lists`, `enrichment`, `scoring`, `outreach`, … + the 6 web destinations)
-have **no code yet**; targets in [05](./planning/05-features-modules.md) +
+_Remaining domains (`search`, `lists`, `outreach`, `sales-navigator`, `crm-sync`, … + the 6 web
+destinations) have **no code yet**; targets in [05](./planning/05-features-modules.md) +
 [11 §6](./planning/11-information-architecture.md)._
 
 ## Destinations cross-reference (6 web destinations → domains; + the auth origin)

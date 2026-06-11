@@ -59,3 +59,18 @@ export {
   idempotencyRepository,
   type StoredResponse,
 } from "./repositories/idempotencyRepository.ts";
+export {
+  scoreRepository,
+  type ScoreInsert,
+  type ScoreHistoryRow,
+} from "./repositories/scoreRepository.ts";
+export {
+  intentSignalRepository,
+  type IntentSignalInsert,
+  type IntentSignalRow,
+} from "./repositories/intentSignalRepository.ts";
+export {
+  providerCallRepository,
+  type ProviderCallRecord,
+  type CachedCall,
+} from "./repositories/providerCallRepository.ts";

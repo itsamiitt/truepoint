@@ -14,7 +14,10 @@
     "@leadwolf/core": "workspace:*",
     "@leadwolf/db": "workspace:*",
     "@leadwolf/types": "workspace:*",
-    "hono": "4.6.13"
+    "hono": "4.6.13",
+    "@leadwolf/integrations": "workspace:*"
   },
-  "devDependencies": { "typescript": "5.7.2" }
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
 }

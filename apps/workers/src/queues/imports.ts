@@ -2,9 +2,9 @@
 // packages/core import pipeline apps/api uses (one implementation, two transports — 16 §3.2). Heavy CSV/XLSX
 // imports are diverted here so the request thread stays free; the result is the new-vs-matched summary.
 
-import type { Job } from "bullmq";
-import { runImport, type RunImportInput } from "@leadwolf/core";
+import { type RunImportInput, runImport } from "@leadwolf/core";
 import type { ImportSummary } from "@leadwolf/types";
+import type { Job } from "bullmq";
 
 export const IMPORTS_QUEUE = "imports";
 

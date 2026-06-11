@@ -20,6 +20,7 @@
         "@leadwolf/config": "workspace:*",
         "@leadwolf/core": "workspace:*",
         "@leadwolf/db": "workspace:*",
+        "@leadwolf/integrations": "workspace:*",
         "@leadwolf/types": "workspace:*",
         "hono": "4.6.13",
       },
@@ -68,6 +69,7 @@
       "dependencies": {
         "@leadwolf/config": "workspace:*",
         "@leadwolf/core": "workspace:*",
+        "@leadwolf/integrations": "workspace:*",
         "@leadwolf/types": "workspace:*",
         "bullmq": "^5.0.0",
         "ioredis": "^5.4.1",
@@ -130,6 +132,18 @@
         "@testcontainers/postgresql": "^10.13.0",
         "drizzle-kit": "0.28.1",
         "testcontainers": "^10.13.0",
+        "typescript": "5.7.2",
+      },
+    },
+    "packages/integrations": {
+      "name": "@leadwolf/integrations",
+      "version": "0.0.0",
+      "dependencies": {
+        "@leadwolf/config": "workspace:*",
+        "@leadwolf/core": "workspace:*",
+        "@leadwolf/types": "workspace:*",
+      },
+      "devDependencies": {
         "typescript": "5.7.2",
       },
     },
@@ -298,6 +312,8 @@
     "@leadwolf/core": ["@leadwolf/core@workspace:packages/core"],
 
     "@leadwolf/db": ["@leadwolf/db@workspace:packages/db"],
+
+    "@leadwolf/integrations": ["@leadwolf/integrations@workspace:packages/integrations"],
 
     "@leadwolf/types": ["@leadwolf/types@workspace:packages/types"],
 

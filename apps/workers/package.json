@@ -13,7 +13,10 @@
     "@leadwolf/core": "workspace:*",
     "@leadwolf/types": "workspace:*",
     "bullmq": "^5.0.0",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.4.1",
+    "@leadwolf/integrations": "workspace:*"
   },
-  "devDependencies": { "typescript": "5.7.2" }
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
 }
