@@ -20,3 +20,6 @@ packages/db/src/migrations/
 
 # Next.js generated type reference (per-build, like .next/)
 next-env.d.ts
+
+# TypeScript incremental-build state (written by tsc --noEmit with incremental projects)
+*.tsbuildinfo

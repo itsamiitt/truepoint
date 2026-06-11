@@ -1,0 +1,212 @@
+/*
+ * reports.module.css — co-located styles for the Reports destination (11 §4.5 MVP slice). Light/monochrome
+ * per the TruePoint tokens (packages/ui/src/tokens.css): bars are ink-on-grey, color appears only via
+ * StatusBadge tones. Calm, Linear/Vercel-flat: hairline borders, whitespace, no shadows, no chart lib.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 28px 32px 48px;
+  max-width: 880px;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tp-ink);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tp-ink-3);
+}
+
+.card {
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+}
+
+.cardHint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+/* ── Credit usage ──────────────────────────────────────────────────────────────────────────────── */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.subheading {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+}
+
+/* ── Proportional CSS bars (credit days + funnel stages) ───────────────────────────────────────── */
+.barList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.barRow {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.barLabel {
+  color: var(--tp-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barTrack {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--tp-surface-3);
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--tp-ink-2);
+}
+
+.barFillMuted {
+  background: var(--tp-ink-4);
+}
+
+.barValue {
+  color: var(--tp-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+  min-width: 64px;
+}
+
+/* The off-ramp statuses (disqualified · nurture · unsubscribed), visually demoted. */
+.secondaryBlock {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tp-hairline);
+}
+
+.secondaryLabel {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+/* ── Data health ───────────────────────────────────────────────────────────────────────────────── */
+.healthList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.healthRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  font-size: 13px;
+}
+
+.healthRow + .healthRow {
+  border-top: 1px solid var(--tp-hairline);
+}
+
+.healthCount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--tp-ink);
+}
+
+.coverage {
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--tp-hairline);
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+
+/* ── Quiet states ──────────────────────────────────────────────────────────────────────────────── */
+.muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.loadingRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.footnote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+@media (max-width: 720px) {
+  .tiles {
+    grid-template-columns: 1fr;
+  }
+}

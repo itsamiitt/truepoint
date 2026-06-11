@@ -1,0 +1,482 @@
+/*
+ * sequences.module.css — co-located styles for the Sequences destination (11 §4.3 MVP slice). Light/
+ * monochrome per the TruePoint tokens (packages/ui/src/tokens.css); color appears only via StatusBadge
+ * tones + the tiny feedback dots. Calm, Linear/Vercel-flat: hairline borders, whitespace, no shadows.
+ * One cohesive stylesheet for the whole destination (list · builder · enrollment), hence its length.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 28px 32px 48px;
+  max-width: 880px;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tp-ink);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tp-ink-3);
+}
+
+.card {
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+}
+
+.cardHint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+/* ── Sequence list ─────────────────────────────────────────────────────────────────────────────── */
+.seqList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.seqList li + li {
+  border-top: 1px solid var(--tp-hairline);
+}
+
+.seqRow {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 10px;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.seqRow:hover {
+  background: var(--nav-hover-fill);
+}
+
+.seqRow[aria-pressed="true"] {
+  background: var(--nav-active-fill);
+}
+
+.seqName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tp-ink);
+}
+
+.seqMeta {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  white-space: nowrap;
+}
+
+/* ── Forms (builder + enroll) ──────────────────────────────────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.fieldNarrow {
+  flex: 0 1 160px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+}
+
+.input,
+.select,
+.textarea {
+  appearance: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--tp-ink);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+}
+
+.input,
+.select {
+  height: 38px;
+  padding: 0 12px;
+}
+
+.textarea {
+  min-height: 96px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236b7280' stroke-width='1.5' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--tp-ink-4);
+}
+
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--tp-ink-4);
+}
+
+.fieldNote {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Sits beside a labeled field in a .row; pins the control to the field's input line. */
+.rowEnd {
+  align-self: flex-end;
+}
+
+.inlineLink {
+  color: var(--tp-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.button {
+  appearance: none;
+  height: 38px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 500;
+  color: #fff;
+  background: var(--tp-btn);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--tp-btn-700);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ghostButton {
+  appearance: none;
+  height: 38px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.ghostButton:hover:not(:disabled) {
+  background: var(--nav-hover-fill);
+}
+
+.ghostButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Steps recap (builder phase 2) ─────────────────────────────────────────────────────────────── */
+.stepList {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stepItem {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.stepItem + .stepItem {
+  border-top: 1px solid var(--tp-hairline);
+}
+
+.stepOrder {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+.stepSubject {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--tp-ink);
+}
+
+.stepDelay {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  white-space: nowrap;
+}
+
+/* ── Enrollment log table ──────────────────────────────────────────────────────────────────────── */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--tp-ink-4);
+  padding: 0 16px 10px 0;
+  border-bottom: 1px solid var(--tp-hairline-2);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 12px 16px 12px 0;
+  border-bottom: 1px solid var(--tp-hairline);
+  color: var(--tp-ink-2);
+  white-space: nowrap;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+/* A row whose send just failed hands its hairline to the failure note beneath it. */
+.rowWithNote td {
+  border-bottom: none;
+}
+
+.noteRow td {
+  padding: 0 16px 12px 0;
+  white-space: normal;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+.stepCell {
+  font-variant-numeric: tabular-nums;
+}
+
+.actionCell {
+  text-align: right;
+}
+
+.smallButton {
+  appearance: none;
+  height: 30px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.smallButton:hover:not(:disabled) {
+  background: var(--nav-hover-fill);
+}
+
+.smallButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* "neutral" enrollment statuses: a plain grey pill, no status dot (color stays earned). */
+.neutralPill {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--tp-surface-3);
+  color: var(--tp-ink-2);
+}
+
+/* ── Feedback / quiet states ───────────────────────────────────────────────────────────────────── */
+.hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.hintDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--tp-ink-4);
+}
+
+.dncNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+
+.dncDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.quietFailure {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+.success {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+
+.successDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.loadingRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.panelDivider {
+  margin: 20px 0 16px;
+  border: 0;
+  border-top: 1px solid var(--tp-hairline);
+}
