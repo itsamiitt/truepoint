@@ -1,6 +1,14 @@
 // Public surface of @leadwolf/db — the tenancy-scoped client + the auth-domain repositories. Repositories
 // are the ONLY data-access layer; callers import them from here, never the schema or client internals.
-export { db, withTenantTx, closeDb, type Db, type Tx, type TenantScope } from "./client.ts";
+export {
+  db,
+  withTenantTx,
+  withPrivilegedTx,
+  closeDb,
+  type Db,
+  type Tx,
+  type TenantScope,
+} from "./client.ts";
 export * as schema from "./schema/index.ts";
 export {
   userRepository,
@@ -74,3 +82,11 @@ export {
   type ProviderCallRecord,
   type CachedCall,
 } from "./repositories/providerCallRepository.ts";
+export { consentRepository, type ConsentInsert } from "./repositories/consentRepository.ts";
+export {
+  dsarRequestRepository,
+  dsarFanoutRepository,
+  type DsarCreateInput,
+  type DsarRow,
+  type SubjectCopy,
+} from "./repositories/dsarRepository.ts";

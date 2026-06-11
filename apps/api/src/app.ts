@@ -6,6 +6,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { authRoutes } from "./features/auth/index.ts";
 import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
+import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { importRoutes } from "./features/import/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
@@ -28,3 +29,7 @@ app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — 
 app.route("/api/v1/billing", billingRoutes);
 app.route("/api/v1/credits", creditsRoutes);
 app.route("/api/v1/enrichment", enrichmentRoutes);
+// Public DSAR intake must register BEFORE the authenticated compliance router, whose `*` middleware
+// would otherwise 401 the session-less form (08 §4).
+app.route("/api/v1/compliance/dsar", dsarPublicRoutes);
+app.route("/api/v1/compliance", complianceRoutes);

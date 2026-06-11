@@ -12,6 +12,10 @@ export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
 export { assertNotSuppressed, type SuppressionKeys } from "./compliance/assertNotSuppressed.ts";
 export { writeAudit, type AuditEntryInput } from "./compliance/writeAudit.ts";
+export { createDsarRequest } from "./compliance/dsarIntake.ts";
+export { deleteFanout, type DeleteFanoutResult } from "./compliance/deleteFanout.ts";
+export { assembleAccessReport, type AccessReport } from "./compliance/assembleAccessReport.ts";
+export { recordConsent, withdrawConsent, type WithdrawResult } from "./compliance/consent.ts";
 
 export {
   enrichContact,

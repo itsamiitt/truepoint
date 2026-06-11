@@ -5,17 +5,23 @@
 // Each row runs in its own tight transaction so one bad row never rolls back the whole import.
 
 import {
+  type ContactWriteValues,
+  type DedupKeys,
+  type Tx,
   accountRepository,
   contactRepository,
   sourceImportRepository,
   withTenantTx,
-  type ContactWriteValues,
-  type DedupKeys,
-  type Tx,
 } from "@leadwolf/db";
-import type { ImportRowError, ImportRowOutcome, ImportSummary, SourceName, ColumnMapping } from "@leadwolf/types";
+import type {
+  ColumnMapping,
+  ImportRowError,
+  ImportRowOutcome,
+  ImportSummary,
+  SourceName,
+} from "@leadwolf/types";
 import { blindIndex } from "./blindIndex.ts";
-import { mapRow, type MappedRow, type RawRow } from "./columnMap.ts";
+import { type MappedRow, type RawRow, mapRow } from "./columnMap.ts";
 import { contentHash } from "./contentHash.ts";
 import { encryptPii } from "./encryptPii.ts";
 import {
@@ -48,7 +54,9 @@ interface PreparedContact {
 }
 
 function coerceSeniority(raw: string | undefined): string | null {
-  const v = normalizeText(raw)?.toLowerCase().replace(/[\s-]+/g, "_");
+  const v = normalizeText(raw)
+    ?.toLowerCase()
+    .replace(/[\s-]+/g, "_");
   return v && SENIORITY.has(v) ? v : null;
 }
 
@@ -116,7 +124,12 @@ async function importOneRow(
     });
   }
 
-  const values: ContactWriteValues = { ...prepared.values, tenantId, workspaceId, accountId: accountId ?? null };
+  const values: ContactWriteValues = {
+    ...prepared.values,
+    tenantId,
+    workspaceId,
+    accountId: accountId ?? null,
+  };
   const match = await contactRepository.findByDedupKeys(tx, workspaceId, prepared.dedupKeys);
 
   let contactId: string;
@@ -156,7 +169,9 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
       const mapped = mapRow(raw, input.mapping);
       const prepared = prepareContact(mapped);
       const hash = contentHash({ mapped, sourceName: input.sourceName });
-      const outcome = await withTenantTx(input.scope, (tx) => importOneRow(tx, input, raw, prepared, hash));
+      const outcome = await withTenantTx(input.scope, (tx) =>
+        importOneRow(tx, input, raw, prepared, hash),
+      );
       if (outcome === "created") created++;
       else if (outcome === "matched") matched++;
       else skipped++;

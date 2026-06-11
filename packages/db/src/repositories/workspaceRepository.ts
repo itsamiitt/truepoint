@@ -146,9 +146,12 @@ export const tenantRepository = {
         .insert(tenants)
         .values({ name: input.tenantName, slug: input.tenantSlug })
         .returning({ id: tenants.id });
-      await tx
-        .insert(tenantMembers)
-        .values({ tenantId: t!.id, userId: input.ownerUserId, isTenantOwner: true, status: "active" });
+      await tx.insert(tenantMembers).values({
+        tenantId: t!.id,
+        userId: input.ownerUserId,
+        isTenantOwner: true,
+        status: "active",
+      });
       const [ws] = await tx
         .insert(workspaces)
         .values({
@@ -159,9 +162,13 @@ export const tenantRepository = {
           createdByUserId: input.ownerUserId,
         })
         .returning({ id: workspaces.id });
-      await tx
-        .insert(workspaceMembers)
-        .values({ workspaceId: ws!.id, userId: input.ownerUserId, role: "owner", status: "active", joinedAt: new Date() });
+      await tx.insert(workspaceMembers).values({
+        workspaceId: ws!.id,
+        userId: input.ownerUserId,
+        role: "owner",
+        status: "active",
+        joinedAt: new Date(),
+      });
       return { tenantId: t!.id, workspaceId: ws!.id };
     });
   },
@@ -290,7 +297,13 @@ export const invitationRepository = {
       .limit(1);
     const r = rows[0];
     return r
-      ? { id: r.id, tenantId: r.tenantId, workspaceId: r.workspaceId, role: r.role, isTenantOwner: r.isTenantOwner }
+      ? {
+          id: r.id,
+          tenantId: r.tenantId,
+          workspaceId: r.workspaceId,
+          role: r.role,
+          isTenantOwner: r.isTenantOwner,
+        }
       : null;
   },
 

@@ -5,6 +5,7 @@
 import { env } from "@leadwolf/config";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
+import { DSAR_QUEUE, type DsarJobData, processDsar } from "./queues/dsar.ts";
 import {
   ENRICHMENT_QUEUE,
   type EnrichmentJobData,
@@ -19,6 +20,7 @@ const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 export const importQueue = new Queue<ImportJobData>(IMPORTS_QUEUE, { connection });
 export const enrichmentQueue = new Queue<EnrichmentJobData>(ENRICHMENT_QUEUE, { connection });
 export const scoringQueue = new Queue<ScoringJobData>(SCORING_QUEUE, { connection });
+export const dsarQueue = new Queue<DsarJobData>(DSAR_QUEUE, { connection });
 
 /** Submit a parsed import for background processing (the async alternative to the inline api path). */
 export async function enqueueImport(data: ImportJobData): Promise<void> {
@@ -37,11 +39,18 @@ export async function enqueueScoring(data: ScoringJobData): Promise<string> {
   return String(job.id);
 }
 
+/** Submit a VERIFIED DSAR for privileged processing (08 §4; the staff workflow enqueues this). */
+export async function enqueueDsar(data: DsarJobData): Promise<string> {
+  const job = await dsarQueue.add("dsar", data);
+  return String(job.id);
+}
+
 /** Boot every queue consumer. Returns the workers so the entry can manage their lifecycle. */
 export function startWorkers(): Worker[] {
   return [
     new Worker<ImportJobData>(IMPORTS_QUEUE, processImport, { connection }),
     new Worker<EnrichmentJobData>(ENRICHMENT_QUEUE, processEnrichment, { connection }),
     new Worker<ScoringJobData>(SCORING_QUEUE, processScoring, { connection }),
+    new Worker<DsarJobData>(DSAR_QUEUE, processDsar, { connection }),
   ];
 }

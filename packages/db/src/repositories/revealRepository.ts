@@ -3,7 +3,7 @@
 // core — never returned over HTTP unmasked elsewhere), the idempotent reveal claim, and the usage list.
 
 import type { RevealDataSource, RevealType } from "@leadwolf/types";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contactReveals } from "../schema/billing.ts";
 import { contacts } from "../schema/contacts.ts";
@@ -52,7 +52,7 @@ export const revealRepository = {
         isRevealed: contacts.isRevealed,
       })
       .from(contacts)
-      .where(eq(contacts.id, contactId))
+      .where(and(eq(contacts.id, contactId), isNull(contacts.deletedAt))) // tombstones are gone (08 §4.2)
       .limit(1);
     return rows[0] ?? null;
   },

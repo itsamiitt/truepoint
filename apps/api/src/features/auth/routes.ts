@@ -4,7 +4,7 @@
 
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { tenancy, type TenancyVariables } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const authRoutes = new Hono<{ Variables: TenancyVariables }>();
 

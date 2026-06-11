@@ -3,3 +3,4 @@ export * from "./auth.ts";
 export * from "./contacts.ts";
 export * from "./billing.ts";
 export * from "./intel.ts";
+export * from "./compliance.ts";

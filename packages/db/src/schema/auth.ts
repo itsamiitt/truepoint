@@ -20,10 +20,7 @@ import {
 const citext = customType<{ data: string }>({ dataType: () => "citext" });
 const bytea = customType<{ data: Uint8Array }>({ dataType: () => "bytea" });
 
-const id = () =>
-  uuid("id")
-    .primaryKey()
-    .default(sql`uuid_generate_v7()`);
+const id = () => uuid("id").primaryKey().default(sql`uuid_generate_v7()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 

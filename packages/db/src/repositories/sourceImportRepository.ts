@@ -3,8 +3,8 @@
 // Tx-aware so it composes into the import pipeline's per-row transaction (03 §9). `content_hash` lets an
 // identical re-import short-circuit to a no-op (idempotency).
 
-import { and, eq } from "drizzle-orm";
 import type { SourceName } from "@leadwolf/types";
+import { and, eq } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { sourceImports } from "../schema/contacts.ts";
 
@@ -21,11 +21,17 @@ export interface SourceImportInput {
 
 export const sourceImportRepository = {
   /** Has this exact payload already been imported into this workspace? Drives idempotent skip. */
-  async findByContentHash(tx: Tx, workspaceId: string, contentHash: Uint8Array): Promise<{ contactId: string } | null> {
+  async findByContentHash(
+    tx: Tx,
+    workspaceId: string,
+    contentHash: Uint8Array,
+  ): Promise<{ contactId: string } | null> {
     const rows = await tx
       .select({ contactId: sourceImports.contactId })
       .from(sourceImports)
-      .where(and(eq(sourceImports.workspaceId, workspaceId), eq(sourceImports.contentHash, contentHash)))
+      .where(
+        and(eq(sourceImports.workspaceId, workspaceId), eq(sourceImports.contentHash, contentHash)),
+      )
       .limit(1);
     return rows[0] ?? null;
   },

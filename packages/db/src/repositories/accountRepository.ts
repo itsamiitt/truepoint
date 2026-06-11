@@ -18,7 +18,12 @@ export const accountRepository = {
   async upsertByDomain(tx: Tx, input: AccountUpsertInput): Promise<string> {
     const rows = await tx
       .insert(accounts)
-      .values({ tenantId: input.tenantId, workspaceId: input.workspaceId, name: input.name, domain: input.domain })
+      .values({
+        tenantId: input.tenantId,
+        workspaceId: input.workspaceId,
+        name: input.name,
+        domain: input.domain,
+      })
       .onConflictDoUpdate({
         target: [accounts.workspaceId, accounts.domain],
         targetWhere: sql`${accounts.domain} IS NOT NULL`,

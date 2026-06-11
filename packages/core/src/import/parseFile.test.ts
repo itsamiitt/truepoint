@@ -6,7 +6,9 @@ import { parseCsv } from "./parseFile.ts";
 
 describe("parseCsv", () => {
   test("parses headers + rows", () => {
-    const { headers, rows } = parseCsv("Email,First Name\njane@acme.com,Jane\njohn@acme.com,John\n");
+    const { headers, rows } = parseCsv(
+      "Email,First Name\njane@acme.com,Jane\njohn@acme.com,John\n",
+    );
     expect(headers).toEqual(["Email", "First Name"]);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toEqual({ Email: "jane@acme.com", "First Name": "Jane" });

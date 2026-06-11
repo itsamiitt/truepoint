@@ -4,7 +4,7 @@
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
 import type { MaskedContact } from "@leadwolf/types";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
 
@@ -141,7 +141,13 @@ export const contactRepository = {
   /** Masked, workspace-scoped list for the search/results + post-import surfaces. Never returns PII. */
   async listByWorkspace(scope: TenantScope, limit = 100): Promise<MaskedContact[]> {
     return withTenantTx(scope, async (tx) => {
-      const rows = await tx.select().from(contacts).orderBy(desc(contacts.createdAt)).limit(limit);
+      // DSAR tombstones never surface (08 §4.2).
+      const rows = await tx
+        .select()
+        .from(contacts)
+        .where(isNull(contacts.deletedAt))
+        .orderBy(desc(contacts.createdAt))
+        .limit(limit);
       return rows.map((r) => ({
         id: r.id,
         firstName: r.firstName,

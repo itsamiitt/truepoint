@@ -22,10 +22,7 @@ import { tenants, users, workspaces } from "./auth.ts";
 // Shared column idioms (kept local per the self-contained-schema convention in auth.ts).
 const citext = customType<{ data: string }>({ dataType: () => "citext" });
 const bytea = customType<{ data: Uint8Array }>({ dataType: () => "bytea" });
-const id = () =>
-  uuid("id")
-    .primaryKey()
-    .default(sql`uuid_generate_v7()`);
+const id = () => uuid("id").primaryKey().default(sql`uuid_generate_v7()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 const tenantId = () =>
@@ -63,7 +60,10 @@ export const accounts = pgTable(
     uniqWsDomain: uniqueIndex("uniq_accounts_ws_domain")
       .on(t.workspaceId, t.domain)
       .where(sql`${t.domain} IS NOT NULL`),
-    icpRange: check("accounts_icp_fit_range", sql`${t.icpFitScore} IS NULL OR ${t.icpFitScore} BETWEEN 0 AND 100`),
+    icpRange: check(
+      "accounts_icp_fit_range",
+      sql`${t.icpFitScore} IS NULL OR ${t.icpFitScore} BETWEEN 0 AND 100`,
+    ),
   }),
 );
 
@@ -100,6 +100,7 @@ export const contacts = pgTable(
     jurisdiction: char("jurisdiction", { length: 2 }),
     region: char("region", { length: 2 }).notNull().default("US"),
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }), // DSAR tombstone (08 §4.2): set + PII nulled
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -131,7 +132,10 @@ export const contacts = pgTable(
       sql`${t.priorityScore} IS NULL OR ${t.priorityScore} BETWEEN 0 AND 100`,
     ),
     // Reveal-ownership invariants (first reveal wins; set by the AFTER INSERT trigger in M3). 03 §5/§10.
-    revealOwner: check("contacts_reveal_owner", sql`${t.isRevealed} = (${t.revealedByUserId} IS NOT NULL)`),
+    revealOwner: check(
+      "contacts_reveal_owner",
+      sql`${t.isRevealed} = (${t.revealedByUserId} IS NOT NULL)`,
+    ),
     revealAt: check("contacts_reveal_at", sql`${t.isRevealed} = (${t.revealedAt} IS NOT NULL)`),
   }),
 );

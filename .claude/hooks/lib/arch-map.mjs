@@ -4,47 +4,116 @@
 // Pure + side-effect-free except for filesystem READS. See navigation-map-spec.md for the contract.
 
 import { createHash } from "node:crypto";
-import { readdirSync, statSync, existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, posix, sep } from "node:path";
 
 export const ROOTS = ["apps", "packages"];
 
 const SOURCE_EXT = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
-const EXCLUDED_SEGMENTS = new Set(["node_modules", "dist", "build", ".next", "coverage", ".turbo", ".git"]);
+const EXCLUDED_SEGMENTS = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  ".next",
+  "coverage",
+  ".turbo",
+  ".git",
+]);
 
 // Canonical domain enumeration — sourced from docs/planning/05 (modules) + 11 §2/§6 (6 destinations).
 // A folder segment outside this list is still bucketed but surfaces in warnings[].
 export const CANONICAL_DOMAINS = [
-  "auth", "workspaces", "import", "enrichment", "sales-navigator", "search", "reveal", "lists",
-  "scoring", "activity", "billing", "export", "outreach", "crm-sync", "api-public", "ai", "alerts",
-  "compliance", "admin-settings", "home", "prospect", "sequences", "inbox", "reports", "settings",
-  "templates", "notifications", "data-health",
+  "auth",
+  "workspaces",
+  "import",
+  "enrichment",
+  "sales-navigator",
+  "search",
+  "reveal",
+  "lists",
+  "scoring",
+  "activity",
+  "billing",
+  "export",
+  "outreach",
+  "crm-sync",
+  "api-public",
+  "ai",
+  "alerts",
+  "compliance",
+  "admin-settings",
+  "home",
+  "prospect",
+  "sequences",
+  "inbox",
+  "reports",
+  "settings",
+  "templates",
+  "notifications",
+  "data-health",
 ];
 
 // Declared maps for the cases where the domain is NOT encoded in the path (extend as code grows).
 export const QUEUE_DOMAIN = {
-  enrichment: "enrichment", scoring: "scoring", imports: "import", "crm-sync": "crm-sync",
-  outreach: "outreach", "search-sync": "search", webhook: "api-public",
+  enrichment: "enrichment",
+  scoring: "scoring",
+  imports: "import",
+  "crm-sync": "crm-sync",
+  outreach: "outreach",
+  "search-sync": "search",
+  webhook: "api-public",
+  dsar: "compliance",
 };
 export const REPO_DOMAIN = {
-  contact: "reveal", account: "reveal", list: "lists", score: "scoring", outreach: "outreach",
-  source_import: "import", sourceImport: "import", suppression: "compliance", tenant: "billing",
-  user: "auth", workspace: "workspaces", "api_key": "api-public", apiKey: "api-public",
-  purchase: "billing", activity: "activity",
-  intentSignal: "scoring", intent_signal: "scoring", providerCall: "enrichment", provider_call: "enrichment",
-  reveal: "reveal", credit: "billing", audit: "compliance", idempotency: "billing",
+  contact: "reveal",
+  account: "reveal",
+  list: "lists",
+  score: "scoring",
+  outreach: "outreach",
+  source_import: "import",
+  sourceImport: "import",
+  suppression: "compliance",
+  tenant: "billing",
+  user: "auth",
+  workspace: "workspaces",
+  api_key: "api-public",
+  apiKey: "api-public",
+  purchase: "billing",
+  activity: "activity",
+  intentSignal: "scoring",
+  intent_signal: "scoring",
+  providerCall: "enrichment",
+  provider_call: "enrichment",
+  reveal: "reveal",
+  credit: "billing",
+  audit: "compliance",
+  idempotency: "billing",
+  consent: "compliance",
+  dsar: "compliance",
 };
 export const PROVIDER_DOMAIN = {
-  salesforce: "crm-sync", hubspot: "crm-sync", pipedrive: "crm-sync", apollo: "enrichment",
-  zoominfo: "enrichment", clearbit: "enrichment", linkedin: "sales-navigator",
+  salesforce: "crm-sync",
+  hubspot: "crm-sync",
+  pipedrive: "crm-sync",
+  apollo: "enrichment",
+  zoominfo: "enrichment",
+  clearbit: "enrichment",
+  linkedin: "sales-navigator",
 };
 
 // The ALLOWED dependency graph (16 §5) — stamped into the JSON for the human map's reference.
 export const DEPENDENCIES = {
-  types: [], config: ["types"], db: ["types", "config"], search: ["types", "config"],
-  email: ["types", "config"], ui: ["types"], analytics: ["types", "config"],
-  observability: ["types", "config"], auth: ["db", "types", "config"],
-  core: ["db", "search", "types", "config"], integrations: ["core", "types", "config"],
+  types: [],
+  config: ["types"],
+  db: ["types", "config"],
+  search: ["types", "config"],
+  email: ["types", "config"],
+  ui: ["types"],
+  analytics: ["types", "config"],
+  observability: ["types", "config"],
+  auth: ["db", "types", "config"],
+  core: ["db", "search", "types", "config"],
+  integrations: ["core", "types", "config"],
 };
 
 const FEATURE_BUCKETS = ["web", "admin", "api", "core", "db", "workers", "integrations"];
@@ -129,14 +198,20 @@ export function classify(p) {
   let m;
 
   // App feature slices (destination/domain-keyed by their own folder).
-  if ((m = p.match(/^apps\/web\/src\/features\/([^/]+)\//))) return { kind: "feature", domain: m[1], bucket: "web" };
-  if ((m = p.match(/^apps\/admin\/src\/features\/([^/]+)\//))) return { kind: "feature", domain: m[1], bucket: "admin" };
-  if ((m = p.match(/^apps\/api\/src\/features\/([^/]+)\//))) return { kind: "feature", domain: m[1], bucket: "api" };
+  if ((m = p.match(/^apps\/web\/src\/features\/([^/]+)\//)))
+    return { kind: "feature", domain: m[1], bucket: "web" };
+  if ((m = p.match(/^apps\/admin\/src\/features\/([^/]+)\//)))
+    return { kind: "feature", domain: m[1], bucket: "admin" };
+  if ((m = p.match(/^apps\/api\/src\/features\/([^/]+)\//)))
+    return { kind: "feature", domain: m[1], bucket: "api" };
 
   // core domains (ports + top-level files are shared, not a domain).
-  if ((m = p.match(/^packages\/core\/src\/ports\//))) return { kind: "shared", area: "packages/core/ports" };
-  if ((m = p.match(/^packages\/core\/src\/([^/]+)\//))) return { kind: "feature", domain: m[1], bucket: "core" };
-  if (/^packages\/core\/src\/[^/]+\.(c|m)?[tj]sx?$/.test(p)) return { kind: "shared", area: "packages/core" };
+  if ((m = p.match(/^packages\/core\/src\/ports\//)))
+    return { kind: "shared", area: "packages/core/ports" };
+  if ((m = p.match(/^packages\/core\/src\/([^/]+)\//)))
+    return { kind: "feature", domain: m[1], bucket: "core" };
+  if (/^packages\/core\/src\/[^/]+\.(c|m)?[tj]sx?$/.test(p))
+    return { kind: "shared", area: "packages/core" };
 
   // db repositories -> domain via REPO_DOMAIN; rest of db is shared.
   if ((m = p.match(/^packages\/db\/src\/repositories\/(.+?)Repository\.(c|m)?[tj]sx?$/))) {
@@ -154,15 +229,23 @@ export function classify(p) {
   if (/^apps\/workers\//.test(p)) return { kind: "shared", area: "apps/workers" };
 
   // integrations -> domain via PROVIDER_DOMAIN; else shared.
-  if ((m = p.match(/^packages\/integrations\/([^/]+)\//)) || (m = p.match(/^packages\/integrations\/src\/([^/]+)\//))) {
+  if (
+    (m = p.match(/^packages\/integrations\/([^/]+)\//)) ||
+    (m = p.match(/^packages\/integrations\/src\/([^/]+)\//))
+  ) {
     const domain = PROVIDER_DOMAIN[m[1]];
-    return domain ? { kind: "feature", domain, bucket: "integrations" } : { kind: "shared", area: "packages/integrations" };
+    return domain
+      ? { kind: "feature", domain, bucket: "integrations" }
+      : { kind: "shared", area: "packages/integrations" };
   }
 
   // App routing/shared/lib/middleware.
-  if ((m = p.match(/^apps\/api\/src\/middleware\//))) return { kind: "shared", area: "apps/api/middleware" };
-  if ((m = p.match(/^apps\/([^/]+)\/src\/(app|shared|lib)\//))) return { kind: "shared", area: `apps/${m[1]}/${m[2]}` };
-  if ((m = p.match(/^apps\/([^/]+)\/src\/[^/]+\.(c|m)?[tj]sx?$/))) return { kind: "shared", area: `apps/${m[1]}` };
+  if ((m = p.match(/^apps\/api\/src\/middleware\//)))
+    return { kind: "shared", area: "apps/api/middleware" };
+  if ((m = p.match(/^apps\/([^/]+)\/src\/(app|shared|lib)\//)))
+    return { kind: "shared", area: `apps/${m[1]}/${m[2]}` };
+  if ((m = p.match(/^apps\/([^/]+)\/src\/[^/]+\.(c|m)?[tj]sx?$/)))
+    return { kind: "shared", area: `apps/${m[1]}` };
 
   // Leaf / platform packages.
   if ((m = p.match(/^packages\/(types|config|ui|auth|search|email|analytics|observability)\//)))
@@ -208,7 +291,9 @@ export function buildMap(cwd) {
   const warnings = [];
   for (const d of [...encountered].sort()) {
     if (!CANONICAL_DOMAINS.includes(d)) {
-      warnings.push(`undeclared domain '${d}' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder`);
+      warnings.push(
+        `undeclared domain '${d}' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder`,
+      );
     }
   }
 

@@ -5,7 +5,7 @@
 
 import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "../client.ts";
-import { authEmailTokens, userMfaMethods, users, userSessions } from "../schema/auth.ts";
+import { authEmailTokens, userMfaMethods, userSessions, users } from "../schema/auth.ts";
 
 // ── Users (global identity — ADR-0019; org membership is in tenantMemberRepository) ──────────────────────
 export interface UserRecord {
@@ -56,7 +56,11 @@ export const userRepository = {
   },
 
   async usernameExists(username: string): Promise<boolean> {
-    const rows = await db.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
+    const rows = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.username, username))
+      .limit(1);
     return rows.length > 0;
   },
 
@@ -93,7 +97,10 @@ export const userRepository = {
   },
 
   async touchLastLogin(id: string): Promise<void> {
-    await db.update(users).set({ lastLoginAt: new Date(), updatedAt: new Date() }).where(eq(users.id, id));
+    await db
+      .update(users)
+      .set({ lastLoginAt: new Date(), updatedAt: new Date() })
+      .where(eq(users.id, id));
   },
 
   async listMfaMethods(userId: string): Promise<MfaMethodRecord[]> {
@@ -183,8 +190,13 @@ export const sessionRepository = {
 
   async rotate(args: { oldId: string; next: CreateSessionInput }): Promise<void> {
     await db.transaction(async (tx) => {
-      await tx.update(userSessions).set({ revokedAt: new Date() }).where(eq(userSessions.id, args.oldId));
-      await tx.insert(userSessions).values({ ...args.next, rotatedFrom: args.oldId, lastSeenAt: new Date() });
+      await tx
+        .update(userSessions)
+        .set({ revokedAt: new Date() })
+        .where(eq(userSessions.id, args.oldId));
+      await tx
+        .insert(userSessions)
+        .values({ ...args.next, rotatedFrom: args.oldId, lastSeenAt: new Date() });
     });
   },
 

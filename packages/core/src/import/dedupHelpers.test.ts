@@ -8,10 +8,14 @@ import { decryptPii, encryptPii } from "./encryptPii.ts";
 
 describe("blindIndex", () => {
   test("is deterministic for the same input", () => {
-    expect(Buffer.from(blindIndex("jane@acme.com"))).toEqual(Buffer.from(blindIndex("jane@acme.com")));
+    expect(Buffer.from(blindIndex("jane@acme.com"))).toEqual(
+      Buffer.from(blindIndex("jane@acme.com")),
+    );
   });
   test("differs for different inputs", () => {
-    expect(Buffer.from(blindIndex("jane@acme.com"))).not.toEqual(Buffer.from(blindIndex("john@acme.com")));
+    expect(Buffer.from(blindIndex("jane@acme.com"))).not.toEqual(
+      Buffer.from(blindIndex("john@acme.com")),
+    );
   });
   test("produces 32 bytes (SHA-256)", () => {
     expect(blindIndex("x@y.com").length).toBe(32);
@@ -39,6 +43,8 @@ describe("contentHash", () => {
     expect(Buffer.from(a)).toEqual(Buffer.from(b));
   });
   test("differs when content differs", () => {
-    expect(Buffer.from(contentHash({ email: "j@a.com" }))).not.toEqual(Buffer.from(contentHash({ email: "J@a.com" })));
+    expect(Buffer.from(contentHash({ email: "j@a.com" }))).not.toEqual(
+      Buffer.from(contentHash({ email: "J@a.com" })),
+    );
   });
 });

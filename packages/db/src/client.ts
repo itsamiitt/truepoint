@@ -21,6 +21,18 @@ export async function closeDb(): Promise<void> {
   await client.end({ timeout: 5 });
 }
 
+/**
+ * Run `fn` under the PRIVILEGED leadwolf_admin role (BYPASSRLS — 03 §9, ADR-0011): the ONE sanctioned
+ * cross-workspace path, used only by the audited DSAR fan-out (08 §4) and, later, apps/admin. The role is
+ * transaction-local; every caller is responsible for writing its audit trail.
+ */
+export async function withPrivilegedTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE leadwolf_admin`);
+    return fn(tx);
+  });
+}
+
 export interface TenantScope {
   tenantId: string;
   workspaceId?: string;

@@ -41,8 +41,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 174,
-  "fileSetHash": "sha256:f59433c828cd33c3b7d4a8afc2a3241c9c573833ca226bc14bf4dd73e1fa42e0",
+  "fileCount": 186,
+  "fileSetHash": "sha256:09091ea3ef1b4da02607ccdeedc57251e911e9a747accf1e3a5868773f3ea48a",
   "features": {
     "auth": {
       "web": [],
@@ -80,16 +80,27 @@
     "compliance": {
       "web": [],
       "admin": [],
-      "api": [],
+      "api": [
+        "apps/api/src/features/compliance/index.ts",
+        "apps/api/src/features/compliance/routes.ts"
+      ],
       "core": [
+        "packages/core/src/compliance/assembleAccessReport.ts",
         "packages/core/src/compliance/assertNotSuppressed.ts",
+        "packages/core/src/compliance/consent.ts",
+        "packages/core/src/compliance/deleteFanout.ts",
+        "packages/core/src/compliance/dsarIntake.ts",
         "packages/core/src/compliance/writeAudit.ts"
       ],
       "db": [
         "packages/db/src/repositories/auditRepository.ts",
+        "packages/db/src/repositories/consentRepository.ts",
+        "packages/db/src/repositories/dsarRepository.ts",
         "packages/db/src/repositories/suppressionRepository.ts"
       ],
-      "workers": [],
+      "workers": [
+        "apps/workers/src/queues/dsar.ts"
+      ],
       "integrations": []
     },
     "data-health": {
@@ -329,10 +340,12 @@
       "packages/db/src/migrate.ts",
       "packages/db/src/schema/auth.ts",
       "packages/db/src/schema/billing.ts",
+      "packages/db/src/schema/compliance.ts",
       "packages/db/src/schema/contacts.ts",
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
       "packages/db/src/seed.ts",
+      "packages/db/test/compliance.itest.ts",
       "packages/db/test/import.itest.ts",
       "packages/db/test/intel.itest.ts",
       "packages/db/test/itestDb.ts",
@@ -347,6 +360,7 @@
     "packages/types": [
       "packages/types/src/auth.ts",
       "packages/types/src/billing.ts",
+      "packages/types/src/compliance.ts",
       "packages/types/src/contacts.ts",
       "packages/types/src/errors.ts",
       "packages/types/src/index.ts",

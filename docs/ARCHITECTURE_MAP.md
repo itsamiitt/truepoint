@@ -5,8 +5,10 @@
 > from the JSON (generated); do not edit paths here by hand.** One-line purposes and the Mermaid graph are
 > authored here. Maintained by the [`enterprise-architecture`](../.claude/skills/enterprise-architecture/SKILL.md) skill.
 
-> **Live end-to-end — auth round-trip + M1 import + M3 reveal & credits + M4 enrichment/verification/
-> scoring.** 174 source files, 0 warnings, 2 framework-root files unbucketed
+> **Live end-to-end — the FULL M0–M5 MVP thin slice** (auth round-trip · M1 import · M3 reveal & credits ·
+> M4 enrichment/verification/scoring · **M5 compliance hardening**: DSAR fan-out with verification scan,
+> consent + global-suppression-on-withdraw, the privileged `leadwolf_admin` path, tombstones, public DSAR
+> intake). 186 source files, 0 warnings, 2 framework-root files unbucketed
 > (`apps/{auth,web}/next.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
 > (port in core, Apollo/ZoomInfo/Clearbit adapters in the now-live `packages/integrations`, cache-first +
 > budget breaker + waterfall), **verify-on-reveal driving the ADR-0013 charge** (verification runs BEFORE
@@ -92,11 +94,20 @@ apps/                           # deployable processes (thin transport adapters)
 - **db:** `packages/db/src/repositories/creditRepository.ts` (lock/decrement/read the tenant counter +
   `grantFromEvent` system tx), `idempotencyRepository.ts` (stored-response replay for money endpoints)
 
-### compliance — *M3 gate + audit (suppression UI lands M5)* ([08 §3/§5](./planning/08-compliance.md))
-- **core:** `packages/core/src/compliance/assertNotSuppressed.ts` (the unbypassable in-tx DNC gate used by
-  reveal now and send at M9), `writeAudit.ts` (same-tx audit writer; closed action enum from types)
-- **db:** `packages/db/src/repositories/suppressionRepository.ts` (scope-aware match + CRUD),
-  `auditRepository.ts` (insert-only; table is append-only via DB trigger)
+### compliance — *M3 gate + audit; M5 DSAR/consent (MVP-completing)* ([08](./planning/08-compliance.md))
+- **core:** `packages/core/src/compliance/` — `assertNotSuppressed.ts` (the unbypassable in-tx DNC gate),
+  `writeAudit.ts` (same-tx audit writer; closed enum), `dsarIntake.ts` (public intake: encrypted subject
+  email + blind index), `deleteFanout.ts` (the 08 §4.2 erase-everywhere: tombstone every copy across
+  tenants → purge dependents → GLOBAL suppression → per-copy audit → **verification scan gates
+  `completed`**; idempotent), `assembleAccessReport.ts` (08 §4.1 enumeration + footprints),
+  `consent.ts` (record + withdraw; withdrawal auto-adds global suppression)
+- **db:** `suppressionRepository.ts`, `auditRepository.ts` (append-only), `consentRepository.ts`,
+  `dsarRepository.ts` (request workflow + the PRIVILEGED `dsarFanoutRepository` cross-workspace queries);
+  `client.ts` adds **`withPrivilegedTx`** (`SET LOCAL ROLE leadwolf_admin`, BYPASSRLS — the one sanctioned
+  cross-workspace path, 03 §9/ADR-0011; the role is created in the migration bootstrap)
+- **api:** `apps/api/src/features/compliance/*` — public POST `/api/v1/compliance/dsar` (session-less,
+  registered before the authenticated router) + suppression/consent endpoints
+- **workers:** `apps/workers/src/queues/dsar.ts` (privileged processing for VERIFIED requests)
 
 ### enrichment — *M4, provider waterfall* ([06](./planning/06-enrichment-engine.md))
 - **core:** `packages/core/src/enrichment/providerPort.ts` (the 06 §3 contract — core OWNS the port),

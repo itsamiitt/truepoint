@@ -3,7 +3,7 @@
 // the non-BYPASSRLS leadwolf_app role) → drizzle-generated table migrations → every src/rls/*.sql
 // (policies + triggers). Takes the connection string as an argument so it has no dependency on @leadwolf/config.
 
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -31,8 +31,18 @@ const BOOTSTRAP = `
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_app') THEN
       CREATE ROLE leadwolf_app LOGIN PASSWORD 'leadwolf_app';
     END IF;
+    -- The privileged cross-tenant role (03 §9, ADR-0011): BYPASSRLS, used ONLY by the audited DSAR path
+    -- (and later apps/admin). Authored at M0 per the plan; first wired at M5.
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_admin') THEN
+      CREATE ROLE leadwolf_admin LOGIN PASSWORD 'leadwolf_admin' BYPASSRLS;
+    END IF;
   END $$;
   GRANT USAGE ON SCHEMA public TO leadwolf_app;
+  GRANT USAGE ON SCHEMA public TO leadwolf_admin;
+  -- Let the connecting base/owner role SET LOCAL ROLE into both app roles (no-op for superusers; required
+  -- for a non-superuser owner in production).
+  GRANT leadwolf_app TO CURRENT_USER;
+  GRANT leadwolf_admin TO CURRENT_USER;
 `;
 
 // Table/sequence privileges for the app role, applied AFTER tables exist (RLS still gates which rows it sees).
@@ -43,6 +53,10 @@ const GRANTS = `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO leadwolf_app;
   ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO leadwolf_app;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO leadwolf_admin;
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_admin;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO leadwolf_admin;
 `;
 
 async function exists(path: string): Promise<boolean> {
@@ -62,7 +76,9 @@ export async function applyMigrations(connectionString: string): Promise<void> {
     if (await exists(migrationsFolder)) {
       await migrate(db, { migrationsFolder });
     } else {
-      console.warn(`applyMigrations: no migrations at ${migrationsFolder} — run \`drizzle-kit generate\` first.`);
+      console.warn(
+        `applyMigrations: no migrations at ${migrationsFolder} — run \`drizzle-kit generate\` first.`,
+      );
     }
     const files = (await readdir(rlsFolder)).filter((f) => f.endsWith(".sql")).sort();
     for (const file of files) {
