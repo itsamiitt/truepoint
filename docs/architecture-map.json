@@ -43,8 +43,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 223,
-  "fileSetHash": "sha256:686ae29ccb5043808a1fb31d8b5934b4a592682b7fd8920ba4d63d5a60f23b8f",
+  "fileCount": 226,
+  "fileSetHash": "sha256:012f99f02d88f5d1766e1104c3c671d0d17d520934cb63ca156e96108ceebbb3",
   "features": {
     "auth": {
       "web": [],
@@ -247,6 +247,17 @@
       ],
       "integrations": []
     },
+    "sequences": {
+      "web": [
+        "apps/web/src/features/sequences/types.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "settings-billing": {
       "web": [
         "apps/web/src/features/settings-billing/api.ts",
@@ -435,13 +446,15 @@
       "packages/integrations/src/index.ts"
     ],
     "packages/types": [
+      "packages/types/src/activity.ts",
       "packages/types/src/auth.ts",
       "packages/types/src/billing.ts",
       "packages/types/src/compliance.ts",
       "packages/types/src/contacts.ts",
       "packages/types/src/errors.ts",
       "packages/types/src/index.ts",
-      "packages/types/src/intel.ts"
+      "packages/types/src/intel.ts",
+      "packages/types/src/outreach.ts"
     ],
     "packages/ui": [
       "packages/ui/src/cn.ts",

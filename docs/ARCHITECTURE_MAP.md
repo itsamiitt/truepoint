@@ -15,7 +15,7 @@
 > cockpit (credit/usage StatTiles + recent reveals + quick actions), and **Settings ▸ Billing & Credits**
 > (balance + usage history) and **▸ Compliance** (suppression + public DSAR intake) — built on token-driven
 > `packages/ui` primitives (`StatusBadge`/`Card`/`StatTile`/`Spinner`), `next build` green (8 routes).
-> 223 source files, 0 warnings, 2 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
+> 226 source files, 0 warnings, 2 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
 > (port in core, Apollo/ZoomInfo/Clearbit adapters in the now-live `packages/integrations`, cache-first +
 > budget breaker + waterfall), **verify-on-reveal driving the ADR-0013 charge** (verification runs BEFORE
 > the FOR UPDATE window; `valid` charges, `invalid`/`catch_all`/`unknown` charge 0, `risky` configurable),
@@ -178,11 +178,13 @@ slices via co-located CSS Modules; primitives in `@leadwolf/ui`.
   (`/credits/*`); routed at `(shell)/settings/billing` (the credit-pill deep-link target).
 - **settings-compliance** (web): `apps/web/src/features/settings-compliance/*` — `SuppressionForm`
   (`POST /compliance/suppression`) + `DsarForm` (public `POST /compliance/dsar`); `(shell)/settings/compliance`.
+- **sequences** (web, groundwork): `apps/web/src/features/sequences/types.ts` — view models +
+  status→tone maps for the Sequences destination; the slice + route land with M9.
 - **`@leadwolf/ui` primitives:** `packages/ui/src/components/{StatusBadge,Card,StatTile,Spinner}.tsx`
   (token-driven, monochrome, presentational) exported from `packages/ui/src/index.ts`.
 
 _Remaining domains (`search`, `lists`, `outreach`, `sales-navigator`, `crm-sync`, …) and the
-Sequences/Inbox/Reports destinations have **no code yet**; targets in
+Sequences/Inbox/Reports destinations have **no code beyond the above groundwork yet**; targets in
 [05](./planning/05-features-modules.md) + [11 §6](./planning/11-information-architecture.md)._
 
 ## Destinations cross-reference (6 web destinations → domains; + the auth origin)
@@ -240,7 +242,9 @@ flowchart TD
 
 - **`packages/types`** — `errors.ts` (RFC-9457 + `ImportValidationError`/`InsufficientCreditsError`/
   `SuppressedError`), `auth.ts`, `contacts.ts`, `billing.ts` (`revealType`, suppression scopes, the **closed
-  `auditAction` enum** — source of truth mirrored by the SQL CHECK), `index.ts`.
+  `auditAction` enum** — source of truth mirrored by the SQL CHECK), `activity.ts` (activity timeline +
+  Sales Navigator link vocabularies, M7/M8 groundwork — not yet in the barrel), `outreach.ts` (sequence/
+  step/log enums + request schemas, M9 groundwork — not yet in the barrel), `index.ts`.
 - **`packages/config`** — `env.ts` (the only `process.env` reader; `BLIND_INDEX_KEY`, the `REVEAL_COST_*`
   placeholders per 07 §1, `STRIPE_WEBHOOK_SECRET`), `index.ts`.
 - **`packages/ui`** — `tokens.css`, `cn.ts`, `index.ts`.
