@@ -1,10 +1,11 @@
 // computeScore.ts — the rule-based v1 lead scorer (ADR-0008, 23 §5): transparent weighted rules over
-// ICP fit + intent signals (+ engagement once activities land at M8), APPENDING a versioned `scores` row
-// whose score_breakdown explains every point. contacts.priority_score syncs via the DB trigger. Lead
+// ICP fit + intent signals + 30-day engagement recency (M8 activities), APPENDING a versioned `scores`
+// row whose score_breakdown explains every point. contacts.priority_score syncs via the DB trigger. Lead
 // score is prospect QUALITY — never conflated with email_status (correctness).
 
 import {
   type TenantScope,
+  activityRepository,
   contactRepository,
   intentSignalRepository,
   scoreRepository,
@@ -55,8 +56,16 @@ export async function computeScore(input: ComputeScoreInput): Promise<ComputeSco
     const signals = await intentSignalRepository.recentForContact(tx, input.contactId);
     const intentScore = clamp(signals.reduce((sum, s) => sum + s.weight, 0) * 10);
 
-    // Engagement: activities land at M8 — 0 until then, with the weight reserved in the composite.
-    const engagementScore = 0;
+    // Engagement (M8): 30-day activity recency — replies/meetings dominate, connected calls count,
+    // opens/clicks nudge. call_made without connection and bare notes score nothing.
+    const recent = await activityRepository.recentCountsForContact(tx, input.contactId);
+    const replies = recent.byType.email_replied ?? 0;
+    const meetingsHeld = recent.byType.meeting_held ?? 0;
+    const callsConnected = recent.byType.call_connected ?? 0;
+    const opensClicks = (recent.byType.email_opened ?? 0) + (recent.byType.email_clicked ?? 0);
+    const engagementScore = clamp(
+      replies * 30 + meetingsHeld * 40 + callsConnected * 20 + opensClicks * 5,
+    );
 
     const compositeScore = clamp(
       icpFit * COMPOSITE_WEIGHTS.icpFit +
@@ -71,7 +80,8 @@ export async function computeScore(input: ComputeScoreInput): Promise<ComputeSco
         reachability: reachabilityPoints,
       },
       intent: signals.map((s) => ({ signalType: s.signalType as SignalType, weight: s.weight })),
-      engagement: {},
+      // Contributing 30-day counts (not points) — the weights above explain the math.
+      engagement: { replies, meetingsHeld, callsConnected, opensClicks },
       weights: COMPOSITE_WEIGHTS,
     };
 

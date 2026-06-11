@@ -45,6 +45,32 @@ export {
   type ComputeScoreInput,
   type ComputeScoreResult,
 } from "./scoring/computeScore.ts";
+export { logActivity, type LogActivityInput } from "./activity/logActivity.ts";
+
+export {
+  createSequence,
+  addStep,
+  type CreateSequenceInput,
+  type AddStepInput,
+  type AddStepResult,
+} from "./outreach/createSequence.ts";
+export {
+  enrollContact,
+  type EnrollContactInput,
+  type EnrollContactResult,
+} from "./outreach/enrollContact.ts";
+export { sendStep, type SendStepInput, type SendStepResult } from "./outreach/sendStep.ts";
+export {
+  handleBounce,
+  type HandleBounceInput,
+  type HandleBounceResult,
+} from "./outreach/handleBounce.ts";
+export {
+  consoleSender,
+  staticSender,
+  type EmailSenderPort,
+  type OutboundEmail,
+} from "./outreach/senderPort.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,

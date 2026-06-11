@@ -90,3 +90,29 @@ export {
   type DsarRow,
   type SubjectCopy,
 } from "./repositories/dsarRepository.ts";
+export {
+  activityRepository,
+  type ActivityInsert,
+  type ActivityTimelineRow,
+  type ActivityCounts,
+} from "./repositories/activityRepository.ts";
+export {
+  salesNavLinkRepository,
+  type SalesNavLinkInsert,
+  type SalesNavLinkRecord,
+} from "./repositories/salesNavLinkRepository.ts";
+export {
+  sequenceRepository,
+  type SequenceInsert,
+  type SequenceRecord,
+  type StepInsert,
+  type StepRecord,
+  type SequenceSummaryRow,
+} from "./repositories/sequenceRepository.ts";
+export {
+  outreachLogRepository,
+  type EnrollmentInsert,
+  type EnrollmentRecord,
+  type LogWithSequence,
+  type OutreachLogRow,
+} from "./repositories/outreachLogRepository.ts";

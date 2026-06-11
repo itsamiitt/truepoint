@@ -14,8 +14,16 @@
 > confirmation dialog driving `POST /contacts/:id/reveal` with 402/403 handling · score panel), **Home**
 > cockpit (credit/usage StatTiles + recent reveals + quick actions), and **Settings ▸ Billing & Credits**
 > (balance + usage history) and **▸ Compliance** (suppression + public DSAR intake) — built on token-driven
-> `packages/ui` primitives (`StatusBadge`/`Card`/`StatTile`/`Spinner`), `next build` green (8 routes).
-> 226 source files, 0 warnings, 2 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
+> `packages/ui` primitives (`StatusBadge`/`Card`/`StatTile`/`Spinner`), `next build` green (11 routes).
+> **Post-MVP M7–M9 are in**: the **activity timeline** (per-contact stream + the `last_activity_at`
+> sync trigger) now drives a real **engagement component** in the scorer (M8), **Sales Navigator link
+> capture** is HITL-only per ADR-0009 (M7), and the **outreach engine** (M9) ships sequences → steps →
+> enrollment with the suppression gate run in-tx at BOTH enroll and send, CAN-SPAM identity enforced at
+> the send transaction (postal-address + unsubscribe footer auto-appended), and the ADR-0013 bounce
+> credit-back — proven by `activity.itest.ts` (5) + `outreach.itest.ts` (8). The web grew the
+> **Sequences** (builder + enrollment log + send), **Reports** (client-side rollups), and **Inbox**
+> (placeholder) destinations.
+> 271 source files, 0 warnings, 2 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
 > (port in core, Apollo/ZoomInfo/Clearbit adapters in the now-live `packages/integrations`, cache-first +
 > budget breaker + waterfall), **verify-on-reveal driving the ADR-0013 charge** (verification runs BEFORE
 > the FOR UPDATE window; `valid` charges, `invalid`/`catch_all`/`unknown` charge 0, `risky` configurable),
@@ -38,34 +46,38 @@
 
 ```
 packages/                       # side-effect-free libraries, each exported via one index.ts  [LIVE]
-  types/   src/{errors,auth,contacts,billing}.ts # RFC-9457 errors + auth/contacts/billing Zod contracts (leaf)
+  types/   src/{errors,auth,contacts,billing,intel,compliance,activity,outreach}.ts # RFC-9457 errors + the Zod contracts (leaf)
   config/  src/env.ts           # zod-validated env (ONLY process.env reader; BLIND_INDEX_KEY, REVEAL_COST_*, STRIPE_WEBHOOK_SECRET)
-  ui/      src/{tokens.css,cn}  # TruePoint tokens + class helper
+  ui/      src/                 # TruePoint tokens + cn helper + StatusBadge/Card/StatTile/Spinner primitives
   db/      src/                 # Drizzle schema + RLS + repositories (the ONLY data access)  [LIVE]
-    schema/{auth,contacts,billing,intel}.ts  rls/{auth,contacts,billing,intel}.sql  client.ts(withTenantTx · closeDb)
-    applyMigrations.ts migrate.ts seed.ts
-    repositories/{user,workspace,account,contact,sourceImport,reveal,credit,suppression,audit,
-                  idempotency,score,intentSignal,providerCall}Repository.ts
-    test/{itestDb.ts,import.itest.ts,reveal.itest.ts,intel.itest.ts}  # DoD proofs (Testcontainers or ITEST_DATABASE_URL)
+    schema/{auth,contacts,billing,intel,compliance,activity,salesnav,outreach}.ts  rls/*.sql (one per schema)
+    client.ts(withTenantTx · withPrivilegedTx · closeDb)  applyMigrations.ts migrate.ts seed.ts
+    repositories/{user,workspace,account,contact,sourceImport,reveal,credit,suppression,audit,idempotency,
+                  score,intentSignal,providerCall,consent,dsar,activity,salesNavLink,sequence,outreachLog}Repository.ts
+    test/{import,reveal,intel,compliance,activity,outreach}.itest.ts + itestDb.ts  # DoD proofs (Testcontainers or ITEST_DATABASE_URL)
   core/    src/                 # domain logic                                                          [LIVE]
     import/      runImport · parseFile · columnMap · normalize · blindIndex · encryptPii · contentHash
     reveal/      revealContact (verify-first money tx: verify → suppress-gate → claim → charge → audit)
     billing/     stripeWebhook (verify/sign/parse) · grantFromStripe (idempotent grant)
-    compliance/  assertNotSuppressed (in-tx DNC gate) · writeAudit (same-tx audit writer)
+    compliance/  assertNotSuppressed (in-tx DNC gate) · writeAudit · dsarIntake · deleteFanout · assembleAccessReport · consent
     enrichment/  providerPort (06 §3 contract) · waterfall (order/breaker) · requestHash · enrichContact
     data-health/ emailVerifier (port + passThrough/static) · chargeFor (ADR-0013) · validatePhone
-    scoring/     computeScore (rule-based v1, appends versioned scores — ADR-0008)
+    scoring/     computeScore (rule-based v1 + M8 engagement, appends versioned scores — ADR-0008)
+    activity/    logActivity (tombstone-aware timeline append; the DB trigger syncs last_activity_at)
+    outreach/    senderPort · createSequence · enrollContact · sendStep (CAN-SPAM + in-tx gates) · handleBounce
   auth/    src/                 # self-built auth primitives (no HTTP)
   integrations/ src/enrichment/ # vendor adapters implementing core's port (httpProvider + apollo/zoominfo/clearbit)  [LIVE]
 apps/                           # deployable processes (thin transport adapters)
   api/   src/                   # Hono on Bun — validates the access JWT; never issues tokens  [LIVE]
     middleware/{authn,tenancy,error,rateLimit,idempotency}.ts
-    features/{auth,import,reveal,billing,enrichment,scoring}/  app.ts  server.ts
+    features/{auth,import,reveal,billing,enrichment,scoring,compliance,activity,sales-navigator,outreach}/  app.ts  server.ts
   auth/  src/                   # auth.truepoint.in IdP (Next 15) — screens + /token/* + JWKS  [LIVE]
-  web/   src/                   # app.truepoint.in (Next 15) — /auth/callback + the import wizard  [LIVE]
-    app/{page,import,auth/callback}  features/import/  lib/{authClient,pkce,publicConfig}
-  workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring queues             [LIVE]
-    index.ts  register.ts  queues/{imports,enrichment,scoring}.ts
+  web/   src/                   # app.truepoint.in (Next 15) — the 6-destination AppShell  [LIVE]
+    app/(shell)/{home,prospect,sequences,inbox,reports,settings}  app/{page,import,auth/callback}
+    components/shell/  features/{import,prospect,home,sequences,reports,settings-billing,settings-compliance}/
+    lib/{authClient,pkce,publicConfig}
+  workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring · dsar · outreach queues  [LIVE]
+    index.ts  register.ts  queues/{imports,enrichment,scoring,dsar,outreach}.ts
   admin/                        # internal staff console                                          [TARGET]
 ```
 
@@ -133,12 +145,48 @@ apps/                           # deployable processes (thin transport adapters)
   a vendor is chosen — 06 §11 Q1 — plus a static fixture verifier), `chargeFor.ts` (the ADR-0013
   charge-by-verified-result mapping, exhaustively unit-tested), `validatePhone.ts` (E.164 sanity)
 
-### scoring — *M4 model (depth/UI M8)* ([ADR-0008](./planning/decisions/ADR-0008-lead-scoring-model.md))
-- **core:** `packages/core/src/scoring/computeScore.ts` (rule-based v1: ICP fit + intent signals; appends a
-  versioned `scores` row with an explanatory breakdown; the DB trigger syncs `contacts.priority_score`)
+### scoring — *M4 model + M8 engagement* ([ADR-0008](./planning/decisions/ADR-0008-lead-scoring-model.md))
+- **core:** `packages/core/src/scoring/computeScore.ts` (rule-based v1: ICP fit + intent signals + the M8
+  **engagement component** — 30-day activity counts where replies/meetings dominate; appends a versioned
+  `scores` row with an explanatory breakdown; the DB trigger syncs `contacts.priority_score`)
 - **db:** `packages/db/src/repositories/{score,intentSignal}Repository.ts`
 - **api:** `apps/api/src/features/scoring/*` (GET `/contacts/:id/scores`, POST `/contacts/:id/rescore`)
   · **workers:** `apps/workers/src/queues/scoring.ts`
+
+### activity — *M8 timeline* ([05 §10](./planning/05-features-modules.md), [03 §7](./planning/03-database-design.md))
+- **core:** `packages/core/src/activity/logActivity.ts` (tombstone-aware contact check + append, one tx;
+  no audit row — the activity IS the record)
+- **db:** `packages/db/src/repositories/activityRepository.ts` (newest-first timeline +
+  `recentCountsForContact` feeding the M8 engagement score); `schema/activity.ts` + `rls/activity.sql`
+  carry the **`activities_sync_last_activity` trigger** — `contacts.last_activity_at` is a cache of the
+  newest `occurred_at` and never regresses on backfill
+- **api:** `apps/api/src/features/activity/{routes,index}.ts` — GET/POST `/contacts/:id/activities`
+  (mounted on the same `/api/v1/contacts` base as reveal/scoring; no path overlap)
+
+### sales-navigator — *M7 link capture (HITL)* ([05 §5](./planning/05-features-modules.md), ADR-0009)
+- **db:** `packages/db/src/repositories/salesNavLinkRepository.ts`; `schema/salesnav.ts` dedups on
+  (workspace_id, url)
+- **api:** `apps/api/src/features/sales-navigator/{routes,index}.ts` — POST/GET `/sales-navigator/links`.
+  A human pastes the link; **nothing is automated against LinkedIn** (assisted capture only). Contact
+  Sales-Nav identity (`sales_nav_lead_id`) already flows through the M1 import pipeline.
+
+### outreach — *M9 sequences + the suppression-gated send engine* ([05 §13](./planning/05-features-modules.md), [08 §3/§6](./planning/08-compliance.md), ADR-0009/0013)
+- **core:** `packages/core/src/outreach/` — `createSequence.ts` (create + addStep; audits
+  `sequence.create`/`sequence.update`), `enrollContact.ts` (revealed-only + **`assertNotSuppressed`
+  in-tx** + idempotent (sequence, contact) membership + `outreach_status` rollup + audit `enroll`),
+  `sendStep.ts` (**the compliance-critical send tx**: CAN-SPAM identity BLOCKED-not-warned at send,
+  suppression re-checked in-tx so post-enrollment DNC/bounce rows still stop the message,
+  postal-address + unsubscribe footer auto-appended, audit `send`), `handleBounce.ts` (replay-idempotent:
+  log `bounced` + auto-suppression reason `bounce` + the **ADR-0013 credit-back** audited
+  `credit.adjust`), `senderPort.ts` (`EmailSenderPort`: dev `consoleSender` + test `staticSender`; the
+  M12 SES adapter swaps the port without touching the send tx)
+- **db:** `packages/db/src/repositories/{sequence,outreachLog}Repository.ts`; `schema/outreach.ts`
+  (`outreach_sequences` → `outreach_steps` → `outreach_log`; unique (sequence_id, contact_id) IS the
+  enrollment-idempotency key) + `rls/outreach.sql`
+- **api:** `apps/api/src/features/outreach/{routes,index}.ts` — `/api/v1/outreach/sequences*` CRUD/enroll/
+  log + `/log/:id/send` + `/log/:id/bounce` (dev stand-in for the SES SNS→SQS feedback worker)
+- **workers:** `apps/workers/src/queues/outreach.ts` (one enrollment-step delivery per job; step delays
+  arrive as BullMQ job delays via `enqueueOutreach`)
 
 ### auth — *M2, global identity* ([05 §1](./planning/05-features-modules.md), [17](./planning/17-authentication.md), ADR-0019/0020)
 - **api:** `apps/api/src/features/auth/{routes,index}.ts` (GET `/api/v1/auth/session` from verified claims)
@@ -178,13 +226,20 @@ slices via co-located CSS Modules; primitives in `@leadwolf/ui`.
   (`/credits/*`); routed at `(shell)/settings/billing` (the credit-pill deep-link target).
 - **settings-compliance** (web): `apps/web/src/features/settings-compliance/*` — `SuppressionForm`
   (`POST /compliance/suppression`) + `DsarForm` (public `POST /compliance/dsar`); `(shell)/settings/compliance`.
-- **sequences** (web, groundwork): `apps/web/src/features/sequences/types.ts` — view models +
-  status→tone maps for the Sequences destination; the slice + route land with M9.
+- **sequences** (web): `apps/web/src/features/sequences/*` — list + two-phase builder (CAN-SPAM identity
+  fields up front), per-sequence enrollment panel (log table + send-next-step with the 422 CAN-SPAM
+  message verbatim + quiet `suppressed` DNC notices), enroll picker filtered to revealed contacts;
+  `types.ts` holds the view models + status→tone maps; routed at `(shell)/sequences`.
+- **reports** (web): `apps/web/src/features/reports/*` — client-side rollups (`rollups.ts`) over
+  `/credits/*` + `/contacts`: credit-usage StatTiles + 14-day CSS bars, outreach funnel, data-health
+  badges (the ClickHouse pipeline is post-MVP); routed at `(shell)/reports`.
+- **inbox** (page only): `(shell)/inbox/page.tsx` — calm placeholder until mailbox sync ships (the M9
+  reply-ingestion design gate); links to /sequences for send status.
 - **`@leadwolf/ui` primitives:** `packages/ui/src/components/{StatusBadge,Card,StatTile,Spinner}.tsx`
   (token-driven, monochrome, presentational) exported from `packages/ui/src/index.ts`.
 
-_Remaining domains (`search`, `lists`, `outreach`, `sales-navigator`, `crm-sync`, …) and the
-Sequences/Inbox/Reports destinations have **no code beyond the above groundwork yet**; targets in
+_Remaining domains (`search`, `lists`, `crm-sync`, `export`, `api-public`, `ai`, `alerts`, `templates`,
+`notifications`, …) have **no code yet**; targets in
 [05](./planning/05-features-modules.md) + [11 §6](./planning/11-information-architecture.md)._
 
 ## Destinations cross-reference (6 web destinations → domains; + the auth origin)
@@ -243,20 +298,26 @@ flowchart TD
 - **`packages/types`** — `errors.ts` (RFC-9457 + `ImportValidationError`/`InsufficientCreditsError`/
   `SuppressedError`), `auth.ts`, `contacts.ts`, `billing.ts` (`revealType`, suppression scopes, the **closed
   `auditAction` enum** — source of truth mirrored by the SQL CHECK), `activity.ts` (activity timeline +
-  Sales Navigator link vocabularies, M7/M8 groundwork — not yet in the barrel), `outreach.ts` (sequence/
-  step/log enums + request schemas, M9 groundwork — not yet in the barrel), `index.ts`.
+  Sales Navigator link vocabularies), `outreach.ts` (sequence/step/log enums + request schemas — closed
+  vocabularies mirrored by the outreach SQL CHECKs), `index.ts`.
 - **`packages/config`** — `env.ts` (the only `process.env` reader; `BLIND_INDEX_KEY`, the `REVEAL_COST_*`
   placeholders per 07 §1, `STRIPE_WEBHOOK_SECRET`), `index.ts`.
 - **`packages/ui`** — `tokens.css`, `cn.ts`, `index.ts`.
 - **`packages/db`** — `client.ts` (`withTenantTx` GUC helper + `closeDb` graceful drain), `applyMigrations.ts`
-  (bootstrap → drizzle → RLS), `migrate.ts`, `seed.ts`, `schema/{auth,contacts,billing}.ts`, `schema/index.ts`,
-  `drizzle.config.ts`, `index.ts`, `test/{itestDb.ts,import.itest.ts,reveal.itest.ts}` (`itestDb` provisions
-  Testcontainers **or** an external server via `ITEST_DATABASE_URL`; run itest files in **separate**
-  processes — the db client is a module singleton). RLS in `src/rls/{auth,contacts,billing}.sql` — policies
-  use the `NULLIF(current_setting(…, true), '')::uuid` idiom so unset/reset GUCs **fail closed** to zero
-  rows; `billing.sql` also carries the reveal-ownership trigger + the audit_log append-only trigger.
+  (bootstrap → drizzle → RLS), `migrate.ts`, `seed.ts`,
+  `schema/{auth,contacts,billing,intel,compliance,activity,salesnav,outreach}.ts`, `schema/index.ts`,
+  `drizzle.config.ts`, `index.ts`, and `test/` — `itestDb.ts` (provisions Testcontainers **or** an external
+  server via `ITEST_DATABASE_URL`) + the six DoD suites
+  `{import,reveal,intel,compliance,activity,outreach}.itest.ts`; run itest files in **separate**
+  processes — the db client is a module singleton. RLS in `src/rls/*.sql` (one per schema file, applied
+  sorted) — policies use the `NULLIF(current_setting(…, true), '')::uuid` idiom so unset/reset GUCs
+  **fail closed** to zero rows; `billing.sql` also carries the reveal-ownership trigger + the audit_log
+  append-only trigger; `activity.sql` the `last_activity_at` sync trigger; `outreach.sql` the
+  sequences `updated_at` trigger.
 - **`packages/core`** — `index.ts` (public surface: import pipeline + `revealContact`, `assertNotSuppressed`,
-  `writeAudit`, `grantFromStripe`, stripe webhook helpers); domain code bucketed per feature above.
+  `writeAudit`, `grantFromStripe`, stripe webhook helpers, `logActivity`, and the outreach engine —
+  `createSequence`/`addStep`/`enrollContact`/`sendStep`/`handleBounce` + the sender port); domain code
+  bucketed per feature above.
 - **`packages/auth`** — the self-built auth primitives + `index.ts`.
 - **`apps/api`** — `app.ts`, `server.ts`; **`apps/api/middleware`** — `authn.ts`, `tenancy.ts`, `error.ts`,
   `rateLimit.ts`, `idempotency.ts` (Idempotency-Key stored-response replay for money endpoints; the DB
@@ -264,8 +325,9 @@ flowchart TD
 - **`apps/auth`** — `middleware.ts` + `app/` screens/token endpoints + `shared/` + `lib/` (see JSON).
 - **`apps/web/app`** — `layout`, `page`, `import/page` (the wizard route), `auth/callback`;
   **`apps/web/lib`** — `authClient`, `pkce`, `publicConfig`. (The import slice lives under `features/import/`.)
-- **`apps/workers`** — `index.ts` (entry + graceful drain), `register.ts` (composition root + `enqueueImport`);
-  the `imports` queue processor is bucketed to the `import` feature.
+- **`apps/workers`** — `index.ts` (entry + graceful drain), `register.ts` (composition root + the
+  `enqueueImport`/`enqueueEnrichment`/`enqueueScoring`/`enqueueDsar`/`enqueueOutreach` producers); each
+  queue processor is bucketed to its feature (`import`, `enrichment`, `scoring`, `compliance`, `outreach`).
 
 ## Notes / unbucketed
 

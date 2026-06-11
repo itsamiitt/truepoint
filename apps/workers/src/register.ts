@@ -12,6 +12,7 @@ import {
   processEnrichment,
 } from "./queues/enrichment.ts";
 import { IMPORTS_QUEUE, type ImportJobData, processImport } from "./queues/imports.ts";
+import { OUTREACH_QUEUE, type OutreachJobData, processOutreach } from "./queues/outreach.ts";
 import { SCORING_QUEUE, type ScoringJobData, processScoring } from "./queues/scoring.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
@@ -21,6 +22,7 @@ export const importQueue = new Queue<ImportJobData>(IMPORTS_QUEUE, { connection 
 export const enrichmentQueue = new Queue<EnrichmentJobData>(ENRICHMENT_QUEUE, { connection });
 export const scoringQueue = new Queue<ScoringJobData>(SCORING_QUEUE, { connection });
 export const dsarQueue = new Queue<DsarJobData>(DSAR_QUEUE, { connection });
+export const outreachQueue = new Queue<OutreachJobData>(OUTREACH_QUEUE, { connection });
 
 /** Submit a parsed import for background processing (the async alternative to the inline api path). */
 export async function enqueueImport(data: ImportJobData): Promise<void> {
@@ -45,6 +47,12 @@ export async function enqueueDsar(data: DsarJobData): Promise<string> {
   return String(job.id);
 }
 
+/** Submit one enrollment-step delivery (05 §13; step delays arrive as BullMQ job delays). */
+export async function enqueueOutreach(data: OutreachJobData, delayMs = 0): Promise<string> {
+  const job = await outreachQueue.add("send", data, delayMs > 0 ? { delay: delayMs } : undefined);
+  return String(job.id);
+}
+
 /** Boot every queue consumer. Returns the workers so the entry can manage their lifecycle. */
 export function startWorkers(): Worker[] {
   return [
@@ -52,5 +60,6 @@ export function startWorkers(): Worker[] {
     new Worker<EnrichmentJobData>(ENRICHMENT_QUEUE, processEnrichment, { connection }),
     new Worker<ScoringJobData>(SCORING_QUEUE, processScoring, { connection }),
     new Worker<DsarJobData>(DSAR_QUEUE, processDsar, { connection }),
+    new Worker<OutreachJobData>(OUTREACH_QUEUE, processOutreach, { connection }),
   ];
 }

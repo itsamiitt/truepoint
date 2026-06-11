@@ -43,9 +43,25 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 226,
-  "fileSetHash": "sha256:012f99f02d88f5d1766e1104c3c671d0d17d520934cb63ca156e96108ceebbb3",
+  "fileCount": 271,
+  "fileSetHash": "sha256:e935367df915d2b23d2a84b3fb27a3fdc9e9df81062a3f38c3f912ba8585c5c0",
   "features": {
+    "activity": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/activity/index.ts",
+        "apps/api/src/features/activity/routes.ts"
+      ],
+      "core": [
+        "packages/core/src/activity/logActivity.ts"
+      ],
+      "db": [
+        "packages/db/src/repositories/activityRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
     "auth": {
       "web": [],
       "admin": [],
@@ -192,6 +208,29 @@
       ],
       "integrations": []
     },
+    "outreach": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/outreach/index.ts",
+        "apps/api/src/features/outreach/routes.ts"
+      ],
+      "core": [
+        "packages/core/src/outreach/createSequence.ts",
+        "packages/core/src/outreach/enrollContact.ts",
+        "packages/core/src/outreach/handleBounce.ts",
+        "packages/core/src/outreach/sendStep.ts",
+        "packages/core/src/outreach/senderPort.ts"
+      ],
+      "db": [
+        "packages/db/src/repositories/outreachLogRepository.ts",
+        "packages/db/src/repositories/sequenceRepository.ts"
+      ],
+      "workers": [
+        "apps/workers/src/queues/outreach.ts"
+      ],
+      "integrations": []
+    },
     "prospect": {
       "web": [
         "apps/web/src/features/prospect/api.ts",
@@ -202,6 +241,25 @@
         "apps/web/src/features/prospect/hooks/useReveal.ts",
         "apps/web/src/features/prospect/index.ts",
         "apps/web/src/features/prospect/types.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "reports": {
+      "web": [
+        "apps/web/src/features/reports/api.ts",
+        "apps/web/src/features/reports/components/CreditUsageSection.tsx",
+        "apps/web/src/features/reports/components/DataHealthSection.tsx",
+        "apps/web/src/features/reports/components/FunnelSection.tsx",
+        "apps/web/src/features/reports/components/ReportsPage.tsx",
+        "apps/web/src/features/reports/hooks/useReports.ts",
+        "apps/web/src/features/reports/index.ts",
+        "apps/web/src/features/reports/rollups.ts",
+        "apps/web/src/features/reports/types.ts"
       ],
       "admin": [],
       "api": [],
@@ -228,6 +286,20 @@
       "workers": [],
       "integrations": []
     },
+    "sales-navigator": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/sales-navigator/index.ts",
+        "apps/api/src/features/sales-navigator/routes.ts"
+      ],
+      "core": [],
+      "db": [
+        "packages/db/src/repositories/salesNavLinkRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
     "scoring": {
       "web": [],
       "admin": [],
@@ -249,6 +321,17 @@
     },
     "sequences": {
       "web": [
+        "apps/web/src/features/sequences/api.ts",
+        "apps/web/src/features/sequences/components/EnrollmentLogTable.tsx",
+        "apps/web/src/features/sequences/components/EnrollmentPanel.tsx",
+        "apps/web/src/features/sequences/components/SequenceBuilder.tsx",
+        "apps/web/src/features/sequences/components/SequenceList.tsx",
+        "apps/web/src/features/sequences/components/SequencesPage.tsx",
+        "apps/web/src/features/sequences/hooks/useEnrollableContacts.ts",
+        "apps/web/src/features/sequences/hooks/useEnrollment.ts",
+        "apps/web/src/features/sequences/hooks/useSequenceBuilder.ts",
+        "apps/web/src/features/sequences/hooks/useSequences.ts",
+        "apps/web/src/features/sequences/index.ts",
         "apps/web/src/features/sequences/types.ts"
       ],
       "admin": [],
@@ -361,8 +444,11 @@
     ],
     "apps/web/app": [
       "apps/web/src/app/(shell)/home/page.tsx",
+      "apps/web/src/app/(shell)/inbox/page.tsx",
       "apps/web/src/app/(shell)/layout.tsx",
       "apps/web/src/app/(shell)/prospect/page.tsx",
+      "apps/web/src/app/(shell)/reports/page.tsx",
+      "apps/web/src/app/(shell)/sequences/page.tsx",
       "apps/web/src/app/(shell)/settings/billing/page.tsx",
       "apps/web/src/app/(shell)/settings/compliance/page.tsx",
       "apps/web/src/app/auth/callback/page.tsx",
@@ -426,17 +512,22 @@
       "packages/db/src/client.ts",
       "packages/db/src/index.ts",
       "packages/db/src/migrate.ts",
+      "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/auth.ts",
       "packages/db/src/schema/billing.ts",
       "packages/db/src/schema/compliance.ts",
       "packages/db/src/schema/contacts.ts",
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
+      "packages/db/src/schema/outreach.ts",
+      "packages/db/src/schema/salesnav.ts",
       "packages/db/src/seed.ts",
+      "packages/db/test/activity.itest.ts",
       "packages/db/test/compliance.itest.ts",
       "packages/db/test/import.itest.ts",
       "packages/db/test/intel.itest.ts",
       "packages/db/test/itestDb.ts",
+      "packages/db/test/outreach.itest.ts",
       "packages/db/test/reveal.itest.ts"
     ],
     "packages/integrations": [

@@ -24,12 +24,13 @@ module.exports = {
     },
     {
       name: "no-deep-import-from-app",
-      comment: "An app may import a package ONLY through its public index.ts — no deep imports (16 §6).",
+      comment:
+        "An app may import a package ONLY through its public index.ts — no deep imports (16 §6). CSS is exempt: stylesheets (packages/ui tokens.css) cannot ship through a TS barrel.",
       severity: "error",
       from: { path: "^apps/[^/]+/" },
       to: {
         path: "^packages/[^/]+/src/",
-        pathNot: "^packages/[^/]+/src/index\\.(ts|tsx|js|mjs|cjs)$",
+        pathNot: ["^packages/[^/]+/src/index\\.(ts|tsx|js|mjs|cjs)$", "\\.css$"],
       },
     },
     {
