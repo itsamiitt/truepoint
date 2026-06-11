@@ -2,8 +2,8 @@
 // the slice's api.postImport; holds no business logic (the pipeline runs server-side in packages/core).
 "use client";
 
-import { useState } from "react";
 import type { ColumnMapping, ImportSummary, SourceName } from "@leadwolf/types";
+import { useState } from "react";
 import { postImport } from "../api";
 
 export interface RunArgs {

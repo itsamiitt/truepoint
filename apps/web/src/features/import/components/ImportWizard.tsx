@@ -4,10 +4,10 @@
 // local view state only — the actual import runs server-side via useImport → api.postImport.
 "use client";
 
-import { useState } from "react";
 import type { CanonicalField, ColumnMapping, SourceName } from "@leadwolf/types";
+import { useState } from "react";
 import { useImport } from "../hooks/useImport";
-import { IDENTITY_FIELDS, MAPPABLE_FIELDS, SOURCE_OPTIONS, type MappableField } from "../types";
+import { IDENTITY_FIELDS, MAPPABLE_FIELDS, type MappableField, SOURCE_OPTIONS } from "../types";
 
 const GROUPS = ["Identity", "Person", "Company", "Location"] as const;
 
@@ -46,7 +46,9 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
   return (
     <section className="lw-card">
       <h2>Import contacts</h2>
-      <p className="app-muted">Upload a CSV, map its columns, and we&apos;ll dedupe into this workspace.</p>
+      <p className="app-muted">
+        Upload a CSV, map its columns, and we&apos;ll dedupe into this workspace.
+      </p>
 
       <div className="lw-row">
         <label className="lw-field">
@@ -61,7 +63,11 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
         </label>
         <label className="lw-field">
           <span>CSV file</span>
-          <input type="file" accept=".csv,text/csv" onChange={(e) => void onFile(e.target.files?.[0] ?? null)} />
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
+          />
         </label>
       </div>
 
@@ -92,18 +98,25 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
       )}
 
       {!identityMapped && headers.length > 0 && (
-        <p className="app-muted">Map at least one identity field (Email, LinkedIn, or Sales Nav id) to continue.</p>
+        <p className="app-muted">
+          Map at least one identity field (Email, LinkedIn, or Sales Nav id) to continue.
+        </p>
       )}
 
-      <button className="app-button" type="button" disabled={!canSubmit} onClick={() => void onSubmit()}>
+      <button
+        className="app-button"
+        type="button"
+        disabled={!canSubmit}
+        onClick={() => void onSubmit()}
+      >
         {busy ? "Importing…" : "Import"}
       </button>
 
       {error && <p className="lw-error">{error}</p>}
       {summary && (
         <div className="lw-summary">
-          <strong>Import complete.</strong> {summary.created} new · {summary.matched} matched · {summary.skipped}{" "}
-          duplicate{summary.skipped === 1 ? "" : "s"} skipped
+          <strong>Import complete.</strong> {summary.created} new · {summary.matched} matched ·{" "}
+          {summary.skipped} duplicate{summary.skipped === 1 ? "" : "s"} skipped
           {summary.errors.length > 0 && <> · {summary.errors.length} error(s)</>}
           {summary.errors.length > 0 && (
             <ul className="lw-errors">

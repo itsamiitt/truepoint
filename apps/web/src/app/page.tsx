@@ -1,58 +1,21 @@
-// page.tsx — the app home. On load it tries a silent refresh (using the auth-origin refresh cookie); if a
-// token results, it calls the API (which validates the JWT via JWKS) and shows the session. Otherwise it
-// offers "Sign in", which starts the PKCE redirect to the auth origin.
+// page.tsx — the app root. The work surface is the (shell) route group; "/" just redirects to the default
+// destination (Prospect, 04 §3). Auth/session resolution now lives in the AppShell (which wraps every
+// (shell) route), not here. A client redirect keeps this a pure SPA hop with no flash of root content.
 "use client";
 
-import { useEffect, useState } from "react";
-import { fetchWithAuth, getAccessToken, silentRefresh, startLogin } from "@/lib/authClient";
-import { API_BASE } from "@/lib/publicConfig";
-
-interface Session {
-  userId: string;
-  tenantId: string;
-  workspaceId: string | null;
-  scope: string[];
-}
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function Home() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [ready, setReady] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    void (async () => {
-      if (!getAccessToken()) await silentRefresh();
-      if (getAccessToken()) {
-        const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
-        if (res.ok) setSession((await res.json()) as Session);
-      }
-      setReady(true);
-    })();
-  }, []);
-
-  if (!ready) {
-    return (
-      <main className="app-main">
-        <p className="app-muted">Loading…</p>
-      </main>
-    );
-  }
+    router.replace("/prospect");
+  }, [router]);
 
   return (
-    <main className="app-main">
-      <h1>TruePoint</h1>
-      {session ? (
-        <>
-          <p className="app-muted">Signed in. Session resolved from a JWT the API validated via JWKS:</p>
-          <pre className="app-pre">{JSON.stringify(session, null, 2)}</pre>
-        </>
-      ) : (
-        <>
-          <p className="app-muted">You&apos;re signed out.</p>
-          <button className="app-button" type="button" onClick={() => void startLogin()}>
-            Sign in
-          </button>
-        </>
-      )}
-    </main>
+    <div className="tp-center-screen">
+      <p className="app-muted">Loading…</p>
+    </div>
   );
 }

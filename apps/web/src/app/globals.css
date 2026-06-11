@@ -116,3 +116,639 @@ body {
   color: var(--tp-ink-3);
   font-weight: 600;
 }
+
+/* ============================================================================
+ * App shell (components/shell/**) — the 6-destination chrome (04 §3–§4, 11 §3).
+ * Monochrome: #f9fafb sidebar, hairline borders only, NO colored nav indicator.
+ * Color appears ONLY on the credit dot (low balance) + email-status glyphs.
+ * ========================================================================== */
+
+/* Centered states: loading + the signed-out "Sign in" card. */
+.tp-center-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+.tp-signin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 360px;
+  padding: 32px;
+  text-align: center;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgb(17 24 39 / 6%);
+}
+.tp-signin-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+/* Brand mark — a small cobalt fill (logo color; never used as text). */
+.tp-brand-mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--tp-cobalt);
+}
+.tp-brand-mark--lg {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+
+/* Shell grid: fixed rail + a fluid main column. */
+.tp-shell {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  min-height: 100vh;
+}
+.tp-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tp-content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Sidebar — #f9fafb surface, single hairline right border. */
+.tp-sidebar {
+  display: flex;
+  flex-direction: column;
+  background: var(--tp-surface-2);
+  border-right: 1px solid var(--tp-hairline-2);
+  padding: 14px 12px;
+}
+.tp-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px 14px;
+}
+.tp-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.tp-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tp-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--tp-ink-2);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.tp-nav-item:hover {
+  background: var(--nav-hover-fill);
+}
+/* Active route: a subtle surface fill only — no colored bar/glow (11 §3). */
+.tp-nav-item.is-active {
+  background: var(--tp-surface-3);
+  color: var(--tp-ink);
+}
+.tp-nav-glyph {
+  width: 18px;
+  text-align: center;
+  color: var(--tp-ink-3);
+  font-size: 13px;
+}
+.tp-nav-item.is-active .tp-nav-glyph {
+  color: var(--tp-ink-2);
+}
+.tp-nav-label {
+  flex: 1;
+}
+
+.tp-sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tp-divider {
+  height: 1px;
+  margin: 8px 2px;
+  background: var(--tp-hairline-2);
+}
+.tp-user-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  margin-top: 2px;
+}
+.tp-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--tp-surface-3);
+  color: var(--tp-ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.tp-user-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tp-user-email {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-user-role {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+
+/* Workspace switcher — present but inert (no list endpoint at MVP). */
+.tp-ws-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 7px;
+  cursor: not-allowed;
+}
+.tp-ws-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-ws-caret {
+  color: var(--tp-ink-4);
+  font-size: 11px;
+}
+
+/* Top bar — section title left, credit pill right; one hairline under it. */
+.tp-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--tp-hairline-2);
+  background: var(--tp-surface);
+}
+.tp-topbar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.tp-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Credit pill — the only place a warning color is allowed in the chrome (low balance). */
+.tp-credit-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 999px;
+  background: var(--tp-surface);
+  color: var(--tp-ink-2);
+  font-size: 13px;
+  text-decoration: none;
+}
+.tp-credit-pill:hover {
+  background: var(--tp-surface-2);
+}
+.tp-credit-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+.tp-credit-dot.is-low {
+  background: var(--warning);
+}
+.tp-credit-amount {
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+.tp-credit-label {
+  color: var(--tp-ink-3);
+}
+
+/* ============================================================================
+ * Prospect surface (features/prospect/**) — filter rail · results grid ·
+ * right slide-over record detail · reveal confirmation dialog (04 §5–§6).
+ * ========================================================================== */
+
+.tp-prospect {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  height: 100%;
+}
+
+/* Filter rail (client-side filter; search is list-only at MVP). */
+.tp-filter-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 16px;
+  border-right: 1px solid var(--tp-hairline-2);
+  background: var(--tp-surface);
+}
+.tp-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.tp-filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tp-ink-3);
+}
+.tp-input {
+  height: 34px;
+  padding: 0 9px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--tp-ink);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 7px;
+}
+.tp-filter-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+  cursor: pointer;
+}
+.tp-link-quiet {
+  align-self: flex-start;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--tp-ink-3);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.tp-filter-count {
+  margin-top: auto;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+/* Results grid — edge-to-edge white; rows separated by hairlines only. */
+.tp-results {
+  padding: 16px 20px;
+  overflow: auto;
+  min-width: 0;
+}
+.tp-result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tp-result-table th,
+.tp-result-table td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--tp-hairline);
+  white-space: nowrap;
+}
+.tp-result-table th {
+  color: var(--tp-ink-3);
+  font-weight: 600;
+  border-bottom-color: var(--tp-hairline-2);
+}
+.tp-result-row {
+  cursor: pointer;
+}
+.tp-result-row:hover {
+  background: var(--tp-surface-2);
+}
+.tp-result-row.is-selected {
+  background: var(--tp-surface-3);
+}
+.tp-cell-name {
+  font-weight: 500;
+  color: var(--tp-ink);
+}
+.tp-cell-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-2);
+}
+.tp-cell-center {
+  text-align: center;
+}
+
+/* Status glyphs — the ONLY status color in the table (04 §5). */
+.tp-glyph {
+  display: inline-block;
+  font-weight: 700;
+}
+.tp-glyph--ok {
+  color: var(--success);
+}
+.tp-glyph--warn {
+  color: var(--warning);
+}
+.tp-glyph--none {
+  color: var(--tp-ink-4);
+}
+
+/* Right slide-over — record detail; a single soft shadow, hairline left edge. */
+.tp-slideover {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  max-width: 90vw;
+  height: 100vh;
+  background: var(--tp-surface);
+  border-left: 1px solid var(--tp-hairline-2);
+  box-shadow: -8px 0 32px rgb(17 24 39 / 8%);
+}
+.tp-slideover-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--tp-hairline-2);
+}
+.tp-slideover-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.tp-slideover-sub {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+.tp-icon-btn {
+  width: 30px;
+  height: 30px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--tp-ink-3);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tp-icon-btn:hover {
+  background: var(--tp-surface-2);
+  color: var(--tp-ink);
+}
+.tp-slideover-body {
+  flex: 1;
+  overflow: auto;
+  padding: 8px 20px 20px;
+}
+.tp-detail-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+.tp-detail-section:last-child {
+  border-bottom: 0;
+}
+.tp-detail-heading {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-4);
+}
+.tp-detail-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.tp-detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tp-detail-label {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.tp-detail-value {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--tp-ink);
+}
+.tp-detail-meta {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.tp-score-grid {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.tp-score-composite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.tp-score-big {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+.tp-score-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.tp-slideover-foot {
+  padding: 16px 20px;
+  border-top: 1px solid var(--tp-hairline-2);
+}
+.tp-slideover-foot .app-button {
+  width: 100%;
+}
+
+/* Reveal confirmation dialog — centered modal, one soft shadow over a scrim. */
+.tp-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+/* The scrim backdrop is a full-bleed button (click/Esc dismiss) sitting behind the dialog. */
+.tp-scrim-backdrop {
+  position: fixed;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgb(17 24 39 / 32%);
+  cursor: default;
+}
+.tp-dialog {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 420px;
+  margin: 0;
+  padding: 24px;
+  color: var(--tp-ink);
+  background: var(--tp-surface);
+  border: 0;
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgb(17 24 39 / 18%);
+}
+.tp-dialog-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.tp-dialog-sub {
+  margin: 2px 0 14px;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+.tp-dialog-note {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+  line-height: 1.5;
+}
+.tp-muted-quiet {
+  color: var(--tp-ink-3);
+}
+.tp-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+.tp-btn-ghost {
+  height: 40px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.tp-btn-ghost:hover {
+  background: var(--tp-surface-2);
+}
+.tp-btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Inline 402 prompt — links to top-up; warning-tinted but quiet. */
+.tp-inline-alert {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-left: 3px solid var(--warning);
+  border-radius: 7px;
+}
+.tp-inline-alert-msg {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+.tp-link-strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+/* Revealed result — the PII appears here only, after a confirmed reveal. */
+.tp-reveal-result {
+  margin: 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tp-reveal-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tp-reveal-pair dt {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.tp-reveal-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--tp-ink);
+}
+.tp-reveal-tag {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--tp-ink-3);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.tp-reveal-meta {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}

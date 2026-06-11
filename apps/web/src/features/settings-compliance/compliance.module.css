@@ -1,0 +1,242 @@
+/*
+ * compliance.module.css — co-located styles for the Compliance & data surface (08, 12 §4). Light/monochrome
+ * per the TruePoint tokens (packages/ui/src/tokens.css); accent/warning/danger reserved for status + feedback
+ * only. Calm, Linear/Vercel-flat: hairline borders, generous spacing, no shadows.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 880px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tp-ink);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--tp-ink-3);
+  margin: 0;
+}
+
+.card {
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.cardTitle {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+  margin: 0;
+}
+
+.cardHint {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  margin: 0;
+}
+
+/* ── Forms ─────────────────────────────────────────────────────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+}
+
+.input,
+.select {
+  appearance: none;
+  height: 38px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--tp-ink);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+}
+
+.select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236b7280' stroke-width='1.5' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.input::placeholder {
+  color: var(--tp-ink-4);
+}
+
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-color: var(--tp-ink-4);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.button {
+  appearance: none;
+  height: 38px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 500;
+  color: #fff;
+  background: var(--tp-btn);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--tp-btn-700);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Feedback ──────────────────────────────────────────────────────────────────────────────────── */
+.success {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+  margin: 0;
+}
+
+.successDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.error {
+  font-size: 13px;
+  color: var(--danger);
+  margin: 0;
+}
+
+.receipt {
+  margin-top: 4px;
+  padding: 14px 16px;
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+
+.receiptRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.receiptRow + .receiptRow {
+  margin-top: 6px;
+}
+
+.receiptLabel {
+  color: var(--tp-ink-3);
+}
+
+.statusPill {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--tp-cobalt-50);
+  color: var(--tp-cobalt-700);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-2);
+}
+
+.receiptNote {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--tp-hairline);
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+/* ── Explainer ─────────────────────────────────────────────────────────────────────────────────── */
+.explainer {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--tp-hairline);
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.explainerDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}

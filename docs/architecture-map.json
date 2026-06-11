@@ -38,11 +38,13 @@
     "search",
     "sequences",
     "settings",
+    "settings-billing",
+    "settings-compliance",
     "templates",
     "workspaces"
   ],
-  "fileCount": 186,
-  "fileSetHash": "sha256:09091ea3ef1b4da02607ccdeedc57251e911e9a747accf1e3a5868773f3ea48a",
+  "fileCount": 223,
+  "fileSetHash": "sha256:686ae29ccb5043808a1fb31d8b5934b4a592682b7fd8920ba4d63d5a60f23b8f",
   "features": {
     "auth": {
       "web": [],
@@ -139,6 +141,21 @@
       ],
       "integrations": []
     },
+    "home": {
+      "web": [
+        "apps/web/src/features/home/api.ts",
+        "apps/web/src/features/home/components/HomePage.tsx",
+        "apps/web/src/features/home/hooks/useHomeSummary.ts",
+        "apps/web/src/features/home/index.ts",
+        "apps/web/src/features/home/types.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "import": {
       "web": [
         "apps/web/src/features/import/api.ts",
@@ -173,6 +190,24 @@
       "workers": [
         "apps/workers/src/queues/imports.ts"
       ],
+      "integrations": []
+    },
+    "prospect": {
+      "web": [
+        "apps/web/src/features/prospect/api.ts",
+        "apps/web/src/features/prospect/components/ProspectPage.tsx",
+        "apps/web/src/features/prospect/components/RecordDetail.tsx",
+        "apps/web/src/features/prospect/components/RevealDialog.tsx",
+        "apps/web/src/features/prospect/hooks/useContacts.ts",
+        "apps/web/src/features/prospect/hooks/useReveal.ts",
+        "apps/web/src/features/prospect/index.ts",
+        "apps/web/src/features/prospect/types.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "reveal": {
@@ -210,6 +245,36 @@
       "workers": [
         "apps/workers/src/queues/scoring.ts"
       ],
+      "integrations": []
+    },
+    "settings-billing": {
+      "web": [
+        "apps/web/src/features/settings-billing/api.ts",
+        "apps/web/src/features/settings-billing/components/BillingPage.tsx",
+        "apps/web/src/features/settings-billing/components/UsageTable.tsx",
+        "apps/web/src/features/settings-billing/hooks/useBilling.ts",
+        "apps/web/src/features/settings-billing/index.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "settings-compliance": {
+      "web": [
+        "apps/web/src/features/settings-compliance/api.ts",
+        "apps/web/src/features/settings-compliance/components/CompliancePage.tsx",
+        "apps/web/src/features/settings-compliance/components/DsarForm.tsx",
+        "apps/web/src/features/settings-compliance/components/SuppressionForm.tsx",
+        "apps/web/src/features/settings-compliance/index.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "workspaces": {
@@ -284,10 +349,22 @@
       "apps/auth/src/shared/TurnstileWidget.tsx"
     ],
     "apps/web/app": [
+      "apps/web/src/app/(shell)/home/page.tsx",
+      "apps/web/src/app/(shell)/layout.tsx",
+      "apps/web/src/app/(shell)/prospect/page.tsx",
+      "apps/web/src/app/(shell)/settings/billing/page.tsx",
+      "apps/web/src/app/(shell)/settings/compliance/page.tsx",
       "apps/web/src/app/auth/callback/page.tsx",
       "apps/web/src/app/import/page.tsx",
       "apps/web/src/app/layout.tsx",
       "apps/web/src/app/page.tsx"
+    ],
+    "apps/web/components": [
+      "apps/web/src/components/shell/AppShell.tsx",
+      "apps/web/src/components/shell/CreditPill.tsx",
+      "apps/web/src/components/shell/Sidebar.tsx",
+      "apps/web/src/components/shell/TopBar.tsx",
+      "apps/web/src/components/shell/WorkspaceSwitcher.tsx"
     ],
     "apps/web/lib": [
       "apps/web/src/lib/authClient.ts",
@@ -368,6 +445,10 @@
     ],
     "packages/ui": [
       "packages/ui/src/cn.ts",
+      "packages/ui/src/components/Card.tsx",
+      "packages/ui/src/components/Spinner.tsx",
+      "packages/ui/src/components/StatTile.tsx",
+      "packages/ui/src/components/StatusBadge.tsx",
       "packages/ui/src/index.ts"
     ]
   },

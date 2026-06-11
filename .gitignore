@@ -17,3 +17,6 @@ coverage/
 # Drizzle migrations are GENERATED at migrate-time (packages/db: "drizzle-kit generate && migrate");
 # the schema files are the source of truth. Committed per-milestone snapshots are a future decision.
 packages/db/src/migrations/
+
+# Next.js generated type reference (per-build, like .next/)
+next-env.d.ts

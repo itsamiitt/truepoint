@@ -2,8 +2,8 @@
 // wizard calls after a successful import. Presentation state only; the masking happens server-side.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import type { MaskedContact } from "@leadwolf/types";
+import { useCallback, useEffect, useState } from "react";
 import { fetchContacts } from "../api";
 
 export function useContacts() {

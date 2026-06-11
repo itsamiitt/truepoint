@@ -2,8 +2,8 @@
 // the round-tripped state, exchanges the code for an in-memory access token (ADR-0016), then returns home.
 "use client";
 
-import { useEffect, useState } from "react";
 import { completeLogin } from "@/lib/authClient";
+import { useEffect, useState } from "react";
 
 export default function CallbackPage() {
   const [error, setError] = useState<string | null>(null);

@@ -39,4 +39,9 @@ export const MAPPABLE_FIELDS: MappableField[] = [
 ];
 
 /** At least one of these must be mapped — they are the per-workspace dedup identity keys. */
-export const IDENTITY_FIELDS: CanonicalField[] = ["email", "linkedinUrl", "linkedinPublicId", "salesNavLeadId"];
+export const IDENTITY_FIELDS: CanonicalField[] = [
+  "email",
+  "linkedinUrl",
+  "linkedinPublicId",
+  "salesNavLeadId",
+];

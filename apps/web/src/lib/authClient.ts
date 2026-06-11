@@ -3,8 +3,8 @@
 // exchanges the returned code, and silently refreshes against auth.*/token/refresh (same-site, credentialed
 // fetch — the refresh cookie stays on the auth origin) shortly before expiry.
 
-import { AUTH_ORIGIN, APP_ORIGIN } from "./publicConfig";
 import { createPkcePair, randomState } from "./pkce";
+import { APP_ORIGIN, AUTH_ORIGIN } from "./publicConfig";
 
 let accessToken: string | null = null;
 let expiresAtMs = 0;
@@ -57,7 +57,10 @@ export async function completeLogin(code: string, returnedState: string): Promis
 /** Silent refresh against the auth origin (the refresh cookie rides the same-site credentialed fetch). */
 export async function silentRefresh(): Promise<boolean> {
   try {
-    const res = await fetch(`${AUTH_ORIGIN}/token/refresh`, { method: "POST", credentials: "include" });
+    const res = await fetch(`${AUTH_ORIGIN}/token/refresh`, {
+      method: "POST",
+      credentials: "include",
+    });
     if (!res.ok) return false;
     const data = (await res.json()) as { accessToken: string; expiresIn: number };
     setToken(data.accessToken, data.expiresIn);

@@ -5,11 +5,17 @@
 > from the JSON (generated); do not edit paths here by hand.** One-line purposes and the Mermaid graph are
 > authored here. Maintained by the [`enterprise-architecture`](../.claude/skills/enterprise-architecture/SKILL.md) skill.
 
-> **Live end-to-end — the FULL M0–M5 MVP thin slice** (auth round-trip · M1 import · M3 reveal & credits ·
-> M4 enrichment/verification/scoring · **M5 compliance hardening**: DSAR fan-out with verification scan,
-> consent + global-suppression-on-withdraw, the privileged `leadwolf_admin` path, tombstones, public DSAR
-> intake). 186 source files, 0 warnings, 2 framework-root files unbucketed
-> (`apps/{auth,web}/next.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
+> **Live end-to-end — the FULL M0–M5 MVP thin slice + its web UI** (auth round-trip · M1 import · M3 reveal
+> & credits · M4 enrichment/verification/scoring · **M5 compliance hardening**: DSAR fan-out with
+> verification scan, consent + global-suppression-on-withdraw, the privileged `leadwolf_admin` path,
+> tombstones, public DSAR intake). **The web app (`apps/web`) now renders the surfaces**: a 6-destination
+> **AppShell** (sidebar + top-bar credit pill + workspace switcher) over a `(shell)` route group, the
+> **Prospect** surface (filter rail · masked results grid · right slide-over record detail · the reveal
+> confirmation dialog driving `POST /contacts/:id/reveal` with 402/403 handling · score panel), **Home**
+> cockpit (credit/usage StatTiles + recent reveals + quick actions), and **Settings ▸ Billing & Credits**
+> (balance + usage history) and **▸ Compliance** (suppression + public DSAR intake) — built on token-driven
+> `packages/ui` primitives (`StatusBadge`/`Card`/`StatTile`/`Spinner`), `next build` green (8 routes).
+> 223 source files, 0 warnings, 2 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
 > (port in core, Apollo/ZoomInfo/Clearbit adapters in the now-live `packages/integrations`, cache-first +
 > budget breaker + waterfall), **verify-on-reveal driving the ADR-0013 charge** (verification runs BEFORE
 > the FOR UPDATE window; `valid` charges, `invalid`/`catch_all`/`unknown` charge 0, `risky` configurable),
@@ -155,9 +161,29 @@ apps/                           # deployable processes (thin transport adapters)
   **tenant-membership / domain / invitation** repos and **new-org provisioning** (`tenantRepository`
   + `tenantMemberRepository.joinOrg`) for registration placement (the `tenant_members` model, ADR-0019/0020)
 
-_Remaining domains (`search`, `lists`, `outreach`, `sales-navigator`, `crm-sync`, … + the 6 web
-destinations) have **no code yet**; targets in [05](./planning/05-features-modules.md) +
-[11 §6](./planning/11-information-architecture.md)._
+### Web UI surfaces ([04](./planning/04-ui-ux-design.md), [11](./planning/11-information-architecture.md))
+The `apps/web` SPA: a `(shell)` route-group layout wraps every destination in the **AppShell** (auth
+gate + sidebar + top bar). Slices follow the `import` pattern (`api.ts` → `fetchWithAuth`; hooks;
+components; `index.ts`). Styling: shell + Prospect via `--tp-*` classes in `app/globals.css`; other
+slices via co-located CSS Modules; primitives in `@leadwolf/ui`.
+- **shell** (shared): `apps/web/src/components/shell/{AppShell,Sidebar,TopBar,CreditPill,WorkspaceSwitcher}.tsx`
+  — the 6-destination chrome; `CreditPill` polls `/credits/balance` and re-fetches on a `credits:changed`
+  window event; `app/(shell)/layout.tsx` mounts it.
+- **prospect** (web): `apps/web/src/features/prospect/*` — filter rail + masked grid + `RecordDetail`
+  slide-over + `RevealDialog` (`POST /contacts/:id/reveal` with `Idempotency-Key`; branches on
+  `insufficient_credits` 402 / `suppressed` 403; dispatches `credits:changed`); routed at `(shell)/prospect`.
+- **home** (web): `apps/web/src/features/home/*` — cockpit composing `/credits/balance` + `/credits/usage`
+  into `StatTile`s + recent-reveals + quick actions; routed at `(shell)/home` (`/` redirects to `/prospect`).
+- **settings-billing** (web): `apps/web/src/features/settings-billing/*` — balance card + usage history
+  (`/credits/*`); routed at `(shell)/settings/billing` (the credit-pill deep-link target).
+- **settings-compliance** (web): `apps/web/src/features/settings-compliance/*` — `SuppressionForm`
+  (`POST /compliance/suppression`) + `DsarForm` (public `POST /compliance/dsar`); `(shell)/settings/compliance`.
+- **`@leadwolf/ui` primitives:** `packages/ui/src/components/{StatusBadge,Card,StatTile,Spinner}.tsx`
+  (token-driven, monochrome, presentational) exported from `packages/ui/src/index.ts`.
+
+_Remaining domains (`search`, `lists`, `outreach`, `sales-navigator`, `crm-sync`, …) and the
+Sequences/Inbox/Reports destinations have **no code yet**; targets in
+[05](./planning/05-features-modules.md) + [11 §6](./planning/11-information-architecture.md)._
 
 ## Destinations cross-reference (6 web destinations → domains; + the auth origin)
 

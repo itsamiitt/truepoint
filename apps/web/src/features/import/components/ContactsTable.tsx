@@ -11,7 +11,9 @@ function maskedEmail(c: MaskedContact): string {
 
 export function ContactsTable({ contacts }: { contacts: MaskedContact[] }) {
   if (contacts.length === 0) {
-    return <p className="app-muted">No contacts yet — import a CSV above to populate this workspace.</p>;
+    return (
+      <p className="app-muted">No contacts yet — import a CSV above to populate this workspace.</p>
+    );
   }
   return (
     <table className="lw-table">

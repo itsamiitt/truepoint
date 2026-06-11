@@ -1,0 +1,157 @@
+/* HomePage.module.css — layout-only styles for the Home cockpit (grid + list rhythm). Color and surfaces
+   come from packages/ui primitives + --tp-* tokens; this file owns spacing/structure, nothing decorative. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 28px 32px 48px;
+  max-width: 1100px;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tp-ink-3);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.cardTitle {
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.revealList {
+  display: flex;
+  flex-direction: column;
+}
+
+.revealRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--tp-hairline);
+  font-size: 13px;
+}
+
+.revealRow:first-child {
+  border-top: 0;
+}
+
+.revealMain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.revealType {
+  color: var(--tp-ink);
+  font-weight: 500;
+}
+
+.revealMeta {
+  color: var(--tp-ink-4);
+  font-size: 12px;
+}
+
+.revealCredits {
+  color: var(--tp-ink-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+  text-decoration: none;
+  transition: background 0.12s ease;
+}
+
+.action:hover {
+  background: var(--nav-hover-fill);
+}
+
+.actionLabel {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.actionHint {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+.muted {
+  color: var(--tp-ink-4);
+  font-size: 13px;
+  margin: 0;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 13px;
+  margin: 0;
+}
+
+.loadingRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tp-ink-3);
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+@media (max-width: 860px) {
+  .tiles {
+    grid-template-columns: 1fr;
+  }
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}

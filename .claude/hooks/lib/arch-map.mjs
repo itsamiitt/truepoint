@@ -51,6 +51,9 @@ export const CANONICAL_DOMAINS = [
   "templates",
   "notifications",
   "data-health",
+  // Settings destination is composed of per-area web slices (12 §1–§5).
+  "settings-billing",
+  "settings-compliance",
 ];
 
 // Declared maps for the cases where the domain is NOT encoded in the path (extend as code grows).
@@ -242,7 +245,7 @@ export function classify(p) {
   // App routing/shared/lib/middleware.
   if ((m = p.match(/^apps\/api\/src\/middleware\//)))
     return { kind: "shared", area: "apps/api/middleware" };
-  if ((m = p.match(/^apps\/([^/]+)\/src\/(app|shared|lib)\//)))
+  if ((m = p.match(/^apps\/([^/]+)\/src\/(app|shared|lib|components)\//)))
     return { kind: "shared", area: `apps/${m[1]}/${m[2]}` };
   if ((m = p.match(/^apps\/([^/]+)\/src\/[^/]+\.(c|m)?[tj]sx?$/)))
     return { kind: "shared", area: `apps/${m[1]}` };
