@@ -17,11 +17,17 @@ WORKDIR /app
 COPY . .
 RUN bun install --frozen-lockfile
 
-# Build the Next apps (web, auth). Turbo skips api/workers — they have no `build` script.
-# Source the env so NEXT_PUBLIC_* inline correctly and @leadwolf/config's fail-fast
-# boot validation passes during `next build`.
+# Build the Next apps directly — NOT `turbo run build`. The workspace has a declared
+# dependency cycle (@leadwolf/db's test-only devDependency on @leadwolf/core) that makes
+# Turbo refuse the package graph. The Next apps don't need Turbo orchestration: they
+# transpile the workspace TS packages themselves, and there is no runtime module cycle
+# (db/src never imports core). api/workers need no build step (Bun runs their TS directly).
+# Source the env so NEXT_PUBLIC_* inline correctly and @leadwolf/config's fail-fast boot
+# validation passes during `next build`.
 RUN --mount=type=secret,id=dotenv \
-    sh -c 'set -a; [ -f /run/secrets/dotenv ] && . /run/secrets/dotenv; set +a; bun run build'
+    sh -c 'set -a; [ -f /run/secrets/dotenv ] && . /run/secrets/dotenv; set +a; \
+           bun run --filter "@leadwolf/web" build && \
+           bun run --filter "@leadwolf/auth-app" build'
 
 ENV NODE_ENV=production
 # web 3002 · auth 3000 · api 3001
