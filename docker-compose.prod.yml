@@ -1,0 +1,94 @@
+# docker-compose.prod.yml — single-host PREVIEW deployment of LeadWolf on Ubuntu.
+# All four app services share one locally-built image (leadwolf:latest, from deploy/deploy.sh).
+# This is NOT production-hardened — see DEPLOY.md "Caveats" (no TLS, dev creds, etc.).
+name: leadwolf
+
+# Shared definition for the four app services. They differ only by `command` and `ports`.
+x-app: &app
+  image: leadwolf:latest
+  env_file: [.env.production]
+  environment:
+    # Multiline EdDSA PEMs can't live in env_file — deploy.sh exports them into the shell
+    # and compose interpolates them here. Empty by default (stack still boots).
+    JWT_PRIVATE_KEY_PEM: ${JWT_PRIVATE_KEY_PEM:-}
+    JWT_PUBLIC_KEY_PEM: ${JWT_PUBLIC_KEY_PEM:-}
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: leadwolf
+      POSTGRES_PASSWORD: leadwolf
+      POSTGRES_DB: leadwolf
+    # Bound to localhost only — reach it via SSH tunnel, not the public internet.
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leadwolf"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    restart: unless-stopped
+
+  typesense:
+    image: typesense/typesense:27.1
+    command: ["--data-dir", "/data", "--api-key", "${TYPESENSE_API_KEY:-dev}", "--enable-cors"]
+    volumes: [tsdata:/data]
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    # Web UI on 8025 (localhost only — view captured email via SSH tunnel).
+    ports: ["127.0.0.1:8025:8025"]
+    restart: unless-stopped
+
+  # ── One-shot tasks (run by deploy.sh; not started by `up`) ──────────────────────
+  migrate:
+    <<: *app
+    profiles: ["migrate"]
+    restart: "no"
+    command: ["bun", "run", "--filter", "@leadwolf/db", "migrate"]
+
+  seed:
+    <<: *app
+    profiles: ["seed"]
+    restart: "no"
+    command: ["bun", "run", "--filter", "@leadwolf/db", "seed"]
+
+  # ── Application services ────────────────────────────────────────────────────────
+  api:
+    <<: *app
+    command: ["bun", "run", "--filter", "@leadwolf/api", "start"]
+    ports: ["3001:3001"]
+
+  auth:
+    <<: *app
+    command: ["bun", "run", "--filter", "@leadwolf/auth-app", "start"]
+    ports: ["3000:3000"]
+
+  workers:
+    <<: *app
+    command: ["bun", "run", "--filter", "@leadwolf/workers", "start"]
+
+  web:
+    <<: *app
+    command: ["bun", "run", "--filter", "@leadwolf/web", "start"]
+    ports: ["3002:3002"]
+    depends_on:
+      api: { condition: service_started }
+
+volumes:
+  pgdata:
+  redisdata:
+  tsdata:
