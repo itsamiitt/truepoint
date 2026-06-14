@@ -1,0 +1,19 @@
+# Caddy — TLS termination + subdomain routing for the LeadWolf preview.
+# Caddy automatically provisions and renews Let's Encrypt certificates for each site,
+# provided (1) the subdomain's DNS A record points at this server and (2) ports 80+443
+# are reachable from the internet (open them in the EC2 Security Group).
+#
+# Edit the hostnames below if your domain differs. Each site reverse-proxies to a
+# container on the internal compose network (service name : container port).
+
+auth.truepoint.in {
+	reverse_proxy auth:3000
+}
+
+app.truepoint.in {
+	reverse_proxy web:3002
+}
+
+api.truepoint.in {
+	reverse_proxy api:3001
+}

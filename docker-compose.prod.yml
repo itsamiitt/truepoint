@@ -1,9 +1,10 @@
 # docker-compose.prod.yml — single-host PREVIEW deployment of LeadWolf on Ubuntu.
 # All four app services share one locally-built image (leadwolf:latest, from deploy/deploy.sh).
-# This is NOT production-hardened — see DEPLOY.md "Caveats" (no TLS, dev creds, etc.).
+# Caddy fronts them with HTTPS + subdomain routing; Postgres is external (Neon/RDS).
+# This is NOT production-hardened — see DEPLOY.md "Caveats".
 name: leadwolf
 
-# Shared definition for the four app services. They differ only by `command` and `ports`.
+# Shared definition for the four app services. They differ only by `command` (+ web's depends_on).
 x-app: &app
   image: leadwolf:latest
   env_file: [.env.production]
@@ -14,27 +15,11 @@ x-app: &app
     JWT_PUBLIC_KEY_PEM: ${JWT_PUBLIC_KEY_PEM:-}
   restart: unless-stopped
   depends_on:
-    postgres: { condition: service_healthy }
     redis: { condition: service_started }
 
 services:
   # ── Infrastructure ────────────────────────────────────────────────────────────
-  postgres:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: leadwolf
-      POSTGRES_PASSWORD: leadwolf
-      POSTGRES_DB: leadwolf
-    # Bound to localhost only — reach it via SSH tunnel, not the public internet.
-    ports: ["127.0.0.1:5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U leadwolf"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    restart: unless-stopped
-
+  # Postgres is EXTERNAL (managed — Neon / RDS). Point DATABASE_URL at it in .env.production.
   redis:
     image: redis:7
     command: ["redis-server", "--appendonly", "yes"]
@@ -67,15 +52,15 @@ services:
     command: ["bun", "run", "--filter", "@leadwolf/db", "seed"]
 
   # ── Application services ────────────────────────────────────────────────────────
+  # App services publish NO host ports — Caddy reaches them over the internal network
+  # (api:3001, auth:3000, web:3002) and exposes them publicly via the subdomains below.
   api:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/api", "start"]
-    ports: ["3001:3001"]
 
   auth:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/auth-app", "start"]
-    ports: ["3000:3000"]
 
   workers:
     <<: *app
@@ -84,11 +69,25 @@ services:
   web:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/web", "start"]
-    ports: ["3002:3002"]
     depends_on:
       api: { condition: service_started }
 
+  # ── Edge: TLS termination + subdomain routing (auto Let's Encrypt) ──────────────
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web: { condition: service_started }
+      auth: { condition: service_started }
+      api: { condition: service_started }
+    restart: unless-stopped
+
 volumes:
-  pgdata:
   redisdata:
   tsdata:
+  caddy_data:
+  caddy_config:

@@ -13,9 +13,9 @@ if [ ! -f "$ENV_FILE" ]; then
   echo "  cp deploy/env.production.template $ENV_FILE   # then edit it"
   exit 1
 fi
-if grep -q "PUBLIC_HOST" "$ENV_FILE"; then
-  echo "ERROR: $ENV_FILE still contains the placeholder 'PUBLIC_HOST'."
-  echo "  Replace it with your server's public IP or domain, then re-run."
+if grep -q "USER:PASSWORD@HOST" "$ENV_FILE"; then
+  echo "ERROR: DATABASE_URL in $ENV_FILE is still the template placeholder."
+  echo "  Set it to your managed Postgres (Neon/RDS) connection string, then re-run."
   exit 1
 fi
 
@@ -33,25 +33,17 @@ fi
 echo "==> [1/5] Building leadwolf:latest (bun install + next build — first run is slow)…"
 DOCKER_BUILDKIT=1 docker build --secret id=dotenv,src="$ENV_FILE" -t leadwolf:latest .
 
-# ── 2. Infrastructure ─────────────────────────────────────────────────────────────
-echo "==> [2/5] Starting infrastructure (postgres, redis, typesense, mailhog)…"
-"${COMPOSE[@]}" up -d postgres redis typesense mailhog
+# ── 2. Local infrastructure (Postgres is external — Neon/RDS — via DATABASE_URL) ──
+echo "==> [2/4] Starting local infrastructure (redis, typesense, mailhog)…"
+"${COMPOSE[@]}" up -d redis typesense mailhog
 
-# ── 3. Wait for Postgres health ──────────────────────────────────────────────────
-echo -n "==> [3/5] Waiting for Postgres to become healthy"
-PG_ID="$("${COMPOSE[@]}" ps -q postgres)"
-until [ "$(docker inspect -f '{{.State.Health.Status}}' "$PG_ID" 2>/dev/null)" = "healthy" ]; do
-  sleep 2; echo -n "."
-done
-echo " ok"
-
-# ── 4. Migrations (bootstrap roles/extensions → tables → RLS policies) ───────────
-echo "==> [4/5] Running database migrations…"
+# ── 3. Migrations against DATABASE_URL (bootstrap roles/extensions → tables → RLS) ─
+echo "==> [3/4] Running database migrations…"
 "${COMPOSE[@]}" run --rm migrate
 
-# ── 5. App services ───────────────────────────────────────────────────────────────
-echo "==> [5/5] Starting application services (api, auth, workers, web)…"
-"${COMPOSE[@]}" up -d api auth workers web
+# ── 4. App services + edge proxy ──────────────────────────────────────────────────
+echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, caddy)…"
+"${COMPOSE[@]}" up -d api auth workers web caddy
 
 echo
 echo "Containers:"

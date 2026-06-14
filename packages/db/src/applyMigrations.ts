@@ -34,7 +34,14 @@ const BOOTSTRAP = `
     -- The privileged cross-tenant role (03 §9, ADR-0011): BYPASSRLS, used ONLY by the audited DSAR path
     -- (and later apps/admin). Authored at M0 per the plan; first wired at M5.
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_admin') THEN
-      CREATE ROLE leadwolf_admin LOGIN PASSWORD 'leadwolf_admin' BYPASSRLS;
+      CREATE ROLE leadwolf_admin LOGIN PASSWORD 'leadwolf_admin';
+    END IF;
+    -- BYPASSRLS can only be granted by a superuser (local Docker / RDS). Managed Postgres such as Neon
+    -- disallows it for the owner role, so apply it only when the connecting role is itself a superuser.
+    -- leadwolf_admin is exercised solely by the audited DSAR path (first wired at M5), so a non-BYPASSRLS
+    -- role is the correct, safe fallback wherever the attribute cannot be granted.
+    IF (SELECT rolsuper FROM pg_roles WHERE rolname = CURRENT_USER) THEN
+      ALTER ROLE leadwolf_admin BYPASSRLS;
     END IF;
   END $$;
   GRANT USAGE ON SCHEMA public TO leadwolf_app;
