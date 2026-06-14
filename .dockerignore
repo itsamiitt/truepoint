@@ -1,0 +1,38 @@
+# Keep the build context small and free of host artifacts / secrets.
+.git
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+dist
+**/dist
+coverage
+**/coverage
+
+# Secrets / env — provided at build via BuildKit secret, at runtime via env_file.
+.env
+.env.*
+deploy/keys
+
+# Deploy tooling is not needed inside the image.
+deploy
+docker-compose*.yml
+DEPLOY.md
+
+# Editor / OS / tooling noise.
+.claude
+*.log
+.DS_Store
+
+# Static brand-kit cruft (not part of the app).
+App-icons
+logo
+Guidelines
+design
+index.html
+server.js
+README.txt
+FONTS.txt
+colors.css

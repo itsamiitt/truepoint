@@ -1,0 +1,7 @@
+# Ensure shell scripts and container files keep LF endings on checkout (incl. on the
+# Ubuntu server cloned from a Windows commit) — CRLF would break bash / the shebang.
+*.sh text eol=lf
+deploy/*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
