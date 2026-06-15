@@ -31,6 +31,11 @@ export const appEnvSchema = z.object({
   // migrations fall back to DATABASE_URL (safe — applyMigrations sets `prepare: false` either way).
   DATABASE_MIGRATION_URL: z.string().url().optional(),
   DATABASE_APP_ROLE: z.string().min(1).default("leadwolf_app"),
+  // Login passwords for the leadwolf_app / leadwolf_admin roles the migration creates. They're reached via
+  // SET ROLE (never logged into directly), so these are inert — but managed Postgres (Neon) rejects weak
+  // CREATE ROLE passwords via its control plane. Strong defaults live in applyMigrations; override here.
+  DATABASE_APP_ROLE_PASSWORD: z.string().min(8).optional(),
+  DATABASE_ADMIN_ROLE_PASSWORD: z.string().min(8).optional(),
   REDIS_URL: z.string().url(),
 
   BLIND_INDEX_KEY: z.string().min(8),
