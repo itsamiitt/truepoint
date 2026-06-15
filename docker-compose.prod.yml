@@ -49,13 +49,15 @@ services:
     <<: *app
     profiles: ["migrate"]
     restart: "no"
-    command: ["bun", "run", "--filter", "@leadwolf/db", "migrate"]
+    # Run the script DIRECTLY (not `bun run --filter`): the filter runner buffers stdout behind a spinner in
+    # a non-TTY `compose run`, so the migration looks frozen. Direct invocation streams the phase logs live.
+    command: ["bun", "run", "packages/db/src/migrate.ts"]
 
   seed:
     <<: *app
     profiles: ["seed"]
     restart: "no"
-    command: ["bun", "run", "--filter", "@leadwolf/db", "seed"]
+    command: ["bun", "run", "packages/db/src/seed.ts"]
 
   # ── Application services ────────────────────────────────────────────────────────
   # App services publish NO host ports — Caddy reaches them over the internal network

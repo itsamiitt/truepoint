@@ -106,9 +106,13 @@ export async function applyMigrations(
     },
   });
   const db = drizzle(sql);
+  // Per-phase progress so the run is never a silent black box — on a managed DB (Neon) the DDL is many
+  // network round-trips and can take tens of seconds; without this it looks "frozen" when it's just working.
   try {
+    console.log("migrate: [1/4] bootstrap (extensions, roles, uuid_generate_v7)…");
     await sql.unsafe(bootstrap(appPwd, adminPwd));
     if (await exists(migrationsFolder)) {
+      console.log("migrate: [2/4] applying table migrations…");
       await migrate(db, { migrationsFolder });
     } else {
       console.warn(
@@ -116,10 +120,13 @@ export async function applyMigrations(
       );
     }
     const files = (await readdir(rlsFolder)).filter((f) => f.endsWith(".sql")).sort();
+    console.log(`migrate: [3/4] applying ${files.length} RLS policy file(s)…`);
     for (const file of files) {
+      console.log(`migrate:        → ${file}`);
       await sql.unsafe(await readFile(join(rlsFolder, file), "utf8"));
     }
     // Grant the non-BYPASSRLS app role access to the now-created tables/sequences (RLS still gates rows).
+    console.log("migrate: [4/4] grants…");
     await sql.unsafe(GRANTS);
   } finally {
     await sql.end();
