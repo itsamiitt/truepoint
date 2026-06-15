@@ -5,12 +5,13 @@
 // to select (auto-select on a single membership, or branch to /org · /workspace). The verified email and the
 // carry-context (app_origin/code_challenge/state) ride the short-lived MAGIC_TXN_COOKIE; a missing user or
 // txn returns the browser to /login with the app's context preserved — never a blank error.
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { createLoginTransaction, resolveNextStep } from "@leadwolf/auth";
-import { userRepository } from "@leadwolf/db";
 import { LOGIN_TXN_COOKIE, LOGIN_TXN_MAX_AGE, clearMagicTxnCookie } from "@/lib/cookies";
 import { finishLogin } from "@/lib/finishLogin";
+import { createLoginTransaction, resolveNextStep } from "@leadwolf/auth";
+import { isAllowedOrigin } from "@leadwolf/config";
+import { userRepository } from "@leadwolf/db";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export interface MagicCarryContext {
   appOrigin: string;
@@ -28,11 +29,15 @@ export async function completeMagic(email: string, carry: MagicCarryContext): Pr
   });
   const fail = (): never => redirect(`/login?${loginCarry.toString()}&error=magic`);
 
+  // Defense in depth: never finalize against an un-allowlisted return origin or an empty PKCE challenge,
+  // even though sendMagic validates up front (the cookie value could be stale or forged).
+  if (!isAllowedOrigin(carry.appOrigin) || !carry.codeChallenge) return fail();
+
   const user = await userRepository.findByEmail(email.trim().toLowerCase());
-  if (!user || user.status !== "active") fail();
+  if (!user || user.status !== "active") return fail();
 
   const { id: loginTxnId, txn: loginTxn } = await createLoginTransaction({
-    userId: user!.id,
+    userId: user.id,
     appOrigin: carry.appOrigin,
     codeChallenge: carry.codeChallenge,
     state: carry.state,

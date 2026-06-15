@@ -1,7 +1,7 @@
 // cookies.ts — the auth-origin refresh cookie: HttpOnly · Secure · SameSite=Strict, scoped to the auth
 // host only. Same-site (under truepoint.in) means it still rides app-initiated fetches to auth.* (17 §1).
-import { cookies } from "next/headers";
 import { env } from "@leadwolf/config";
+import { cookies } from "next/headers";
 
 export const REFRESH_COOKIE = "lw_refresh";
 
@@ -37,9 +37,11 @@ export const SSO_TXN_COOKIE = "lw_sso_txn";
 export const SSO_TXN_MAX_AGE = 600;
 
 // The short-lived magic-link-transaction cookie that carries the app's PKCE/return context (app_origin,
-// code_challenge, state) across the email round-trip until the verified link lands on /verify. Same
-// hardening as the other transaction cookies (HttpOnly · Secure · SameSite=Strict, auth-origin scoped);
-// 10-minute window to click the link. Helpers below mirror the inline set/read/clear used for the others.
+// code_challenge, state) across the email round-trip until the verified link lands on /magic/confirm.
+// Unlike the other transaction cookies this one is SameSite=Lax, NOT Strict: the magic link is a cross-site
+// top-level navigation from the user's email client, and Strict cookies are dropped on those — Lax is the
+// standard for email-link / OAuth-callback cookies. Still HttpOnly · Secure · auth-origin scoped, and it
+// holds only PKCE/return context (the credential is the single-use code in the URL); 10-minute window.
 export const MAGIC_TXN_COOKIE = "lw_magic_txn";
 export const MAGIC_TXN_MAX_AGE = 600;
 
@@ -47,7 +49,7 @@ export async function setMagicTxnCookie(txnId: string): Promise<void> {
   (await cookies()).set(MAGIC_TXN_COOKIE, txnId, {
     httpOnly: true,
     secure: true,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
     maxAge: MAGIC_TXN_MAX_AGE,
   });
