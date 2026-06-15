@@ -70,6 +70,24 @@ export const appEnvSchema = z.object({
   TYPESENSE_URL: z.string().url().optional(),
   TYPESENSE_API_KEY: z.string().optional(),
   SMTP_URL: z.string().optional(),
+}).superRefine((val, ctx) => {
+  // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.
+  // A bare registrable-domain value (e.g. truepoint.in) would make it a parent-domain cookie sent to
+  // app.*/api.* too — the larger blast radius ADR-0016 rejects. The base schema only checks min(1).
+  if (val.NODE_ENV !== "production") return;
+  let authHost: string;
+  try {
+    authHost = new URL(val.AUTH_ORIGIN).hostname;
+  } catch {
+    return; // AUTH_ORIGIN invalid → already reported by its own .url() check
+  }
+  if (val.AUTH_COOKIE_DOMAIN !== authHost) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["AUTH_COOKIE_DOMAIN"],
+      message: `must equal the AUTH_ORIGIN host "${authHost}" (host-only cookie scope), got "${val.AUTH_COOKIE_DOMAIN}"`,
+    });
+  }
 });
 
 export type AppEnv = z.infer<typeof appEnvSchema>;

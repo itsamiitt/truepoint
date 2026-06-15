@@ -18,15 +18,22 @@ if grep -q "USER:PASSWORD@HOST" "$ENV_FILE"; then
   echo "  Set it to your managed Postgres (Neon/RDS) connection string, then re-run."
   exit 1
 fi
+if grep -q "change-me-to-a-long-random-string" "$ENV_FILE"; then
+  echo "ERROR: BLIND_INDEX_KEY in $ENV_FILE is still the placeholder."
+  echo "  Set it to a strong value:  openssl rand -hex 32"
+  exit 1
+fi
 
-# Inject EdDSA keys (multiline → shell env → compose interpolation) when present.
+# Inject EdDSA keys (multiline → shell env → compose interpolation). REQUIRED: without them every token
+# mint/verify throws, so login completes to a 500. Hard-fail rather than ship a stack that can't log in.
 if [ -f deploy/keys/jwt_private.pem ] && [ -f deploy/keys/jwt_public.pem ]; then
   JWT_PRIVATE_KEY_PEM="$(cat deploy/keys/jwt_private.pem)"; export JWT_PRIVATE_KEY_PEM
   JWT_PUBLIC_KEY_PEM="$(cat deploy/keys/jwt_public.pem)";   export JWT_PUBLIC_KEY_PEM
   echo "==> JWT keys loaded from deploy/keys/"
 else
-  echo "==> No deploy/keys/ found — auth boots but cannot sign tokens."
-  echo "    Run 'bash deploy/gen-keys.sh' and re-run this script to enable login."
+  echo "ERROR: deploy/keys/ not found — JWT signing keys are required (login mints/verifies tokens)."
+  echo "  Run 'bash deploy/gen-keys.sh' and re-run this script."
+  exit 1
 fi
 
 # ── 1. Build the single image ───────────────────────────────────────────────────

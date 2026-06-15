@@ -6,6 +6,11 @@
 # Edit the hostnames below if your domain differs. Each site reverse-proxies to a
 # container on the internal compose network (service name : container port).
 
+# Global options (must be the FIRST block). ACME contact for Let's Encrypt expiry/policy notices.
+{
+	email amit@thecloso.com
+}
+
 auth.truepoint.in {
 	reverse_proxy auth:3000
 }

@@ -143,8 +143,8 @@ $C logs -f caddy                     # watch TLS certificate provisioning
 # Redeploy after a code or .env change:
 bash deploy/deploy.sh                # rebuilds image + restarts
 
-# Re-run migrations only:
-$C run --rm migrate
+# Re-run migrations only (bounded + non-interactive; streams [1/4]…[4/4] then "migrate: done."):
+timeout 300 $C run --rm -T migrate
 
 # Seed demo data (optional, one-shot):
 $C --profile seed run --rm seed

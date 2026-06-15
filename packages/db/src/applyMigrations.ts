@@ -108,25 +108,28 @@ export async function applyMigrations(
   const db = drizzle(sql);
   // Per-phase progress so the run is never a silent black box — on a managed DB (Neon) the DDL is many
   // network round-trips and can take tens of seconds; without this it looks "frozen" when it's just working.
+  // Progress goes to STDERR, not stdout: Bun block-buffers stdout when it is a pipe (the case under
+  // `docker compose run`), so stdout logs would stay invisible until the process exits — making a working
+  // migration look frozen. stderr is unbuffered, so each phase appears live.
   try {
-    console.log("migrate: [1/4] bootstrap (extensions, roles, uuid_generate_v7)…");
+    process.stderr.write("migrate: [1/4] bootstrap (extensions, roles, uuid_generate_v7)…\n");
     await sql.unsafe(bootstrap(appPwd, adminPwd));
     if (await exists(migrationsFolder)) {
-      console.log("migrate: [2/4] applying table migrations…");
+      process.stderr.write("migrate: [2/4] applying table migrations…\n");
       await migrate(db, { migrationsFolder });
     } else {
-      console.warn(
-        `applyMigrations: no migrations at ${migrationsFolder} — run \`drizzle-kit generate\` first.`,
+      process.stderr.write(
+        `migrate: WARNING no migrations at ${migrationsFolder} — run \`drizzle-kit generate\` first.\n`,
       );
     }
     const files = (await readdir(rlsFolder)).filter((f) => f.endsWith(".sql")).sort();
-    console.log(`migrate: [3/4] applying ${files.length} RLS policy file(s)…`);
+    process.stderr.write(`migrate: [3/4] applying ${files.length} RLS policy file(s)…\n`);
     for (const file of files) {
-      console.log(`migrate:        → ${file}`);
+      process.stderr.write(`migrate:        → ${file}\n`);
       await sql.unsafe(await readFile(join(rlsFolder, file), "utf8"));
     }
     // Grant the non-BYPASSRLS app role access to the now-created tables/sequences (RLS still gates rows).
-    console.log("migrate: [4/4] grants…");
+    process.stderr.write("migrate: [4/4] grants…\n");
     await sql.unsafe(GRANTS);
   } finally {
     await sql.end();

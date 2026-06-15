@@ -1,7 +1,7 @@
 // token.ts — short-lived access-JWT mint/verify + JWKS publication (ADR-0016). EdDSA, 15-min TTL, audience
 // = the app origin. apps/api verifies statelessly against the JWKS; the access token lives in memory only.
 
-import { exportJWK, importPKCS8, importSPKI, jwtVerify, SignJWT } from "jose";
+import { createRemoteJWKSet, exportJWK, importPKCS8, importSPKI, jwtVerify, SignJWT } from "jose";
 import { env } from "@leadwolf/config";
 import { accessTokenClaimsSchema, type AccessTokenClaims } from "@leadwolf/types";
 
@@ -9,6 +9,13 @@ const ALG = "EdDSA";
 
 const privateKey = () => importPKCS8(env.JWT_PRIVATE_KEY_PEM, ALG);
 const publicKey = () => importSPKI(env.JWT_PUBLIC_KEY_PEM, ALG);
+
+// verifyAccessToken (the apps/api path) verifies against the auth origin's PUBLISHED JWKS, selecting the key
+// by `kid` — so the api needs no local public PEM and key rotation works (publish the next key in JWKS, the
+// api picks it up; jose caches the set ~5 min). Lazy so importing this module opens no socket.
+const jwksUrl = new URL("/.well-known/jwks.json", env.AUTH_ORIGIN);
+let _jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
+const remoteJwks = () => (_jwks ??= createRemoteJWKSet(jwksUrl));
 
 export interface MintAccessTokenInput {
   userId: string;
@@ -43,7 +50,7 @@ export async function verifyAccessToken(
   token: string,
   audience: string | string[],
 ): Promise<AccessTokenClaims> {
-  const { payload } = await jwtVerify(token, await publicKey(), {
+  const { payload } = await jwtVerify(token, remoteJwks(), {
     issuer: env.AUTH_ORIGIN,
     audience,
     algorithms: [ALG],
