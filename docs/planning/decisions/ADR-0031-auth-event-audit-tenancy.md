@@ -79,7 +79,7 @@ every audit row. It unblocks the majority of the 20 events without a risky schem
 
 - **Positive:** unblocks ~9 auth events immediately; preserves the `NOT NULL` + RLS invariant; clarifies that
   identity events are not tenant data.
-- **Negative / coupling:** depends on resolving **OQ-D** (`platform_audit_log` action vocabulary); auth audit
+- **Negative / coupling:** depends on resolving **OQ-D** (`platform_audit_log` action vocabulary — proposed in [ADR-0032](./ADR-0032-platform-audit-action-vocabulary.md)); auth audit
   writes are best-effort (a failed audit insert is swallowed — acceptable for observational events, but auth
   audit is therefore not transactionally guaranteed like the reveal/compliance path).
 - **On acceptance (wiring):** add the `00 §7` decision-log row + the tripod; implement `recordAuthEvent` +

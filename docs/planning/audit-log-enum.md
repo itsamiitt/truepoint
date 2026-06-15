@@ -218,7 +218,7 @@ new one. "New value" is flagged only where granularity genuinely requires it (an
 | **M14** ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)) | AI intelligence layer | Every call → `ai_requests` (in DSAR scope, [08 §10]); only *material* downstream actions hit `audit_log` via existing values (e.g. approved AI draft sent → `send`) | **No** `ai.*` audit action (OQ-C) |
 | **M15** ([ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)) | Departments & teams | Team/role changes → `member.*` / `settings.update` | **No** dedicated `team.*` |
 | **M16** ([ADR-0026]) | Automation engine | Rule CRUD covered (`automation.rule.*`); runs → `automation_runs`; in-rule actions reuse the action they perform (e.g. enroll → `enroll`) | **No** new value for rule mutations |
-| **Platform admin** ([ADR-0011]) | Staff / impersonation / tenant ops | Writes the **separate** `platform_audit_log`, **not** this enum | Separate vocabulary — **unspecified** (OQ-D) |
+| **Platform admin** ([ADR-0011]) | Staff / impersonation / tenant ops | Writes the **separate** `platform_audit_log`, **not** this enum | Separate `platform_audit_action` enum — [ADR-0032](./decisions/ADR-0032-platform-audit-action-vocabulary.md) (Proposed) |
 
 ## 7. Mechanism: TS ↔ DB alignment & how to add a value
 
@@ -297,7 +297,7 @@ for (const action of auditAction.options) {
 | OQ-A | M8 record customization: add dedicated `custom_field.*`/`tag.*`/`pipeline_stage.*` actions, or fold into `settings.update`/`contact.update`? ADR-0028 adds new entity types for which [08 §5] lists no dedicated action (its existing `contact.*`/`settings.update` may suffice). | M8 DoD | M8 |
 | OQ-B | Keep `audit_log` to compliance-significant `send` only, with per-send detail in `outreach_log`? (De-facto today — confirm.) | M9 | M9 |
 | OQ-C | M14 AI: add first-class `ai.*` audit actions, or keep AI in `ai_requests` (+ DSAR scope) and only audit material downstream actions? | M14 DoD ("AI artifacts in DSAR scope") | M14 |
-| OQ-D | `platform_audit_log` vocabulary: share this enum, or a separate `platform_audit_action`? Currently **unspecified** corpus-wide. | Platform-admin track | Platform admin |
+| OQ-D | `platform_audit_log` vocabulary: share this enum, or a separate `platform_audit_action`? **Proposed in [ADR-0032](./decisions/ADR-0032-platform-audit-action-vocabulary.md)** — a separate `platform_audit_action` enum covering staff actions + the tenant-less auth events. | Platform-admin track | [ADR-0032](./decisions/ADR-0032-platform-audit-action-vocabulary.md) |
 | OQ-E | Retention/purge: is a retention-job partition delete itself an audited event? (No `audit_log.purge` value exists.) | Trust track | Trust track |
 | OQ-F | **Auth audit sink + tenancy:** how do the 20 auth-event values get written given `audit_log.tenant_id` is `NOT NULL` but auth is pre-tenant (global identity)? The sink design + the resolved-vs-tenant-less split are proposed in [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md) (**Proposed**); coupled to OQ-D. | M2 / M11 auth audit | [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md) |
 
