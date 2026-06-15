@@ -2,6 +2,7 @@
 // PKCE/return context rides as hidden fields. SSR, no-JS friendly, keyboard-first, WCAG AA. Show/hide and
 // passkey prompt are progressive enhancements layered on top of this base render.
 import { AuthShell } from "@/shared/AuthShell";
+import { Alert, Badge, Button, Input, Label } from "@leadwolf/ui";
 import { submitPassword } from "./actions";
 
 type SearchParams = Promise<Record<string, string | undefined>>;
@@ -20,47 +21,49 @@ export default async function PasswordPage({ searchParams }: { searchParams: Sea
     <AuthShell
       title="Enter your password"
       footer={
-        <a className="auth-link" href={`/forgot?${carry}`}>
+        <a
+          className="underline underline-offset-2 hover:text-muted-foreground"
+          href={`/forgot?${carry}`}
+        >
           Forgot password?
         </a>
       }
     >
-      <div className="auth-chip">
+      <Badge className="mb-4">
         <span>{email || "your account"}</span>
-        <a className="auth-link" href={`/login?${carry}`}>
+        <a
+          className="underline underline-offset-2 hover:text-muted-foreground"
+          href={`/login?${carry}`}
+        >
           change
         </a>
-      </div>
+      </Badge>
 
       <form action={submitPassword} noValidate>
         <input type="hidden" name="email" value={email} />
         <input type="hidden" name="app_origin" value={sp.app_origin ?? ""} />
         <input type="hidden" name="code_challenge" value={sp.code_challenge ?? ""} />
         <input type="hidden" name="state" value={sp.state ?? ""} />
-        <div className="auth-field">
-          <label className="auth-label" htmlFor="password">
-            Password
-          </label>
-          <input
-            className="auth-input"
+        <div className="mb-4">
+          <Label htmlFor="password">Password</Label>
+          <Input
             id="password"
             name="password"
             type="password"
             autoComplete="current-password"
             required
-            // biome-ignore lint/a11y/noAutofocus: single-field step focuses the password input by design
             autoFocus
             aria-invalid={sp.error ? "true" : undefined}
           />
         </div>
         {sp.error ? (
-          <p className="auth-error" role="alert">
+          <Alert variant="destructive" role="alert" className="mb-4">
             Check your credentials and try again.
-          </p>
+          </Alert>
         ) : null}
-        <button className="auth-button" type="submit">
+        <Button type="submit" size="full">
           Sign in
-        </button>
+        </Button>
       </form>
     </AuthShell>
   );
