@@ -1,12 +1,13 @@
 // page.tsx — org selector (ADR-0019): shown when a global identity belongs to more than one org. Lists the
 // user's active orgs as a radio group; choosing one sets the active tenant, then login continues to the
 // workspace step or completes. Requires a pending login transaction (else back to /login). SSR + WCAG AA.
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { getLoginTransaction } from "@leadwolf/auth";
-import { tenantMemberRepository } from "@leadwolf/db";
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
+import { getLoginTransaction } from "@leadwolf/auth";
+import { tenantMemberRepository } from "@leadwolf/db";
+import { Alert, Button, RadioGroup, RadioOption } from "@leadwolf/ui";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { selectOrg } from "./actions";
 
 type SearchParams = Promise<Record<string, string | undefined>>;
@@ -22,23 +23,30 @@ export default async function OrgPage({ searchParams }: { searchParams: SearchPa
   return (
     <AuthShell title="Choose an organization" subtitle="You belong to more than one.">
       <form action={selectOrg}>
-        <div className="auth-field" role="radiogroup" aria-label="Organizations">
+        <RadioGroup aria-label="Organizations" className="mb-4">
           {orgs.map((o, i) => (
-            <label key={o.tenantId} className="auth-radio">
-              <input type="radio" name="tenantId" value={o.tenantId} defaultChecked={i === 0} required />
+            <RadioOption
+              key={o.tenantId}
+              name="tenantId"
+              value={o.tenantId}
+              defaultChecked={i === 0}
+              required
+            >
               <span>{o.tenantName}</span>
-              {o.isTenantOwner ? <span className="auth-radio-meta">owner</span> : null}
-            </label>
+              {o.isTenantOwner ? (
+                <span className="ml-auto text-xs text-[var(--tp-ink-4)]">owner</span>
+              ) : null}
+            </RadioOption>
           ))}
-        </div>
+        </RadioGroup>
         {sp.error ? (
-          <p className="auth-error" role="alert">
+          <Alert variant="destructive" role="alert" className="mb-4">
             Please choose an organization.
-          </p>
+          </Alert>
         ) : null}
-        <button className="auth-button" type="submit">
+        <Button type="submit" size="full">
           Continue
-        </button>
+        </Button>
       </form>
     </AuthShell>
   );

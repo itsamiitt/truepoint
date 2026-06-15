@@ -1,12 +1,13 @@
 // page.tsx — Step 4: the workspace selector (shown only when the user can access more than one). Lists the
 // user's active workspaces (RLS-scoped read) as a radio group; choosing one completes login. Requires a
 // pending login transaction (else back to /login). SSR + WCAG AA.
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { getLoginTransaction } from "@leadwolf/auth";
-import { workspaceRepository } from "@leadwolf/db";
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
+import { getLoginTransaction } from "@leadwolf/auth";
+import { workspaceRepository } from "@leadwolf/db";
+import { Alert, Button, RadioGroup, RadioOption } from "@leadwolf/ui";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { selectWorkspace } from "./actions";
 
 type SearchParams = Promise<Record<string, string | undefined>>;
@@ -23,23 +24,28 @@ export default async function WorkspacePage({ searchParams }: { searchParams: Se
   return (
     <AuthShell title="Choose a workspace" subtitle="Select where you want to work.">
       <form action={selectWorkspace}>
-        <div className="auth-field" role="radiogroup" aria-label="Workspaces">
+        <RadioGroup aria-label="Workspaces" className="mb-4">
           {workspaces.map((w, i) => (
-            <label key={w.id} className="auth-radio">
-              <input type="radio" name="workspaceId" value={w.id} defaultChecked={i === 0} required />
+            <RadioOption
+              key={w.id}
+              name="workspaceId"
+              value={w.id}
+              defaultChecked={i === 0}
+              required
+            >
               <span>{w.name}</span>
-              <span className="auth-radio-meta">{w.role}</span>
-            </label>
+              <span className="ml-auto text-xs text-[var(--tp-ink-4)]">{w.role}</span>
+            </RadioOption>
           ))}
-        </div>
+        </RadioGroup>
         {sp.error ? (
-          <p className="auth-error" role="alert">
+          <Alert variant="destructive" role="alert" className="mb-4">
             Please choose a workspace.
-          </p>
+          </Alert>
         ) : null}
-        <button className="auth-button" type="submit">
+        <Button type="submit" size="full">
           Continue
-        </button>
+        </Button>
       </form>
     </AuthShell>
   );
