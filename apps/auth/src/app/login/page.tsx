@@ -5,6 +5,7 @@
 // PKCE/return context through the flow as hidden fields. "Continue with Google" begins social OAuth.
 import { AuthShell } from "@/shared/AuthShell";
 import { TurnstileWidget } from "@/shared/TurnstileWidget";
+import { Alert, Button, Input, Label, Separator } from "@leadwolf/ui";
 import { submitIdentifier } from "./actions";
 
 type SearchParams = Promise<Record<string, string | undefined>>;
@@ -14,6 +15,7 @@ type SearchParams = Promise<Record<string, string | undefined>>;
 const ERRORS: Record<string, string> = {
   rate: "Too many attempts. Wait a moment and try again.",
   bot: "We couldn't verify you're human. Please try again.",
+  magic: "That sign-in link was invalid or expired. Enter your email to try again.",
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: SearchParams }) {
@@ -22,26 +24,36 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
   const codeChallenge = sp.code_challenge ?? "";
   const state = sp.state ?? "";
   const oauthHref = `/oauth/google?${new URLSearchParams({ app_origin: appOrigin, code_challenge: codeChallenge, state })}`;
-  const errorMessage = sp.error ? (ERRORS[sp.error] ?? "Enter your email or username to continue.") : null;
+  const errorMessage = sp.error
+    ? (ERRORS[sp.error] ?? "Enter your email or username to continue.")
+    : null;
+  // Success notice after a completed password reset (/reset → /login?reset=1).
+  const notice =
+    sp.reset === "1" ? "Your password has been updated — sign in with your new password." : null;
 
   return (
-    <AuthShell title="Sign in or create an account" subtitle="Enter your email or username to continue.">
-      <a className="auth-button auth-button--ghost" href={oauthHref}>
-        Continue with Google
-      </a>
+    <AuthShell
+      title="Sign in or create an account"
+      subtitle="Enter your email or username to continue."
+    >
+      {notice ? (
+        <Alert aria-live="polite" className="mb-4">
+          {notice}
+        </Alert>
+      ) : null}
+      <Button asChild variant="outline" size="full">
+        <a href={oauthHref}>Continue with Google</a>
+      </Button>
 
-      <div className="auth-divider">or</div>
+      <Separator label="or" />
 
       <form action={submitIdentifier} noValidate>
         <input type="hidden" name="app_origin" value={appOrigin} />
         <input type="hidden" name="code_challenge" value={codeChallenge} />
         <input type="hidden" name="state" value={state} />
-        <div className="auth-field">
-          <label className="auth-label" htmlFor="identifier">
-            Email or username
-          </label>
-          <input
-            className="auth-input"
+        <div className="mb-4">
+          <Label htmlFor="identifier">Email or username</Label>
+          <Input
             id="identifier"
             name="identifier"
             type="text"
@@ -51,20 +63,19 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
             spellCheck={false}
             placeholder="you@company.com"
             required
-            // biome-ignore lint/a11y/noAutofocus: identifier-first screen focuses the single input by design
             autoFocus
             aria-invalid={errorMessage ? "true" : undefined}
           />
         </div>
         <TurnstileWidget />
         {errorMessage ? (
-          <p className="auth-error" role="alert">
+          <Alert variant="destructive" role="alert" className="mb-4">
             {errorMessage}
-          </p>
+          </Alert>
         ) : null}
-        <button className="auth-button" type="submit">
+        <Button type="submit" size="full">
           Continue
-        </button>
+        </Button>
       </form>
     </AuthShell>
   );

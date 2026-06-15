@@ -23,7 +23,7 @@
 > credit-back — proven by `activity.itest.ts` (5) + `outreach.itest.ts` (8). The web grew the
 > **Sequences** (builder + enrollment log + send), **Reports** (client-side rollups), and **Inbox**
 > (placeholder) destinations.
-> 271 source files, 0 warnings, 2 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
+> 292 source files, 0 warnings, 3 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
 > (port in core, Apollo/ZoomInfo/Clearbit adapters in the now-live `packages/integrations`, cache-first +
 > budget breaker + waterfall), **verify-on-reveal driving the ADR-0013 charge** (verification runs BEFORE
 > the FOR UPDATE window; `valid` charges, `invalid`/`catch_all`/`unknown` charge 0, `risky` configurable),
@@ -48,7 +48,7 @@
 packages/                       # side-effect-free libraries, each exported via one index.ts  [LIVE]
   types/   src/{errors,auth,contacts,billing,intel,compliance,activity,outreach}.ts # RFC-9457 errors + the Zod contracts (leaf)
   config/  src/env.ts           # zod-validated env (ONLY process.env reader; BLIND_INDEX_KEY, REVEAL_COST_*, STRIPE_WEBHOOK_SECRET)
-  ui/      src/                 # TruePoint tokens + cn helper + StatusBadge/Card/StatTile/Spinner primitives
+  ui/      src/                 # TruePoint Tailwind-v4 tokens + cn helper + StatusBadge/Card/StatTile/Spinner + shadcn-pattern components/ui/* (button/input/label/checkbox/radio-group/badge/alert/separator)
   db/      src/                 # Drizzle schema + RLS + repositories (the ONLY data access)  [LIVE]
     schema/{auth,contacts,billing,intel,compliance,activity,salesnav,outreach}.ts  rls/*.sql (one per schema)
     client.ts(withTenantTx · withPrivilegedTx · closeDb)  applyMigrations.ts migrate.ts seed.ts
@@ -195,7 +195,9 @@ apps/                           # deployable processes (thin transport adapters)
 - **shared primitives:** `packages/auth/*` — login (`identifierLookup`/`login`/`flow`), `botCheck`/`rateLimit`
   anti-abuse (Turnstile in `apps/auth/src/shared/TurnstileWidget.tsx`), **registration**
   (`registration` provisioning + `emailVerification` codes + `signupTransaction`), **invitations**
-  (`invitations` — mint a link token + accept-by-token; new invitees auto-accept by email at signup), and
+  (`invitations` — mint a link token + accept-by-token; new invitees auto-accept by email at signup),
+  **password + magic-link** (`password`/`passwordReset` set-and-reset flows + `apps/auth/src/lib/completeMagic`
+  passwordless sign-in completion), and
   **SSO** (`sso/{types,providers,mockIdp,jit}` + `ssoTransaction` — one provider seam over OIDC/SAML with a
   dev mock IdP; callback JIT-provisions the identity + membership)
 - **IdP origin:** `apps/auth/*` screens — sign-in (identifier → password → mfa → **org** → workspace, with
@@ -236,7 +238,9 @@ slices via co-located CSS Modules; primitives in `@leadwolf/ui`.
 - **inbox** (page only): `(shell)/inbox/page.tsx` — calm placeholder until mailbox sync ships (the M9
   reply-ingestion design gate); links to /sequences for send status.
 - **`@leadwolf/ui` primitives:** `packages/ui/src/components/{StatusBadge,Card,StatTile,Spinner}.tsx`
-  (token-driven, monochrome, presentational) exported from `packages/ui/src/index.ts`.
+  (token-driven, monochrome, presentational) + the **shadcn-pattern** form set
+  `components/ui/{button,input,label,checkbox,radio-group,badge,alert,separator}.tsx` (Tailwind-v4, used by
+  the auth screens) — all exported from `packages/ui/src/index.ts`.
 
 _Remaining domains (`search`, `lists`, `crm-sync`, `export`, `api-public`, `ai`, `alerts`, `templates`,
 `notifications`, …) have **no code yet**; targets in
@@ -302,7 +306,9 @@ flowchart TD
   vocabularies mirrored by the outreach SQL CHECKs), `index.ts`.
 - **`packages/config`** — `env.ts` (the only `process.env` reader; `BLIND_INDEX_KEY`, the `REVEAL_COST_*`
   placeholders per 07 §1, `STRIPE_WEBHOOK_SECRET`), `index.ts`.
-- **`packages/ui`** — `tokens.css`, `cn.ts`, `index.ts`.
+- **`packages/ui`** — `tokens.css` (Tailwind v4 theme), `cn.ts`, the presentational primitives
+  `components/{StatusBadge,Card,StatTile,Spinner}.tsx`, the **shadcn-pattern** `components/ui/*`
+  (`button,input,label,checkbox,radio-group,badge,alert,separator`), `index.ts`.
 - **`packages/db`** — `client.ts` (`withTenantTx` GUC helper + `closeDb` graceful drain), `applyMigrations.ts`
   (bootstrap → drizzle → RLS), `migrate.ts`, `seed.ts`,
   `schema/{auth,contacts,billing,intel,compliance,activity,salesnav,outreach}.ts`, `schema/index.ts`,
@@ -331,7 +337,9 @@ flowchart TD
 
 ## Notes / unbucketed
 
-- **`apps/auth/next.config.mjs`** and **`apps/web/next.config.mjs`** appear in `unassigned[]`. These are
-  **Next.js-mandated app-root files** (they transpile the workspace packages); they cannot live under
-  `apps/<app>/src/`, and the generator only classifies files under `apps/<app>/src/`. A **framework
-  constraint, not a placement error**. No code-level violations: `warnings[]` is empty.
+- **`apps/auth/next.config.mjs`**, **`apps/web/next.config.mjs`**, and **`apps/auth/postcss.config.mjs`**
+  appear in `unassigned[]` (3 files). These are **framework-mandated app-root files** — the Next.js configs
+  transpile the workspace packages, and `postcss.config.mjs` wires the Tailwind v4 pipeline; none can live
+  under `apps/<app>/src/`, and the generator only classifies files under `apps/<app>/src/`. A **framework
+  constraint, not a placement error** — documented here as Notes per the repo's map-hygiene rule (we don't
+  special-case the generator for them). No code-level violations: `warnings[]` is empty.

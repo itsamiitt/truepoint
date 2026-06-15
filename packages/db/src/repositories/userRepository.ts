@@ -103,6 +103,16 @@ export const userRepository = {
       .where(eq(users.id, id));
   },
 
+  // Replace the user's Argon2id digest (password reset — packages/auth/passwordReset). The hash is opaque
+  // and pre-computed by the auth layer; it is never logged or returned. findByEmail runs under the
+  // auth-service role (pre-tenant identity), so this mutation stays in the same auth-domain boundary.
+  async setPassword(userId: string, passwordHash: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+  },
+
   async listMfaMethods(userId: string): Promise<MfaMethodRecord[]> {
     const rows = await db
       .select({
@@ -217,7 +227,7 @@ export interface CreateEmailTokenInput {
   tokenHash: string;
   email: string;
   userId?: string;
-  purpose: "verify" | "magic_link" | "email_otp";
+  purpose: "verify" | "magic_link" | "email_otp" | "reset";
   expiresAt: Date;
   ipAddress?: string;
 }

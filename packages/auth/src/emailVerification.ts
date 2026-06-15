@@ -6,7 +6,7 @@
 import { createHash, randomInt } from "node:crypto";
 import { authEmailTokenRepository } from "@leadwolf/db";
 
-export type EmailTokenPurpose = "verify" | "magic_link" | "email_otp";
+export type EmailTokenPurpose = "verify" | "magic_link" | "email_otp" | "reset";
 
 const TTL_MS = 15 * 60 * 1000; // 15-minute window to enter the code
 const tokenHash = (purpose: EmailTokenPurpose, email: string, code: string): string =>

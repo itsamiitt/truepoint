@@ -1,11 +1,12 @@
 // page.tsx — Registration step 3: set the profile (full name, optional username alias, password) after the
 // email is proven (ADR-0020). Requires an email-verified signup transaction (else back to /signup or /verify).
 // Submitting provisions the global identity + its org placement and completes the login. SSR + WCAG AA.
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { getSignupTransaction } from "@leadwolf/auth";
 import { SIGNUP_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
+import { getSignupTransaction } from "@leadwolf/auth";
+import { Alert, Badge, Button, Input, Label } from "@leadwolf/ui";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { completeSignup } from "../actions";
 
 type SearchParams = Promise<Record<string, string | undefined>>;
@@ -25,32 +26,27 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
 
   return (
     <AuthShell title="Finish setting up" subtitle="A few details and you're in.">
-      <div className="auth-chip">
+      <Badge className="mb-4">
         <span>{txn.email}</span>
-      </div>
+      </Badge>
 
       <form action={completeSignup} noValidate>
-        <div className="auth-field">
-          <label className="auth-label" htmlFor="full_name">
-            Full name
-          </label>
-          <input
-            className="auth-input"
+        <div className="mb-4">
+          <Label htmlFor="full_name">Full name</Label>
+          <Input
             id="full_name"
             name="full_name"
             type="text"
             autoComplete="name"
             required
-            // biome-ignore lint/a11y/noAutofocus: first field of the step focuses by design
             autoFocus
           />
         </div>
-        <div className="auth-field">
-          <label className="auth-label" htmlFor="username">
-            Username <span className="auth-label-hint">(optional)</span>
-          </label>
-          <input
-            className="auth-input"
+        <div className="mb-4">
+          <Label htmlFor="username">
+            Username <span className="text-muted-foreground">(optional)</span>
+          </Label>
+          <Input
             id="username"
             name="username"
             type="text"
@@ -62,12 +58,9 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
             aria-invalid={sp.error === "username" ? "true" : undefined}
           />
         </div>
-        <div className="auth-field">
-          <label className="auth-label" htmlFor="password">
-            Password
-          </label>
-          <input
-            className="auth-input"
+        <div className="mb-4">
+          <Label htmlFor="password">Password</Label>
+          <Input
             id="password"
             name="password"
             type="password"
@@ -78,13 +71,13 @@ export default async function ProfilePage({ searchParams }: { searchParams: Sear
           />
         </div>
         {errorMessage ? (
-          <p className="auth-error" role="alert">
+          <Alert variant="destructive" role="alert" className="mb-4">
             {errorMessage}
-          </p>
+          </Alert>
         ) : null}
-        <button className="auth-button" type="submit">
+        <Button type="submit" size="full">
           Create account
-        </button>
+        </Button>
       </form>
     </AuthShell>
   );

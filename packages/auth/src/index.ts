@@ -42,6 +42,14 @@ export {
   type EmailTokenPurpose,
 } from "./emailVerification.ts";
 export {
+  requestPasswordReset,
+  completePasswordReset,
+  type RequestPasswordResetInput,
+  type RequestPasswordResetResult,
+  type CompletePasswordResetInput,
+  type CompletePasswordResetResult,
+} from "./passwordReset.ts";
+export {
   createSignupTransaction,
   getSignupTransaction,
   patchSignupTransaction,
