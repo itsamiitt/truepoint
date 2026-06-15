@@ -52,6 +52,7 @@
 | 29 | `docs/planning/29-settings-administration-architecture.md` *(audit companion — settings + admin catalog)* |
 | departments | `docs/planning/departments/` (README + 11 modules) |
 | brand | `docs/planning/brand-identity.md` |
+| audit-enum | `docs/planning/audit-log-enum.md` *(reference — closed `audit_log.action` vocabulary + write-path coverage; no decisions)* |
 | ADR-1 | `decisions/ADR-0001-orm-drizzle.md` |
 | ADR-2 | `decisions/ADR-0002-search-postgres-then-engine.md` |
 | ADR-3 | `decisions/ADR-0003-three-layer-data-model.md` *(superseded)* |
@@ -82,6 +83,7 @@
 | ADR-28 | `decisions/ADR-0028-record-customization-layer.md` |
 | ADR-29 | `decisions/ADR-0029-credit-ledger-and-lease-decrement.md` |
 | ADR-30 | `decisions/ADR-0030-granular-tenant-org-roles.md` |
+| ADR-31 | `decisions/ADR-0031-auth-event-audit-tenancy.md` *(proposed)* |
 | (input) | `docs/planning/proposals/2026-05-29-multi-tenant-schema.md` (adopted) |
 
 ## 2. Adjacency list (doc → docs/ADRs it references)
@@ -220,7 +222,7 @@ register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
 | `signal_type` (intent) | 03 §6 (intent_signals) | 06, 09 |
 | `activity_type` + `channel` + `outcome` | 03 §7 (activities) | 05, 09 |
 | outreach `status`/`platform` (sequences) | 03 §7 (outreach_log/sequences) | 05, 09, ADR-9 |
-| audit actions (closed enum, incl. `credit.adjust` + auth events `login.*/mfa.*/token.*/sso.*/device.*/session.revoked/code.*/signup/oauth.link` + record/config mutations `contact.*/account.*/list.*/sequence.*/template.*/settings.update/automation.rule.*`; `audit_log.origin_domain`) | 03 §7 (audit_log) / 08 §5 | 08 §5, 07 §3/§7, 03 §8, 09 §3.2, 17 §9, 02 §6 |
+| audit actions (closed enum, incl. `credit.adjust` + auth events `login.*/mfa.*/token.*/sso.*/device.*/session.revoked/code.*/signup/oauth.link` + record/config mutations `contact.*/account.*/list.*/sequence.*/template.*/settings.update/automation.rule.*`; `audit_log.origin_domain`) | 03 §7 (audit_log) / 08 §5 | 08 §5, 07 §3/§7, 03 §8, 09 §3.2, 17 §9, 02 §6, audit-log-enum.md (consolidated ref) |
 | commercial policy (transparent, no-lock-in, export-on-exit) | ADR-12 / 07 §1A | 00 §7, 05 §11, 12 §4, 10 (M3) |
 | charge-by-verified-result + credit-back | ADR-13 / 07 §3 | 03 §8, 05 §7, 06 §9, 09 §3.2, 10 (M4/M9) |
 | trust & certification program (SOC 2/ISO/registration/Trust Center) | ADR-14 / 08 §15 | 00 §7, 10 (Trust track), 12 §4, 13 §3 |
@@ -291,6 +293,7 @@ register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
 | ADR-28 | Record customization layer (custom fields, stages, tags) | Accepted | 05, 03 | 00, 03 §14, 05 §7/§21, 10 (M8), 24, 28, 29, README |
 | ADR-29 | Credit ledger reintroduction & lease-based decrement | Accepted (amends ADR-7) | 07, 03 | 00, 02 §3.1, 03 §8/§14, 05 §11, 07 §2/§8/§11, 10 (M11/M12 + risk #2), 28, README |
 | ADR-30 | Granular tenant org roles | Accepted (amends ADR-19) | 03, 17 | 00, 02 §5, 03 §4, 05 §1, 08 §16, 09 §4, 12 §1, 17 §4, 10 (M11), 28, 29, README |
+| ADR-31 | Auth-event audit tenancy | **Proposed** | 03, 08, 17 | audit-enum (OQ-F), 17 §9, 08 §5, 03 §7; coupled to OQ-D + ADR-11 |
 
 **ADR rules:** new significant decision → new ADR + 00 §7 row + lead-doc edit (tripod). Superseding a
 locked ADR → set old `Status: Superseded by ADR-NNNN` + reciprocal link, never overwrite the body.

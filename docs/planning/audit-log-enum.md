@@ -183,7 +183,7 @@ tree**; they land as their owning services / milestones do:
   `session.revoked`/`code.*`/`signup`/`oauth.link` family. **Blocked on the "auth audit sink"** (a writer
   reachable from `packages/auth` / `apps/auth`). Confirmed pending by an in-code TODO:
   `packages/auth/src/passwordReset.ts` — *"emit `password.reset.*` audit events when the auth audit sink
-  lands."* (OQ-F.)
+  lands."* (OQ-F; proposed resolution in [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md)).
 - **Record/config mutations (17)** — `contact.*`, `account.*`, `list.*`, `template.*`, `settings.update`,
   `automation.rule.*`, and `sequence.delete`. Their services are partly unbuilt (no list, settings,
   membership, or template service writes audit today). Coverage tracks **M8** (record customization /
@@ -291,7 +291,7 @@ for (const action of auditAction.options) {
 | OQ-C | M14 AI: add first-class `ai.*` audit actions, or keep AI in `ai_requests` (+ DSAR scope) and only audit material downstream actions? | M14 DoD ("AI artifacts in DSAR scope") | M14 |
 | OQ-D | `platform_audit_log` vocabulary: share this enum, or a separate `platform_audit_action`? Currently **unspecified** corpus-wide. | Platform-admin track | Platform admin |
 | OQ-E | Retention/purge: is a retention-job partition delete itself an audited event? (No `audit_log.purge` value exists.) | Trust track | Trust track |
-| OQ-F | **Auth audit sink:** how do `packages/auth` / `apps/auth` write the 20 auth-event values when they cannot import `core`'s `writeAudit`? (Direct `auditRepository` via `db`, or a new port.) Blocks the entire auth family in §5.2. | M2 / M11 auth audit | Auth |
+| OQ-F | **Auth audit sink + tenancy:** how do the 20 auth-event values get written given `audit_log.tenant_id` is `NOT NULL` but auth is pre-tenant (global identity)? The sink design + the resolved-vs-tenant-less split are proposed in [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md) (**Proposed**); coupled to OQ-D. | M2 / M11 auth audit | [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md) |
 
 **Resolved (was the prompt's open question):** *Does DSAR fan-out scan by `entity_id` or `actor_id`?* —
 **by neither directly:** [08 §4.2] resolves the data subject to the golden `master_person_id` and cascades
