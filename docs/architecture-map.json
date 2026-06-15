@@ -43,8 +43,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 290,
-  "fileSetHash": "sha256:15111dffbecbe37b6a76c0ac411d904513b2eb4a6e98beadc1ae57c0de7599d8",
+  "fileCount": 292,
+  "fileSetHash": "sha256:c125fe3dedb16d54410f9546299cfd66c79daa3599f00096b92cbdd565a235bb",
   "features": {
     "activity": {
       "web": [],
@@ -441,6 +441,7 @@
       "apps/auth/src/lib/cors.ts",
       "apps/auth/src/lib/domainResolver.ts",
       "apps/auth/src/lib/finishLogin.ts",
+      "apps/auth/src/lib/magicCarry.test.ts",
       "apps/auth/src/lib/magicCarry.ts",
       "apps/auth/src/lib/mailer.ts",
       "apps/auth/src/lib/ssoConfig.ts"
@@ -511,7 +512,8 @@
     ],
     "packages/config": [
       "packages/config/src/env.ts",
-      "packages/config/src/index.ts"
+      "packages/config/src/index.ts",
+      "packages/config/src/originAllowlist.test.ts"
     ],
     "packages/core": [
       "packages/core/src/index.ts"

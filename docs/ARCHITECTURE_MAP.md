@@ -23,7 +23,7 @@
 > credit-back — proven by `activity.itest.ts` (5) + `outreach.itest.ts` (8). The web grew the
 > **Sequences** (builder + enrollment log + send), **Reports** (client-side rollups), and **Inbox**
 > (placeholder) destinations.
-> 290 source files, 0 warnings, 3 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
+> 292 source files, 0 warnings, 3 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
 > (port in core, Apollo/ZoomInfo/Clearbit adapters in the now-live `packages/integrations`, cache-first +
 > budget breaker + waterfall), **verify-on-reveal driving the ADR-0013 charge** (verification runs BEFORE
 > the FOR UPDATE window; `valid` charges, `invalid`/`catch_all`/`unknown` charge 0, `risky` configurable),
