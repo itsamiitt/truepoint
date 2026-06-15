@@ -1,6 +1,6 @@
 # ADR-0031 — Auth-event audit tenancy
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-15
 - **Context doc:** [03-database-design.md](../03-database-design.md), [08-compliance.md](../08-compliance.md), [17-authentication.md](../17-authentication.md), [audit-log-enum.md](../audit-log-enum.md)
 - **Relates to:** [ADR-0019](./ADR-0019-global-identity-and-tenant-membership.md) (global identity — the root cause), [ADR-0011](./ADR-0011-platform-admin-and-privileged-access.md) (`platform_audit_log`)
@@ -30,9 +30,11 @@ Net: the corpus places auth events on the tenant-scoped `audit_log`, but `NOT NU
 reality make a chunk of them un-writable as-is. This must be reconciled **before** the auth sink is wired —
 it touches the schema/RLS contract (H1/H9), so it is an ADR-level call, not an ad-hoc fix.
 
-## Decision (proposed)
+## Decision
 
-A **split by tenant-resolvability**, with **no change to the `audit_log` `NOT NULL` + RLS invariant**:
+A **split by tenant-resolvability**, with **no change to the `audit_log` `NOT NULL` + RLS invariant**.
+Wiring is **phased**: the tenant-resolved events are wired now; the tenant-less events wait for
+`platform_audit_log` (the admin track) and the OQ-D vocabulary.
 
 1. **Auth audit sink** — add `packages/auth/src/auditEvent.ts` (`recordAuthEvent`), wrapping
    `@leadwolf/db`'s `auditRepository.insert` inside its own `withTenantTx`, **swallow-on-failure**, invoked
@@ -68,7 +70,7 @@ every audit row. It unblocks the majority of the 20 events without a risky schem
 
 | Option | Verdict | Why |
 |---|---|---|
-| **Split: resolved→`audit_log`, tenant-less→`platform_audit_log`** (this ADR) | Proposed | No `audit_log` contract change; each event lands in the right log; bounded follow-on (define `platform_audit_log` vocab, OQ-D). |
+| **Split: resolved→`audit_log`, tenant-less→`platform_audit_log`** (this ADR) | Chosen | No `audit_log` contract change; each event lands in the right log; bounded follow-on (define `platform_audit_log` vocab, OQ-D). |
 | Reserved "system" tenant UUID for tenant-less rows on `audit_log` | Rejected | Pollutes tenant-scoped exports with a sentinel tenant; needs BYPASSRLS to write; semantically wrong. |
 | Make `audit_log.tenant_id` nullable + relax the RLS `WITH CHECK` | Rejected | Weakens the H9 fail-closed RLS invariant for *every* audit row to serve a minority of events; high blast radius. |
 | Defer all auth-event auditing | Rejected | Leaves the [02 §6](../02-architecture.md) contract unmet for the entire auth surface and the `passwordReset.ts` TODO open indefinitely. |

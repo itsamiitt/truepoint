@@ -4,8 +4,16 @@
 // existence checks are deliberate (registration reveals existence); credentials never live in the URL.
 "use server";
 
-import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { clientIpFromHeaders } from "@/lib/clientIp";
+import {
+  LOGIN_TXN_COOKIE,
+  LOGIN_TXN_MAX_AGE,
+  SIGNUP_TXN_COOKIE,
+  SIGNUP_TXN_MAX_AGE,
+} from "@/lib/cookies";
+import { resolveDomain } from "@/lib/domainResolver";
+import { finishLogin } from "@/lib/finishLogin";
+import { sendAuthEmail } from "@/lib/mailer";
 import {
   createEmailVerification,
   createLoginTransaction,
@@ -14,21 +22,14 @@ import {
   getSignupTransaction,
   patchLoginTransaction,
   provisionIdentity,
+  recordAuthEvent,
   resolveNextStep,
 } from "@leadwolf/auth";
-import { isAllowedOrigin } from "@leadwolf/config";
+import { env, isAllowedOrigin } from "@leadwolf/config";
 import { userRepository } from "@leadwolf/db";
 import { ConflictError, signupSchema } from "@leadwolf/types";
-import { clientIpFromHeaders } from "@/lib/clientIp";
-import {
-  LOGIN_TXN_COOKIE,
-  LOGIN_TXN_MAX_AGE,
-  SIGNUP_TXN_COOKIE,
-  SIGNUP_TXN_MAX_AGE,
-} from "@/lib/cookies";
-import { finishLogin } from "@/lib/finishLogin";
-import { sendAuthEmail } from "@/lib/mailer";
-import { resolveDomain } from "@/lib/domainResolver";
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 const TXN_COOKIE = {
   httpOnly: true,
@@ -39,11 +40,18 @@ const TXN_COOKIE = {
 
 // Step 1 → 2: claim an unknown email, mail a code, and start the signup transaction.
 export async function startSignup(formData: FormData): Promise<void> {
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
   const appOrigin = String(formData.get("app_origin") ?? "");
   const codeChallenge = String(formData.get("code_challenge") ?? "");
   const state = String(formData.get("state") ?? "");
-  const carry = new URLSearchParams({ email, app_origin: appOrigin, code_challenge: codeChallenge, state });
+  const carry = new URLSearchParams({
+    email,
+    app_origin: appOrigin,
+    code_challenge: codeChallenge,
+    state,
+  });
   const back = (err: string): never => redirect(`/signup?${carry.toString()}&error=${err}`);
 
   if (!isAllowedOrigin(appOrigin) || !codeChallenge) back("1");
@@ -53,7 +61,13 @@ export async function startSignup(formData: FormData): Promise<void> {
   if (await userRepository.findByEmail(email)) redirect(`/password?${carry.toString()}`);
 
   const clientIp = clientIpFromHeaders(await headers());
-  const { id: txnId } = await createSignupTransaction({ email, appOrigin, codeChallenge, state, clientIp });
+  const { id: txnId } = await createSignupTransaction({
+    email,
+    appOrigin,
+    codeChallenge,
+    state,
+    clientIp,
+  });
   (await cookies()).set(SIGNUP_TXN_COOKIE, txnId, { ...TXN_COOKIE, maxAge: SIGNUP_TXN_MAX_AGE });
 
   const { code } = await createEmailVerification({ email, ipAddress: clientIp });
@@ -83,9 +97,14 @@ export async function completeSignup(formData: FormData): Promise<void> {
 
   let provisioned: Awaited<ReturnType<typeof provisionIdentity>>;
   try {
-    provisioned = await provisionIdentity({ ...parsed.data, clientIp: txn.clientIp, resolveDomain });
+    provisioned = await provisionIdentity({
+      ...parsed.data,
+      clientIp: txn.clientIp,
+      resolveDomain,
+    });
   } catch (err) {
-    if (err instanceof ConflictError && err.code === "username_taken") redirect("/signup/profile?error=username");
+    if (err instanceof ConflictError && err.code === "username_taken")
+      redirect("/signup/profile?error=username");
     if (err instanceof ConflictError && err.code === "email_taken") {
       const carry = new URLSearchParams({
         email: txn.email,
@@ -97,6 +116,20 @@ export async function completeSignup(formData: FormData): Promise<void> {
     }
     throw err;
   }
+
+  // signup — a new global identity was provisioned + placed in an org (ADR-0031 §2).
+  await recordAuthEvent({
+    tenantId: provisioned.tenantId,
+    workspaceId: provisioned.workspaceId ?? null,
+    actorUserId: provisioned.userId,
+    action: "signup",
+    entityType: "user",
+    entityId: provisioned.userId,
+    metadata: { placement: provisioned.placement },
+    ipAddress: txn.clientIp,
+    userAgent: (await headers()).get("user-agent"),
+    originDomain: new URL(env.AUTH_ORIGIN).host,
+  });
 
   // Open the durable login flow for the new identity, pre-bound to the org it was just placed in.
   const { id: loginTxnId, txn: loginTxn } = await createLoginTransaction({
@@ -110,7 +143,11 @@ export async function completeSignup(formData: FormData): Promise<void> {
     tenantId: provisioned.tenantId,
     workspaceId: provisioned.workspaceId,
   });
-  const advanced = { ...loginTxn, tenantId: provisioned.tenantId, workspaceId: provisioned.workspaceId };
+  const advanced = {
+    ...loginTxn,
+    tenantId: provisioned.tenantId,
+    workspaceId: provisioned.workspaceId,
+  };
 
   const jar = await cookies();
   jar.set(LOGIN_TXN_COOKIE, loginTxnId, { ...TXN_COOKIE, maxAge: LOGIN_TXN_MAX_AGE });

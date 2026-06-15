@@ -23,6 +23,13 @@ const WRITTEN = new Set<string>([
   "consent.withdraw",
   "dsar.access",
   "dsar.delete",
+  // auth events wired via recordAuthEvent (packages/auth, ADR-0031)
+  "login.success",
+  "signup",
+  "sso.initiated",
+  "sso.callback",
+  "token.issued",
+  "code.exchanged",
 ]);
 
 // §5.2 — defined in the closed enum but not yet wired to a writeAudit() call-site.
@@ -54,8 +61,8 @@ const PENDING = new Set<string>([
   "automation.rule.create",
   "automation.rule.update",
   "automation.rule.delete",
-  // auth events — blocked on the auth audit sink + the tenant-scoping decision (OQ-F)
-  "login.success",
+  // auth events — tenant-resolved ones are wired (ADR-0031); these stay pending because they are
+  // pre-tenant (→ platform_audit_log, OQ-D), high-volume (token.refresh), or have no flow yet.
   "login.failure",
   "login.locked",
   "mfa.challenge",
@@ -63,17 +70,12 @@ const PENDING = new Set<string>([
   "mfa.failure",
   "password.reset.request",
   "password.reset.complete",
-  "sso.initiated",
-  "sso.callback",
-  "token.issued",
   "token.refresh",
   "token.revoke",
   "device.trusted",
   "device.revoked",
   "session.revoked",
   "code.issued",
-  "code.exchanged",
-  "signup",
   "oauth.link",
 ]);
 

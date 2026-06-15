@@ -199,6 +199,7 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 | Record customization | **Custom fields (typed-jsonb values) + pipeline-stage layer + tags**, workspace-defined, M8 | CRM-grade modeling without opening shared vocab → [ADR-0028](./decisions/ADR-0028-record-customization-layer.md), [05 §7](./05-features-modules.md) |
 | Billing hardening | **Append-only `credit_ledger` at M11** (counter → derived cache) + **credit leases at M12** | Provable accounting + hot-row relief; executes ADR-0007's revisit path → [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md), [07 §2](./07-billing-credits.md) |
 | Tenant org roles | **`tenant_members.org_role`** — `owner`/`billing_admin`/`security_admin`/`compliance_admin`/`member` (M11) | Delegated administration → [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md), [03 §4](./03-database-design.md) |
+| Auth-event audit | **Auth events split by tenant-resolvability** — resolved → `audit_log`; tenant-less → `platform_audit_log` (preserves the `NOT NULL`+RLS invariant) | Write the closed-enum auth actions without weakening RLS → [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md), [audit-log-enum.md](./audit-log-enum.md) |
 
 ## 8. Open questions (tracked, resolved during doc review or early milestones)
 

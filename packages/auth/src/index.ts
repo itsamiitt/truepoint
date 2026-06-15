@@ -86,3 +86,4 @@ export {
   strictestMfa,
   isMethodAllowed,
 } from "./policy.ts";
+export { recordAuthEvent } from "./auditEvent.ts";

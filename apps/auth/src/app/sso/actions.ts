@@ -4,21 +4,29 @@
 // back to the handoff with a support message — never a blank error.
 "use server";
 
-import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { createSsoTransaction, getSsoProvider } from "@leadwolf/auth";
-import { env, isAllowedOrigin } from "@leadwolf/config";
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { SSO_TXN_COOKIE, SSO_TXN_MAX_AGE } from "@/lib/cookies";
 import { loadSsoConfig } from "@/lib/ssoConfig";
+import { createSsoTransaction, getSsoProvider, recordAuthEvent } from "@leadwolf/auth";
+import { env, isAllowedOrigin } from "@leadwolf/config";
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 export async function initiateSso(formData: FormData): Promise<void> {
   const tenantId = String(formData.get("tenant") ?? "");
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
   const appOrigin = String(formData.get("app_origin") ?? "");
   const codeChallenge = String(formData.get("code_challenge") ?? "");
   const state = String(formData.get("state") ?? "");
-  const carry = new URLSearchParams({ tenant: tenantId, email, app_origin: appOrigin, code_challenge: codeChallenge, state });
+  const carry = new URLSearchParams({
+    tenant: tenantId,
+    email,
+    app_origin: appOrigin,
+    code_challenge: codeChallenge,
+    state,
+  });
   const back = (): never => redirect(`/sso?${carry.toString()}&error=1`);
 
   if (!tenantId || !isAllowedOrigin(appOrigin) || !codeChallenge) back();
@@ -54,6 +62,18 @@ export async function initiateSso(formData: FormData): Promise<void> {
     sameSite: "strict",
     path: "/",
     maxAge: SSO_TXN_MAX_AGE,
+  });
+
+  // sso.initiated — tenant-routed SSO handoff started (ADR-0031 §2); no identity yet (actorUserId null).
+  await recordAuthEvent({
+    tenantId,
+    actorUserId: null,
+    action: "sso.initiated",
+    entityType: "user",
+    metadata: { placement: "sso_handoff", protocol: config!.protocol },
+    ipAddress: clientIp,
+    userAgent: (await headers()).get("user-agent"),
+    originDomain: new URL(env.AUTH_ORIGIN).host,
   });
 
   redirect(initiation!.redirectUrl);

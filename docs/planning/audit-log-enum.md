@@ -154,10 +154,11 @@ The single writer **today** (for core-mediated mutations) is **`writeAudit(tx, e
 action and its audit row commit or roll back together → `auditRepository.insert` (append-only). *(One
 intentional exception: `reveal.blocked` is written in its own transaction after the reveal rolls back, so
 the blocked-attempt proof survives.)* Because `packages/auth` cannot import `core` (dependency graph:
-`auth → db/types/config`, never `core`), the **auth-event family needs its own audit sink, which is not yet
-built** (OQ-F, confirmed below).
+`auth → db/types/config`, never `core`), auth events use a **separate sink — `recordAuthEvent`**
+(`packages/auth/src/auditEvent.ts`, [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md)): its own
+`withTenantTx`, swallow-on-failure, wired for the **tenant-resolved** events (§5.1).
 
-### 5.1 Written today — verified `writeAudit` call-sites (12 of 57)
+### 5.1 Written today — verified call-sites (18 of 57)
 
 | Action | Call-site |
 |---|---|
@@ -173,17 +174,24 @@ built** (OQ-F, confirmed below).
 | `consent.withdraw` | `packages/core/src/compliance/consent.ts:60` |
 | `dsar.access` | `packages/core/src/compliance/assembleAccessReport.ts:48` |
 | `dsar.delete` | `packages/core/src/compliance/deleteFanout.ts:41` |
+| `login.success` | `packages/auth/src/flow.ts` `finalizeLogin` — via `recordAuthEvent`, covers password/magic/SSO |
+| `signup` | `apps/auth/src/app/signup/actions.ts` `completeSignup` |
+| `sso.initiated` | `apps/auth/src/app/sso/actions.ts` `initiateSso` |
+| `sso.callback` | `apps/auth/src/lib/completeSso.ts` `completeSso` |
+| `token.issued` | `apps/auth/src/app/token/exchange/route.ts` POST |
+| `code.exchanged` | `apps/auth/src/app/token/exchange/route.ts` POST |
 
-### 5.2 Defined but not yet wired — the residual coverage backlog (45 of 57)
+### 5.2 Defined but not yet wired — the residual coverage backlog (39 of 57)
 
-These values exist in the closed enum but have **no `writeAudit({ action })` call-site in the current
-tree**; they land as their owning services / milestones do:
+These values exist in the closed enum but have **no writer call-site yet** (`writeAudit` for core,
+`recordAuthEvent` for auth); they land as their owning services / milestones do:
 
-- **Auth events (20)** — the entire `login.*`/`mfa.*`/`password.reset.*`/`sso.*`/`token.*`/`device.*`/
-  `session.revoked`/`code.*`/`signup`/`oauth.link` family. **Blocked on the "auth audit sink"** (a writer
-  reachable from `packages/auth` / `apps/auth`). Confirmed pending by an in-code TODO:
-  `packages/auth/src/passwordReset.ts` — *"emit `password.reset.*` audit events when the auth audit sink
-  lands."* (OQ-F; proposed resolution in [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md)).
+- **Auth events (14)** — the tenant-resolved auth events are now wired via `recordAuthEvent` (§5.1). These
+  **14 remain pending**: *pre-tenant* (`login.failure`, `mfa.challenge/success/failure`,
+  `password.reset.request/complete` → `platform_audit_log`, OQ-D), *high-volume* (`token.refresh`),
+  *redundant* (`code.issued` — the same finalize moment as the wired `login.success`), or *no flow yet*
+  (`login.locked`, `token.revoke`, `session.revoked`, `device.trusted/revoked`, `oauth.link`). See
+  [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md).
 - **Record/config mutations (17)** — `contact.*`, `account.*`, `list.*`, `template.*`, `settings.update`,
   `automation.rule.*`, and `sequence.delete`. Their services are partly unbuilt (no list, settings,
   membership, or template service writes audit today). Coverage tracks **M8** (record customization /
@@ -302,7 +310,7 @@ across every overlay copy by that identity, never by `actor_id`.
 - [x] Vocabulary closes the [02 §6] contract — record/config mutations in the closed enum (M5 / Pass 1).
 - [x] Zod `auditAction` ↔ DB CHECK `audit_log_action_enum` in lockstep (verified).
 - [ ] Every defined value has a writer or an explicit "pending" allowlist entry (§5.2 backlog cleared).
-- [ ] The auth audit sink lands; the auth-event values are written (the `passwordReset.ts` TODO cleared — OQ-F).
+- [~] Auth audit sink (`recordAuthEvent`) landed; tenant-resolved auth events wired (§5.1, [ADR-0031]). Pre-tenant events await `platform_audit_log` (OQ-D); the `passwordReset.ts` TODO tracks that subset.
 - [x] Coverage **drift-guard** unit test green (`packages/types/src/auditCoverage.test.ts`, §8).
 - [ ] DB-backed exercised-writer gate + CI wiring (§8) — pending a CI pipeline.
 - [ ] DSAR delete E2E proves removal across all copies + the relevant `audit_log` rows ([10 M5](./10-roadmap.md) DoD).

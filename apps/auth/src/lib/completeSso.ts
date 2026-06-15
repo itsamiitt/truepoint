@@ -2,8 +2,10 @@
 // validates the IdP assertion through the provider seam (relay-state-bound), JIT-provisions the identity +
 // membership, then hands off to the normal login finalize (durable session + cross-domain code). Any
 // validation/JIT failure returns the browser to /login with the app's context preserved — never a blank error.
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+
+import { LOGIN_TXN_COOKIE, LOGIN_TXN_MAX_AGE, SSO_TXN_COOKIE } from "@/lib/cookies";
+import { finishLogin } from "@/lib/finishLogin";
+import { loadSsoConfig } from "@/lib/ssoConfig";
 import {
   createLoginTransaction,
   deleteSsoTransaction,
@@ -11,11 +13,12 @@ import {
   getSsoTransaction,
   patchLoginTransaction,
   provisionSsoIdentity,
+  recordAuthEvent,
   resolveNextStep,
 } from "@leadwolf/auth";
-import { LOGIN_TXN_COOKIE, LOGIN_TXN_MAX_AGE, SSO_TXN_COOKIE } from "@/lib/cookies";
-import { finishLogin } from "@/lib/finishLogin";
-import { loadSsoConfig } from "@/lib/ssoConfig";
+import { env } from "@leadwolf/config";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export async function completeSso(
   protocol: "oidc" | "saml",
@@ -50,6 +53,19 @@ export async function completeSso(
   } catch {
     fail();
   }
+
+  // sso.callback — IdP assertion validated + identity JIT-provisioned into the SSO org (ADR-0031 §2).
+  await recordAuthEvent({
+    tenantId: txn.tenantId,
+    workspaceId: provisioned!.workspaceId ?? null,
+    actorUserId: provisioned!.userId,
+    action: "sso.callback",
+    entityType: "user",
+    entityId: provisioned!.userId,
+    metadata: { placement: "sso_callback", protocol },
+    ipAddress: txn.clientIp,
+    originDomain: new URL(env.AUTH_ORIGIN).host,
+  });
 
   const { id: loginTxnId, txn: loginTxn } = await createLoginTransaction({
     userId: provisioned!.userId,

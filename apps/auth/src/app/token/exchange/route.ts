@@ -2,10 +2,10 @@
 // for a short-lived access JWT. The code is validated server-side (single-use, IP, PKCE, allow-listed
 // origin) BEFORE any token is minted; tokens never appear in URLs. Cross-origin, credentialed (CORS).
 
-import { exchangeCode, mintAccessToken } from "@leadwolf/auth";
-import { tokenExchangeSchema } from "@leadwolf/types";
 import { clientIp } from "@/lib/clientIp";
 import { corsHeaders } from "@/lib/cors";
+import { exchangeCode, mintAccessToken, recordAuthEvent } from "@leadwolf/auth";
+import { tokenExchangeSchema } from "@leadwolf/types";
 
 export async function OPTIONS(req: Request): Promise<Response> {
   return new Response(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });
@@ -30,12 +30,38 @@ export async function POST(req: Request): Promise<Response> {
       clientIp: clientIp(req),
       origin: origin as string,
     });
+    // code.exchanged — the single-use code was consumed + validated (ADR-0031 §2). Never log the code.
+    await recordAuthEvent({
+      tenantId: binding.tenantId,
+      workspaceId: binding.workspaceId ?? null,
+      actorUserId: binding.userId,
+      action: "code.exchanged",
+      entityType: "user",
+      entityId: binding.userId,
+      metadata: { sessionId: binding.sessionId },
+      ipAddress: clientIp(req),
+      userAgent: req.headers.get("user-agent"),
+      originDomain: origin,
+    });
     const { token, expiresIn } = await mintAccessToken({
       userId: binding.userId,
       tenantId: binding.tenantId,
       workspaceId: binding.workspaceId,
       sessionId: binding.sessionId,
       audience: origin as string,
+    });
+    // token.issued — an access JWT was minted (ADR-0031 §2). Never log the token string.
+    await recordAuthEvent({
+      tenantId: binding.tenantId,
+      workspaceId: binding.workspaceId ?? null,
+      actorUserId: binding.userId,
+      action: "token.issued",
+      entityType: "user",
+      entityId: binding.userId,
+      metadata: { sessionId: binding.sessionId },
+      ipAddress: clientIp(req),
+      userAgent: req.headers.get("user-agent"),
+      originDomain: origin,
     });
     return Response.json({ accessToken: token, tokenType: "Bearer", expiresIn }, { headers: cors });
   } catch {

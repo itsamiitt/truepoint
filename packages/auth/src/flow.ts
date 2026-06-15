@@ -5,6 +5,7 @@
 import { env } from "@leadwolf/config";
 import { tenantMemberRepository, userRepository, workspaceRepository } from "@leadwolf/db";
 import { InvalidCredentialsError } from "@leadwolf/types";
+import { recordAuthEvent } from "./auditEvent.ts";
 import { issueCode } from "./code.ts";
 import { type LoginTransaction, patchLoginTransaction } from "./loginTransaction.ts";
 import { createSession } from "./session.ts";
@@ -81,6 +82,20 @@ export async function finalizeLogin(
     clientIp: txn.clientIp,
     codeChallenge: txn.codeChallenge,
     workspaceId,
+  });
+
+  // login.success — authentication fully succeeded (ADR-0031 §2; covers password/magic/SSO via finalize).
+  await recordAuthEvent({
+    tenantId,
+    workspaceId: workspaceId ?? null,
+    actorUserId: txn.userId,
+    action: "login.success",
+    entityType: "user",
+    entityId: txn.userId,
+    metadata: { sessionId: session.sessionId },
+    ipAddress: txn.clientIp,
+    userAgent: ctx.userAgent ?? null,
+    originDomain: new URL(env.AUTH_ORIGIN).host,
   });
 
   return {

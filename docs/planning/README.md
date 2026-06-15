@@ -102,7 +102,9 @@ Splink** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)) ·
 **credit ledger + leases**
 ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)) ·
 **tenant org roles**
-([ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)).
+([ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)) ·
+**auth-event audit tenancy**
+([ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md)).
 
 See [00-overview.md](./00-overview.md#7-decision-log) for the full decision log with rationale links,
 and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md),
