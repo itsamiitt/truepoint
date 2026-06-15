@@ -3,8 +3,14 @@
 // repeatedly. Progress + result go to STDERR: Bun block-buffers stdout to a pipe, so under
 // `docker compose run` stdout would stay invisible until exit (a working migration would look frozen).
 
+import { writeSync } from "node:fs";
 import { env } from "@leadwolf/config";
 import { applyMigrations } from "./applyMigrations.ts";
+
+// Direct synchronous write to fd 2 (stderr) — unbuffered even when stderr is a pipe (docker compose run).
+const log = (m: string): void => {
+  writeSync(2, m);
+};
 
 // Migrations must NOT run through a transaction-pooling endpoint: Drizzle's migrator opens a real DDL
 // transaction (postgres-js `client.begin`) that PgBouncer can stall, and the pooler's connect-queue wait is
@@ -23,17 +29,17 @@ function directUrl(url: string): string {
 
 const target = env.DATABASE_MIGRATION_URL ?? directUrl(env.DATABASE_URL);
 const masked = target.replace(/\/\/([^:]+):[^@]+@/, "//$1:****@");
-process.stderr.write(`migrate: connecting to ${masked}\n`);
+log(`migrate: connecting to ${masked}\n`);
 
 applyMigrations(target, {
   appRolePassword: env.DATABASE_APP_ROLE_PASSWORD,
   adminRolePassword: env.DATABASE_ADMIN_ROLE_PASSWORD,
 })
   .then(() => {
-    process.stderr.write("migrate: done.\n");
+    log("migrate: done.\n");
     process.exit(0);
   })
   .catch((err) => {
-    process.stderr.write(`migrate: failed ${err?.stack ?? String(err)}\n`);
+    log(`migrate: failed ${err?.stack ?? String(err)}\n`);
     process.exit(1);
   });

@@ -3,6 +3,7 @@
 // the non-BYPASSRLS leadwolf_app role) → drizzle-generated table migrations → every src/rls/*.sql
 // (policies + triggers). Takes the connection string as an argument so it has no dependency on @leadwolf/config.
 
+import { writeSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -108,28 +109,30 @@ export async function applyMigrations(
   const db = drizzle(sql);
   // Per-phase progress so the run is never a silent black box — on a managed DB (Neon) the DDL is many
   // network round-trips and can take tens of seconds; without this it looks "frozen" when it's just working.
-  // Progress goes to STDERR, not stdout: Bun block-buffers stdout when it is a pipe (the case under
-  // `docker compose run`), so stdout logs would stay invisible until the process exits — making a working
-  // migration look frozen. stderr is unbuffered, so each phase appears live.
+  // Progress via writeSync(fd 2) — a DIRECT synchronous write to stderr that cannot be buffered. Bun (like
+  // Node) buffers process.stdout/stderr.write when the stream is a pipe (the case under `docker compose run`,
+  // non-TTY), so those would stay invisible until the process exits — making a working migration look frozen.
+  // writeSync goes straight to the fd, so each phase appears live regardless of TTY/pipe.
+  const log = (m: string): void => {
+    writeSync(2, m);
+  };
   try {
-    process.stderr.write("migrate: [1/4] bootstrap (extensions, roles, uuid_generate_v7)…\n");
+    log("migrate: [1/4] bootstrap (extensions, roles, uuid_generate_v7)…\n");
     await sql.unsafe(bootstrap(appPwd, adminPwd));
     if (await exists(migrationsFolder)) {
-      process.stderr.write("migrate: [2/4] applying table migrations…\n");
+      log("migrate: [2/4] applying table migrations…\n");
       await migrate(db, { migrationsFolder });
     } else {
-      process.stderr.write(
-        `migrate: WARNING no migrations at ${migrationsFolder} — run \`drizzle-kit generate\` first.\n`,
-      );
+      log(`migrate: WARNING no migrations at ${migrationsFolder} — run \`drizzle-kit generate\` first.\n`);
     }
     const files = (await readdir(rlsFolder)).filter((f) => f.endsWith(".sql")).sort();
-    process.stderr.write(`migrate: [3/4] applying ${files.length} RLS policy file(s)…\n`);
+    log(`migrate: [3/4] applying ${files.length} RLS policy file(s)…\n`);
     for (const file of files) {
-      process.stderr.write(`migrate:        → ${file}\n`);
+      log(`migrate:        → ${file}\n`);
       await sql.unsafe(await readFile(join(rlsFolder, file), "utf8"));
     }
     // Grant the non-BYPASSRLS app role access to the now-created tables/sequences (RLS still gates rows).
-    process.stderr.write("migrate: [4/4] grants…\n");
+    log("migrate: [4/4] grants…\n");
     await sql.unsafe(GRANTS);
   } finally {
     await sql.end();
