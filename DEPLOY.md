@@ -119,7 +119,7 @@ app services and Caddy. The first run takes several minutes; Caddy then fetches 
 
 ```bash
 docker compose -f docker-compose.prod.yml ps             # all services "running"
-docker compose -f docker-compose.prod.yml exec -T api wget -qO- http://localhost:3001/health
+docker compose -f docker-compose.prod.yml exec -T api bun -e "fetch('http://localhost:3001/health').then(r=>r.text()).then(t=>console.log(t))"
 curl https://api.truepoint.in/health                     # → {"status":"ok"} (once DNS+TLS are live)
 ```
 
