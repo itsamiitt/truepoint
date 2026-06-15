@@ -1,12 +1,13 @@
-// OtpInput.tsx — the 6-digit MFA code input. Progressive enhancement: with JS it auto-submits the form on
-// the 6th digit (mission requirement); without JS the screen's Verify button still works. Bundled 'self'
-// script — no inline JS, so it satisfies the auth origin's nonce-CSP.
+// OtpInput.tsx — the 6-digit MFA/verify code input. Progressive enhancement: with JS it auto-submits the
+// form on the 6th digit (mission requirement); without JS the screen's Verify button still works. Bundled
+// 'self' script — no inline JS, so it satisfies the auth origin's nonce-CSP. Native <input>, Tailwind-themed
+// as a centered, monospaced, letter-spaced code field.
 "use client";
 
 export function OtpInput() {
   return (
     <input
-      className="auth-input"
+      className="h-12 w-full rounded-[var(--radius)] border border-input bg-background text-center font-mono text-lg tracking-[0.5em] text-foreground"
       id="code"
       name="code"
       inputMode="numeric"

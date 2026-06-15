@@ -2,7 +2,12 @@
  * globals.css — auth-origin layout + component styles, built ENTIRELY from the TruePoint tokens
  * (packages/ui/tokens.css). Light, near-monochrome; Cobalt never used as text; one soft shadow on the
  * card only; subtle grey focus ring. Mobile-first at 375px. (04 §7, brand-identity.md.)
+ *
+ * Tailwind v4 + the shared TruePoint theme are pulled in first; the .auth-* rules below remain only for
+ * any not-yet-migrated screens and are removed once every page is on the primitives.
  */
+@import "tailwindcss";
+@import "@leadwolf/ui/theme.css";
 
 * {
   box-sizing: border-box;
