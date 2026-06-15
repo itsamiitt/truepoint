@@ -43,8 +43,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 271,
-  "fileSetHash": "sha256:e935367df915d2b23d2a84b3fb27a3fdc9e9df81062a3f38c3f912ba8585c5c0",
+  "fileCount": 290,
+  "fileSetHash": "sha256:15111dffbecbe37b6a76c0ac411d904513b2eb4a6e98beadc1ae57c0de7599d8",
   "features": {
     "activity": {
       "web": [],
@@ -400,9 +400,14 @@
     ],
     "apps/auth/app": [
       "apps/auth/src/app/.well-known/jwks.json/route.ts",
+      "apps/auth/src/app/forgot/actions.ts",
+      "apps/auth/src/app/forgot/page.tsx",
       "apps/auth/src/app/layout.tsx",
       "apps/auth/src/app/login/actions.ts",
       "apps/auth/src/app/login/page.tsx",
+      "apps/auth/src/app/magic/actions.ts",
+      "apps/auth/src/app/magic/confirm/route.ts",
+      "apps/auth/src/app/magic/page.tsx",
       "apps/auth/src/app/mfa/actions.ts",
       "apps/auth/src/app/mfa/page.tsx",
       "apps/auth/src/app/org/actions.ts",
@@ -410,6 +415,8 @@
       "apps/auth/src/app/page.tsx",
       "apps/auth/src/app/password/actions.ts",
       "apps/auth/src/app/password/page.tsx",
+      "apps/auth/src/app/reset/actions.ts",
+      "apps/auth/src/app/reset/page.tsx",
       "apps/auth/src/app/signup/actions.ts",
       "apps/auth/src/app/signup/page.tsx",
       "apps/auth/src/app/signup/profile/page.tsx",
@@ -428,11 +435,13 @@
     ],
     "apps/auth/lib": [
       "apps/auth/src/lib/clientIp.ts",
+      "apps/auth/src/lib/completeMagic.ts",
       "apps/auth/src/lib/completeSso.ts",
       "apps/auth/src/lib/cookies.ts",
       "apps/auth/src/lib/cors.ts",
       "apps/auth/src/lib/domainResolver.ts",
       "apps/auth/src/lib/finishLogin.ts",
+      "apps/auth/src/lib/magicCarry.ts",
       "apps/auth/src/lib/mailer.ts",
       "apps/auth/src/lib/ssoConfig.ts"
     ],
@@ -485,6 +494,7 @@
       "packages/auth/src/mfa.ts",
       "packages/auth/src/mfaVerify.ts",
       "packages/auth/src/password.ts",
+      "packages/auth/src/passwordReset.ts",
       "packages/auth/src/policy.ts",
       "packages/auth/src/rateLimit.ts",
       "packages/auth/src/refresh.ts",
@@ -553,11 +563,20 @@
       "packages/ui/src/components/Spinner.tsx",
       "packages/ui/src/components/StatTile.tsx",
       "packages/ui/src/components/StatusBadge.tsx",
+      "packages/ui/src/components/ui/alert.tsx",
+      "packages/ui/src/components/ui/badge.tsx",
+      "packages/ui/src/components/ui/button.tsx",
+      "packages/ui/src/components/ui/checkbox.tsx",
+      "packages/ui/src/components/ui/input.tsx",
+      "packages/ui/src/components/ui/label.tsx",
+      "packages/ui/src/components/ui/radio-group.tsx",
+      "packages/ui/src/components/ui/separator.tsx",
       "packages/ui/src/index.ts"
     ]
   },
   "unassigned": [
     "apps/auth/next.config.mjs",
+    "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs"
   ],
   "warnings": [],
