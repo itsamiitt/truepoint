@@ -43,8 +43,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 292,
-  "fileSetHash": "sha256:c125fe3dedb16d54410f9546299cfd66c79daa3599f00096b92cbdd565a235bb",
+  "fileCount": 293,
+  "fileSetHash": "sha256:f118dc2223d2d170d50d63bc3bece9ddc0ea0f028fce8e18e90659ee6fec9b37",
   "features": {
     "activity": {
       "web": [],
@@ -550,6 +550,7 @@
     ],
     "packages/types": [
       "packages/types/src/activity.ts",
+      "packages/types/src/auditCoverage.test.ts",
       "packages/types/src/auth.ts",
       "packages/types/src/billing.ts",
       "packages/types/src/compliance.ts",

@@ -256,13 +256,18 @@ CHECK ( action IN ('reveal','reveal.blocked', /* … */ , 'oauth.link') )  -- co
 > future milestones add **no** migration here; they add **writers** (§5) and tests (§8) for values that
 > already exist.
 
-## 8. CI coverage gate (recommended — not yet built)
+## 8. Coverage gate
 
-§5.2 shows **45** values defined without writers; today nothing fails CI if a value gains no writer, or if
-a writer is dropped. Recommended: an integration test in the existing `packages/db/test/*.itest.ts` harness
-that imports `auditAction` from `@leadwolf/types` and asserts every value either (a) has at least one
-exercised writer, or (b) is on an explicit **"vocabulary-only, writer pending"** allowlist — so the §5.2
-backlog stays visible and shrinking, not silently forgotten. Runs after migrate, before build.
+**Implemented — unit drift-guard.** `packages/types/src/auditCoverage.test.ts` (Bun test, no DB) asserts
+the closed `auditAction` enum partitions exactly into the **WRITTEN** set (§5.1) and the **PENDING** set
+(§5.2): `WRITTEN ∪ PENDING === auditAction.options`, the two sets are disjoint, and neither holds a stale
+literal. Adding or removing an action without updating the bookkeeping fails the test, so the §5.2 backlog
+stays visible and the [02 §6] contract can't silently regress. As each PENDING action lands a writer, move
+it to WRITTEN there **and** in §5. Run with `bun test packages/types`.
+
+**Future — DB-backed exercised-writer gate.** The stronger check — that each WRITTEN action actually
+produces an `audit_log` row — belongs as an integration test in the `packages/db/test/*.itest.ts` harness
+(needs Postgres), run after migrate / before build, once a CI pipeline exists (there is none today):
 
 ```ts
 // packages/db/test/audit-coverage.itest.ts (proposed)
@@ -298,7 +303,8 @@ across every overlay copy by that identity, never by `actor_id`.
 - [x] Zod `auditAction` ↔ DB CHECK `audit_log_action_enum` in lockstep (verified).
 - [ ] Every defined value has a writer or an explicit "pending" allowlist entry (§5.2 backlog cleared).
 - [ ] The auth audit sink lands; the auth-event values are written (the `passwordReset.ts` TODO cleared — OQ-F).
-- [ ] CI coverage gate (§8) green.
+- [x] Coverage **drift-guard** unit test green (`packages/types/src/auditCoverage.test.ts`, §8).
+- [ ] DB-backed exercised-writer gate + CI wiring (§8) — pending a CI pipeline.
 - [ ] DSAR delete E2E proves removal across all copies + the relevant `audit_log` rows ([10 M5](./10-roadmap.md) DoD).
 
 ---

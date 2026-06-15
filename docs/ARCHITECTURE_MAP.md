@@ -23,7 +23,7 @@
 > credit-back — proven by `activity.itest.ts` (5) + `outreach.itest.ts` (8). The web grew the
 > **Sequences** (builder + enrollment log + send), **Reports** (client-side rollups), and **Inbox**
 > (placeholder) destinations.
-> 292 source files, 0 warnings, 3 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
+> 293 source files, 0 warnings, 3 framework-root files unbucketed (`apps/{auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs` — see Notes). **M4** adds the provider-agnostic enrichment engine
 > (port in core, Apollo/ZoomInfo/Clearbit adapters in the now-live `packages/integrations`, cache-first +
 > budget breaker + waterfall), **verify-on-reveal driving the ADR-0013 charge** (verification runs BEFORE
 > the FOR UPDATE window; `valid` charges, `invalid`/`catch_all`/`unknown` charge 0, `risky` configurable),
@@ -303,7 +303,8 @@ flowchart TD
   `SuppressedError`), `auth.ts`, `contacts.ts`, `billing.ts` (`revealType`, suppression scopes, the **closed
   `auditAction` enum** — source of truth mirrored by the SQL CHECK), `activity.ts` (activity timeline +
   Sales Navigator link vocabularies), `outreach.ts` (sequence/step/log enums + request schemas — closed
-  vocabularies mirrored by the outreach SQL CHECKs), `index.ts`.
+  vocabularies mirrored by the outreach SQL CHECKs), `index.ts`, and `auditCoverage.test.ts` (the
+  closed-enum **drift guard** — [audit-log-enum.md](./planning/audit-log-enum.md) §8).
 - **`packages/config`** — `env.ts` (the only `process.env` reader; `BLIND_INDEX_KEY`, the `REVEAL_COST_*`
   placeholders per 07 §1, `STRIPE_WEBHOOK_SECRET`), `index.ts`.
 - **`packages/ui`** — `tokens.css` (Tailwind v4 theme), `cn.ts`, the presentational primitives
