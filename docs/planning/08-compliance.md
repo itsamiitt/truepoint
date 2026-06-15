@@ -164,6 +164,9 @@ penalties (data-side research
   reveal/top-up: admin grants/adjustments + chargeback reversals ([07 §6/§7](./07-billing-credits.md)) and the
   automated **credit-back-on-bounce** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).
   This closes a prior gap where credit corrections were "audit-logged" with no dedicated action value.
+- **Consolidated reference.** The full as-built value list, the write-path coverage (which actions have a
+  `writeAudit` call-site vs. are still pending), the naming convention, and the per-milestone evolution
+  plan live in [audit-log-enum.md](./audit-log-enum.md) — the single reference for this closed enum.
 
 ## 6. Sending compliance (CAN-SPAM + GDPR/ePrivacy)
 
