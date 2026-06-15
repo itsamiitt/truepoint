@@ -15,6 +15,7 @@ type SearchParams = Promise<Record<string, string | undefined>>;
 const ERRORS: Record<string, string> = {
   rate: "Too many attempts. Wait a moment and try again.",
   bot: "We couldn't verify you're human. Please try again.",
+  magic: "That sign-in link was invalid or expired. Enter your email to try again.",
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: SearchParams }) {
@@ -26,12 +27,20 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
   const errorMessage = sp.error
     ? (ERRORS[sp.error] ?? "Enter your email or username to continue.")
     : null;
+  // Success notice after a completed password reset (/reset → /login?reset=1).
+  const notice =
+    sp.reset === "1" ? "Your password has been updated — sign in with your new password." : null;
 
   return (
     <AuthShell
       title="Sign in or create an account"
       subtitle="Enter your email or username to continue."
     >
+      {notice ? (
+        <Alert aria-live="polite" className="mb-4">
+          {notice}
+        </Alert>
+      ) : null}
       <Button asChild variant="outline" size="full">
         <a href={oauthHref}>Continue with Google</a>
       </Button>
