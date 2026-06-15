@@ -6,7 +6,10 @@ import Redis from "ioredis";
 import { env, isAllowedOrigin } from "@leadwolf/config";
 import { InvalidAuthCodeError } from "@leadwolf/types";
 
-const redis = new Redis(env.REDIS_URL);
+// Lazy: constructing ioredis opens a socket + retry loop. Defer it so importing this module is
+// side-effect-free (it's transpiled into the auth Next app; `next build` must not try to reach Redis).
+let _redis: Redis | undefined;
+const redis = (): Redis => (_redis ??= new Redis(env.REDIS_URL));
 const key = (code: string) => `authcode:${code}`;
 
 export interface CodeBinding {
@@ -22,7 +25,7 @@ export interface CodeBinding {
 /** Mint a code bound to the session context; returned to the browser as a URL param on the redirect. */
 export async function issueCode(binding: CodeBinding): Promise<string> {
   const code = randomBytes(32).toString("base64url");
-  await redis.set(key(code), JSON.stringify(binding), "EX", env.AUTH_CODE_TTL_SECONDS);
+  await redis().set(key(code), JSON.stringify(binding), "EX", env.AUTH_CODE_TTL_SECONDS);
   return code;
 }
 
@@ -35,7 +38,7 @@ export async function exchangeCode(args: {
   clientIp: string;
   origin: string;
 }): Promise<CodeBinding> {
-  const raw = await redis.getdel(key(args.code)); // atomic single-use
+  const raw = await redis().getdel(key(args.code)); // atomic single-use
   if (!raw) throw new InvalidAuthCodeError();
 
   const binding = JSON.parse(raw) as CodeBinding;

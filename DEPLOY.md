@@ -166,7 +166,7 @@ ssh -L 8025:localhost:8025 user@SERVER_IP    # then open http://localhost:8025
 - **A service exits on boot with "Invalid environment configuration"** — a required key in `.env.production` is missing/invalid; the log lists exactly which one.
 - **Browser loads the UI but API calls fail (CORS)** — `APP_ORIGINS` must exactly match `https://app.truepoint.in`, and `NEXT_PUBLIC_API_BASE` must be `https://api.truepoint.in`; rebuild after changing (`bash deploy/deploy.sh`).
 - **Caddy won't get a certificate / site shows TLS error** — confirm the subdomain's DNS resolves to this server and ports 80+443 are open in the cloud firewall, then `docker compose -f docker-compose.prod.yml logs caddy`. Caddy retries automatically once DNS/ports are correct.
-- **Migration fails with a prepared-statement error (Neon pooler)** — point `DATABASE_URL` at Neon's **direct** (non-`-pooler`) host for the migrate step.
+- **Migration hangs or errors on Neon's pooler** — migrations now run with `prepare: false` + short connect/lock timeouts, so the pooled host should work and a real problem fails fast instead of freezing. If you still prefer the direct host for migrations, set `DATABASE_MIGRATION_URL` in `.env.production` to Neon's **direct** (non-`-pooler`) host; the app keeps using the pooled `DATABASE_URL`.
 - **Next.js misbehaves under Bun** — as a fallback I can switch the web/auth build+runtime to a Node base image; tell me and I'll adjust the Dockerfile.
 
 ---

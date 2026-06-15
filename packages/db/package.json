@@ -7,7 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
-    "migrate": "drizzle-kit generate && bun run src/migrate.ts",
+    "migrate": "bun run src/migrate.ts",
     "seed": "bun run src/seed.ts"
   },
   "dependencies": {

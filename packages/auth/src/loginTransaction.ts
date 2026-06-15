@@ -7,7 +7,10 @@ import { randomBytes } from "node:crypto";
 import Redis from "ioredis";
 import { env } from "@leadwolf/config";
 
-const redis = new Redis(env.REDIS_URL);
+// Lazy: constructing ioredis opens a socket + retry loop. Defer it so importing this module is
+// side-effect-free (it's transpiled into the auth Next app; `next build` must not try to reach Redis).
+let _redis: Redis | undefined;
+const redis = (): Redis => (_redis ??= new Redis(env.REDIS_URL));
 const TTL_SECONDS = 600;
 const key = (id: string) => `logintxn:${id}`;
 
@@ -33,12 +36,12 @@ export async function createLoginTransaction(
 ): Promise<{ id: string; txn: LoginTransaction }> {
   const id = randomBytes(24).toString("base64url");
   const txn: LoginTransaction = { ...input, mfaVerified: false, createdAt: Date.now() };
-  await redis.set(key(id), JSON.stringify(txn), "EX", TTL_SECONDS);
+  await redis().set(key(id), JSON.stringify(txn), "EX", TTL_SECONDS);
   return { id, txn };
 }
 
 export async function getLoginTransaction(id: string): Promise<LoginTransaction | null> {
-  const raw = await redis.get(key(id));
+  const raw = await redis().get(key(id));
   return raw ? (JSON.parse(raw) as LoginTransaction) : null;
 }
 
@@ -48,9 +51,9 @@ export async function patchLoginTransaction(
 ): Promise<void> {
   const cur = await getLoginTransaction(id);
   if (!cur) return;
-  await redis.set(key(id), JSON.stringify({ ...cur, ...patch }), "KEEPTTL");
+  await redis().set(key(id), JSON.stringify({ ...cur, ...patch }), "KEEPTTL");
 }
 
 export async function deleteLoginTransaction(id: string): Promise<void> {
-  await redis.del(key(id));
+  await redis().del(key(id));
 }

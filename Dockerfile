@@ -9,7 +9,7 @@
 # are public by design. The build is invoked by deploy/deploy.sh:
 #   DOCKER_BUILDKIT=1 docker build --secret id=dotenv,src=.env.production -t leadwolf:latest .
 
-FROM oven/bun:1.1.34 AS build
+FROM oven/bun:1.3.14 AS build
 WORKDIR /app
 
 # Install ALL workspace deps, including devDependencies (drizzle-kit, next type defs, …).
