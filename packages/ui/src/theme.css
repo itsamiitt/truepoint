@@ -13,11 +13,12 @@
  * auto-detected by the app's own build. */
 @source "./components/**/*.{ts,tsx}";
 
-/* Fonts: set Tailwind's defaults to Geist so Preflight's html rule matches tokens.css. This import
- * loads after tokens.css, so without this Tailwind's default sans would win and override Geist. */
+/* Fonts: point Tailwind's defaults at the self-hosted Geist next/font CSS vars (set on <html> by each app
+ * via the `geist` package), with a system fallback. Self-hosting avoids the dropped Google-Fonts @import
+ * that previously left Geist unloaded in production. */
 @theme {
-  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
 
 /* Colors: map Tailwind's color tokens onto the live --tp-* vars. `inline` means utilities reference the

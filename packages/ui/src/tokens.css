@@ -2,14 +2,15 @@
  * tokens.css — TruePoint design tokens (authoritative source: /colors.css + docs/planning/04 §3,
  * brand-identity.md). Light theme only; Cobalt is a FILL/logo color, never text. Imported once by every
  * app shell (auth.* and app.*). Extend the Tailwind theme from these variables — do not fork them.
+ * Geist is self-hosted via next/font (the `geist` package): each app sets --font-geist-* on <html>;
+ * the family stacks below are the fallback (the dropped Google-Fonts @import is gone).
  */
 
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap");
-
 :root {
-  /* Typography (FONTS.txt) — hierarchy comes from weight + size, never color. */
-  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* Typography — hierarchy comes from weight + size, never color. Self-hosted Geist via next/font. */
+  --font-sans: var(--font-geist-sans), "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-mono: var(--font-geist-mono), "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* Neutrals — text */
   --tp-ink: #111827;
