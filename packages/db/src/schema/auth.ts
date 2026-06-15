@@ -235,7 +235,7 @@ export const authEmailTokens = pgTable("auth_email_tokens", {
   tokenHash: varchar("token_hash", { length: 255 }).primaryKey(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }), // null for pre-signup verify
   email: citext("email").notNull(),
-  purpose: varchar("purpose", { length: 20 }).notNull(), // verify|magic_link|email_otp
+  purpose: varchar("purpose", { length: 20 }).notNull(), // verify|magic_link|email_otp|reset
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   consumedAt: timestamp("consumed_at", { withTimezone: true }),
   ipAddress: text("ip_address"),
