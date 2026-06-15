@@ -15,7 +15,7 @@ x-app: &app
     JWT_PUBLIC_KEY_PEM: ${JWT_PUBLIC_KEY_PEM:-}
   restart: unless-stopped
   depends_on:
-    redis: { condition: service_started }
+    redis: { condition: service_healthy }
 
 services:
   # ── Infrastructure ────────────────────────────────────────────────────────────
@@ -25,6 +25,12 @@ services:
     command: ["redis-server", "--appendonly", "yes"]
     volumes: [redisdata:/data]
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
   typesense:
     image: typesense/typesense:27.1
@@ -57,10 +63,23 @@ services:
   api:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/api", "start"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 25s
 
   auth:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/auth-app", "start"]
+    healthcheck:
+      # Any HTTP response (200/redirect) = server up; fetch only throws on a refused connection.
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3000/login',{redirect:'manual'}).then(()=>process.exit(0),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
 
   workers:
     <<: *app
@@ -69,8 +88,16 @@ services:
   web:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/web", "start"]
+    # Explicit depends_on REPLACES the anchor's (YAML merge isn't deep), so re-list redis here too.
     depends_on:
-      api: { condition: service_started }
+      redis: { condition: service_healthy }
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3002/',{redirect:'manual'}).then(()=>process.exit(0),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
 
   # ── Edge: TLS termination + subdomain routing (auto Let's Encrypt) ──────────────
   caddy:
@@ -81,9 +108,9 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      web: { condition: service_started }
-      auth: { condition: service_started }
-      api: { condition: service_started }
+      web: { condition: service_healthy }
+      auth: { condition: service_healthy }
+      api: { condition: service_healthy }
     restart: unless-stopped
 
 volumes:

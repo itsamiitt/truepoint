@@ -7,7 +7,10 @@ import { randomBytes } from "node:crypto";
 import Redis from "ioredis";
 import { env } from "@leadwolf/config";
 
-const redis = new Redis(env.REDIS_URL);
+// Lazy: constructing ioredis opens a socket + retry loop. Defer it so importing this module is
+// side-effect-free (it's transpiled into the auth Next app; `next build` must not try to reach Redis).
+let _redis: Redis | undefined;
+const redis = (): Redis => (_redis ??= new Redis(env.REDIS_URL));
 const TTL_SECONDS = 600;
 const key = (id: string) => `ssotxn:${id}`;
 
@@ -31,15 +34,15 @@ export async function createSsoTransaction(
 ): Promise<{ id: string; txn: SsoTransaction }> {
   const id = randomBytes(24).toString("base64url");
   const txn: SsoTransaction = { ...input, createdAt: Date.now() };
-  await redis.set(key(id), JSON.stringify(txn), "EX", TTL_SECONDS);
+  await redis().set(key(id), JSON.stringify(txn), "EX", TTL_SECONDS);
   return { id, txn };
 }
 
 export async function getSsoTransaction(id: string): Promise<SsoTransaction | null> {
-  const raw = await redis.get(key(id));
+  const raw = await redis().get(key(id));
   return raw ? (JSON.parse(raw) as SsoTransaction) : null;
 }
 
 export async function deleteSsoTransaction(id: string): Promise<void> {
-  await redis.del(key(id));
+  await redis().del(key(id));
 }

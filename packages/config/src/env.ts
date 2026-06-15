@@ -26,6 +26,10 @@ export const appEnvSchema = z.object({
   JWT_PUBLIC_KEY_PEM: z.string().default(""),
 
   DATABASE_URL: z.string().url(),
+  // Optional DIRECT (non-pooled) URL used ONLY for migrations. On Neon the default connection string is
+  // the pooled (`-pooler`/PgBouncer) host; migrations run cleaner against the direct host. When unset,
+  // migrations fall back to DATABASE_URL (safe — applyMigrations sets `prepare: false` either way).
+  DATABASE_MIGRATION_URL: z.string().url().optional(),
   DATABASE_APP_ROLE: z.string().min(1).default("leadwolf_app"),
   REDIS_URL: z.string().url(),
 

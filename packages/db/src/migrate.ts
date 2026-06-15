@@ -5,7 +5,8 @@
 import { env } from "@leadwolf/config";
 import { applyMigrations } from "./applyMigrations.ts";
 
-applyMigrations(env.DATABASE_URL)
+// Prefer the direct (non-pooled) URL for migrations when provided; otherwise use DATABASE_URL.
+applyMigrations(env.DATABASE_MIGRATION_URL ?? env.DATABASE_URL)
   .then(() => {
     console.log("migrate: done.");
     process.exit(0);

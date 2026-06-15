@@ -17,9 +17,9 @@ coverage/
 # Deploy-time secrets — generated on the server, never committed.
 deploy/keys/
 
-# Drizzle migrations are GENERATED at migrate-time (packages/db: "drizzle-kit generate && migrate");
-# the schema files are the source of truth. Committed per-milestone snapshots are a future decision.
-packages/db/src/migrations/
+# Drizzle migrations are now GENERATED in dev (`bun run --filter @leadwolf/db generate`) and COMMITTED —
+# prod APPLIES them deterministically (no generate at deploy time, which could hang/prompt on the host).
+# So packages/db/src/migrations/ is tracked on purpose; do not re-ignore it.
 
 # Next.js generated type reference (per-build, like .next/)
 next-env.d.ts

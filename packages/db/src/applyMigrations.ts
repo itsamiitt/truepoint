@@ -76,7 +76,21 @@ async function exists(path: string): Promise<boolean> {
 }
 
 export async function applyMigrations(connectionString: string): Promise<void> {
-  const sql = postgres(connectionString, { max: 1, onnotice: () => {} });
+  // `prepare: false` is REQUIRED here: Drizzle's migrator issues prepared statements, which a
+  // transaction-pooling proxy (Neon `-pooler` / PgBouncer / RDS Proxy) can't keep across checkouts —
+  // the classic "migration hangs forever" on Neon's default pooled host. Mirrors client.ts. The timeouts
+  // turn every other freeze mode (unreachable host, blocked lock) into a fast error instead of an
+  // indefinite wait. `statement_timeout` is deliberately generous: first-run DDL can be legitimately slow.
+  const sql = postgres(connectionString, {
+    max: 1,
+    prepare: false,
+    connect_timeout: 15,
+    onnotice: () => {},
+    connection: {
+      lock_timeout: 15000,
+      statement_timeout: 120000,
+    },
+  });
   const db = drizzle(sql);
   try {
     await sql.unsafe(BOOTSTRAP);

@@ -38,8 +38,11 @@ echo "==> [2/4] Starting local infrastructure (redis, typesense, mailhog)…"
 "${COMPOSE[@]}" up -d redis typesense mailhog
 
 # ── 3. Migrations against DATABASE_URL (bootstrap roles/extensions → tables → RLS) ─
+# Hard 5-min backstop: the migrator now sets prepare:false + connect/lock timeouts so it can't
+# silently freeze on a Neon pooler, but `timeout` guarantees a hung run can never block the deploy
+# (set -e turns the 124 exit into a clean abort BEFORE any app service starts).
 echo "==> [3/4] Running database migrations…"
-"${COMPOSE[@]}" run --rm migrate
+timeout 300 "${COMPOSE[@]}" run --rm migrate
 
 # ── 4. App services + edge proxy ──────────────────────────────────────────────────
 echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, caddy)…"
