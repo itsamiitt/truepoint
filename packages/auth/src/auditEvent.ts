@@ -5,6 +5,7 @@
 // tenant-less identity events go to platform_audit_log (ADR-0031 §3). Never pass codes/tokens/PII.
 
 import { type AuditEntryInput, auditRepository, withTenantTx } from "@leadwolf/db";
+import { log } from "./log.ts";
 
 export async function recordAuthEvent(entry: AuditEntryInput): Promise<void> {
   try {
@@ -15,7 +16,13 @@ export async function recordAuthEvent(entry: AuditEntryInput): Promise<void> {
       },
       (tx) => auditRepository.insert(tx, entry),
     );
-  } catch {
-    // Observational (ADR-0031 §1): a failed audit insert must never break authentication.
+  } catch (err) {
+    // Observational (ADR-0031 §1): a failed audit insert must never break authentication — but it must not
+    // be SILENT either, or an audit_log DB/RLS regression is invisible. Log the action, never the entry's
+    // identifiers/PII or the error stack.
+    log.warn("audit.write.failed", {
+      action: entry.action,
+      err: err instanceof Error ? err.name : "unknown",
+    });
   }
 }

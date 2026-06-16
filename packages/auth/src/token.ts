@@ -66,3 +66,26 @@ export async function getJwks(): Promise<{ keys: Array<Record<string, unknown>> 
   const jwk = await exportJWK(await publicKey());
   return { keys: [{ ...jwk, use: "sig", alg: ALG, kid: env.JWT_SIGNING_KID }] };
 }
+
+/**
+ * Boot self-test (ADR-0016 addendum): mint a throwaway token to prove the signing key actually loads and
+ * signs — the exact path that returns 503 `token_mint_failed` when JWT_PRIVATE_KEY_PEM/_B64 is missing or
+ * mangled. No DB/Redis. Throws a clear, secret-free error (never the PEM) so the deploy smoke test and the
+ * app boot hook fail loudly and specifically instead of every login silently 503-ing.
+ */
+export async function assertSigningKey(): Promise<void> {
+  try {
+    await mintAccessToken({
+      userId: "boot-selftest",
+      tenantId: "boot",
+      sessionId: "boot",
+      audience: env.AUTH_ORIGIN,
+    });
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "unknown";
+    const message = err instanceof Error ? err.message : "unknown";
+    throw new Error(
+      `JWT signing self-test failed (${name}: ${message}) — JWT_PRIVATE_KEY_PEM/_B64 is missing or malformed`,
+    );
+  }
+}
