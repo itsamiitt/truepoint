@@ -145,7 +145,7 @@ export const importJobRefSchema = z.object({
 export type ImportJobRef = z.infer<typeof importJobRefSchema>;
 
 /** Dead-letter queue name for import jobs that exhaust their retries (16 §3.2). Shared producer/consumer. */
-export const IMPORTS_DLQ = "imports:dlq";
+export const IMPORTS_DLQ = "imports-dlq";
 
 /** Coarse progress the import worker reports via job.updateProgress; the status endpoint echoes it back. */
 export const importProgressSchema = z.object({

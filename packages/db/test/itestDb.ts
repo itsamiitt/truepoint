@@ -20,7 +20,9 @@ function withDatabase(url: string, database: string): string {
 function appUrlFrom(adminUrl: string): string {
   const u = new URL(adminUrl);
   u.username = "leadwolf_app";
-  u.password = "leadwolf_app";
+  // Must match the password applyMigrations sets for leadwolf_app (its DEFAULT_APP_ROLE_PASSWORD) when the
+  // itests call applyMigrations() with no appRolePassword override — otherwise the RLS proofs fail to auth.
+  u.password = "Lw_App_Role_2026!x7Qm";
   return u.toString();
 }
 
@@ -29,7 +31,9 @@ export async function startItestDb(name: string): Promise<ItestDb> {
   if (external) {
     const database = `itest_${name}_${Date.now().toString(36)}`;
     const root = postgres(external, { max: 1, onnotice: () => {} });
-    await root.unsafe(`CREATE DATABASE ${database}`);
+    // Quote the identifier: an uppercase name (e.g. "workspaceSwitch") is otherwise folded to lowercase by
+    // CREATE DATABASE while the connection URL keeps the original case -> "database does not exist".
+    await root.unsafe(`CREATE DATABASE "${database}"`);
     await root.end();
     const adminUrl = withDatabase(external, database);
     return {
@@ -37,7 +41,7 @@ export async function startItestDb(name: string): Promise<ItestDb> {
       appUrl: appUrlFrom(adminUrl),
       stop: async () => {
         const cleaner = postgres(external, { max: 1, onnotice: () => {} });
-        await cleaner.unsafe(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+        await cleaner.unsafe(`DROP DATABASE IF EXISTS "${database}" WITH (FORCE)`);
         await cleaner.end();
       },
     };
