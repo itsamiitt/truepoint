@@ -80,6 +80,51 @@ complianceRoutes.post("/suppression", async (c) => {
   return c.json({ id }, 201);
 });
 
+// List the caller's manageable suppression entries (tenant + workspace scope; global rows excluded). The
+// response never includes the email/phone blind indexes (HMACs of PII) — see suppressionRepository.list.
+complianceRoutes.get("/suppression", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace");
+  const rows = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, (tx) =>
+    suppressionRepository.list(tx),
+  );
+  return c.json({
+    entries: rows.map((r) => ({
+      id: r.id,
+      scope: r.scope,
+      match_type: r.matchType,
+      domain: r.domain,
+      contact_id: r.contactId,
+      reason: r.reason,
+      created_at: r.createdAt.toISOString(),
+    })),
+  });
+});
+
+// Remove one suppression entry. RLS limits removal to the caller's own scope, so a foreign/global id is a
+// no-op (not an error). Every removal is audited in the same transaction (suppression.remove).
+complianceRoutes.delete("/suppression/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace");
+  const id = c.req.param("id");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    throw new ValidationError("Invalid suppression id.");
+  }
+  await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, async (tx) => {
+    await suppressionRepository.removeByIds(tx, [id]);
+    await writeAudit(tx, {
+      tenantId: c.get("tenantId"),
+      workspaceId,
+      actorUserId: c.get("claims").sub,
+      action: "suppression.remove",
+      entityType: "suppression_list",
+      entityId: id,
+      metadata: {},
+    });
+  });
+  return c.body(null, 204);
+});
+
 complianceRoutes.post("/consent", async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace");

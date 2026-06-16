@@ -68,6 +68,8 @@ export function SuppressionForm() {
       setAddedId(id);
       setValue("");
       setReason("");
+      // Nudge the sibling SuppressionList to reload so the new entry appears immediately.
+      window.dispatchEvent(new CustomEvent("suppression:changed"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add suppression entry");
     } finally {

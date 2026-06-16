@@ -29,7 +29,9 @@ export function RepliesCard({
           <Spinner /> Loading replies…
         </div>
       ) : replies.length === 0 ? (
-        <p className={styles.muted}>No recent replies. Replies to your sequences will appear here.</p>
+        <p className={styles.muted}>
+          No recent replies. Replies to your sequences will appear here.
+        </p>
       ) : (
         <div className={styles.list}>
           {replies.map((reply) => (
