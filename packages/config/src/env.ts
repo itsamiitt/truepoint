@@ -38,6 +38,11 @@ export const appEnvSchema = z
     JWT_SIGNING_KID: z.string().min(1),
     JWT_PRIVATE_KEY_PEM: z.string().default(""),
     JWT_PUBLIC_KEY_PEM: z.string().default(""),
+    // Base64 single-line transport for the EdDSA PEMs. A multi-line PEM passed through docker compose
+    // `${VAR}` interpolation gets its newlines mangled → importPKCS8 throws → login 503s (token_mint_failed).
+    // deploy.sh ships these base64 forms; loadEnv decodes them into the PEM fields. Raw PEM still wins if set.
+    JWT_PRIVATE_KEY_PEM_B64: z.string().default(""),
+    JWT_PUBLIC_KEY_PEM_B64: z.string().default(""),
 
     DATABASE_URL: z.string().url(),
     // Optional DIRECT (non-pooled) URL used ONLY for migrations. On Neon the default connection string is
@@ -126,6 +131,18 @@ export const appEnvSchema = z
 
 export type AppEnv = z.infer<typeof appEnvSchema>;
 
+/**
+ * Resolve a PEM from its two possible transports. A raw (non-empty) PEM wins — backward compatible with
+ * deployments that inject the PEM directly. Otherwise decode the base64 transport, which survives the
+ * shell→compose interpolation that mangles a multi-line PEM (ADR-0016 addendum). Returns "" when neither
+ * is supplied (dev/build/test): token signing simply throws later, surfaced by the boot/deploy self-test.
+ */
+export function decodeKeyMaterial(raw: string, b64: string): string {
+  if (raw.trim() !== "") return raw;
+  if (b64.trim() === "") return "";
+  return Buffer.from(b64, "base64").toString("utf8");
+}
+
 function loadEnv(): AppEnv {
   const parsed = appEnvSchema.safeParse(process.env);
   if (!parsed.success) {
@@ -134,7 +151,20 @@ function loadEnv(): AppEnv {
       .join("\n");
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
-  return Object.freeze(parsed.data);
+  // Decode the base64 PEM transport into the effective PEM fields so token.ts can read env.JWT_*_PEM
+  // unchanged. Done here (the one process.env reader) rather than in the schema so it stays a pure transform.
+  const resolved = {
+    ...parsed.data,
+    JWT_PRIVATE_KEY_PEM: decodeKeyMaterial(
+      parsed.data.JWT_PRIVATE_KEY_PEM,
+      parsed.data.JWT_PRIVATE_KEY_PEM_B64,
+    ),
+    JWT_PUBLIC_KEY_PEM: decodeKeyMaterial(
+      parsed.data.JWT_PUBLIC_KEY_PEM,
+      parsed.data.JWT_PUBLIC_KEY_PEM_B64,
+    ),
+  };
+  return Object.freeze(resolved);
 }
 
 export const env: AppEnv = loadEnv();
