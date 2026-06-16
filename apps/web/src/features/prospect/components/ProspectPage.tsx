@@ -7,6 +7,7 @@
 
 import type { MaskedContact } from "@leadwolf/types";
 import { useMemo, useState } from "react";
+import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useContacts } from "../hooks/useContacts";
 import {
   EMPTY_FILTER,
@@ -16,6 +17,7 @@ import {
   emailGlyphFor,
   maskedEmail,
 } from "../types";
+import { BulkActionBar } from "./BulkActionBar";
 import { RecordDetail } from "./RecordDetail";
 
 function FilterRail({
@@ -91,10 +93,14 @@ function ResultRow({
   contact,
   selected,
   onSelect,
+  checked,
+  onToggle,
 }: {
   contact: MaskedContact;
   selected: boolean;
   onSelect: () => void;
+  checked: boolean;
+  onToggle: () => void;
 }) {
   const glyph = emailGlyphFor(contact);
   return (
@@ -109,6 +115,20 @@ function ResultRow({
         }
       }}
     >
+      {/* Checkbox cell stops click/keydown from bubbling so selecting a row never opens the slide-over. */}
+      <td
+        className="tp-cell-check"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          className="tp-row-check"
+          checked={checked}
+          onChange={onToggle}
+          aria-label={`Select ${displayName(contact)}`}
+        />
+      </td>
       <td className="tp-cell-name">{displayName(contact)}</td>
       <td>{contact.jobTitle ?? "—"}</td>
       <td className="tp-cell-mono">{contact.emailDomain ?? "—"}</td>
@@ -140,6 +160,19 @@ export function ProspectPage() {
     [contacts, selectedId],
   );
 
+  // Multi-row selection for the bulk-action bar (distinct from the single-row slide-over selection above).
+  const bulk = useBulkSelection();
+  const shownIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const allShownSelected = shownIds.length > 0 && shownIds.every((id) => bulk.selectedIds.has(id));
+  // Only contacts with a maskable email and not yet revealed can be bulk-revealed (07 §3).
+  const revealableIds = useMemo(
+    () =>
+      contacts
+        .filter((c) => bulk.selectedIds.has(c.id) && c.hasEmail && !c.isRevealed)
+        .map((c) => c.id),
+    [contacts, bulk.selectedIds],
+  );
+
   return (
     <div className="tp-prospect">
       <FilterRail
@@ -164,6 +197,15 @@ export function ProspectPage() {
           <table className="tp-result-table">
             <thead>
               <tr>
+                <th className="tp-cell-check">
+                  <input
+                    type="checkbox"
+                    className="tp-row-check"
+                    aria-label="Select all shown"
+                    checked={allShownSelected}
+                    onChange={(e) => bulk.setMany(shownIds, e.target.checked)}
+                  />
+                </th>
                 <th>Name</th>
                 <th>Title</th>
                 <th>Company</th>
@@ -179,10 +221,24 @@ export function ProspectPage() {
                   contact={c}
                   selected={c.id === selectedId}
                   onSelect={() => setSelectedId(c.id)}
+                  checked={bulk.isSelected(c.id)}
+                  onToggle={() => bulk.toggle(c.id)}
                 />
               ))}
             </tbody>
           </table>
+        )}
+
+        {bulk.count > 0 && (
+          <BulkActionBar
+            count={bulk.count}
+            revealableIds={revealableIds}
+            onClear={bulk.clear}
+            onRevealed={(ids) => {
+              for (const id of ids) markRevealed(id);
+              bulk.clear();
+            }}
+          />
         )}
       </section>
 
