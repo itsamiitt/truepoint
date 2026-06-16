@@ -15,6 +15,7 @@ export {
   mintAccessToken,
   verifyAccessToken,
   getJwks,
+  assertSigningKey,
   type MintAccessTokenInput,
 } from "./token.ts";
 export { issueCode, exchangeCode, validateBinding, type CodeBinding } from "./code.ts";
