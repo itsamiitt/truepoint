@@ -3,11 +3,11 @@
 // registration. Reveals existence by design, throttled. Carries the app's PKCE/return context forward.
 "use server";
 
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-import { checkIdentifierRate, lookupIdentifier, verifyTurnstile } from "@leadwolf/auth";
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { resolveDomain } from "@/lib/domainResolver";
+import { checkIdentifierRate, lookupIdentifier, verifyTurnstile } from "@leadwolf/auth";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 export async function submitIdentifier(formData: FormData): Promise<void> {
   const identifier = String(formData.get("identifier") ?? "").trim();

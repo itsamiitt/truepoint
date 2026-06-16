@@ -14,7 +14,13 @@ const nextConfig = {
   // Server-only / native deps reached via the transpiled workspace packages above. Keep them OUT of the
   // webpack bundle and `require()` them at runtime from node_modules — otherwise webpack tries to parse
   // @node-rs/argon2's native .node binary and the build fails. (They run only in server routes/actions.)
-  serverExternalPackages: ["@node-rs/argon2", "postgres", "ioredis", "rate-limiter-flexible", "nodemailer"],
+  serverExternalPackages: [
+    "@node-rs/argon2",
+    "postgres",
+    "ioredis",
+    "rate-limiter-flexible",
+    "nodemailer",
+  ],
   // serverExternalPackages doesn't reliably externalize a native dep reached THROUGH a transpilePackages
   // workspace package (@leadwolf/auth → @node-rs/argon2), so force it into the server bundle's externals:
   // webpack then emits a runtime require() instead of trying to parse the .node binary. nodemailer is added

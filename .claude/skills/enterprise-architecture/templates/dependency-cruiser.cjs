@@ -21,14 +21,16 @@ module.exports = {
     },
     {
       name: "apps-never-import-apps",
-      comment: "apps/* are deployable processes; they may depend on packages/* but never on each other (16 §5).",
+      comment:
+        "apps/* are deployable processes; they may depend on packages/* but never on each other (16 §5).",
       severity: "error",
       from: { path: "^apps/([^/]+)/" },
       to: { path: "^apps/([^/]+)/", pathNot: "^apps/$1/" },
     },
     {
       name: "no-deep-import-from-app",
-      comment: "An app may import a package ONLY through its public index.ts — no deep imports (16 §6).",
+      comment:
+        "An app may import a package ONLY through its public index.ts — no deep imports (16 §6).",
       severity: "error",
       from: { path: "^apps/[^/]+/" },
       to: {
@@ -38,7 +40,8 @@ module.exports = {
     },
     {
       name: "no-deep-import-cross-package",
-      comment: "A package may import another package ONLY through its index.ts; its own internals are fine.",
+      comment:
+        "A package may import another package ONLY through its index.ts; its own internals are fine.",
       severity: "error",
       from: { path: "^packages/([^/]+)/" },
       to: {
@@ -48,17 +51,22 @@ module.exports = {
     },
     {
       name: "no-cross-feature-import",
-      comment: "Inside an app, a feature must not import another feature's internals; route via a public index or shared/ (16 §3.3).",
+      comment:
+        "Inside an app, a feature must not import another feature's internals; route via a public index or shared/ (16 §3.3).",
       severity: "error",
       from: { path: "^apps/([^/]+)/src/features/([^/]+)/" },
       to: {
         path: "^apps/[^/]+/src/features/([^/]+)/",
-        pathNot: ["^apps/$1/src/features/$2/", "^apps/[^/]+/src/features/[^/]+/index\\.(ts|tsx|js|jsx)$"],
+        pathNot: [
+          "^apps/$1/src/features/$2/",
+          "^apps/[^/]+/src/features/[^/]+/index\\.(ts|tsx|js|jsx)$",
+        ],
       },
     },
     {
       name: "core-must-not-import-integrations",
-      comment: "core declares ports; integrations implement them. core never imports integrations (16 §4/§5).",
+      comment:
+        "core declares ports; integrations implement them. core never imports integrations (16 §4/§5).",
       severity: "error",
       from: { path: "^packages/core/" },
       to: { path: "^packages/integrations/" },

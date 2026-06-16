@@ -102,6 +102,7 @@ export const accessTokenClaimsSchema = z.object({
   wid: z.string().uuid().optional(), // active workspace id (absent until selected)
   sid: z.string(), // session id (for the revocation denylist)
   scope: z.array(z.string()).default([]),
+  pa: z.boolean().optional(), // platform super-admin — cross-tenant access (ADR-0032)
   iss: z.string(),
   aud: z.string(),
   exp: z.number(),

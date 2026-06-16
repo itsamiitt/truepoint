@@ -16,7 +16,10 @@ export async function provisionSsoIdentity(input: {
   let userId = (await userRepository.findByEmail(email))?.id;
   if (!userId) {
     if (!input.config.jitEnabled) {
-      throw new ForbiddenError("sso_jit_disabled", "Your account has not been provisioned for SSO.");
+      throw new ForbiddenError(
+        "sso_jit_disabled",
+        "Your account has not been provisioned for SSO.",
+      );
     }
     userId = await userRepository.create({
       email,

@@ -1,9 +1,9 @@
 // token.ts — short-lived access-JWT mint/verify + JWKS publication (ADR-0016). EdDSA, 15-min TTL, audience
 // = the app origin. apps/api verifies statelessly against the JWKS; the access token lives in memory only.
 
-import { createRemoteJWKSet, exportJWK, importPKCS8, importSPKI, jwtVerify, SignJWT } from "jose";
 import { env } from "@leadwolf/config";
-import { accessTokenClaimsSchema, type AccessTokenClaims } from "@leadwolf/types";
+import { type AccessTokenClaims, accessTokenClaimsSchema } from "@leadwolf/types";
+import { SignJWT, createRemoteJWKSet, exportJWK, importPKCS8, importSPKI, jwtVerify } from "jose";
 
 const ALG = "EdDSA";
 
@@ -15,6 +15,7 @@ const publicKey = () => importSPKI(env.JWT_PUBLIC_KEY_PEM, ALG);
 // api picks it up; jose caches the set ~5 min). Lazy so importing this module opens no socket.
 const jwksUrl = new URL("/.well-known/jwks.json", env.AUTH_ORIGIN);
 let _jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
+// biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
 const remoteJwks = () => (_jwks ??= createRemoteJWKSet(jwksUrl));
 
 export interface MintAccessTokenInput {
@@ -24,6 +25,7 @@ export interface MintAccessTokenInput {
   audience: string; // the requesting app origin
   workspaceId?: string;
   scope?: string[];
+  isPlatformAdmin?: boolean;
 }
 
 export async function mintAccessToken(
@@ -35,6 +37,7 @@ export async function mintAccessToken(
     ...(input.workspaceId ? { wid: input.workspaceId } : {}),
     sid: input.sessionId,
     scope: input.scope ?? [],
+    ...(input.isPlatformAdmin ? { pa: true } : {}),
   })
     .setProtectedHeader({ alg: ALG, kid: env.JWT_SIGNING_KID, typ: "JWT" })
     .setSubject(input.userId)

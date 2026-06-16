@@ -826,9 +826,7 @@
           "detail": "In the Oct 2024-Mar 2025 reporting period the CRTC issued 16 warning letters, 105 Notices to Produce, 2 preservation demands, and 1 undertaking. Hudson's Bay Company agreed to a CAD $120,000 penalty plus a compliance-program review over unsubscribe-mechanism violations. The Spam Reporting Centre logged 208,083 complaints (~8,003/week); top reasons were lack of consent (48%), sender-identification issues (20%), and deceptive marketing (19%). Email accounted for 58% of complaints.",
           "figure": "Hudson's Bay CAD $120K; 208,083 complaints; consent=48% of complaints (FY2024-25)",
           "confidence": "high",
-          "sourceUrls": [
-            "https://crtc.gc.ca/eng/internet/pub/20250331.htm"
-          ]
+          "sourceUrls": ["https://crtc.gc.ca/eng/internet/pub/20250331.htm"]
         },
         {
           "point": "Google/Yahoo Feb 2024 bulk-sender rules reshaped cold email: 5,000+/day senders need SPF+DKIM+DMARC, one-click unsubscribe, spam rate <0.3%",
@@ -921,9 +919,7 @@
           "detail": "Per DLA Piper's 2026 GDPR report (as cited by industry analysis), European data protection authorities issued 330+ fines in 2025 and breach notifications rose ~22% year-over-year, indicating a rising-enforcement backdrop even as substantive law (Experian ruling, ePrivacy withdrawal, Digital Omnibus) trends modestly more permissive for legitimate-interest B2B activity. The net effect for vendors: more procedural scrutiny and documentation demands, but a defensible legal path for compliant B2B prospecting.",
           "figure": "330+ GDPR fines in 2025; breach notifications +22% YoY (DLA Piper 2026 report, via secondary source)",
           "confidence": "low",
-          "sourceUrls": [
-            "https://instantly.ai/blog/b2b-email-list-compliance-gdpr-canspam/"
-          ]
+          "sourceUrls": ["https://instantly.ai/blog/b2b-email-list-compliance-gdpr-canspam/"]
         }
       ],
       "keyTakeaways": [

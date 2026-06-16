@@ -4,11 +4,18 @@ export {
   db,
   withTenantTx,
   withPrivilegedTx,
+  withPlatformTx,
   closeDb,
   type Db,
   type Tx,
   type TenantScope,
+  type PlatformActor,
 } from "./client.ts";
+export {
+  provisionBootstrapAdmin,
+  type BootstrapAdminInput,
+  type BootstrapAdminResult,
+} from "./bootstrapAdmin.ts";
 export * as schema from "./schema/index.ts";
 export {
   userRepository,

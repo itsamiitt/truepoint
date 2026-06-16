@@ -3,26 +3,26 @@
 
 :root {
   /* Neutrals */
-  --tp-ink:        #111827; /* text, mark lower chevrons, primary buttons */
-  --tp-ink-2:      #374151;
-  --tp-ink-3:      #6B7280;
-  --tp-ink-4:      #9CA3AF;
-  --tp-surface:    #FFFFFF;
-  --tp-surface-2:  #F9FAFB;
-  --tp-surface-3:  #F4F5F7;
-  --tp-hairline:   #F0F0F0;
-  --tp-hairline-2: #E5E7EB;
-  --tp-twilight:   #0C0E1A; /* dark band / dark app-icon background */
+  --tp-ink: #111827; /* text, mark lower chevrons, primary buttons */
+  --tp-ink-2: #374151;
+  --tp-ink-3: #6b7280;
+  --tp-ink-4: #9ca3af;
+  --tp-surface: #ffffff;
+  --tp-surface-2: #f9fafb;
+  --tp-surface-3: #f4f5f7;
+  --tp-hairline: #f0f0f0;
+  --tp-hairline-2: #e5e7eb;
+  --tp-twilight: #0c0e1a; /* dark band / dark app-icon background */
 
   /* Brand accent — Cobalt (FILLS & the mark only, never text) */
-  --tp-cobalt:      #2563C9;
-  --tp-cobalt-700:  #1E4FA3; /* hover/darker fill */
-  --tp-cobalt-50:   #E9F0FC; /* soft tint background */
-  --tp-cobalt-tint: #5B8DEF; /* apex tint for dark surfaces */
+  --tp-cobalt: #2563c9;
+  --tp-cobalt-700: #1e4fa3; /* hover/darker fill */
+  --tp-cobalt-50: #e9f0fc; /* soft tint background */
+  --tp-cobalt-tint: #5b8def; /* apex tint for dark surfaces */
 
   /* Primary action */
-  --tp-btn:     #111827;
-  --tp-btn-700: #0B1220;
+  --tp-btn: #111827;
+  --tp-btn-700: #0b1220;
 }
 
 /* Usage rules

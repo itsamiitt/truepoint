@@ -1,28 +1,47 @@
+import { env } from "@leadwolf/config";
+import { RateLimitedError } from "@leadwolf/types";
 // rateLimit.ts — per-IP + per-identifier throttling for the identifier/credential steps (ADR-0020), backed
 // by Redis (rate-limiter-flexible). Throws RateLimitedError when a key is exhausted; fails OPEN on a Redis
 // outage so a cache blip can't brick authentication.
 import Redis from "ioredis";
 import { RateLimiterRedis } from "rate-limiter-flexible";
-import { env } from "@leadwolf/config";
-import { RateLimitedError } from "@leadwolf/types";
 
 // Lazy: constructing ioredis (and the limiters that capture it) opens a socket + retry loop. Defer it so
 // importing this module is side-effect-free — it is reachable from the auth Next app's module graph, and
 // `next build` must not try to reach Redis at build time.
 let _redis: Redis | undefined;
 const redis = (): Redis =>
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
   (_redis ??= new Redis(env.REDIS_URL, { enableOfflineQueue: false, maxRetriesPerRequest: 1 }));
 
 let _ipLimiter: RateLimiterRedis | undefined;
 let _idLimiter: RateLimiterRedis | undefined;
 let _apiLimiter: RateLimiterRedis | undefined;
 const ipLimiter = (): RateLimiterRedis =>
-  (_ipLimiter ??= new RateLimiterRedis({ storeClient: redis(), keyPrefix: "rl:ip", points: 30, duration: 60 }));
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
+  (_ipLimiter ??= new RateLimiterRedis({
+    storeClient: redis(),
+    keyPrefix: "rl:ip",
+    points: 30,
+    duration: 60,
+  }));
 const idLimiter = (): RateLimiterRedis =>
-  (_idLimiter ??= new RateLimiterRedis({ storeClient: redis(), keyPrefix: "rl:id", points: 10, duration: 60 }));
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
+  (_idLimiter ??= new RateLimiterRedis({
+    storeClient: redis(),
+    keyPrefix: "rl:id",
+    points: 10,
+    duration: 60,
+  }));
 // Coarse per-caller cap for the resource API (keyed by subject when authenticated, else IP). 120/min.
 const apiLimiter = (): RateLimiterRedis =>
-  (_apiLimiter ??= new RateLimiterRedis({ storeClient: redis(), keyPrefix: "rl:api", points: 120, duration: 60 }));
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
+  (_apiLimiter ??= new RateLimiterRedis({
+    storeClient: redis(),
+    keyPrefix: "rl:api",
+    points: 120,
+    duration: 60,
+  }));
 
 // Throw RateLimitedError if `limiter` is exhausted for `key`; fail OPEN on a Redis outage (shared helper).
 async function consume(limiter: RateLimiterRedis, key: string): Promise<void> {

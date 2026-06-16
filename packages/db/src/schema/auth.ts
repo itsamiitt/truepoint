@@ -53,6 +53,7 @@ export const users = pgTable("users", {
   scimExternalId: varchar("scim_external_id", { length: 255 }),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   status: varchar("status", { length: 50 }).notNull().default("active"), // active|pending|suspended
+  isPlatformAdmin: boolean("is_platform_admin").notNull().default(false), // platform super-admin (ADR-0032)
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

@@ -12,8 +12,16 @@ export function TurnstileWidget() {
   if (!SITE_KEY) return null;
   return (
     <>
-      <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" />
-      <div className="cf-turnstile" data-sitekey={SITE_KEY} data-theme="light" style={{ marginBottom: 16 }} />
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+        strategy="afterInteractive"
+      />
+      <div
+        className="cf-turnstile"
+        data-sitekey={SITE_KEY}
+        data-theme="light"
+        style={{ marginBottom: 16 }}
+      />
     </>
   );
 }

@@ -17,6 +17,7 @@ export interface UserRecord {
   authProvider: string;
   emailVerifiedAt: Date | null;
   status: string;
+  isPlatformAdmin: boolean;
 }
 
 type UserRow = typeof users.$inferSelect;
@@ -29,6 +30,7 @@ const toUser = (r: UserRow): UserRecord => ({
   authProvider: r.authProvider,
   emailVerifiedAt: r.emailVerifiedAt,
   status: r.status,
+  isPlatformAdmin: r.isPlatformAdmin,
 });
 
 export const userRepository = {

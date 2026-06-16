@@ -123,7 +123,9 @@ export async function applyMigrations(
       log("migrate: [2/4] applying table migrations…\n");
       await migrate(db, { migrationsFolder });
     } else {
-      log(`migrate: WARNING no migrations at ${migrationsFolder} — run \`drizzle-kit generate\` first.\n`);
+      log(
+        `migrate: WARNING no migrations at ${migrationsFolder} — run \`drizzle-kit generate\` first.\n`,
+      );
     }
     const files = (await readdir(rlsFolder)).filter((f) => f.endsWith(".sql")).sort();
     log(`migrate: [3/4] applying ${files.length} RLS policy file(s)…\n`);

@@ -1,10 +1,10 @@
+import { type LoginTransaction, deleteLoginTransaction, finalizeLogin } from "@leadwolf/auth";
+import { env } from "@leadwolf/config";
 // finishLogin.ts — shared completion for the login flow: finalize the transaction (open the durable session
 // + issue the cross-domain code), set the auth-origin refresh cookie, clear the login-transaction cookie,
 // and redirect to the app callback. Called by whichever step reaches "complete" (password / MFA / workspace).
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { type LoginTransaction, deleteLoginTransaction, finalizeLogin } from "@leadwolf/auth";
-import { env } from "@leadwolf/config";
 import { LOGIN_TXN_COOKIE, REFRESH_COOKIE } from "./cookies";
 
 export async function finishLogin(txnId: string, txn: LoginTransaction): Promise<never> {

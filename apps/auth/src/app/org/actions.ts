@@ -2,11 +2,11 @@
 // advance (workspace selection or completion). Requires a pending login transaction.
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { getLoginTransaction, patchLoginTransaction, resolveNextStep } from "@leadwolf/auth";
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { finishLogin } from "@/lib/finishLogin";
+import { getLoginTransaction, patchLoginTransaction, resolveNextStep } from "@leadwolf/auth";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export async function selectOrg(formData: FormData): Promise<void> {
   const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;

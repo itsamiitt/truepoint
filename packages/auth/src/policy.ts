@@ -30,14 +30,20 @@ function minDefined(a?: number, b?: number): number | undefined {
 }
 
 /** Effective policy a login/refresh must satisfy. Booleans can only become more restrictive. */
-export function resolveEffectivePolicy(tenant: AuthPolicy, workspace?: Partial<AuthPolicy>): AuthPolicy {
+export function resolveEffectivePolicy(
+  tenant: AuthPolicy,
+  workspace?: Partial<AuthPolicy>,
+): AuthPolicy {
   return {
     mfaEnforcement: strictestMfa(tenant.mfaEnforcement, workspace?.mfaEnforcement),
     allowedMethods: intersectMethods(tenant.allowedMethods, workspace?.allowedMethods),
     disableSocial: tenant.disableSocial || (workspace?.disableSocial ?? false),
     requireSso: tenant.requireSso || (workspace?.requireSso ?? false),
     ipAllowlist: tighten(tenant.ipAllowlist, workspace?.ipAllowlist),
-    sessionTimeoutSeconds: minDefined(tenant.sessionTimeoutSeconds, workspace?.sessionTimeoutSeconds),
+    sessionTimeoutSeconds: minDefined(
+      tenant.sessionTimeoutSeconds,
+      workspace?.sessionTimeoutSeconds,
+    ),
   };
 }
 

@@ -56,3 +56,29 @@ export async function withTenantTx<T>(scope: TenantScope, fn: (tx: Tx) => Promis
     return fn(tx);
   });
 }
+
+export interface PlatformActor {
+  userId: string;
+  ip?: string | null;
+}
+
+/**
+ * Run `fn` with PLATFORM (cross-tenant) visibility — the audited super-admin path (ADR-0032). The base
+ * connection is the DB owner, which bypasses RLS, so this does NOT drop to leadwolf_app (unlike
+ * withTenantTx); it can read across EVERY workspace. EVERY call writes a platform_audit_log row in the
+ * SAME transaction. MUST only be reached behind a verified platform-admin (`pa`) claim — never from the
+ * tenant request flow. (Not withPrivilegedTx: on Neon leadwolf_admin lacks BYPASSRLS and would fail closed.)
+ */
+export async function withPlatformTx<T>(
+  actor: PlatformActor,
+  action: string,
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`INSERT INTO platform_audit_log (actor_user_id, action, ip)
+          VALUES (${actor.userId}::uuid, ${action}, ${actor.ip ?? null})`,
+    );
+    return fn(tx);
+  });
+}

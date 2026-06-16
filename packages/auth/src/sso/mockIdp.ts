@@ -20,7 +20,11 @@ const mac = (payload: string): string =>
   createHmac("sha256", env.BLIND_INDEX_KEY).update(payload).digest("base64url");
 
 /** Mint a signed mock assertion — called by the /sso/mock screen to stand in for an IdP's response. */
-export function signMockAssertion(input: { email: string; fullName?: string; relayState: string }): string {
+export function signMockAssertion(input: {
+  email: string;
+  fullName?: string;
+  relayState: string;
+}): string {
   const claims: MockClaims = { ...input, exp: Date.now() + 5 * 60 * 1000 };
   const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
   return `${payload}.${mac(payload)}`;
@@ -44,7 +48,10 @@ function verifyMockAssertion(token: string): MockClaims | null {
 export const mockProvider: SsoProvider = {
   protocol: "oidc", // the mock serves both protocols; the field is unused for selection
   async initiate(): Promise<SsoInitiation> {
-    return { redirectUrl: `${env.AUTH_ORIGIN}/sso/mock`, relayState: randomBytes(16).toString("base64url") };
+    return {
+      redirectUrl: `${env.AUTH_ORIGIN}/sso/mock`,
+      relayState: randomBytes(16).toString("base64url"),
+    };
   },
   async validate({ params, relayState }): Promise<SsoAssertion> {
     const token = params.code ?? params.assertion ?? params.SAMLResponse ?? "";

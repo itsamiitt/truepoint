@@ -3,8 +3,8 @@
 // It may import from shared/, lib/, config/, and its own feature files — NEVER another feature.
 
 import { apiClient } from "../../../lib/apiClient"; // shared HTTP/DB client lives in lib/
-import { sortByNewest } from "../utils/format";
 import type { CreateExampleInput, Example, ExampleListResult } from "../types";
+import { sortByNewest } from "../utils/format";
 
 /** Fetch all Examples, newest-first. */
 export async function listExamples(): Promise<ExampleListResult> {

@@ -3,16 +3,16 @@
 // the trusted-device registry (next increment). Uniform failure ("that code didn't match"). (17 §7.)
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
+import { finishLogin } from "@/lib/finishLogin";
 import {
   getLoginTransaction,
   patchLoginTransaction,
   resolveNextStep,
   verifyMfaCode,
 } from "@leadwolf/auth";
-import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
-import { finishLogin } from "@/lib/finishLogin";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export async function submitMfa(formData: FormData): Promise<void> {
   const code = String(formData.get("code") ?? "").trim();
@@ -21,7 +21,8 @@ export async function submitMfa(formData: FormData): Promise<void> {
   const txn = await getLoginTransaction(txnId);
   if (!txn) redirect("/login");
 
-  if (!(await verifyMfaCode({ userId: txn.userId, method: "totp", code }))) redirect("/mfa?error=1");
+  if (!(await verifyMfaCode({ userId: txn.userId, method: "totp", code })))
+    redirect("/mfa?error=1");
 
   await patchLoginTransaction(txnId, { mfaVerified: true });
   const verified = { ...txn, mfaVerified: true };

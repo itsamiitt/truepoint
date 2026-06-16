@@ -15,7 +15,7 @@ export function normalizeText(raw: string | undefined | null): string | undefine
 /** Canonical email for storage + domain extraction: trim + lowercase. Undefined if empty. */
 export function normalizeEmailForStorage(raw: string | undefined | null): string | undefined {
   const v = normalizeText(raw)?.toLowerCase();
-  return v && v.includes("@") ? v : undefined;
+  return v?.includes("@") ? v : undefined;
 }
 
 /** Email form used for the blind index: storage form with the local-part "+tag" removed. */
@@ -41,7 +41,7 @@ export function normalizeDomain(raw: string | undefined | null): string | undefi
   if (!v) return undefined;
   const noScheme = v.replace(/^https?:\/\//, "").replace(/^www\./, "");
   const host = noScheme.split("/")[0];
-  return host && host.includes(".") ? host : undefined;
+  return host?.includes(".") ? host : undefined;
 }
 
 /** Extract the LinkedIn public id (slug) from a profile URL, or pass through a bare slug. */
