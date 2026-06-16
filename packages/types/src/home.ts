@@ -73,6 +73,28 @@ export const activityFeedItemSchema = z.object({
 });
 export type ActivityFeedItem = z.infer<typeof activityFeedItemSchema>;
 
+// ── Today's tasks (PII-safe: ids + kind + due time only; max 20) ─────────────────────────────────────────
+export const homeTaskKind = z.enum(["follow_up", "review_reply", "reveal", "enrich", "custom"]);
+export type HomeTaskKind = z.infer<typeof homeTaskKind>;
+
+export const todaysTaskSchema = z.object({
+  id: z.string(),
+  kind: homeTaskKind,
+  contactId: z.string().nullable(),
+  dueAt: z.string().datetime({ offset: true }),
+});
+export type TodaysTask = z.infer<typeof todaysTaskSchema>;
+
+// ── Recent replies (PII-safe: references only — no email address, no message body; max 10) ───────────────
+export const recentReplySchema = z.object({
+  id: z.string(),
+  contactId: z.string(),
+  sequenceId: z.string().nullable(),
+  channel: z.string(),
+  repliedAt: z.string().datetime({ offset: true }),
+});
+export type RecentReply = z.infer<typeof recentReplySchema>;
+
 // ── The Home dashboard summary (GET /home/summary) ─────────────────────────────────────────────────────
 export const homeSummarySchema = z.object({
   creditBalance: z.number().int().min(0),
@@ -83,5 +105,7 @@ export const homeSummarySchema = z.object({
   enrichmentActivity: z.array(enrichmentActivitySchema),
   sequenceSnapshot: sequenceSnapshotSchema,
   activityFeed: z.array(activityFeedItemSchema).max(15),
+  todaysTasks: z.array(todaysTaskSchema).max(20),
+  recentReplies: z.array(recentReplySchema).max(10),
 });
 export type HomeSummary = z.infer<typeof homeSummarySchema>;
