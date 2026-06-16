@@ -30,6 +30,36 @@
   color: var(--tp-ink-3);
 }
 
+/* ── Quick actions (deep-link row) ──────────────────────────────────────────────────────────────────── */
+.quickActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quickAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--tp-hairline);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink);
+  text-decoration: none;
+}
+
+.quickAction:hover {
+  background: var(--tp-surface-3);
+  border-color: var(--tp-ink-4);
+}
+
+.quickActionGlyph {
+  color: var(--tp-ink-3);
+  font-size: 14px;
+}
+
 /* ── KPI tile row ───────────────────────────────────────────────────────────────────────────────── */
 .tiles {
   display: grid;
