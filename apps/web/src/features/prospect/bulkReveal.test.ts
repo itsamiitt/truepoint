@@ -86,7 +86,12 @@ describe("runBulkReveal", () => {
 
   test("reports progress from 0/total to total/total", async () => {
     const seen: Array<{ done: number; total: number }> = [];
-    await runBulkReveal(["a", "b"], async () => ok(1, 1), "email", (p) => seen.push(p));
+    await runBulkReveal(
+      ["a", "b"],
+      async () => ok(1, 1),
+      "email",
+      (p) => seen.push(p),
+    );
     expect(seen[0]).toEqual({ done: 0, total: 2 });
     expect(seen.at(-1)).toEqual({ done: 2, total: 2 });
   });
