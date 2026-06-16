@@ -13,9 +13,11 @@ export interface AuthEmail {
   to: string;
   subject: string;
   text: string;
+  /** Optional branded HTML body; when present it rides as the primary part with `text` as the fallback. */
+  html?: string;
 }
 
-const FROM = `LeadWolf <no-reply@${new URL(env.AUTH_ORIGIN).hostname}>`;
+const FROM = `TruePoint <no-reply@${new URL(env.AUTH_ORIGIN).hostname}>`;
 
 let transporter: Transporter | undefined;
 // Lazy so importing this module opens no socket (keeps `next build` side-effect-free).
@@ -38,5 +40,6 @@ export async function sendAuthEmail(message: AuthEmail): Promise<void> {
     to: message.to,
     subject: message.subject,
     text: message.text,
+    html: message.html, // undefined for any legacy text-only caller — nodemailer then sends text only.
   });
 }

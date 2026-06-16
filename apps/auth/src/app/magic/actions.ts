@@ -6,6 +6,7 @@
 
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { setMagicTxnCookie } from "@/lib/cookies";
+import { magicLinkEmail } from "@/lib/emails";
 import { encodeMagicCarry } from "@/lib/magicCarry";
 import { sendAuthEmail } from "@/lib/mailer";
 import { checkIdentifierRate, createEmailVerification } from "@leadwolf/auth";
@@ -48,11 +49,7 @@ export async function sendMagic(formData: FormData): Promise<void> {
   await setMagicTxnCookie(encodeMagicCarry({ appOrigin, codeChallenge, state }));
 
   const link = `${env.AUTH_ORIGIN}/magic/confirm?${new URLSearchParams({ email, code })}`;
-  await sendAuthEmail({
-    to: email,
-    subject: "Your TruePoint sign-in link",
-    text: `Click to sign in (expires in 15 minutes):\n\n${link}\n\nIf you didn't request this, you can safely ignore this email.`,
-  });
+  await sendAuthEmail({ to: email, ...magicLinkEmail({ link }) });
 
   redirect(`/magic?${carry.toString()}&sent=1`);
 }
