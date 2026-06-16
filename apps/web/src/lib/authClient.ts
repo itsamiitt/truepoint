@@ -57,7 +57,13 @@ export async function completeLogin(code: string, returnedState: string): Promis
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ code, codeVerifier: verifier, state }),
   });
-  if (!res.ok) throw new Error("exchange_failed");
+  if (!res.ok) {
+    // Surface the server's diagnostic so the callback can log/show the real cause instead of swallowing it.
+    // For an invalid code the body carries a `reason` (ip_mismatch | origin_mismatch | pkce_mismatch |
+    // code_not_found); for a server fault it carries `code: "auth_unavailable"`.
+    const body = (await res.json().catch(() => null)) as { code?: string; reason?: string } | null;
+    throw new Error(body?.reason ?? body?.code ?? "exchange_failed");
+  }
   const data = (await res.json()) as { accessToken: string; expiresIn: number };
   setToken(data.accessToken, data.expiresIn);
 }

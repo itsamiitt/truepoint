@@ -9,6 +9,15 @@
 # Global options (must be the FIRST block). ACME contact for Let's Encrypt expiry/policy notices.
 {
 	email amit@thecloso.com
+
+	# Define which upstreams may be trusted to set X-Forwarded-For, so the auth origin binds the cross-domain
+	# code to the REAL client IP (ADR-0016), not a spoofed header. Caddy is the edge here (clients connect
+	# directly), so it derives the client IP from the connection and ignores client-sent XFF. Keep this
+	# accurate if a load balancer / CDN is ever placed in front (add its range), or dual-stack first-hop
+	# drift can make the IP binding reject legitimate logins — see AUTH_BIND_IP (env) for the binding posture.
+	servers {
+		trusted_proxies static private_ranges
+	}
 }
 
 auth.truepoint.in {
