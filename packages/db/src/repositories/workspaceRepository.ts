@@ -4,6 +4,7 @@
 // lookup; an invite by email) run on the global client; workspace lists run under withTenantTx (RLS).
 // All co-located here because they form one cohesive aggregate that maps to the `workspaces` domain.
 
+import type { WorkspaceRole } from "@leadwolf/types";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db, withTenantTx } from "../client.ts";
 import {
@@ -32,6 +33,29 @@ export const workspaceRepository = {
         .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
         .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.status, "active")));
       return rows.map((r) => ({ id: r.id, name: r.name, role: r.role }));
+    });
+  },
+
+  // The active workspace role for a member (owner|admin|member|viewer), or null if not an active member.
+  // RLS-scoped: read under the tenant+workspace GUCs the caller is operating in.
+  async getRoleForUser(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceRole | null> {
+    return withTenantTx({ tenantId, workspaceId }, async (tx) => {
+      const rows = await tx
+        .select({ role: workspaceMembers.role })
+        .from(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, userId),
+            eq(workspaceMembers.status, "active"),
+          ),
+        )
+        .limit(1);
+      return rows[0] ? (rows[0].role as WorkspaceRole) : null;
     });
   },
 

@@ -1,5 +1,5 @@
-// useHomeSummary.ts — loads the composed cockpit summary (credit balance + recent reveals) with
-// loading/error state and a `reload`. Presentation state only; the composition happens in api.ts.
+// useHomeSummary.ts — loads the Home cockpit summary (GET /home/summary) with loading/error state and a
+// `reload`. Presentation state only; the typed fetch lives in api.ts and the shape comes from @leadwolf/types.
 "use client";
 
 import { useCallback, useEffect, useState } from "react";

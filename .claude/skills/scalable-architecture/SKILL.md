@@ -2,7 +2,8 @@
 name: scalable-architecture
 description: >-
   Scaffold a new project, add a new feature, or review/audit project structure against a clean,
-  modular, feature-based architecture. Use to set up clean, scalable architecture.
+  modular, feature-based architecture. Use to set up clean, scalable architecture. For the LeadWolf
+  repo's day-to-day change/commit/scale/deploy discipline, see codebase-discipline.
 ---
 
 # scalable-architecture

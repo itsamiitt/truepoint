@@ -6,7 +6,8 @@ description: >-
   map (navigation graph). Enforces this repo's feature-based, layered, typed, small-file architecture
   (Turborepo: apps/* + packages/*, source of truth in docs/planning/16 + 02) and keeps
   docs/ARCHITECTURE_MAP.md + docs/architecture-map.json in sync with the code. Complements
-  scalable-architecture (generic conventions) and plan-weaver (planning docs); do not duplicate them.
+  scalable-architecture (generic conventions), plan-weaver (planning docs), and codebase-discipline
+  (commit/branch/scale/deploy workflow); do not duplicate them.
 ---
 
 # enterprise-architecture
@@ -34,6 +35,8 @@ When it does **not** apply:
 - Edits to `docs/planning/**` → that's [`plan-weaver`](../plan-weaver/SKILL.md).
 - Generic greenfield scaffolding unrelated to LeadWolf's monorepo → that's
   [`scalable-architecture`](../scalable-architecture/SKILL.md).
+- Commit/branch/PR, pre-commit checks, scale, and deploy discipline → that's
+  [`codebase-discipline`](../codebase-discipline/SKILL.md).
 
 ## Authoritative sources (read these; do not restate or fork them)
 

@@ -34,7 +34,11 @@ export interface SsoAssertion {
 
 export interface SsoProvider {
   protocol: "oidc" | "saml";
-  initiate(input: { config: SsoConfig; callbackUrl: string; emailHint?: string }): Promise<SsoInitiation>;
+  initiate(input: {
+    config: SsoConfig;
+    callbackUrl: string;
+    emailHint?: string;
+  }): Promise<SsoInitiation>;
   validate(input: {
     config: SsoConfig;
     params: Record<string, string>;

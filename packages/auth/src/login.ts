@@ -17,6 +17,7 @@ export async function authenticatePassword(input: {
   // Global identity (ADR-0019): resolve the person; org/workspace are chosen AFTER auth, not baked in here.
   const user = await userRepository.findByEmail(input.email);
   if (!user || !user.passwordHash || user.status !== "active") throw new InvalidCredentialsError();
-  if (!(await verifyPassword(user.passwordHash, input.password))) throw new InvalidCredentialsError();
+  if (!(await verifyPassword(user.passwordHash, input.password)))
+    throw new InvalidCredentialsError();
   return { userId: user.id };
 }

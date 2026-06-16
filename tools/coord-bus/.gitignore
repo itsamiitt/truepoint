@@ -1,0 +1,9 @@
+node_modules/
+.env
+coord-state.json
+coord-state.json.tmp
+*.log
+
+# cloudflared tunnel binary — downloaded on demand, never committed (~52 MB).
+cloudflared
+cloudflared.exe

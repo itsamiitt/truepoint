@@ -2,12 +2,12 @@
 // (finishLogin issues the code bound to that workspace). Requires a pending login transaction. (17 §2.)
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { getLoginTransaction, patchLoginTransaction } from "@leadwolf/auth";
-import { workspaceSelectionSchema } from "@leadwolf/types";
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { finishLogin } from "@/lib/finishLogin";
+import { getLoginTransaction, patchLoginTransaction } from "@leadwolf/auth";
+import { workspaceSelectionSchema } from "@leadwolf/types";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export async function selectWorkspace(formData: FormData): Promise<void> {
   const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;

@@ -1,0 +1,59 @@
+/* Sidebar.module.css — layout-only styling for the user-row menu (11 §2). The row chrome stays on the
+   global .tp-user-* classes; this adds the button affordance + the small pop-up. Calm + monochrome. */
+
+.userMenu {
+  position: relative;
+  margin-top: 2px;
+}
+
+/* The user row rendered as a button: same look as .tp-user-row, just interactive. */
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.trigger:hover {
+  background: var(--tp-surface-3);
+}
+
+.menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(17 24 39 / 0.08);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--tp-ink-2);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.item:hover {
+  background: var(--tp-surface-2);
+}

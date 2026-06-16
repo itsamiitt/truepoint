@@ -17,6 +17,7 @@ export interface UserRecord {
   authProvider: string;
   emailVerifiedAt: Date | null;
   status: string;
+  isPlatformAdmin: boolean;
 }
 
 type UserRow = typeof users.$inferSelect;
@@ -29,6 +30,7 @@ const toUser = (r: UserRow): UserRecord => ({
   authProvider: r.authProvider,
   emailVerifiedAt: r.emailVerifiedAt,
   status: r.status,
+  isPlatformAdmin: r.isPlatformAdmin,
 });
 
 export const userRepository = {
@@ -107,10 +109,7 @@ export const userRepository = {
   // and pre-computed by the auth layer; it is never logged or returned. findByEmail runs under the
   // auth-service role (pre-tenant identity), so this mutation stays in the same auth-domain boundary.
   async setPassword(userId: string, passwordHash: string): Promise<void> {
-    await db
-      .update(users)
-      .set({ passwordHash, updatedAt: new Date() })
-      .where(eq(users.id, userId));
+    await db.update(users).set({ passwordHash, updatedAt: new Date() }).where(eq(users.id, userId));
   },
 
   async listMfaMethods(userId: string): Promise<MfaMethodRecord[]> {
@@ -196,6 +195,12 @@ export const sessionRepository = {
 
   async revoke(id: string): Promise<void> {
     await db.update(userSessions).set({ revokedAt: new Date() }).where(eq(userSessions.id, id));
+  },
+
+  // Pin the session's active workspace (chosen at the workspace-selection step; ADR-0019). Durable on the
+  // auth origin, so it runs on the global client like the rest of the session aggregate.
+  async setWorkspace(sessionId: string, workspaceId: string): Promise<void> {
+    await db.update(userSessions).set({ workspaceId }).where(eq(userSessions.id, sessionId));
   },
 
   async rotate(args: { oldId: string; next: CreateSessionInput }): Promise<void> {

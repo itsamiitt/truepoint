@@ -6,7 +6,8 @@ description: >-
   item in docs/planning/ — or when asked to audit/sync/wire the planning docs, or check them for
   drift. Reads the whole corpus, produces a structured plan, and propagates the change across EVERY
   related .md file (decision log, cross-links, feature↔milestone matrix, risk register, ADRs, README,
-  shared enums/vocab) so nothing ever drifts out of sync.
+  shared enums/vocab) so nothing ever drifts out of sync. To execute a planned change (commits,
+  pre-commit checks, scale, deploy), follow codebase-discipline.
 ---
 
 # plan-weaver

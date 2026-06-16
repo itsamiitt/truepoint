@@ -3,16 +3,16 @@
 // fresh code for the same transaction. Both require a pending signup transaction.
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { SIGNUP_TXN_COOKIE } from "@/lib/cookies";
+import { sendAuthEmail } from "@/lib/mailer";
 import {
   createEmailVerification,
   getSignupTransaction,
   patchSignupTransaction,
   verifyEmailCode,
 } from "@leadwolf/auth";
-import { SIGNUP_TXN_COOKIE } from "@/lib/cookies";
-import { sendAuthEmail } from "@/lib/mailer";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 async function requireSignup(): Promise<{ id: string; email: string }> {
   const id = (await cookies()).get(SIGNUP_TXN_COOKIE)?.value;

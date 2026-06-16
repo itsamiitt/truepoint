@@ -4,12 +4,13 @@
 // finalizeLogin, after every required factor passes. 10-minute TTL to complete.
 
 import { randomBytes } from "node:crypto";
-import Redis from "ioredis";
 import { env } from "@leadwolf/config";
+import Redis from "ioredis";
 
 // Lazy: constructing ioredis opens a socket + retry loop. Defer it so importing this module is
 // side-effect-free (it's transpiled into the auth Next app; `next build` must not try to reach Redis).
 let _redis: Redis | undefined;
+// biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
 const redis = (): Redis => (_redis ??= new Redis(env.REDIS_URL));
 const TTL_SECONDS = 600;
 const key = (id: string) => `logintxn:${id}`;

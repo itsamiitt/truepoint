@@ -49,6 +49,7 @@ export async function POST(req: Request): Promise<Response> {
       workspaceId: binding.workspaceId,
       sessionId: binding.sessionId,
       audience: origin as string,
+      isPlatformAdmin: binding.isPlatformAdmin,
     });
     // token.issued — an access JWT was minted (ADR-0031 §2). Never log the token string.
     await recordAuthEvent({

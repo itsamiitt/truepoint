@@ -14,7 +14,7 @@ import {
   workspaceRepository,
 } from "@leadwolf/db";
 import { ConflictError } from "@leadwolf/types";
-import { type DomainResolver } from "./identifierLookup.ts";
+import type { DomainResolver } from "./identifierLookup.ts";
 import { hashPassword } from "./password.ts";
 
 export type Placement = "auto_join" | "invitation" | "new_org";
@@ -46,7 +46,9 @@ function slugify(base: string): string {
   return `${core}-${randomBytes(3).toString("hex")}`;
 }
 
-export async function provisionIdentity(input: ProvisionIdentityInput): Promise<ProvisionedIdentity> {
+export async function provisionIdentity(
+  input: ProvisionIdentityInput,
+): Promise<ProvisionedIdentity> {
   const email = input.email.trim().toLowerCase();
 
   // Existence guards. Registration reveals existence by design (ADR-0020), so these are specific, not uniform.
@@ -93,7 +95,12 @@ export async function provisionIdentity(input: ProvisionIdentityInput): Promise<
       invitedByUserId: undefined,
     });
     await invitationRepository.markAccepted(invite.id);
-    return { userId, tenantId: invite.tenantId, workspaceId: invite.workspaceId ?? undefined, placement: "invitation" };
+    return {
+      userId,
+      tenantId: invite.tenantId,
+      workspaceId: invite.workspaceId ?? undefined,
+      placement: "invitation",
+    };
   }
 
   // No domain match, no invite → the person founds their own org.

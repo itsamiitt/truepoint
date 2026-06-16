@@ -74,6 +74,9 @@ export async function finalizeLogin(
   });
   await userRepository.touchLastLogin(txn.userId);
 
+  // Carry the platform super-admin flag (ADR-0032) into the cross-domain code → access-token `pa` claim.
+  const user = await userRepository.findById(txn.userId);
+
   const code = await issueCode({
     userId: txn.userId,
     tenantId,
@@ -82,6 +85,7 @@ export async function finalizeLogin(
     clientIp: txn.clientIp,
     codeChallenge: txn.codeChallenge,
     workspaceId,
+    isPlatformAdmin: user?.isPlatformAdmin ?? false,
   });
 
   // login.success — authentication fully succeeded (ADR-0031 §2; covers password/magic/SSO via finalize).

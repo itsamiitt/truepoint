@@ -10,6 +10,7 @@ export {
   type SessionContext,
 } from "./session.ts";
 export { refreshAccessToken, type RefreshResult } from "./refresh.ts";
+export { switchWorkspace, type SwitchWorkspaceResult } from "./switchWorkspace.ts";
 export {
   mintAccessToken,
   verifyAccessToken,

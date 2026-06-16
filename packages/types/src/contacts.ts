@@ -19,7 +19,14 @@ export const sourceName = z.enum([
 export type SourceName = z.infer<typeof sourceName>;
 
 /** Email field correctness (set by verify-on-reveal in M4) — distinct from lead score (quality). */
-export const emailStatus = z.enum(["unverified", "valid", "risky", "invalid", "catch_all", "unknown"]);
+export const emailStatus = z.enum([
+  "unverified",
+  "valid",
+  "risky",
+  "invalid",
+  "catch_all",
+  "unknown",
+]);
 export type EmailStatus = z.infer<typeof emailStatus>;
 
 export const phoneStatus = z.enum(["direct", "mobile", "hq", "unknown", "valid", "invalid"]);

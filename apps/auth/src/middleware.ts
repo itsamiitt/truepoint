@@ -2,7 +2,7 @@
 // X-Frame-Options: DENY, X-Content-Type-Options: nosniff, a nonce-based CSP with no inline scripts, and
 // Referrer-Policy: no-referrer. The per-request nonce is forwarded so server components can tag scripts.
 
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 export function middleware(request: NextRequest): NextResponse {
   const nonce = crypto.randomUUID().replace(/-/g, "");

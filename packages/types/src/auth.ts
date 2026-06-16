@@ -13,6 +13,9 @@ export type MfaMethodType = z.infer<typeof mfaMethodType>;
 export const mfaEnforcement = z.enum(["off", "optional", "required"]);
 export type MfaEnforcement = z.infer<typeof mfaEnforcement>;
 
+export const workspaceRole = z.enum(["owner", "admin", "member", "viewer"]);
+export type WorkspaceRole = z.infer<typeof workspaceRole>;
+
 // ── Step 1: identifier-first (ADR-0017) ──────────────────────────────────────────────────────────────
 export const identifierSchema = z.object({
   email: z.string().email().max(320),
@@ -99,6 +102,7 @@ export const accessTokenClaimsSchema = z.object({
   wid: z.string().uuid().optional(), // active workspace id (absent until selected)
   sid: z.string(), // session id (for the revocation denylist)
   scope: z.array(z.string()).default([]),
+  pa: z.boolean().optional(), // platform super-admin — cross-tenant access (ADR-0032)
   iss: z.string(),
   aud: z.string(),
   exp: z.number(),

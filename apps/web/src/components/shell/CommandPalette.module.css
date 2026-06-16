@@ -1,0 +1,98 @@
+/* CommandPalette.module.css — layout-only styling for the cmdk dialog (11 §3). Tokens/surfaces come from
+   @leadwolf/ui; this only positions the modal + lists. Monochrome and quiet: a single soft shadow over a
+   light scrim, hairline-separated groups, and a --tp-surface-3 highlight for the active item (no color). */
+
+/* Radix dialog overlay — a calm scrim, matching the reveal dialog's backdrop weight. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgb(17 24 39 / 32%);
+}
+
+/* Radix dialog content — centered near the top so the palette feels like a launcher, not a modal block. */
+.content {
+  position: fixed;
+  top: 14vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 71;
+  width: 100%;
+  max-width: 560px;
+  padding: 0 16px;
+}
+
+.dialog {
+  display: block;
+}
+
+.command {
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgb(17 24 39 / 18%);
+  overflow: hidden;
+}
+
+.input {
+  height: 52px;
+  padding: 0 18px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--tp-ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--tp-hairline-2);
+  outline: none;
+}
+.input::placeholder {
+  color: var(--tp-ink-4);
+}
+
+.list {
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.empty {
+  padding: 22px 14px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+/* Group heading — a small uppercase label, hairline-separated from the previous group. */
+.group {
+  padding: 4px 0;
+}
+.group + .group {
+  margin-top: 4px;
+  border-top: 1px solid var(--tp-hairline);
+}
+.group [cmdk-group-heading] {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-4);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 10px;
+  font-size: 14px;
+  color: var(--tp-ink-2);
+  border-radius: 7px;
+  cursor: pointer;
+}
+/* cmdk marks the active (keyboard/pointer) item with data-selected — a subtle surface fill, no color. */
+.item[data-selected="true"] {
+  background: var(--tp-surface-3);
+  color: var(--tp-ink);
+}

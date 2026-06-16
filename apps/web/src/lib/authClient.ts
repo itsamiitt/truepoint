@@ -25,6 +25,14 @@ function setToken(token: string, expiresIn: number): void {
   refreshTimer = setTimeout(() => void silentRefresh(), leadMs);
 }
 
+/** Drop the in-memory token + cancel the pending refresh. The auth-origin cookie is cleared server-side. */
+function clearToken(): void {
+  accessToken = null;
+  expiresAtMs = 0;
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = null;
+}
+
 /** Begin login: generate PKCE + state, stash the verifier, and redirect to the auth origin. */
 export async function startLogin(): Promise<void> {
   const { verifier, challenge } = await createPkcePair();
@@ -80,4 +88,38 @@ export async function fetchWithAuth(input: string, init: RequestInit = {}): Prom
   const headers = new Headers(init.headers);
   if (token) headers.set("authorization", `Bearer ${token}`);
   return fetch(input, { ...init, headers });
+}
+
+/**
+ * End the session: revoke + clear the refresh cookie on the auth origin (idempotent 204), drop the
+ * in-memory access token, then send the browser back to the app origin (the shell re-gates to sign-in).
+ */
+export async function logout(): Promise<void> {
+  try {
+    await fetch(`${AUTH_ORIGIN}/logout`, { method: "POST", credentials: "include" });
+  } catch {
+    // Best-effort: logout must always feel complete to the user even if the network call fails.
+  }
+  clearToken();
+  window.location.assign(APP_ORIGIN);
+}
+
+/**
+ * Re-pin the active workspace: the auth origin authorizes the target, rotates the session cookie, and
+ * mints a fresh access JWT carrying the new wid. On success we store the new token (resetting the refresh
+ * timer), announce workspace:changed, and reload so every per-workspace surface re-fetches under the new
+ * scope. Throws on a non-200 (e.g. 403 no-access) so the caller can surface it and keep the current scope.
+ */
+export async function switchWorkspace(workspaceId: string): Promise<void> {
+  const res = await fetch(`${AUTH_ORIGIN}/workspace/switch`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ workspaceId }),
+  });
+  if (!res.ok) throw new Error("switch_failed");
+  const data = (await res.json()) as { accessToken: string; expiresIn: number };
+  setToken(data.accessToken, data.expiresIn);
+  window.dispatchEvent(new CustomEvent("workspace:changed", { detail: { workspaceId } }));
+  window.location.reload();
 }

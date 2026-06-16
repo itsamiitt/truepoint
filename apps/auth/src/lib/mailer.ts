@@ -19,6 +19,7 @@ const FROM = `LeadWolf <no-reply@${new URL(env.AUTH_ORIGIN).hostname}>`;
 
 let transporter: Transporter | undefined;
 // Lazy so importing this module opens no socket (keeps `next build` side-effect-free).
+// biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
 const transport = (): Transporter => (transporter ??= nodemailer.createTransport(env.SMTP_URL));
 
 export async function sendAuthEmail(message: AuthEmail): Promise<void> {

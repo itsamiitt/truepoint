@@ -7,8 +7,7 @@ import { env } from "@leadwolf/config";
 import { sessionRepository } from "@leadwolf/db";
 
 const newId = () => randomBytes(24).toString("base64url");
-export const hashRefreshToken = (t: string): string =>
-  createHash("sha256").update(t).digest("hex");
+export const hashRefreshToken = (t: string): string => createHash("sha256").update(t).digest("hex");
 const refreshExpiry = () => new Date(Date.now() + env.REFRESH_TOKEN_TTL_SECONDS * 1000);
 
 export interface IssuedSession {
@@ -70,4 +69,5 @@ export async function rotateSession(
   return { sessionId, refreshToken, expiresAt };
 }
 
-export const revokeSession = (sessionId: string): Promise<void> => sessionRepository.revoke(sessionId);
+export const revokeSession = (sessionId: string): Promise<void> =>
+  sessionRepository.revoke(sessionId);

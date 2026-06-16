@@ -189,7 +189,8 @@ apps/                           # deployable processes (thin transport adapters)
   arrive as BullMQ job delays via `enqueueOutreach`)
 
 ### auth — *M2, global identity* ([05 §1](./planning/05-features-modules.md), [17](./planning/17-authentication.md), ADR-0019/0020)
-- **api:** `apps/api/src/features/auth/{routes,index}.ts` (GET `/api/v1/auth/session` from verified claims)
+- **api:** `apps/api/src/features/auth/{routes,index}.ts` (GET `/api/v1/auth/session` from verified claims,
+  now incl. the live workspace **role**); RBAC primitive `apps/api/src/middleware/requireRole.ts`
 - **db:** `packages/db/src/repositories/userRepository.ts` (global user/identity: users + sessions +
   `authEmailTokenRepository` for email-verification codes); `workspaceRepository.ts` `tenantSsoConfigRepository`
 - **shared primitives:** `packages/auth/*` — login (`identifierLookup`/`login`/`flow`), `botCheck`/`rateLimit`
@@ -199,31 +200,46 @@ apps/                           # deployable processes (thin transport adapters)
   **password + magic-link** (`password`/`passwordReset` set-and-reset flows + `apps/auth/src/lib/completeMagic`
   passwordless sign-in completion), and
   **SSO** (`sso/{types,providers,mockIdp,jit}` + `ssoTransaction` — one provider seam over OIDC/SAML with a
-  dev mock IdP; callback JIT-provisions the identity + membership)
+  dev mock IdP; callback JIT-provisions the identity + membership), and **workspace switch**
+  (`switchWorkspace` — authorize the target within-tenant, rotate the session, re-mint a JWT with the new `wid`)
 - **IdP origin:** `apps/auth/*` screens — sign-in (identifier → password → mfa → **org** → workspace, with
   `app/org/*` the org selector), **registration** (`app/signup/*` + `app/verify`, mailed via `lib/mailer`),
   and **SSO** (`app/sso/*` handoff + `oidc`/`saml` callbacks + dev `mock` IdP, via `lib/{ssoConfig,completeSso}`)
-  + `/token/*` + JWKS
-- **app-domain:** `apps/web` callback + in-memory token client
+  + `/token/*` + `/logout` (revokes the session + clears the cookie) + `/workspace/switch` (re-pins the
+  active workspace, rotates the session, re-mints a JWT with the new `wid`) + JWKS
+- **app-domain:** `apps/web` callback + in-memory token client (`authClient` now adds `logout()` +
+  `switchWorkspace()`)
 
 ### workspaces — *M2* ([05 §2](./planning/05-features-modules.md))
-- **db:** `packages/db/src/repositories/workspaceRepository.ts` — RLS-scoped workspaces plus the
-  **tenant-membership / domain / invitation** repos and **new-org provisioning** (`tenantRepository`
-  + `tenantMemberRepository.joinOrg`) for registration placement (the `tenant_members` model, ADR-0019/0020)
+- **api:** `apps/api/src/features/workspaces/{routes,index}.ts` — `GET /api/v1/workspaces` lists the
+  signed-in user's workspaces (`{id,name,role}`) for the switcher
+- **db:** `packages/db/src/repositories/workspaceRepository.ts` — RLS-scoped workspaces (+ `getRoleForUser`
+  for RBAC and the switch authz) plus the **tenant-membership / domain / invitation** repos and **new-org
+  provisioning** (`tenantRepository` + `tenantMemberRepository.joinOrg`) for registration placement
+  (the `tenant_members` model, ADR-0019/0020)
 
 ### Web UI surfaces ([04](./planning/04-ui-ux-design.md), [11](./planning/11-information-architecture.md))
 The `apps/web` SPA: a `(shell)` route-group layout wraps every destination in the **AppShell** (auth
 gate + sidebar + top bar). Slices follow the `import` pattern (`api.ts` → `fetchWithAuth`; hooks;
 components; `index.ts`). Styling: shell + Prospect via `--tp-*` classes in `app/globals.css`; other
 slices via co-located CSS Modules; primitives in `@leadwolf/ui`.
-- **shell** (shared): `apps/web/src/components/shell/{AppShell,Sidebar,TopBar,CreditPill,WorkspaceSwitcher}.tsx`
-  — the 6-destination chrome; `CreditPill` polls `/credits/balance` and re-fetches on a `credits:changed`
-  window event; `app/(shell)/layout.tsx` mounts it.
+- **shell** (shared): `apps/web/src/components/shell/{AppShell,Sidebar,TopBar,CreditPill,WorkspaceSwitcher,
+  CommandPalette,NotificationsBell}.tsx` + `useNotifications.ts` — the 6-destination chrome; `CreditPill`
+  polls `/credits/balance` and re-fetches on a `credits:changed` window event; `CommandPalette` is a `cmdk`
+  ⌘/Ctrl-K palette (nav + quick actions + a `command:switch-workspace` event + logout); `NotificationsBell`
+  renders a client-DERIVED feed (low credits / recent imports / replies from `/home/summary` + balance — no
+  notifications backend); `WorkspaceSwitcher` lists `/workspaces` and switches via the auth origin; the
+  `Sidebar` user row shows the real role + a sign-out menu; `app/(shell)/layout.tsx` mounts it.
 - **prospect** (web): `apps/web/src/features/prospect/*` — filter rail + masked grid + `RecordDetail`
   slide-over + `RevealDialog` (`POST /contacts/:id/reveal` with `Idempotency-Key`; branches on
   `insufficient_credits` 402 / `suppressed` 403; dispatches `credits:changed`); routed at `(shell)/prospect`.
-- **home** (web): `apps/web/src/features/home/*` — cockpit composing `/credits/balance` + `/credits/usage`
-  into `StatTile`s + recent-reveals + quick actions; routed at `(shell)/home` (`/` redirects to `/prospect`).
+- **home** (web + api + core): `apps/web/src/features/home/*` — cockpit over a single `GET /home/summary`
+  (`api.ts` → `fetchWithAuth`), rendering KPI `StatTile`s + co-located widget cards (recent reveals, hot
+  leads, this-workspace credit **burn** sparkline, recent imports, enrichment activity, sequence snapshot,
+  workspace activity feed; replies/tasks deferred to the M9 inbox gate). The endpoint is
+  `apps/api/src/features/home/{routes,index}.ts` (guarded by `authn`+`tenancy`+`requireRole`), composed by
+  `packages/core/src/home/buildHomeSummary.ts` (fan-out over existing domain repos via `withTenantTx`); the
+  shared `homeSummarySchema` lives in `@leadwolf/types`. Routed at `(shell)/home` (`/` redirects to `/prospect`).
 - **settings-billing** (web): `apps/web/src/features/settings-billing/*` — balance card + usage history
   (`/credits/*`); routed at `(shell)/settings/billing` (the credit-pill deep-link target).
 - **settings-compliance** (web): `apps/web/src/features/settings-compliance/*` — `SuppressionForm`

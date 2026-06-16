@@ -17,7 +17,6 @@
     "postgres": "3.4.5"
   },
   "devDependencies": {
-    "@leadwolf/core": "workspace:*",
     "@testcontainers/postgresql": "^10.13.0",
     "drizzle-kit": "0.28.1",
     "testcontainers": "^10.13.0",

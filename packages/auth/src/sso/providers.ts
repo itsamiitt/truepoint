@@ -8,8 +8,10 @@ import { env } from "@leadwolf/config";
 import { mockProvider } from "./mockIdp.ts";
 import type { SsoProvider } from "./types.ts";
 
-const oidcUnwired = "OIDC SSO is not configured: wire `arctic` into packages/auth/src/sso/providers.ts";
-const samlUnwired = "SAML SSO is not configured: wire `@node-saml/node-saml` into packages/auth/src/sso/providers.ts";
+const oidcUnwired =
+  "OIDC SSO is not configured: wire `arctic` into packages/auth/src/sso/providers.ts";
+const samlUnwired =
+  "SAML SSO is not configured: wire `@node-saml/node-saml` into packages/auth/src/sso/providers.ts";
 
 export const oidcProvider: SsoProvider = {
   protocol: "oidc",

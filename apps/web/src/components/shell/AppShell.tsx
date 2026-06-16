@@ -1,15 +1,16 @@
 // AppShell.tsx — the app chrome (11 §3) and the single auth gate for every signed-in surface. On mount it
 // resolves a token (in-memory access token via a silent refresh against the auth origin, ADR-0016); with no
 // token it redirects straight to the auth-origin login via PKCE (no interstitial screen). Signed in, it composes the
-// left rail + top bar + the routed {children}. The section title is derived from the active route so each
-// destination labels its own top bar without prop-drilling. (This replaces the per-page session logic that
-// used to live in app/page.tsx.)
+// left rail (with the session role) + top bar + the routed {children}, and mounts the Cmd/Ctrl-K command palette
+// once. The section title is derived from the active route so each destination labels its own top bar without
+// prop-drilling. (This replaces the per-page session logic that used to live in app/page.tsx.)
 "use client";
 
 import { fetchWithAuth, getAccessToken, silentRefresh, startLogin } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
+import { CommandPalette } from "./CommandPalette";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 
@@ -17,6 +18,7 @@ interface Session {
   userId: string;
   tenantId: string;
   workspaceId: string | null;
+  role: string | null;
   scope: string[];
 }
 
@@ -64,11 +66,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="tp-shell">
-      <Sidebar userEmail={session ? session.userId : null} />
+      <Sidebar userEmail={session ? session.userId : null} role={session?.role ?? null} />
       <div className="tp-main">
         <TopBar title={sectionTitle(pathname)} />
         <main className="tp-content">{children}</main>
       </div>
+      <CommandPalette />
     </div>
   );
 }

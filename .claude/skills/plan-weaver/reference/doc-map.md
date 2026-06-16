@@ -83,7 +83,8 @@
 | ADR-28 | `decisions/ADR-0028-record-customization-layer.md` |
 | ADR-29 | `decisions/ADR-0029-credit-ledger-and-lease-decrement.md` |
 | ADR-30 | `decisions/ADR-0030-granular-tenant-org-roles.md` |
-| ADR-31 | `decisions/ADR-0031-auth-event-audit-tenancy.md` *(proposed)* |
+| ADR-31 | `decisions/ADR-0031-auth-event-audit-tenancy.md` |
+| ADR-32 | `decisions/ADR-0032-platform-audit-action-vocabulary.md` *(proposed)* |
 | (input) | `docs/planning/proposals/2026-05-29-multi-tenant-schema.md` (adopted) |
 
 ## 2. Adjacency list (doc → docs/ADRs it references)
@@ -293,7 +294,8 @@ register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
 | ADR-28 | Record customization layer (custom fields, stages, tags) | Accepted | 05, 03 | 00, 03 §14, 05 §7/§21, 10 (M8), 24, 28, 29, README |
 | ADR-29 | Credit ledger reintroduction & lease-based decrement | Accepted (amends ADR-7) | 07, 03 | 00, 02 §3.1, 03 §8/§14, 05 §11, 07 §2/§8/§11, 10 (M11/M12 + risk #2), 28, README |
 | ADR-30 | Granular tenant org roles | Accepted (amends ADR-19) | 03, 17 | 00, 02 §5, 03 §4, 05 §1, 08 §16, 09 §4, 12 §1, 17 §4, 10 (M11), 28, 29, README |
-| ADR-31 | Auth-event audit tenancy | **Proposed** | 03, 08, 17 | audit-enum (OQ-F), 17 §9, 08 §5, 03 §7; coupled to OQ-D + ADR-11 |
+| ADR-31 | Auth-event audit tenancy | Accepted | 03, 08, 17 | audit-enum (OQ-F), 17 §9, 08 §5, 03 §7; OQ-D → ADR-32 |
+| ADR-32 | Platform-audit action vocabulary | **Proposed** | 13, 08, 03 | audit-enum (OQ-D), ADR-11, ADR-31 |
 
 **ADR rules:** new significant decision → new ADR + 00 §7 row + lead-doc edit (tripod). Superseding a
 locked ADR → set old `Status: Superseded by ADR-NNNN` + reciprocal link, never overwrite the body.

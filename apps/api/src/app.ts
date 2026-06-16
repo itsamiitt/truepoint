@@ -5,15 +5,18 @@ import { appOrigins } from "@leadwolf/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { activityRoutes } from "./features/activity/index.ts";
+import { adminRoutes } from "./features/admin/index.ts";
 import { authRoutes } from "./features/auth/index.ts";
 import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
+import { homeRoutes } from "./features/home/index.ts";
 import { importRoutes } from "./features/import/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
 import { salesNavRoutes } from "./features/sales-navigator/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
+import { workspacesRoutes } from "./features/workspaces/index.ts";
 import { onError } from "./middleware/error.ts";
 import { rateLimit } from "./middleware/rateLimit.ts";
 
@@ -26,6 +29,10 @@ app.get("/health", (c) => c.json({ status: "ok" }));
 // Coarse per-caller throttle on the resource surface (IP-keyed here; per-subject once authn has set claims).
 app.use("/api/*", rateLimit);
 app.route("/api/v1/auth", authRoutes);
+// Platform super-admin (ADR-0032): pa-gated, cross-tenant, audited — NOT workspace-scoped. Highest privilege.
+app.route("/api/v1/admin", adminRoutes);
+app.route("/api/v1/workspaces", workspacesRoutes);
+app.route("/api/v1/home", homeRoutes);
 app.route("/api/v1/imports", importRoutes);
 app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal

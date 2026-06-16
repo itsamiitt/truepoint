@@ -2,9 +2,9 @@
 // same-site, credentialed fetches from the app), rotates the session, mints a fresh access JWT, and sets
 // the rotated cookie. On any failure the cookie is cleared and 401 returned (reuse-detection upstream).
 
-import { refreshAccessToken } from "@leadwolf/auth";
 import { REFRESH_COOKIE, clearRefreshCookie, refreshCookie } from "@/lib/cookies";
 import { corsHeaders } from "@/lib/cors";
+import { refreshAccessToken } from "@leadwolf/auth";
 
 function readRefreshCookie(req: Request): string | null {
   const cookie = req.headers.get("cookie");

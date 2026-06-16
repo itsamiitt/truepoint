@@ -1,18 +1,13 @@
-// types.ts — the home slice's view models. The backend has no /home/summary endpoint yet, so the cockpit
-// composes its summary client-side from the credits balance + usage endpoints (see api.ts). View-only shapes.
-import type { RevealType } from "@leadwolf/types";
-
-/** One recent reveal row from GET /api/v1/credits/usage. */
-export interface UsageReveal {
-  id: string;
-  contactId: string;
-  revealType: RevealType;
-  creditsConsumed: number;
-  revealedAt: string;
-}
-
-/** The composed cockpit summary the Home page renders. */
-export interface HomeSummary {
-  creditBalance: number;
-  reveals: UsageReveal[];
-}
+// types.ts — the home slice's view models. The cockpit shape is now a server contract: GET /home/summary
+// returns HomeSummary (PII-safe — hotLeads carry facets only, the activity feed carries minimized columns).
+// We re-export the inferred types from @leadwolf/types so the slice has one local import surface for them.
+export type {
+  ActivityFeedItem,
+  BurnPoint,
+  EnrichmentActivity,
+  HomeSummary,
+  HotLead,
+  RecentImport,
+  RecentReveal,
+  SequenceSnapshot,
+} from "@leadwolf/types";

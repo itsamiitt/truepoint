@@ -78,3 +78,4 @@ export {
   parseCreditGrantEvent,
   type CreditGrantEvent,
 } from "./billing/stripeWebhook.ts";
+export { buildHomeSummary, type BuildHomeSummaryInput } from "./home/buildHomeSummary.ts";

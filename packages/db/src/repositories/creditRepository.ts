@@ -4,7 +4,13 @@
 
 import { sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
-import { purchases } from "../schema/billing.ts";
+import { contactReveals, purchases } from "../schema/billing.ts";
+
+/** One day of credit burn for the Home sparkline (07 §2). */
+export interface BurnByDayRow {
+  day: string; // YYYY-MM-DD
+  credits: number;
+}
 
 export interface GrantInput {
   tenantId: string;
@@ -46,6 +52,26 @@ export const creditRepository = {
 
   async getBalance(scope: TenantScope): Promise<number> {
     return withTenantTx(scope, (tx) => creditRepository.currentBalance(tx, scope.tenantId));
+  },
+
+  /**
+   * Per-day credit burn over the last `days` days for the Home sparkline (07 §2): SUM(credits_consumed)
+   * grouped by the reveal day, ascending. Workspace-scoped via RLS — only this workspace's reveals.
+   */
+  async burnByDay(scope: TenantScope, days = 30): Promise<BurnByDayRow[]> {
+    const since = new Date(Date.now() - days * 86_400_000);
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select({
+          day: sql<string>`to_char(date_trunc('day', ${contactReveals.revealedAt}), 'YYYY-MM-DD')`,
+          credits: sql<number>`coalesce(sum(${contactReveals.creditsConsumed}), 0)::int`,
+        })
+        .from(contactReveals)
+        .where(sql`${contactReveals.revealedAt} >= ${since}`)
+        .groupBy(sql`date_trunc('day', ${contactReveals.revealedAt})`)
+        .orderBy(sql`date_trunc('day', ${contactReveals.revealedAt}) asc`);
+      return rows.map((r) => ({ day: r.day, credits: Number(r.credits) }));
+    });
   },
 
   /**
