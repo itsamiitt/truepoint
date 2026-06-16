@@ -6,6 +6,7 @@ import { env } from "@leadwolf/config";
 import type { ImportDeadLetter } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
+import { log } from "./logger.ts";
 import { DSAR_QUEUE, type DsarJobData, processDsar } from "./queues/dsar.ts";
 import {
   ENRICHMENT_QUEUE,
@@ -62,20 +63,45 @@ export async function enqueueOutreach(data: OutreachJobData, delayMs = 0): Promi
   return String(job.id);
 }
 
+/** Attach structured completed/failed logging to a worker (per-queue observability). Never logs payloads. */
+function instrument<T = unknown>(worker: Worker<T>, queue: string): Worker<T> {
+  worker.on("completed", (job) => log.info("job completed", { queue, jobId: job.id }));
+  worker.on("failed", (job, err) =>
+    log.error("job failed", {
+      queue,
+      jobId: job?.id,
+      attemptsMade: job?.attemptsMade,
+      error: err.message,
+    }),
+  );
+  return worker;
+}
+
 /** Boot every queue consumer. Returns the workers so the entry can manage their lifecycle. */
 export function startWorkers(): Worker[] {
-  const importsWorker = new Worker<ImportJobData>(IMPORTS_QUEUE, processImport, { connection });
+  const importsWorker = instrument(
+    new Worker<ImportJobData>(IMPORTS_QUEUE, processImport, { connection }),
+    IMPORTS_QUEUE,
+  );
   // Import jobs that exhaust their retries are dead-lettered (PII-free) for ops triage instead of being lost.
   importsWorker.on("failed", (job, err) => {
     void deadLetterFailedImport(importDeadLetterQueue, job, err).catch((e) =>
-      console.error("imports: dead-letter routing failed", e),
+      log.error("imports: dead-letter routing failed", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
     );
   });
   return [
     importsWorker,
-    new Worker<EnrichmentJobData>(ENRICHMENT_QUEUE, processEnrichment, { connection }),
-    new Worker<ScoringJobData>(SCORING_QUEUE, processScoring, { connection }),
-    new Worker<DsarJobData>(DSAR_QUEUE, processDsar, { connection }),
-    new Worker<OutreachJobData>(OUTREACH_QUEUE, processOutreach, { connection }),
+    instrument(
+      new Worker<EnrichmentJobData>(ENRICHMENT_QUEUE, processEnrichment, { connection }),
+      ENRICHMENT_QUEUE,
+    ),
+    instrument(new Worker<ScoringJobData>(SCORING_QUEUE, processScoring, { connection }), SCORING_QUEUE),
+    instrument(new Worker<DsarJobData>(DSAR_QUEUE, processDsar, { connection }), DSAR_QUEUE),
+    instrument(
+      new Worker<OutreachJobData>(OUTREACH_QUEUE, processOutreach, { connection }),
+      OUTREACH_QUEUE,
+    ),
   ];
 }
