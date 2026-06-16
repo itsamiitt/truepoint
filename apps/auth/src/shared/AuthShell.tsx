@@ -18,7 +18,7 @@ export function AuthShell({
     <main className="grid min-h-screen place-items-center px-4 py-6">
       <section
         aria-labelledby="auth-title"
-        className="w-full max-w-[400px] rounded-[var(--radius)] border border-[var(--tp-hairline-2)] bg-[var(--tp-surface)] px-6 py-7 shadow-[0_8px_30px_rgba(17,24,39,0.06)]"
+        className="tp-card-enter w-full max-w-[400px] rounded-[var(--radius)] border border-[var(--tp-hairline-2)] bg-[var(--tp-surface)] px-6 py-7 shadow-[0_8px_30px_rgba(17,24,39,0.06)]"
       >
         <BrandLockup />
         <h1 id="auth-title" className="mb-1 text-[22px] font-semibold leading-tight">

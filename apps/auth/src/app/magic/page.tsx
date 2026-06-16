@@ -3,6 +3,7 @@
 // sendMagic action to mail a one-click link. After sending it switches to "check your email" + a resend
 // button (rate-limited server-side). Carries the app's PKCE/return context as hidden fields.
 import { AuthShell } from "@/shared/AuthShell";
+import { SubmitButton } from "@/shared/SubmitButton";
 import { Alert, Badge, Button } from "@leadwolf/ui";
 import { sendMagic } from "./actions";
 
@@ -58,7 +59,7 @@ export default async function MagicPage({ searchParams }: { searchParams: Search
       </Badge>
 
       {errorMessage ? (
-        <Alert variant="destructive" role="alert" className="mb-4">
+        <Alert variant="destructive" role="alert" className="mb-4 tp-shake">
           {errorMessage}
         </Alert>
       ) : null}
@@ -78,9 +79,7 @@ export default async function MagicPage({ searchParams }: { searchParams: Search
       ) : (
         <form action={sendMagic} noValidate>
           {hidden}
-          <Button type="submit" size="full">
-            Send sign-in link
-          </Button>
+          <SubmitButton>Send sign-in link</SubmitButton>
         </form>
       )}
     </AuthShell>

@@ -2,7 +2,8 @@
 // PKCE/return context rides as hidden fields. SSR, no-JS friendly, keyboard-first, WCAG AA. Show/hide and
 // passkey prompt are progressive enhancements layered on top of this base render.
 import { AuthShell } from "@/shared/AuthShell";
-import { Alert, Badge, Button, Input, Label } from "@leadwolf/ui";
+import { SubmitButton } from "@/shared/SubmitButton";
+import { Alert, Badge, Input, Label } from "@leadwolf/ui";
 import { submitPassword } from "./actions";
 
 type SearchParams = Promise<Record<string, string | undefined>>;
@@ -57,13 +58,11 @@ export default async function PasswordPage({ searchParams }: { searchParams: Sea
           />
         </div>
         {sp.error ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className="mb-4 tp-shake">
             Check your credentials and try again.
           </Alert>
         ) : null}
-        <Button type="submit" size="full">
-          Sign in
-        </Button>
+        <SubmitButton>Sign in</SubmitButton>
       </form>
     </AuthShell>
   );
