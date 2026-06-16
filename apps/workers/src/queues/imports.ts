@@ -6,7 +6,9 @@ import { type RunImportInput, runImport } from "@leadwolf/core";
 import type { ImportSummary } from "@leadwolf/types";
 import type { Job } from "bullmq";
 
-export const IMPORTS_QUEUE = "imports";
+// Single source of truth for the queue name lives in @leadwolf/types so this consumer and the apps/api
+// producer never drift (and apps never import apps). Re-exported for register.ts (the composition root).
+export { IMPORTS_QUEUE } from "@leadwolf/types";
 
 /** The job payload IS a RunImportInput (rows already parsed before enqueue). */
 export type ImportJobData = RunImportInput;
