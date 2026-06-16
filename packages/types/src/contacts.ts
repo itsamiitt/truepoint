@@ -137,6 +137,44 @@ export const importJobRefSchema = z.object({
 });
 export type ImportJobRef = z.infer<typeof importJobRefSchema>;
 
+/** Dead-letter queue name for import jobs that exhaust their retries (16 §3.2). Shared producer/consumer. */
+export const IMPORTS_DLQ = "imports:dlq";
+
+/** Coarse progress the import worker reports via job.updateProgress; the status endpoint echoes it back. */
+export const importProgressSchema = z.object({
+  total: z.number().int().nonnegative(),
+  processed: z.number().int().nonnegative(),
+  created: z.number().int().nonnegative(),
+  matched: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+});
+export type ImportProgress = z.infer<typeof importProgressSchema>;
+
+/** The polled status of an import job (GET /import/:jobId). `summary`/`failedReason` fill in once it settles. */
+export const importJobStatusResponseSchema = z.object({
+  jobId: z.string(),
+  status: importJobStatus,
+  progress: importProgressSchema.nullable(),
+  summary: importSummarySchema.nullable(),
+  failedReason: z.string().nullable(),
+});
+export type ImportJobStatusResponse = z.infer<typeof importJobStatusResponseSchema>;
+
+/** A PII-FREE record of an import job that exhausted its retries, written to the dead-letter queue. Carries
+ *  scope + provenance + the failure reason for ops triage — never the raw rows (those hold un-encrypted PII). */
+export const importDeadLetterSchema = z.object({
+  originalJobId: z.string(),
+  tenantId: z.string(),
+  workspaceId: z.string(),
+  sourceName: sourceName,
+  sourceFile: z.string().nullable(),
+  importedByUserId: z.string().nullable(),
+  failedReason: z.string(),
+  attemptsMade: z.number().int().nonnegative(),
+});
+export type ImportDeadLetter = z.infer<typeof importDeadLetterSchema>;
+
 // ── Masked contact view (what search/list returns before reveal — 05 §6/§7) ────────────────────────────
 /** A workspace-scoped contact with PII masked until reveal (M3). `emailDomain` is the non-PII facet. */
 export const maskedContactSchema = z.object({
