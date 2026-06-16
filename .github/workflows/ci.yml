@@ -1,0 +1,113 @@
+# ci.yml — the project's verification gate. No developer/agent sandbox has bun+docker, so THIS is the only
+# place the gates and the integration suite actually run. Two jobs:
+#   • gates  — typecheck (turbo) + biome + dependency-cruiser boundaries + unit tests (bun test). Fast, no services.
+#   • itests — every *.itest.ts against real Postgres 16 + Redis 7 service containers.
+# The itests are named *.itest.ts so the default `bun test` (units) skips them; they run explicitly here, each
+# in its OWN process because the @leadwolf/db client is a module singleton and itestDb.ts (external mode, via
+# ITEST_DATABASE_URL) provisions an isolated database per file. Globbing *.itest.ts means this auto-covers new
+# suites (e.g. work/worker-a rls-isolation, work/worker-b imports.queue/resilience) the moment they land on main.
+
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Supersede in-flight runs for the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Set so the integration suite runs against the service containers below instead of spawning Testcontainers
+  # (no docker-in-docker needed). itestDb.ts uses ITEST_DATABASE_URL (external mode, one DB per file); the
+  # apps/workers import itests use ITEST_REDIS_URL.
+  ITEST_DATABASE_URL: postgres://leadwolf:leadwolf@localhost:5432/leadwolf
+  ITEST_REDIS_URL: redis://localhost:6379
+  # The itests set this themselves in beforeAll; provided here too for any unit test that touches blind-index/PII.
+  BLIND_INDEX_KEY: ci-blind-index-key-0123456789abcdef
+  # Forward-compat with the RLS hardening (work/worker-a): @leadwolf/config requires this in production. CI is
+  # not NODE_ENV=production so the guard is inert, but set it so nothing trips once that branch merges.
+  DATABASE_APP_ROLE_PASSWORD: leadwolf_app
+
+jobs:
+  gates:
+    name: Gates — typecheck · biome · boundaries · unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      # --frozen-lockfile fails if any package.json gained a dep without bun.lock being refreshed — the
+      # forcing function for "run bun install after pulling a feature branch".
+      - name: Install (frozen lockfile)
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Lint (biome)
+        run: bun run lint
+      - name: Import boundaries (dependency-cruiser)
+        run: bun run lint:boundaries
+      - name: Unit tests
+        run: bun test
+
+  itests:
+    name: Integration tests — *.itest.ts on Postgres + Redis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: leadwolf
+          POSTGRES_PASSWORD: leadwolf
+          POSTGRES_DB: leadwolf
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U leadwolf"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install (frozen lockfile)
+        run: bun install --frozen-lockfile
+      - name: Run every *.itest.ts in its own process
+        run: |
+          set -uo pipefail
+          mapfile -t files < <(find packages apps -name '*.itest.ts' | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No *.itest.ts found — nothing to run."
+            exit 0
+          fi
+          printf 'Found %d integration test file(s):\n' "${#files[@]}"
+          printf '  %s\n' "${files[@]}"
+          status=0
+          for f in "${files[@]}"; do
+            echo "::group::bun test ${f}"
+            if ! bun test "${f}"; then
+              status=1
+              echo "::error file=${f}::integration test failed"
+            fi
+            echo "::endgroup::"
+          done
+          exit "${status}"
