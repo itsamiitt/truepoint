@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
-type Core = typeof import("@leadwolf/core");
+type Core = typeof import("../../core/src/index.ts");
 type SequenceModule = typeof import("../../core/src/outreach/createSequence.ts");
 type EnrollModule = typeof import("../../core/src/outreach/enrollContact.ts");
 type SendModule = typeof import("../../core/src/outreach/sendStep.ts");
@@ -110,7 +110,7 @@ beforeAll(async () => {
   wsA = (w as { id: string }).id;
 
   // env is set above, BEFORE any of these dynamic imports load @leadwolf/config / the db singleton.
-  core = await import("@leadwolf/core");
+  core = await import("../../core/src/index.ts");
   seqMod = await import("../../core/src/outreach/createSequence.ts");
   enrollMod = await import("../../core/src/outreach/enrollContact.ts");
   sendMod = await import("../../core/src/outreach/sendStep.ts");

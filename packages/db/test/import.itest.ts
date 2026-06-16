@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
-type RunImportFn = typeof import("@leadwolf/core")["runImport"];
+type RunImportFn = typeof import("../../core/src/index.ts")["runImport"];
 
 let dbHandle: ItestDb;
 let runImport: RunImportFn;
@@ -105,7 +105,7 @@ beforeAll(async () => {
   ({ tenantId: tenantA, workspaceId: wsA, ownerId: ownerA } = await seedWorkspace("acme"));
   ({ tenantId: tenantB, workspaceId: wsB } = await seedWorkspace("globex"));
 
-  ({ runImport } = await import("@leadwolf/core"));
+  ({ runImport } = await import("../../core/src/index.ts"));
 }, 180_000);
 
 afterAll(async () => {

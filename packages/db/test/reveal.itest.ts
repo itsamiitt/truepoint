@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
-type Core = typeof import("@leadwolf/core");
+type Core = typeof import("../../core/src/index.ts");
 
 let dbHandle: ItestDb;
 let core: Core;
@@ -97,7 +97,7 @@ beforeAll(async () => {
   ({ tenantId: tenantA, workspaceId: wsA, ownerId: ownerA } = await seedWorkspace("acme"));
   ({ tenantId: tenantB, workspaceId: wsB, ownerId: ownerB } = await seedWorkspace("globex"));
 
-  core = await import("@leadwolf/core");
+  core = await import("../../core/src/index.ts");
   // Seed identical books into both workspaces through the real import pipeline (encrypted PII + blind index).
   await core.runImport({
     scope: { tenantId: tenantA, workspaceId: wsA },
