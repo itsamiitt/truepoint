@@ -52,6 +52,18 @@ const valid = {
       occurredAt: "2026-06-14T10:00:00.000Z",
     },
   ],
+  todaysTasks: [
+    { id: "t_1", kind: "follow_up", contactId: "c_1", dueAt: "2026-06-16T17:00:00.000Z" },
+  ],
+  recentReplies: [
+    {
+      id: "r_1",
+      contactId: "c_2",
+      sequenceId: "seq_1",
+      channel: "email",
+      repliedAt: "2026-06-15T14:00:00.000Z",
+    },
+  ],
 };
 
 describe("homeSummarySchema", () => {
@@ -59,6 +71,22 @@ describe("homeSummarySchema", () => {
     const parsed = homeSummarySchema.parse(valid);
     expect(parsed.creditBalance).toBe(1200);
     expect(parsed.recentReveals[0]!.revealType).toBe("email");
+    expect(parsed.todaysTasks[0]!.kind).toBe("follow_up");
+    expect(parsed.recentReplies[0]!.channel).toBe("email");
+  });
+
+  it("accepts empty todaysTasks + recentReplies (empty-state-first)", () => {
+    const parsed = homeSummarySchema.parse({ ...valid, todaysTasks: [], recentReplies: [] });
+    expect(parsed.todaysTasks).toEqual([]);
+    expect(parsed.recentReplies).toEqual([]);
+  });
+
+  it("rejects a todaysTask with a kind outside the closed enum", () => {
+    const result = homeSummarySchema.safeParse({
+      ...valid,
+      todaysTasks: [{ ...valid.todaysTasks[0], kind: "deploy" }],
+    });
+    expect(result.success).toBe(false);
   });
 
   it("rejects a negative credit balance", () => {
