@@ -90,5 +90,9 @@ export async function buildHomeSummary({ scope }: BuildHomeSummaryInput): Promis
       actorUserId: a.actorUserId,
       occurredAt: a.occurredAt.toISOString(),
     })),
+    // Empty-state-first (T3): the DTO + cards ship now; population lands with the tasks/replies sources.
+    // Returned [] so the Home cards render calm empty states without a backing source yet.
+    todaysTasks: [],
+    recentReplies: [],
   };
 }
