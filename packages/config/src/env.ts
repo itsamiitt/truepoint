@@ -18,6 +18,19 @@ export const appEnvSchema = z
     APP_ORIGINS: z.string().transform(csv).pipe(z.array(z.string().url()).min(1)),
     AUTH_COOKIE_DOMAIN: z.string().min(1),
 
+    // Client-IP binding posture for the cross-domain code (ADR-0016 addendum): `strict` = exact match on
+    // the normalized IP, `prefix` = same network (/24 IPv4, /64 IPv6) so a proxy first-hop that varies
+    // within a network doesn't break a legitimate login, `off` = don't bind (rely on PKCE + single-use +
+    // short TTL). Default `prefix` — robust to dual-stack first-hop drift without dropping the protection.
+    AUTH_BIND_IP: z.enum(["strict", "prefix", "off"]).default("prefix"),
+
+    // The browser-facing public origins are ALSO inlined into the web/auth bundles at BUILD time
+    // (NEXT_PUBLIC_*). Optional here (absent during a bare `next build` or in unit tests), but when present
+    // at runtime the prod superRefine asserts they agree with the server-side origins — drift between the
+    // baked bundle and the runtime allow-list is the classic "redirects to the app but never logs in" bug.
+    NEXT_PUBLIC_APP_ORIGIN: z.string().url().optional(),
+    NEXT_PUBLIC_AUTH_ORIGIN: z.string().url().optional(),
+
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
     REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(2_592_000),
     AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive().max(120).default(60),
@@ -88,6 +101,25 @@ export const appEnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ["AUTH_COOKIE_DOMAIN"],
         message: `must equal the AUTH_ORIGIN host "${authHost}" (host-only cookie scope), got "${val.AUTH_COOKIE_DOMAIN}"`,
+      });
+    }
+
+    // Origin self-consistency (ADR-0016): the public origins baked into the bundles at build time MUST agree
+    // with the server-side origins read at runtime, or `exchangeCode`'s exact-match origin check fails and
+    // login dies with an opaque 400. Assert only when the NEXT_PUBLIC_* values are present in the process env
+    // (they are here via env_file) — fail fast and loud at boot instead of silently breaking sign-in.
+    if (val.NEXT_PUBLIC_APP_ORIGIN && !val.APP_ORIGINS.includes(val.NEXT_PUBLIC_APP_ORIGIN)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["NEXT_PUBLIC_APP_ORIGIN"],
+        message: `must be one of APP_ORIGINS [${val.APP_ORIGINS.join(", ")}] — the build-time app origin must be an allow-listed runtime origin, or the cross-domain token exchange fails`,
+      });
+    }
+    if (val.NEXT_PUBLIC_AUTH_ORIGIN && val.NEXT_PUBLIC_AUTH_ORIGIN !== val.AUTH_ORIGIN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["NEXT_PUBLIC_AUTH_ORIGIN"],
+        message: `must equal AUTH_ORIGIN "${val.AUTH_ORIGIN}" (the baked auth origin must match the runtime auth origin)`,
       });
     }
   });
