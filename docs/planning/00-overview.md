@@ -200,6 +200,7 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 | Billing hardening | **Append-only `credit_ledger` at M11** (counter → derived cache) + **credit leases at M12** | Provable accounting + hot-row relief; executes ADR-0007's revisit path → [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md), [07 §2](./07-billing-credits.md) |
 | Tenant org roles | **`tenant_members.org_role`** — `owner`/`billing_admin`/`security_admin`/`compliance_admin`/`member` (M11) | Delegated administration → [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md), [03 §4](./03-database-design.md) |
 | Auth-event audit | **Auth events split by tenant-resolvability** — resolved → `audit_log`; tenant-less → `platform_audit_log` (preserves the `NOT NULL`+RLS invariant) | Write the closed-enum auth actions without weakening RLS → [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md), [audit-log-enum.md](./audit-log-enum.md) |
+| Platform bootstrap admin | **Interim** super-admin as a `users.is_platform_admin` flag → signed `pa` JWT claim → deny-by-default `/admin/*` guard + audited `withPlatformTx` (owner pool); diverges from ADR-0011's separate staff app until `apps/admin` ships | Immediate working super-admin without the staff app → [ADR-0034](./decisions/ADR-0034-bootstrap-platform-admin.md) (interim; diverges from [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)) |
 
 ## 8. Open questions (tracked, resolved during doc review or early milestones)
 
