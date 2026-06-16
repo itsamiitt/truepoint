@@ -107,3 +107,41 @@ bind is defense-in-depth):
   post-deploy smoke test** (`assertSigningKey()` — a trial mint inside the auth container); a boot-time
   `instrumentation.ts` self-test logs a FATAL line (no exit) if the key is unusable. Signing keys/tokens are
   never logged.
+
+## Addendum (2026-06-16) — callback auto-recovery + honest password failure semantics
+
+The single-use round-trip ([§ Decision](#decision), [17 §3](../17-authentication.md#3-cross-domain-token-contract))
+is correct but unforgiving: a code is one-shot and 60 s-lived, so a stale tab, a back-button replay, or a
+React **StrictMode** double-invoke of the callback effect would consume the code twice and dead-end the user
+on a generic error. The password step likewise collapsed a credential rejection and a dependency outage into
+the same failure, so a Redis/DB blip surfaced as a `500` (or as a misleading "check your credentials").
+
+Refinements (the token contract and security intent are unchanged):
+
+- **Callback auto-recovery.** A **recoverable** `state`/code failure from `completeLogin` —
+  `invalid_state` | `pkce_mismatch` | `code_not_found` (the "session expired / already-used / single-use
+  code" class) — now triggers **exactly one** automatic fresh-login restart via `startLogin()`, guarded by a
+  **`lw_auth_recovery` sessionStorage flag** so it can never loop. A **`503 auth_unavailable`** is treated as
+  a transient server fault: it is **shown** ("temporarily unavailable") and is **not** retried in a loop.
+- **StrictMode / re-entrancy guard.** The callback effect that exchanges the code is guarded against
+  StrictMode double-invocation (and any re-entry), so the **single-use code is consumed exactly once** — the
+  guard, not the server, is the first line against an accidental double-spend.
+- **Honest password failure semantics.** The password step separates an **`InvalidCredentialsError`**
+  (uniform credential error — never reveals *why*, [17 §6](../17-authentication.md#6-security-layers)) from an
+  **infra failure** (DB/Redis throw → `auth_unavailable`-style "Sign-in is temporarily unavailable"). The
+  post-verify steps are wrapped so a dependency outage **no longer `500`s**; it degrades to the transient
+  message instead.
+
+### Monitoring / alerting
+
+These failure modes are now observable; alert on them:
+
+- **`503 auth_unavailable` from `POST /token/exchange`** — the server already emits
+  `token.exchange.infra_error` (reason `redis_unavailable`) and `token.exchange.mint_failed` (reason
+  `token_mint_failed`). Alert on either; both indicate a real server fault, not a client mistake.
+- **A spike in client `invalid_state` callbacks** — a sustained rise signals stale-tab / replay churn or a
+  deeper origin/`state` drift, distinct from the steady-state one-off recovery.
+- **Operational reminder.** A real production `503` means the deployed **`JWT_PRIVATE_KEY_PEM_B64`** and
+  **`REDIS_URL`** must be checked first — the code path itself (base64 key decode in `loadEnv`, boot
+  self-test, deploy smoke test; see the [client-IP binding addendum](#addendum-2026-06-16--client-ip-binding-posture--failure-observability))
+  is already correct, so a 503 points at deploy-time config, not the application.
