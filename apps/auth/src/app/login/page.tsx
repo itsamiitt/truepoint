@@ -4,6 +4,7 @@
 // Turnstile widget + per-IP/per-identifier rate-limit gate the existence reveal. Carries the app's
 // PKCE/return context through the flow as hidden fields. "Continue with Google" begins social OAuth.
 import { AuthShell } from "@/shared/AuthShell";
+import { SubmitButton } from "@/shared/SubmitButton";
 import { TurnstileWidget } from "@/shared/TurnstileWidget";
 import { Alert, Button, Input, Label, Separator } from "@leadwolf/ui";
 import { submitIdentifier } from "./actions";
@@ -23,6 +24,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
   const appOrigin = sp.app_origin ?? "";
   const codeChallenge = sp.code_challenge ?? "";
   const state = sp.state ?? "";
+  // Prefill the identifier when we arrive back from a later step — the password/magic "change" link and the
+  // signup/forgot/sso screens all carry ?email — so the person never has to retype it (bug 1). Matches the
+  // signup/forgot/magic prefill; the field stays editable so "change" still lets them switch accounts.
+  const prefill = sp.email ?? "";
   const oauthHref = `/oauth/google?${new URLSearchParams({ app_origin: appOrigin, code_challenge: codeChallenge, state })}`;
   const errorMessage = sp.error
     ? (ERRORS[sp.error] ?? "Enter your email or username to continue.")
@@ -62,6 +67,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
             autoCorrect="off"
             spellCheck={false}
             placeholder="you@company.com"
+            defaultValue={prefill}
             required
             autoFocus
             aria-invalid={errorMessage ? "true" : undefined}
@@ -69,13 +75,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
         </div>
         <TurnstileWidget />
         {errorMessage ? (
-          <Alert variant="destructive" role="alert" className="mb-4">
+          <Alert variant="destructive" role="alert" className="mb-4 tp-shake">
             {errorMessage}
           </Alert>
         ) : null}
-        <Button type="submit" size="full">
-          Continue
-        </Button>
+        <SubmitButton>Continue</SubmitButton>
       </form>
     </AuthShell>
   );

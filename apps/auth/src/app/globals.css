@@ -11,3 +11,47 @@ body {
   background: var(--tp-surface-2);
   color: var(--tp-ink);
 }
+
+/*
+ * Auth motion (04 §8; brand "calm, not neon"): a gentle one-shot card rise on each step and a single error
+ * shake. Opacity/transform only, ~150-350ms ease-out; both fully disabled under prefers-reduced-motion. (Bug 4.)
+ */
+@keyframes tp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tp-shake {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  30%,
+  70% {
+    transform: translateX(2px);
+  }
+  50% {
+    transform: translateX(-3px);
+  }
+}
+
+.tp-card-enter {
+  animation: tp-rise 0.28s ease-out;
+}
+
+.tp-shake {
+  animation: tp-shake 0.35s ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-card-enter,
+  .tp-shake {
+    animation: none;
+  }
+}
