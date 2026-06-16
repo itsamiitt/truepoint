@@ -62,4 +62,38 @@ describe("lookupIdentifier step routing", () => {
     expect(r.route).toBe("sso");
     expect(r.email).toBe("dev@acme.test");
   });
+
+  it("SSO-enforced domain wins over an existing PASSWORD user (sso beats password)", async () => {
+    const ssoDomain = async () => ({
+      tenantId: "00000000-0000-0000-0000-000000000001",
+      tenantName: "Acme",
+      joinPolicy: "sso_only",
+      ssoEnforced: true,
+      ssoProtocol: "oidc",
+    });
+    const r = await lookupIdentifier(
+      "admin@acme.test",
+      ssoDomain,
+      found({ email: "admin@acme.test", passwordHash: "$argon2id$x" }),
+    );
+    expect(r.route).toBe("sso");
+    expect(r.email).toBe("admin@acme.test");
+  });
+
+  it("SSO-enforced domain wins over an existing PASSWORDLESS user (sso beats magic)", async () => {
+    const ssoDomain = async () => ({
+      tenantId: "00000000-0000-0000-0000-000000000001",
+      tenantName: "Acme",
+      joinPolicy: "sso_only",
+      ssoEnforced: true,
+      ssoProtocol: "oidc",
+    });
+    const r = await lookupIdentifier(
+      "grace@acme.test",
+      ssoDomain,
+      found({ email: "grace@acme.test", passwordHash: null }),
+    );
+    expect(r.route).toBe("sso");
+    expect(r.email).toBe("grace@acme.test");
+  });
 });
