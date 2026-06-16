@@ -17,7 +17,9 @@ export {
   getJwks,
   type MintAccessTokenInput,
 } from "./token.ts";
-export { issueCode, exchangeCode, type CodeBinding } from "./code.ts";
+export { issueCode, exchangeCode, validateBinding, type CodeBinding } from "./code.ts";
+export { normalizeIp, clientIpMatches, type IpBindMode } from "./ipBinding.ts";
+export { log } from "./log.ts";
 export { authenticatePassword, type AuthenticatedUser } from "./login.ts";
 export {
   createLoginTransaction,
