@@ -73,14 +73,44 @@ export class MfaRequiredError extends AppError {
   }
 }
 
+/**
+ * Which client-side check the cross-domain code exchange failed on (ADR-0016). Diagnostic only — it names
+ * the failing check, never the offending value (no code/verifier/IP), so it is safe to surface to the
+ * caller. Distinct from {@link AuthInfraError}, which is a SERVER fault, not a bad client code.
+ */
+export type AuthCodeFailureReason =
+  | "code_not_found" // not in the store: expired (>TTL), already used, or never issued
+  | "ip_mismatch" // the exchange came from a different client than the login
+  | "origin_mismatch" // the request origin isn't the allow-listed origin the code was bound to
+  | "pkce_mismatch"; // the PKCE verifier doesn't match the challenge bound at login
+
 /** Cross-domain code exchange failed validation (reused/expired/wrong-IP/PKCE/origin) — ADR-0016. */
 export class InvalidAuthCodeError extends AppError {
-  constructor() {
+  constructor(reason?: AuthCodeFailureReason) {
     super({
       status: 400,
       code: "invalid_auth_code",
       title: "Authorization code is invalid or expired",
+      ...(reason ? { extensions: { reason } } : {}),
     });
+  }
+}
+
+/**
+ * An auth dependency failed (the code store is unreachable, or token signing failed) — a SERVER fault, not
+ * a bad client code. We answer with a generic `auth_unavailable` so we never leak infra detail or invite a
+ * client to "retry with a better code"; the specific {@link reason} is for SERVER LOGS only (ADR-0016).
+ */
+export type AuthInfraReason = "redis_unavailable" | "token_mint_failed";
+export class AuthInfraError extends AppError {
+  readonly reason: AuthInfraReason;
+  constructor(reason: AuthInfraReason) {
+    super({
+      status: 503,
+      code: "auth_unavailable",
+      title: "Authentication is temporarily unavailable",
+    });
+    this.reason = reason;
   }
 }
 
