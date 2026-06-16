@@ -36,6 +36,7 @@ export interface RevealUsageRow {
   revealType: string;
   creditsConsumed: number;
   revealedAt: Date;
+  revealedByUserId: string;
 }
 
 export const revealRepository = {
@@ -81,6 +82,7 @@ export const revealRepository = {
           revealType: contactReveals.revealType,
           creditsConsumed: contactReveals.creditsConsumed,
           revealedAt: contactReveals.revealedAt,
+          revealedByUserId: contactReveals.revealedByUserId,
         })
         .from(contactReveals)
         .where(
