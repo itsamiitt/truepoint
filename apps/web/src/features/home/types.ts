@@ -8,6 +8,8 @@ export type {
   HomeSummary,
   HotLead,
   RecentImport,
+  RecentReply,
   RecentReveal,
   SequenceSnapshot,
+  TodaysTask,
 } from "@leadwolf/types";

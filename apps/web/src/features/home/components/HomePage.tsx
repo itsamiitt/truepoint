@@ -11,9 +11,12 @@ import { BurnSparkline } from "./BurnSparkline";
 import { EnrichmentActivityCard } from "./EnrichmentActivityCard";
 import styles from "./HomePage.module.css";
 import { HotLeadsCard } from "./HotLeadsCard";
+import { QuickActionsRow } from "./QuickActionsRow";
 import { RecentImportsCard } from "./RecentImportsCard";
 import { RecentRevealsCard } from "./RecentRevealsCard";
+import { RepliesCard } from "./RepliesCard";
 import { SequenceSnapshot } from "./SequenceSnapshot";
+import { TasksCard } from "./TasksCard";
 
 export function HomePage() {
   const { summary, error, loading } = useHomeSummary();
@@ -28,6 +31,8 @@ export function HomePage() {
         <h1 className={styles.title}>Home</h1>
         <p className={styles.subtitle}>Your workspace at a glance.</p>
       </header>
+
+      <QuickActionsRow />
 
       <section className={styles.tiles}>
         <StatTile
@@ -67,6 +72,8 @@ export function HomePage() {
       </section>
 
       <section className={styles.grid}>
+        <TasksCard tasks={summary?.todaysTasks ?? []} loading={loading} error={error} />
+        <RepliesCard replies={summary?.recentReplies ?? []} loading={loading} error={error} />
         <RecentRevealsCard reveals={summary?.recentReveals ?? []} loading={loading} error={error} />
         <HotLeadsCard leads={summary?.hotLeads ?? []} loading={loading} error={error} />
         <BurnSparkline burn={summary?.burn ?? []} loading={loading} error={error} />
