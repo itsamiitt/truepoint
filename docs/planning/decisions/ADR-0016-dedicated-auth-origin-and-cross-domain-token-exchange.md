@@ -100,3 +100,10 @@ bind is defense-in-depth):
   so origin drift fails fast instead of silently breaking sign-in.
 - The edge proxy declares **`trusted_proxies`** so the auth origin binds to the real client IP, not a spoofed
   `X-Forwarded-For`.
+- **EdDSA signing key transport is base64.** A multi-line PEM passed through docker compose `${VAR}`
+  interpolation loses its newlines → `importPKCS8` throws → the exchange 503s as `token_mint_failed`. The key
+  now ships as a single-line `JWT_PRIVATE_KEY_PEM_B64` / `JWT_PUBLIC_KEY_PEM_B64` (decoded in `packages/config`;
+  raw PEM still wins if set). `deploy.sh` auto-generates/repairs the keypair and **gates the deploy on a
+  post-deploy smoke test** (`assertSigningKey()` — a trial mint inside the auth container); a boot-time
+  `instrumentation.ts` self-test logs a FATAL line (no exit) if the key is unusable. Signing keys/tokens are
+  never logged.
