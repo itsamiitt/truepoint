@@ -56,6 +56,17 @@ describe("runBulkReveal", () => {
     expect(s.balanceAfter).toBe(0);
   });
 
+  test("on a 402 carrying no balance, still stops and retains the last known server balance", async () => {
+    const s = await runBulkReveal(["a", "b", "c"], async (id) => {
+      if (id === "b") throw apiError("insufficient_credits"); // 402 with no balance extension
+      return ok(2, 7);
+    });
+    expect(s.revealedIds).toEqual(["a"]);
+    expect(s.stoppedForCredits).toBe(true);
+    expect(s.balanceAfter).toBe(7); // a's server balance is retained; the 402 carried none
+    expect(s.totalCharged).toBe(2);
+  });
+
   test("counts other failures and keeps going", async () => {
     const s = await runBulkReveal(["a", "b"], async (id) => {
       if (id === "a") throw new Error("network blip");
@@ -78,5 +89,16 @@ describe("runBulkReveal", () => {
     await runBulkReveal(["a", "b"], async () => ok(1, 1), "email", (p) => seen.push(p));
     expect(seen[0]).toEqual({ done: 0, total: 2 });
     expect(seen.at(-1)).toEqual({ done: 2, total: 2 });
+  });
+
+  test("still reports final progress done=total after an early 402 stop", async () => {
+    const seen: Array<{ done: number; total: number }> = [];
+    const reveal = async (id: string) => {
+      if (id === "b") throw apiError("insufficient_credits", { balance: 0 });
+      return ok(1, 4);
+    };
+    await runBulkReveal(["a", "b", "c"], reveal, "email", (p) => seen.push(p));
+    expect(seen[0]).toEqual({ done: 0, total: 3 });
+    expect(seen.at(-1)).toEqual({ done: 3, total: 3 });
   });
 });
