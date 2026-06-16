@@ -9,8 +9,12 @@ x-app: &app
   image: leadwolf:latest
   env_file: [.env.production]
   environment:
-    # Multiline EdDSA PEMs can't live in env_file — deploy.sh exports them into the shell
-    # and compose interpolates them here. Empty by default (stack still boots).
+    # EdDSA signing keys. deploy.sh ships them BASE64-encoded (single line) from deploy/keys/: a multi-line
+    # PEM loses its newlines through ${VAR} interpolation → importPKCS8 throws → login 503s. packages/config
+    # decodes the _B64 forms into the PEM at boot. Raw PEM kept as an optional back-compat fallback. Empty by
+    # default (stack still boots; the boot self-test + deploy smoke gate flag a missing key).
+    JWT_PRIVATE_KEY_PEM_B64: ${JWT_PRIVATE_KEY_PEM_B64:-}
+    JWT_PUBLIC_KEY_PEM_B64: ${JWT_PUBLIC_KEY_PEM_B64:-}
     JWT_PRIVATE_KEY_PEM: ${JWT_PRIVATE_KEY_PEM:-}
     JWT_PUBLIC_KEY_PEM: ${JWT_PUBLIC_KEY_PEM:-}
   restart: unless-stopped

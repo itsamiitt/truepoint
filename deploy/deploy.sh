@@ -24,17 +24,26 @@ if grep -q "change-me-to-a-long-random-string" "$ENV_FILE"; then
   exit 1
 fi
 
-# Inject EdDSA keys (multiline → shell env → compose interpolation). REQUIRED: without them every token
-# mint/verify throws, so login completes to a 500. Hard-fail rather than ship a stack that can't log in.
-if [ -f deploy/keys/jwt_private.pem ] && [ -f deploy/keys/jwt_public.pem ]; then
-  JWT_PRIVATE_KEY_PEM="$(cat deploy/keys/jwt_private.pem)"; export JWT_PRIVATE_KEY_PEM
-  JWT_PUBLIC_KEY_PEM="$(cat deploy/keys/jwt_public.pem)";   export JWT_PUBLIC_KEY_PEM
-  echo "==> JWT keys loaded from deploy/keys/"
-else
-  echo "ERROR: deploy/keys/ not found — JWT signing keys are required (login mints/verifies tokens)."
-  echo "  Run 'bash deploy/gen-keys.sh' and re-run this script."
-  exit 1
+# Ensure a VALID EdDSA keypair, then ship it BASE64-ENCODED. A multi-line PEM loses its newlines when docker
+# compose interpolates ${VAR} → importPKCS8 throws → login 503s (token_mint_failed). Base64 is a single line,
+# so it survives interpolation intact; packages/config decodes it back to a PEM at boot. Self-healing: we
+# (re)generate when the key is missing OR fails an openssl parse (corrupt/empty), so one deploy.sh just works.
+KEY_DIR="deploy/keys"
+key_valid() { [ -f "$KEY_DIR/jwt_private.pem" ] && openssl pkey -in "$KEY_DIR/jwt_private.pem" -noout 2>/dev/null; }
+pub_valid() { [ -f "$KEY_DIR/jwt_public.pem" ]  && openssl pkey -pubin -in "$KEY_DIR/jwt_public.pem" -noout 2>/dev/null; }
+
+if ! key_valid; then
+  echo "==> No valid JWT private key in $KEY_DIR/ — generating a fresh EdDSA keypair…"
+  rm -f "$KEY_DIR/jwt_private.pem" "$KEY_DIR/jwt_public.pem"   # gen-keys.sh refuses to overwrite; clear first
+  bash deploy/gen-keys.sh
+elif ! pub_valid; then
+  echo "==> JWT public key missing/invalid — deriving it from the private key…"
+  openssl pkey -in "$KEY_DIR/jwt_private.pem" -pubout -out "$KEY_DIR/jwt_public.pem"
 fi
+
+JWT_PRIVATE_KEY_PEM_B64="$(base64 -w0 "$KEY_DIR/jwt_private.pem")"; export JWT_PRIVATE_KEY_PEM_B64
+JWT_PUBLIC_KEY_PEM_B64="$(base64 -w0 "$KEY_DIR/jwt_public.pem")";   export JWT_PUBLIC_KEY_PEM_B64
+echo "==> JWT keys validated + base64-encoded from $KEY_DIR/"
 
 # ── 1. Build the single image ───────────────────────────────────────────────────
 echo "==> [1/5] Building leadwolf:latest (bun install + next build — first run is slow)…"
@@ -54,6 +63,23 @@ timeout 300 "${COMPOSE[@]}" run --rm migrate
 # ── 4. App services + edge proxy ──────────────────────────────────────────────────
 echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, caddy)…"
 "${COMPOSE[@]}" up -d api auth workers web caddy
+
+# ── 5. Post-deploy smoke gate: prove sign-in can actually MINT, or fail the deploy loudly ───────────────
+# The slim oven/bun image has no curl/wget — use bun -e. `up -d` already waited on healthchecks (Caddy
+# depends on auth being healthy), so the auth container is up by now.
+echo "==> Verifying Redis reachability…"
+"${COMPOSE[@]}" exec -T redis redis-cli ping | grep -q PONG \
+  || { echo "ERROR: Redis did not answer PONG — code issuance/exchange will fail."; exit 1; }
+
+echo "==> Smoke test: minting a token inside the auth container (assertSigningKey)…"
+if "${COMPOSE[@]}" exec -T auth bun -e "import('@leadwolf/auth').then(m=>m.assertSigningKey()).then(()=>process.exit(0),(e)=>{console.error(String((e&&e.message)||e));process.exit(1)})"; then
+  echo "==> Smoke test PASSED — auth can mint tokens; sign-in should work."
+else
+  echo "ERROR: JWT signing self-test FAILED in the auth container — sign-in would 503 (token_mint_failed)."
+  echo "       Recent auth logs:"
+  "${COMPOSE[@]}" logs --tail=50 auth | grep -iE "token.exchange|signing_key|FATAL" || true
+  exit 1
+fi
 
 echo
 echo "Containers:"
