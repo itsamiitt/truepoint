@@ -118,6 +118,25 @@ export const importSummarySchema = z.object({
 });
 export type ImportSummary = z.infer<typeof importSummarySchema>;
 
+// ── Async import job (queue) DTOs (16 §3.2) ──────────────────────────────────────────────────────────────
+/**
+ * The BullMQ queue name shared by the API *producer* (apps/api import slice) and the workers *consumer*
+ * (apps/workers). It lives here, in the leaf types package both apps already depend on, so the producer and
+ * consumer can never drift — and so apps never import apps (.dependency-cruiser.cjs `apps-never-import-apps`).
+ */
+export const IMPORTS_QUEUE = "imports";
+
+/** Lifecycle of a queued import job. `queued` is what the 202 accept-response reports at enqueue time. */
+export const importJobStatus = z.enum(["queued", "active", "completed", "failed", "unknown"]);
+export type ImportJobStatus = z.infer<typeof importJobStatus>;
+
+/** The 202 accept-response when an import is taken for background processing: a job ref the importer can poll. */
+export const importJobRefSchema = z.object({
+  jobId: z.string(),
+  status: importJobStatus,
+});
+export type ImportJobRef = z.infer<typeof importJobRefSchema>;
+
 // ── Masked contact view (what search/list returns before reveal — 05 §6/§7) ────────────────────────────
 /** A workspace-scoped contact with PII masked until reveal (M3). `emailDomain` is the non-PII facet. */
 export const maskedContactSchema = z.object({
