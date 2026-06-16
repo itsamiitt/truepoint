@@ -8,7 +8,10 @@ import { type UserLookup, lookupIdentifier } from "./identifierLookup.ts";
 type FakeUser = { email: string; passwordHash: string | null };
 const noDomain = async () => null;
 /** An injected user-lookup that always resolves to `user`. */
-const found = (user: FakeUser | null): UserLookup => async () => user;
+const found =
+  (user: FakeUser | null): UserLookup =>
+  async () =>
+    user;
 
 describe("lookupIdentifier step routing", () => {
   it("existing user WITH a password → route 'password', carrying the canonical email", async () => {
