@@ -17,6 +17,11 @@ const MATCH_LABEL: Record<string, string> = {
   contact_id: "Contact",
 };
 
+const SCOPE_LABEL: Record<string, string> = {
+  tenant: "Org-wide",
+  workspace: "Workspace",
+};
+
 /** The human-readable key for a row, or a masked label when only a blind index exists (email / phone). */
 function entryKey(e: SuppressionListItem): string {
   if (e.match_type === "domain") return e.domain ?? "—";
@@ -84,7 +89,10 @@ export function SuppressionList() {
                 {e.reason && <span className={styles.listReason}>{e.reason}</span>}
               </div>
               <div className={styles.listMeta}>
-                <span className={styles.listScope}>{e.scope}</span>
+                <span className={styles.listScope}>
+                  {new Date(e.created_at).toLocaleDateString()}
+                </span>
+                <span className={styles.listScope}>{SCOPE_LABEL[e.scope] ?? e.scope}</span>
                 <button
                   className={styles.removeButton}
                   type="button"
