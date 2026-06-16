@@ -15,15 +15,13 @@ const here = dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = join(here, "migrations");
 const rlsFolder = join(here, "rls");
 
-// Role login passwords. These roles are reached via SET ROLE (the app never logs in AS them in the current
-// architecture), so the value is functionally inert — BUT managed Postgres enforces a password policy:
-// Neon's control plane REJECTS weak passwords on CREATE ROLE (a literal 'leadwolf_app' fails with
-// "insecure password"). Strong defaults satisfy that out of the box; override via
-// DATABASE_APP_ROLE_PASSWORD / DATABASE_ADMIN_ROLE_PASSWORD for a real secret in production.
+// leadwolf_app login password: the app connects AS leadwolf_app (RLS-enforced), so this is its real login
+// secret — override via DATABASE_APP_ROLE_PASSWORD in production. Managed Postgres (Neon) rejects weak
+// passwords on CREATE ROLE, so the default is strong. leadwolf_admin is NOLOGIN (reached only via SET ROLE
+// by the owner for the audited DSAR/admin path) — it needs no password and cannot be logged into directly.
 const DEFAULT_APP_ROLE_PASSWORD = "Lw_App_Role_2026!x7Qm";
-const DEFAULT_ADMIN_ROLE_PASSWORD = "Lw_Admin_Role_2026!z3Kp";
 
-const bootstrap = (appPwd: string, adminPwd: string): string => `
+const bootstrap = (appPwd: string): string => `
   CREATE EXTENSION IF NOT EXISTS pgcrypto;
   CREATE EXTENSION IF NOT EXISTS citext;
 
@@ -43,7 +41,7 @@ const bootstrap = (appPwd: string, adminPwd: string): string => `
     -- The privileged cross-tenant role (03 §9, ADR-0011): BYPASSRLS, used ONLY by the audited DSAR path
     -- (and later apps/admin). Authored at M0 per the plan; first wired at M5.
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_admin') THEN
-      CREATE ROLE leadwolf_admin LOGIN PASSWORD '${adminPwd}';
+      CREATE ROLE leadwolf_admin NOLOGIN;
     END IF;
     -- BYPASSRLS can only be granted by a superuser (local Docker / RDS). Managed Postgres such as Neon
     -- disallows it for the owner role, so apply it only when the connecting role is itself a superuser.
@@ -90,7 +88,6 @@ export async function applyMigrations(
 ): Promise<void> {
   // Single-quote-escape so a password containing ' can't break the bootstrap SQL.
   const appPwd = (opts.appRolePassword ?? DEFAULT_APP_ROLE_PASSWORD).replace(/'/g, "''");
-  const adminPwd = (opts.adminRolePassword ?? DEFAULT_ADMIN_ROLE_PASSWORD).replace(/'/g, "''");
   // `prepare: false` is REQUIRED here: Drizzle's migrator issues prepared statements, which a
   // transaction-pooling proxy (Neon `-pooler` / PgBouncer / RDS Proxy) can't keep across checkouts —
   // the classic "migration hangs forever" on Neon's default pooled host. Mirrors client.ts. The timeouts
@@ -118,7 +115,7 @@ export async function applyMigrations(
   };
   try {
     log("migrate: [1/4] bootstrap (extensions, roles, uuid_generate_v7)…\n");
-    await sql.unsafe(bootstrap(appPwd, adminPwd));
+    await sql.unsafe(bootstrap(appPwd));
     if (await exists(migrationsFolder)) {
       log("migrate: [2/4] applying table migrations…\n");
       await migrate(db, { migrationsFolder });
