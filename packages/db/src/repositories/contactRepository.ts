@@ -175,6 +175,8 @@ export const contactRepository = {
         locationCity: r.locationCity,
         outreachStatus: r.outreachStatus as MaskedContact["outreachStatus"],
         isRevealed: r.isRevealed,
+        ownerUserId: r.revealedByUserId, // T4b: member dimension (null until revealed) — non-PII user FK.
+        createdAt: r.createdAt.toISOString(), // T4b: date dimension (created_at is non-null).
       }));
     });
   },

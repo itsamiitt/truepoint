@@ -199,5 +199,8 @@ export const maskedContactSchema = z.object({
   locationCity: z.string().nullable(),
   outreachStatus: outreachStatus,
   isRevealed: z.boolean(),
+  // Non-PII reporting dimensions (T4b): member + funnel/health-date filtering over the masked list.
+  ownerUserId: z.string().nullable(), // the member who revealed (= owns) the contact; null until revealed.
+  createdAt: z.string().datetime({ offset: true }), // when the workspace row was created (ISO-8601).
 });
 export type MaskedContact = z.infer<typeof maskedContactSchema>;

@@ -25,6 +25,19 @@ export const revealResponseSchema = z.object({
 });
 export type RevealResponse = z.infer<typeof revealResponseSchema>;
 
+/** One metered reveal from GET /credits/usage — the usage-history row (07 §9, 09 §3, 12 §4). PII-free: the
+ *  reveal's id/contact/type/cost/timestamp plus the member who ran it (the Reports "member" dimension).
+ *  Single source of truth for apps/api (the /credits/usage payload) and apps/web (Settings ▸ Billing, Reports). */
+export const usageRevealSchema = z.object({
+  id: z.string().uuid(),
+  contactId: z.string().uuid(),
+  revealType: revealType,
+  creditsConsumed: z.number().int().min(0),
+  revealedAt: z.string().datetime({ offset: true }),
+  revealedByUserId: z.string(), // contact_reveals.revealed_by_user_id (NOT NULL) — the member who revealed.
+});
+export type UsageReveal = z.infer<typeof usageRevealSchema>;
+
 // ── Suppression / DNC (08 §3) ──────────────────────────────────────────────────────────────────────────
 export const suppressionScope = z.enum(["global", "tenant", "workspace"]);
 export type SuppressionScope = z.infer<typeof suppressionScope>;
