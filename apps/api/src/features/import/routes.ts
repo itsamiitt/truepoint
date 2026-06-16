@@ -9,19 +9,45 @@ import { parseImportFile } from "@leadwolf/core";
 import {
   ForbiddenError,
   type ImportJobRef,
+  type ImportJobStatus,
+  type ImportJobStatusResponse,
   ImportValidationError,
+  NotFoundError,
   columnMappingSchema,
+  importProgressSchema,
+  importSummarySchema,
   sourceName,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
-import { enqueueImport } from "./queue.ts";
+import { enqueueImport, getImportJob } from "./queue.ts";
 
 export const importRoutes = new Hono<{ Variables: TenancyVariables }>();
 
 importRoutes.use("*", authn);
 importRoutes.use("*", tenancy);
+importRoutes.use("*", rateLimit);
+
+/** Map a BullMQ job state to the public import status enum. */
+function toImportJobStatus(state: string): ImportJobStatus {
+  switch (state) {
+    case "completed":
+      return "completed";
+    case "failed":
+      return "failed";
+    case "active":
+      return "active";
+    case "waiting":
+    case "waiting-children":
+    case "delayed":
+    case "prioritized":
+      return "queued";
+    default:
+      return "unknown";
+  }
+}
 
 importRoutes.post("/", async (c) => {
   const workspaceId = c.get("workspaceId");
@@ -60,4 +86,28 @@ importRoutes.post("/", async (c) => {
   });
   const body: ImportJobRef = { jobId, status: "queued" };
   return c.json(body, 202);
+});
+
+// Poll an import job's status/progress. Tenant-scoped: only the owning workspace may read its job.
+importRoutes.get("/:jobId", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
+
+  const job = await getImportJob(c.req.param("jobId"));
+  // Tenant isolation: a job from another workspace (or a non-existent id) returns 404 — never leak existence.
+  if (!job || job.data.scope.workspaceId !== workspaceId)
+    throw new NotFoundError("Import job not found.");
+
+  const state = await job.getState();
+  const progress = importProgressSchema.safeParse(job.progress);
+  const summary = importSummarySchema.safeParse(job.returnvalue);
+  const body: ImportJobStatusResponse = {
+    jobId: String(job.id),
+    status: toImportJobStatus(state),
+    progress: progress.success ? progress.data : null,
+    summary: summary.success ? summary.data : null,
+    failedReason: job.failedReason ?? null,
+  };
+  return c.json(body, 200);
 });
