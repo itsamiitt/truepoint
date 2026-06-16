@@ -12,6 +12,7 @@ import {
   SIGNUP_TXN_MAX_AGE,
 } from "@/lib/cookies";
 import { resolveDomain } from "@/lib/domainResolver";
+import { verificationCodeEmail } from "@/lib/emails";
 import { finishLogin } from "@/lib/finishLogin";
 import { sendAuthEmail } from "@/lib/mailer";
 import {
@@ -71,11 +72,7 @@ export async function startSignup(formData: FormData): Promise<void> {
   (await cookies()).set(SIGNUP_TXN_COOKIE, txnId, { ...TXN_COOKIE, maxAge: SIGNUP_TXN_MAX_AGE });
 
   const { code } = await createEmailVerification({ email, ipAddress: clientIp });
-  await sendAuthEmail({
-    to: email,
-    subject: "Your TruePoint verification code",
-    text: `Your verification code is ${code}. It expires in 15 minutes.`,
-  });
+  await sendAuthEmail({ to: email, ...verificationCodeEmail({ code }) });
 
   redirect("/verify");
 }

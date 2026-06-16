@@ -4,6 +4,7 @@
 "use server";
 
 import { SIGNUP_TXN_COOKIE } from "@/lib/cookies";
+import { verificationCodeEmail } from "@/lib/emails";
 import { sendAuthEmail } from "@/lib/mailer";
 import {
   createEmailVerification,
@@ -33,10 +34,6 @@ export async function submitVerification(formData: FormData): Promise<void> {
 export async function resendCode(): Promise<void> {
   const { email } = await requireSignup();
   const { code } = await createEmailVerification({ email });
-  await sendAuthEmail({
-    to: email,
-    subject: "Your TruePoint verification code",
-    text: `Your verification code is ${code}. It expires in 15 minutes.`,
-  });
+  await sendAuthEmail({ to: email, ...verificationCodeEmail({ code }) });
   redirect("/verify?sent=1");
 }

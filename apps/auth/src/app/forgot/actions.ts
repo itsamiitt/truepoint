@@ -5,6 +5,7 @@
 "use server";
 
 import { clientIpFromHeaders } from "@/lib/clientIp";
+import { passwordResetEmail } from "@/lib/emails";
 import { sendAuthEmail } from "@/lib/mailer";
 import { checkIdentifierRate, requestPasswordReset } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
@@ -37,11 +38,7 @@ export async function requestReset(formData: FormData): Promise<void> {
   const { code } = await requestPasswordReset({ email, ipAddress: ip });
   if (code) {
     const link = `${env.AUTH_ORIGIN}/reset?${new URLSearchParams({ email, code })}`;
-    await sendAuthEmail({
-      to: email,
-      subject: "Reset your TruePoint password",
-      text: `Reset your password using this link (expires in 15 minutes):\n\n${link}\n\nIf you didn't request this, you can safely ignore this email.`,
-    });
+    await sendAuthEmail({ to: email, ...passwordResetEmail({ link }) });
   }
 
   redirect(`/forgot?${carry.toString()}&sent=1`);
