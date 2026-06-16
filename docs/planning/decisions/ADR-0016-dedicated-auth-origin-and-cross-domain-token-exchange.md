@@ -75,3 +75,28 @@ table) so issuance/validation scale horizontally. Lucia, arctic, `@oslojs/otp`, 
 
 Per-request immediate revocation becomes a hard requirement (move to opaque access tokens + introspection),
 or operating a separate auth origin outweighs the isolation benefit at the current team size.
+
+## Addendum (2026-06-16) — client-IP binding posture + failure observability
+
+The original decision bound the code to an **exact client IP**. In practice the login step (a server-action
+POST to the auth origin) and the exchange (a CORS `fetch` from the app origin) are **separate connections**,
+so a dual-stack client can present a different IP on each (IPv4 vs IPv6, or a proxy first-hop that varies
+within a network). Exact-match then rejected legitimate logins, and — because `/token/exchange` collapsed
+every failure into one opaque `400 invalid_auth_code` — the cause was undiagnosable in production.
+
+Refinements (security intent unchanged — PKCE + single-use + 60 s TTL remain the primary protections; the IP
+bind is defense-in-depth):
+
+- **IP binding is now a configurable posture, `AUTH_BIND_IP`** (default **`prefix`**): `strict` = exact match
+  on the *normalized* IP (folds IPv4-mapped IPv6, strips zone/brackets); `prefix` = same network (**/24**
+  IPv4, **/64** IPv6); `off` = don't bind. `prefix` keeps the "same network" intent without failing
+  dual-stack first-hop drift; a true cross-family flip requires `off` (PKCE still protects the code).
+- **Failures are no longer conflated.** A bad/expired/replayed code → `400 invalid_auth_code` with a
+  diagnostic `reason` (`code_not_found` | `ip_mismatch` | `origin_mismatch` | `pkce_mismatch`); an
+  unreachable code store or a token-signing failure → `503 auth_unavailable` with the reason in the
+  **server log only** (never the code/verifier/token/raw IP).
+- **Origin self-consistency is asserted at boot** (prod): the build-time `NEXT_PUBLIC_APP_ORIGIN` /
+  `NEXT_PUBLIC_AUTH_ORIGIN` baked into the bundles must agree with the runtime `APP_ORIGINS` / `AUTH_ORIGIN`,
+  so origin drift fails fast instead of silently breaking sign-in.
+- The edge proxy declares **`trusted_proxies`** so the auth origin binds to the real client IP, not a spoofed
+  `X-Forwarded-For`.
