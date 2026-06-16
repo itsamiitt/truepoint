@@ -9,7 +9,8 @@ import { closeDb, provisionBootstrapAdmin } from "@leadwolf/db";
 const env = process.env;
 
 // Fail closed: BOTH creds must be set explicitly — never fall back to a built-in default.
-function requireBootstrapEnv(): { email: string; password: string } {
+// Exported so the regression test can assert the fail-closed contract without booting main().
+export function requireBootstrapEnv(): { email: string; password: string } {
   const email = env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
   const password = env.BOOTSTRAP_ADMIN_PASSWORD;
   if (!email || !password) {
@@ -31,7 +32,11 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error("bootstrapAdmin: failed", err);
-  process.exit(1);
-});
+// Only auto-run when executed directly as the deploy seed entrypoint. Guarding this lets the unit test
+// import requireBootstrapEnv without running main() (which would connect to the DB and process.exit).
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error("bootstrapAdmin: failed", err);
+    process.exit(1);
+  });
+}
