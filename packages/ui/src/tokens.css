@@ -55,6 +55,15 @@
 
   /* Focus ring — subtle grey, not glowing (04 §7) */
   --focus-ring: #9ca3af;
+
+  /* Motion — subtle + professional (04 §8). Shared easings + durations so every interaction reads
+     consistently; use with opacity/transform only (GPU-friendly). All motion collapses to near-instant
+     under prefers-reduced-motion (the baseline at the end of this file). */
+  --tp-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --tp-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --tp-duration-fast: 120ms;
+  --tp-duration: 180ms;
+  --tp-duration-slow: 260ms;
 }
 
 html {
@@ -69,4 +78,58 @@ html {
 :focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* Shared motion keyframes — opacity/transform only, used app-wide (entrances, panels, feedback). */
+@keyframes tp-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes tp-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes tp-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes tp-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Accessibility baseline (WCAG 2.3.3): honor the OS "reduce motion" preference app-wide — collapse every
+   animation + transition to near-instant and disable smooth-scroll. Applies to EVERY TruePoint app via this
+   shared file, so individual components never have to repeat the guard. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
