@@ -17,6 +17,10 @@
     "@leadwolf/integrations": "workspace:*"
   },
   "devDependencies": {
+    "@leadwolf/db": "workspace:*",
+    "@testcontainers/postgresql": "^10.13.0",
+    "postgres": "3.4.5",
+    "testcontainers": "^10.13.0",
     "typescript": "5.7.2"
   }
 }
