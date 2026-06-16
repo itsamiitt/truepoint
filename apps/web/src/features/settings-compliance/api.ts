@@ -5,7 +5,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { SuppressionMatchType, SuppressionScope } from "@leadwolf/types";
+import type { SuppressionListItem, SuppressionMatchType, SuppressionScope } from "@leadwolf/types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -45,6 +45,22 @@ export async function addSuppression(input: SuppressionInput): Promise<{ id: str
   });
   if (!res.ok) throw new Error(await problemMessage(res, "Could not add suppression entry"));
   return (await res.json()) as { id: string };
+}
+
+/** List the workspace's manageable suppression entries (masked — email/phone surface by type only). */
+export async function listSuppressions(): Promise<SuppressionListItem[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/compliance/suppression`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the suppression list"));
+  const body = (await res.json()) as { entries: SuppressionListItem[] };
+  return body.entries;
+}
+
+/** Remove a suppression entry by id (RLS limits removal to the caller's own scope). */
+export async function removeSuppression(id: string): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/compliance/suppression/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not remove the entry"));
 }
 
 /** Submit a DSAR via the PUBLIC, session-less intake (plain fetch, not fetchWithAuth — 08 §4). */

@@ -7,6 +7,7 @@
 import styles from "../compliance.module.css";
 import { DsarForm } from "./DsarForm";
 import { SuppressionForm } from "./SuppressionForm";
+import { SuppressionList } from "./SuppressionList";
 
 export function CompliancePage() {
   return (
@@ -20,6 +21,7 @@ export function CompliancePage() {
       </header>
 
       <SuppressionForm />
+      <SuppressionList />
       <DsarForm />
     </div>
   );

@@ -18,6 +18,23 @@ export const suppressionCreateSchema = z.object({
   reason: z.string().max(255).optional(),
 });
 
+// Masked view of a suppression entry for the management list (08 §3). NEVER includes the email/phone
+// blind-index columns (HMACs of PII): email/phone matches surface by type only; domain/contact_id carry the
+// human-readable key for those match types. (T-1b27d4ce.)
+export const suppressionListItemSchema = z.object({
+  id: z.string().uuid(),
+  scope: suppressionScope,
+  match_type: suppressionMatchType,
+  domain: z.string().nullable(),
+  contact_id: z.string().uuid().nullable(),
+  reason: z.string().nullable(),
+  created_at: z.string(),
+});
+export type SuppressionListItem = z.infer<typeof suppressionListItemSchema>;
+
+export const suppressionListSchema = z.object({ entries: z.array(suppressionListItemSchema) });
+export type SuppressionList = z.infer<typeof suppressionListSchema>;
+
 export const lawfulBasis = z.enum(["legitimate_interest", "consent", "contract", "public_record"]);
 export type LawfulBasis = z.infer<typeof lawfulBasis>;
 

@@ -240,3 +240,92 @@
   border-radius: 50%;
   background: var(--warning);
 }
+
+/* ── Suppression list (view + remove) ──────────────────────────────────────────────────────────── */
+.empty {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  margin: 0;
+  padding: 8px 0;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.listRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--tp-hairline);
+}
+
+.listRow:first-child {
+  border-top: 0;
+}
+
+.listMain {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.listType {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+}
+
+.listKey {
+  font-size: 14px;
+  color: var(--tp-ink);
+  overflow-wrap: anywhere;
+}
+
+.listReason {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.listMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.listScope {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+.removeButton {
+  appearance: none;
+  height: 30px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.removeButton:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.removeButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

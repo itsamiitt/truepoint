@@ -4,7 +4,7 @@
 // the match itself.
 
 import type { SuppressionMatchType, SuppressionScope } from "@leadwolf/types";
-import { type SQL, eq, inArray, or } from "drizzle-orm";
+import { type SQL, desc, eq, inArray, ne, or } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { suppressionList } from "../schema/billing.ts";
 
@@ -31,6 +31,18 @@ export interface SuppressionEntryInput {
   contactId?: string | null;
   reason?: string | null;
   createdByUserId?: string | null;
+}
+
+/** A suppression row for the management list. The blind-index (HMAC) columns are deliberately OMITTED —
+ *  HMACs of PII must never leave the DB; email/phone matches are identified by type only. */
+export interface SuppressionListRow {
+  id: string;
+  scope: string;
+  matchType: string;
+  domain: string | null;
+  contactId: string | null;
+  reason: string | null;
+  createdAt: Date;
 }
 
 export const suppressionRepository = {
@@ -74,5 +86,24 @@ export const suppressionRepository = {
   async removeByIds(tx: Tx, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
     await tx.delete(suppressionList).where(inArray(suppressionList.id, ids));
+  },
+
+  /** List the caller's manageable suppression entries (tenant + workspace scope; global rows are platform-
+   *  managed and excluded). RLS already restricts visibility to the caller's tenant/workspace; this only
+   *  drops global rows and the blind-index columns (HMACs of PII never leave the DB). Newest first. */
+  async list(tx: Tx): Promise<SuppressionListRow[]> {
+    return tx
+      .select({
+        id: suppressionList.id,
+        scope: suppressionList.scope,
+        matchType: suppressionList.matchType,
+        domain: suppressionList.domain,
+        contactId: suppressionList.contactId,
+        reason: suppressionList.reason,
+        createdAt: suppressionList.createdAt,
+      })
+      .from(suppressionList)
+      .where(ne(suppressionList.scope, "global"))
+      .orderBy(desc(suppressionList.createdAt));
   },
 };
