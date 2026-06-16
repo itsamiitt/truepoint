@@ -59,7 +59,9 @@ export default async function PasswordPage({ searchParams }: { searchParams: Sea
         </div>
         {sp.error ? (
           <Alert variant="destructive" role="alert" className="mb-4 tp-shake">
-            Check your credentials and try again.
+            {sp.error === "unavailable"
+              ? "Sign-in is temporarily unavailable. Please try again in a moment."
+              : "Check your credentials and try again."}
           </Alert>
         ) : null}
         <SubmitButton>Sign in</SubmitButton>
