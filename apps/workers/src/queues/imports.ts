@@ -22,7 +22,9 @@ export type ImportJobData = RunImportInput;
 export class ImportFailedError extends Error {
   readonly summary: ImportSummary;
   constructor(summary: ImportSummary) {
-    super(`Import made no progress: 0/${summary.total} rows imported (${summary.errors.length} errored).`);
+    super(
+      `Import made no progress: 0/${summary.total} rows imported (${summary.errors.length} errored).`,
+    );
     this.name = "ImportFailedError";
     this.summary = summary;
   }
@@ -30,7 +32,14 @@ export class ImportFailedError extends Error {
 
 export async function processImport(job: Job<ImportJobData>): Promise<ImportSummary> {
   const total = job.data.rows.length;
-  const start: ImportProgress = { total, processed: 0, created: 0, matched: 0, skipped: 0, failed: 0 };
+  const start: ImportProgress = {
+    total,
+    processed: 0,
+    created: 0,
+    matched: 0,
+    skipped: 0,
+    failed: 0,
+  };
   await job.updateProgress(start);
 
   const summary = await runImport(job.data);

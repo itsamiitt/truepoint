@@ -97,7 +97,10 @@ export function startWorkers(): Worker[] {
       new Worker<EnrichmentJobData>(ENRICHMENT_QUEUE, processEnrichment, { connection }),
       ENRICHMENT_QUEUE,
     ),
-    instrument(new Worker<ScoringJobData>(SCORING_QUEUE, processScoring, { connection }), SCORING_QUEUE),
+    instrument(
+      new Worker<ScoringJobData>(SCORING_QUEUE, processScoring, { connection }),
+      SCORING_QUEUE,
+    ),
     instrument(new Worker<DsarJobData>(DSAR_QUEUE, processDsar, { connection }), DSAR_QUEUE),
     instrument(
       new Worker<OutreachJobData>(OUTREACH_QUEUE, processOutreach, { connection }),

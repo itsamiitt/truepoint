@@ -59,7 +59,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (auth !== "signed-in") {
     return (
       <div className="tp-center-screen">
-        <p className="app-muted">{auth === "redirecting" ? "Redirecting to sign in…" : "Loading…"}</p>
+        <p className="app-muted">
+          {auth === "redirecting" ? "Redirecting to sign in…" : "Loading…"}
+        </p>
       </div>
     );
   }

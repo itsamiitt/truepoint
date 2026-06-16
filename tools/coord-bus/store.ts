@@ -3,10 +3,10 @@
 // mutation with an atomic temp+rename write, serialized through a promise chain. No DB, no native
 // deps — adequate and robust for a handful of agents coordinating. Runtime-agnostic (Bun or Node).
 
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { randomUUID } from "node:crypto";
 
 export type TaskState = "pending" | "claimed" | "in_progress" | "blocked" | "done";
 
@@ -87,8 +87,9 @@ export function board(agent?: string) {
   const unreadMessages =
     agent === undefined
       ? undefined
-      : state.messages.filter((m) => (m.to === agent || m.to === "all") && !m.readBy.includes(agent))
-          .length;
+      : state.messages.filter(
+          (m) => (m.to === agent || m.to === "all") && !m.readBy.includes(agent),
+        ).length;
   return {
     agents: Object.values(state.agents),
     tasks: state.tasks,
@@ -154,7 +155,10 @@ export async function claimTask(taskId: string, agent: string) {
     return !dep || dep.state !== "done";
   });
   if (unmet.length) {
-    return { ok: false as const, reason: `Blocked on unfinished dependencies: ${unmet.join(", ")}` };
+    return {
+      ok: false as const,
+      reason: `Blocked on unfinished dependencies: ${unmet.join(", ")}`,
+    };
   }
   task.assignee = agent;
   task.state = "claimed";

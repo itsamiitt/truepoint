@@ -2,14 +2,12 @@
 // orchestrator (docker-compose healthcheck) can probe it. GET /health = liveness (the process is up);
 // GET /ready = readiness (workers booted and not draining). No new dependency — Bun.serve is built in.
 
-import type { Server } from "bun";
-
 /** Port the workers health endpoint listens on. A constant (not process.env) to honor the
  *  "no process.env outside @leadwolf/config" rule; promote to @leadwolf/config if it must be tunable. */
 export const WORKERS_HEALTH_PORT = 3002;
 
 /** Start the health server. `isReady` is polled per /ready request so it reflects live drain state. */
-export function startHealthServer(isReady: () => boolean, port: number = WORKERS_HEALTH_PORT): Server {
+export function startHealthServer(isReady: () => boolean, port: number = WORKERS_HEALTH_PORT) {
   return Bun.serve({
     port,
     fetch(req): Response {

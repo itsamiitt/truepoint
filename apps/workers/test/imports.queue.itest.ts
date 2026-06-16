@@ -53,8 +53,20 @@ const MAPPING = {
 };
 // Two distinct identities → two contacts created.
 const ROWS = [
-  { Email: "jane@acme.com", "First Name": "Jane", "Last Name": "Doe", Company: "Acme", Domain: "acme.com" },
-  { Email: "john@acme.com", "First Name": "John", "Last Name": "Roe", Company: "Acme", Domain: "acme.com" },
+  {
+    Email: "jane@acme.com",
+    "First Name": "Jane",
+    "Last Name": "Doe",
+    Company: "Acme",
+    Domain: "acme.com",
+  },
+  {
+    Email: "john@acme.com",
+    "First Name": "John",
+    "Last Name": "Roe",
+    Company: "Acme",
+    Domain: "acme.com",
+  },
 ];
 
 async function startItestRedis(): Promise<ItestRedis> {
@@ -143,28 +155,24 @@ afterAll(async () => {
 });
 
 describe("T-b30a403b async import DoD: enqueue → worker → DB, RLS-scoped", () => {
-  test(
-    "a queued import is drained by the worker and persists tenant A's contacts",
-    async () => {
-      const data: ImportJobData = {
-        scope: { tenantId: tenantA, workspaceId: wsA },
-        importedByUserId: ownerA,
-        sourceName: "manual",
-        sourceFile: "acme.csv",
-        mapping: MAPPING,
-        rows: ROWS,
-      };
-      const job = await queue.add("import", data);
-      const summary = (await job.waitUntilFinished(queueEvents)) as ImportSummary;
+  test("a queued import is drained by the worker and persists tenant A's contacts", async () => {
+    const data: ImportJobData = {
+      scope: { tenantId: tenantA, workspaceId: wsA },
+      importedByUserId: ownerA,
+      sourceName: "manual",
+      sourceFile: "acme.csv",
+      mapping: MAPPING,
+      rows: ROWS,
+    };
+    const job = await queue.add("import", data);
+    const summary = (await job.waitUntilFinished(queueEvents)) as ImportSummary;
 
-      expect(summary.created).toBe(2);
-      expect(summary.matched).toBe(0);
-      expect(summary.skipped).toBe(0);
-      expect(summary.errors).toHaveLength(0);
-      expect(await countContacts(wsA)).toBe(2);
-    },
-    60_000,
-  );
+    expect(summary.created).toBe(2);
+    expect(summary.matched).toBe(0);
+    expect(summary.skipped).toBe(0);
+    expect(summary.errors).toHaveLength(0);
+    expect(await countContacts(wsA)).toBe(2);
+  }, 60_000);
 
   test("RLS isolates the imported contacts for leadwolf_app and fails closed when the GUC is unset", async () => {
     const app = postgres(appUrl, { max: 1, onnotice: () => {} });

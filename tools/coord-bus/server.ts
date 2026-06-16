@@ -9,9 +9,9 @@
 // Run:  MCP_BEARER_TOKEN=... PORT=7333 bun run server.ts   (or: npx tsx server.ts under Node)
 
 import { timingSafeEqual } from "node:crypto";
-import express, { type NextFunction, type Request, type Response } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import express, { type NextFunction, type Request, type Response } from "express";
 import * as z from "zod/v4";
 import * as store from "./store.ts";
 
@@ -99,7 +99,8 @@ function buildServer(): McpServer {
         note: z.string().optional(),
       },
     },
-    async ({ taskId, agent, state, note }) => ok(await store.updateTask(taskId, agent, { state, note })),
+    async ({ taskId, agent, state, note }) =>
+      ok(await store.updateTask(taskId, agent, { state, note })),
   );
 
   server.registerTool(
@@ -147,7 +148,9 @@ function requireBearer(req: Request, res: Response, next: NextFunction): void {
 }
 
 const methodNotAllowed = (_req: Request, res: Response): void => {
-  res.status(405).json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null });
+  res
+    .status(405)
+    .json({ jsonrpc: "2.0", error: { code: -32000, message: "Method not allowed." }, id: null });
 };
 
 const app = express();
@@ -168,7 +171,11 @@ app.post("/mcp", requireBearer, async (req: Request, res: Response) => {
     await transport.handleRequest(req, res, req.body);
   } catch {
     if (!res.headersSent) {
-      res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null });
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: { code: -32603, message: "Internal server error" },
+        id: null,
+      });
     }
   }
 });

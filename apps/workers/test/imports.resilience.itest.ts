@@ -56,7 +56,13 @@ const MAPPING = {
 };
 // One importable identity (jane has an email) + one un-importable row (no email/linkedin/sales-nav id).
 const MIXED_ROWS = [
-  { Email: "jane@acme.com", "First Name": "Jane", "Last Name": "Doe", Company: "Acme", Domain: "acme.com" },
+  {
+    Email: "jane@acme.com",
+    "First Name": "Jane",
+    "Last Name": "Doe",
+    Company: "Acme",
+    Domain: "acme.com",
+  },
   { "First Name": "NoId", "Last Name": "Person", Company: "Ghost", Domain: "ghost.com" },
 ];
 // Both rows lack any identity key → every row errors → zero progress → job-level failure.
@@ -96,7 +102,11 @@ async function seedWorkspace(
 }
 
 /** Poll until `pred` is truthy or the timeout elapses (Date.now/setTimeout are fine under bun:test). */
-async function until(pred: () => Promise<boolean>, timeoutMs = 15_000, stepMs = 100): Promise<void> {
+async function until(
+  pred: () => Promise<boolean>,
+  timeoutMs = 15_000,
+  stepMs = 100,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await pred()) return;
@@ -156,80 +166,72 @@ afterAll(async () => {
 });
 
 describe("T-704632ee import observability + resilience DoD", () => {
-  test(
-    "a partial-bad import completes, surfaces per-row errors, and reports progress (status read)",
-    async () => {
-      const data: ImportJobData = {
-        scope: { tenantId: tenantA, workspaceId: wsA },
-        importedByUserId: ownerA,
-        sourceName: "manual",
-        sourceFile: "mixed.csv",
-        mapping: MAPPING,
-        rows: MIXED_ROWS,
-      };
-      const job = await queue.add("import", data, { attempts: 1 });
-      const summary = (await job.waitUntilFinished(queueEvents)) as ImportSummary;
+  test("a partial-bad import completes, surfaces per-row errors, and reports progress (status read)", async () => {
+    const data: ImportJobData = {
+      scope: { tenantId: tenantA, workspaceId: wsA },
+      importedByUserId: ownerA,
+      sourceName: "manual",
+      sourceFile: "mixed.csv",
+      mapping: MAPPING,
+      rows: MIXED_ROWS,
+    };
+    const job = await queue.add("import", data, { attempts: 1 });
+    const summary = (await job.waitUntilFinished(queueEvents)) as ImportSummary;
 
-      // One imported, one row errored — the import did NOT fail the job (partial progress).
-      expect(summary.created).toBe(1);
-      expect(summary.errors).toHaveLength(1);
-      expect(summary.errors[0]?.row).toBe(1); // the second (0-based) row had no identity key
+    // One imported, one row errored — the import did NOT fail the job (partial progress).
+    expect(summary.created).toBe(1);
+    expect(summary.errors).toHaveLength(1);
+    expect(summary.errors[0]?.row).toBe(1); // the second (0-based) row had no identity key
 
-      // What GET /import/:jobId reads back: completed state, the reported progress, and the summary.
-      const fresh = await queue.getJob(String(job.id));
-      expect(fresh).toBeDefined();
-      expect(await fresh!.getState()).toBe("completed");
-      const progress = fresh!.progress as ImportProgress;
-      expect(progress.total).toBe(2);
-      expect(progress.created).toBe(1);
-      expect(progress.failed).toBe(1);
-      expect((fresh!.returnvalue as ImportSummary).created).toBe(1);
-    },
-    60_000,
-  );
+    // What GET /import/:jobId reads back: completed state, the reported progress, and the summary.
+    const fresh = await queue.getJob(String(job.id));
+    expect(fresh).toBeDefined();
+    expect(await fresh!.getState()).toBe("completed");
+    const progress = fresh!.progress as ImportProgress;
+    expect(progress.total).toBe(2);
+    expect(progress.created).toBe(1);
+    expect(progress.failed).toBe(1);
+    expect((fresh!.returnvalue as ImportSummary).created).toBe(1);
+  }, 60_000);
 
-  test(
-    "an all-failed import retries to exhaustion and dead-letters a PII-free record",
-    async () => {
-      const data: ImportJobData = {
-        scope: { tenantId: tenantA, workspaceId: wsA },
-        importedByUserId: ownerA,
-        sourceName: "manual",
-        sourceFile: "all-bad.csv",
-        mapping: MAPPING,
-        rows: ALL_BAD_ROWS,
-      };
-      await queue.add("import", data, {
-        attempts: 2,
-        backoff: { type: "fixed", delay: 100 },
-      });
+  test("an all-failed import retries to exhaustion and dead-letters a PII-free record", async () => {
+    const data: ImportJobData = {
+      scope: { tenantId: tenantA, workspaceId: wsA },
+      importedByUserId: ownerA,
+      sourceName: "manual",
+      sourceFile: "all-bad.csv",
+      mapping: MAPPING,
+      rows: ALL_BAD_ROWS,
+    };
+    await queue.add("import", data, {
+      attempts: 2,
+      backoff: { type: "fixed", delay: 100 },
+    });
 
-      // After 2 attempts both fail, the worker dead-letters the job.
-      await until(async () => (await dlq.getWaitingCount()) >= 1);
+    // After 2 attempts both fail, the worker dead-letters the job.
+    await until(async () => (await dlq.getWaitingCount()) >= 1);
 
-      const [dead] = await dlq.getJobs(["waiting"]);
-      expect(dead).toBeDefined();
-      const record = dead!.data as ImportDeadLetter;
-      expect(record.workspaceId).toBe(wsA);
-      expect(record.tenantId).toBe(tenantA);
-      expect(record.attemptsMade).toBe(2);
-      expect(record.failedReason).toContain("no progress");
+    const [dead] = await dlq.getJobs(["waiting"]);
+    expect(dead).toBeDefined();
+    const record = dead!.data as ImportDeadLetter;
+    expect(record.workspaceId).toBe(wsA);
+    expect(record.tenantId).toBe(tenantA);
+    expect(record.attemptsMade).toBe(2);
+    expect(record.failedReason).toContain("no progress");
 
-      // PII-free: the dead-letter record carries scope + provenance only, NEVER the raw rows.
-      expect(Object.keys(record).sort()).toEqual(
-        [
-          "attemptsMade",
-          "failedReason",
-          "importedByUserId",
-          "originalJobId",
-          "sourceFile",
-          "sourceName",
-          "tenantId",
-          "workspaceId",
-        ].sort(),
-      );
-      expect(JSON.stringify(record)).not.toContain("First Name");
-    },
-    60_000,
-  );
+    // PII-free: the dead-letter record carries scope + provenance only, NEVER the raw rows.
+    expect(Object.keys(record).sort()).toEqual(
+      [
+        "attemptsMade",
+        "failedReason",
+        "importedByUserId",
+        "originalJobId",
+        "sourceFile",
+        "sourceName",
+        "tenantId",
+        "workspaceId",
+      ].sort(),
+    );
+    expect(JSON.stringify(record)).not.toContain("First Name");
+  }, 60_000);
 });
