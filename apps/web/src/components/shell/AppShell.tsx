@@ -1,6 +1,6 @@
 // AppShell.tsx — the app chrome (11 §3) and the single auth gate for every signed-in surface. On mount it
 // resolves a token (in-memory access token via a silent refresh against the auth origin, ADR-0016); with no
-// token it renders a centered "Sign in" screen that starts the PKCE redirect. Signed in, it composes the
+// token it redirects straight to the auth-origin login via PKCE (no interstitial screen). Signed in, it composes the
 // left rail + top bar + the routed {children}. The section title is derived from the active route so each
 // destination labels its own top bar without prop-drilling. (This replaces the per-page session logic that
 // used to live in app/page.tsx.)
@@ -20,7 +20,7 @@ interface Session {
   scope: string[];
 }
 
-type AuthState = "loading" | "signed-out" | "signed-in";
+type AuthState = "loading" | "redirecting" | "signed-in";
 
 /** Map a pathname to its top-bar section title (matches the rail destinations). */
 function sectionTitle(pathname: string): string {
@@ -42,7 +42,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     void (async () => {
       if (!getAccessToken()) await silentRefresh();
       if (!getAccessToken()) {
-        setAuth("signed-out");
+        setAuth("redirecting");
+        await startLogin(); // no interstitial — PKCE redirect straight to the auth-origin login
         return;
       }
       const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
@@ -51,25 +52,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     })();
   }, []);
 
-  if (auth === "loading") {
+  // Until the session resolves, render a neutral placeholder. Signed-out users are redirected to the
+  // auth-origin login by the effect above (no interstitial), so "redirecting" only shows briefly.
+  if (auth !== "signed-in") {
     return (
       <div className="tp-center-screen">
-        <p className="app-muted">Loading…</p>
-      </div>
-    );
-  }
-
-  if (auth === "signed-out") {
-    return (
-      <div className="tp-center-screen">
-        <div className="tp-signin-card">
-          <span className="tp-brand-mark tp-brand-mark--lg" aria-hidden="true" />
-          <h1 className="tp-signin-title">TruePoint</h1>
-          <p className="app-muted">Sign in to continue to your workspace.</p>
-          <button className="app-button" type="button" onClick={() => void startLogin()}>
-            Sign in
-          </button>
-        </div>
+        <p className="app-muted">{auth === "redirecting" ? "Redirecting to sign in…" : "Loading…"}</p>
       </div>
     );
   }
