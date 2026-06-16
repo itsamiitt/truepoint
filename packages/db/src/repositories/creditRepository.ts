@@ -2,7 +2,7 @@
 // 07 §2/§4, ADR-0007). The counter mutations are tx-aware (composed inside the reveal tx / webhook tx);
 // the FOR UPDATE lock + the DB CHECK (reveal_credit_balance >= 0) are the double-spend/overdraft guards.
 
-import { sql } from "drizzle-orm";
+import { gte, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { contactReveals, purchases } from "../schema/billing.ts";
 
@@ -67,7 +67,7 @@ export const creditRepository = {
           credits: sql<number>`coalesce(sum(${contactReveals.creditsConsumed}), 0)::int`,
         })
         .from(contactReveals)
-        .where(sql`${contactReveals.revealedAt} >= ${since}`)
+        .where(gte(contactReveals.revealedAt, since))
         .groupBy(sql`date_trunc('day', ${contactReveals.revealedAt})`)
         .orderBy(sql`date_trunc('day', ${contactReveals.revealedAt}) asc`);
       return rows.map((r) => ({ day: r.day, credits: Number(r.credits) }));

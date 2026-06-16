@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
-type Core = typeof import("@leadwolf/core");
+type Core = typeof import("../../core/src/index.ts");
 
 let dbHandle: ItestDb;
 let core: Core;
@@ -102,7 +102,7 @@ beforeAll(async () => {
     VALUES (${tenantA}, 'acme', 'acme', true, ${ownerA}) RETURNING id`;
   wsA = (w as { id: string }).id;
 
-  core = await import("@leadwolf/core");
+  core = await import("../../core/src/index.ts");
   ({ withTenantTx } = await import("@leadwolf/db"));
   ({ logActivity } = await import("../../core/src/activity/logActivity.ts"));
   ({ activityRepository } = await import("../src/repositories/activityRepository.ts"));

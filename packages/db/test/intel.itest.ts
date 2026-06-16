@@ -13,8 +13,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
-type Core = typeof import("@leadwolf/core");
-type Provider = import("@leadwolf/core").EnrichmentProvider;
+type Core = typeof import("../../core/src/index.ts");
+type Provider = import("../../core/src/index.ts").EnrichmentProvider;
 
 let dbHandle: ItestDb;
 let core: Core;
@@ -100,7 +100,7 @@ beforeAll(async () => {
     VALUES (${tenantA}, 'acme', 'acme', true, ${ownerA}) RETURNING id`;
   wsA = (w as { id: string }).id;
 
-  core = await import("@leadwolf/core");
+  core = await import("../../core/src/index.ts");
   await core.runImport({
     scope: { tenantId: tenantA, workspaceId: wsA },
     sourceName: "manual",

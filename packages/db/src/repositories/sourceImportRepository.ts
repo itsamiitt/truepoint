@@ -80,7 +80,9 @@ export const sourceImportRepository = {
         sourceName: r.sourceName,
         sourceFile: r.sourceFile,
         contactCount: Number(r.contactCount),
-        importedAt: r.importedAt,
+        // max() is a raw sql aggregate, so it skips drizzle's timestamp decoder — coerce to a Date
+        // (the value arrives as a pg timestamp string; the Home DTO calls .toISOString() on it).
+        importedAt: new Date(r.importedAt),
       }));
     });
   },

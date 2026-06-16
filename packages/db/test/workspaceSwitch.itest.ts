@@ -18,7 +18,7 @@ import { generateKeyPairSync } from "node:crypto";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
-type Auth = typeof import("@leadwolf/auth");
+type Auth = typeof import("../../auth/src/index.ts");
 
 let dbHandle: ItestDb;
 let auth: Auth;
@@ -124,7 +124,7 @@ beforeAll(async () => {
   // alice is deliberately NOT a member of wsNoMember (same tenant) nor wsCrossTenant (other tenant).
 
   // env is set above, BEFORE this dynamic import loads @leadwolf/config / the db singleton.
-  auth = await import("@leadwolf/auth");
+  auth = await import("../../auth/src/index.ts");
 }, 240_000);
 
 afterAll(async () => {
