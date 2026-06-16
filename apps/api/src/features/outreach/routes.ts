@@ -22,6 +22,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const outreachRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -40,7 +41,7 @@ outreachRoutes.get("/sequences", async (c) => {
   return c.json({ sequences });
 });
 
-outreachRoutes.post("/sequences", async (c) => {
+outreachRoutes.post("/sequences", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before creating sequences.");
@@ -57,7 +58,7 @@ outreachRoutes.post("/sequences", async (c) => {
   return c.json(result, 201);
 });
 
-outreachRoutes.post("/sequences/:id/steps", async (c) => {
+outreachRoutes.post("/sequences/:id/steps", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before editing sequences.");
@@ -77,7 +78,7 @@ outreachRoutes.post("/sequences/:id/steps", async (c) => {
 });
 
 // 201 on a new membership; 200 + alreadyEnrolled when the (sequence, contact) row already existed.
-outreachRoutes.post("/sequences/:id/enroll", async (c) => {
+outreachRoutes.post("/sequences/:id/enroll", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before enrolling.");
@@ -107,7 +108,7 @@ outreachRoutes.get("/sequences/:id/log", async (c) => {
 });
 
 // Inline dev send (M9: consoleSender, no real network); scheduled delivery runs on the outreach queue.
-outreachRoutes.post("/log/:id/send", async (c) => {
+outreachRoutes.post("/log/:id/send", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace before sending.");
   const result = await sendStep({
@@ -120,7 +121,7 @@ outreachRoutes.post("/log/:id/send", async (c) => {
 });
 
 // Dev/testing bounce injection — simulates the SES SNS→SQS hard-bounce feedback (08 §6, ADR-0013).
-outreachRoutes.post("/log/:id/bounce", async (c) => {
+outreachRoutes.post("/log/:id/bounce", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before recording a bounce.");

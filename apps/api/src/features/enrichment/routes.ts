@@ -8,6 +8,7 @@ import { defaultProviders } from "@leadwolf/integrations";
 import { ForbiddenError, ValidationError, enrichmentRequestSchema } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const enrichmentRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -15,7 +16,7 @@ export const enrichmentRoutes = new Hono<{ Variables: TenancyVariables }>();
 enrichmentRoutes.use("*", authn);
 enrichmentRoutes.use("*", tenancy);
 
-enrichmentRoutes.post("/:entity/:id", async (c) => {
+enrichmentRoutes.post("/:entity/:id", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before enriching.");
