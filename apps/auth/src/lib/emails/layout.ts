@@ -14,8 +14,7 @@ const SURFACE_2 = "#f9fafb";
 const HAIRLINE = "#f0f0f0";
 const BORDER = "#e5e7eb";
 const COBALT = "#2563c9"; // fill / logo only — never text (brand rule, tokens.css §brand accent)
-const FONT =
-  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
 
 /** A ready-to-send email: the subject plus both the branded html part and its plaintext fallback. */
