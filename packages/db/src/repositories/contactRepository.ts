@@ -4,9 +4,21 @@
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
 import type { MaskedContact } from "@leadwolf/types";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
+
+/** A top-priority lead for the Home dashboard — FACETS ONLY (no encrypted email/phone). Mirrors HotLead. */
+export interface HotLeadRow {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  jobTitle: string | null;
+  emailDomain: string | null;
+  priorityScore: number;
+  outreachStatus: string;
+  isRevealed: boolean;
+}
 
 /** The dedup keys, in priority order: a match on any identifies the same person within the workspace. */
 export interface DedupKeys {
@@ -164,6 +176,31 @@ export const contactRepository = {
         outreachStatus: r.outreachStatus as MaskedContact["outreachStatus"],
         isRevealed: r.isRevealed,
       }));
+    });
+  },
+
+  /**
+   * The highest-priority leads for the Home dashboard (top N by priority_score). FACETS ONLY — the
+   * encrypted email/phone are never selected. DSAR tombstones never surface (08 §4.2). Workspace-scoped.
+   */
+  async topByPriority(scope: TenantScope, limit = 5): Promise<HotLeadRow[]> {
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select({
+          id: contacts.id,
+          firstName: contacts.firstName,
+          lastName: contacts.lastName,
+          jobTitle: contacts.jobTitle,
+          emailDomain: contacts.emailDomain,
+          priorityScore: contacts.priorityScore,
+          outreachStatus: contacts.outreachStatus,
+          isRevealed: contacts.isRevealed,
+        })
+        .from(contacts)
+        .where(and(isNull(contacts.deletedAt), isNotNull(contacts.priorityScore)))
+        .orderBy(desc(contacts.priorityScore))
+        .limit(limit);
+      return rows.map((r) => ({ ...r, priorityScore: r.priorityScore ?? 0 }));
     });
   },
 };

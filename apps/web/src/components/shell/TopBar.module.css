@@ -1,0 +1,32 @@
+/* TopBar.module.css — layout-only styling for the Cmd/Ctrl-K palette hint (11 §3). Tokens come from
+   @leadwolf/ui; the bar chrome itself stays on the global .tp-topbar classes. Quiet + monochrome. */
+
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* Keycap chips — hairline-bordered, muted; a passive affordance, never a button. */
+.key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--tp-ink-3);
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 5px;
+}
+
+/* On narrow viewports the hint is the first thing to fold away (bell + pill keep priority). */
+@media (max-width: 640px) {
+  .hint {
+    display: none;
+  }
+}

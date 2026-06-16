@@ -40,10 +40,12 @@ export {
   contactRepository,
   type ContactWriteValues,
   type DedupKeys,
+  type HotLeadRow,
 } from "./repositories/contactRepository.ts";
 export {
   sourceImportRepository,
   type SourceImportInput,
+  type ImportBatchRow,
 } from "./repositories/sourceImportRepository.ts";
 export {
   revealRepository,
@@ -55,6 +57,7 @@ export {
   creditRepository,
   type GrantInput,
   type GrantResult,
+  type BurnByDayRow,
 } from "./repositories/creditRepository.ts";
 export {
   suppressionRepository,
@@ -62,7 +65,11 @@ export {
   type SuppressionHit,
   type SuppressionEntryInput,
 } from "./repositories/suppressionRepository.ts";
-export { auditRepository, type AuditEntryInput } from "./repositories/auditRepository.ts";
+export {
+  auditRepository,
+  type AuditEntryInput,
+  type ActivityFeedRow,
+} from "./repositories/auditRepository.ts";
 export {
   idempotencyRepository,
   type StoredResponse,
@@ -81,6 +88,7 @@ export {
   providerCallRepository,
   type ProviderCallRecord,
   type CachedCall,
+  type EnrichActivityRow,
 } from "./repositories/providerCallRepository.ts";
 export { consentRepository, type ConsentInsert } from "./repositories/consentRepository.ts";
 export {
@@ -108,6 +116,7 @@ export {
   type StepInsert,
   type StepRecord,
   type SequenceSummaryRow,
+  type PerformanceSnapshotRow,
 } from "./repositories/sequenceRepository.ts";
 export {
   outreachLogRepository,

@@ -3,9 +3,19 @@
 // layer (trigger in rls/billing.sql), so this repository deliberately exposes no mutation helpers.
 
 import type { AuditAction } from "@leadwolf/types";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { auditLog } from "../schema/billing.ts";
+
+/** A minimized audit entry for the Home activity feed — NO metadata/ip/userAgent (never leak PII). */
+export interface ActivityFeedRow {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  actorUserId: string | null;
+  occurredAt: Date;
+}
 
 export interface AuditEntryInput {
   tenantId: string;
@@ -32,6 +42,37 @@ export const auditRepository = {
         .select()
         .from(auditLog)
         .where(eq(auditLog.tenantId, scope.tenantId))
+        .orderBy(desc(auditLog.occurredAt))
+        .limit(limit),
+    );
+  },
+
+  /**
+   * Workspace activity feed for the Home dashboard — this workspace's rows PLUS tenant-level rows
+   * (workspace_id IS NULL), newest first. MINIMIZED PROJECTION: metadata/ip/userAgent are NEVER selected
+   * (those carry PII). Distinct from listByTenant, which returns the raw rows for the compliance viewer.
+   */
+  async listByWorkspace(scope: TenantScope, limit = 15): Promise<ActivityFeedRow[]> {
+    return withTenantTx(scope, (tx) =>
+      tx
+        .select({
+          id: auditLog.id,
+          action: auditLog.action,
+          entityType: auditLog.entityType,
+          entityId: auditLog.entityId,
+          actorUserId: auditLog.actorUserId,
+          occurredAt: auditLog.occurredAt,
+        })
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.tenantId, scope.tenantId),
+            or(
+              scope.workspaceId ? eq(auditLog.workspaceId, scope.workspaceId) : undefined,
+              isNull(auditLog.workspaceId),
+            ),
+          ),
+        )
         .orderBy(desc(auditLog.occurredAt))
         .limit(limit),
     );

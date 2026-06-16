@@ -13,6 +13,9 @@ export type MfaMethodType = z.infer<typeof mfaMethodType>;
 export const mfaEnforcement = z.enum(["off", "optional", "required"]);
 export type MfaEnforcement = z.infer<typeof mfaEnforcement>;
 
+export const workspaceRole = z.enum(["owner", "admin", "member", "viewer"]);
+export type WorkspaceRole = z.infer<typeof workspaceRole>;
+
 // ── Step 1: identifier-first (ADR-0017) ──────────────────────────────────────────────────────────────
 export const identifierSchema = z.object({
   email: z.string().email().max(320),

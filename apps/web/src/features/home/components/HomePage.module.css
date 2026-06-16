@@ -1,5 +1,6 @@
-/* HomePage.module.css — layout-only styles for the Home cockpit (grid + list rhythm). Color and surfaces
-   come from packages/ui primitives + --tp-* tokens; this file owns spacing/structure, nothing decorative. */
+/* HomePage.module.css — layout-only styles for the Home cockpit: the KPI tile row, the widget grid, and the
+   list/row rhythm shared by the cards. Color and surfaces come from packages/ui primitives + --tp-* tokens;
+   this file owns spacing/structure only — nothing decorative. The grid collapses to one column at 860px. */
 
 .page {
   display: flex;
@@ -29,32 +30,57 @@
   color: var(--tp-ink-3);
 }
 
+/* ── KPI tile row ───────────────────────────────────────────────────────────────────────────────── */
 .tiles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
-.columns {
+/* ── Widget grid (two columns; cards declare their own span) ──────────────────────────────────────── */
+.grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
 }
 
-.cardTitle {
-  margin: 0 0 14px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--tp-ink);
+.spanFull {
+  grid-column: 1 / -1;
 }
 
-.revealList {
+/* ── Card chrome shared by the widgets ────────────────────────────────────────────────────────────── */
+.cardHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+}
+
+.cardHint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  white-space: nowrap;
+}
+
+/* ── List rows shared by reveals / imports / enrichment / activity ────────────────────────────────── */
+.list {
   display: flex;
   flex-direction: column;
 }
 
-.revealRow {
+.row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -64,68 +90,134 @@
   font-size: 13px;
 }
 
-.revealRow:first-child {
+.row:first-child {
   border-top: 0;
 }
 
-.revealMain {
+.rowMain {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
 }
 
-.revealType {
-  color: var(--tp-ink);
-  font-weight: 500;
-}
-
-.revealMeta {
-  color: var(--tp-ink-4);
-  font-size: 12px;
-}
-
-.revealCredits {
-  color: var(--tp-ink-3);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  white-space: nowrap;
-  flex: 0 0 auto;
-}
-
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.action {
+.rowStack {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px 14px;
-  border: 1px solid var(--tp-hairline-2);
-  border-radius: var(--radius);
-  background: var(--tp-surface);
+  min-width: 0;
+}
+
+.rowLabel {
   color: var(--tp-ink);
-  text-decoration: none;
-  transition: background 0.12s ease;
-}
-
-.action:hover {
-  background: var(--nav-hover-fill);
-}
-
-.actionLabel {
-  font-size: 14px;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.actionHint {
+.rowMeta {
+  color: var(--tp-ink-4);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rowAside {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-3);
+  white-space: nowrap;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Hot leads ─────────────────────────────────────────────────────────────────────────────────────── */
+.leadName {
+  color: var(--tp-ink);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leadSub {
+  color: var(--tp-ink-4);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Burn sparkline ───────────────────────────────────────────────────────────────────────────────── */
+.sparkWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sparkSvg {
+  display: block;
+  width: 100%;
+  height: 56px;
+}
+
+.sparkFooter {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 12px;
   color: var(--tp-ink-4);
 }
 
+.sparkTotal {
+  font-family: var(--font-mono);
+  color: var(--tp-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Sequence snapshot (compact metric grid) ──────────────────────────────────────────────────────── */
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metricValue {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricLabel {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+/* ── Quiet states ──────────────────────────────────────────────────────────────────────────────────── */
 .muted {
   color: var(--tp-ink-4);
   font-size: 13px;
@@ -151,7 +243,10 @@
   .tiles {
     grid-template-columns: 1fr;
   }
-  .columns {
+  .grid {
     grid-template-columns: 1fr;
+  }
+  .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

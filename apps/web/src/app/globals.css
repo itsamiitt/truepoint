@@ -285,7 +285,7 @@ body {
   color: var(--tp-ink-4);
 }
 
-/* Workspace switcher — present but inert (no list endpoint at MVP). */
+/* Workspace switcher — live: lists the user's workspaces and switches via the auth origin. */
 .tp-ws-switcher {
   display: flex;
   align-items: center;
@@ -300,7 +300,11 @@ body {
   background: var(--tp-surface);
   border: 1px solid var(--tp-hairline-2);
   border-radius: 7px;
-  cursor: not-allowed;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.tp-ws-switcher:hover {
+  background: var(--tp-surface-2);
 }
 .tp-ws-name {
   white-space: nowrap;

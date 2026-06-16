@@ -7,3 +7,4 @@ export * from "./intel.ts";
 export * from "./compliance.ts";
 export * from "./activity.ts";
 export * from "./outreach.ts";
+export * from "./home.ts";

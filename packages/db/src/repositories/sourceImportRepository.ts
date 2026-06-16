@@ -4,9 +4,17 @@
 // identical re-import short-circuit to a no-op (idempotency).
 
 import type { SourceName } from "@leadwolf/types";
-import { and, eq } from "drizzle-orm";
-import type { Tx } from "../client.ts";
+import { and, eq, sql } from "drizzle-orm";
+import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { sourceImports } from "../schema/contacts.ts";
+
+/** One import batch for the Home dashboard — a (file, source, minute) group with its contact count. */
+export interface ImportBatchRow {
+  sourceName: string;
+  sourceFile: string | null;
+  contactCount: number;
+  importedAt: Date;
+}
 
 export interface SourceImportInput {
   tenantId: string;
@@ -47,6 +55,33 @@ export const sourceImportRepository = {
       sourceFile: input.sourceFile ?? null,
       rawData: input.rawData,
       contentHash: input.contentHash ?? null,
+    });
+  },
+
+  /**
+   * The most recent import batches for the Home dashboard: provenance rows grouped by
+   * (source_file, source_name, minute) with their contact count, newest first. Workspace-scoped via RLS.
+   */
+  async recentBatches(scope: TenantScope, limit = 5): Promise<ImportBatchRow[]> {
+    return withTenantTx(scope, async (tx) => {
+      const minute = sql`date_trunc('minute', ${sourceImports.importedAt})`;
+      const rows = await tx
+        .select({
+          sourceName: sourceImports.sourceName,
+          sourceFile: sourceImports.sourceFile,
+          contactCount: sql<number>`count(*)::int`,
+          importedAt: sql<Date>`max(${sourceImports.importedAt})`,
+        })
+        .from(sourceImports)
+        .groupBy(sourceImports.sourceFile, sourceImports.sourceName, minute)
+        .orderBy(sql`max(${sourceImports.importedAt}) desc`)
+        .limit(limit);
+      return rows.map((r) => ({
+        sourceName: r.sourceName,
+        sourceFile: r.sourceFile,
+        contactCount: Number(r.contactCount),
+        importedAt: r.importedAt,
+      }));
     });
   },
 };

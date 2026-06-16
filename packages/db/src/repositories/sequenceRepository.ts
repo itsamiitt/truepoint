@@ -52,6 +52,14 @@ export interface SequenceSummaryRow {
   enrolledCount: number;
 }
 
+/** The outreach-engine aggregate for the Home dashboard (the `sent` count is derived by the api from
+ * activities — email_sent — and merged in, since it lives in the activity domain, not here). */
+export interface PerformanceSnapshotRow {
+  activeSequences: number;
+  enrolled: number;
+  replied: number;
+}
+
 export const sequenceRepository = {
   async insert(tx: Tx, row: SequenceInsert): Promise<string> {
     const inserted = await tx
@@ -136,6 +144,31 @@ export const sequenceRepository = {
         stepCount: Number(r.stepCount),
         enrolledCount: Number(r.enrolledCount),
       }));
+    });
+  },
+
+  /**
+   * Aggregate outreach counts for the Home dashboard: active = sequences with status 'active';
+   * enrolled = total outreach_log rows; replied = outreach_log rows with status 'replied'.
+   * Workspace-scoped via RLS (all three reads run under the same scoped transaction).
+   */
+  async performanceSnapshot(scope: TenantScope): Promise<PerformanceSnapshotRow> {
+    return withTenantTx(scope, async (tx) => {
+      const count = sql<number>`count(*)::int`;
+      const [active] = await tx
+        .select({ n: count })
+        .from(outreachSequences)
+        .where(eq(outreachSequences.status, "active"));
+      const [enrolled] = await tx.select({ n: count }).from(outreachLog);
+      const [replied] = await tx
+        .select({ n: count })
+        .from(outreachLog)
+        .where(eq(outreachLog.status, "replied"));
+      return {
+        activeSequences: Number(active?.n ?? 0),
+        enrolled: Number(enrolled?.n ?? 0),
+        replied: Number(replied?.n ?? 0),
+      };
     });
   },
 };
