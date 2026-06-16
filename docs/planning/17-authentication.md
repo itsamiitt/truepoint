@@ -130,6 +130,14 @@ held in **Redis** (TTL), not a Postgres table, so it scales horizontally with 1M
   supported for non-SPA flows; the browser-BFF variant above is the default.
 - **CSRF / fixation:** the `state` nonce + PKCE verifier + IP-bound, single-use, 60 s code together gate
   the exchange; the refresh cookie is `SameSite=Strict`.
+- **Callback resilience & failure semantics** — the `/auth/callback` effect is guarded against React
+  **StrictMode** double-invoke so the single-use code is consumed **once**; a recoverable `state`/code
+  failure (`invalid_state`/`pkce_mismatch`/`code_not_found`) **auto-restarts login once** (`lw_auth_recovery`
+  sessionStorage flag) instead of dead-ending, while a **`503 auth_unavailable`** is shown, not looped. The
+  password step likewise separates an `InvalidCredentialsError` (uniform credential error, [§6](#6-security-layers))
+  from an infra outage ("temporarily unavailable") and no longer `500`s on a dependency blip. Failure modes,
+  the recovery contract, and the **monitoring/alerting** signals are detailed in the
+  [ADR-0016 callback-recovery addendum](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md#addendum-2026-06-16--callback-auto-recovery--honest-password-failure-semantics).
 
 ## 4. Multi-tenancy auth model
 
