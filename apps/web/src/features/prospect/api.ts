@@ -44,6 +44,18 @@ export async function fetchContacts(limit = 100): Promise<MaskedContact[]> {
   return data.contacts;
 }
 
+/**
+ * GET /credits/balance — the tenant's spendable reveal-credit balance (07 §3). Non-PII; the bulk-action
+ * bar shows it as the remaining balance and re-reads it on the "credits:changed" event after a reveal.
+ * The balance is authoritative server-side; the UI only displays it (never computes the spend).
+ */
+export async function getCreditBalance(): Promise<number> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/balance`);
+  if (!res.ok) throw await toApiError(res, "Could not load credit balance");
+  const data = (await res.json()) as { balance: number };
+  return data.balance;
+}
+
 /** One score-history row (09 §2). Shapes the API's `{ scores: [...] }`; the breakdown is opaque to the UI. */
 export interface ScoreHistoryRow {
   id: string;
