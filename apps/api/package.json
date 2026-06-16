@@ -15,7 +15,9 @@
     "@leadwolf/db": "workspace:*",
     "@leadwolf/types": "workspace:*",
     "hono": "4.6.13",
-    "@leadwolf/integrations": "workspace:*"
+    "@leadwolf/integrations": "workspace:*",
+    "bullmq": "^5.0.0",
+    "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "typescript": "5.7.2"

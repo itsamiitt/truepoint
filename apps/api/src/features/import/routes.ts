@@ -1,12 +1,14 @@
 // routes.ts — HTTP wiring for the import feature (05 §3). POST accepts a multipart upload (the CSV file +
-// a JSON column mapping + the source), then hands off to packages/core's runImport — this file does the
-// transport (parse the request, shape the response) and no business logic. The workspace is taken from the
-// VERIFIED token via the tenancy middleware, never the request body (16 §7). M1 runs the import inline and
-// returns the new-vs-matched summary; large files can later be diverted to the imports worker (same core fn).
+// a JSON column mapping + the source), parses it on the request thread, then ENQUEUES the parsed rows onto
+// the `imports` queue and returns 202 + a job ref — the heavy per-row dedup/encrypt/DB work runs in the
+// apps/workers consumer (processImport → the SAME packages/core runImport). This file does only transport
+// (parse the request, enqueue, shape the response) and no business logic. The workspace is taken from the
+// VERIFIED token via the tenancy middleware, never the request body (16 §7).
 
-import { parseImportFile, runImport } from "@leadwolf/core";
+import { parseImportFile } from "@leadwolf/core";
 import {
   ForbiddenError,
+  type ImportJobRef,
   ImportValidationError,
   columnMappingSchema,
   sourceName,
@@ -14,6 +16,7 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { enqueueImport } from "./queue.ts";
 
 export const importRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -47,7 +50,7 @@ importRoutes.post("/", async (c) => {
   if (!parsedMapping.success) throw new ImportValidationError("Invalid column mapping.");
 
   const parsed = parseImportFile(await file.text(), file.name);
-  const summary = await runImport({
+  const jobId = await enqueueImport({
     scope: { tenantId, workspaceId },
     importedByUserId: claims.sub,
     sourceName: parsedSource.data,
@@ -55,5 +58,6 @@ importRoutes.post("/", async (c) => {
     mapping: parsedMapping.data,
     rows: parsed.rows,
   });
-  return c.json(summary, 200);
+  const body: ImportJobRef = { jobId, status: "queued" };
+  return c.json(body, 202);
 });
