@@ -1,8 +1,10 @@
-# ADR-0032 — Bootstrap platform super-admin via a flag on the customer identity
+# ADR-0034 — Bootstrap platform super-admin via a flag on the customer identity
 
 - **Status:** Accepted (interim). Diverges from [ADR-0011](./ADR-0011-platform-admin-and-privileged-access.md) /
   [13-platform-admin.md](../13-platform-admin.md) for the bootstrap case.
 - **Date:** 2026-06-16
+- **History:** Renumbered from a duplicate **ADR-0032** (2026-06-16); **0033** is reserved for the
+  RLS-by-default decision (in-flight `fix/rls-app-role-runtime` branch, not yet on main).
 
 ## Context
 
