@@ -794,3 +794,55 @@ body {
   font-size: 13px;
   color: var(--tp-ink-3);
 }
+
+/* ============================================================================
+ * Interaction motion (T-fd902dcd) — subtle, GPU-friendly transitions + entrance
+ * animations on the shell + prospect surfaces. Uses the shared motion tokens +
+ * keyframes from @leadwolf/ui/tokens.css; ALL of it auto-disables under
+ * prefers-reduced-motion via the baseline in that same shared file.
+ * ========================================================================== */
+
+.app-button,
+.tp-btn-ghost,
+.tp-icon-btn,
+.tp-credit-pill {
+  transition-property: background-color, color, border-color, transform;
+  transition-duration: var(--tp-duration-fast);
+  transition-timing-function: var(--tp-ease);
+}
+
+/* A small press-down on click — the control physically responds (subtle, not bouncy). */
+.app-button:active,
+.tp-btn-ghost:active,
+.tp-icon-btn:active {
+  transform: translateY(0.5px);
+}
+
+.tp-nav-item,
+.tp-result-row {
+  transition-property: background-color, color;
+  transition-duration: var(--tp-duration-fast);
+  transition-timing-function: var(--tp-ease);
+}
+
+/* Entrance animations for surfaces that mount on demand (panel, scrim, modal, the bulk bar). */
+.tp-slideover {
+  animation: tp-slide-in-right var(--tp-duration-slow) var(--tp-ease-out);
+}
+.tp-scrim-backdrop {
+  animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
+}
+.tp-dialog {
+  animation: tp-pop-in var(--tp-duration) var(--tp-ease-out);
+}
+.tp-bulk-bar {
+  animation: tp-rise-in var(--tp-duration) var(--tp-ease-out);
+}
+
+/* Feedback surfaces enter gently too (the 402 top-up prompt, the revealed-PII block). */
+.tp-inline-alert {
+  animation: tp-rise-in var(--tp-duration) var(--tp-ease-out);
+}
+.tp-reveal-result {
+  animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
+}
