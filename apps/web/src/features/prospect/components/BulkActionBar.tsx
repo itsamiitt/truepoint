@@ -27,7 +27,7 @@ export function BulkActionBar({
   const revealable = revealableIds.length;
 
   return (
-    <div className="tp-bulk-bar" role="region" aria-label="Bulk actions">
+    <section className="tp-bulk-bar" aria-label="Bulk actions">
       <span className="tp-bulk-count">{count} selected</span>
       <span className="tp-bulk-balance">
         Balance: <strong>{balance === null ? "—" : balance.toLocaleString()}</strong> credits
@@ -61,6 +61,6 @@ export function BulkActionBar({
           }}
         />
       )}
-    </div>
+    </section>
   );
 }

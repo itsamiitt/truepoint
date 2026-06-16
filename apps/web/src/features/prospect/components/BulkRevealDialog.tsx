@@ -68,7 +68,8 @@ export function BulkRevealDialog({
               credits; you only pay for valid data. Re-revealing in this workspace is free.
             </p>
             <p className="tp-dialog-sub">
-              Balance: <strong>{balance === null ? "—" : balance.toLocaleString()}</strong> credits
+              Balance:{" "}
+              <strong>{balance === null ? "—" : balance.toLocaleString()}</strong> credits
             </p>
             {busy && progress && (
               <p className="app-muted">

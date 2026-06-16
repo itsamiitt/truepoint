@@ -2,8 +2,8 @@
 // creditsCharged (never a client-side cost), STOPS on insufficient_credits (402), SKIPS suppressed (403),
 // counts other failures and keeps going, and reports the latest server balance + progress. Pure — no React,
 // no network (the reveal fn is injected/mocked).
-import type { RevealResponse } from "@leadwolf/types";
 import { describe, expect, test } from "bun:test";
+import type { RevealResponse } from "@leadwolf/types";
 import { ApiError } from "./api";
 import { runBulkReveal } from "./bulkReveal";
 

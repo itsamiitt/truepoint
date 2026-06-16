@@ -65,5 +65,12 @@ export async function runBulkReveal(
   }
 
   onProgress?.({ done: ids.length, total: ids.length });
-  return { revealedIds, totalCharged, balanceAfter, suppressedCount, failedCount, stoppedForCredits };
+  return {
+    revealedIds,
+    totalCharged,
+    balanceAfter,
+    suppressedCount,
+    failedCount,
+    stoppedForCredits,
+  };
 }
