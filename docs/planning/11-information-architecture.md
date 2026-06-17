@@ -101,6 +101,12 @@ One surface = **Search + Contacts + Accounts + Lists**.
   sequence**.
 - **Sticky bulk-action bar:** reveal selected (shows cost + balance) · add to list · enroll · export CSV.
 - **Import** opens as a wizard drawer (CSV/XLSX · provider · Sales Nav) with a history panel.
+- **Bulk CSV enrichment** *(M17 — [30](./30-bulk-enrichment-pipeline.md))* extends the same Import
+  drawer: upload a **sparse CSV** → **column-map** → **estimate** (match-first against our data, shows
+  matchable rows + credit cost before any spend) → **run** → **progress** (large jobs run async on AWS
+  Batch off the request path) → **download** the enriched/verified file. It is a **mode of the Import
+  surface under Prospect**, not a new destination (Credits-not-a-tab discipline, **H11**); the jobs/history
+  panel lists past runs with status and re-downloadable outputs. Full design in [30](./30-bulk-enrichment-pipeline.md).
 
 ### 4.3 Sequences — *outreach* (M9 — [ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md))
 List (status, enrolled, performance) · **builder drawer** (ordered `outreach_steps`: channel, delay,
@@ -138,7 +144,7 @@ panels/overlays on the single shell.
 | Destination | Modules ([05](./05-features-modules.md)) | API ([09](./09-api-design.md)) |
 |---|---|---|
 | Home | Home/Dashboard, Notifications | `/home/summary`, `/notifications` |
-| Prospect | Search, Contacts, Accounts, Lists, Import, Record-detail+reveal, Enrichment, Scoring | `/search/*`, `/contacts/*`, `/accounts/*`, `/lists`, `/imports`, `/contacts/:id/reveal` |
+| Prospect | Search, Contacts, Accounts, Lists, Import, Bulk CSV enrichment ([30](./30-bulk-enrichment-pipeline.md)), Record-detail+reveal, Enrichment, Scoring | `/search/*`, `/contacts/*`, `/accounts/*`, `/lists`, `/imports`, `/contacts/:id/reveal` |
 | Sequences | Outreach send engine, Templates | `/outreach/*`, `/templates` |
 | Inbox | Inbox+Tasks | `/inbox`, `/tasks` |
 | Reports | Reports/Analytics, Data Health | `/reports/*` |
