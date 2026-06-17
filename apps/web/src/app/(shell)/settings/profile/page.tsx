@@ -1,6 +1,6 @@
-// Settings ▸ User ▸ Profile — placeholder until the S1 (User settings) unit lands.
-import { SettingsPlaceholder } from "@/features/settings-shell";
+// Settings ▸ User ▸ Profile — mounts the settings-user slice's Profile panel (12 §2).
+import { ProfilePanel } from "@/features/settings-user";
 
 export default function ProfileSettingsRoute() {
-  return <SettingsPlaceholder title="Profile" />;
+  return <ProfilePanel />;
 }
