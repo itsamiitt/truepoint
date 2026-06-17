@@ -41,6 +41,7 @@ accounts, on an **AWS-native self-hosted** stack.
 | 27 | [Workflow Automation Engine](./27-workflow-automation-engine.md) | Trigger→condition→action plays, recipe library, guardrails, `automation_runs`. |
 | 28 | [Enterprise Readiness Audit](./28-enterprise-readiness-audit.md) | Full-corpus audit overlay: per-module gaps, automation/AI/scale/performance/observability audits, drift findings, prioritized gap register. |
 | 29 | [Settings & Administration Architecture](./29-settings-administration-architecture.md) | The complete settings catalog (defaults, roles, impact, audit) + administration roles and approval workflows — companion to 28. |
+| 30 | [Bulk Enrichment Pipeline](./30-bulk-enrichment-pipeline.md) | Match-first bulk CSV enrichment at scale: upload → match against our data → enrich/verify → download. |
 | — | [Audit-log Action Enum](./audit-log-enum.md) | Living reference for the closed `audit_log.action` vocabulary: as-built values, naming convention, write-path coverage, G-CMP-1 history, and the per-milestone evolution plan. |
 | — | [Department Modules](./departments/) | Per-department specs: Sales, SDR, BDR, Marketing, CS, Support, Ops/RevOps, Compliance, Finance, HR, Admin. |
 | — | [Brand Identity](./brand-identity.md) | Name/meaning, positioning, voice, logo, color, type — the LeadWolf brand system. |
@@ -109,7 +110,13 @@ Splink** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)) ·
 ([ADR-0034](./decisions/ADR-0034-bootstrap-platform-admin.md)) ·
 **search query semantics + autocomplete + filter architecture** (typeahead from indexed values,
 synonym/abbreviation expansion, ClickHouse facet counts)
-([ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md)).
+([ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md)) ·
+**match-first bulk CSV enrichment pipeline**
+([ADR-0036](./decisions/ADR-0036-bulk-csv-enrichment-pipeline.md)) ·
+**bulk match-first resolution + candidate index**
+([ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md)) ·
+**bulk enrichment billing, forecast & quota**
+([ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md)).
 
 See [00-overview.md](./00-overview.md#7-decision-log) for the full decision log with rationale links,
 and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md),
@@ -135,5 +142,8 @@ and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-worksp
 [ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md),
 [ADR-0028](./decisions/ADR-0028-record-customization-layer.md),
 [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md),
-[ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md), and
-[ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md).
+[ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md),
+[ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md),
+[ADR-0036](./decisions/ADR-0036-bulk-csv-enrichment-pipeline.md),
+[ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md), and
+[ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md).

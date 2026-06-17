@@ -50,6 +50,7 @@
 | 27 | `docs/planning/27-workflow-automation-engine.md` |
 | 28 | `docs/planning/28-enterprise-readiness-audit.md` *(audit overlay — findings/recommendations, no decisions)* |
 | 29 | `docs/planning/29-settings-administration-architecture.md` *(audit companion — settings + admin catalog)* |
+| 30 | `docs/planning/30-bulk-enrichment-pipeline.md` |
 | departments | `docs/planning/departments/` (README + 11 modules) |
 | brand | `docs/planning/brand-identity.md` |
 | audit-enum | `docs/planning/audit-log-enum.md` *(reference — closed `audit_log.action` vocabulary + write-path coverage; no decisions)* |
@@ -86,6 +87,9 @@
 | ADR-31 | `decisions/ADR-0031-auth-event-audit-tenancy.md` |
 | ADR-32 | `decisions/ADR-0032-platform-audit-action-vocabulary.md` *(proposed)* |
 | ADR-34 | `decisions/ADR-0034-bootstrap-platform-admin.md` *(accepted — interim; diverges from ADR-11)* |
+| ADR-36 | `decisions/ADR-0036-bulk-csv-enrichment-pipeline.md` |
+| ADR-37 | `decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md` |
+| ADR-38 | `decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md` |
 | (input) | `docs/planning/proposals/2026-05-29-multi-tenant-schema.md` (adopted) |
 
 ## 2. Adjacency list (doc → docs/ADRs it references)
@@ -142,6 +146,7 @@
 | 27 | 20, 03, 05, 22, 23, 24, 25, 26, 09, 12, 08, ADR-26 |
 | 28 | 00–27, departments/, 29 (audit overlay; cites ADR-7/13/14/18/22–27; reports drift, edits nothing) |
 | 29 | 28, 12, 13, 17, 22, 23, 25, 26, 27, 08, ADR-18, ADR-22 |
+| 30 | 06, 03, 07, 09, 18, 22, 08, 10, ADR-36, ADR-37, ADR-38, ADR-13, ADR-21, ADR-15, ADR-29 |
 | departments/ | 25 (+ 24, 27, 23, 22, 08, 06, 07, 12, 17) |
 | ADR-22 | 25, 03 (additive to ADR-6/ADR-19; no tenancy tier) |
 | ADR-23 | 23, 05 (resolves 00 §8 Q8) |
@@ -152,6 +157,9 @@
 | ADR-28 | 05, 03 (record customization; 28 G-REV cluster) |
 | ADR-29 | 07, 03 (amends ADR-7 — executes its revisit path; 28 G-BIL-1/2) |
 | ADR-30 | 03, 17, 12 (amends ADR-19 capability model; resolves drift F-4; 28 G-AUTH-10) |
+| ADR-36 | 30, 06, 03, 09, 18 (match-first bulk CSV enrichment pipeline: job/chunk/row model + queue) |
+| ADR-37 | 30, 06, 03 (bulk match-first resolution + candidate index; amends ADR-15, extends ADR-21) |
+| ADR-38 | 07, 30, 03 (bulk enrichment billing, forecast & quota; extends ADR-13/7/29) |
 
 **Bidirectional pairs:** 00↔ADRs; 03↔ADR-6/7/8/9/10; 05↔10 (matrix↔roadmap); 07↔08↔09 (reveal+send path); 11↔04 (IA↔nav); 11↔12↔13 (app surface); 13↔ADR-11; 10↔14 (roadmap↔execution); 02↔16, 14↔16 (architecture↔code-organization); 04↔brand (design↔brand); 07↔ADR-12/13, 08↔ADR-14, 06↔ADR-13, 03↔ADR-13 (remediation decisions); 10↔15, 05↔15 (gap remediation); 03↔ADR-15, 06↔ADR-15 (entity resolution); superseded↔superseding (ADR-3/5↔ADR-6, ADR-4↔ADR-7); 17↔03/05/09/12 (auth ↔ schema/features/API/settings); 00↔ADR-16/17/18; 03↔ADR-16; ADR-10↔ADR-16 (auth transport amended); 17↔ADR-19/20; ADR-6↔ADR-19 (user scoping amended); ADR-17↔ADR-20 (no-enumeration amended); 00↔ADR-19/20; **03/02/06/08↔ADR-21** (two-layer master graph + overlay), ADR-21↔ADR-2/6/15 (amends), ADR-21↔ADR-3/5 (revives as hybrid); 00↔ADR-21.
 **New (2026-06-10):** 25↔departments/, 25↔03/05/07/11/12/24/27 (departments); 23↔05/06/08/09/16/20/27 (AI);
@@ -164,6 +172,10 @@ to the whole corpus one-way — no reciprocal links required from 00–27 (overl
 customization); 07 §2↔03 §8↔10 M11/M12↔02 §3.1 (ledger + leases); H8 propagated to org_role across
 03/02/05/09/12/17; audit-enum extension in 03 §7 + 08 §5; 08 §16 (breach notification) ↔ 19 §5; risk
 register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
+**Bulk enrichment (2026-06-17):** 30↔06/03/07/09/18/22/08/10 (bulk CSV pipeline: match-first +
+job/chunk/row model + charge-per-verified-match); 00↔ADR-36/37/38 (decision tripod rows in 00 §7);
+ADR-37↔ADR-15 (specializes global ER for bulk), ADR-37↔ADR-21 (extends master-graph/overlay matching);
+ADR-38↔ADR-13/07/29 (extends charge-for-verified-data + counter + ledger/lease for bulk billing).
 
 > **Doc 14 (Phase 1 Execution)** is an execution *overlay*: it sequences the build of M0–M5 and must
 > agree with 05 §21 / 10 (H10) but introduces no new milestone scope. **`brand-identity.md`** is the
@@ -180,7 +192,7 @@ register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
 | **README index + locked-decisions summary** | README | Update on doc add/rename + when locked decisions change. |
 | **Stack table** | 01 §1 (canonical) ; mirrored rows in 00 §7 | Stack change → update 01 §1 AND 00 §7. |
 
-## 4. Critical drift hazards (H1–H23) — "edit these together"
+## 4. Critical drift hazards (H1–H25) — "edit these together"
 
 | ID | Concept | Locations that must stay consistent |
 |---|---|---|
@@ -207,6 +219,8 @@ register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
 | **H21** | Automation engine: `automation_trigger`/`automation_action` enums + suppression-gated + idempotent + per-team policies + `automation_runs` | 27, 03 §14, 05 (matrix), 09 §10, 12 §3, 08 §11, ADR-26 |
 | **H22** | Performance SLOs / error budgets (latency budgets, freshness SLOs, capacity, Citus cutover) | 18 §2/§8, 02 §9, 09, 19 §2, 10 (M12), ADR-24 |
 | **H23** | Event backbone: transactional `outbox` + idempotent consumers + DLQ/backpressure + SSE/WebSocket; per-entity ordering | 20, 02 §3, 03 §12/§14, 09 §10, 18 §9, ADR-27 |
+| **H24** | Bulk enrichment pipeline: `enrichment_jobs`/`_chunks`/`_rows` model + chunked async (`BULK_ENRICHMENT_QUEUE`) + match-first + charge-per-verified-match | 30, 06 §11, 03 (new tables), 07, 09, 18, 10 (M17 + risk #25/#26), ADR-36/37/38 |
+| **H25** | Bulk match-first resolution: `MatchPort` resolves internal-first (overlay → master graph → provider) via deterministic keys + blocking/LSH candidate index | 30, 06 §9/§11, 03, ADR-37, ADR-21/15 |
 
 ## 5. Shared-vocabulary index (definition → usages)
 
@@ -260,6 +274,10 @@ register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
 | record customization (`custom_field_definitions` + `custom_fields` jsonb, `pipeline_stages`→`outreach_status` map, `tags`/`record_tags`) | 03 §14 / ADR-28 | 05 §7/§21, 10 (M8), 24, 29 §6, 00 §6 |
 | `credit_ledger` (M11; counter = derived cache) + `credit_leases` (M12) | ADR-29 / 07 §2 | 03 §8/§14, 05 §11, 02 §3.1, 10 (M11/M12 + risk #2), 00 §6/§7 |
 | `mailbox_connections` (reply ingestion; M9 design gate) | 03 §14 | 05 §20, 10 (M9), 00 §8 Q11 |
+| bulk CSV enrichment (upload → match-first → enrich/verify → download; chunked async at scale) | 30 / ADR-36 | 06 §11, 03, 07, 09, 18, 10 (M17), 00 §6/§7 |
+| MatchPort / match-first resolution (internal-first: overlay → master graph → provider) | ADR-37 / 30 / 06 §9/§11 | 03, 00 §6/§7, 22, ADR-21/15 |
+| `enrichment_job_status` / `match_method` / `match_outcome` enums | 03 (new) / 30 / ADR-36/37 | 06 §11, 09, 07 |
+| `enrichment_jobs`/`_chunks`/`_rows` tables (partitioned: `enrichment_job_rows`) | 03 (new) / 30 | 06 §11, 07, 18, ADR-36 |
 
 ## 6. ADR registry
 
@@ -279,13 +297,13 @@ register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
 | ADR-12 | Transparent no-lock-in commercial policy | Accepted | 07, 00 | 00, 05, 07, 12, 15 |
 | ADR-13 | Charge-for-verified-data + credit-back | Accepted | 07, 06, 03 | 00, 03, 05, 06, 07, 09, 10, 15 |
 | ADR-14 | Trust & certification program | Accepted | 08, 10 | 00, 08, 10, 12, 13, 15 |
-| ADR-15 | Entity resolution / dedup engine (Splink) | Accepted (made global/cross-source by ADR-21) | 03, 06 | 00, 03, 06, 10, ADR-21 |
+| ADR-15 | Entity resolution / dedup engine (Splink) | Accepted (made global/cross-source by ADR-21; specialized for bulk by ADR-37) | 03, 06 | 00, 03, 06, 10, ADR-21, ADR-37 |
 | ADR-16 | Dedicated auth origin + cross-domain token exchange | Accepted | 17, 09, 01 | 00, 03, 05, 09, 10, 12, 17, README (amends ADR-10) |
 | ADR-17 | Progressive identifier-first login + domain tenant routing | Accepted (no-enumeration amended by ADR-20) | 17, 03, 12 | 00, 05, 09, 10, 12, 17, README, ADR-20 |
 | ADR-18 | Auth policy + MFA enforcement model | Accepted | 17, 12, 03 | 00, 05, 10, 12, 17, README |
 | ADR-19 | Global identity + tenant membership | Accepted (org-role capability amended by ADR-0030) | 17, 03 | 00, 02, 03, 05, 09, 12, 17, README (amends ADR-6 user scoping) |
 | ADR-20 | Existence-revealing identifier-first + registration | Accepted | 17, 03, 12 | 00, 03, 05, 09, 17, README (amends ADR-17 no-enumeration) |
-| ADR-21 | Global master graph + per-workspace overlay (two-layer) | Accepted | 02, 03, 06, 08 | 00, 02, 03, 06, 08, 09, 10, README (reopens ADR-6; revives ADR-3/5; amends ADR-2/15) |
+| ADR-21 | Global master graph + per-workspace overlay (two-layer) | Accepted (specialized for bulk by ADR-37) | 02, 03, 06, 08 | 00, 02, 03, 06, 08, 09, 10, 30, README, ADR-37 (reopens ADR-6; revives ADR-3/5; amends ADR-2/15) |
 | ADR-22 | Departments/teams as intra-workspace segmentation | Accepted (additive to ADR-6/19) | 25, 03 | 00, 03, 05, 07, 09, 12, 25, README |
 | ADR-23 | AI provider & intelligence architecture (Anthropic Claude) | Accepted (resolves 00 §8 Q8) | 23, 05 | 00, 01, 05, 06, 08, 09, 16, 23, README |
 | ADR-24 | Performance SLOs, capacity & scale-hardening | Accepted | 18, 02 | 00, 02, 09, 10, 18, 19, README |
@@ -298,6 +316,9 @@ register dups renumbered → #23/#24; 28 §11/§12 carry the fix/landing status.
 | ADR-31 | Auth-event audit tenancy | Accepted | 03, 08, 17 | audit-enum (OQ-F), 17 §9, 08 §5, 03 §7; OQ-D → ADR-32 |
 | ADR-32 | Platform-audit action vocabulary | **Proposed** | 13, 08, 03 | audit-enum (OQ-D), ADR-11, ADR-31 |
 | ADR-34 | Bootstrap platform super-admin — interim flag on the customer identity (`users.is_platform_admin` + `pa` claim + audited `withPlatformTx`) | Accepted (interim; diverges from ADR-11 until `apps/admin` ships) | 13, 03, 17 | 00 §7, README, ADR-11 |
+| ADR-36 | Bulk CSV Enrichment Pipeline | Accepted | 30, 06, 03, 09, 18 | 00, 06, 03, 07, 09, 10, 18, 22, 08, 30, README |
+| ADR-37 | Bulk Match-First Resolution & Candidate Index | Accepted (amends ADR-15, extends ADR-21) | 30, 06, 03 | 00, 06, 22, 30, README |
+| ADR-38 | Bulk Enrichment Billing, Forecast & Quota | Accepted (extends ADR-13/7/29) | 07, 30, 03 | 00, 07, 10, 30, README |
 
 **ADR rules:** new significant decision → new ADR + 00 §7 row + lead-doc edit (tripod). Superseding a
 locked ADR → set old `Status: Superseded by ADR-NNNN` + reciprocal link, never overwrite the body.
