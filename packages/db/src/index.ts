@@ -146,3 +146,9 @@ export {
   type ContactMatchKeys,
   type ContactMatchCandidate,
 } from "./repositories/enrichmentJobRepository.ts";
+export {
+  enrichmentPolicyRepository,
+  type EnrichmentPolicyRecord,
+  type EnrichmentPolicyUpsert,
+  type EnrichmentPolicyPatch,
+} from "./repositories/enrichmentPolicyRepository.ts";

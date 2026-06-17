@@ -1,0 +1,63 @@
+// routes.ts — HTTP wiring for the workspace auto-enrich policy settings (G-ENR-1; 29 §3, 09 §3):
+//   GET   /api/v1/settings/auto-enrich   → the resolved policy + month-to-date spend
+//   PATCH /api/v1/settings/auto-enrich   → update (partial; arrays replace) → resolved policy + spend
+// Transport only: validate the body, then read/write through the repository (RLS workspace-scoped). The
+// resolve-default + partial-merge live in the repository (applyPartial is an atomic read-merge-upsert, so
+// concurrent PATCHes can't lost-update). No enrichment is triggered here — this configures the policy the
+// core guard (enforceAutoEnrichPolicy) consults on a system-initiated enrich.
+
+import { enrichmentPolicyRepository } from "@leadwolf/db";
+import {
+  type EnrichmentPolicyResponse,
+  ForbiddenError,
+  ValidationError,
+  updateEnrichmentPolicySchema,
+} from "@leadwolf/types";
+import { Hono } from "hono";
+import { authn } from "../../middleware/authn.ts";
+import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+
+export const settingsRoutes = new Hono<{ Variables: TenancyVariables }>();
+
+settingsRoutes.use("*", authn);
+settingsRoutes.use("*", tenancy);
+
+/** The resolved policy (off-by-default for an unconfigured workspace) bundled with the live month-to-date spend. */
+async function loadPolicyResponse(scope: {
+  tenantId: string;
+  workspaceId: string;
+}): Promise<EnrichmentPolicyResponse> {
+  const [policy, monthlySpentMicros] = await Promise.all([
+    enrichmentPolicyRepository.resolved(scope),
+    enrichmentPolicyRepository.monthlySpentMicros(scope),
+  ]);
+  return { ...policy, monthlySpentMicros };
+}
+
+settingsRoutes.get("/auto-enrich", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace to view its auto-enrich policy.");
+  const response = await loadPolicyResponse({ tenantId: c.get("tenantId"), workspaceId });
+  return c.json(response, 200);
+});
+
+settingsRoutes.patch("/auto-enrich", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError(
+      "no_workspace",
+      "Select a workspace to update its auto-enrich policy.",
+    );
+  const tenantId = c.get("tenantId");
+  const scope = { tenantId, workspaceId };
+
+  const parsed = updateEnrichmentPolicySchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success)
+    throw new ValidationError("Invalid auto-enrich policy.", { issues: parsed.error.issues });
+
+  // Atomic merge-persist in the repository (arrays replace; absent fields keep the current value).
+  await enrichmentPolicyRepository.applyPartial(scope, { tenantId, workspaceId }, parsed.data);
+  const response = await loadPolicyResponse(scope);
+  return c.json(response, 200);
+});

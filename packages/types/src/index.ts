@@ -5,6 +5,7 @@ export * from "./contacts.ts";
 export * from "./bulkEnrichment.ts";
 export * from "./billing.ts";
 export * from "./intel.ts";
+export * from "./enrichmentPolicy.ts";
 export * from "./compliance.ts";
 export * from "./activity.ts";
 export * from "./outreach.ts";
