@@ -1,11 +1,12 @@
 // ImportWizard.tsx — the import surface: pick a source + CSV, map its columns to canonical fields, and run
 // the import. Headers are read client-side only to populate the mapper's dropdowns (the server does the
 // authoritative RFC-4180 parse + dedup in packages/core). A cohesive feature component; presentation +
-// local view state only — the actual import runs server-side via useImport → api.postImport.
+// local view state only — the actual import runs server-side: useImport enqueues a background job and POLLS
+// it to completion, surfacing a queued → processing → done/failed lifecycle (no summary until it settles).
 "use client";
 
 import type { CanonicalField, ColumnMapping, SourceName } from "@leadwolf/types";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useImport } from "../hooks/useImport";
 import { IDENTITY_FIELDS, MAPPABLE_FIELDS, type MappableField, SOURCE_OPTIONS } from "../types";
 
@@ -20,11 +21,21 @@ async function readHeaders(file: File): Promise<string[]> {
 }
 
 export function ImportWizard({ onImported }: { onImported: () => void }) {
-  const { summary, error, busy, run } = useImport();
+  const { status, jobId, summary, error, busy, run } = useImport();
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [sourceName, setSourceName] = useState<SourceName>("manual");
   const [mapping, setMapping] = useState<Partial<Record<CanonicalField, string>>>({});
+
+  // Notify the parent exactly once per completed import (the job settles asynchronously via polling, so this
+  // can't be done inline in onSubmit). The ref guards against re-firing on unrelated re-renders.
+  const notifiedRef = useRef(false);
+  useEffect(() => {
+    if (status === "done" && summary && !notifiedRef.current) {
+      notifiedRef.current = true;
+      onImported();
+    }
+  }, [status, summary, onImported]);
 
   async function onFile(f: File | null): Promise<void> {
     setFile(f);
@@ -35,12 +46,12 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
   const identityMapped = IDENTITY_FIELDS.some((f) => mapping[f]);
   const canSubmit = Boolean(file) && identityMapped && !busy;
 
-  async function onSubmit(): Promise<void> {
+  function onSubmit(): void {
     if (!file) return;
+    notifiedRef.current = false;
     const cleaned: Record<string, string> = {};
     for (const [k, v] of Object.entries(mapping)) if (v) cleaned[k] = v;
-    const result = await run({ file, sourceName, mapping: cleaned as ColumnMapping });
-    if (result) onImported();
+    run({ file, sourceName, mapping: cleaned as ColumnMapping });
   }
 
   return (
@@ -103,25 +114,38 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
         </p>
       )}
 
-      <button
-        className="app-button"
-        type="button"
-        disabled={!canSubmit}
-        onClick={() => void onSubmit()}
-      >
-        {busy ? "Importing…" : "Import"}
+      <button className="app-button" type="button" disabled={!canSubmit} onClick={onSubmit}>
+        {status === "submitting"
+          ? "Uploading…"
+          : status === "processing"
+            ? "Processing…"
+            : "Import"}
       </button>
 
+      {status === "processing" && (
+        <p className="app-muted">
+          Import queued — processing in the background…
+          {jobId && (
+            <>
+              {" "}
+              (job <code>{jobId}</code>)
+            </>
+          )}
+        </p>
+      )}
+
       {error && <p className="lw-error">{error}</p>}
-      {summary && (
+
+      {status === "done" && summary && (
         <div className="lw-summary">
           <strong>Import complete.</strong> {summary.created} new · {summary.matched} matched ·{" "}
           {summary.skipped} duplicate{summary.skipped === 1 ? "" : "s"} skipped
           {summary.errors.length > 0 && <> · {summary.errors.length} error(s)</>}
           {summary.errors.length > 0 && (
             <ul className="lw-errors">
-              {summary.errors.slice(0, 5).map((e) => (
-                <li key={e.row}>
+              {summary.errors.slice(0, 5).map((e, i) => (
+                // Two errors can share a row, so the row index alone is not a unique key.
+                <li key={`${e.row}-${i}`}>
                   Row {e.row + 1}: {e.message}
                 </li>
               ))}
