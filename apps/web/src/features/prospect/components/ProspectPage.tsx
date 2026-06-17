@@ -1,157 +1,57 @@
-// ProspectPage.tsx — the prospect surface (04 §5, 11 §4.2): a left filter rail, a center results grid of
-// masked rows (name · title · company domain · email-status glyph · masked email · phone lock), and a right
-// slide-over record detail opened by row click. The search endpoint is list-only at MVP, so the rail filters
-// the loaded rows client-side (types.applyFilter). This is the feature's public component (rendered by the
-// thin (shell)/prospect route). Composition + view state only — data + masking come from the slice.
+// ProspectPage.tsx — the prospect master/detail surface (04 §5, 11 §4.2): a faceted filter rail, an active-
+// filter summary, a Contacts⇄Accounts segmented control, the results DataTable (sortable, density-aware,
+// masked email/phone glyphs + a row-select column), the record-detail Drawer, and a sticky bulk-action bar.
+// Search is list-only at MVP (05 §5), so the rail filters the loaded rows client-side. This is the slice's
+// public component (mounted by the thin (shell)/prospect route). Composition + view state; data + masking
+// come from the slice.
 "use client";
 
 import type { MaskedContact } from "@leadwolf/types";
+import {
+  type Column,
+  DataTable,
+  EmptyState,
+  SegmentedControl,
+  StateSwitch,
+  TpButton,
+  TpChip,
+  Tooltip,
+} from "@leadwolf/ui";
+import { Building2, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useContacts } from "../hooks/useContacts";
+import styles from "../prospect.module.css";
 import {
   EMPTY_FILTER,
   type ProspectFilter,
+  type ResultScope,
+  activeFilterChips,
   applyFilter,
   displayName,
   emailGlyphFor,
+  isEmptyFilter,
   maskedEmail,
 } from "../types";
 import { BulkActionBar } from "./BulkActionBar";
+import { FilterRail } from "./FilterRail";
 import { RecordDetail } from "./RecordDetail";
 
-function FilterRail({
-  filter,
-  onChange,
-  total,
-  shown,
-}: {
-  filter: ProspectFilter;
-  onChange: (next: ProspectFilter) => void;
-  total: number;
-  shown: number;
-}) {
-  return (
-    <aside className="tp-filter-rail" aria-label="Filters">
-      <div className="tp-filter-field">
-        <label className="tp-filter-label" htmlFor="tp-f-query">
-          Search
-        </label>
-        <input
-          id="tp-f-query"
-          className="tp-input"
-          type="search"
-          placeholder="Title, name, department…"
-          value={filter.query}
-          onChange={(e) => onChange({ ...filter, query: e.target.value })}
-        />
-      </div>
+const SCOPES = [
+  { value: "contacts", label: "Contacts" },
+  { value: "accounts", label: "Accounts" },
+];
 
-      <div className="tp-filter-field">
-        <label className="tp-filter-label" htmlFor="tp-f-seniority">
-          Seniority
-        </label>
-        <select
-          id="tp-f-seniority"
-          className="tp-input"
-          value={filter.seniority}
-          onChange={(e) =>
-            onChange({ ...filter, seniority: e.target.value as ProspectFilter["seniority"] })
-          }
-        >
-          <option value="">Any seniority</option>
-          <option value="c_suite">C-suite</option>
-          <option value="vp">VP</option>
-          <option value="director">Director</option>
-          <option value="manager">Manager</option>
-          <option value="ic">Individual contributor</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-
-      <label className="tp-filter-check">
-        <input
-          type="checkbox"
-          checked={filter.hasEmail}
-          onChange={(e) => onChange({ ...filter, hasEmail: e.target.checked })}
-        />
-        <span>Has email</span>
-      </label>
-
-      <button className="tp-link-quiet" type="button" onClick={() => onChange(EMPTY_FILTER)}>
-        Clear filters
-      </button>
-
-      <p className="tp-filter-count">
-        {shown} of {total} shown
-      </p>
-    </aside>
-  );
-}
-
-function ResultRow({
-  contact,
-  selected,
-  onSelect,
-  checked,
-  onToggle,
-}: {
-  contact: MaskedContact;
-  selected: boolean;
-  onSelect: () => void;
-  checked: boolean;
-  onToggle: () => void;
-}) {
-  const glyph = emailGlyphFor(contact);
-  return (
-    <tr
-      className={`tp-result-row${selected ? " is-selected" : ""}`}
-      onClick={onSelect}
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect();
-        }
-      }}
-    >
-      {/* Checkbox cell stops click/keydown from bubbling so selecting a row never opens the slide-over. */}
-      <td
-        className="tp-cell-check"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        <input
-          type="checkbox"
-          className="tp-row-check"
-          checked={checked}
-          onChange={onToggle}
-          aria-label={`Select ${displayName(contact)}`}
-        />
-      </td>
-      <td className="tp-cell-name">{displayName(contact)}</td>
-      <td>{contact.jobTitle ?? "—"}</td>
-      <td className="tp-cell-mono">{contact.emailDomain ?? "—"}</td>
-      <td className="tp-cell-center">
-        <span
-          className={`tp-glyph tp-glyph--${glyph.tone}`}
-          title={glyph.label}
-          aria-label={glyph.label}
-        >
-          {glyph.mark}
-        </span>
-      </td>
-      <td className="tp-cell-mono">{maskedEmail(contact)}</td>
-      <td className="tp-cell-center">
-        {contact.hasPhone ? <span title="Phone hidden until reveal">🔒</span> : "—"}
-      </td>
-    </tr>
-  );
-}
+const DENSITIES = [
+  { value: "comfortable", label: "Comfortable" },
+  { value: "compact", label: "Compact" },
+];
 
 export function ProspectPage() {
-  const { contacts, error, loading, markRevealed } = useContacts();
+  const { contacts, error, loading, reload, markRevealed } = useContacts();
   const [filter, setFilter] = useState<ProspectFilter>(EMPTY_FILTER);
+  const [scope, setScope] = useState<ResultScope>("contacts");
+  const [density, setDensity] = useState("comfortable");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const filtered = useMemo(() => applyFilter(contacts, filter), [contacts, filter]);
@@ -159,94 +59,227 @@ export function ProspectPage() {
     () => contacts.find((c) => c.id === selectedId) ?? null,
     [contacts, selectedId],
   );
+  const chips = useMemo(() => activeFilterChips(filter), [filter]);
 
-  // Multi-row selection for the bulk-action bar (distinct from the single-row slide-over selection above).
+  // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection above).
   const bulk = useBulkSelection();
   const shownIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
   const allShownSelected = shownIds.length > 0 && shownIds.every((id) => bulk.selectedIds.has(id));
+  const selectedContacts = useMemo(
+    () => contacts.filter((c) => bulk.selectedIds.has(c.id)),
+    [contacts, bulk.selectedIds],
+  );
   // Only contacts with a maskable email and not yet revealed can be bulk-revealed (07 §3).
   const revealableIds = useMemo(
-    () =>
-      contacts
-        .filter((c) => bulk.selectedIds.has(c.id) && c.hasEmail && !c.isRevealed)
-        .map((c) => c.id),
-    [contacts, bulk.selectedIds],
+    () => selectedContacts.filter((c) => c.hasEmail && !c.isRevealed).map((c) => c.id),
+    [selectedContacts],
+  );
+
+  const columns: Column<MaskedContact>[] = useMemo(
+    () => [
+      {
+        key: "select",
+        // The header checkbox selects/clears every visible row; click stays out of the row-open handler.
+        header: (
+          <span
+            className={styles.headCheck}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <input
+              type="checkbox"
+              aria-label="Select all shown"
+              checked={allShownSelected}
+              onChange={(e) => bulk.setMany(shownIds, e.target.checked)}
+            />
+          </span>
+        ),
+        width: 36,
+        cell: (c) => (
+          <span
+            className={styles.rowCheck}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <input
+              type="checkbox"
+              checked={bulk.isSelected(c.id)}
+              onChange={() => bulk.toggle(c.id)}
+              aria-label={`Select ${displayName(c)}`}
+            />
+          </span>
+        ),
+      },
+      {
+        key: "name",
+        header: "Name",
+        sortValue: (c) => displayName(c),
+        cell: (c) => (
+          <span className={styles.nameCell}>
+            <span className={styles.nameMeta}>
+              <span className={styles.name}>{displayName(c)}</span>
+              <span className={styles.title}>{c.jobTitle ?? "—"}</span>
+            </span>
+          </span>
+        ),
+      },
+      {
+        key: "company",
+        header: "Company",
+        sortValue: (c) => c.emailDomain ?? "",
+        cell: (c) => <span className={styles.mono}>{c.emailDomain ?? "—"}</span>,
+      },
+      {
+        key: "email",
+        header: "Email",
+        align: "center",
+        width: 56,
+        sortValue: (c) => c.emailStatus,
+        cell: (c) => {
+          const g = emailGlyphFor(c);
+          const cls =
+            g.tone === "ok" ? styles.glyphOk : g.tone === "warn" ? styles.glyphWarn : styles.glyphNone;
+          return (
+            <Tooltip label={g.label}>
+              <span className={`${styles.glyph} ${cls}`} aria-label={g.label}>
+                {g.mark}
+              </span>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        key: "address",
+        header: "Address",
+        cell: (c) => <span className={styles.mono}>{maskedEmail(c)}</span>,
+      },
+      {
+        key: "phone",
+        header: "Phone",
+        align: "center",
+        width: 64,
+        sortValue: (c) => (c.hasPhone ? 1 : 0),
+        cell: (c) =>
+          c.hasPhone ? (
+            <Tooltip label="Phone hidden until reveal">
+              <span className={styles.lock} aria-label="Phone hidden until reveal">
+                🔒
+              </span>
+            </Tooltip>
+          ) : (
+            <span className={styles.glyphNone}>—</span>
+          ),
+      },
+    ],
+    [allShownSelected, shownIds, bulk],
   );
 
   return (
-    <div className="tp-prospect">
-      <FilterRail
-        filter={filter}
-        onChange={setFilter}
-        total={contacts.length}
-        shown={filtered.length}
-      />
+    <div className={styles.page} data-density={density}>
+      <FilterRail filter={filter} onChange={setFilter} contacts={contacts} />
 
-      <section className="tp-results">
-        {error ? (
-          <p className="lw-error">{error}</p>
-        ) : loading ? (
-          <p className="app-muted">Loading contacts…</p>
-        ) : contacts.length === 0 ? (
-          <p className="app-muted">
-            No contacts yet — import a CSV from the Import surface to populate this workspace.
-          </p>
-        ) : filtered.length === 0 ? (
-          <p className="app-muted">No contacts match these filters.</p>
-        ) : (
-          <table className="tp-result-table">
-            <thead>
-              <tr>
-                <th className="tp-cell-check">
-                  <input
-                    type="checkbox"
-                    className="tp-row-check"
-                    aria-label="Select all shown"
-                    checked={allShownSelected}
-                    onChange={(e) => bulk.setMany(shownIds, e.target.checked)}
-                  />
-                </th>
-                <th>Name</th>
-                <th>Title</th>
-                <th>Company</th>
-                <th className="tp-cell-center">Email</th>
-                <th>Address</th>
-                <th className="tp-cell-center">Phone</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => (
-                <ResultRow
-                  key={c.id}
-                  contact={c}
-                  selected={c.id === selectedId}
-                  onSelect={() => setSelectedId(c.id)}
-                  checked={bulk.isSelected(c.id)}
-                  onToggle={() => bulk.toggle(c.id)}
-                />
-              ))}
-            </tbody>
-          </table>
+      <section className={styles.results}>
+        <div className={styles.resultsHead}>
+          <div className={styles.headLeft}>
+            <SegmentedControl
+              items={SCOPES}
+              value={scope}
+              onChange={(v) => setScope(v as ResultScope)}
+              aria-label="Result type"
+            />
+            {scope === "contacts" && (
+              <span className={styles.count}>
+                {loading
+                  ? "Loading…"
+                  : `${filtered.length.toLocaleString()} of ${contacts.length.toLocaleString()}`}
+              </span>
+            )}
+          </div>
+          <div className={styles.headRight}>
+            <SegmentedControl
+              items={DENSITIES}
+              value={density}
+              onChange={setDensity}
+              aria-label="Row density"
+            />
+          </div>
+        </div>
+
+        {scope === "contacts" && !isEmptyFilter(filter) && (
+          <div className={styles.summary}>
+            <span className={styles.summaryLabel}>Filters</span>
+            {chips.map((chip) => (
+              <TpChip key={chip.key} onRemove={() => setFilter((f) => chip.clear(f))}>
+                {chip.label}
+              </TpChip>
+            ))}
+            <span className={styles.summarySpacer} />
+            <TpButton variant="link" size="sm" onClick={() => setFilter(EMPTY_FILTER)}>
+              Clear all
+            </TpButton>
+          </div>
         )}
 
-        {bulk.count > 0 && (
-          <BulkActionBar
-            count={bulk.count}
-            revealableIds={revealableIds}
-            onClear={bulk.clear}
-            onRevealed={(ids) => {
-              for (const id of ids) markRevealed(id);
-              bulk.clear();
-            }}
+        {scope === "accounts" ? (
+          <EmptyState
+            icon={<Building2 size={28} />}
+            title="Accounts view is coming"
+            description="The account-level rollup of your prospects lands in a later milestone. Switch back to Contacts to work the list."
           />
+        ) : (
+          <StateSwitch
+            loading={loading}
+            error={error}
+            empty={!loading && contacts.length === 0}
+            onRetry={reload}
+            emptyState={
+              <EmptyState
+                icon={<Users size={28} />}
+                title="No contacts yet"
+                description="Import a CSV from the Import surface to populate this workspace, then prospect, score and reveal here."
+              />
+            }
+          >
+            <DataTable
+              columns={columns}
+              rows={filtered}
+              rowKey={(c) => c.id}
+              onRowClick={(c) => setSelectedId(c.id)}
+              isSelected={(c) => c.id === selectedId}
+              empty={
+                <EmptyState
+                  title="No matches"
+                  description="No contacts match these filters."
+                  action={
+                    <TpButton variant="secondary" size="sm" onClick={() => setFilter(EMPTY_FILTER)}>
+                      Clear filters
+                    </TpButton>
+                  }
+                />
+              }
+            />
+          </StateSwitch>
         )}
       </section>
 
-      {selected && (
-        <RecordDetail
-          contact={selected}
-          onClose={() => setSelectedId(null)}
-          onRevealed={(id) => markRevealed(id)}
+      <RecordDetail
+        contact={selected}
+        onClose={() => setSelectedId(null)}
+        onRevealed={(id) => markRevealed(id)}
+      />
+
+      {bulk.count > 0 && (
+        <BulkActionBar
+          count={bulk.count}
+          selectedContacts={selectedContacts}
+          revealableIds={revealableIds}
+          onClear={bulk.clear}
+          onRevealed={(ids) => {
+            for (const id of ids) markRevealed(id);
+            bulk.clear();
+          }}
         />
       )}
     </div>

@@ -1,58 +1,143 @@
-// FilterRail.tsx — the search-box-first filter rail (24 §2): one FacetTypeahead per high-cardinality facet,
-// each adding include chips. Emits the active filter set as FilterClause[] so the page can run the search.
-// Reference composition for the prospect slice; the web agent wires it into ProspectPage's left rail.
+// FilterRail.tsx — the faceted filter rail for the prospect surface (04 §5, 24 §2). Multi-select facets render
+// as toggleable TpChips; high-cardinality facets (department, country) use the searchable Combobox over the
+// loaded rows' distinct values; has-email/has-phone are TpCheckboxes. Search is list-only at MVP (05 §5) so
+// every facet filters the already-loaded rows client-side (types.applyFilter). Composition + view state only.
 "use client";
 
-import type { FacetKey, FilterClause } from "@leadwolf/types";
-import { useState } from "react";
-import { FacetTypeahead } from "./FacetTypeahead";
+import type { MaskedContact } from "@leadwolf/types";
+import { Combobox, FieldGroup, TpCheckbox, TpChip, TpInput } from "@leadwolf/ui";
+import { useMemo } from "react";
+import styles from "../prospect.module.css";
+import {
+  EMAIL_STATUS_OPTIONS,
+  OUTREACH_STATUS_OPTIONS,
+  type ProspectFilter,
+  SENIORITY_OPTIONS,
+  distinctValues,
+  toggleFacet,
+} from "../types";
 
-const FACETS: { field: FacetKey; label: string }[] = [
-  { field: "title", label: "Job title" },
-  { field: "company", label: "Company" },
-  { field: "location", label: "Location" },
-];
-
-export function FilterRail({ onChange }: { onChange: (filters: FilterClause[]) => void }) {
-  const [byField, setByField] = useState<Record<string, string[]>>({});
-
-  function emit(next: Record<string, string[]>) {
-    setByField(next);
-    const filters: FilterClause[] = Object.entries(next)
-      .filter(([, values]) => values.length > 0)
-      .map(
-        ([field, values]): FilterClause => ({
-          kind: "term",
-          field: field as FacetKey,
-          op: "include",
-          values,
-        }),
-      );
-    onChange(filters);
-  }
-
-  function add(field: FacetKey, value: string) {
-    const current = byField[field] ?? [];
-    if (current.includes(value)) return;
-    emit({ ...byField, [field]: [...current, value] });
-  }
-
-  function remove(field: FacetKey, value: string) {
-    emit({ ...byField, [field]: (byField[field] ?? []).filter((v) => v !== value) });
-  }
-
+export function FilterRail({
+  filter,
+  onChange,
+  contacts,
+}: {
+  filter: ProspectFilter;
+  onChange: (next: ProspectFilter) => void;
+  /** The loaded rows — facet value sets (department, country) are derived from these (05 §5). */
+  contacts: MaskedContact[];
+}) {
+  const departments = useMemo(
+    () => distinctValues(contacts, (c) => c.department).map((v) => ({ value: v, label: v })),
+    [contacts],
+  );
+  const countries = useMemo(
+    () => distinctValues(contacts, (c) => c.locationCountry).map((v) => ({ value: v, label: v })),
+    [contacts],
+  );
   return (
-    <aside style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {FACETS.map((f) => (
-        <FacetTypeahead
-          key={f.field}
-          field={f.field}
-          label={f.label}
-          selected={byField[f.field] ?? []}
-          onAdd={(v) => add(f.field, v)}
-          onRemove={(v) => remove(f.field, v)}
+    <aside className={styles.rail} aria-label="Filters">
+      <div className={styles.railHead}>
+        <h2 className={styles.railTitle}>Filters</h2>
+      </div>
+
+      <FieldGroup label="Search" htmlFor="tp-f-query">
+        <TpInput
+          id="tp-f-query"
+          type="search"
+          placeholder="Title, name, department…"
+          value={filter.query}
+          onChange={(e) => onChange({ ...filter, query: e.target.value })}
         />
-      ))}
+      </FieldGroup>
+
+      <div className={styles.facet}>
+        <span className={styles.facetLabel}>Seniority</span>
+        <div className={styles.chipWrap}>
+          {SENIORITY_OPTIONS.map((o) => (
+            <TpChip
+              key={o.value}
+              active={filter.seniority.includes(o.value)}
+              onClick={() =>
+                onChange({ ...filter, seniority: toggleFacet(filter.seniority, o.value) })
+              }
+            >
+              {o.label}
+            </TpChip>
+          ))}
+        </div>
+      </div>
+
+      <div className={styles.facet}>
+        <span className={styles.facetLabel}>Email status</span>
+        <div className={styles.chipWrap}>
+          {EMAIL_STATUS_OPTIONS.map((o) => (
+            <TpChip
+              key={o.value}
+              active={filter.emailStatus.includes(o.value)}
+              onClick={() =>
+                onChange({ ...filter, emailStatus: toggleFacet(filter.emailStatus, o.value) })
+              }
+            >
+              {o.label}
+            </TpChip>
+          ))}
+        </div>
+      </div>
+
+      <div className={styles.facet}>
+        <span className={styles.facetLabel}>Outreach</span>
+        <div className={styles.chipWrap}>
+          {OUTREACH_STATUS_OPTIONS.map((o) => (
+            <TpChip
+              key={o.value}
+              active={filter.outreachStatus.includes(o.value)}
+              onClick={() =>
+                onChange({ ...filter, outreachStatus: toggleFacet(filter.outreachStatus, o.value) })
+              }
+            >
+              {o.label}
+            </TpChip>
+          ))}
+        </div>
+      </div>
+
+      <div className={styles.facet}>
+        <span className={styles.facetLabel}>Department</span>
+        <Combobox
+          options={departments}
+          value={filter.department}
+          onChange={(v) => onChange({ ...filter, department: v })}
+          placeholder="Any department"
+          searchPlaceholder="Search departments…"
+          emptyText={departments.length === 0 ? "None in view" : "No matches"}
+        />
+      </div>
+
+      <div className={styles.facet}>
+        <span className={styles.facetLabel}>Country</span>
+        <Combobox
+          options={countries}
+          value={filter.country}
+          onChange={(v) => onChange({ ...filter, country: v })}
+          placeholder="Any country"
+          searchPlaceholder="Search countries…"
+          emptyText={countries.length === 0 ? "None in view" : "No matches"}
+        />
+      </div>
+
+      <div className={styles.checkRow}>
+        <TpCheckbox
+          label="Has email"
+          checked={filter.hasEmail}
+          onChange={(e) => onChange({ ...filter, hasEmail: e.target.checked })}
+        />
+        <TpCheckbox
+          label="Has phone"
+          checked={filter.hasPhone}
+          onChange={(e) => onChange({ ...filter, hasPhone: e.target.checked })}
+        />
+      </div>
     </aside>
   );
 }
