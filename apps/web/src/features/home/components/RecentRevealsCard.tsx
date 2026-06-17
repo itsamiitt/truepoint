@@ -1,11 +1,14 @@
-// RecentRevealsCard.tsx — the most recent reveals in this workspace: reveal-type badge, date, and credits
-// consumed. Pure presentation over HomeSummary.recentReveals (extracted from the cockpit shell).
+// RecentRevealsCard.tsx — the most recent reveals in this workspace: a reveal-type badge, relative time, and
+// the credits consumed. Pure presentation over HomeSummary.recentReveals; all four async states render
+// through the shared WidgetCard → StateSwitch. Public slice component.
 "use client";
 
-import { Card, Spinner, StatusBadge, type StatusTone } from "@leadwolf/ui";
+import { StatusBadge, type StatusTone } from "@leadwolf/ui";
+import { Sparkles } from "lucide-react";
 import type { RecentReveal } from "../types";
+import { formatRelative } from "./format";
 import styles from "./HomePage.module.css";
-import { formatDate } from "./format";
+import { WidgetCard } from "./WidgetCard";
 
 const REVEAL_LABEL: Record<RecentReveal["revealType"], string> = {
   email: "Email",
@@ -23,43 +26,40 @@ export function RecentRevealsCard({
   reveals,
   loading,
   error,
+  onRetry,
 }: {
   reveals: RecentReveal[];
   loading: boolean;
   error: string | null;
+  onRetry?: () => void;
 }) {
   return (
-    <Card>
-      <div className={styles.cardHeader}>
-        <h2 className={styles.cardTitle}>Recent reveals</h2>
+    <WidgetCard
+      title="Recent reveals"
+      icon={Sparkles}
+      loading={loading}
+      error={error}
+      empty={reveals.length === 0}
+      onRetry={onRetry}
+      emptyIcon={Sparkles}
+      emptyTitle="No reveals yet"
+      emptyDescription="Reveal a verified email or phone from Prospect and it will show up here."
+    >
+      <div className={styles.list}>
+        {reveals.map((r) => (
+          <div key={r.id} className={styles.row}>
+            <span className={styles.rowMain}>
+              <StatusBadge tone={REVEAL_TONE[r.revealType]}>
+                {REVEAL_LABEL[r.revealType]}
+              </StatusBadge>
+              <span className={styles.rowMeta}>{formatRelative(r.revealedAt)}</span>
+            </span>
+            <span className={styles.mono}>
+              −{r.creditsConsumed} credit{r.creditsConsumed === 1 ? "" : "s"}
+            </span>
+          </div>
+        ))}
       </div>
-      {error ? (
-        <p className={styles.error}>{error}</p>
-      ) : loading ? (
-        <div className={styles.loadingRow}>
-          <Spinner /> Loading recent reveals…
-        </div>
-      ) : reveals.length === 0 ? (
-        <p className={styles.muted}>
-          No reveals yet. Reveal a verified email or phone from Prospect and it will show up here.
-        </p>
-      ) : (
-        <div className={styles.list}>
-          {reveals.map((r) => (
-            <div key={r.id} className={styles.row}>
-              <span className={styles.rowMain}>
-                <StatusBadge tone={REVEAL_TONE[r.revealType]}>
-                  {REVEAL_LABEL[r.revealType]}
-                </StatusBadge>
-                <span className={styles.rowMeta}>{formatDate(r.revealedAt)}</span>
-              </span>
-              <span className={styles.mono}>
-                −{r.creditsConsumed} credit{r.creditsConsumed === 1 ? "" : "s"}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
+    </WidgetCard>
   );
 }
