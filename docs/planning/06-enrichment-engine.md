@@ -140,7 +140,7 @@ provider cost/cache for the enrichment workers, not user-facing billing
 - **Idempotency:** enrichment jobs carry an idempotency key; `provider_calls.request_hash` unique +
   Redis in-flight lock prevent duplicate **paid** calls under retries/concurrency.
 - **Cost control:** per-provider + global **daily cost budgets** with alerts; the breaker can be tripped
-  by budget exhaustion. All spend is observable (cost-per-reveal dashboard, [§9](#10-metrics-the-economics-dashboard)).
+  by budget exhaustion. All spend is observable (cost-per-reveal dashboard, [§10](#10-metrics-the-economics-dashboard)).
 
 ## 7. Lead scoring & intent signals
 
@@ -195,7 +195,7 @@ sales_navigator` records the raw payload as provenance.
   (e.g. **ZeroBounce / NeverBounce**), *separate from the enrichment providers that supply the address* — so a
   provider never grades its own data and the charge-only-for-`valid` + credit-back guarantee
   ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)) rests on an independent signal
-  (resolves §11 Q1; data-side research
+  (resolves §12 Q1; data-side research
   [../research/sales-intelligence-data-research.md](../research/sales-intelligence-data-research.md) §3).
 - **Periodic re-verification** (post-MVP): scheduled jobs re-check fields older than a freshness SLA;
   `last_verified_at` drives ordering. Per-field **freshness SLAs**, `freshness_status`, the decay model,
@@ -233,7 +233,11 @@ A per-record **data-quality subsystem** (flagged as a [03 §14](./03-database-de
   re-resolution); `match_links.is_duplicate_of` links merged survivors, low-confidence merges route to a
   **manual review queue**, and `source_records` keeps every merge **reversible** (un-merge). Batch ER runs on
   Spark/Athena over the S3/Iceberg lake. The **overlay** still dedups within a workspace on its blind-index
-  uniques at import ([03 §11](./03-database-design.md#11-integrity-rules)).
+  uniques at import ([03 §11](./03-database-design.md#11-integrity-rules)). **Bulk CSV rows resolve through
+  this same global ER** — deterministic keys + blocking/MinHash-LSH + Splink — reached behind a **MatchPort**
+  ([§11](#11-bulk-csv-enrichment)), **internal-first** (overlay → master graph before any provider), with
+  low-confidence matches routed to the same **manual-review** queue ([ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md),
+  [30 §5](./30-bulk-enrichment-pipeline.md)).
 - **Surfacing:** customers see a **Data Health** view in Reports + a per-record quality badge
   ([11 §4.5](./11-information-architecture.md)); staff get platform-wide DQ ops + DB management in the
   admin console ([13](./13-platform-admin.md)).
@@ -249,7 +253,47 @@ A per-record **data-quality subsystem** (flagged as a [03 §14](./03-database-de
 | Coverage (% records with verified email/phone) | Product value |
 | Daily provider spend vs budget | Cost control / breaker triggers |
 
-## 11. Open questions
+## 11. Bulk CSV enrichment
+
+Enterprise customers upload a sparse CSV and get a matched + enriched + verified file back, at list scale.
+The pipeline is **match-first**: every row is resolved against **our own data before any provider is paid**,
+so the bulk path is an orchestration *over* the engine above — it reuses the global ER (§9) and the §3/§4
+provider waterfall rather than introducing a second one. The full design — schemas, ports, queue topology,
+and the per-stage state machine — lives in [30](./30-bulk-enrichment-pipeline.md); three decisions pin it
+down: [ADR-0036](./decisions/ADR-0036-bulk-csv-enrichment-pipeline.md) (pipeline),
+[ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md) (match-first resolution +
+candidate index), and [ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md)
+(billing forecast + quota). Built in **M17**.
+
+- **Upload → estimate → confirm.** The CSV is staged and column-mapped, then a **forecast** projects expected
+  matches, provider residual, and credit cost ([ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md));
+  the job sits in `awaiting_confirmation` until the customer accepts — no spend before confirm.
+- **Chunked fan-out.** On confirm, the job is split into `enrichment_job_chunks` and fanned out across
+  workers ([01 §4](./01-tech-stack.md#4-background-workers)) so a multi-million-row file processes in parallel
+  with bounded blast radius and resumable progress.
+- **Match-first per row** ([ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md)).
+  Each `enrichment_job_rows` row resolves **internal-first** through a **MatchPort**: **overlay → master-graph
+  seam** (the global ER of §9 — deterministic keys + blocking/MinHash-LSH + Splink) and only the **residual**
+  (unmatched rows) falls through to the §3/§4 **provider waterfall** — run here in a **bulk/parallel-cheap
+  mode** for low-cost providers (§4 already permits a parallel-cheap mode), not the per-field sequential
+  path. Each row records its `match_method`
+  (`deterministic_email`/`deterministic_linkedin`/`deterministic_phone`/`deterministic_domain`/
+  `fuzzy_name_company`/`provider`/`none`) and `match_outcome`
+  (`matched_internal`/`matched_provider`/`unmatched`/`suppressed`/`error`); low-confidence matches route to
+  the same **manual-review** queue (§9).
+- **Verify + charge-per-valid.** Filled fields run the §9 independent verifier; consistent with the
+  charge-only-for-`valid` rule ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)),
+  the customer is billed **only for rows that verify `valid`** — `invalid`/`catch_all`/`unknown`/unmatched →
+  **0 credits**, `risky` → charged-but-flagged.
+- **Progress → download.** The job advances through `enrichment_job_status`
+  (`queued`/`estimating`/`awaiting_confirmation`/`running`/`paused`/`completed`/`failed`/`cancelled`) with
+  live per-chunk progress; on completion the customer downloads the enriched file (matched values + status
+  columns), and per-row provenance still lands as `source_records`/`source_imports` (§2, §4).
+- **New tables.** `enrichment_jobs` (one per upload), `enrichment_job_chunks` (fan-out unit), and
+  `enrichment_job_rows` (per-row match/enrich/verify state) — defined in
+  [30](./30-bulk-enrichment-pipeline.md) and [03 §14](./03-database-design.md#14-planned-schema-additions-app-surface--platform).
+
+## 12. Open questions
 
 1. ~~Add a dedicated email-verification provider (e.g. ZeroBounce/NeverBounce) alongside the enrichment
    providers?~~ **Resolved — yes** (§9): a **provider-independent** verifier backs the charge-only-for-`valid`
