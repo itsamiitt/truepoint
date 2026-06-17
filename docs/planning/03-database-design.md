@@ -28,6 +28,7 @@
 - **Global master graph (Layer 0 — system-owned, [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)):** `master_persons`, `master_companies`, `master_emails`, `master_phones`, `master_employment`, `source_records`, `match_links`.
 - **Per-workspace overlay (Layer 1):** `accounts`, `contacts`, `contact_reveals`, `sales_nav_links`, `source_imports`,
   `lists`, `list_members`, `saved_searches`, `api_keys`.
+- **Bulk CSV enrichment (M17 — [30](./30-bulk-enrichment-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-csv-enrichment-pipeline.md)):** `enrichment_jobs`, `enrichment_job_chunks`, `enrichment_job_rows`.
 - **Intelligence:** `scores`, `intent_signals`.
 - **Activity & outreach:** `activities`, `outreach_sequences`, `outreach_steps`, `outreach_log`,
   `audit_log`.
@@ -564,6 +565,109 @@ CREATE INDEX idx_contacts_master ON contacts (master_person_id) WHERE master_per
 
 **`lists` / `list_members` / `saved_searches`**: workspace-scoped (static + dynamic lists, saved filters). **`api_keys`**: tenant-scoped, hashed + scoped (public API).
 
+### 5.3 Bulk CSV enrichment (M17 — [30](./30-bulk-enrichment-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-csv-enrichment-pipeline.md))
+
+The **bulk enrichment pipeline** ([30](./30-bulk-enrichment-pipeline.md)) lets a workspace upload a sparse CSV,
+**match it against our own data first** (Layer-0 master graph + the workspace overlay) and only fall through to
+paid providers on a miss ([ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md)),
+then verify/enrich and download — at enterprise scale (millions of rows per job). Three tables back it: a
+workspace-scoped **control** table (`enrichment_jobs`), a **chunk** table for parallel worker fan-out
+(`enrichment_job_chunks`), and a **high-volume per-row** ledger (`enrichment_job_rows`) that is range-partitioned
+by month like `activities`/`provider_calls` (§12). Estimation, the `awaiting_confirmation` credit gate, and
+match-first resolution are specified in [30](./30-bulk-enrichment-pipeline.md) /
+[ADR-0038](./decisions/ADR-0038-bulk-enrichment-credit-estimation-and-confirmation-gate.md); per-row charging
+follows the same charge-for-verified-data rule as reveals ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).
+
+New enum types (closed sets — §2). `email_status` is **reused** from the master/overlay channel records
+(§5.1/§5.2), not redefined:
+
+```sql
+CREATE TYPE enrichment_job_status AS ENUM
+  ('queued','estimating','awaiting_confirmation','running','paused','completed','failed','cancelled');
+CREATE TYPE match_method AS ENUM
+  ('deterministic_email','deterministic_linkedin','deterministic_phone','deterministic_domain',
+   'fuzzy_name_company','provider','none');
+CREATE TYPE match_outcome AS ENUM
+  ('matched_internal','matched_provider','unmatched','suppressed','error');
+```
+
+```sql
+-- Control table: one row per uploaded CSV job. NOT partitioned; RLS workspace-scoped.
+CREATE TABLE enrichment_jobs (
+  id                    uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id             uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  workspace_id          uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  created_by_user_id    uuid REFERENCES users(id),
+  source_file           varchar(500) NOT NULL,             -- S3 key of the uploaded CSV
+  source_name           varchar(255),                      -- original filename (display)
+  status                enrichment_job_status NOT NULL DEFAULT 'queued',
+  total_rows            int NOT NULL DEFAULT 0,
+  processed_rows        int NOT NULL DEFAULT 0,
+  matched_rows          int NOT NULL DEFAULT 0,
+  enriched_rows         int NOT NULL DEFAULT 0,
+  charged_rows          int NOT NULL DEFAULT 0,
+  credit_estimate_micros bigint,                            -- estimate shown at the confirmation gate
+  credit_spent_micros   bigint NOT NULL DEFAULT 0,
+  column_mapping        jsonb NOT NULL DEFAULT '{}',        -- CSV header → canonical field mapping
+  options               jsonb NOT NULL DEFAULT '{}',        -- match/verify/enrich flags, provider fallback policy
+  idempotency_key       varchar(255),                      -- client Idempotency-Key (dedup re-submits)
+  created_at            timestamptz NOT NULL DEFAULT now(),
+  started_at            timestamptz,
+  completed_at          timestamptz,
+  failed_reason         text
+);
+CREATE INDEX idx_enrichment_jobs_ws_status ON enrichment_jobs (workspace_id, status);
+CREATE UNIQUE INDEX uniq_enrichment_jobs_ws_idem
+  ON enrichment_jobs (workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+
+-- Chunk table: a job is split into fixed-size row ranges for parallel worker fan-out. RLS via parent job.
+CREATE TABLE enrichment_job_chunks (
+  id             uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  job_id         uuid NOT NULL REFERENCES enrichment_jobs(id) ON DELETE CASCADE,
+  chunk_index    int NOT NULL,                              -- 0-based ordinal within the job
+  row_start      int NOT NULL,                              -- inclusive row offset
+  row_end        int NOT NULL,                              -- exclusive row offset
+  status         enrichment_job_status NOT NULL DEFAULT 'queued',
+  attempts       int NOT NULL DEFAULT 0,                    -- worker retry count
+  processed_rows int NOT NULL DEFAULT 0,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  completed_at   timestamptz,
+  UNIQUE (job_id, chunk_index)
+);
+CREATE INDEX idx_enrichment_job_chunks_job ON enrichment_job_chunks (job_id, chunk_index);
+
+-- Per-row ledger: input + match/enrich outcome per CSV row. HIGH VOLUME → range-partitioned by month (§12);
+-- RLS workspace-scoped (tenant_id/workspace_id denormalized for RLS + partition pruning).
+CREATE TABLE enrichment_job_rows (
+  id                      uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id               uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  workspace_id            uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  job_id                  uuid NOT NULL REFERENCES enrichment_jobs(id) ON DELETE CASCADE,
+  chunk_id                uuid NOT NULL REFERENCES enrichment_job_chunks(id) ON DELETE CASCADE,
+  row_index               int NOT NULL,                     -- 0-based row ordinal within the job
+  input                   jsonb NOT NULL,                   -- raw parsed CSV row (mapped fields)
+  match_method            match_method NOT NULL DEFAULT 'none',
+  match_outcome           match_outcome NOT NULL DEFAULT 'unmatched',
+  matched_contact_id      uuid REFERENCES contacts(id) ON DELETE SET NULL,   -- overlay hit (Layer 1)
+  matched_master_person_id uuid,                            -- Layer-0 hit (system-owned; no overlay FK, §9)
+  match_confidence        numeric(4,3) CHECK (match_confidence IS NULL OR match_confidence BETWEEN 0 AND 1),
+  enriched_fields         jsonb NOT NULL DEFAULT '{}',      -- fields filled/verified for this row
+  provider_source         varchar(50),                      -- provider used on a Layer-0/overlay miss (null = internal)
+  cost_micros             bigint NOT NULL DEFAULT 0,
+  charged                 boolean NOT NULL DEFAULT false,   -- charge-for-verified-data (ADR-0013)
+  email_status            varchar(20)                       -- reuses the shared email_status enum vocabulary
+                            CHECK (email_status IS NULL OR email_status IN
+                              ('unverified','valid','risky','invalid','catch_all','unknown')),
+  created_at              timestamptz NOT NULL DEFAULT now()  -- range-partitioned by month (§12)
+);
+CREATE INDEX idx_enrichment_job_rows_job ON enrichment_job_rows (job_id);
+CREATE INDEX idx_enrichment_job_rows_ws_outcome ON enrichment_job_rows (workspace_id, match_outcome);
+```
+
+> `matched_master_person_id` references the **system-owned** Layer-0 `master_persons` graph and therefore carries
+> **no overlay FK** (the master tables are not workspace-RLS-scoped, §9) — it is a soft reference resolved by the
+> match-first worker, mirroring how the overlay otherwise reaches Layer 0 only via search + reveal.
+
 ## 6. Intelligence layer ([ADR-0008](./decisions/ADR-0008-lead-scoring-model.md))
 
 - **`scores`** (versioned, append-per-rescore): `id · tenant_id · workspace_id · contact_id · icp_fit · intent_score · engagement_score · composite_score (all 0–100) · score_breakdown jsonb · scored_at`. A trigger syncs `contacts.priority_score = composite_score`.
@@ -587,6 +691,8 @@ CREATE INDEX idx_contacts_master ON contacts (master_person_id) WHERE master_per
 
 RLS on every workspace-scoped table; policy `USING (workspace_id = current_setting('app.current_workspace_id')::uuid)`. Tenant-scoped tables (tenants/api_keys/purchases/audit_log tenant rows, the membership table `tenant_members`, plus the auth-origin tenant tables `tenant_domains`/`invitations`/`tenant_auth_policies`/`tenant_sso_configs`/`scim_tokens`/`oauth_app_clients`) use `app.current_tenant_id`; `workspace_auth_policies` is workspace-scoped. **`users` is the GLOBAL identity** ([ADR-0019](./decisions/ADR-0019-global-identity-and-tenant-membership.md)) — **not** tenant-RLS-scoped; it and the **user-scoped auth tables** (`user_sessions`/`trusted_devices`/`user_mfa_methods`/`user_mfa_recovery_codes`/`webauthn_credentials`/`auth_email_tokens`) are owned by the auth service (`apps/auth`) and accessed by `user_id`, before any tenant/workspace is selected. The API sets `SET LOCAL app.current_tenant_id` + `app.current_workspace_id` per request after auth; queries run as a non-`BYPASSRLS` role; **RDS Proxy** (transaction pooling) requires the GUC be set within the transaction and reset on checkout.
 
+**Bulk enrichment RLS** ([30](./30-bulk-enrichment-pipeline.md), §5.3). `enrichment_jobs` and `enrichment_job_rows` are workspace-RLS-scoped on their own denormalized `workspace_id` (the standard `app.current_workspace_id` predicate — **H9**), so partition pruning and RLS share the same key. `enrichment_job_chunks` carries no `workspace_id`; it is isolated **via its parent `job_id`** (a join/`EXISTS` predicate against the RLS-scoped `enrichment_jobs`), the same indirection pattern used for child rows reached through their owning workspace-scoped parent. `enrichment_job_rows.matched_master_person_id` is a **soft** reference into the system-owned Layer-0 graph (no FK, §5.3) — the master tables remain non-workspace-RLS-scoped.
+
 **Intra-workspace team visibility** (departments — [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md), **H18**). Departments are **not** a new RLS scope — workspace RLS still isolates by `app.current_workspace_id`. Records with `visibility IN ('team','owner')` are **further** restricted *within* the workspace by an app-layer authz filter (and an optional supplementary RLS predicate keyed on `assigned_team_id`/`owner_user_id` against the request's team context), used by Finance/HR/Compliance ([25 §4](./25-departments-teams-workspaces.md)). Default `visibility='workspace'` is readable by the whole workspace; `teams`/`team_members` themselves are workspace-RLS-scoped.
 
 **Layer-0 master graph is system-owned** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)). The `master_*` / `source_records` / `match_links` tables are **not** workspace-RLS-scoped — no customer-facing query reads them directly. Only the **ER pipeline**, **search-sync**, and the **reveal** service touch them (under their own least-privilege roles); customers reach the universe solely through **masked global search** (no PII leaves the index) and the **paid reveal** path, which decrypts a `master_emails`/`master_phones` channel only inside the reveal transaction (§10, [09 §3](./09-api-design.md)).
@@ -609,6 +715,7 @@ Convention: keep business logic in the app; use triggers only for invariants tha
 - Unique `(workspace_id, email_blind_index)` / `(workspace_id, linkedin_public_id)` / `(workspace_id, sales_nav_lead_id)` — per-workspace overlay dedup.
 - **Master graph (global) dedup keys** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)): unique `master_companies.primary_domain` / `master_companies.linkedin_company_id` / `master_persons.linkedin_public_id` / `master_emails.email_blind_index` / `master_phones.phone_blind_index`; unique `source_records.content_hash` — idempotent ingest.
 - Unique `purchases.stripe_event_id` — idempotent top-ups.
+- **Bulk enrichment** (§5.3, [30](./30-bulk-enrichment-pipeline.md)): unique `enrichment_jobs (workspace_id, idempotency_key)` where not null — job-submit idempotency (the app also sends an `Idempotency-Key`); unique `enrichment_job_chunks (job_id, chunk_index)` — one chunk per ordinal; `enrichment_job_rows.match_confidence` ∈ [0,1] (CHECK); `enrichment_job_rows.email_status` reuses the shared `email_status` vocabulary (CHECK); per-row charging records `charged`/`cost_micros` under charge-for-verified-data ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).
 - One default workspace per tenant (partial unique).
 - RLS on all workspace-scoped tables.
 
@@ -627,7 +734,8 @@ lives in the search index (below).
 
 **Partitioning.** Range-partition by month: `activities`, `audit_log`, `contact_reveals`, `intent_signals`,
 `scores`, `source_imports`, `outreach_log`, `provider_calls`, `source_records` (the master evidence
-log), **and the new event/AI/automation logs `outbox`, `ai_requests`, `automation_runs`** (§14).
+log), **the bulk-enrichment per-row ledger `enrichment_job_rows`** (§5.3, high-volume — millions of rows per
+job), **and the new event/AI/automation logs `outbox`, `ai_requests`, `automation_runs`** (§14).
 
 **Master-graph scale (billions, [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** The
 golden tables outgrow a single Aurora writer, so **shard horizontally with Citus** by a hash of the entity /
@@ -718,6 +826,14 @@ conditions, and exports.
 `credit_ledger` (M11 — append-only entries per grant/spend/credit-back/adjustment; `balance ==
 SUM(delta)` invariant; the counter becomes a derived cache) and `credit_leases` (M12 —
 workspace/team-level pre-allocated blocks relieving the tenant-counter hot row).
+
+**Bulk CSV enrichment** (M17 — [30](./30-bulk-enrichment-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-csv-enrichment-pipeline.md),
+[ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md),
+[ADR-0038](./decisions/ADR-0038-bulk-enrichment-credit-estimation-and-confirmation-gate.md)): `enrichment_jobs`
+(control), `enrichment_job_chunks` (worker fan-out), `enrichment_job_rows` (per-row ledger, month-partitioned per
+§12) — **now defined in §5.3** (not forthcoming). New enums: `enrichment_job_status`, `match_method`,
+`match_outcome`; reuses the existing `email_status` enum. Match-first resolution prefers the Layer-0 master graph +
+overlay before paid providers ([06 §11](./06-enrichment-engine.md), [ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md)).
 
 **Inbox ingestion** (design gate before the M9 build — [10 M9](./10-roadmap.md)): `mailbox_connections`
 (per-user mailbox OAuth state + sync cursors for reply capture into `activities`/Inbox); build-vs-vendor
