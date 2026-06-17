@@ -87,7 +87,9 @@ search · import · start sequence.
 One surface = **Search + Contacts + Accounts + Lists**.
 - **Left rail:** filter facets (title, seniority, department, account, headcount, industry, location,
   has-email/phone, **lead score**, `outreach_status`, list membership) + **Saved Views / Lists**
-  (static & dynamic) selector.
+  (static & dynamic) selector. High-cardinality facets are **search-box typeahead** suggesting real indexed
+  values, with **abbreviation/synonym expansion** (type `CEO` → "Chief Executive Officer") — spec in
+  [24 §3–§4](./24-advanced-search-exploration-ux.md), architecture [ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md).
 - **Center grid:** virtualized; **segmented toggle Contacts ⇄ Accounts**; masked email/phone with
   **status + score glyphs**; column config + density toggle. Backed by `SearchPort` — **OpenSearch**
   (global master graph) + **Typesense** (overlay), masked ([ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md)

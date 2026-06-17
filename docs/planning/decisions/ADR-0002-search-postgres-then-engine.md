@@ -5,6 +5,7 @@
 - **Context doc:** [01-tech-stack.md](../01-tech-stack.md), [03-database-design.md](../03-database-design.md)
 - **Amendment note:** The original decision was *Postgres-native search first, dedicated engine later*. With the AWS-native stack decision ([ADR-0010](./ADR-0010-aws-native-self-hosted-stack.md)) and the 100M+ target, the team adopts **self-hosted Typesense from day one**. The `SearchPort` abstraction is retained; the "start on Postgres" timing is dropped. Original reasoning kept below as history.
 - **Amended by:** [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md) (2026-06-09) — the **global master-graph** search index (billions of rows, the shared universe) moves to **OpenSearch** behind the same `SearchPort`; **Typesense** is retained for the smaller **per-workspace overlay** search + dev. The day-one search decision stands for the overlay; the billions-row global universe exceeds Typesense's envelope.
+- **Amended by:** [ADR-0035](./ADR-0035-search-query-and-filter-architecture.md) (2026-06-17) — extends the `SearchPort` contract with **`suggest()` (typeahead from indexed values)** and **`facetCounts()`**, and adds the **query-semantics layer** (query-time `synonym_graph` + a canonical job-title taxonomy for abbreviation expansion, e.g. CEO→Chief Executive Officer). Engine choice unchanged.
 
 ## Context
 
