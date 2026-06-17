@@ -1,6 +1,6 @@
-// Settings ▸ Workspace ▸ Members — placeholder until the S2 (Workspace settings) unit lands.
-import { SettingsPlaceholder } from "@/features/settings-shell";
+// Settings ▸ Workspace ▸ Members — mounts the members & roles panel (settings-workspace slice).
+import { MembersPanel } from "@/features/settings-workspace";
 
 export default function MembersSettingsRoute() {
-  return <SettingsPlaceholder title="Members" />;
+  return <MembersPanel />;
 }

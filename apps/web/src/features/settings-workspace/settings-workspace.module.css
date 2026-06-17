@@ -1,0 +1,43 @@
+/* settings-workspace.module.css — layout for the Workspace settings panels (general + members). Color comes
+ * from --tp-* tokens + the @leadwolf/ui primitives; layout/structure only. */
+
+.formActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.note {
+  font-size: 13px;
+  color: var(--tp-ink-4);
+}
+
+.inviteRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.inviteEmail {
+  flex: 1;
+}
+.inviteRole {
+  flex: 0 0 150px;
+}
+
+.memberCell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.memberEmail {
+  color: var(--tp-ink);
+}
+.memberName {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+.roleSelect {
+  flex: 0 0 140px;
+  max-width: 140px;
+}

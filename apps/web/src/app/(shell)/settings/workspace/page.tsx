@@ -1,6 +1,6 @@
-// Settings ▸ Workspace ▸ General — placeholder until the S2 (Workspace settings) unit lands.
-import { SettingsPlaceholder } from "@/features/settings-shell";
+// Settings ▸ Workspace ▸ General — mounts the Workspace general-settings panel (settings-workspace slice).
+import { WorkspaceGeneralPanel } from "@/features/settings-workspace";
 
 export default function WorkspaceSettingsRoute() {
-  return <SettingsPlaceholder title="Workspace" />;
+  return <WorkspaceGeneralPanel />;
 }
