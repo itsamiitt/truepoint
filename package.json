@@ -14,7 +14,9 @@
     "lint:boundaries": "depcruise apps packages",
     "arch:map": "node .claude/hooks/gen-architecture-map.mjs",
     "db:migrate": "bun run --filter @leadwolf/db migrate",
-    "db:seed": "bun run --filter @leadwolf/db seed"
+    "db:seed": "bun run --filter @leadwolf/db seed",
+    "dev:admin": "turbo run dev --filter @leadwolf/admin",
+    "build:admin": "turbo run build --filter @leadwolf/admin"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

@@ -46,11 +46,13 @@
     "settings-tenant",
     "settings-user",
     "settings-workspace",
+    "system-health",
     "templates",
+    "tenants",
     "workspaces"
   ],
-  "fileCount": 490,
-  "fileSetHash": "sha256:cbbc809cdfd2b23ccfa86891bb59aa552975ef4d07593a7c297045f503bbe043",
+  "fileCount": 523,
+  "fileSetHash": "sha256:e95b792804b8feb701977f5479d263f64b0dccd5634622936ab9978f2d319533",
   "features": {
     "activity": {
       "web": [],
@@ -573,6 +575,42 @@
       "workers": [],
       "integrations": []
     },
+    "system-health": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/system-health/api.ts",
+        "apps/admin/src/features/system-health/components/SystemHealthPage.tsx",
+        "apps/admin/src/features/system-health/format.test.ts",
+        "apps/admin/src/features/system-health/format.ts",
+        "apps/admin/src/features/system-health/hooks/useSystemHealth.ts",
+        "apps/admin/src/features/system-health/index.ts",
+        "apps/admin/src/features/system-health/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "tenants": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/tenants/api.ts",
+        "apps/admin/src/features/tenants/components/TenantDetailPage.tsx",
+        "apps/admin/src/features/tenants/components/TenantsPage.tsx",
+        "apps/admin/src/features/tenants/format.test.ts",
+        "apps/admin/src/features/tenants/format.ts",
+        "apps/admin/src/features/tenants/hooks/useTenantDetail.ts",
+        "apps/admin/src/features/tenants/hooks/useTenants.ts",
+        "apps/admin/src/features/tenants/index.ts",
+        "apps/admin/src/features/tenants/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "workspaces": {
       "web": [],
       "admin": [],
@@ -589,6 +627,27 @@
     }
   },
   "shared": {
+    "apps/admin/app": [
+      "apps/admin/src/app/(shell)/layout.tsx",
+      "apps/admin/src/app/(shell)/system-health/page.tsx",
+      "apps/admin/src/app/(shell)/tenants/[id]/page.tsx",
+      "apps/admin/src/app/(shell)/tenants/page.tsx",
+      "apps/admin/src/app/callback/page.tsx",
+      "apps/admin/src/app/layout.tsx",
+      "apps/admin/src/app/page.tsx"
+    ],
+    "apps/admin/components": [
+      "apps/admin/src/components/shell/AdminShell.tsx",
+      "apps/admin/src/components/shell/Sidebar.tsx",
+      "apps/admin/src/components/shell/TopBar.tsx",
+      "apps/admin/src/components/shell/navConfig.ts"
+    ],
+    "apps/admin/lib": [
+      "apps/admin/src/lib/adminGate.ts",
+      "apps/admin/src/lib/authClient.ts",
+      "apps/admin/src/lib/pkce.ts",
+      "apps/admin/src/lib/publicConfig.ts"
+    ],
     "apps/api": [
       "apps/api/src/app.ts",
       "apps/api/src/server.ts"
@@ -782,6 +841,7 @@
       "packages/db/src/client.ts",
       "packages/db/src/index.ts",
       "packages/db/src/migrate.ts",
+      "packages/db/src/repositories/platformAdminReads.ts",
       "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/auth.ts",
       "packages/db/src/schema/billing.ts",
@@ -866,6 +926,7 @@
     ]
   },
   "unassigned": [
+    "apps/admin/next.config.mjs",
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
@@ -877,7 +938,9 @@
     "undeclared domain 'settings-shell' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-tenant' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-user' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'settings-workspace' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder"
+    "undeclared domain 'settings-workspace' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'system-health' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'tenants' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder"
   ],
   "dependencies": {
     "types": [],

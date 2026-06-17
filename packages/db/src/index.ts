@@ -146,3 +146,14 @@ export {
   type ContactMatchKeys,
   type ContactMatchCandidate,
 } from "./repositories/enrichmentJobRepository.ts";
+// Platform super-admin read surface (ADR-0032) — bounded cross-tenant reads, run within withPlatformTx.
+export {
+  platformAdminRepository,
+  PLATFORM_READ_LIMIT,
+  type PlatformTenantRow,
+  type PlatformTenantDetail,
+  type PlatformWorkspaceRow,
+  type PlatformWorkspaceListRow,
+  type PlatformMemberRow,
+  type PlatformUserRow,
+} from "./repositories/platformAdminReads.ts";
