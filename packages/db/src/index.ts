@@ -132,3 +132,17 @@ export {
   type LogWithSequence,
   type OutreachLogRow,
 } from "./repositories/outreachLogRepository.ts";
+export {
+  enrichmentJobRepository,
+  type JobCreateValues,
+  type JobRecord,
+  type JobStatusUpdate,
+  type JobProgressDelta,
+  type ChunkCreateValues,
+  type ChunkUpdate,
+  type ChunkRecord,
+  type JobRowInsert,
+  type JobRowRecord,
+  type ContactMatchKeys,
+  type ContactMatchCandidate,
+} from "./repositories/enrichmentJobRepository.ts";
