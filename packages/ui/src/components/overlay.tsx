@@ -51,6 +51,7 @@ export function Dialog({
           className="tp-ui-dialog-card"
           role="document"
           onClick={(e) => e.stopPropagation()}
+          style={maxWidth != null ? { maxWidth } : undefined}
         >
           {title != null ? (
             <div className="tp-ui-dialog-head">
