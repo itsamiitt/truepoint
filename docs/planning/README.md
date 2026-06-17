@@ -35,7 +35,7 @@ accounts, on an **AWS-native self-hosted** stack.
 | 21 | [Data Acquisition & Sourcing](./21-data-acquisition-sourcing.md) | Source channels, ingestion cadence, provider vetting/DPA, lawful-basis lineage, co-op. |
 | 22 | [Data Quality, Freshness & Lifecycle](./22-data-quality-freshness-lifecycle.md) | `data_quality_score`, freshness SLAs, re-verification, coverage/ER targets, retention. |
 | 23 | [AI & Intelligence Layer](./23-ai-intelligence-layer.md) | Claude behind `AiPort`: NL search, copilot, drafting, research agent, RAG, guardrails. |
-| 24 | [Advanced Search & Exploration UX](./24-advanced-search-exploration-ux.md) | Faceted filters, saved views, smart segments, instant masked search, result actions. |
+| 24 | [Advanced Search & Exploration UX](./24-advanced-search-exploration-ux.md) | Search-box facets with typeahead from indexed values, abbreviation/synonym expansion (CEO→Chief Executive Officer), faceted filters, saved views, smart segments, instant masked search, result actions. |
 | 25 | [Departments, Teams & Workspaces](./25-departments-teams-workspaces.md) | Teams-in-workspace, personas, record-visibility, per-team budgets, dashboards → departments/. |
 | 26 | [Integrations & Data Delivery](./26-integrations-data-delivery.md) | CRM sync + native apps, webhooks, reverse-ETL, Chrome extension, SMS, export center. |
 | 27 | [Workflow Automation Engine](./27-workflow-automation-engine.md) | Trigger→condition→action plays, recipe library, guardrails, `automation_runs`. |
@@ -106,7 +106,10 @@ Splink** ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)) ·
 **auth-event audit tenancy**
 ([ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md)) ·
 **bootstrap platform super-admin** *(interim)*
-([ADR-0034](./decisions/ADR-0034-bootstrap-platform-admin.md)).
+([ADR-0034](./decisions/ADR-0034-bootstrap-platform-admin.md)) ·
+**search query semantics + autocomplete + filter architecture** (typeahead from indexed values,
+synonym/abbreviation expansion, ClickHouse facet counts)
+([ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md)).
 
 See [00-overview.md](./00-overview.md#7-decision-log) for the full decision log with rationale links,
 and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md),
@@ -131,5 +134,6 @@ and the [ADR index](./decisions/) for [ADR-0006](./decisions/ADR-0006-per-worksp
 [ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md),
 [ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md),
 [ADR-0028](./decisions/ADR-0028-record-customization-layer.md),
-[ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md), and
-[ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md).
+[ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md),
+[ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md), and
+[ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md).

@@ -6,6 +6,7 @@
 - **Reopens / amends:** [ADR-0006](./ADR-0006-per-workspace-multitenant-model.md) (the *no-global-golden-record* clause; the per-workspace **overlay** stands)
 - **Revives (as a deliberate hybrid):** [ADR-0005](./ADR-0005-multi-tenancy-and-global-contact-db.md) (global contact DB), [ADR-0003](./ADR-0003-three-layer-data-model.md) (raw/provenance/golden layering)
 - **Amends:** [ADR-0002](./ADR-0002-search-postgres-then-engine.md) (global search index → OpenSearch), [ADR-0015](./ADR-0015-entity-resolution-dedup-engine.md) (entity resolution now **global/cross-source**)
+- **Amended by:** [ADR-0035](./ADR-0035-search-query-and-filter-architecture.md) (2026-06-17) — specifies *how* the global OpenSearch index serves **typeahead suggestions**, **facet counts** (ClickHouse `LowCardinality` + materialized views), and **abbreviation/synonym matching** (CEO→Chief Executive Officer) via a query-time `synonym_graph` + a canonical job-title taxonomy. Topology (OpenSearch + Typesense + ClickHouse) unchanged.
 
 ## Context
 

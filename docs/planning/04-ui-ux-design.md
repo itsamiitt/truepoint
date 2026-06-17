@@ -145,9 +145,11 @@ exposes tenant-level billing for the **tenant owner**.
 ## 5. Key screen — Search & Results (specified first)
 
 The most-used screen and the first we fully design/build. The **full advanced-exploration spec** — facet
-interactions (multi-select, AND/OR, preset bundles, recent searches), **intent/technographic facets**,
-instant search, **saved views**, and **smart segments** — is
-[24](./24-advanced-search-exploration-ux.md); **department personas** set default filters/views per team
+interactions (multi-select, AND/OR, preset bundles, recent searches), **search-box typeahead from indexed
+values** and **abbreviation/synonym expansion** (type `CEO`, match "Chief Executive Officer"),
+**intent/technographic facets**, instant search, **saved views**, and **smart segments** — is
+[24](./24-advanced-search-exploration-ux.md) (query/filter architecture: [ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md));
+**department personas** set default filters/views per team
 ([25 §3](./25-departments-teams-workspaces.md)).
 
 ```
