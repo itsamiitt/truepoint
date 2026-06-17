@@ -101,6 +101,7 @@ export function useEnrollment(sequenceId: string, onChanged: () => void) {
     entries,
     loading,
     error,
+    reload,
     enroll,
     enrolling,
     enrollError,

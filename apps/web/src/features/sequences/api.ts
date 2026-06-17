@@ -2,20 +2,29 @@
 // plus the masked-contacts list that feeds the enroll picker. Reads the in-memory access token via
 // fetchWithAuth (ADR-0016); never touches the DB or the auth origin directly. The slice's only seam to
 // the backend. Errors carry the RFC-9457 problem `code` so enroll/send can branch on the failure mode.
+//
+// The redesign adds: pause/resume on a sequence, a templates list (GET /templates), and the AI draft seam
+// (GET /outreach/drafts). The templates + drafts backends are post-MVP (M9) — when they 404/501 the helpers
+// return an empty list with `available: false` so the panels render a "connect …" EmptyState instead of an
+// error. The existing GET/POST /outreach/sequences contracts are unchanged.
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type { MaskedContact } from "@leadwolf/types";
 import type {
+  DraftSummary,
   EnrollResult,
   EnrollmentEntry,
   NewSequenceInput,
   NewStepInput,
   SendResult,
+  SequenceStatus,
   SequenceSummary,
+  TemplateSummary,
 } from "./types";
 
 const OUTREACH_BASE = `${API_BASE}/api/v1/outreach`;
+const TEMPLATES_BASE = `${API_BASE}/api/v1/templates`;
 
 /**
  * A backend error mapped to its RFC-9457 Problem Details (09 §6). Carries the stable machine `code`
@@ -45,6 +54,17 @@ async function toApiError(res: Response, fallback: string): Promise<ApiError> {
   return new ApiError(message, res.status, body?.code ?? "error");
 }
 
+/** A status that means the endpoint isn't wired yet (404 not_found / 501 not_implemented). */
+function isUnavailable(status: number): boolean {
+  return status === 404 || status === 501;
+}
+
+/** A list payload + whether the backend exists yet (false → the panel shows a "connect …" empty state). */
+export interface MaybeList<T> {
+  items: T[];
+  available: boolean;
+}
+
 /** GET /outreach/sequences — the workspace's sequences for the list view. */
 export async function fetchSequences(): Promise<SequenceSummary[]> {
   const res = await fetchWithAuth(`${OUTREACH_BASE}/sequences`);
@@ -65,7 +85,20 @@ export async function createSequence(input: NewSequenceInput): Promise<string> {
   return data.id;
 }
 
-/** POST /outreach/sequences/:id/steps — append an email step (201 → id + stepOrder). */
+/** PATCH /outreach/sequences/:id — flip a sequence's status (pause ⇄ resume). */
+export async function setSequenceStatus(
+  sequenceId: string,
+  status: SequenceStatus,
+): Promise<void> {
+  const res = await fetchWithAuth(`${OUTREACH_BASE}/sequences/${sequenceId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not update the sequence");
+}
+
+/** POST /outreach/sequences/:id/steps — append a step (201 → id + stepOrder). */
 export async function addSequenceStep(
   sequenceId: string,
   input: NewStepInput,
@@ -111,4 +144,34 @@ export async function fetchContacts(limit = 100): Promise<MaskedContact[]> {
   if (!res.ok) throw await toApiError(res, "Could not load contacts");
   const data = (await res.json()) as { contacts: MaskedContact[] };
   return data.contacts;
+}
+
+/**
+ * GET /templates — the message-template library (M9, panel within Sequences; 11 §4.3). Backend is not
+ * wired yet, so a 404/501 resolves to `{ items: [], available: false }` and the panel shows a "connect …"
+ * empty state rather than an error.
+ */
+export async function fetchTemplates(): Promise<MaybeList<TemplateSummary>> {
+  const res = await fetchWithAuth(TEMPLATES_BASE);
+  if (res.ok) {
+    const data = (await res.json()) as { templates: TemplateSummary[] };
+    return { items: data.templates ?? [], available: true };
+  }
+  if (isUnavailable(res.status)) return { items: [], available: false };
+  throw await toApiError(res, "Could not load templates");
+}
+
+/**
+ * GET /outreach/drafts — AI/manual drafts awaiting human review (draft → review → send; 05 §13/§16).
+ * Backend is post-MVP; a 404/501 resolves to `available: false` so the panel gates on "review required"
+ * without inventing drafts. There is intentionally NO send call here — sending stays human-reviewed.
+ */
+export async function fetchDrafts(): Promise<MaybeList<DraftSummary>> {
+  const res = await fetchWithAuth(`${OUTREACH_BASE}/drafts`);
+  if (res.ok) {
+    const data = (await res.json()) as { drafts: DraftSummary[] };
+    return { items: data.drafts ?? [], available: true };
+  }
+  if (isUnavailable(res.status)) return { items: [], available: false };
+  throw await toApiError(res, "Could not load drafts");
 }
