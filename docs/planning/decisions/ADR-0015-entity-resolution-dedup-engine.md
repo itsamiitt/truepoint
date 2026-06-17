@@ -4,6 +4,7 @@
 - **Date:** 2026-06-02
 - **Context doc:** [03-database-design.md](../03-database-design.md), [06-enrichment-engine.md](../06-enrichment-engine.md)
 - **Amended by:** [ADR-0021](./ADR-0021-global-master-graph-and-overlay.md) (2026-06-09) — entity resolution is now **global / cross-source** at the master-graph layer (deterministic keys → **blocking + MinHash/LSH** candidate generation → **Splink** scoring → survivorship), not within-workspace only. The within-workspace Splink dedup below still applies to the **overlay**; the engine choice (Splink) is unchanged.
+- **Amended by:** [ADR-0037](./ADR-0037-bulk-match-first-resolution-and-candidate-index.md) (2026-06-17) — the Splink engine + deterministic keys now also back the **bulk fast-path** matcher: a *synchronous, candidate-indexed read* of the already-resolved graph (Redis KV for deterministic keys + LSH blocks + Splink for the fuzzy tail) behind a `MatchPort`, **not** a batch re-resolution. Same engine, new read-path role.
 
 ## Context
 
