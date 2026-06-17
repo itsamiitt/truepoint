@@ -1,21 +1,25 @@
 // AppShell.tsx — the app chrome (11 §3) and the single auth gate for every signed-in surface. On mount it
 // resolves a token (in-memory access token via a silent refresh against the auth origin, ADR-0016); with no
-// token it redirects straight to the auth-origin login via PKCE (no interstitial screen). Signed in, it composes the
-// left rail (with the session role) + top bar + the routed {children}, and mounts the Cmd/Ctrl-K command palette
-// once. The section title is derived from the active route so each destination labels its own top bar without
-// prop-drilling. (This replaces the per-page session logic that used to live in app/page.tsx.) The gate runs in a
-// try/catch: startLogin() can throw (crypto.subtle is undefined on insecure origins; sessionStorage can be blocked)
-// and the session fetch can throw on a network/CORS error — either way, and on a non-ok session response, we surface
-// an "error" state with a Retry button instead of hanging forever on a spinner (mirrors auth/callback/page.tsx).
+// token it redirects straight to the auth-origin login via PKCE (no interstitial). Signed in, it composes the
+// left rail + top bar + the routed {children}, and mounts the command palette, shortcuts help, the toast host,
+// and the density provider once. The section title is derived from the active route via the central navConfig.
+// The gate runs in a try/catch: startLogin() can throw (crypto.subtle is undefined on insecure origins;
+// sessionStorage can be blocked) and the session fetch can throw on a network/CORS error — either way, and on a
+// non-ok session response, we surface an "error" state with a Retry button instead of hanging on a spinner
+// (mirrors auth/callback/page.tsx).
 "use client";
 
 import { fetchWithAuth, getAccessToken, silentRefresh, startLogin } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import { ToastProvider } from "@leadwolf/ui";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { CommandPalette } from "./CommandPalette";
+import { DensityProvider } from "./DensityProvider";
+import { ShortcutsDialog } from "./ShortcutsDialog";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { sectionTitleFor } from "./navConfig";
 
 interface Session {
   userId: string;
@@ -26,17 +30,6 @@ interface Session {
 }
 
 type AuthState = "loading" | "redirecting" | "signed-in" | "error";
-
-/** Map a pathname to its top-bar section title (matches the rail destinations). */
-function sectionTitle(pathname: string): string {
-  if (pathname.startsWith("/prospect")) return "Prospect";
-  if (pathname.startsWith("/sequences")) return "Sequences";
-  if (pathname.startsWith("/inbox")) return "Inbox";
-  if (pathname.startsWith("/reports")) return "Reports";
-  if (pathname.startsWith("/settings")) return "Settings";
-  if (pathname.startsWith("/home")) return "Home";
-  return "TruePoint";
-}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/";
@@ -110,13 +103,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="tp-shell">
-      <Sidebar userEmail={session ? session.userId : null} role={session?.role ?? null} />
-      <div className="tp-main">
-        <TopBar title={sectionTitle(pathname)} />
-        <main className="tp-content">{children}</main>
-      </div>
-      <CommandPalette />
-    </div>
+    <ToastProvider>
+      <DensityProvider>
+        <div className="tp-shell">
+          <Sidebar userEmail={session ? session.userId : null} role={session?.role ?? null} />
+          <div className="tp-main">
+            <TopBar title={sectionTitleFor(pathname)} />
+            <main className="tp-content">{children}</main>
+          </div>
+          <CommandPalette />
+          <ShortcutsDialog />
+        </div>
+      </DensityProvider>
+    </ToastProvider>
   );
 }
