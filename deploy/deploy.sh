@@ -43,7 +43,17 @@ fi
 
 JWT_PRIVATE_KEY_PEM_B64="$(base64 -w0 "$KEY_DIR/jwt_private.pem")"; export JWT_PRIVATE_KEY_PEM_B64
 JWT_PUBLIC_KEY_PEM_B64="$(base64 -w0 "$KEY_DIR/jwt_public.pem")";   export JWT_PUBLIC_KEY_PEM_B64
-echo "==> JWT keys validated + base64-encoded from $KEY_DIR/"
+
+# Persist the single-line base64 keys into $ENV_FILE so the signing key survives EVERY future container
+# (re)start — not just this deploy.sh run. Compose loads them via `env_file`, so a later `docker compose up -d`
+# (e.g. to apply an .env edit), a recreate, or a host reboot still has the key. A shell-only export would be
+# gone on those paths → empty key → importPKCS8 throws → login 503s (token_mint_failed). Delete any prior copy
+# by key (sed never nukes the file and is unaffected by base64's +,/,= chars), then append the fresh values
+# via printf (literal — the base64 payload is never re-interpreted).
+sed -i -E '/^(JWT_PRIVATE_KEY_PEM_B64|JWT_PUBLIC_KEY_PEM_B64)=/d' "$ENV_FILE"
+printf 'JWT_PRIVATE_KEY_PEM_B64=%s\n' "$JWT_PRIVATE_KEY_PEM_B64" >> "$ENV_FILE"
+printf 'JWT_PUBLIC_KEY_PEM_B64=%s\n'  "$JWT_PUBLIC_KEY_PEM_B64"  >> "$ENV_FILE"
+echo "==> JWT keys validated, base64-encoded from $KEY_DIR/, and persisted to $ENV_FILE (durable across restarts)"
 
 # ── 1. Build the single image ───────────────────────────────────────────────────
 echo "==> [1/5] Building leadwolf:latest (bun install + next build — first run is slow)…"

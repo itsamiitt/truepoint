@@ -7,16 +7,13 @@ name: leadwolf
 # Shared definition for the four app services. They differ only by `command` (+ web's depends_on).
 x-app: &app
   image: leadwolf:latest
+  # ALL env — including the base64 EdDSA signing keys (JWT_*_PEM_B64), which deploy.sh persists into
+  # .env.production — comes from env_file. We deliberately do NOT also list the keys under `environment:`: a
+  # compose `environment:` entry with a `${VAR:-}` empty default takes PRECEDENCE over env_file and would
+  # clobber the persisted key to empty on any container start whose shell didn't re-export it (→ importPKCS8
+  # throws → login 503s, token_mint_failed). Sourcing the keys only from env_file keeps them durable across
+  # `up -d` / restart / reboot. packages/config decodes JWT_*_PEM_B64 → PEM at boot (a raw PEM still wins if set).
   env_file: [.env.production]
-  environment:
-    # EdDSA signing keys. deploy.sh ships them BASE64-encoded (single line) from deploy/keys/: a multi-line
-    # PEM loses its newlines through ${VAR} interpolation → importPKCS8 throws → login 503s. packages/config
-    # decodes the _B64 forms into the PEM at boot. Raw PEM kept as an optional back-compat fallback. Empty by
-    # default (stack still boots; the boot self-test + deploy smoke gate flag a missing key).
-    JWT_PRIVATE_KEY_PEM_B64: ${JWT_PRIVATE_KEY_PEM_B64:-}
-    JWT_PUBLIC_KEY_PEM_B64: ${JWT_PUBLIC_KEY_PEM_B64:-}
-    JWT_PRIVATE_KEY_PEM: ${JWT_PRIVATE_KEY_PEM:-}
-    JWT_PUBLIC_KEY_PEM: ${JWT_PUBLIC_KEY_PEM:-}
   restart: unless-stopped
   depends_on:
     redis: { condition: service_healthy }
