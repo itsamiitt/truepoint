@@ -8,6 +8,8 @@ import type {
   ColumnMapping,
   ImportJobRef,
   ImportJobStatusResponse,
+  ImportMappingTemplate,
+  ImportMappingTemplateList,
   MaskedContact,
   SourceName,
 } from "@leadwolf/types";
@@ -44,6 +46,30 @@ export async function getImportJob(jobId: string): Promise<ImportJobStatusRespon
   const res = await fetchWithAuth(`${API_BASE}/api/v1/imports/${encodeURIComponent(jobId)}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not check import status"));
   return (await res.json()) as ImportJobStatusResponse;
+}
+
+const TEMPLATES_BASE = `${API_BASE}/api/v1/imports/mapping-templates`;
+
+/** List the workspace's saved column-mapping templates (the picker's data). */
+export async function listMappingTemplates(): Promise<ImportMappingTemplate[]> {
+  const res = await fetchWithAuth(TEMPLATES_BASE);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load mapping templates"));
+  const data = (await res.json()) as ImportMappingTemplateList;
+  return data.templates;
+}
+
+/** Save (UPSERT by name) the current column mapping as a named template. Returns the persisted template. */
+export async function saveMappingTemplate(args: {
+  name: string;
+  mapping: ColumnMapping;
+}): Promise<ImportMappingTemplate> {
+  const res = await fetchWithAuth(TEMPLATES_BASE, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(args),
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not save template"));
+  return (await res.json()) as ImportMappingTemplate;
 }
 
 export async function fetchContacts(): Promise<MaskedContact[]> {
