@@ -1,0 +1,741 @@
+/*
+ * primitives.css — styling for the @leadwolf/ui token primitives (controls, overlays, feedback, data display).
+ * Behavior + markup live in the .tsx files; the visual styling lives here so packages/ui stays self-contained
+ * and dependency-free. Everything reads the --tp-* tokens from tokens.css — never a hardcoded brand color.
+ * Consume from an app once: `@import "@leadwolf/ui/primitives.css";` (after tokens.css). Light theme only.
+ *
+ * Conventions: class prefix .tp-ui-*; hierarchy from weight + size; one soft shadow per overlay; motion via the
+ * shared tp-* keyframes + token durations (collapses under prefers-reduced-motion via the tokens.css baseline).
+ */
+
+/* ── Buttons ─────────────────────────────────────────────────────────────────────────────────────────── */
+.tp-ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--tp-duration-fast) var(--tp-ease),
+    border-color var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast) var(--tp-ease),
+    opacity var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-ui-btn:disabled,
+.tp-ui-btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tp-ui-btn--sm {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.tp-ui-btn--full {
+  width: 100%;
+}
+.tp-ui-btn--primary {
+  background: var(--tp-btn);
+  color: #fff;
+}
+.tp-ui-btn--primary:not(:disabled):hover {
+  background: var(--tp-btn-700);
+}
+.tp-ui-btn--secondary {
+  background: var(--tp-surface-3);
+  color: var(--tp-ink);
+  border-color: var(--tp-hairline-2);
+}
+.tp-ui-btn--secondary:not(:disabled):hover {
+  background: var(--nav-hover-fill);
+}
+.tp-ui-btn--ghost {
+  background: transparent;
+  color: var(--tp-ink-2);
+}
+.tp-ui-btn--ghost:not(:disabled):hover {
+  background: var(--nav-hover-fill);
+  color: var(--tp-ink);
+}
+.tp-ui-btn--danger {
+  background: var(--danger);
+  color: #fff;
+}
+.tp-ui-btn--danger:not(:disabled):hover {
+  background: #b91c1c;
+}
+.tp-ui-btn--link {
+  height: auto;
+  padding: 0;
+  background: transparent;
+  color: var(--tp-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tp-ui-btn--link:not(:disabled):hover {
+  color: var(--tp-ink-2);
+}
+
+/* Icon-only button (32px square, ghost by default) */
+.tp-ui-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--tp-ink-3);
+  cursor: pointer;
+  transition: background var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-ui-iconbtn:not(:disabled):hover {
+  background: var(--nav-hover-fill);
+  color: var(--tp-ink);
+}
+.tp-ui-iconbtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Text inputs / textarea / native select ──────────────────────────────────────────────────────────── */
+.tp-ui-field {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-ui-field::placeholder {
+  color: var(--tp-ink-4);
+}
+.tp-ui-field:focus {
+  outline: none;
+  border-color: var(--tp-ink-3);
+}
+.tp-ui-field:disabled {
+  background: var(--tp-surface-2);
+  color: var(--tp-ink-3);
+  cursor: not-allowed;
+}
+.tp-ui-field--invalid {
+  border-color: var(--danger);
+}
+textarea.tp-ui-field {
+  height: auto;
+  min-height: 76px;
+  padding: 8px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+select.tp-ui-field {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  cursor: pointer;
+}
+
+/* ── Checkbox (token, square) ────────────────────────────────────────────────────────────────────────── */
+.tp-ui-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--tp-ink);
+}
+.tp-ui-checkbox input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 4px;
+  background: var(--tp-surface);
+  cursor: pointer;
+  position: relative;
+  flex: 0 0 auto;
+  transition: background var(--tp-duration-fast) var(--tp-ease),
+    border-color var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-ui-checkbox input:checked {
+  background: var(--tp-btn);
+  border-color: var(--tp-btn);
+}
+.tp-ui-checkbox input:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.tp-ui-checkbox input:indeterminate::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  width: 8px;
+  height: 2px;
+  background: #fff;
+}
+.tp-ui-checkbox input:indeterminate {
+  background: var(--tp-btn);
+  border-color: var(--tp-btn);
+}
+.tp-ui-checkbox input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Switch (token toggle) ───────────────────────────────────────────────────────────────────────────── */
+.tp-ui-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--tp-hairline-2);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: background var(--tp-duration) var(--tp-ease);
+}
+.tp-ui-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--tp-duration) var(--tp-ease);
+}
+.tp-ui-switch:checked {
+  background: var(--tp-btn);
+}
+.tp-ui-switch:checked::after {
+  transform: translateX(16px);
+}
+.tp-ui-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Chip (token pill; distinct from StatusBadge) ────────────────────────────────────────────────────── */
+.tp-ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-sm);
+  background: var(--tp-surface-3);
+  color: var(--tp-ink-2);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tp-ui-chip--active {
+  background: var(--tp-cobalt-50);
+  border-color: var(--tp-cobalt-50);
+  color: var(--tp-ink);
+}
+.tp-ui-chip--button {
+  cursor: pointer;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-ui-chip--button:hover {
+  background: var(--nav-hover-fill);
+}
+.tp-ui-chip-x {
+  display: inline-flex;
+  margin-right: -2px;
+  color: var(--tp-ink-4);
+  cursor: pointer;
+}
+.tp-ui-chip-x:hover {
+  color: var(--tp-ink);
+}
+
+/* ── Form layout (section / row / field group) ───────────────────────────────────────────────────────── */
+.tp-ui-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tp-ui-form-section + .tp-ui-form-section {
+  margin-top: 28px;
+  padding-top: 28px;
+  border-top: 1px solid var(--tp-hairline);
+}
+.tp-ui-form-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tp-ui-form-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+.tp-ui-form-section-desc {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  line-height: 1.5;
+}
+.tp-ui-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tp-ui-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+}
+.tp-ui-field-hint {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  line-height: 1.4;
+}
+.tp-ui-field-error {
+  font-size: 12px;
+  color: var(--danger);
+  line-height: 1.4;
+}
+.tp-ui-form-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 16px 24px;
+  align-items: start;
+}
+@media (max-width: 720px) {
+  .tp-ui-form-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+/* ── Tabs / segmented control ────────────────────────────────────────────────────────────────────────── */
+.tp-ui-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--tp-hairline-2);
+}
+.tp-ui-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  margin-bottom: -1px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tp-ink-3);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-ui-tab:hover {
+  color: var(--tp-ink);
+}
+.tp-ui-tab[aria-selected="true"] {
+  color: var(--tp-ink);
+  border-bottom-color: var(--tp-ink);
+}
+.tp-ui-segmented {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--tp-surface-3);
+  border-radius: var(--radius);
+}
+.tp-ui-segmented-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-3);
+  border-radius: var(--tp-radius-sm);
+  cursor: pointer;
+  transition: background var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-ui-segmented-item:hover {
+  color: var(--tp-ink);
+}
+.tp-ui-segmented-item[aria-selected="true"] {
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
+}
+
+/* ── Scrim + overlays (Dialog / Drawer) ──────────────────────────────────────────────────────────────── */
+.tp-ui-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.32);
+  z-index: var(--tp-z-overlay);
+  animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
+}
+.tp-ui-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: var(--tp-z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.tp-ui-dialog-card {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  box-shadow: var(--tp-shadow-dialog);
+  animation: tp-pop-in var(--tp-duration) var(--tp-ease-out);
+}
+.tp-ui-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 0;
+}
+.tp-ui-dialog-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+.tp-ui-dialog-desc {
+  padding: 4px 20px 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  line-height: 1.5;
+}
+.tp-ui-dialog-body {
+  padding: 16px 20px;
+}
+.tp-ui-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 20px 20px;
+}
+.tp-ui-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  /* Above the shared scrim (--tp-z-overlay) so the panel is never covered by its own backdrop. */
+  z-index: var(--tp-z-modal);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 460px;
+  background: var(--tp-surface);
+  box-shadow: var(--tp-shadow-drawer);
+}
+.tp-ui-drawer--right {
+  right: 0;
+  border-left: 1px solid var(--tp-hairline-2);
+  animation: tp-slide-in-right var(--tp-duration-slow) var(--tp-ease-out);
+}
+.tp-ui-drawer--left {
+  left: 0;
+  border-right: 1px solid var(--tp-hairline-2);
+  animation: tp-slide-in-left var(--tp-duration-slow) var(--tp-ease-out);
+}
+@keyframes tp-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.tp-ui-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+.tp-ui-drawer-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+.tp-ui-drawer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+.tp-ui-drawer-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--tp-hairline);
+}
+
+/* ── Floating: popover / menu / tooltip ──────────────────────────────────────────────────────────────── */
+.tp-ui-anchor {
+  position: relative;
+  display: inline-flex;
+}
+.tp-ui-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: var(--tp-z-popover);
+  min-width: 180px;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  box-shadow: var(--tp-shadow-popover);
+  animation: tp-pop-in var(--tp-duration-fast) var(--tp-ease-out);
+}
+.tp-ui-popover--start {
+  left: 0;
+}
+.tp-ui-popover--end {
+  right: 0;
+}
+/* Open upward (for triggers near the bottom edge, e.g. the sidebar user/team menus). */
+.tp-ui-popover--up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.tp-ui-menu {
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.tp-ui-menu-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--tp-ink);
+  text-align: left;
+  border-radius: var(--tp-radius-sm);
+  cursor: pointer;
+}
+.tp-ui-menu-item:hover {
+  background: var(--nav-hover-fill);
+}
+.tp-ui-menu-item--danger {
+  color: var(--danger);
+}
+.tp-ui-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--tp-hairline);
+}
+.tp-ui-tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--tp-z-popover);
+  padding: 5px 8px;
+  background: var(--tp-ink);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  border-radius: var(--tp-radius-sm);
+  pointer-events: none;
+  animation: tp-fade-in var(--tp-duration-fast) var(--tp-ease-out);
+}
+
+/* ── Toast ───────────────────────────────────────────────────────────────────────────────────────────── */
+.tp-ui-toaster {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: var(--tp-z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+}
+.tp-ui-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  box-shadow: var(--tp-shadow-popover);
+  animation: tp-rise-in var(--tp-duration) var(--tp-ease-out);
+}
+.tp-ui-toast-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: var(--tp-ink-4);
+}
+.tp-ui-toast--success .tp-ui-toast-dot {
+  background: var(--success);
+}
+.tp-ui-toast--error .tp-ui-toast-dot {
+  background: var(--danger);
+}
+.tp-ui-toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tp-ui-toast-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+.tp-ui-toast-desc {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  line-height: 1.4;
+}
+
+/* ── DataTable ───────────────────────────────────────────────────────────────────────────────────────── */
+.tp-ui-table-wrap {
+  width: 100%;
+  overflow: auto;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+}
+.tp-ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--tp-table-font);
+}
+.tp-ui-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--tp-surface-2);
+  text-align: left;
+  font-weight: 500;
+  color: var(--tp-ink-3);
+  padding: var(--tp-cell-pad-y) var(--tp-cell-pad-x);
+  border-bottom: 1px solid var(--tp-hairline-2);
+  white-space: nowrap;
+}
+.tp-ui-table th.tp-ui-th-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.tp-ui-table th.tp-ui-th-sortable:hover {
+  color: var(--tp-ink);
+}
+.tp-ui-th-arrow {
+  margin-left: 4px;
+  color: var(--tp-ink-4);
+}
+.tp-ui-table td {
+  padding: var(--tp-cell-pad-y) var(--tp-cell-pad-x);
+  border-bottom: 1px solid var(--tp-hairline);
+  color: var(--tp-ink);
+  height: var(--tp-row-h);
+}
+.tp-ui-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.tp-ui-table tbody tr.tp-ui-tr-clickable {
+  cursor: pointer;
+}
+.tp-ui-table tbody tr.tp-ui-tr-clickable:hover td {
+  background: var(--tp-surface-2);
+}
+.tp-ui-table tbody tr[aria-selected="true"] td {
+  background: var(--tp-cobalt-50);
+}
+[data-density="compact"] .tp-ui-table td {
+  height: var(--tp-row-h-compact);
+  padding-top: var(--tp-cell-pad-y-compact);
+  padding-bottom: var(--tp-cell-pad-y-compact);
+}
+[data-density="compact"] .tp-ui-table th {
+  padding-top: var(--tp-cell-pad-y-compact);
+  padding-bottom: var(--tp-cell-pad-y-compact);
+}
+
+/* ── Pagination ──────────────────────────────────────────────────────────────────────────────────────── */
+.tp-ui-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+/* ── Progress ────────────────────────────────────────────────────────────────────────────────────────── */
+.tp-ui-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tp-surface-3);
+  overflow: hidden;
+}
+.tp-ui-progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tp-ink);
+  transition: width var(--tp-duration) var(--tp-ease);
+}
+.tp-ui-progress--cobalt .tp-ui-progress-bar {
+  background: var(--tp-cobalt);
+}
+.tp-ui-progress--success .tp-ui-progress-bar {
+  background: var(--success);
+}
+.tp-ui-progress--warning .tp-ui-progress-bar {
+  background: var(--warning);
+}
+.tp-ui-progress--danger .tp-ui-progress-bar {
+  background: var(--danger);
+}

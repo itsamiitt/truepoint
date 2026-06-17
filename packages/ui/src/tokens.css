@@ -64,6 +64,44 @@
   --tp-duration-fast: 120ms;
   --tp-duration: 180ms;
   --tp-duration-slow: 260ms;
+
+  /* Elevation — the brand allows ONE soft shadow per overlay (04 §1). Extracted here so Drawer/Dialog/
+     Popover/Menu/Toast share a single source instead of hand-writing the shadow inline each time. */
+  --tp-shadow-popover: 0 4px 16px rgba(17, 24, 39, 0.08), 0 1px 3px rgba(17, 24, 39, 0.06);
+  --tp-shadow-drawer: -12px 0 32px rgba(17, 24, 39, 0.1);
+  --tp-shadow-dialog: 0 12px 40px rgba(17, 24, 39, 0.14);
+  --tp-shadow-bar: 0 -6px 20px rgba(17, 24, 39, 0.08);
+
+  /* Z-index scale — replaces the scattered magic numbers (sticky bar 30 / slide-over 40 / scrim 50…) so
+     overlays always stack predictably: sticky < drawer < overlay/scrim < modal < popover < toast < command. */
+  --tp-z-sticky: 30;
+  --tp-z-drawer: 40;
+  --tp-z-overlay: 50;
+  --tp-z-modal: 60;
+  --tp-z-popover: 70;
+  --tp-z-toast: 80;
+  --tp-z-command: 90;
+
+  /* Data density — drives the comfortable/compact toggle (04 §8, 24 §7); switched via [data-density] on a
+     wrapper (the shell sets it from the DensityProvider). Tables read these for row height + cell padding. */
+  --tp-row-h: 44px;
+  --tp-row-h-compact: 32px;
+  --tp-cell-pad-y: 10px;
+  --tp-cell-pad-y-compact: 5px;
+  --tp-cell-pad-x: 12px;
+  --tp-table-font: 13px;
+
+  /* Spacing — the 4px base scale, formalized so cards/tables stop repeating inline magic numbers. */
+  --tp-space-1: 4px;
+  --tp-space-2: 8px;
+  --tp-space-3: 12px;
+  --tp-space-4: 16px;
+  --tp-space-5: 20px;
+  --tp-space-6: 24px;
+  --tp-space-8: 32px;
+
+  /* Secondary radius for chips + small controls, alongside the 8px --radius. */
+  --tp-radius-sm: 6px;
 }
 
 html {
@@ -117,6 +155,19 @@ html {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+/* Skeleton shimmer — an opacity-only pulse for loading placeholders. Collapses to a static block under
+   prefers-reduced-motion via the baseline below, so it never needs its own guard. */
+@keyframes tp-skeleton {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 1;
   }
 }
 

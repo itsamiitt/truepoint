@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./tokens.css": "./src/tokens.css",
+    "./primitives.css": "./src/primitives.css",
     "./theme.css": "./src/theme.css"
   },
   "scripts": {

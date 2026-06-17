@@ -1,5 +1,8 @@
-/* globals.css — minimal app-shell styles for the round-trip demo, built from the TruePoint tokens. */
+/* globals.css — the apps/web shell + feature styling, built from the TruePoint tokens. Imports the shared
+ * design-token variables and the @leadwolf/ui primitives stylesheet (controls/overlays/feedback/data-display),
+ * then layers the app-shell + prospect chrome classes below. No Tailwind here — inline tokens + these classes. */
 @import "@leadwolf/ui/tokens.css";
+@import "@leadwolf/ui/primitives.css";
 
 * {
   box-sizing: border-box;
@@ -845,4 +848,123 @@ body {
 }
 .tp-reveal-result {
   animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
+}
+
+/* ============================================================================
+ * Foundation redesign additions (Unit 0) — top-bar global search, the sidebar
+ * user-menu trigger + dropdown anchoring, and the Settings scope shell.
+ * ========================================================================== */
+
+/* Top-bar global search — a quiet button that opens the command palette. */
+.tp-global-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  min-width: 200px;
+  padding: 0 12px;
+  color: var(--tp-ink-4);
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 13px;
+  cursor: text;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-global-search:hover {
+  background: var(--tp-surface-3);
+}
+.tp-global-search-text {
+  flex: 1;
+  text-align: left;
+}
+
+/* Sidebar user-row trigger — a full-width button reset. */
+.tp-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-user-trigger:hover {
+  background: var(--nav-hover-fill);
+}
+
+/* Sidebar dropdown anchors (team switcher, user menu) fill the rail width. */
+.tp-sidebar-footer .tp-ui-anchor {
+  display: block;
+}
+
+/* Settings scope shell — left scope nav + right panel (12 §1). */
+.tp-settings-shell {
+  display: grid;
+  grid-template-columns: 224px 1fr;
+  min-height: 100%;
+}
+.tp-settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 16px;
+  border-right: 1px solid var(--tp-hairline-2);
+  background: var(--tp-surface-2);
+}
+.tp-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tp-settings-scope {
+  padding: 0 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-4);
+}
+.tp-settings-link {
+  padding: 7px 10px;
+  border-radius: 7px;
+  color: var(--tp-ink-2);
+  font-size: 14px;
+  text-decoration: none;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-settings-link:hover {
+  background: var(--nav-hover-fill);
+}
+.tp-settings-link.is-active {
+  background: var(--tp-surface-3);
+  color: var(--tp-ink);
+  font-weight: 500;
+}
+.tp-settings-panel {
+  min-width: 0;
+  max-width: 760px;
+  padding: 28px 32px;
+}
+.tp-settings-title {
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+@media (max-width: 720px) {
+  .tp-settings-shell {
+    grid-template-columns: 1fr;
+  }
+  .tp-settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--tp-hairline-2);
+  }
 }
