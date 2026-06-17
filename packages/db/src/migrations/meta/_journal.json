@@ -15,6 +15,13 @@
       "when": 1781610856824,
       "tag": "0001_ordinary_luckman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781685995251,
+      "tag": "0002_jittery_guardsmen",
+      "breakpoints": true
     }
   ]
 }

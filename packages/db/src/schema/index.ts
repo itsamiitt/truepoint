@@ -7,3 +7,4 @@ export * from "./compliance.ts";
 export * from "./activity.ts";
 export * from "./salesnav.ts";
 export * from "./outreach.ts";
+export * from "./enrichmentJobs.ts";
