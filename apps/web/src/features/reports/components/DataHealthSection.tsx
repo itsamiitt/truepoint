@@ -5,6 +5,7 @@
 
 import { EmptyState, Icon, Progress, StateSwitch, StatusBadge } from "@leadwolf/ui";
 import { ShieldCheck } from "lucide-react";
+import { DistributionChart } from "../charts";
 import styles from "../reports.module.css";
 import type { DataHealthRollup } from "../types";
 
@@ -78,6 +79,17 @@ export function DataHealthSection({
           </div>
 
           <h3 className={styles.subheading}>Verification breakdown</h3>
+          <div className={styles.chartBlock}>
+            <DistributionChart
+              segments={rollup.rows.map((r) => ({
+                key: r.status,
+                label: r.label,
+                value: r.count,
+                tone: r.tone,
+              }))}
+              ariaLabel="Email verification status distribution"
+            />
+          </div>
           <ul className={styles.healthList}>
             {rollup.rows.map((row) => (
               <li key={row.status} className={styles.healthRow}>

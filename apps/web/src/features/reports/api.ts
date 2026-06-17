@@ -54,7 +54,11 @@ export async function fetchReportsSource(): Promise<ReportsSource> {
 }
 
 /** Trigger a client-side CSV download. PII-free rollup rows only — never raw contact data. */
-export function downloadCsv(filename: string, headers: string[], rows: (string | number)[][]): void {
+export function downloadCsv(
+  filename: string,
+  headers: string[],
+  rows: (string | number)[][],
+): void {
   const escape = (cell: string | number): string => {
     const s = String(cell);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;

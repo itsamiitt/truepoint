@@ -70,20 +70,15 @@ export function useReports() {
     };
 
     const contacts = source.contacts.filter(
-      (c) =>
-        inRange(c.createdAt) && (member === "all" || c.ownerUserId === member),
+      (c) => inRange(c.createdAt) && (member === "all" || c.ownerUserId === member),
     );
     const reveals = source.reveals.filter(
-      (r) =>
-        inRange(r.revealedAt) && (member === "all" || r.revealedByUserId === member),
+      (r) => inRange(r.revealedAt) && (member === "all" || r.revealedByUserId === member),
     );
     return { contacts, reveals };
   }, [source, range, member]);
 
-  const credit = useMemo(
-    () => (filtered ? rollupCreditUsage(filtered.reveals) : null),
-    [filtered],
-  );
+  const credit = useMemo(() => (filtered ? rollupCreditUsage(filtered.reveals) : null), [filtered]);
   const funnel = useMemo(() => (filtered ? rollupFunnel(filtered.contacts) : null), [filtered]);
   const health = useMemo(() => (filtered ? rollupDataHealth(filtered.contacts) : null), [filtered]);
   const team = useMemo(

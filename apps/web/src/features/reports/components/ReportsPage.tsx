@@ -5,10 +5,18 @@
 // ClickHouse /reports/* pipeline (ADR-0010) is post-MVP. Public slice component.
 "use client";
 
-import { Combobox, Icon, Tabs, TpButton, useToast } from "@leadwolf/ui";
+import { Combobox, Icon, SegmentedControl, Tabs, TpButton, useToast } from "@leadwolf/ui";
 import { Download, RotateCw } from "lucide-react";
 import { useState } from "react";
-import { downloadCsv } from "../api";
+import {
+  type ExportFormat,
+  type ReportDataset,
+  creditUsageDataset,
+  dataHealthDataset,
+  downloadDataset,
+  funnelDataset,
+  teamDataset,
+} from "../export";
 import { RANGE_OPTIONS, type RangeId, useReports } from "../hooks/useReports";
 import styles from "../reports.module.css";
 import type { DashboardId } from "../types";
@@ -55,49 +63,33 @@ export function ReportsPage() {
   } = useReports();
   const { success, toast } = useToast();
   const [tab, setTab] = useState<DashboardId>("funnel");
+  const [format, setFormat] = useState<ExportFormat>("csv");
 
   const memberCombo = [{ value: "all", label: "All members" }, ...memberOptions];
 
-  // Export CSV per dashboard — PII-free rollup rows only. Dashboards without a data source toast "Coming soon".
+  // Build the export dataset for the active dashboard ONCE (headers + rows), so CSV and XLSX emit identical
+  // PII-free, workspace-scoped columns. Returns null for dashboards that have no data (or no backend yet).
+  function activeDataset(): ReportDataset | null {
+    if (tab === "credits" && credit && credit.byType.length > 0) return creditUsageDataset(credit);
+    if (tab === "team" && team && team.rows.length > 0) return teamDataset(team);
+    if (tab === "funnel" && funnel && funnel.total > 0) return funnelDataset(funnel);
+    if (tab === "health" && health && health.total > 0) return dataHealthDataset(health);
+    return null;
+  }
+
+  // Export the active dashboard in the chosen format. Dashboards without a data source toast "Coming soon".
   function handleExport() {
-    const ts = new Date().toISOString().slice(0, 10);
-    if (tab === "credits" && credit && credit.byType.length > 0) {
-      downloadCsv(
-        `credit-usage-${ts}.csv`,
-        ["Reveal type", "Reveals", "Credits"],
-        credit.byType.map((r) => [r.label, r.reveals, r.credits]),
-      );
-      success("Export ready", "Credit usage CSV downloaded.");
+    const dataset = activeDataset();
+    if (!dataset) {
+      toast({
+        tone: "default",
+        title: "Coming soon",
+        description: "Nothing to export for this dashboard yet.",
+      });
       return;
     }
-    if (tab === "team" && team && team.rows.length > 0) {
-      downloadCsv(
-        `team-activity-${ts}.csv`,
-        ["Member", "Revealed", "Engaged", "Credits"],
-        team.rows.map((r) => [r.label, r.revealed, r.engaged, r.credits]),
-      );
-      success("Export ready", "Team activity CSV downloaded.");
-      return;
-    }
-    if (tab === "funnel" && funnel && funnel.total > 0) {
-      downloadCsv(
-        `pipeline-funnel-${ts}.csv`,
-        ["Stage", "Contacts", "Conversion %"],
-        [...funnel.primary, ...funnel.secondary].map((s) => [s.label, s.count, s.conversionPct]),
-      );
-      success("Export ready", "Pipeline funnel CSV downloaded.");
-      return;
-    }
-    if (tab === "health" && health && health.total > 0) {
-      downloadCsv(
-        `data-health-${ts}.csv`,
-        ["Email status", "Contacts", "Share %"],
-        health.rows.map((r) => [r.label, r.count, r.pct]),
-      );
-      success("Export ready", "Data health CSV downloaded.");
-      return;
-    }
-    toast({ tone: "default", title: "Coming soon", description: "Nothing to export for this dashboard yet." });
+    downloadDataset(dataset, format);
+    success("Export ready", `${DASHBOARD_TITLE[tab]} ${format.toUpperCase()} downloaded.`);
   }
 
   function notifyConnectSoon() {
@@ -156,13 +148,22 @@ export function ReportsPage() {
           >
             Refresh
           </TpButton>
+          <SegmentedControl
+            items={[
+              { value: "csv", label: "CSV" },
+              { value: "xlsx", label: "XLSX" },
+            ]}
+            value={format}
+            onChange={(v) => setFormat(v as ExportFormat)}
+            aria-label="Export format"
+          />
           <TpButton
             variant="secondary"
             size="sm"
             leftIcon={<Icon icon={Download} size={15} />}
             onClick={handleExport}
           >
-            Export CSV
+            Export
           </TpButton>
         </div>
       </div>
@@ -195,9 +196,9 @@ export function ReportsPage() {
       </section>
 
       <p className={styles.footnote}>
-        MVP dashboards are composed in your browser from the credits and contacts APIs (over your most
-        recent 200 reveals and contacts). Sending &amp; deliverability and lead score &amp; intent
-        await the dedicated analytics pipeline (ClickHouse), which ships post-MVP.
+        MVP dashboards are composed in your browser from the credits and contacts APIs (over your
+        most recent 200 reveals and contacts). Sending &amp; deliverability and lead score &amp;
+        intent await the dedicated analytics pipeline (ClickHouse), which ships post-MVP.
       </p>
     </main>
   );

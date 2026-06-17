@@ -16,13 +16,7 @@ import type { StatusTone } from "@leadwolf/ui";
 export type UsageReveal = TUsageReveal;
 
 /** The dashboards in the Tabs switcher, in display order. */
-export type DashboardId =
-  | "funnel"
-  | "credits"
-  | "deliverability"
-  | "team"
-  | "health"
-  | "score";
+export type DashboardId = "funnel" | "credits" | "deliverability" | "team" | "health" | "score";
 
 /** One day's bucket in the 14-day credit-usage bar list / table. */
 export interface CreditDay {

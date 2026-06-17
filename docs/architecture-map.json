@@ -49,8 +49,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 490,
-  "fileSetHash": "sha256:cbbc809cdfd2b23ccfa86891bb59aa552975ef4d07593a7c297045f503bbe043",
+  "fileCount": 501,
+  "fileSetHash": "sha256:4a88e93c27613ba4771167f16cc165985d6815b1b639c0b87ad1e9aa69878197",
   "features": {
     "activity": {
       "web": [],
@@ -335,6 +335,11 @@
     "reports": {
       "web": [
         "apps/web/src/features/reports/api.ts",
+        "apps/web/src/features/reports/charts/BarChart.tsx",
+        "apps/web/src/features/reports/charts/DistributionChart.tsx",
+        "apps/web/src/features/reports/charts/FunnelChart.tsx",
+        "apps/web/src/features/reports/charts/LineChart.tsx",
+        "apps/web/src/features/reports/charts/index.ts",
         "apps/web/src/features/reports/components/CreditUsageSection.tsx",
         "apps/web/src/features/reports/components/DataHealthSection.tsx",
         "apps/web/src/features/reports/components/DeliverabilitySection.tsx",
@@ -343,6 +348,12 @@
         "apps/web/src/features/reports/components/LeadScoreSection.tsx",
         "apps/web/src/features/reports/components/ReportsPage.tsx",
         "apps/web/src/features/reports/components/TeamActivitySection.tsx",
+        "apps/web/src/features/reports/export/downloadXlsx.ts",
+        "apps/web/src/features/reports/export/exportData.test.ts",
+        "apps/web/src/features/reports/export/exportData.ts",
+        "apps/web/src/features/reports/export/index.ts",
+        "apps/web/src/features/reports/export/xlsxWriter.test.ts",
+        "apps/web/src/features/reports/export/xlsxWriter.ts",
         "apps/web/src/features/reports/hooks/useReports.ts",
         "apps/web/src/features/reports/index.ts",
         "apps/web/src/features/reports/rollups.ts",
