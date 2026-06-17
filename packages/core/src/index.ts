@@ -69,6 +69,16 @@ export {
   type ProviderHitStats,
 } from "./enrichment/bulk/estimate.ts";
 
+// Customer-visible enrichment job-status surface (G-ENR-4, 06 §4.1): READ-only list/detail query helpers over
+// the workspace-scoped enrichment-jobs repository → the EnrichmentJobSummary DTO the status UI polls.
+export {
+  listEnrichmentJobs,
+  getEnrichmentJobStatus,
+  toEnrichmentJobSummary,
+  type ListEnrichmentJobsInput,
+  type GetEnrichmentJobInput,
+} from "./enrichment/jobStatus.ts";
+
 export {
   passThroughVerifier,
   staticVerifier,

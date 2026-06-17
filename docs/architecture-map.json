@@ -24,6 +24,7 @@
     "crm-sync",
     "data-health",
     "enrichment",
+    "enrichment-jobs",
     "export",
     "home",
     "import",
@@ -49,8 +50,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 490,
-  "fileSetHash": "sha256:cbbc809cdfd2b23ccfa86891bb59aa552975ef4d07593a7c297045f503bbe043",
+  "fileCount": 502,
+  "fileSetHash": "sha256:aac01455327b747c111819f389bc039e966f50ab9e06d7a9ccb3c7837491ea43",
   "features": {
     "activity": {
       "web": [],
@@ -168,6 +169,8 @@
         "packages/core/src/enrichment/bulk/overlayMatcher.test.ts",
         "packages/core/src/enrichment/bulk/overlayMatcher.ts",
         "packages/core/src/enrichment/enrichContact.ts",
+        "packages/core/src/enrichment/jobStatus.test.ts",
+        "packages/core/src/enrichment/jobStatus.ts",
         "packages/core/src/enrichment/matchKeys.test.ts",
         "packages/core/src/enrichment/matchKeys.ts",
         "packages/core/src/enrichment/providerPort.ts",
@@ -182,6 +185,24 @@
       "workers": [
         "apps/workers/src/queues/enrichment.ts"
       ],
+      "integrations": []
+    },
+    "enrichment-jobs": {
+      "web": [
+        "apps/web/src/features/enrichment-jobs/api.ts",
+        "apps/web/src/features/enrichment-jobs/components/EnrichmentJobsPage.tsx",
+        "apps/web/src/features/enrichment-jobs/components/JobDetailDrawer.tsx",
+        "apps/web/src/features/enrichment-jobs/components/format.ts",
+        "apps/web/src/features/enrichment-jobs/hooks/useEnrichmentJobDetail.ts",
+        "apps/web/src/features/enrichment-jobs/hooks/useEnrichmentJobs.ts",
+        "apps/web/src/features/enrichment-jobs/index.ts",
+        "apps/web/src/features/enrichment-jobs/types.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "home": {
@@ -677,6 +698,7 @@
       "apps/auth/src/shared/TurnstileWidget.tsx"
     ],
     "apps/web/app": [
+      "apps/web/src/app/(shell)/enrichment/jobs/page.tsx",
       "apps/web/src/app/(shell)/home/page.tsx",
       "apps/web/src/app/(shell)/inbox/page.tsx",
       "apps/web/src/app/(shell)/layout.tsx",
@@ -795,6 +817,7 @@
       "packages/db/src/seed.ts",
       "packages/db/test/activity.itest.ts",
       "packages/db/test/compliance.itest.ts",
+      "packages/db/test/enrichmentJobStatus.itest.ts",
       "packages/db/test/home.itest.ts",
       "packages/db/test/import.itest.ts",
       "packages/db/test/intel.itest.ts",
@@ -873,6 +896,7 @@
   ],
   "warnings": [
     "undeclared domain 'admin' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'enrichment-jobs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-developer' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-shell' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-tenant' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
