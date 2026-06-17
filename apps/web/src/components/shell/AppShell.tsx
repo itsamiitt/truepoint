@@ -3,7 +3,10 @@
 // token it redirects straight to the auth-origin login via PKCE (no interstitial screen). Signed in, it composes the
 // left rail (with the session role) + top bar + the routed {children}, and mounts the Cmd/Ctrl-K command palette
 // once. The section title is derived from the active route so each destination labels its own top bar without
-// prop-drilling. (This replaces the per-page session logic that used to live in app/page.tsx.)
+// prop-drilling. (This replaces the per-page session logic that used to live in app/page.tsx.) The gate runs in a
+// try/catch: startLogin() can throw (crypto.subtle is undefined on insecure origins; sessionStorage can be blocked)
+// and the session fetch can throw on a network/CORS error — either way, and on a non-ok session response, we surface
+// an "error" state with a Retry button instead of hanging forever on a spinner (mirrors auth/callback/page.tsx).
 "use client";
 
 import { fetchWithAuth, getAccessToken, silentRefresh, startLogin } from "@/lib/authClient";
@@ -22,7 +25,7 @@ interface Session {
   scope: string[];
 }
 
-type AuthState = "loading" | "redirecting" | "signed-in";
+type AuthState = "loading" | "redirecting" | "signed-in" | "error";
 
 /** Map a pathname to its top-bar section title (matches the rail destinations). */
 function sectionTitle(pathname: string): string {
@@ -40,8 +43,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<AuthState>("loading");
   const [session, setSession] = useState<Session | null>(null);
 
-  useEffect(() => {
-    void (async () => {
+  // The single auth gate. Wrapped in try/catch so a throwing startLogin() (insecure-origin crypto, blocked
+  // sessionStorage) or a failed session fetch (network/CORS) lands on "error" instead of hanging forever. Only a
+  // successful res.ok + parsed session reaches "signed-in" — a non-ok response is an error, not a half-signed-in state.
+  // Extracted as a named function so the Retry button can re-run it. silentRefresh() catches internally (returns false).
+  async function runGate() {
+    try {
       if (!getAccessToken()) await silentRefresh();
       if (!getAccessToken()) {
         setAuth("redirecting");
@@ -49,10 +56,46 @@ export function AppShell({ children }: { children: ReactNode }) {
         return;
       }
       const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
-      if (res.ok) setSession((await res.json()) as Session);
+      if (!res.ok) {
+        setAuth("error");
+        return;
+      }
+      setSession((await res.json()) as Session);
       setAuth("signed-in");
-    })();
+    } catch (err: unknown) {
+      console.warn(`[auth] gate failed: ${err instanceof Error ? err.message : "unknown"}`);
+      setAuth("error");
+    }
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run-once gate; Retry re-invokes runGate directly.
+  useEffect(() => {
+    void runGate();
   }, []);
+
+  // The gate failed (unreachable sign-in / network error / non-ok session). Offer a clear message and a Retry that
+  // resets to "loading" and re-runs the gate, rather than dead-ending on a spinner.
+  if (auth === "error") {
+    return (
+      <div className="tp-center-screen">
+        <div className="tp-signin-card">
+          <p className="app-muted">
+            We couldn't reach sign-in. Check your connection and try again.
+          </p>
+          <button
+            className="app-button"
+            type="button"
+            onClick={() => {
+              setAuth("loading");
+              void runGate();
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Until the session resolves, render a neutral placeholder. Signed-out users are redirected to the
   // auth-origin login by the effect above (no interstitial), so "redirecting" only shows briefly.
