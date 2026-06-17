@@ -29,6 +29,7 @@ flowchart LR
   M5 --> M9[M9 Outreach + send + Inbox/Templates]
   M5 --> M10[M10 CRM sync + Public API]
   M5 --> M11[M11 Enterprise settings: SSO/SCIM/residency]
+  M5 --> M17[M17 Bulk CSV enrichment]
   M5 --> B[Beyond: ClickHouse, AI, EU residency]
   M3 -. operational, parallel .-> PAa[Platform admin: tenants, billing, impersonation, system-health]
   PAa --> PAb[M12 Platform admin depth: trust/abuse, feature-flags, data-mgmt/quality]
@@ -355,6 +356,48 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
   re-delivery**, logged to `automation_runs`; a smart segment reverse-ETLs to a warehouse; the Chrome
   extension reveals + adds a contact under budget; an export over the cap requires approval.
 
+## M17 — Bulk CSV Enrichment (enterprise scale)
+**Goal:** match-first bulk CSV enrichment at scale — upload a sparse CSV → match against our own data
+first → enrich/verify the residual → download an enriched CSV + unmatched report
+([31](./31-bulk-enrichment-pipeline.md), [ADR-0039](./decisions/ADR-0039-bulk-enrichment-pipeline.md)).
+- **Chunked async job:** `enrichment_jobs` / `enrichment_job_chunks` / `enrichment_job_rows` drive a
+  resumable, chunked pipeline on a dedicated **`BULK_ENRICHMENT_QUEUE`** (BullMQ), so a large file never
+  blocks the request path and partial failure resumes per-chunk
+  ([31](./31-bulk-enrichment-pipeline.md), [ADR-0039](./decisions/ADR-0039-bulk-enrichment-pipeline.md)).
+- **MatchPort match-first** ([ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md)):
+  resolve each row **overlay → master-graph seam → provider waterfall on the residual** — internal matches
+  are **free**; only the unmatched residual reaches paid providers. The **master-graph fast path is
+  infra-gated** on the M12/M13 scale track ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md));
+  until then MatchPort runs overlay-only + provider residual.
+- **Pre-run estimate + confirm gate:** before any spend, the job produces a forecast (estimated matches,
+  paid-provider calls, credit cost) the user must **confirm**
+  ([ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md), [31](./31-bulk-enrichment-pipeline.md)).
+- **Charge-per-verified-match** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)):
+  consistent with verify-driven billing, only a **`valid`** verified match charges; `invalid`/`catch_all`/
+  `unknown` → **0 credits**. Per-tenant **bulk quota + concurrency cap** + **lease decrement**
+  ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)) keep one big file from starving
+  other tenants; pricing is a **placeholder** ([07 §1](./07-billing-credits.md)), never hardcoded.
+- **Progress + downloadable output:** live per-job progress; on completion an **enriched CSV** (matched +
+  enriched rows) and an **unmatched report** (S3 signed URLs), suppression-checked + audited, with
+  per-row **match-insights** (which seam matched + confidence) ([06 §9](./06-enrichment-engine.md),
+  [ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md)).
+- **DoD:** upload a sparse fixture CSV → a **pre-run estimate** renders (estimated matches + paid-provider
+  calls + credit cost) and the run **does not start until confirmed**; the job chunks across
+  `enrichment_jobs`/`_chunks`/`_rows` on `BULK_ENRICHMENT_QUEUE` and **resumes from the last completed
+  chunk** after a worker crash; MatchPort resolves **overlay → master-graph seam → provider residual** so
+  internal matches **charge 0** and only the residual hits providers; verified matches charge **per
+  `valid`** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).
+  **Cost/quota gate (risk #25):** the per-tenant **bulk quota + concurrency cap** holds (a second large
+  file queues rather than starving others), the **lease decrement** ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md))
+  contends on lease rows not the tenant counter, and a **daily provider budget breaker** halts paid calls
+  when tripped ([ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md), [31](./31-bulk-enrichment-pipeline.md)).
+  **Match-quality gate (risk #26):** matching is **deterministic-first** with a **match-confidence
+  threshold** — sub-threshold rows route to **manual review** ([06 §9](./06-enrichment-engine.md)) instead
+  of auto-enriching the wrong person, and every row carries **match-insights/audit**
+  ([ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md), [31](./31-bulk-enrichment-pipeline.md)).
+  Output: a downloadable **enriched CSV** + **unmatched report** (suppression-checked + audited). Stays in
+  lockstep with the [05 §21](./05-features-modules.md#21-feature--milestone-matrix) matrix (H10).
+
 ## Platform admin — *parallel operational track* (`apps/admin`)
 **Goal:** internal staff operate the platform ([13](./13-platform-admin.md),
 [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)) — a **separate app** on its
@@ -422,7 +465,7 @@ data-broker law — the remediation for the analysis' execution-risk drag ([15 �
 | 11 | **Privileged-role blast radius** — the RLS-bypass cross-tenant role is a high-value target | High | Dedicated role used **only** by `apps/admin`, distinct from the app's non-`BYPASSRLS` role; staff SSO+MFA + IP allowlist; secrets in Secrets Manager + rotation; every access audited | Platform admin |
 | 12 | **Webhook delivery** failures / SSRF / secret leakage | Med | Signed payloads + delivery log + retries/backoff; egress controls/allowlist; per-tenant signing-secret rotation | M10 |
 | 13 | **Incumbent feature absorption** — CRMs/Clay fold enrichment + sequencing + compliance into the seat price (the market analysis' sole *Critical* risk) | **Critical** (existential) | Wedge discipline (stay narrow on honest + compliant + all-in-one); **CRM-neutral open API** ([09 §8](./09-api-design.md), M10); certs as a moat ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)); fair-billing wedge ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)) | Strategic / M10 |
-| 14 | **No proprietary data asset** — inherits providers' accuracy ceiling; can't win raw accuracy outright | High | Verify-on-reveal + **charge-only-for-`valid` + credit-back** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)); multi-provider waterfall; optional dedicated verification provider ([06 §11](./06-enrichment-engine.md)); over time the **global master graph** + opt-in co-op build toward a proprietary asset ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | M4 |
+| 14 | **No proprietary data asset** — inherits providers' accuracy ceiling; can't win raw accuracy outright | High | Verify-on-reveal + **charge-only-for-`valid` + credit-back** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)); multi-provider waterfall; optional dedicated verification provider ([06 §12](./06-enrichment-engine.md)); over time the **global master graph** + opt-in co-op build toward a proprietary asset ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | M4 |
 | 15 | **Compliance wedge unproven / cert-dependent / US-only** — the differentiator is a promise until attested | High | **Trust & certification program** ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)): SOC 2 / ISO readiness at M5, **data-broker registration a GA gate**, public Trust Center ([08 §15](./08-compliance.md)) | M5 / Trust track |
 | 16 | **Placeholder pricing unvalidated** vs real willingness-to-pay | Med | Transparent no-lock-in policy ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)); validate prices in early access before GA; non-expiring credits reduce commitment risk | M3 |
 | 17 | **Cross-domain token exchange / IdP boundary** — code interception/replay, open redirect, CSRF, refresh-token theft across `auth.*`↔`app.*` | High (account takeover) | Single-use 60 s **IP-bound + PKCE** code validated server-side before any token; access JWT **in memory only**; refresh token **HttpOnly/Secure/SameSite=Strict** cookie scoped to the auth origin, **rotated + reuse-detected** (family revoke); CORS **allow-list, no wildcard**; `sid` denylist for fast revoke; auth security headers (HSTS / XFO=DENY / nonce-CSP / nosniff / Referrer) ([ADR-0016](./decisions/ADR-0016-dedicated-auth-origin-and-cross-domain-token-exchange.md), [17 §3/§6](./17-authentication.md#3-cross-domain-token-contract)) | M2 |
@@ -433,6 +476,8 @@ data-broker law — the remediation for the analysis' execution-risk drag ([15 �
 | 22 | **Event-backbone reliability** — dropped events or unbounded queue growth break the freshness SLOs | High | **Transactional outbox** (commit⇒publish) + idempotent consumers; **DLQ** + alerts; **backpressure** (shed/slow producers); per-entity ordering ([ADR-0027](./decisions/ADR-0027-real-time-delivery-and-event-backbone.md), [20](./20-event-driven-realtime-backbone.md)) | M12 |
 | 23 | **Data-broker compliance** — operating a global universe makes CA Delete Act/DROP registration + state broker laws **core and GA-gating** | High (legal/GA) | Broker registration before GA; DROP polling → DSAR fan-out ([08 §4.4](./08-compliance.md)); global suppression at both layers; opt-in/disclosed co-op; counsel review ([08 §15](./08-compliance.md), [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | M5 / Trust track |
 | 24 | **Billions-scale infra cost/ops** — Citus shards + S3/Iceberg lake + OpenSearch + ClickHouse + ER pipeline are a large surface | Med | Staged by milestone (single-writer Aurora + Typesense until volume warrants); `SearchPort`/lake abstractions; cost dashboards; shard cutover tracked as an open question ([03 §13](./03-database-design.md), [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) | Post-MVP |
+| 25 | **Bulk enrichment cost/quota blowout** — a large file fans out millions of paid provider calls / starves other tenants | High (cost + fairness) | Match-first (internal matches free) + pre-run estimate & confirm gate + per-tenant bulk quota/concurrency cap + daily provider budget breaker + lease decrement ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)) ([ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md), [31](./31-bulk-enrichment-pipeline.md)) | M17 |
+| 26 | **Bulk match quality** — false matches enrich the wrong person at scale | High (data trust + wasted spend) | Deterministic-first + match-confidence threshold + low-confidence → manual-review ([06 §9](./06-enrichment-engine.md)) + per-row match-insights/audit ([ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md), [31](./31-bulk-enrichment-pipeline.md)) | M17 |
 
 ## Definition of done (global)
 A milestone is done when: code merged + reviewed, tests green in CI (unit + integration; e2e where
@@ -446,4 +491,6 @@ M5+) the relevant compliance checklist items are satisfied.
   referenced corpus-wide.
 - Each milestone ends in a runnable, demoable increment — no big-bang integration.
 - M-numbers are kept in lockstep with [05 §21](./05-features-modules.md#21-feature--milestone-matrix);
-  if a module's milestone moves, update both.
+  if a module's milestone moves, update both. **M17 (Bulk CSV Enrichment)** is a post-MVP extension and
+  must stay in lockstep with the same [05 §21](./05-features-modules.md#21-feature--milestone-matrix)
+  matrix (H10).

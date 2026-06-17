@@ -31,6 +31,17 @@ export type {
 } from "./enrichment/providerPort.ts";
 export { requestHash } from "./enrichment/requestHash.ts";
 export { runWaterfall, orderProviders, resetBreakers } from "./enrichment/waterfall.ts";
+export {
+  registrableDomain,
+  toE164,
+  canonicalName,
+  linkedinPublicId,
+  buildMatchKeys,
+  type MatchMethod,
+  type MatchInputRow,
+  type CanonicalNameResult,
+  type MatchKeys,
+} from "./enrichment/matchKeys.ts";
 
 export {
   passThroughVerifier,
