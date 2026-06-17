@@ -1,23 +1,26 @@
 // api.ts — the settings-billing slice's data access: typed, authenticated calls to apps/api for the credit
-// pool (07, 12 §4). Reads the in-memory access token via fetchWithAuth (ADR-0016); never touches the DB or
-// the auth origin directly. The slice's only seam to the backend.
+// pool + tenant plan (07, 09 §3, 12 §4). Reads the in-memory access token via fetchWithAuth (ADR-0016); never
+// touches the DB or the auth origin directly. The slice's only seam to the backend.
+//
+// Contract notes:
+//   GET  /credits/balance     → current tenant balance (09 §3)               — preserved
+//   GET  /credits/usage       → usage history (reveals)   (09 §3)            — preserved
+//   GET  /tenants/me          → plan, seat_limit, workspace_limit, balance (09 §3.1)
+//   POST /credits/checkout    → Stripe checkout for a credit pack (09 §3) — 404/501 ⇒ Stripe not wired
+// A 404/501 means "not built yet" — surfaced as null / available:false so the page degrades to disabled/empty
+// states instead of erroring. No fabricated balances, no fake checkouts.
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { RevealType } from "@leadwolf/types";
+import type { TenantPlan, UsageReveal } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
   return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
 }
 
-/** A single metered reveal from /credits/usage — the usage-history row shape (09 §3, 12 §4). */
-export interface UsageReveal {
-  id: string;
-  contactId: string;
-  revealType: RevealType;
-  creditsConsumed: number;
-  revealedAt: string;
+function notBuilt(status: number): boolean {
+  return status === 404 || status === 501;
 }
 
 export async function fetchBalance(): Promise<number> {
@@ -32,4 +35,28 @@ export async function fetchUsage(limit = 100): Promise<UsageReveal[]> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load usage history"));
   const data = (await res.json()) as { reveals: UsageReveal[] };
   return data.reveals;
+}
+
+/** Current tenant's plan/seat/limit envelope (09 §3.1). null when the route isn't built yet. */
+export async function fetchTenantPlan(): Promise<TenantPlan | null> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/tenants/me`);
+  if (notBuilt(res.status)) return null;
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load plan"));
+  return (await res.json()) as TenantPlan;
+}
+
+/** Begin a Stripe credit-pack top-up (09 §3). `available:false` ⇒ Stripe isn't wired (404/501) — the page
+ *  toasts "coming soon" rather than inventing a checkout. Never fabricates a URL. */
+export async function startCheckout(
+  pack: string,
+): Promise<{ available: boolean; checkoutUrl?: string }> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/checkout`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ pack }),
+  });
+  if (notBuilt(res.status)) return { available: false };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not start checkout"));
+  const data = (await res.json()) as { checkoutUrl?: string };
+  return { available: true, checkoutUrl: data.checkoutUrl };
 }
