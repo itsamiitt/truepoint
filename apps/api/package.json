@@ -13,6 +13,7 @@
     "@leadwolf/config": "workspace:*",
     "@leadwolf/core": "workspace:*",
     "@leadwolf/db": "workspace:*",
+    "@leadwolf/search": "workspace:*",
     "@leadwolf/types": "workspace:*",
     "hono": "4.6.13",
     "@leadwolf/integrations": "workspace:*",

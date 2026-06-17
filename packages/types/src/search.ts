@@ -123,6 +123,13 @@ export const contactQuery = z.object({
 });
 export type ContactQuery = z.infer<typeof contactQuery>;
 
+/** A facet-count request: the active query + which facets to count (POST body for /search/facets). */
+export const facetCountsRequest = z.object({
+  query: contactQuery,
+  fields: z.array(facetKey).min(1),
+});
+export type FacetCountsRequest = z.infer<typeof facetCountsRequest>;
+
 // ── Port contract (24 §3.3, ADR-0002 amended by ADR-0035) ──────────────────────────────────────────────
 /** Tenant scope every SearchPort call is filtered by — never cross-workspace (ADR-0006). */
 export interface SearchCtx {

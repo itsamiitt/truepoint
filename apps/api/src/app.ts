@@ -15,6 +15,7 @@ import { importRoutes } from "./features/import/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
 import { salesNavRoutes } from "./features/sales-navigator/index.ts";
+import { searchRoutes } from "./features/search/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
 import { workspacesRoutes } from "./features/workspaces/index.ts";
 import { onError } from "./middleware/error.ts";
@@ -37,6 +38,7 @@ app.route("/api/v1/imports", importRoutes);
 app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal
 app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path overlap either
+app.route("/api/v1/search", searchRoutes); // 24/ADR-0035: filtered search, typeahead, facet counts
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/outreach", outreachRoutes);
 app.route("/api/v1/billing", billingRoutes);
