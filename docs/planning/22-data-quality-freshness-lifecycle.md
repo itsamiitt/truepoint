@@ -1,10 +1,11 @@
 # 22 — Data Quality, Freshness & Lifecycle
 
 > How data stays **correct and current** after it enters: the `data_quality_score` formula, per-field
-> **freshness SLAs** + decay, scheduled re-verification, coverage/match-rate targets, entity-resolution
-> quality + manual review, and retention/purge.
+> **freshness SLAs** + decay, scheduled re-verification, coverage/match-rate targets (including **bulk
+> match-rate** + verify-on-match, §9–§10), entity-resolution quality + manual review, and retention/purge.
 > [ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md) locks the policy;
-> downstream of acquisition ([21](./21-data-acquisition-sourcing.md)) and enrichment ([06](./06-enrichment-engine.md)).
+> downstream of acquisition ([21](./21-data-acquisition-sourcing.md)) and enrichment ([06](./06-enrichment-engine.md)),
+> and feeding bulk enrichment ([30](./30-bulk-enrichment-pipeline.md), [ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md)).
 
 ## 1. Principles
 
@@ -86,15 +87,66 @@ Breaching a threshold pages Ops (`13`, `19 §3`) and triggers provider/registry/
 - **Staff** Data-Ops (`13`): coverage/match-rate trends, ER review queue, verification-job throughput,
   provider quality.
 
+## 9. Bulk match-rate & coverage targets
+
+Bulk CSV enrichment ([30 §5](./30-bulk-enrichment-pipeline.md),
+[ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md), milestone `M17`) is
+**match-first**: each input row is resolved against our own corpus before any provider spend, recording a
+`match_method` (`deterministic|fuzzy|none`) and a `match_outcome`
+(`matched_internal|matched_provider|unmatched`). These internal targets — alerted on the
+economics/Data-Health dashboards (`06 §10`, §8) — extend the coverage/ER targets in §5; they are **engineering
+targets, not customer promises**, and are validated against our own data as bulk volume accrues.
+
+**Match-rate by input key** (industry-approximate; calibrate per dataset):
+
+| Input key | Match-rate target (approx.) |
+|---|---|
+| Email-keyed | ~70–85% |
+| Phone-keyed | ~50–65% |
+| Company-keyed (domain/name) | ~85–95% |
+
+**Match-source split** (where a matched row resolved):
+
+| `match_outcome` | Initial target |
+|---|---|
+| `matched_internal` (own corpus, no provider spend) | ≥ 60% of matched rows |
+| `matched_provider` (waterfall fill at match time) | remainder |
+| `unmatched` | tracked as a coverage gap, fed to provider/registry/contribution fill (`21 §8`) |
+
+The §5 **ER match precision ≥ 0.95** and **false-merge ≤ 0.5%** targets **apply unchanged to bulk** — a
+match-first resolver must not relax merge precision under volume. Breaching any threshold pages Ops
+(`13`, `19 §3`) exactly as in §5.
+
+## 10. Verify-on-bulk-match
+
+A matched row is **not trusted on match alone** — it re-enters the standard pipeline so a bulk export carries
+the same correctness guarantees as a single reveal:
+
+- **Same verification + scoring path.** Matched rows feed email verify / phone validation (`06 §9`) and the
+  unchanged `data_quality_score = round(100 × (0.4·completeness + 0.3·verification + 0.3·freshness))` (§2),
+  with `freshness_status` (§3) recomputed against each field's SLA at match time. No bulk-only formula.
+- **Charge-only-for-`valid`.** [ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)
+  (H13) governs bulk identically: only `valid` rows are charged; `invalid`/`catch_all`/`unknown`/miss →
+  **0 credits**; confirmed bounces inside the guarantee window earn **credit-back** (`07 §3`).
+- **Low-confidence fuzzy → manual review.** A `match_method = fuzzy` row below the per-dataset Splink
+  threshold routes to the **manual-review queue** (§6, `06 §9`; workflow open-question `06 §11`) rather than
+  auto-merging — preserving the §5/§9 false-merge bound at bulk scale
+  ([ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md)).
+
 ## Links
-- **Links to:** [03 §5/§14](./03-database-design.md), [06 §9/§10](./06-enrichment-engine.md),
+- **Links to:** [03 §5/§14](./03-database-design.md), [06 §9/§10/§11](./06-enrichment-engine.md),
   [08 §7](./08-compliance.md), [07 §3](./07-billing-credits.md), [13](./13-platform-admin.md),
-  [20](./20-event-driven-realtime-backbone.md), [21](./21-data-acquisition-sourcing.md), [10](./10-roadmap.md),
+  [20](./20-event-driven-realtime-backbone.md), [21 §8](./21-data-acquisition-sourcing.md), [10](./10-roadmap.md),
+  [30 §5/§9](./30-bulk-enrichment-pipeline.md),
   [ADR-0025](./decisions/ADR-0025-data-freshness-decay-and-reverification-lifecycle.md),
-  [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)
-- **Linked from:** [00 §7](./00-overview.md#7-decision-log), [06 §9](./06-enrichment-engine.md), [03 §14](./03-database-design.md), README
+  [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md),
+  [ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md),
+  [ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md)
+- **Linked from:** [00 §7](./00-overview.md#7-decision-log), [06 §9](./06-enrichment-engine.md), [03 §14](./03-database-design.md), [30 §5/§9](./30-bulk-enrichment-pipeline.md), README
 
 ## Open questions
 1. Sub-score weights (0.4/0.3/0.3) and decay curve shape — tune from measured decay.
 2. Re-verify budget per plan tier (how aggressive by default) — `07`/`12`.
 3. Manual-review SLA + staffing for low-confidence merges — `13`.
+4. Bulk match-rate targets (§9) are industry-approximate — recalibrate per input key from our own measured
+   data, and set the `matched_internal` floor by segment ([30 §5](./30-bulk-enrichment-pipeline.md)).
