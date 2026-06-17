@@ -1,8 +1,10 @@
 /*
- * sequences.module.css — co-located styles for the Sequences destination (11 §4.3 MVP slice). Light/
+ * sequences.module.css — co-located styles for the Sequences destination (11 §4.3, ADR-0009). Light/
  * monochrome per the TruePoint tokens (packages/ui/src/tokens.css); color appears only via StatusBadge
- * tones + the tiny feedback dots. Calm, Linear/Vercel-flat: hairline borders, whitespace, no shadows.
- * One cohesive stylesheet for the whole destination (list · builder · enrollment), hence its length.
+ * tones, the Progress bar, and the tiny feedback dots. Calm, Linear/Vercel-flat: hairline borders,
+ * whitespace, no shadows. One cohesive stylesheet for the whole destination (list · builder · enrollment ·
+ * templates · send status · drafts), hence its length. Most async/empty/error states render through the
+ * shared State Kit (@leadwolf/ui), so this file holds layout, not state chrome.
  */
 
 .page {
@@ -10,13 +12,22 @@
   flex-direction: column;
   gap: 24px;
   padding: 28px 32px 48px;
-  max-width: 880px;
+  max-width: 960px;
+  animation: tp-fade-in 0.18s var(--tp-ease) both;
 }
 
 .heading {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headingText {
+  display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .title {
@@ -33,6 +44,17 @@
   color: var(--tp-ink-3);
 }
 
+.tabsRow {
+  border-bottom: 1px solid var(--tp-hairline-2);
+}
+
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  animation: tp-fade-in 0.16s var(--tp-ease) both;
+}
+
 .card {
   background: var(--tp-surface);
   border: 1px solid var(--tp-hairline-2);
@@ -42,9 +64,17 @@
 
 .cardHeader {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cardHeaderText {
+  display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: 16px;
+  min-width: 0;
 }
 
 .cardTitle {
@@ -62,338 +92,212 @@
   color: var(--tp-ink-3);
 }
 
-/* ── Sequence list ─────────────────────────────────────────────────────────────────────────────── */
-.seqList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* ── Sequence list (DataTable cells) ───────────────────────────────────────────────────────────── */
+.seqName {
   display: flex;
   flex-direction: column;
-}
-
-.seqList li + li {
-  border-top: 1px solid var(--tp-hairline);
-}
-
-.seqRow {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  margin: 0;
-  padding: 12px 10px;
-  font: inherit;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.seqRow:hover {
-  background: var(--nav-hover-fill);
-}
-
-.seqRow[aria-pressed="true"] {
-  background: var(--nav-active-fill);
-}
-
-.seqName {
-  flex: 1 1 auto;
+  gap: 2px;
   min-width: 0;
+}
+
+.seqNameMain {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tp-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--tp-ink);
 }
 
-.seqMeta {
-  flex: 0 0 auto;
+.seqNameSub {
   font-size: 12px;
   color: var(--tp-ink-4);
   white-space: nowrap;
 }
 
-/* ── Forms (builder + enroll) ──────────────────────────────────────────────────────────────────── */
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.row {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1 1 200px;
-  min-width: 0;
-}
-
-.fieldNarrow {
-  flex: 0 1 160px;
-}
-
-.label {
-  font-size: 13px;
-  font-weight: 500;
+.numCell {
+  font-variant-numeric: tabular-nums;
   color: var(--tp-ink-2);
 }
 
-.input,
-.select,
-.textarea {
-  appearance: none;
-  font: inherit;
-  font-size: 14px;
-  color: var(--tp-ink);
-  background: var(--tp-surface);
-  border: 1px solid var(--tp-hairline-2);
-  border-radius: var(--radius);
-}
-
-.input,
-.select {
-  height: 38px;
-  padding: 0 12px;
-}
-
-.textarea {
-  min-height: 96px;
-  padding: 10px 12px;
-  resize: vertical;
-}
-
-.select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236b7280' stroke-width='1.5' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
-}
-
-.input::placeholder,
-.textarea::placeholder {
-  color: var(--tp-ink-4);
-}
-
-.input:focus-visible,
-.select:focus-visible,
-.textarea:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-  border-color: var(--tp-ink-4);
-}
-
-.fieldNote {
-  font-size: 12px;
-  color: var(--tp-ink-4);
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-/* Sits beside a labeled field in a .row; pins the control to the field's input line. */
-.rowEnd {
-  align-self: flex-end;
-}
-
-.inlineLink {
-  color: var(--tp-ink);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.button {
-  appearance: none;
-  height: 38px;
-  padding: 0 16px;
-  font: inherit;
-  font-weight: 500;
-  color: #fff;
-  background: var(--tp-btn);
-  border: 0;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-
-.button:hover:not(:disabled) {
-  background: var(--tp-btn-700);
-}
-
-.button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.ghostButton {
-  appearance: none;
-  height: 38px;
-  padding: 0 16px;
-  font: inherit;
-  font-weight: 500;
-  color: var(--tp-ink-2);
-  background: var(--tp-surface);
-  border: 1px solid var(--tp-hairline-2);
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-
-.ghostButton:hover:not(:disabled) {
-  background: var(--nav-hover-fill);
-}
-
-.ghostButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ── Steps recap (builder phase 2) ─────────────────────────────────────────────────────────────── */
-.stepList {
-  list-style: none;
-  margin: 0 0 16px;
-  padding: 0;
+/* The compact per-metric funnel cell inside the list row (sent / open% / reply% etc.). */
+.funnelCell {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
 }
 
-.stepItem {
+.funnelTop {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 8px 0;
-  font-size: 13px;
-}
-
-.stepItem + .stepItem {
-  border-top: 1px solid var(--tp-hairline);
-}
-
-.stepOrder {
-  flex: 0 0 auto;
-  font-family: var(--font-mono);
+  justify-content: space-between;
+  gap: 8px;
   font-size: 12px;
-  color: var(--tp-ink-4);
 }
 
-.stepSubject {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.funnelTopValue {
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   color: var(--tp-ink);
 }
 
-.stepDelay {
-  flex: 0 0 auto;
-  font-size: 12px;
+.funnelTopMuted {
   color: var(--tp-ink-4);
-  white-space: nowrap;
 }
 
-/* ── Enrollment log table ──────────────────────────────────────────────────────────────────────── */
-.tableWrap {
-  overflow-x: auto;
+.rowActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
+/* ── Builder drawer ────────────────────────────────────────────────────────────────────────────── */
+.drawerForm {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.stepCard {
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--tp-surface);
+}
+
+.stepCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stepCardTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
-}
-
-.table th {
-  text-align: left;
-  font-weight: 500;
-  color: var(--tp-ink-4);
-  padding: 0 16px 10px 0;
-  border-bottom: 1px solid var(--tp-hairline-2);
-  white-space: nowrap;
-}
-
-.table td {
-  padding: 12px 16px 12px 0;
-  border-bottom: 1px solid var(--tp-hairline);
+  font-weight: 600;
   color: var(--tp-ink-2);
-  white-space: nowrap;
 }
 
-.table tr:last-child td {
-  border-bottom: none;
-}
-
-/* A row whose send just failed hands its hairline to the failure note beneath it. */
-.rowWithNote td {
-  border-bottom: none;
-}
-
-.noteRow td {
-  padding: 0 16px 12px 0;
-  white-space: normal;
-}
-
-.mono {
+.stepOrderBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--tp-surface-3);
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--tp-ink-3);
 }
 
-.stepCell {
-  font-variant-numeric: tabular-nums;
+.stepCardActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.actionCell {
-  text-align: right;
+.stepFields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.smallButton {
-  appearance: none;
-  height: 30px;
-  padding: 0 12px;
-  font: inherit;
+.fieldRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fieldRow > * {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.fieldNarrow {
+  flex: 0 1 130px;
+}
+
+.linkedinNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
   font-size: 12px;
-  font-weight: 500;
-  color: var(--tp-ink-2);
-  background: var(--tp-surface);
+  color: var(--tp-ink-3);
+}
+
+.noteDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.suppressionNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
   border: 1px solid var(--tp-hairline-2);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.smallButton:hover:not(:disabled) {
-  background: var(--nav-hover-fill);
-}
-
-.smallButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* "neutral" enrollment statuses: a plain grey pill, no status dot (color stays earned). */
-.neutralPill {
-  display: inline-block;
+  border-radius: var(--radius);
+  background: var(--tp-surface-2);
   font-size: 12px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--tp-surface-3);
-  color: var(--tp-ink-2);
+  line-height: 1.5;
+  color: var(--tp-ink-3);
 }
 
-/* ── Feedback / quiet states ───────────────────────────────────────────────────────────────────── */
+.drawerFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.drawerError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.addStepRow {
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
+}
+
+/* ── Enrollment panel ──────────────────────────────────────────────────────────────────────────── */
+.enrollForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.enrollRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.grow {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
 .hint {
   display: flex;
   align-items: flex-start;
@@ -412,7 +316,7 @@
   background: var(--tp-ink-4);
 }
 
-.dncNotice {
+.notice {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -421,31 +325,7 @@
   color: var(--tp-ink-2);
 }
 
-.dncDot {
-  flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: var(--warning);
-}
-
-.quietFailure {
-  margin: 0;
-  font-size: 12px;
-  color: var(--tp-ink-3);
-}
-
-.success {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0;
-  font-size: 13px;
-  color: var(--tp-ink-2);
-}
-
-.successDot {
+.noticeDotSuccess {
   flex-shrink: 0;
   width: 6px;
   height: 6px;
@@ -454,29 +334,261 @@
   background: var(--success);
 }
 
-.muted {
-  margin: 0;
-  font-size: 13px;
-  color: var(--tp-ink-3);
-}
-
-.error {
-  margin: 0;
-  font-size: 13px;
-  color: var(--danger);
-}
-
-.loadingRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  font-size: 13px;
-  color: var(--tp-ink-3);
+.noticeDotWarning {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--warning);
 }
 
 .panelDivider {
   margin: 20px 0 16px;
   border: 0;
   border-top: 1px solid var(--tp-hairline);
+}
+
+.inlineLink {
+  color: var(--tp-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── Enrollment log table cells ────────────────────────────────────────────────────────────────── */
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+.neutralPill {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--tp-surface-3);
+  color: var(--tp-ink-2);
+}
+
+.failureNote {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.failureNoteQuiet {
+  color: var(--tp-ink-3);
+}
+
+.failureNoteError {
+  color: var(--danger);
+}
+
+/* ── Send status dashboard ─────────────────────────────────────────────────────────────────────── */
+.statTiles {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.funnelList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.funnelStage {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) 96px;
+  align-items: center;
+  gap: 12px;
+}
+
+.funnelStageLabel {
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+
+.funnelStageValue {
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-ink-3);
+}
+
+.sendStatusPicker {
+  margin-bottom: 16px;
+  max-width: 320px;
+}
+
+/* ── Templates panel ───────────────────────────────────────────────────────────────────────────── */
+.templateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.templateCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+}
+
+.templateHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.templateName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tp-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.templateSubject {
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+
+.templateBody {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tp-ink-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mergeFieldList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mergeFieldRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  font-size: 13px;
+}
+
+.mergeFieldRow + .mergeFieldRow {
+  border-top: 1px solid var(--tp-hairline);
+}
+
+.mergeToken {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink);
+  background: var(--tp-surface-3);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.mergeDesc {
+  color: var(--tp-ink-3);
+}
+
+/* ── Draft review panel ────────────────────────────────────────────────────────────────────────── */
+.draftList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.draftCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+}
+
+.draftHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.draftMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.draftSubject {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tp-ink);
+}
+
+.draftBody {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--tp-ink-2);
+  white-space: pre-wrap;
+}
+
+.draftFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reviewGate {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+/* ── Generic helpers ───────────────────────────────────────────────────────────────────────────── */
+.muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.footnote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+@media (max-width: 720px) {
+  .statTiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .heading {
+    flex-direction: column;
+  }
 }
