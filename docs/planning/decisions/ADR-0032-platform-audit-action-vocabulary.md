@@ -76,3 +76,34 @@ routing without weakening the tenant `audit_log` `NOT NULL` / RLS invariant (H1/
 
 The tenant-less identity events grow into a high-volume **security-events** stream (then split them into a
 dedicated store), or staff volume warrants a richer permission-derived action taxonomy.
+
+## Addendum (2026-06-17) — tenant `audit_log` vocabulary expansion (G-CMP-1 follow-on)
+
+This ADR's separate-enum decision (above) is unchanged. While settling the `platform_audit_log` vocabulary,
+the **tenant** `audit_log` closed enum ([audit-log-enum.md](../audit-log-enum.md)) was found to still omit the
+new entity types introduced by [ADR-0028](./ADR-0028-record-customization-layer.md) (M8 record customization),
+the automation **lifecycle** verbs of [ADR-0026](./ADR-0026-workflow-automation-engine.md) (M16) beyond rule
+CRUD, and the AI config/draft-moderation actions of
+[ADR-0023](./ADR-0023-ai-provider-and-intelligence-architecture.md) (M14). These were the
+[audit-log-enum.md §6](../audit-log-enum.md) open questions **OQ-A** and **OQ-C**, plus the automation
+lifecycle gap.
+
+**Decision:** resolve OQ-A and OQ-C toward **dedicated, append-only** `entity.verb` actions on the tenant
+`audit_log` (not folding into `settings.update` / `contact.update`), so that record-customization, automation
+lifecycle, and AI moderation events are exhaustively switchable in their own right — the same rationale that
+keeps the enum granular for SOC 2 evidence. The values added (all `entity.verb`, present-tense verbs per
+[audit-log-enum.md §3](../audit-log-enum.md)):
+
+- **Record customization (ADR-0028 / M8):** `custom_field.create/update/delete`,
+  `tag.create/update/delete/assign/unassign`, `pipeline_stage.create/update/delete/assign`,
+  `saved_search.create/update/delete`.
+- **Automation lifecycle (ADR-0026 / M16):** `automation.rule.enable/disable/run` (rule CRUD already existed).
+- **AI intelligence (ADR-0023 / M14):** `ai.config.update`, `ai.draft.approve`, `ai.draft.reject`.
+
+These are **additive and append-only** — nothing is removed or renamed. They live on the **tenant** enum
+(`packages/types/src/billing.ts` `auditAction` + the `audit_log_action_enum` CHECK mirror in
+`packages/db/src/schema/billing.ts`), are mirrored in [08 §5](../08-compliance.md) and
+[audit-log-enum.md §2/§6](../audit-log-enum.md), and are all added to the **PENDING** set of the coverage
+drift-guard (`packages/types/src/auditCoverage.test.ts`) since their owning services are not built yet. This
+does **not** change the separate-`platform_audit_action` decision — staff/admin and tenant-less identity
+events still get their own enum once the `apps/admin` track lands.

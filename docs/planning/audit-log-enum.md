@@ -39,7 +39,7 @@ honest and the gap does not silently reopen.
 enum**. There is no `AUDIT_ACTIONS` array, and no type literally named `audit_action`. The Zod list and the
 CHECK list are two **hand-maintained** lists that must match (see §7).
 
-### 2.2 The value set — 57 values, three groups
+### 2.2 The value set — 78 values, four groups
 
 Exactly as declared in `auditAction` (`packages/types/src/billing.ts`). In the prose docs (08 §5, 03 §7)
 shared prefixes are slash-compressed (`contact.create/update/delete`); the code carries the fully-expanded
@@ -74,6 +74,24 @@ expressible.
 | `template.create` / `template.update` / `template.delete` | Message template CRUD |
 | `settings.update` | Any workspace/tenant settings write ([29](./29-settings-administration-architecture.md)) |
 | `automation.rule.create` / `automation.rule.update` / `automation.rule.delete` | Automation rule CRUD ([ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md)) |
+
+**D. Record-customization / automation-lifecycle / AI mutations (21)** — *added per
+[ADR-0032 Addendum](./decisions/ADR-0032-platform-audit-action-vocabulary.md)* resolving §6 OQ-A and OQ-C toward
+dedicated `entity.verb` actions for the new entity types of [ADR-0028](./decisions/ADR-0028-record-customization-layer.md)
+(M8), the automation **lifecycle** verbs of [ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md) (M16),
+and the AI moderation actions of [ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md) (M14).
+
+| Value | Covers |
+|---|---|
+| `custom_field.create` / `custom_field.update` / `custom_field.delete` | Custom-field definition CRUD ([ADR-0028](./decisions/ADR-0028-record-customization-layer.md)) |
+| `tag.create` / `tag.update` / `tag.delete` | Tag definition CRUD ([ADR-0028](./decisions/ADR-0028-record-customization-layer.md)) |
+| `tag.assign` / `tag.unassign` | Tag attached to / removed from a record |
+| `pipeline_stage.create` / `pipeline_stage.update` / `pipeline_stage.delete` | Custom pipeline-stage CRUD ([ADR-0028](./decisions/ADR-0028-record-customization-layer.md)) |
+| `pipeline_stage.assign` | Record moved to a pipeline stage |
+| `saved_search.create` / `saved_search.update` / `saved_search.delete` | Saved-search / segment CRUD ([ADR-0028](./decisions/ADR-0028-record-customization-layer.md)) |
+| `automation.rule.enable` / `automation.rule.disable` / `automation.rule.run` | Automation rule lifecycle: toggled on/off, manual run ([ADR-0026](./decisions/ADR-0026-workflow-automation-engine.md)) |
+| `ai.config.update` | AI configuration write ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)) |
+| `ai.draft.approve` / `ai.draft.reject` | Human moderation of an AI-generated draft ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)) |
 
 **C. Auth events (20)** — owned by [17 §9](./17-authentication.md); carried on `audit_log` with `origin_domain`.
 
@@ -137,9 +155,13 @@ Any new value MUST follow the established style — do not introduce a second co
   record/config mutation actions (group **B**, §2.2). Landed in [08 §5], mirrored in [03 §7], and in code
   (the `auditAction` group commented `// record/config mutations (28 G-CMP-1)`).
 - **Scope note.** [28 §3.17]'s *recommendation* also floated `ai.config.*` and `report.export`; Pass 1
-  intentionally did **not** adopt these — AI is audited via existing values / `ai_requests` (OQ-C) and
-  audit-log / report export via the existing `export` action (§3, §6). The landed group **B** is therefore
-  narrower than the original gap recommendation.
+  intentionally did **not** adopt these — AI was audited via existing values / `ai_requests` (OQ-C) and
+  audit-log / report export via the existing `export` action (§3, §6). The landed group **B** was therefore
+  narrower than the original gap recommendation. **A later pass (2026-06-17,
+  [ADR-0032 Addendum](./decisions/ADR-0032-platform-audit-action-vocabulary.md)) then added the dedicated
+  `ai.config.update`/`ai.draft.*` actions** (resolving OQ-C) plus the record-customization and
+  automation-lifecycle actions (group **D**, §2.2; resolving OQ-A); `report.export` is still folded into
+  `export`.
 - **Status.** G-CMP-1 / F-8 are **closed for the vocabulary** ("the contract is expressible within the
   closed enum"). **Residual:** vocabulary ≠ coverage — see §5. Full write-path coverage is milestone-gated
   as the owning services land.
@@ -158,7 +180,7 @@ the blocked-attempt proof survives.)* Because `packages/auth` cannot import `cor
 (`packages/auth/src/auditEvent.ts`, [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md)): its own
 `withTenantTx`, swallow-on-failure, wired for the **tenant-resolved** events (§5.1).
 
-### 5.1 Written today — verified call-sites (18 of 57)
+### 5.1 Written today — verified call-sites (18 of 78)
 
 | Action | Call-site |
 |---|---|
@@ -181,7 +203,7 @@ the blocked-attempt proof survives.)* Because `packages/auth` cannot import `cor
 | `token.issued` | `apps/auth/src/app/token/exchange/route.ts` POST |
 | `code.exchanged` | `apps/auth/src/app/token/exchange/route.ts` POST |
 
-### 5.2 Defined but not yet wired — the residual coverage backlog (39 of 57)
+### 5.2 Defined but not yet wired — the residual coverage backlog (60 of 78)
 
 These values exist in the closed enum but have **no writer call-site yet** (`writeAudit` for core,
 `recordAuthEvent` for auth); they land as their owning services / milestones do:
@@ -193,9 +215,14 @@ These values exist in the closed enum but have **no writer call-site yet** (`wri
   (`login.locked`, `token.revoke`, `session.revoked`, `device.trusted/revoked`, `oauth.link`). See
   [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md).
 - **Record/config mutations (17)** — `contact.*`, `account.*`, `list.*`, `template.*`, `settings.update`,
-  `automation.rule.*`, and `sequence.delete`. Their services are partly unbuilt (no list, settings,
-  membership, or template service writes audit today). Coverage tracks **M8** (record customization /
+  `automation.rule.create/update/delete`, and `sequence.delete`. Their services are partly unbuilt (no list,
+  settings, membership, or template service writes audit today). Coverage tracks **M8** (record customization /
   [ADR-0028](./decisions/ADR-0028-record-customization-layer.md)) and **M16** (automation).
+- **Record-customization / automation-lifecycle / AI (21)** — the group **D** additions (§2.2,
+  [ADR-0032 Addendum](./decisions/ADR-0032-platform-audit-action-vocabulary.md)): `custom_field.*`, `tag.*`
+  (incl. `assign`/`unassign`), `pipeline_stage.*` (incl. `assign`), `saved_search.*`,
+  `automation.rule.enable/disable/run`, `ai.config.update`, `ai.draft.approve/reject`. Their owning services
+  (M8 / M16 / M14) are unbuilt, so none has a writer yet.
 - **Other (8)** — `export`, `unsubscribe`, `suppression.remove`, `member.add/update/remove`, `apikey.use`,
   `dsar.rectify`.
 
@@ -211,13 +238,13 @@ new one. "New value" is flagged only where granularity genuinely requires it (an
 | Milestone (ADR) | Capability | Audit handling today | New value? |
 |---|---|---|---|
 | **M7** ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)) | Sales Navigator capture (HITL) | Captured leads land as imported contacts → `contact.create` | *Optional* `salesnav.capture` (OQ-A); legacy `sales_nav.link_added` was **not** adopted |
-| **M8** ([ADR-0028](./decisions/ADR-0028-record-customization-layer.md)) | Custom fields / tags / pipeline stages | ADR-0028 mutations write the **existing** record-mutation actions ([08 §5] *does* list `contact.*`/`list.*`/`settings.update`/…); but 08 §5 has **no** dedicated `custom_field.*`/`tag.*`/`pipeline_stage.*` for ADR-0028's new entity types | **Decision needed (OQ-A):** add `custom_field.*` / `tag.*` / `pipeline_stage.*` or fold into `settings.update` / `contact.update` |
+| **M8** ([ADR-0028](./decisions/ADR-0028-record-customization-layer.md)) | Custom fields / tags / pipeline stages / saved searches | Now have **dedicated** actions: `custom_field.*`, `tag.*` (incl. `assign`/`unassign`), `pipeline_stage.*` (incl. `assign`), `saved_search.*` (group **D**, §2.2). Pending writers (§5.2) until the M8 services land | **Yes — resolved (was OQ-A):** dedicated `entity.verb` actions added per [ADR-0032 Addendum](./decisions/ADR-0032-platform-audit-action-vocabulary.md) |
 | **M9** ([ADR-0009]/[ADR-0013]) | Outreach send engine, bounces, unsubscribe | Covered: `enroll`, `send`, `unsubscribe`; bounce → `suppression.add` + `credit.adjust` | **No** `bounce.*`/`enrollment.*`/`credit_back.*` — by design; per-send detail → `outreach_log` (OQ-B) |
 | **M10** ([26](./26-integrations-data-delivery.md)) | CRM sync / public API / webhooks | Config → `settings.update`; metered API reveal → `apikey.use` | **No** `integration.*`/`crm_sync.*`/`webhook.*`; sync runs → integration/sync logs |
 | **M11** ([ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)/[ADR-0018](./decisions/ADR-0018-auth-policy-and-mfa-enforcement-model.md)) | SSO / SCIM / domain / policy / org-roles / audit-log export | Auth events (`sso.*`, …) already in enum ([17 §9]); SCIM/domain/policy/role changes → `settings.update` / `member.update`; audit-log export → `export` | **No** dedicated `scim.*`/`domain.*`/`auth_policy.*`/`org_role.*`/`audit_log.exported` |
-| **M14** ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)) | AI intelligence layer | Every call → `ai_requests` (in DSAR scope, [08 §10]); only *material* downstream actions hit `audit_log` via existing values (e.g. approved AI draft sent → `send`) | **No** `ai.*` audit action (OQ-C) |
+| **M14** ([ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md)) | AI intelligence layer | Every call → `ai_requests` (in DSAR scope, [08 §10]); material downstream actions still hit `audit_log` via existing values (e.g. approved AI draft sent → `send`). **Config writes + human draft moderation** now have dedicated actions | **Yes — resolved (was OQ-C):** `ai.config.update`, `ai.draft.approve`, `ai.draft.reject` added per [ADR-0032 Addendum](./decisions/ADR-0032-platform-audit-action-vocabulary.md); per-call telemetry stays in `ai_requests` |
 | **M15** ([ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)) | Departments & teams | Team/role changes → `member.*` / `settings.update` | **No** dedicated `team.*` |
-| **M16** ([ADR-0026]) | Automation engine | Rule CRUD covered (`automation.rule.*`); runs → `automation_runs`; in-rule actions reuse the action they perform (e.g. enroll → `enroll`) | **No** new value for rule mutations |
+| **M16** ([ADR-0026]) | Automation engine | Rule CRUD covered (`automation.rule.create/update/delete`); **lifecycle** (enable/disable, manual run) now has dedicated `automation.rule.enable/disable/run`; in-rule actions still reuse the action they perform (e.g. enroll → `enroll`) | **Yes — added** `automation.rule.enable/disable/run` per [ADR-0032 Addendum](./decisions/ADR-0032-platform-audit-action-vocabulary.md); `automation_runs` keeps per-run telemetry |
 | **Platform admin** ([ADR-0011]) | Staff / impersonation / tenant ops | Writes the **separate** `platform_audit_log`, **not** this enum | Separate `platform_audit_action` enum — [ADR-0032](./decisions/ADR-0032-platform-audit-action-vocabulary.md) (Proposed) |
 
 ## 7. Mechanism: TS ↔ DB alignment & how to add a value
@@ -294,9 +321,9 @@ for (const action of auditAction.options) {
 
 | # | Question | Blocks | Owner |
 |---|---|---|---|
-| OQ-A | M8 record customization: add dedicated `custom_field.*`/`tag.*`/`pipeline_stage.*` actions, or fold into `settings.update`/`contact.update`? ADR-0028 adds new entity types for which [08 §5] lists no dedicated action (its existing `contact.*`/`settings.update` may suffice). | M8 DoD | M8 |
+| OQ-A | M8 record customization: add dedicated `custom_field.*`/`tag.*`/`pipeline_stage.*` actions, or fold into `settings.update`/`contact.update`? ADR-0028 adds new entity types for which [08 §5] lists no dedicated action. **Resolved** ([ADR-0032 Addendum](./decisions/ADR-0032-platform-audit-action-vocabulary.md)): added dedicated `custom_field.*`, `tag.*` (incl. assign/unassign), `pipeline_stage.*` (incl. assign), `saved_search.*` (group **D**, §2.2). | M8 DoD | M8 |
 | OQ-B | Keep `audit_log` to compliance-significant `send` only, with per-send detail in `outreach_log`? (De-facto today — confirm.) | M9 | M9 |
-| OQ-C | M14 AI: add first-class `ai.*` audit actions, or keep AI in `ai_requests` (+ DSAR scope) and only audit material downstream actions? | M14 DoD ("AI artifacts in DSAR scope") | M14 |
+| OQ-C | M14 AI: add first-class `ai.*` audit actions, or keep AI in `ai_requests` (+ DSAR scope) and only audit material downstream actions? **Resolved** ([ADR-0032 Addendum](./decisions/ADR-0032-platform-audit-action-vocabulary.md)): added `ai.config.update` + `ai.draft.approve`/`ai.draft.reject` for config writes and human draft moderation; per-call telemetry stays in `ai_requests`. | M14 DoD ("AI artifacts in DSAR scope") | M14 |
 | OQ-D | `platform_audit_log` vocabulary: share this enum, or a separate `platform_audit_action`? **Proposed in [ADR-0032](./decisions/ADR-0032-platform-audit-action-vocabulary.md)** — a separate `platform_audit_action` enum covering staff actions + the tenant-less auth events. | Platform-admin track | [ADR-0032](./decisions/ADR-0032-platform-audit-action-vocabulary.md) |
 | OQ-E | Retention/purge: is a retention-job partition delete itself an audited event? (No `audit_log.purge` value exists.) | Trust track | Trust track |
 | OQ-F | **Auth audit sink + tenancy:** how do the 20 auth-event values get written given `audit_log.tenant_id` is `NOT NULL` but auth is pre-tenant (global identity)? The sink design + the resolved-vs-tenant-less split are proposed in [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md) (**Proposed**); coupled to OQ-D. | M2 / M11 auth audit | [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md) |
