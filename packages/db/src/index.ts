@@ -146,3 +146,8 @@ export {
   type ContactMatchKeys,
   type ContactMatchCandidate,
 } from "./repositories/enrichmentJobRepository.ts";
+export {
+  savedSearchRepository,
+  type SavedSearchRow,
+  type SavedSearchInsert,
+} from "./repositories/savedSearchRepository.ts";
