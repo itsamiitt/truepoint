@@ -1,6 +1,7 @@
-// Settings ▸ User ▸ Security — placeholder until the S1 (User settings) unit lands.
-import { SettingsPlaceholder } from "@/features/settings-shell";
+// Settings ▸ User ▸ Security — mounts the settings-user slice's Security panel (12 §2). The mutations live on
+// the auth origin; this panel is read-only status + deep links.
+import { SecurityPanel } from "@/features/settings-user";
 
 export default function SecuritySettingsRoute() {
-  return <SettingsPlaceholder title="Security" />;
+  return <SecurityPanel />;
 }
