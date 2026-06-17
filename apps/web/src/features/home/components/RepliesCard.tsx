@@ -1,49 +1,52 @@
-// RepliesCard.tsx — recent inbound replies to outreach. PII-safe: references only (id/contactId/
-// sequenceId/channel/repliedAt) — no message body, no email address. Empty-state-first: a calm "no recent
-// replies" until a replies source lands. Pure presentation over HomeSummary.recentReplies. Public slice component.
+// RepliesCard.tsx — recent inbound replies to outreach. PII-safe: references only (id/contactId/sequenceId/
+// channel/repliedAt) — no message body, no email address. Empty-state-first: a calm "no recent replies"
+// until a replies source lands. Pure presentation over HomeSummary.recentReplies; all four async states
+// render through the shared WidgetCard → StateSwitch. Public slice component.
 "use client";
 
-import { Card, Spinner } from "@leadwolf/ui";
+import { StatusBadge } from "@leadwolf/ui";
+import { MessageSquare } from "lucide-react";
 import type { RecentReply } from "../types";
+import { formatRelative } from "./format";
 import styles from "./HomePage.module.css";
-import { formatDate } from "./format";
+import { WidgetCard } from "./WidgetCard";
 
 export function RepliesCard({
   replies,
   loading,
   error,
+  onRetry,
 }: {
   replies: RecentReply[];
   loading: boolean;
   error: string | null;
+  onRetry?: () => void;
 }) {
   return (
-    <Card>
-      <div className={styles.cardHeader}>
-        <h2 className={styles.cardTitle}>Recent replies</h2>
+    <WidgetCard
+      title="Recent replies"
+      icon={MessageSquare}
+      loading={loading}
+      error={error}
+      empty={replies.length === 0}
+      onRetry={onRetry}
+      emptyIcon={MessageSquare}
+      emptyTitle="No replies yet"
+      emptyDescription="Replies to your sequences land here so you can pick up the conversation."
+    >
+      <div className={styles.list}>
+        {replies.map((reply) => (
+          <div key={reply.id} className={styles.row}>
+            <span className={styles.rowStack}>
+              <span className={styles.rowLabel}>New reply</span>
+              <span className={styles.rowMeta}>{formatRelative(reply.repliedAt)}</span>
+            </span>
+            <span className={styles.rowAside}>
+              <StatusBadge tone="success">{reply.channel}</StatusBadge>
+            </span>
+          </div>
+        ))}
       </div>
-      {error ? (
-        <p className={styles.error}>{error}</p>
-      ) : loading ? (
-        <div className={styles.loadingRow}>
-          <Spinner /> Loading replies…
-        </div>
-      ) : replies.length === 0 ? (
-        <p className={styles.muted}>
-          No recent replies. Replies to your sequences will appear here.
-        </p>
-      ) : (
-        <div className={styles.list}>
-          {replies.map((reply) => (
-            <div key={reply.id} className={styles.row}>
-              <span className={styles.rowStack}>
-                <span className={styles.rowLabel}>Reply via {reply.channel}</span>
-                <span className={styles.rowMeta}>{formatDate(reply.repliedAt)}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
+    </WidgetCard>
   );
 }

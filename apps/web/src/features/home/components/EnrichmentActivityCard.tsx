@@ -1,11 +1,14 @@
 // EnrichmentActivityCard.tsx — recent enrichment-provider calls: provider name, a cache-hit/live tag, an
-// outcome status badge, and when it ran. Pure presentation over HomeSummary.enrichmentActivity.
+// outcome status badge, and when it ran. Pure presentation over HomeSummary.enrichmentActivity; all four
+// async states render through the shared WidgetCard → StateSwitch. Public slice component.
 "use client";
 
-import { Card, Spinner, StatusBadge, type StatusTone } from "@leadwolf/ui";
+import { StatusBadge, type StatusTone } from "@leadwolf/ui";
+import { Database } from "lucide-react";
 import type { EnrichmentActivity } from "../types";
-import styles from "./HomePage.module.css";
 import { formatRelative } from "./format";
+import styles from "./HomePage.module.css";
+import { WidgetCard } from "./WidgetCard";
 
 /** Map a provider call status to a monochrome-system tone (only the badge earns color). */
 function statusTone(status: string): StatusTone {
@@ -20,41 +23,40 @@ export function EnrichmentActivityCard({
   activity,
   loading,
   error,
+  onRetry,
 }: {
   activity: EnrichmentActivity[];
   loading: boolean;
   error: string | null;
+  onRetry?: () => void;
 }) {
   return (
-    <Card>
-      <div className={styles.cardHeader}>
-        <h2 className={styles.cardTitle}>Enrichment activity</h2>
+    <WidgetCard
+      title="Enrichment activity"
+      icon={Database}
+      loading={loading}
+      error={error}
+      empty={activity.length === 0}
+      onRetry={onRetry}
+      emptyIcon={Database}
+      emptyTitle="No enrichment calls yet"
+      emptyDescription="Provider lookups run as you reveal and enrich contacts — their outcomes appear here."
+    >
+      <div className={styles.list}>
+        {activity.map((a, i) => (
+          <div key={`${a.providerName}-${a.calledAt}-${i}`} className={styles.row}>
+            <span className={styles.rowStack}>
+              <span className={styles.rowLabel}>{a.providerName}</span>
+              <span className={styles.rowMeta}>
+                {a.cacheHit ? "Cache hit" : "Live"} · {formatRelative(a.calledAt)}
+              </span>
+            </span>
+            <span className={styles.rowAside}>
+              <StatusBadge tone={statusTone(a.status)}>{a.status}</StatusBadge>
+            </span>
+          </div>
+        ))}
       </div>
-      {error ? (
-        <p className={styles.error}>{error}</p>
-      ) : loading ? (
-        <div className={styles.loadingRow}>
-          <Spinner /> Loading enrichment activity…
-        </div>
-      ) : activity.length === 0 ? (
-        <p className={styles.muted}>No enrichment calls yet in this workspace.</p>
-      ) : (
-        <div className={styles.list}>
-          {activity.map((a, i) => (
-            <div key={`${a.providerName}-${a.calledAt}-${i}`} className={styles.row}>
-              <span className={styles.rowStack}>
-                <span className={styles.rowLabel}>{a.providerName}</span>
-                <span className={styles.rowMeta}>
-                  {a.cacheHit ? "Cache hit" : "Live"} · {formatRelative(a.calledAt)}
-                </span>
-              </span>
-              <span className={styles.rowAside}>
-                <StatusBadge tone={statusTone(a.status)}>{a.status}</StatusBadge>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
+    </WidgetCard>
   );
 }
