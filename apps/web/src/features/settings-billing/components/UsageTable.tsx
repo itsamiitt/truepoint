@@ -1,14 +1,12 @@
-// UsageTable.tsx — presentation of the credit usage history (one row per metered reveal). Pure
-// presentation: data comes from useBilling via the parent; the credit accounting is server-side (07 §3).
+// UsageTable.tsx — the credit usage history (one row per metered reveal) on the foundation DataTable: typed,
+// sortable columns with a quiet empty state. Pure presentation — data comes from useBilling via the parent; the
+// credit accounting is server-side (07 §3).
+"use client";
 
-import type { UsageReveal } from "../api";
+import { type Column, DataTable, EmptyState, StatusBadge } from "@leadwolf/ui";
+import { Receipt } from "lucide-react";
+import { REVEAL_LABEL, type UsageReveal } from "../types";
 import styles from "../billing.module.css";
-
-const REVEAL_LABEL: Record<string, string> = {
-  email: "Email",
-  phone: "Phone",
-  full_profile: "Full profile",
-};
 
 function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
@@ -26,40 +24,47 @@ function formatDate(iso: string): string {
   });
 }
 
+const columns: Column<UsageReveal>[] = [
+  {
+    key: "reveal",
+    header: "Reveal",
+    sortValue: (r) => r.id,
+    cell: (r) => <span className={styles.mono}>{shortId(r.id)}</span>,
+  },
+  {
+    key: "type",
+    header: "Type",
+    sortValue: (r) => r.revealType,
+    cell: (r) => <StatusBadge tone="muted">{REVEAL_LABEL[r.revealType] ?? r.revealType}</StatusBadge>,
+  },
+  {
+    key: "credits",
+    header: "Credits",
+    align: "right",
+    sortValue: (r) => r.creditsConsumed,
+    cell: (r) => <span className={styles.credits}>{r.creditsConsumed}</span>,
+  },
+  {
+    key: "date",
+    header: "Date",
+    sortValue: (r) => r.revealedAt,
+    cell: (r) => formatDate(r.revealedAt),
+  },
+];
+
 export function UsageTable({ reveals }: { reveals: UsageReveal[] }) {
-  if (reveals.length === 0) {
-    return (
-      <p className={styles.muted}>
-        No reveals yet. When you reveal a contact, each charge shows up here — fully itemized.
-      </p>
-    );
-  }
   return (
-    <div className={styles.tableWrap}>
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Reveal</th>
-            <th>Type</th>
-            <th>Credits</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          {reveals.map((r) => (
-            <tr key={r.id}>
-              <td className={styles.mono}>{shortId(r.id)}</td>
-              <td>
-                <span className={styles.typeBadge}>
-                  {REVEAL_LABEL[r.revealType] ?? r.revealType}
-                </span>
-              </td>
-              <td className={styles.credits}>{r.creditsConsumed}</td>
-              <td>{formatDate(r.revealedAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      rows={reveals}
+      rowKey={(r) => r.id}
+      empty={
+        <EmptyState
+          icon={<Receipt size={28} />}
+          title="No reveals yet"
+          description="When you reveal a contact, each charge shows up here — fully itemized."
+        />
+      }
+    />
   );
 }
