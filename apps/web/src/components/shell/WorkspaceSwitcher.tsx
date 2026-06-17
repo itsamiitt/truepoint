@@ -23,6 +23,7 @@ export function WorkspaceSwitcher() {
   const [state, setState] = useState<LoadState>("loading");
   const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [switchError, setSwitchError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,7 +52,10 @@ export function WorkspaceSwitcher() {
 
   // The command palette opens this control via a window event (decoupled — no shared module import).
   useEffect(() => {
-    const onOpen = () => setOpen(true);
+    const onOpen = () => {
+      setSwitchError(null);
+      setOpen(true);
+    };
     window.addEventListener("command:switch-workspace", onOpen);
     return () => window.removeEventListener("command:switch-workspace", onOpen);
   }, []);
@@ -79,10 +83,20 @@ export function WorkspaceSwitcher() {
       ? "Loading…"
       : (active?.name ?? (activeId ? `Workspace ${activeId.slice(0, 8)}` : "No workspace"));
 
-  function select(id: string) {
-    setOpen(false);
-    if (id === activeId) return;
-    void switchWorkspace(id);
+  // switchWorkspace reloads the page on success; on a non-2xx it throws ("switch_failed"). Catch here so the
+  // failure surfaces inline instead of dead-ending as an unhandled rejection that silently strands the user.
+  async function select(id: string) {
+    if (id === activeId) {
+      setOpen(false);
+      return;
+    }
+    setSwitchError(null);
+    try {
+      await switchWorkspace(id);
+    } catch {
+      setSwitchError("Couldn’t switch workspace. Try again.");
+      setOpen(true);
+    }
   }
 
   return (
@@ -92,7 +106,12 @@ export function WorkspaceSwitcher() {
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() =>
+          setOpen((v) => {
+            if (!v) setSwitchError(null); // reopening clears any stale failure from a prior attempt
+            return !v;
+          })
+        }
       >
         <span className="tp-ws-name">{label}</span>
         <span className="tp-ws-caret" aria-hidden="true">
@@ -105,6 +124,7 @@ export function WorkspaceSwitcher() {
         <div className={styles.menu} role="listbox" aria-label="Switch workspace" tabIndex={-1}>
           {state === "loading" && <p className={styles.state}>Loading workspaces…</p>}
           {state === "error" && <p className={styles.state}>Couldn’t load workspaces.</p>}
+          {switchError && <p className={styles.state}>{switchError}</p>}
           {state === "ready" && workspaces.length === 0 && (
             <p className={styles.state}>No workspaces.</p>
           )}
@@ -117,7 +137,7 @@ export function WorkspaceSwitcher() {
                 // biome-ignore lint/a11y/useSemanticElements: option is an ARIA composite-widget role with no native HTML element.
                 role="option"
                 aria-selected={w.id === activeId}
-                onClick={() => select(w.id)}
+                onClick={() => void select(w.id)}
               >
                 <span className={styles.optionName}>{w.name}</span>
                 <span className={styles.optionRole}>{w.role}</span>
