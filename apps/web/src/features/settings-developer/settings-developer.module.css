@@ -1,0 +1,195 @@
+/* settings-developer.module.css — layout for the Developer settings console (API keys · OAuth apps · Webhooks ·
+ * API docs). Color comes from --tp-* tokens + the @leadwolf/ui primitives; layout/structure only. */
+
+.tabs {
+  margin-bottom: 20px;
+}
+
+.panelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.panelHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.panelTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tp-ink);
+}
+.panelDesc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tp-ink-3);
+}
+
+.note {
+  font-size: 13px;
+  color: var(--tp-ink-4);
+  line-height: 1.5;
+}
+.connectNote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  line-height: 1.5;
+}
+.connectNoteIcon {
+  color: var(--tp-ink-4);
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* Dialog form bodies */
+.dialogForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 380px;
+  max-width: 460px;
+}
+.scopeList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.scopeRow {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.scopeDesc {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  margin-left: 26px;
+}
+
+/* One-time secret reveal */
+.secretBox {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.secretWarn {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tp-ink-2);
+}
+.secretRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.secretValue {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--tp-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+  word-break: break-all;
+  user-select: all;
+}
+
+/* Inline code-ish cells in tables */
+.mono {
+  font-family: var(--tp-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  color: var(--tp-ink-2);
+}
+.muted {
+  color: var(--tp-ink-4);
+}
+.scopeTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.nameCell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.uriList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rowActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+/* API docs cards */
+.docGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+.docCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.docIcon {
+  color: var(--tp-cobalt);
+  display: inline-flex;
+}
+.docTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+.docBody {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tp-ink-3);
+  flex: 1;
+}
+.docLink {
+  margin-top: 4px;
+}
+
+/* Subscribe/register event picker */
+.eventList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.eventRow {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sectionGap {
+  margin-top: 28px;
+}
+.subTitle {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
