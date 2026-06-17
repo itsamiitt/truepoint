@@ -4,6 +4,7 @@
 // expansion). Validation lives here; logic lives in @leadwolf/core/search. Leaf package — no app imports.
 
 import { z } from "zod";
+import type { MaskedContact } from "./contacts.ts";
 
 // ── Facets ───────────────────────────────────────────────────────────────────────────────────────────
 /**
@@ -85,3 +86,67 @@ export const expandedTerm = z.object({
   synonyms: z.array(z.string()),
 });
 export type ExpandedTerm = z.infer<typeof expandedTerm>;
+
+// ── Query contract (SearchPort input) ──────────────────────────────────────────────────────────────────
+/** A term facet clause: include or exclude a set of values for one facet (24 §2 multi-select is/is-not). */
+export const termFilter = z.object({
+  kind: z.literal("term"),
+  field: facetKey,
+  op: z.enum(["include", "exclude"]).default("include"),
+  values: z.array(z.string().min(1)).min(1),
+});
+export type TermFilter = z.infer<typeof termFilter>;
+
+/** A numeric range clause (headcount, revenue, score, signal recency — 24 §2). At least one bound required. */
+export const rangeFilter = z
+  .object({
+    kind: z.literal("range"),
+    field: z.string().min(1),
+    gte: z.number().optional(),
+    lte: z.number().optional(),
+  })
+  .refine((r) => r.gte !== undefined || r.lte !== undefined, "range needs gte or lte");
+export type RangeFilter = z.infer<typeof rangeFilter>;
+
+// Note: z.union (not discriminatedUnion) because rangeFilter carries a .refine() (a ZodEffects), which
+// discriminatedUnion rejects. The literal `kind` still makes each branch unambiguous to consumers.
+export const filterClause = z.union([termFilter, rangeFilter]);
+export type FilterClause = z.infer<typeof filterClause>;
+
+/** A validated search request. `cursor` drives keyset pagination (24 §6); never offset. */
+export const contactQuery = z.object({
+  text: z.string().trim().max(200).optional(),
+  filters: z.array(filterClause).default([]),
+  sort: z.enum(["relevance", "score_desc", "created_desc"]).default("relevance"),
+  cursor: z.string().optional(),
+  limit: z.number().int().min(1).max(200).default(50),
+});
+export type ContactQuery = z.infer<typeof contactQuery>;
+
+// ── Port contract (24 §3.3, ADR-0002 amended by ADR-0035) ──────────────────────────────────────────────
+/** Tenant scope every SearchPort call is filtered by — never cross-workspace (ADR-0006). */
+export interface SearchCtx {
+  workspaceId: string;
+}
+
+/** A single result row: the masked contact view + its resolved canonical title id (24 §4.2). */
+export type ContactHit = MaskedContact & { canonicalTitleId?: string };
+
+/** One keyset page of results, with the cursor for the next page and optional live facet counts (24 §5). */
+export interface SearchPage<T> {
+  hits: T[];
+  nextCursor: string | null;
+  facets?: FacetCount[];
+}
+
+/**
+ * The single seam all search goes through (ADR-0002). Callers never embed engine-specific queries; adapters
+ * (OpenSearch global / Typesense overlay / Postgres dev) live in `packages/search`. `suggest` + `facetCounts`
+ * are the ADR-0035 additions powering search-box typeahead and live facet counts.
+ */
+export interface SearchPort {
+  searchContacts(query: ContactQuery, ctx: SearchCtx): Promise<SearchPage<ContactHit>>;
+  suggest(req: SuggestQuery, ctx: SearchCtx): Promise<Suggestion[]>;
+  facetCounts(query: ContactQuery, fields: FacetKey[], ctx: SearchCtx): Promise<FacetCount[]>;
+  index(entity: "contact" | "account", id: string, ctx: SearchCtx): Promise<void>;
+}

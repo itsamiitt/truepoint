@@ -88,4 +88,5 @@ export {
   type CanonicalizedTitle,
 } from "./search/canonicalizeTitle.ts";
 export { expandTitleTerm } from "./search/expandQuery.ts";
+export { planTitleFilter, type TitleFilterPlan } from "./search/planTitleFilter.ts";
 export { CANONICAL_TITLES, type CanonicalTitle } from "./search/titleTaxonomy.ts";
