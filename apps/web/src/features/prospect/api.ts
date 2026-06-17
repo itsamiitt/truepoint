@@ -27,7 +27,7 @@ export class ApiError extends Error {
 }
 
 /** Parse a non-OK response's Problem Details into an ApiError (mirrors the import slice's helper, typed). */
-async function toApiError(res: Response, fallback: string): Promise<ApiError> {
+export async function toApiError(res: Response, fallback: string): Promise<ApiError> {
   const body = (await res.json().catch(() => null)) as
     | ({ detail?: string; title?: string; code?: string } & Record<string, unknown>)
     | null;
