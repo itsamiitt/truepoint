@@ -115,6 +115,13 @@ last-line guarantee that a handler can't read across workspaces ([03 §9](./03-d
 /compliance/dsar                POST intake; GET status   (+ public intake variant)
 
 /enrichment/:entity/:id         POST: trigger on-demand enrichment (async; returns job ref)
+
+/enrichment/bulk                POST: create a bulk CSV enrichment job (multipart CSV | S3 upload ref) → 202 job ref (M17, 30 §4)
+/enrichment/bulk/estimate       POST: sample-based match-rate + credit forecast (no charge, no job)
+/enrichment/bulk/:jobId         GET:  job status + progress + live match-rate (poll; SSE on the M12 backbone)
+/enrichment/bulk/:jobId/download GET: signed S3 URL(s) — enriched CSV + unmatched report
+/enrichment/bulk/:jobId/confirm POST: confirm after estimate (awaiting_confirmation → running)
+/enrichment/bulk/:jobId/cancel  POST: cancel a queued/running job
 ```
 
 Resource names follow the corpus-wide rename ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)):
@@ -278,6 +285,103 @@ Credits are **granted only by the webhook**, incrementing the tenant counter `te
 `purchases.stripe_event_id` is **unique** → duplicate webhooks grant exactly once
 ([07 §4](./07-billing-credits.md)).
 
+### 3.5 Bulk CSV enrichment (async job) — M17
+
+Upload a sparse CSV → match against the master graph → enrich/verify → download, at enterprise scale
+([30](./30-bulk-enrichment-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-csv-enrichment-pipeline.md)).
+This is an **async job**, mirroring `/source-imports` and `/exports` (file in → 202 + job ref → poll
+status → signed download URL), not the synchronous reveal of §3.2. The job fans out across
+`enrichment_jobs` → `enrichment_chunks` → `enrichment_rows` and is driven by the
+`BULK_ENRICHMENT_QUEUE` workers ([30 §4](./30-bulk-enrichment-pipeline.md)).
+
+**Create the job** (multipart CSV *or* a presigned-upload ref — large files upload straight to S3 first):
+```http
+POST /api/v1/enrichment/bulk
+Idempotency-Key: 1a2b... (client-generated)
+Content-Type: multipart/form-data            // OR application/json with { "upload": { "s3Ref":"..." } }
+
+# multipart: file=<csv>, and a JSON `body` part:
+{
+  "columnMapping": { "email":"Email", "fullName":"Name", "companyDomain":"Domain" },
+  "options": { "verify": true, "fillMissing": ["email","phone","title"], "skipAlreadyOwned": true }
+}
+=> 202
+{ "jobId":"...", "status":"queued" }         // status ∈ enrichment_job_status
+```
+
+**Estimate** (cheap, sample-based; **spends nothing**, creates **no** job — a forecast only):
+```http
+POST /api/v1/enrichment/bulk/estimate        // same multipart/upload-ref + columnMapping shape
+=> 200
+{ "rowCount": 48211, "estimatedMatchRate": 0.62, "estimatedCreditMicros": 29890000 }
+```
+`estimatedCreditMicros` is the forecast spend in **credit-micros** (a fractional projection over the
+sample × expected match-rate; `1e6` micros = `1` integer credit, so a whole-job total still resolves to
+the integer credits charged at the verified-match price — [07 §1](./07-billing-credits.md)). Micros are
+used only for this *forecast* (matching the `cost_micros` convention, [03 §2](./03-database-design.md#2-conventions-binding-for-all-tables));
+actual per-row charges are **integer credits**, exactly as the reveal path (§3.2).
+
+**Poll status** (progress + live match-rate; SSE later on the M12 event backbone,
+[20 §8](./20-event-driven-realtime-backbone.md)):
+```http
+GET /api/v1/enrichment/bulk/{jobId}
+=> 200
+{
+  "jobId":"...", "status":"running",
+  "progress": { "totalRows":48211, "processedRows":31044, "matchedRows":19082 },
+  "liveMatchRate": 0.61,
+  "creditsCharged": 19082,
+  "createdAt":"...", "updatedAt":"..."
+}
+```
+
+**Confirm / cancel** — the estimate→confirm gate gives the user a spend preview before any charge:
+```http
+POST /api/v1/enrichment/bulk/{jobId}/confirm   // awaiting_confirmation -> running (no-op if already past)
+POST /api/v1/enrichment/bulk/{jobId}/cancel    // queued|estimating|awaiting_confirmation|running|paused -> cancelled
+=> 200 { "jobId":"...", "status":"running" | "cancelled" }
+```
+
+**Download** (only when `completed`; signed S3 URLs, time-boxed — mirrors `/exports`):
+```http
+GET /api/v1/enrichment/bulk/{jobId}/download
+=> 200
+{ "enrichedCsvUrl":"https://...signed...", "unmatchedReportUrl":"https://...signed...", "expiresAt":"..." }
+=> 409  (Problem Details, code="job_not_complete")  when status != completed
+```
+
+**Async contract & statuses.** The lifecycle is the canonical `enrichment_job_status` vocabulary —
+`queued → estimating → awaiting_confirmation → running → completed`, with `paused`, `failed`, and
+`cancelled` as terminal/interrupt states ([30 §4](./30-bulk-enrichment-pipeline.md)):
+
+| Status | Meaning |
+|---|---|
+| `queued` | accepted (202); awaiting a `BULK_ENRICHMENT_QUEUE` worker |
+| `estimating` | sampling rows for match-rate + credit forecast |
+| `awaiting_confirmation` | estimate ready; held for `…/confirm` before spending |
+| `running` | matching/enriching/verifying chunks; counters advance |
+| `paused` | temporarily halted (entitlement/quota/admin hold); resumable |
+| `completed` | done; enriched CSV + unmatched report available at `…/download` |
+| `failed` | unrecoverable error; Problem Details on the job; no further charge |
+| `cancelled` | cancelled via `…/cancel`; partial results may still download |
+
+- **Idempotency.** `POST /enrichment/bulk` honors `Idempotency-Key` exactly like the reveal path
+  ([§5](#5-idempotency--concurrency)): a replayed key returns the **same `jobId`** instead of creating a
+  duplicate job, so a retried upload never enqueues twice. `…/confirm` and `…/cancel` are naturally
+  idempotent (terminal-state transitions are no-ops).
+- **Charge per verified match** ([07 §3](./07-billing-credits.md),
+  [ADR-0038](./decisions/ADR-0038-bulk-enrichment-credit-accounting.md)): credits are spent **only for
+  rows that resolve to a verified result**, on the **same per-verified-data rule as reveal**
+  ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)) — `invalid`/`catch_all`/
+  `unknown`/no-match rows charge **0** and land in the unmatched report; `valid` charges full; `risky`
+  is charged-but-flagged. Per-row charges decrement the same tenant counter the reveal path uses
+  (`tenants.reveal_credit_balance`, [07 §2](./07-billing-credits.md)) and feed the same
+  credit-back-on-bounce guarantee. `skipAlreadyOwned` rows reuse the existing workspace overlay and
+  charge **0** (first-reveal-wins, per workspace).
+- **Tenancy & RLS** are uniform with every other endpoint: `tenant_id`/`workspace_id` derive from auth
+  context (never the body), and the job + its chunks/rows are RLS-scoped to the active workspace
+  ([§1](#1-conventions), [03 §9](./03-database-design.md#9-row-level-security)). Scope: `enrich:write`.
+
 ## 4. Auth & authorization
 
 - **Dashboard:** authentication runs on a dedicated origin **`auth.truepoint.in`** (the IdP/BFF —
@@ -298,7 +402,7 @@ Credits are **granted only by the webhook**, incrementing the tenant counter `te
   per `tenant_sso_configs.default_role`, and **SCIM 2.0** (`scim_tokens`) syncs lifecycle
   ([17 §8](./17-authentication.md#8-sso--scim-architecture)).
 - **Machine/public:** `api_keys` (hashed, prefixed, **tenant-scoped**, bound to a workspace). Scopes
-  gate endpoints (`search:read`, `reveal:write`, `outreach:write`, `export:write`, …). Reveals via the
+  gate endpoints (`search:read`, `reveal:write`, `outreach:write`, `export:write`, `enrich:write`, …). Reveals via the
   API spend the **tenant's** credits and are metered.
 - **RBAC — two distinct axes** (drift hazard **H8**):
   - **Workspace role** on `workspace_members` (`owner/admin/member/viewer`) gates data actions in the
@@ -380,6 +484,7 @@ outbox** ([20 §2](./20-event-driven-realtime-backbone.md)); **reverse-ETL** + n
 | `score.updated` | a new `scores` row lands → `contacts.priority_score` re-cached ([ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)) |
 | `outreach.status_changed` | an enrollment's `status` or a contact's `outreach_status` changes ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)) |
 | `enrichment.completed` | an on-demand enrichment job finishes |
+| `enrichment.bulk.completed` | a bulk CSV enrichment job reaches `completed`/`failed`/`cancelled` (rowCount, matchedRows, creditsCharged) ([30 §4](./30-bulk-enrichment-pipeline.md)) |
 | `import.completed` | a `source_imports` job finishes (counts, dedup outcome) |
 | `signal.received` | an intent signal is ingested (`signal_type`, account/contact) — feeds automation ([27](./27-workflow-automation-engine.md)) |
 | `verification.completed` | a `verification_jobs` run finishes (freshness + credit-back, [22](./22-data-quality-freshness-lifecycle.md)) |
