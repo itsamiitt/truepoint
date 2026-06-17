@@ -1,18 +1,21 @@
-/* HomePage.module.css — layout-only styles for the Home cockpit: the KPI tile row, the widget grid, and the
-   list/row rhythm shared by the cards. Color and surfaces come from packages/ui primitives + --tp-* tokens;
-   this file owns spacing/structure only — nothing decorative. The grid collapses to one column at 860px. */
+/* HomePage.module.css — modern layout for the Home cockpit. Layout + rhythm only; color + surfaces come
+   from the --tp-* tokens and @leadwolf/ui primitives. Grid collapses: 3-col tiles → 2-col at 860px → 1-col
+   at 540px; widget grid: 2-col → 1-col at 860px. */
 
+/* ── Page shell ─────────────────────────────────────────────────────────────────────────────────────── */
 .page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 28px 32px 48px;
-  max-width: 1140px;
+  gap: 28px;
+  padding: 32px 32px 64px;
+  max-width: 1200px;
+  animation: tp-rise-in var(--tp-duration-slow) var(--tp-ease-out) both;
 }
 
+/* ── Heading row ─────────────────────────────────────────────────────────────────────────────────────── */
 .heading {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
@@ -21,55 +24,67 @@
 .headingText {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
 
 .title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--tp-ink);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .subtitle {
   margin: 0;
   font-size: 14px;
   color: var(--tp-ink-3);
+  font-weight: 400;
 }
 
 .refresh {
   flex: 0 0 auto;
+  padding-top: 2px;
 }
 
 /* ── Quick actions (deep-link row) ──────────────────────────────────────────────────────────────────── */
 .quickActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
 }
 
 .quickAction {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  border: 1px solid var(--tp-hairline);
-  border-radius: 8px;
-  font-size: 13px;
+  gap: 10px;
+  padding: 10px 18px 10px 12px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 10px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--tp-ink);
   text-decoration: none;
-  background: var(--tp-surface-2);
+  background: var(--tp-surface);
+  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.05), 0 1px 2px rgba(17, 24, 39, 0.04);
   transition:
     background var(--tp-duration-fast) var(--tp-ease),
-    border-color var(--tp-duration-fast) var(--tp-ease);
+    border-color var(--tp-duration-fast) var(--tp-ease),
+    box-shadow var(--tp-duration-fast) var(--tp-ease),
+    transform var(--tp-duration-fast) var(--tp-ease);
 }
 
 .quickAction:hover {
-  background: var(--tp-surface-3);
+  background: var(--tp-surface-2);
   border-color: var(--tp-ink-4);
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.08);
+  transform: translateY(-1px);
+}
+
+.quickAction:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.05);
 }
 
 .quickAction:focus-visible {
@@ -77,9 +92,17 @@
   outline-offset: 2px;
 }
 
+/* Icon bubble: cobalt-50 tint with cobalt icon — brand-allowed fill usage (04 §3). */
 .quickActionGlyph {
-  color: var(--tp-ink-3);
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--tp-cobalt-50);
+  color: var(--tp-cobalt);
+  flex-shrink: 0;
 }
 
 /* ── KPI tile row ───────────────────────────────────────────────────────────────────────────────── */
@@ -101,13 +124,13 @@
   grid-column: 1 / -1;
 }
 
-/* ── Card chrome shared by the widgets ────────────────────────────────────────────────────────────── */
+/* ── Card chrome shared by all widgets ────────────────────────────────────────────────────────────── */
 .cardHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .cardTitleWrap {
@@ -117,18 +140,25 @@
   min-width: 0;
 }
 
+/* Icon badge with subtle background */
 .cardTitleIcon {
-  color: var(--tp-ink-4);
   display: inline-flex;
-  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--tp-surface-3);
+  color: var(--tp-ink-3);
+  flex-shrink: 0;
 }
 
 .cardTitle {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.07em;
   color: var(--tp-ink-3);
 }
 
@@ -280,15 +310,15 @@
 .metric {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .metricValue {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 26px;
+  font-weight: 700;
   color: var(--tp-ink);
   line-height: 1.1;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -319,22 +349,51 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Entrance motion (respects the global prefers-reduced-motion reset) ───────────────────────────── */
+/* ── Entrance motion (respects global prefers-reduced-motion reset in tokens.css) ────────────────── */
 .enter {
   animation: tp-rise-in var(--tp-duration) var(--tp-ease-out) both;
 }
 
+/* ── Responsive breakpoints ───────────────────────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
   .page {
-    padding: 24px 20px 40px;
+    padding: 24px 20px 48px;
+    gap: 20px;
+  }
+  .title {
+    font-size: 20px;
   }
   .tiles {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .grid {
     grid-template-columns: 1fr;
   }
   .metricGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .page {
+    padding: 20px 16px 40px;
+    gap: 16px;
+  }
+  .title {
+    font-size: 18px;
+  }
+  .tiles {
+    grid-template-columns: 1fr;
+  }
+  .quickActions {
+    gap: 8px;
+  }
+  .quickAction {
+    padding: 9px 14px 9px 10px;
+    font-size: 13px;
+  }
+  .quickActionGlyph {
+    width: 26px;
+    height: 26px;
   }
 }

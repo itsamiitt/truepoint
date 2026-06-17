@@ -1,18 +1,17 @@
-// Sidebar.tsx — the compact left rail (04 §1 north-star; 11 §2). Dark text on the #f9fafb surface, a single
-// hairline right border, and a subtle fill on the active route (NO colored bar/glow). Destinations come from the
-// central navConfig (lucide icons); Settings + the team/workspace switchers + the user row are pinned at the
-// bottom. Active state derives from usePathname().
+// Sidebar.tsx — the compact left rail. Dark text on the #f9fafb surface, a single hairline right border,
+// and a subtle fill + cobalt icon on the active route (fills allowed per 04 §3; no colored glow). Responsive:
+// on mobile the rail is a fixed overlay driven by isOpen / onClose from AppShell.
 "use client";
 
 import { logout } from "@/lib/authClient";
 import { Avatar, DropdownMenu, Icon } from "@leadwolf/ui";
+import { X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type NavDestination, DESTINATIONS, SETTINGS_DESTINATION, isActive } from "./navConfig";
 import { TeamSwitcher } from "./TeamSwitcher";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
-/** "member" → "Member"; null/empty role falls back to a calm "Member" so the row never reads blank. */
 function roleLabel(role: string | null): string {
   if (!role) return "Member";
   return role.charAt(0).toUpperCase() + role.slice(1);
@@ -59,14 +58,34 @@ function UserRow({ userEmail, role }: { userEmail: string | null; role: string |
   );
 }
 
-export function Sidebar({ userEmail, role }: { userEmail: string | null; role: string | null }) {
+export function Sidebar({
+  userEmail,
+  role,
+  isOpen,
+  onClose,
+}: {
+  userEmail: string | null;
+  role: string | null;
+  isOpen?: boolean;
+  onClose?: () => void;
+}) {
   const pathname = usePathname() ?? "/";
 
   return (
-    <aside className="tp-sidebar">
+    <aside className={`tp-sidebar${isOpen ? " is-open" : ""}`}>
       <div className="tp-brand">
         <span className="tp-brand-mark" aria-hidden="true" />
         <span className="tp-brand-name">TruePoint</span>
+        {onClose ? (
+          <button
+            type="button"
+            className="tp-sidebar-close"
+            onClick={onClose}
+            aria-label="Close navigation"
+          >
+            <Icon icon={X} size={16} />
+          </button>
+        ) : null}
       </div>
 
       <nav className="tp-nav" aria-label="Primary">
