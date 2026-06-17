@@ -7,9 +7,9 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   padding: 28px 32px 48px;
-  max-width: 880px;
+  max-width: 960px;
 }
 
 .heading {
@@ -128,6 +128,10 @@
   min-width: 64px;
 }
 
+.barConv {
+  color: var(--tp-ink-4);
+}
+
 /* The off-ramp statuses (disqualified · nurture · unsubscribed), visually demoted. */
 .secondaryBlock {
   margin-top: 14px;
@@ -151,9 +155,9 @@
 }
 
 .healthRow {
-  display: flex;
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
   font-size: 13px;
@@ -163,18 +167,64 @@
   border-top: 1px solid var(--tp-hairline);
 }
 
+.healthBadge {
+  min-width: 0;
+}
+
+.healthTrack {
+  display: block;
+  min-width: 0;
+}
+
 .healthCount {
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   color: var(--tp-ink);
+  white-space: nowrap;
+  text-align: right;
 }
 
-.coverage {
-  margin: 14px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--tp-hairline);
+/* Deliverable / coverage / staleness rate bars. */
+.rates {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.rate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.rateHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rateLabel {
   font-size: 13px;
+  font-weight: 500;
   color: var(--tp-ink-2);
+}
+
+.rateValue {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.rateSub {
+  font-size: 12px;
+  color: var(--tp-ink-4);
 }
 
 /* ── Quiet states ──────────────────────────────────────────────────────────────────────────────── */
@@ -200,13 +250,82 @@
 }
 
 .footnote {
-  margin: 0;
+  margin: 12px 0 0;
   font-size: 12px;
   color: var(--tp-ink-4);
 }
 
+/* ── Dashboard switcher + filter row ───────────────────────────────────────────────────────────── */
+.tabsRow {
+  border-bottom: 1px solid var(--tp-hairline);
+  overflow-x: auto;
+}
+
+.filters {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.filterControls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filterField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 180px;
+}
+
+.filterLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tp-ink-3);
+}
+
+.filterActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Lead score & intent layout ────────────────────────────────────────────────────────────────── */
+.scoreGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.subPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.connect {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--tp-hairline);
+}
+
 @media (max-width: 720px) {
-  .tiles {
+  .tiles,
+  .rates,
+  .scoreGrid {
     grid-template-columns: 1fr;
+  }
+
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterField {
+    min-width: 0;
   }
 }
