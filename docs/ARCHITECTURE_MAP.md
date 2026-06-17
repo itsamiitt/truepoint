@@ -18,23 +18,29 @@
 > rail · masked grid · record slide-over · single + **bulk reveal** with a no-dead-ends money loop · score
 > panel), **Home** cockpit (KPI StatTiles + recent reveals/hot-leads/burn-sparkline/imports/enrichment/
 > sequence cards + the T3 **quick-actions row, tasks & replies** cards, empty-state-first), **Sequences**
-> (builder + enrollment log + send), **Reports** (client rollups), **Inbox** (placeholder), and a new
-> **Settings shell** (nested `SettingsScopeLayout` + scope nav over User/Workspace/Tenant/Developer; Billing
-> & Compliance are real, the other 8 routes are placeholders awaiting the S-units). Import is now **async**
-> (API returns `202 + jobId`, the web slice polls; a BullMQ producer enqueues the parsed rows).
-> **New `search` domain (contract-first):** query-semantics core (title canonicalization + synonym/
-> abbreviation expansion + an engine-agnostic title-filter planner), the **`SearchPort` contract** in
-> `@leadwolf/types`, and an **in-memory adapter** in `packages/search` proving it end-to-end (OpenSearch/
-> Typesense adapters land behind the same seam — ADR-0035). Auth hardening: an Edge-safe **boot self-test**
-> (`instrumentation.ts` → Node-only `bootSelfTest.ts`), typed transactional **email templates**, an
-> **infra-vs-credentials** failure classifier, and a client-IP **binding** policy.
-> **413 source files · 2 domain-vocabulary warnings (`admin`, `settings-shell` — see Notes) · 3
-> framework-root files unbucketed** (`apps/{auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs` —
-> see Notes). `apps/admin` (the staff console app) remains a **target**; the `admin` *domain* is the
-> platform-admin **API** + `platformAdmin` middleware. Design: [04](./planning/04-ui-ux-design.md),
-> [10-roadmap.md](./planning/10-roadmap.md), [11 §6](./planning/11-information-architecture.md),
-> [07 §3](./planning/07-billing-credits.md), [08](./planning/08-compliance.md), ADR-0006/0007/0008/0009/
-> 0013/0016/0035.
+> (builder + enrollment log + send + draft-review/send-status/templates panels), **Reports** (client
+> rollups across credit-usage/funnel/data-health/deliverability/intent/lead-score/team-activity), a now-real
+> **Inbox** (unified reply **threads** + **tasks**), and a **Settings shell** (nested `SettingsScopeLayout` +
+> scope nav over User/Workspace/Tenant/Developer) whose **User** (Profile/Security/Notifications) and
+> **Workspace** (General/Members) scopes are now live alongside Billing & Compliance; Tenant/Developer
+> remain placeholders. Import is **async** (API returns `202 + jobId`, the web slice polls; a BullMQ producer
+> enqueues the parsed rows).
+> **`search` domain (contract-first, now wired through the stack):** query-semantics core (title
+> canonicalization + synonym/abbreviation expansion + an engine-agnostic title-filter planner), the
+> **`SearchPort` contract** in `@leadwolf/types`, an **in-memory adapter** in `packages/search`, a
+> **`/search/*` API** (`searchPortProvider` wires the port), and the **Prospect filter rail + facet
+> typeahead** consuming it (OpenSearch/Typesense adapters land behind the same seam — ADR-0035). Auth
+> hardening: an Edge-safe **boot self-test** (`instrumentation.ts` → Node-only `bootSelfTest.ts`), typed
+> transactional **email templates**, an **infra-vs-credentials** failure classifier, and a client-IP
+> **binding** policy.
+> **457 source files · 4 domain-vocabulary warnings (`admin`, `settings-shell`, `settings-user`,
+> `settings-workspace` — see Notes) · 3 framework-root files unbucketed** (`apps/{auth,web}/next.config.mjs`
+> + `apps/auth/postcss.config.mjs` — see Notes). `apps/admin` (the staff console app) remains a **target**;
+> the `admin` *domain* is the platform-admin **API** + `platformAdmin` middleware. Design:
+> [04](./planning/04-ui-ux-design.md), [10-roadmap.md](./planning/10-roadmap.md),
+> [11 §6](./planning/11-information-architecture.md), [07 §3](./planning/07-billing-credits.md),
+> [08](./planning/08-compliance.md), [29](./planning/29-settings-administration-architecture.md),
+> ADR-0006/0007/0008/0009/0013/0016/0035.
 
 ## Repo tree (live; `apps/admin` is a target)
 
@@ -59,12 +65,12 @@ packages/                       # side-effect-free libraries, each exported via 
 apps/                           # deployable processes (thin transport adapters)
   api/   src/                   # Hono on Bun — validates the access JWT; never issues tokens  [LIVE]
     middleware/{authn,tenancy,error,rateLimit,idempotency,requireRole,platformAdmin}.ts
-    features/{auth,workspaces,import,reveal,billing,enrichment,scoring,compliance,activity,sales-navigator,outreach,home,admin}/  app.ts  server.ts
+    features/{auth,workspaces,import,reveal,billing,enrichment,scoring,compliance,activity,sales-navigator,outreach,home,search,admin}/  app.ts  server.ts
   auth/  src/                   # auth.truepoint.in IdP (Next 15) — screens + /token/* + JWKS + Edge-safe boot self-test  [LIVE]
     instrumentation.ts  bootSelfTest.ts  middleware.ts  app/*  lib/{…,authFailure,emails/*}  shared/*
   web/   src/                   # app.truepoint.in (Next 15) — the AppShell over a (shell) route group  [LIVE]
     app/(shell)/{home,prospect,sequences,inbox,reports,settings/*}  app/{page,import,auth/callback}
-    components/shell/  features/{import,prospect,home,sequences,reports,settings-billing,settings-compliance,settings-shell}/
+    components/shell/  features/{import,prospect,home,sequences,inbox,reports,settings-billing,settings-compliance,settings-shell,settings-user,settings-workspace}/
     lib/{authClient,pkce,publicConfig}
   workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring · dsar · outreach queues + health/logger  [LIVE]
     index.ts  register.ts  health.ts  logger.ts  queues/{imports,enrichment,scoring,dsar,outreach}.ts
@@ -159,7 +165,7 @@ apps/                           # deployable processes (thin transport adapters)
 - **api:** `apps/api/src/features/outreach/{routes,index}.ts` — `/outreach/sequences*` CRUD/enroll/log +
   `/log/:id/send` + `/log/:id/bounce` · **workers:** `queues/outreach.ts` (one step-delivery per job)
 
-### search — *NEW: query-semantics core + SearchPort contract (contract-first)* ([05](./planning/05-features-modules.md), ADR-0035)
+### search — *query-semantics core + SearchPort contract + `/search/*` API + Prospect rail* ([05](./planning/05-features-modules.md), [24](./planning/24-advanced-search-exploration-ux.md), ADR-0035)
 - **core:** `packages/core/src/search/` — `normalizeTitle.ts` (freetext → stable comparison key:
   lowercase/strip/abbrev-expand so "CEO" ≡ "Chief Executive Officer"), `canonicalizeTitle.ts` (resolve a
   raw title to a canonical occupation, index- and query-time), `expandQuery.ts` (a typed title term →
@@ -173,7 +179,13 @@ apps/                           # deployable processes (thin transport adapters)
   adapter/types seam — OpenSearch global + Typesense overlay land here later, ADR-0002)
 - **types:** `packages/types/src/search.ts` — the **`SearchPort` contract** + query/result Zod schemas
   (`FacetKey`, `ContactQuery`, `FilterClause`, `SuggestQuery`, `Suggestion`, `FacetCount`, `ExpandedTerm`)
-- *No web route yet — `navConfig` reserves the **Search** destination; the UI surface is upcoming.*
+- **api:** `apps/api/src/features/search/` — `routes.ts` (`GET /search/contacts`, `/search/suggest`,
+  `/search/facets`), `searchPortProvider.ts` (composition seam: wires the active SearchPort — the in-memory
+  adapter today), `index.ts`
+- **web (Prospect rail):** `apps/web/src/features/prospect/` — `searchApi.ts` (typed calls to `/search/*`),
+  `FilterRail.tsx` (the facet filter rail), `FacetTypeahead.tsx` (per-facet search-as-you-type), hooks
+  `useContactSearch.ts` (run a `ContactQuery`) + `useTypeahead.ts` (debounced suggest). *`navConfig` still
+  reserves a standalone **Search** destination; for now search powers the Prospect rail.*
 
 ### auth — *M2, global identity* ([05 §1](./planning/05-features-modules.md), [17](./planning/17-authentication.md), ADR-0019/0020)
 - **api:** `apps/api/src/features/auth/{routes,index}.ts` (GET `/auth/session` incl. the live workspace
@@ -225,35 +237,47 @@ The `apps/web` SPA wraps every destination in the **AppShell** (auth gate + side
   `NotificationsBell.tsx` + `useNotifications.ts` (client-DERIVED feed — low credits / recent imports /
   replies from `/home/summary` + balance; no notifications backend), `WorkspaceSwitcher.tsx` (lists
   `/workspaces`, switches via the auth origin)
-- **prospect** (web): `apps/web/src/features/prospect/*` — filter rail + masked grid + `RecordDetail`
-  slide-over + `RevealDialog` (single reveal); **bulk reveal**: `useBulkSelection` (id-keyed selection that
-  survives re-filtering), `BulkActionBar` (sticky count + live balance + reveal/add-to-list/clear),
-  `BulkRevealDialog` + `useBulkReveal` (runs the pure `bulkReveal.ts` policy: reveal each id, sum
-  server-reported credits, **stop on 402 / skip 403**, fire one `credits:changed` at the end),
-  `useCreditBalance` (balance synced via `credits:changed`); routed at `(shell)/prospect`
+- **prospect** (web): `apps/web/src/features/prospect/*` — masked grid + `RecordDetail` slide-over +
+  `RevealDialog` (single reveal); **bulk reveal**: `useBulkSelection` (id-keyed selection that survives
+  re-filtering), `BulkActionBar` (sticky count + live balance + reveal/add-to-list/clear), `BulkRevealDialog`
+  + `useBulkReveal` (runs the pure `bulkReveal.ts` policy: reveal each id, sum server-reported credits,
+  **stop on 402 / skip 403**, fire one `credits:changed` at the end), `useCreditBalance` (synced via
+  `credits:changed`); **search filter rail**: `FilterRail` + `FacetTypeahead` (search-as-you-type per facet)
+  over `searchApi.ts` (`/search/*`), hooks `useContactSearch` + `useTypeahead` (debounced suggest); routed at
+  `(shell)/prospect`
 - **home** (web + api + core): `apps/web/src/features/home/*` — cockpit over a single `GET /home/summary`,
   rendering KPI `StatTile`s + co-located cards (recent reveals, hot leads, credit-**burn** sparkline, recent
   imports, enrichment activity, sequence snapshot, activity feed) + the **T3** `QuickActionsRow` (deep-links
   to Prospect/Import/Sequences), `TasksCard` (today's tasks — empty-state-first), `RepliesCard` (recent
-  inbound replies, PII-safe: ids/channel/repliedAt only). Endpoint
+  inbound replies, PII-safe: ids/channel/repliedAt only), all wrapped in the shared `WidgetCard`. Endpoint
   `apps/api/src/features/home/{routes,index}.ts` (guarded by `authn`+`tenancy`+`requireRole`), composed by
   `packages/core/src/home/buildHomeSummary.ts` (fan-out over domain repos in `withTenantTx`); shared
   `homeSummarySchema` in `@leadwolf/types`. Routed at `(shell)/home` (`/` redirects to `/prospect`).
 - **sequences** (web): `apps/web/src/features/sequences/*` — list + two-phase builder (CAN-SPAM identity up
   front) + enrollment panel (log table + send-next-step with the verbatim 422 CAN-SPAM message + quiet
-  `suppressed` notices) + revealed-only enroll picker; `(shell)/sequences`
+  `suppressed` notices) + revealed-only enroll picker; plus `DraftReviewPanel` (review queued drafts before
+  send, via `useDrafts`), `SendStatusDashboard` (per-step delivery status), and `TemplatesPanel` (reusable
+  step templates, via `useTemplates`); `(shell)/sequences`
 - **reports** (web): `apps/web/src/features/reports/*` — client-side `rollups.ts` over `/credits/*` +
-  `/contacts`: credit-usage tiles + 14-day bars (`CreditUsageSection`), outreach `FunnelSection`,
-  `DataHealthSection` badges; `(shell)/reports`
-- **inbox** (page only): `(shell)/inbox/page.tsx` — calm placeholder until mailbox sync ships (M9 gate)
+  `/contacts`: `CreditUsageSection` (tiles + 14-day bars), outreach `FunnelSection`, `DataHealthSection`,
+  plus `DeliverabilitySection`, `IntentSection`, `LeadScoreSection`, `TeamActivitySection`; `(shell)/reports`
+- **inbox** (web): `apps/web/src/features/inbox/*` — the unified replies + tasks surface: `ThreadList`
+  (reply threads) + `ThreadView` (a thread) over `useInbox`/`api.ts`, `TasksPanel` over `useTasks`,
+  `InboxPage` composes them; `format.ts` + `types.ts`; `(shell)/inbox`
 - **settings shell** (web): `apps/web/src/features/settings-shell/*` — `SettingsScopeLayout` (two-column:
   scope nav left, panel right) wraps all `/settings/*` routes via `app/(shell)/settings/layout.tsx`;
-  `SettingsNav` (User/Workspace/Tenant/Developer scopes from `navConfig.SETTINGS_NAV`), `SettingsPlaceholder`
-  ("coming soon" panel). Real panels: **settings-billing** (`/settings/billing` — balance + `UsageTable`)
-  and **settings-compliance** (`/settings/compliance` — `SuppressionForm` + `SuppressionList` + public
-  `DsarForm`). The other 8 routes (`profile`/`security`/`notifications` [User], `members`/`workspace`
-  [Workspace], `organization` [Tenant], `api-keys` [Developer]) are **placeholders** awaiting the S-units.
-  *Folder slug `settings-shell` is not yet in `CANONICAL_DOMAINS` — see Notes.*
+  `SettingsNav` (User/Workspace/Tenant/Developer scopes from `navConfig.SETTINGS_NAV`), `SettingsPlaceholder`.
+  **Live scopes** (the route pages now render real panels):
+  - **settings-user** (`features/settings-user/*`, User scope) — `ProfilePanel` (via `useProfile`),
+    `SecurityPanel`, `NotificationsPanel` (via `useNotificationPrefs`) over `api.ts`; `options.ts` + `types.ts`;
+    routes `/settings/{profile,security,notifications}`.
+  - **settings-workspace** (`features/settings-workspace/*`, Workspace scope) — `WorkspaceGeneralPanel` (via
+    `useWorkspace`) + `MembersPanel` (via `useMembers`) over `api.ts`; routes `/settings/{workspace,members}`.
+  - **settings-billing** (`/settings/billing` — balance + `UsageTable`) and **settings-compliance**
+    (`/settings/compliance` — `SuppressionForm` + `SuppressionList` + public `DsarForm`).
+  - Remaining `/settings/{organization}` [Tenant] + `/settings/{api-keys}` [Developer] are **placeholders**.
+  *Folder slugs `settings-shell`, `settings-user`, `settings-workspace` are not yet in `CANONICAL_DOMAINS`
+  — see Notes.*
 - **`@leadwolf/ui` kit:** see the [Shared / platform areas](#shared--platform-areas-live) section below.
 
 _Remaining domains (`lists`, `crm-sync`, `export`, `api-public`, `ai`, `alerts`, `templates`,
@@ -268,10 +292,10 @@ _Remaining domains (`lists`, `crm-sync`, `export`, `api-public`, `ai`, `alerts`,
 | Destination | Surfaces domains | API | Route |
 |---|---|---|---|
 | **Home** | home, notifications | `/home/summary` | `(shell)/home` |
-| **Prospect** | **reveal**, **import**, search, lists, enrichment, scoring | `/imports`, `/contacts`, `/contacts/:id/reveal` | `(shell)/prospect` |
-| **Search** | search | `/search/*` *(SearchPort; web surface pending)* | *reserved in navConfig* |
+| **Prospect** | **reveal**, **import**, **search**, lists, enrichment, scoring | `/imports`, `/contacts`, `/contacts/:id/reveal`, `/search/*` | `(shell)/prospect` |
+| **Search** | search | `/search/{contacts,suggest,facets}` *(powers the Prospect rail; standalone surface reserved)* | *reserved in navConfig* |
 | **Sequences** | outreach, templates | `/outreach/*` | `(shell)/sequences` |
-| **Inbox** | inbox | `/inbox`, `/tasks` *(deferred)* | `(shell)/inbox` |
+| **Inbox** | inbox | `/inbox`, `/tasks` | `(shell)/inbox` |
 | **Reports** | reports, data-health | `/credits/*`, `/contacts` | `(shell)/reports` |
 | **Settings** | admin-settings, billing, compliance, api-public, **auth** | `/settings/*`, `/credits/*`, `/compliance/*` | `(shell)/settings/*` (4 scopes) |
 | **(auth origin)** | auth | `auth.truepoint.in/login · /password · /magic · /signup · /verify · /sso{,/oidc,/saml}/callback · /org · /workspace/switch · /token/* · /.well-known/jwks.json` | — |
@@ -378,10 +402,12 @@ flowchart TD
   under `apps/<app>/src/`, and the generator only classifies files under `src/`. A **framework constraint,
   not a placement error** — documented here per the repo's map-hygiene rule (we don't special-case the
   generator for them).
-- **Domain-vocabulary warnings (2):** the folder slugs **`admin`** (`apps/api/src/features/admin/`) and
-  **`settings-shell`** (`apps/web/src/features/settings-shell/`) are bucketed correctly but are **not yet in
-  `CANONICAL_DOMAINS`** (`lib/arch-map.mjs`). Both are real, intentional features. Reconcile by either adding
-  the slugs to the canonical list (the same way `settings-billing`/`settings-compliance` were declared — a
-  [`plan-weaver`](../.claude/skills/plan-weaver/SKILL.md) + generator change) or renaming the folder to a
-  canonical slug. Left as a flagged warning (the established handling for the pre-existing `admin` warning),
-  not papered over.
+- **Domain-vocabulary warnings (4):** the folder slugs **`admin`** (`apps/api/src/features/admin/`),
+  **`settings-shell`**, **`settings-user`**, and **`settings-workspace`** (under `apps/web/src/features/`)
+  are bucketed correctly but are **not yet in `CANONICAL_DOMAINS`** (`lib/arch-map.mjs`). All four are real,
+  intentional features (the settings-* trio are the Settings scope slices). Reconcile by either adding the
+  slugs to the canonical list (the same way `settings-billing`/`settings-compliance` were declared — a
+  [`plan-weaver`](../.claude/skills/plan-weaver/SKILL.md) + generator change) or renaming the folders to
+  canonical slugs. Left as flagged warnings (the established handling for the pre-existing `admin` warning),
+  not papered over — `settings-shell`/`-user`/`-workspace` are a consistent destination-keyed family worth
+  declaring together.
