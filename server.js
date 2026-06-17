@@ -1,6 +1,10 @@
-const http = require("node:http");
-const fs = require("node:fs");
-const path = require("node:path");
+import http from "node:http";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const PORT = 5000;
 const HOST = "0.0.0.0";

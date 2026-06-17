@@ -50,14 +50,15 @@ function clearToken(): void {
   refreshTimer = null;
 }
 
-/** Begin login: generate PKCE + state, stash the verifier, and redirect to the auth origin. */
+/** Begin login: generate PKCE + state, stash the verifier, and redirect to the auth origin.
+ * The auth app runs at basePath="/auth" so the login page is at /auth/login (not /login). */
 export async function startLogin(): Promise<void> {
   const { verifier, challenge } = await createPkcePair();
   const state = randomState();
   sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
   sessionStorage.setItem(STATE_KEY, state);
   const params = new URLSearchParams({ app_origin: APP_ORIGIN, code_challenge: challenge, state });
-  window.location.assign(`${AUTH_ORIGIN}/login?${params.toString()}`);
+  window.location.assign(`${AUTH_ORIGIN}/auth/login?${params.toString()}`);
 }
 
 /** Complete login at /auth/callback: validate state, exchange the code server-side at the auth origin. */
@@ -71,7 +72,7 @@ export async function completeLogin(code: string, returnedState: string): Promis
   sessionStorage.removeItem(PKCE_VERIFIER_KEY);
   sessionStorage.removeItem(STATE_KEY);
 
-  const res = await fetch(`${AUTH_ORIGIN}/token/exchange`, {
+  const res = await fetch(`${AUTH_ORIGIN}/auth/token/exchange`, {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
@@ -91,7 +92,7 @@ export async function completeLogin(code: string, returnedState: string): Promis
 /** Silent refresh against the auth origin (the refresh cookie rides the same-site credentialed fetch). */
 export async function silentRefresh(): Promise<boolean> {
   try {
-    const res = await fetch(`${AUTH_ORIGIN}/token/refresh`, {
+    const res = await fetch(`${AUTH_ORIGIN}/auth/token/refresh`, {
       method: "POST",
       credentials: "include",
     });
@@ -122,7 +123,7 @@ export async function fetchWithAuth(input: string, init: RequestInit = {}): Prom
  */
 export async function logout(): Promise<void> {
   try {
-    await fetch(`${AUTH_ORIGIN}/logout`, { method: "POST", credentials: "include" });
+    await fetch(`${AUTH_ORIGIN}/auth/logout`, { method: "POST", credentials: "include" });
   } catch {
     // Best-effort: logout must always feel complete to the user even if the network call fails.
   }
@@ -137,7 +138,7 @@ export async function logout(): Promise<void> {
  * scope. Throws on a non-200 (e.g. 403 no-access) so the caller can surface it and keep the current scope.
  */
 export async function switchWorkspace(workspaceId: string): Promise<void> {
-  const res = await fetch(`${AUTH_ORIGIN}/workspace/switch`, {
+  const res = await fetch(`${AUTH_ORIGIN}/auth/workspace/switch`, {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },

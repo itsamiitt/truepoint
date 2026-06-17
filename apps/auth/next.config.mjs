@@ -2,6 +2,10 @@
 // and disables the framework header that would leak the stack. Security headers are set in middleware.ts.
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // On Replit all services share one domain. basePath "/auth" puts every auth page and its
+  // /_next/ asset chunks at /auth/_next/… so they never collide with the web app's own
+  // /_next/ assets when both are proxied through the Next.js rewrites on port 5000.
+  basePath: "/auth",
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: [

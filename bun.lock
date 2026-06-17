@@ -21,6 +21,7 @@
         "@leadwolf/core": "workspace:*",
         "@leadwolf/db": "workspace:*",
         "@leadwolf/integrations": "workspace:*",
+        "@leadwolf/search": "workspace:*",
         "@leadwolf/types": "workspace:*",
         "bullmq": "^5.0.0",
         "hono": "4.6.13",
@@ -67,6 +68,7 @@
         "@leadwolf/ui": "workspace:*",
         "cmdk": "^1.1.1",
         "geist": "1.3.1",
+        "lucide-react": "1.18.0",
         "next": "15.1.2",
         "react": "19.0.0",
         "react-dom": "19.0.0",
@@ -160,6 +162,17 @@
       "version": "0.0.0",
       "dependencies": {
         "@leadwolf/config": "workspace:*",
+        "@leadwolf/core": "workspace:*",
+        "@leadwolf/types": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "5.7.2",
+      },
+    },
+    "packages/search": {
+      "name": "@leadwolf/search",
+      "version": "0.0.0",
+      "dependencies": {
         "@leadwolf/core": "workspace:*",
         "@leadwolf/types": "workspace:*",
       },
@@ -352,6 +365,8 @@
     "@leadwolf/db": ["@leadwolf/db@workspace:packages/db"],
 
     "@leadwolf/integrations": ["@leadwolf/integrations@workspace:packages/integrations"],
+
+    "@leadwolf/search": ["@leadwolf/search@workspace:packages/search"],
 
     "@leadwolf/types": ["@leadwolf/types@workspace:packages/types"],
 
