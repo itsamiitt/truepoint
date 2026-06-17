@@ -1,19 +1,64 @@
-// routes.ts — HTTP wiring for on-demand enrichment (09 §2: POST /enrichment/:entity/:id). Like the M1
-// import route, M4 runs the call inline with the configured adapters injected; bulk/background work
-// diverts to the `enrichment` worker queue (same core fn). Transport only — cache, budget breaker,
-// waterfall, and persistence live in core/db.
+// routes.ts — HTTP wiring for enrichment (09 §2). On-demand: POST /enrichment/:entity/:id runs the waterfall
+// inline with the configured adapters injected (bulk/background work diverts to the `enrichment` worker queue,
+// same core fn). Customer status surface (G-ENR-4, 06 §4.1): GET /enrichment/jobs[/:jobId] return the
+// workspace's enrichment jobs with live status/progress/counts/failure-reason for the polling UI — READ-only,
+// no mutation. Transport only — cache, budget breaker, waterfall, persistence, and the status query live in
+// core/db. The workspace is taken from the VERIFIED token via tenancy, never the request body (16 §7).
 
-import { enrichContact } from "@leadwolf/core";
+import { enrichContact, getEnrichmentJobStatus, listEnrichmentJobs } from "@leadwolf/core";
 import { defaultProviders } from "@leadwolf/integrations";
-import { ForbiddenError, ValidationError, enrichmentRequestSchema } from "@leadwolf/types";
+import {
+  type EnrichmentJobDetailResponse,
+  type EnrichmentJobListResponse,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  enrichmentJobDetailResponseSchema,
+  enrichmentJobListResponseSchema,
+  enrichmentRequestSchema,
+} from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
+import { tenancy } from "../../middleware/tenancy.ts";
 
-export const enrichmentRoutes = new Hono<{ Variables: TenancyVariables }>();
+export const enrichmentRoutes = new Hono<{ Variables: RoleVariables }>();
 
 enrichmentRoutes.use("*", authn);
 enrichmentRoutes.use("*", tenancy);
+
+// ── Customer-visible job-status surface (G-ENR-4) — READ-only; any active workspace role may view. ───────
+// Registered BEFORE POST /:entity/:id so the literal `jobs` segment is never captured as an `:entity` param.
+
+/** List this workspace's enrichment jobs (most-recent first) with live status/progress/counts. */
+enrichmentRoutes.get("/jobs", requireRole("owner", "admin", "member", "viewer"), async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace to view enrichment jobs.");
+  const jobs = await listEnrichmentJobs({
+    scope: { tenantId: c.get("tenantId"), workspaceId },
+  });
+  const body: EnrichmentJobListResponse = { jobs };
+  return c.json(enrichmentJobListResponseSchema.parse(body), 200);
+});
+
+/** One enrichment job's status detail. 404 (never leak existence) when not in the caller's workspace. */
+enrichmentRoutes.get(
+  "/jobs/:jobId",
+  requireRole("owner", "admin", "member", "viewer"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId)
+      throw new ForbiddenError("no_workspace", "Select a workspace to view enrichment jobs.");
+    const job = await getEnrichmentJobStatus({
+      scope: { tenantId: c.get("tenantId"), workspaceId },
+      jobId: c.req.param("jobId"),
+    });
+    if (!job) throw new NotFoundError("Enrichment job not found.");
+    const body: EnrichmentJobDetailResponse = job;
+    return c.json(enrichmentJobDetailResponseSchema.parse(body), 200);
+  },
+);
 
 enrichmentRoutes.post("/:entity/:id", async (c) => {
   const workspaceId = c.get("workspaceId");

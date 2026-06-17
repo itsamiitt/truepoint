@@ -81,6 +81,7 @@ export function sectionTitleFor(pathname: string): string {
     if (pathname === d.match || pathname.startsWith(`${d.match}/`)) return d.label;
   }
   if (pathname.startsWith("/import")) return "Import";
+  if (pathname.startsWith("/enrichment/jobs")) return "Enrichment jobs";
   return "TruePoint";
 }
 
@@ -97,13 +98,28 @@ export interface PaletteEntry {
 }
 
 export const PALETTE_NAVIGATE: PaletteEntry[] = [
-  ...DESTINATIONS.map<PaletteEntry>((d) => ({ id: `nav-${d.match}`, label: d.label, href: d.href })),
-  { id: "nav-settings", label: "Settings", href: SETTINGS_DESTINATION.href, keywords: ["preferences"] },
+  ...DESTINATIONS.map<PaletteEntry>((d) => ({
+    id: `nav-${d.match}`,
+    label: d.label,
+    href: d.href,
+  })),
+  {
+    id: "nav-settings",
+    label: "Settings",
+    href: SETTINGS_DESTINATION.href,
+    keywords: ["preferences"],
+  },
 ];
 
 export const PALETTE_QUICK: PaletteEntry[] = [
   { id: "act-search", label: "New search", href: "/prospect", keywords: ["prospect", "find"] },
   { id: "act-import", label: "Import contacts", href: "/import", keywords: ["csv", "upload"] },
+  {
+    id: "act-enrichment-jobs",
+    label: "Enrichment jobs",
+    href: "/enrichment/jobs",
+    keywords: ["enrich", "bulk", "status", "job", "progress"],
+  },
   {
     id: "act-topup",
     label: "Top up credits",

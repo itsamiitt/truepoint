@@ -37,6 +37,7 @@ export interface JobCreateValues {
 /** The control row read by the dashboard/worker status path (all non-PII; safe to serialize). */
 export interface JobRecord {
   id: string;
+  sourceName: string;
   status: string;
   totalRows: number;
   processedRows: number;
@@ -213,12 +214,49 @@ export const enrichmentJobRepository = {
     });
   },
 
+  /**
+   * List the workspace's jobs, most-recent first, capped at `limit` (default 50). Workspace-scoped via RLS —
+   * the `enrichment_jobs_workspace_isolation` policy restricts the SELECT to the caller's workspace, so this
+   * can never return another workspace's jobs. The control-row columns only (all non-PII; serializable) — the
+   * customer status surface (G-ENR-4) reads these, never the high-volume per-row ledger. Used by the read-only
+   * status endpoints; does not mutate.
+   */
+  async listJobsByWorkspace(scope: TenantScope, limit = 50): Promise<JobRecord[]> {
+    const capped = Math.max(1, Math.min(200, Math.trunc(limit)));
+    return withTenantTx(scope, (tx) =>
+      tx
+        .select({
+          id: enrichmentJobs.id,
+          sourceName: enrichmentJobs.sourceName,
+          status: enrichmentJobs.status,
+          totalRows: enrichmentJobs.totalRows,
+          processedRows: enrichmentJobs.processedRows,
+          matchedRows: enrichmentJobs.matchedRows,
+          enrichedRows: enrichmentJobs.enrichedRows,
+          chargedRows: enrichmentJobs.chargedRows,
+          creditEstimateMicros: enrichmentJobs.creditEstimateMicros,
+          creditSpentMicros: enrichmentJobs.creditSpentMicros,
+          columnMapping: enrichmentJobs.columnMapping,
+          options: enrichmentJobs.options,
+          idempotencyKey: enrichmentJobs.idempotencyKey,
+          createdAt: enrichmentJobs.createdAt,
+          startedAt: enrichmentJobs.startedAt,
+          completedAt: enrichmentJobs.completedAt,
+          failedReason: enrichmentJobs.failedReason,
+        })
+        .from(enrichmentJobs)
+        .orderBy(desc(enrichmentJobs.createdAt), desc(enrichmentJobs.id))
+        .limit(capped),
+    );
+  },
+
   /** Read a job by id (RLS already restricts it to the caller's workspace). Null if not visible. */
   async getJob(scope: TenantScope, jobId: string): Promise<JobRecord | null> {
     return withTenantTx(scope, async (tx) => {
       const rows = await tx
         .select({
           id: enrichmentJobs.id,
+          sourceName: enrichmentJobs.sourceName,
           status: enrichmentJobs.status,
           totalRows: enrichmentJobs.totalRows,
           processedRows: enrichmentJobs.processedRows,

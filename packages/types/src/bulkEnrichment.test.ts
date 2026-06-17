@@ -14,7 +14,10 @@ import {
   bulkEnrichProgressSchema,
   bulkEnrichRowResultSchema,
   bulkEnrichmentOptionsSchema,
+  enrichmentJobDetailResponseSchema,
+  enrichmentJobListResponseSchema,
   enrichmentJobStatus,
+  enrichmentJobSummarySchema,
   matchMethod,
   matchOutcome,
 } from "./bulkEnrichment.ts";
@@ -232,5 +235,53 @@ describe("bulkEnrichJobStatusResponseSchema", () => {
       failedReason: null,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("enrichmentJobSummarySchema (customer-visible job-status surface, G-ENR-4)", () => {
+  const running = {
+    jobId: "ej_1",
+    sourceName: "leads-q2.csv",
+    status: "running",
+    progress: 0.4,
+    counts: { total: 100, processed: 40, matched: 30, enriched: 25, charged: 10, failed: 2 },
+    creditEstimateMicros: 1_000_000,
+    creditSpentMicros: 250_000,
+    createdAt: "2026-06-17T10:00:00.000Z",
+    startedAt: "2026-06-17T10:01:00.000Z",
+    completedAt: null,
+    failedReason: null,
+  };
+
+  it("round-trips a running job summary", () => {
+    const parsed = enrichmentJobSummarySchema.parse(running);
+    expect(parsed.progress).toBe(0.4);
+    expect(parsed.counts.matched).toBe(30);
+  });
+
+  it("round-trips a failed job carrying its failure reason", () => {
+    const parsed = enrichmentJobSummarySchema.parse({
+      ...running,
+      status: "failed",
+      progress: 1,
+      completedAt: "2026-06-17T10:05:00.000Z",
+      failedReason: "provider budget exhausted",
+    });
+    expect(parsed.failedReason).toBe("provider budget exhausted");
+  });
+
+  it("rejects a progress fraction outside 0–1", () => {
+    expect(enrichmentJobSummarySchema.safeParse({ ...running, progress: 1.2 }).success).toBe(false);
+  });
+
+  it("rejects a status outside the closed enum", () => {
+    expect(enrichmentJobSummarySchema.safeParse({ ...running, status: "active" }).success).toBe(
+      false,
+    );
+  });
+
+  it("accepts the list + detail wrappers", () => {
+    expect(enrichmentJobListResponseSchema.parse({ jobs: [running] }).jobs.length).toBe(1);
+    expect(enrichmentJobDetailResponseSchema.parse(running).jobId).toBe("ej_1");
   });
 });

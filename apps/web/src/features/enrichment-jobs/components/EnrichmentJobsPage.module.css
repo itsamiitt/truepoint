@@ -1,0 +1,166 @@
+/*
+ * EnrichmentJobsPage.module.css — co-located styles for the enrichment job-status surface (G-ENR-4). Light /
+ * monochrome per the TruePoint tokens (packages/ui/src/tokens.css): ink-on-grey, color appears only via the
+ * StatusBadge / Progress tones. Calm, Linear/Vercel-flat: hairline borders, whitespace, no shadows, 8px radius.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 32px 48px;
+  max-width: 1040px;
+}
+
+.heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headingText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tp-ink);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--tp-ink-3);
+}
+
+.refresh {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.liveTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tp-ink-3);
+}
+
+.liveTag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--success);
+  animation: tp-skeleton 1.4s var(--tp-ease) infinite;
+}
+
+.card {
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 8px;
+}
+
+.fileCell {
+  font-weight: 500;
+  color: var(--tp-ink);
+}
+
+.muted {
+  color: var(--tp-ink-3);
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-ink-2);
+}
+
+.progressCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 160px;
+}
+
+.progressTrack {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Detail drawer ─────────────────────────────────────────────────────────────────────────────── */
+.drawerBody {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.drawerStatusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+.statValue {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tp-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.failure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--tp-hairline-2);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--tp-surface-2);
+}
+
+.failureLabel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+}
+
+.failureText {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tp-ink);
+}
+
+@media (max-width: 720px) {
+  .statGrid {
+    grid-template-columns: 1fr;
+  }
+}

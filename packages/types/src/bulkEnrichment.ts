@@ -129,3 +129,55 @@ export const bulkEnrichJobStatusResponseSchema = z.object({
   failedReason: z.string().nullable(),
 });
 export type BulkEnrichJobStatusResponse = z.infer<typeof bulkEnrichJobStatusResponseSchema>;
+
+// ── Customer-visible enrichment job-status surface (G-ENR-4; 06 §4.1, 31 §8) ─────────────────────────────
+// A READ-only surface so a workspace user can see their enrichment jobs with live status, progress, the
+// matched/enriched/charged + failed counts, timestamps, and the failure reason. These are the projection the
+// jobs LIST and DETAIL endpoints (GET /enrichment/jobs[/:jobId]) return; they carry NO PII (just the control
+// row's counters + file name + timestamps), so they are safe to poll into the browser. Additive — the queue
+// DTOs above stay the producer/consumer contract; these are the customer status view.
+
+/**
+ * The matched/enriched/charged + failed-row counts pulled off the `enrichment_jobs` control row. `failed` is
+ * derived — rows that were neither matched nor still pending = `processed - matched` once a job is settled —
+ * so the surface can show "how many rows didn't resolve" without reading the high-volume per-row ledger.
+ */
+export const enrichmentJobCountsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  processed: z.number().int().nonnegative(),
+  matched: z.number().int().nonnegative(),
+  enriched: z.number().int().nonnegative(),
+  charged: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+});
+export type EnrichmentJobCounts = z.infer<typeof enrichmentJobCountsSchema>;
+
+/**
+ * One row in the customer-facing jobs list: identity + the original file name, lifecycle status, a 0–1
+ * progress fraction (processed ÷ total, 0 when total is 0), the counts, the credit estimate/spend (micros),
+ * the lifecycle timestamps, and the failure reason (set only when `status = failed`). Non-PII: serializable.
+ */
+export const enrichmentJobSummarySchema = z.object({
+  jobId: z.string(),
+  sourceName: z.string(),
+  status: enrichmentJobStatus,
+  progress: z.number().min(0).max(1), // processed ÷ total (0 when total is 0)
+  counts: enrichmentJobCountsSchema,
+  creditEstimateMicros: z.number().int().nonnegative().nullable(),
+  creditSpentMicros: z.number().int().nonnegative(),
+  createdAt: z.string().datetime({ offset: true }),
+  startedAt: z.string().datetime({ offset: true }).nullable(),
+  completedAt: z.string().datetime({ offset: true }).nullable(),
+  failedReason: z.string().nullable(),
+});
+export type EnrichmentJobSummary = z.infer<typeof enrichmentJobSummarySchema>;
+
+/** The jobs LIST response (GET /enrichment/jobs): most-recent first, capped server-side. */
+export const enrichmentJobListResponseSchema = z.object({
+  jobs: z.array(enrichmentJobSummarySchema),
+});
+export type EnrichmentJobListResponse = z.infer<typeof enrichmentJobListResponseSchema>;
+
+/** The job DETAIL response (GET /enrichment/jobs/:jobId): the same summary, one job. */
+export const enrichmentJobDetailResponseSchema = enrichmentJobSummarySchema;
+export type EnrichmentJobDetailResponse = z.infer<typeof enrichmentJobDetailResponseSchema>;
