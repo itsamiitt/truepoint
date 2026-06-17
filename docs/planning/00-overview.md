@@ -138,6 +138,8 @@ email/sequencing send engine is now IN scope — see ADR-0009 — reversing the 
 | **Custom field / Stage / Tag** | Workspace-defined record customization: typed custom fields (jsonb values), pipeline **stages** mapping onto the canonical `outreach_status`, and tags ([ADR-0028](./decisions/ADR-0028-record-customization-layer.md)). |
 | **Credit ledger / lease** | The M11 append-only `credit_ledger` (`balance == SUM(delta)`; counter becomes a derived cache) and the M12 workspace/team **credit leases** that relieve the tenant-counter hot row ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)). |
 | **Org role** | A member's tenant-scope capability — `owner`/`billing_admin`/`security_admin`/`compliance_admin`/`member` on `tenant_members.org_role` ([ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md)); orthogonal to workspace + team roles. |
+| **Bulk CSV enrichment** | Upload a sparse CSV → match each row against our own data (master graph + overlay) → enrich/verify → download, run as a chunked async job at enterprise scale ([31](./31-bulk-enrichment-pipeline.md), [ADR-0039](./decisions/ADR-0039-bulk-enrichment-pipeline.md)). |
+| **MatchPort / match-first resolution** | The bulk-matching seam (`MatchPort`) that resolves each input row **internal-first** (overlay → master graph) via deterministic keys + blocking/LSH candidate index before falling back to a provider; charged per **verified match** ([ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md), [06 §11](./06-enrichment-engine.md)). |
 
 ## 7. Decision log
 
@@ -176,7 +178,7 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 | Residency | US region first, region-tagged | Migration path → [08](./08-compliance.md) |
 | Enrichment | Apollo, ZoomInfo, Clearbit (per-workspace import) | → [06](./06-enrichment-engine.md) |
 | Data quality | Email verify on reveal + phone validation | Deliverable data → [06](./06-enrichment-engine.md) |
-| Entity resolution | **Global/cross-source: deterministic keys + blocking/LSH + Splink + survivorship** | Dedup the universe, risk #1 → [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md) (amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)), [06 §9](./06-enrichment-engine.md) |
+| Entity resolution | **Global/cross-source: deterministic keys + blocking/LSH + Splink + survivorship** | Dedup the universe, risk #1 → [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md) (amended by [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), [ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md)), [06 §9](./06-enrichment-engine.md) |
 | Email verification | **Dedicated, provider-independent verifier** (e.g. ZeroBounce/NeverBounce) | Backs credit-back → [ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md), [06 §9](./06-enrichment-engine.md) |
 | Intent & technographic data | **Bombora/G2/6sense** (intent); **BuiltWith/HG Insights** (technographic) | Feeds intent_signals/scoring → [06 §2](./06-enrichment-engine.md), [ADR-0008](./decisions/ADR-0008-lead-scoring-model.md) |
 | Scale | **Billions** (master) / 100M+ (overlay) → partitioning + **Citus** + **OpenSearch** + ClickHouse + S3/Iceberg lake | → [03 §12](./03-database-design.md), [01](./01-tech-stack.md), [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md) |
@@ -202,6 +204,9 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 | Tenant org roles | **`tenant_members.org_role`** — `owner`/`billing_admin`/`security_admin`/`compliance_admin`/`member` (M11) | Delegated administration → [ADR-0030](./decisions/ADR-0030-granular-tenant-org-roles.md), [03 §4](./03-database-design.md) |
 | Auth-event audit | **Auth events split by tenant-resolvability** — resolved → `audit_log`; tenant-less → `platform_audit_log` (preserves the `NOT NULL`+RLS invariant) | Write the closed-enum auth actions without weakening RLS → [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md), [audit-log-enum.md](./audit-log-enum.md) |
 | Platform bootstrap admin | **Interim** super-admin as a `users.is_platform_admin` flag → signed `pa` JWT claim → deny-by-default `/admin/*` guard + audited `withPlatformTx` (owner pool); diverges from ADR-0011's separate staff app until `apps/admin` ships | Immediate working super-admin without the staff app → [ADR-0034](./decisions/ADR-0034-bootstrap-platform-admin.md) (interim; diverges from [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)) |
+| Bulk enrichment | Match-first bulk CSV pipeline (chunked async, internal-match-first, provider residual) | → [ADR-0039](./decisions/ADR-0039-bulk-enrichment-pipeline.md), [31](./31-bulk-enrichment-pipeline.md) |
+| Bulk matching | Deterministic KV + blocking/LSH candidate index; internal-first via MatchPort | → [ADR-0037](./decisions/ADR-0037-bulk-match-first-resolution-and-candidate-index.md), [06 §11](./06-enrichment-engine.md) |
+| Bulk billing | Charge-per-verified-match + pre-run estimate + per-tenant quota/lease | → [ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md), [07](./07-billing-credits.md) |
 
 ## 8. Open questions (tracked, resolved during doc review or early milestones)
 

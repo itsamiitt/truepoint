@@ -1,6 +1,7 @@
-// Settings ▸ Tenant ▸ Organization — placeholder until the S4 (Tenant settings) unit lands.
-import { SettingsPlaceholder } from "@/features/settings-shell";
+// Settings ▸ Tenant ▸ Organization — mounts the tenant Organization panel (settings-tenant slice). All behavior
+// lives in the feature slice; this thin route only mounts its public component inside the (shell) chrome.
+import { OrganizationPanel } from "@/features/settings-tenant";
 
 export default function OrganizationSettingsRoute() {
-  return <SettingsPlaceholder title="Organization" />;
+  return <OrganizationPanel />;
 }

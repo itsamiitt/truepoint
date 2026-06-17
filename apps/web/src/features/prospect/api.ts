@@ -5,7 +5,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { MaskedContact, RevealResponse, RevealType } from "@leadwolf/types";
+import type { ActivityRow, MaskedContact, RevealResponse, RevealType } from "@leadwolf/types";
 
 /**
  * A backend error mapped to its RFC-9457 Problem Details (09 §6). Carries the stable machine `code`
@@ -34,6 +34,15 @@ async function toApiError(res: Response, fallback: string): Promise<ApiError> {
   const message = body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
   const code = body?.code ?? "error";
   return new ApiError(message, res.status, code, body ?? {});
+}
+
+/**
+ * A route that isn't built yet answers 404/501 — that's "no data here / not wired", not a failure to surface.
+ * The activity timeline (M8) + lists/enroll/export backends gate behind later milestones, so the slice treats
+ * those as not-built (empty / honest "not available yet") rather than fabricating data or faking a mutation.
+ */
+export function notBuilt(status: number): boolean {
+  return status === 404 || status === 501;
 }
 
 /** The masked search/list (05 §6): no PII — emailDomain is the only email facet until reveal. */
@@ -90,4 +99,58 @@ export async function revealContact(id: string, revealType: RevealType): Promise
   });
   if (!res.ok) throw await toApiError(res, "Reveal failed");
   return (await res.json()) as RevealResponse;
+}
+
+/** The contact activity timeline (09 §3, M8). `available:false` means the route isn't built yet (404/501). */
+export interface ActivityFeed {
+  available: boolean;
+  activities: ActivityRow[];
+}
+
+/**
+ * GET /contacts/:id/activities — the per-contact timeline (sends/opens/clicks/replies/calls/notes). The
+ * timeline backend is an M8 gate, so a 404/501 is treated as not-built (`available:false`) and the detail
+ * panel renders a first-class EmptyState instead of an error. No fabricated activity.
+ */
+export async function fetchActivities(id: string): Promise<ActivityFeed> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${id}/activities`);
+  if (notBuilt(res.status)) return { available: false, activities: [] };
+  if (!res.ok) throw await toApiError(res, "Could not load activity");
+  const data = (await res.json()) as { activities?: ActivityRow[] };
+  return { available: true, activities: data.activities ?? [] };
+}
+
+/**
+ * POST /lists/:id/members — add the selected contacts to a list (09 §3). Lists are a later milestone, so an
+ * unbuilt backend (404/501) returns `{ ok:false }` and the caller surfaces an honest "not available yet"
+ * toast rather than faking the add. No fabricated mutation.
+ */
+export async function addContactsToList(
+  listId: string,
+  contactIds: string[],
+): Promise<{ ok: boolean }> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/lists/${listId}/members`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ contactIds }),
+  });
+  if (notBuilt(res.status)) return { ok: false };
+  if (!res.ok) throw await toApiError(res, "Could not add to list");
+  return { ok: true };
+}
+
+/**
+ * POST /outreach/enrollments — enroll the selected contacts in a sequence (09 §3.3). The outreach engine
+ * gates behind a later milestone, so an unbuilt backend (404/501) returns `{ ok:false }` and the caller is
+ * honest about it. Suppression/consent gating runs server-side; the UI never fakes an enroll.
+ */
+export async function enrollContacts(contactIds: string[]): Promise<{ ok: boolean }> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/outreach/enrollments`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ contactIds }),
+  });
+  if (notBuilt(res.status)) return { ok: false };
+  if (!res.ok) throw await toApiError(res, "Could not enroll");
+  return { ok: true };
 }

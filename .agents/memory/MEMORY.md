@@ -1,0 +1,1 @@
+- [LeadWolf Replit migration](leadwolf-replit-migration.md) — single-domain proxy architecture, CORS fix, Zod env validation, and auth basePath details for this monorepo.

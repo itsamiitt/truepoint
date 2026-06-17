@@ -47,15 +47,16 @@ export function resetBreakers(): void {
   breakers.clear();
 }
 
+/** The waterfall ordering score: trust ÷ estimated cost (06 §4), clamped so a sub-1µ cost can't blow up. */
+function providerScore(provider: EnrichmentProvider, req: EnrichRequest): number {
+  return provider.trust / Math.max(1, provider.estimateCostMicros(req));
+}
+
 export function orderProviders(
   providers: EnrichmentProvider[],
   req: EnrichRequest,
 ): EnrichmentProvider[] {
-  return [...providers].sort((a, b) => {
-    const scoreA = a.trust / Math.max(1, a.estimateCostMicros(req));
-    const scoreB = b.trust / Math.max(1, b.estimateCostMicros(req));
-    return scoreB - scoreA;
-  });
+  return [...providers].sort((a, b) => providerScore(b, req) - providerScore(a, req));
 }
 
 export interface WaterfallOutcome {
@@ -72,12 +73,7 @@ export async function runWaterfall(
   const attempts: WaterfallOutcome["attempts"] = [];
   for (const provider of orderProviders(providers, req)) {
     if (breakerOpen(provider.name)) continue;
-    let result: ProviderResult;
-    try {
-      result = await provider.enrich(req);
-    } catch {
-      result = { fields: [], rawPayload: null, costMicros: 0, status: "error" };
-    }
+    const result = await callProvider(provider, req);
     attempts.push({
       provider: provider.name,
       status: result.status,
@@ -86,5 +82,93 @@ export async function runWaterfall(
     recordOutcome(provider.name, result.status === "hit" || result.status === "miss");
     if (result.status === "hit") return { provider: provider.name, result, attempts };
   }
+  return { provider: null, result: null, attempts };
+}
+
+/** One provider call, never throwing — a thrown adapter error becomes a zero-cost `error` status. */
+async function callProvider(
+  provider: EnrichmentProvider,
+  req: EnrichRequest,
+): Promise<ProviderResult> {
+  try {
+    return await provider.enrich(req);
+  } catch {
+    return { fields: [], rawPayload: null, costMicros: 0, status: "error" };
+  }
+}
+
+/** Tuning knobs for the bulk / parallel-cheap waterfall (06 §4 allows parallel-cheap for low-cost providers). */
+export interface BulkWaterfallOptions {
+  /**
+   * The cost ceiling (micros) below which a provider is "cheap" enough to fire in the parallel batch. Cheap
+   * providers race together (latency win on the bulk residual); any provider above this is treated as
+   * expensive and only runs sequentially AFTER the cheap batch misses, preserving cost discipline.
+   */
+  cheapCostThresholdMicros: number;
+}
+
+/**
+ * Bulk / parallel-cheap waterfall (06 §4; 31 §4) for the bulk residual. Cheap providers (estimated cost
+ * below the threshold) are called CONCURRENTLY and the best hit wins; if none of the cheap batch hits, the
+ * remaining (expensive) providers run as the normal sequential waterfall. ADDITIVE — `runWaterfall` is
+ * unchanged, so single-call behavior is untouched. Breakers + attempt accounting work identically: every
+ * call is recorded for cost, open breakers are skipped, and a thrown adapter error is a zero-cost `error`.
+ */
+export async function runWaterfallBulk(
+  providers: EnrichmentProvider[],
+  req: EnrichRequest,
+  options: BulkWaterfallOptions,
+): Promise<WaterfallOutcome> {
+  // Partition in ONE pass — estimateCostMicros is evaluated once per provider (it may be non-trivial), and
+  // open breakers are dropped up front. cheap = below the threshold (race in parallel); the rest run last.
+  const cheap: EnrichmentProvider[] = [];
+  const expensive: EnrichmentProvider[] = [];
+  for (const provider of orderProviders(providers, req)) {
+    if (breakerOpen(provider.name)) continue;
+    if (provider.estimateCostMicros(req) < options.cheapCostThresholdMicros) cheap.push(provider);
+    else expensive.push(provider);
+  }
+
+  const attempts: WaterfallOutcome["attempts"] = [];
+
+  // 1) Race the cheap batch in parallel; record every attempt; pick the best hit by trust ÷ cost (same
+  //    score as orderProviders, so the bulk path doesn't prefer a costlier hit over a cheaper equal-trust one).
+  if (cheap.length > 0) {
+    const results = await Promise.all(
+      cheap.map(async (provider) => ({ provider, result: await callProvider(provider, req) })),
+    );
+    for (const { provider, result } of results) {
+      attempts.push({
+        provider: provider.name,
+        status: result.status,
+        costMicros: result.costMicros,
+      });
+      recordOutcome(provider.name, result.status === "hit" || result.status === "miss");
+    }
+    let best: { provider: EnrichmentProvider; result: ProviderResult } | null = null;
+    for (const candidate of results) {
+      if (candidate.result.status !== "hit") continue;
+      if (
+        best === null ||
+        providerScore(candidate.provider, req) > providerScore(best.provider, req)
+      ) {
+        best = candidate;
+      }
+    }
+    if (best) return { provider: best.provider.name, result: best.result, attempts };
+  }
+
+  // 2) No cheap hit → fall through to the expensive providers sequentially (cost-disciplined, first hit wins).
+  for (const provider of expensive) {
+    const result = await callProvider(provider, req);
+    attempts.push({
+      provider: provider.name,
+      status: result.status,
+      costMicros: result.costMicros,
+    });
+    recordOutcome(provider.name, result.status === "hit" || result.status === "miss");
+    if (result.status === "hit") return { provider: provider.name, result, attempts };
+  }
+
   return { provider: null, result: null, attempts };
 }

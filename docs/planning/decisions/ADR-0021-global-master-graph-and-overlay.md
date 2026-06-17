@@ -7,6 +7,7 @@
 - **Revives (as a deliberate hybrid):** [ADR-0005](./ADR-0005-multi-tenancy-and-global-contact-db.md) (global contact DB), [ADR-0003](./ADR-0003-three-layer-data-model.md) (raw/provenance/golden layering)
 - **Amends:** [ADR-0002](./ADR-0002-search-postgres-then-engine.md) (global search index → OpenSearch), [ADR-0015](./ADR-0015-entity-resolution-dedup-engine.md) (entity resolution now **global/cross-source**)
 - **Amended by:** [ADR-0035](./ADR-0035-search-query-and-filter-architecture.md) (2026-06-17) — specifies *how* the global OpenSearch index serves **typeahead suggestions**, **facet counts** (ClickHouse `LowCardinality` + materialized views), and **abbreviation/synonym matching** (CEO→Chief Executive Officer) via a query-time `synonym_graph` + a canonical job-title taxonomy. Topology (OpenSearch + Typesense + ClickHouse) unchanged.
+- **Extended by:** [ADR-0037](./ADR-0037-bulk-match-first-resolution-and-candidate-index.md) (2026-06-17) — bulk CSV rows match against the **Layer-0 master graph** and the **Layer-1 overlay** through a `MatchPort` (match-first: overlay → master-graph candidate index → provider residual). The master-graph matcher is **infra-gated** on this ADR's Citus/OpenSearch/Spark scale track (M12/M13), so it ships as a stub seam until that infra lands. Two layers + ER pipeline unchanged.
 
 ## Context
 

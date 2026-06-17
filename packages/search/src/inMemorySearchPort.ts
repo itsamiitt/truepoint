@@ -39,7 +39,8 @@ export function createInMemorySearchPort(seed: readonly IndexedContact[]): Searc
       const start = query.cursor ? indexAfterCursor(matched, query.cursor) : 0;
       const page = matched.slice(start, start + query.limit);
       const more = start + query.limit < matched.length;
-      const nextCursor = more && page.length > 0 ? page[page.length - 1].id : null;
+      const last = page[page.length - 1];
+      const nextCursor = more && last ? last.id : null;
       return { hits: page, nextCursor };
     },
 

@@ -1,10 +1,9 @@
-// TopBar.tsx — the always-on top bar (11 §3): the section title at the left; on the right the global search, a
-// density toggle, a keyboard-shortcuts trigger, the notifications bell, and the credit pill. The title is derived
-// by the shell from the active route (navConfig). Quiet + monochrome so every destination reads as one system.
+// TopBar.tsx — the always-on top bar: section title left (with hamburger on mobile), global search + density
+// toggle + shortcuts + notifications + credit pill right. Sticky so it stays in view while content scrolls.
 "use client";
 
 import { Icon, TpIconButton } from "@leadwolf/ui";
-import { HelpCircle, LayoutGrid, Rows3 } from "lucide-react";
+import { HelpCircle, LayoutGrid, Menu, Rows3 } from "lucide-react";
 import { CreditPill } from "./CreditPill";
 import { useDensity } from "./DensityProvider";
 import { GlobalSearch } from "./GlobalSearch";
@@ -20,10 +19,22 @@ function DensityToggle() {
   );
 }
 
-export function TopBar({ title }: { title: string }) {
+export function TopBar({ title, onMenuToggle }: { title: string; onMenuToggle?: () => void }) {
   return (
     <header className="tp-topbar">
-      <h1 className="tp-topbar-title">{title}</h1>
+      <div className="tp-topbar-left">
+        {onMenuToggle ? (
+          <button
+            type="button"
+            className="tp-menu-btn"
+            onClick={onMenuToggle}
+            aria-label="Open navigation"
+          >
+            <Icon icon={Menu} size={18} />
+          </button>
+        ) : null}
+        <h1 className="tp-topbar-title">{title}</h1>
+      </div>
       <div className="tp-topbar-right">
         <GlobalSearch />
         <DensityToggle />

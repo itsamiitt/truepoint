@@ -7,6 +7,15 @@
 * {
   box-sizing: border-box;
 }
+
+/* Scrollbars — hidden app-wide; content remains fully scrollable (clean modern look). */
+* {
+  scrollbar-width: none; /* Firefox */
+}
+*::-webkit-scrollbar {
+  display: none; /* Chrome / Safari / Edge */
+}
+
 body {
   margin: 0;
   background: var(--tp-surface);
@@ -166,30 +175,38 @@ body {
   border-radius: 9px;
 }
 
-/* Shell grid: fixed rail + a fluid main column. */
+/* Shell grid: fixed rail + a fluid main column. Height uses dvh for mobile browser chrome handling. */
 .tp-shell {
   display: grid;
   grid-template-columns: 232px 1fr;
-  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden; /* prevents outer page scrollbar; each zone scrolls independently */
 }
 .tp-main {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 .tp-content {
   flex: 1;
   min-height: 0;
   min-width: 0;
+  overflow-y: auto; /* content scrolls; outer shell does not */
 }
 
-/* Sidebar — #f9fafb surface, single hairline right border. */
+/* Sidebar — #f9fafb surface, single hairline right border. Scrolls independently on overflow. */
 .tp-sidebar {
   display: flex;
   flex-direction: column;
   background: var(--tp-surface-2);
   border-right: 1px solid var(--tp-hairline-2);
   padding: 14px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* smooth slide transition drives the mobile overlay (transform overridden in the responsive block). */
+  transition: transform var(--tp-duration-slow) var(--tp-ease-out);
 }
 .tp-brand {
   display: flex;
@@ -233,8 +250,9 @@ body {
   color: var(--tp-ink-3);
   font-size: 13px;
 }
+/* Active glyph uses cobalt — a fill/icon color, brand-allowed (never text; 04 §3). */
 .tp-nav-item.is-active .tp-nav-glyph {
-  color: var(--tp-ink-2);
+  color: var(--tp-cobalt);
 }
 .tp-nav-label {
   flex: 1;
@@ -319,7 +337,7 @@ body {
   font-size: 11px;
 }
 
-/* Top bar — section title left, credit pill right; one hairline under it. */
+/* Top bar — sticky so it stays visible as content scrolls; one hairline under it. */
 .tp-topbar {
   display: flex;
   align-items: center;
@@ -328,17 +346,86 @@ body {
   padding: 0 24px;
   border-bottom: 1px solid var(--tp-hairline-2);
   background: var(--tp-surface);
+  position: sticky;
+  top: 0;
+  z-index: var(--tp-z-sticky);
+  flex-shrink: 0;
+}
+/* Left cluster: hamburger (mobile-only) + page title. */
+.tp-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 .tp-topbar-title {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tp-topbar-right {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
+
+/* Hamburger button — visible only on mobile (display switched in the media query below). */
+.tp-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--tp-ink-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-menu-btn:hover {
+  background: var(--tp-surface-2);
+  color: var(--tp-ink);
+}
+.tp-menu-btn:active {
+  transform: translateY(0.5px);
+}
+
+/* Sidebar mobile scrim — full-bleed backdrop when the overlay rail is open. */
+.tp-sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--tp-z-drawer) - 1);
+  background: rgba(17, 24, 39, 0.4);
+  animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
+}
+
+/* Mobile-only close button inside the sidebar header. */
+.tp-sidebar-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--tp-ink-3);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-sidebar-close:hover {
+  background: var(--tp-surface-3);
+  color: var(--tp-ink);
+}
+
 
 /* Credit pill — the only place a warning color is allowed in the chrome (low balance). */
 .tp-credit-pill {
@@ -966,5 +1053,64 @@ body {
     flex-wrap: wrap;
     border-right: 0;
     border-bottom: 1px solid var(--tp-hairline-2);
+  }
+}
+
+/* ============================================================================
+ * Mobile responsive shell — sidebar becomes a fixed overlay at ≤ 768px.
+ * The hamburger button in TopBar and the close button in Sidebar activate this.
+ * ========================================================================== */
+
+@media (max-width: 768px) {
+  /* Collapse to a single-column layout — sidebar no longer occupies a grid column. */
+  .tp-shell {
+    grid-template-columns: 1fr;
+  }
+
+  /* Sidebar becomes a fixed overlay, off-screen by default. */
+  .tp-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: var(--tp-z-drawer);
+    width: 260px;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 32px rgba(17, 24, 39, 0.14);
+  }
+
+  /* When AppShell sets is-open the sidebar slides into view. */
+  .tp-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  /* Show the hamburger button and the sidebar close button on mobile. */
+  .tp-menu-btn {
+    display: inline-flex;
+  }
+  .tp-sidebar-close {
+    display: inline-flex;
+  }
+
+  /* Brand row stretches to use all available width for the close button. */
+  .tp-brand {
+    width: 100%;
+  }
+
+  /* Topbar padding reduces slightly on mobile. */
+  .tp-topbar {
+    padding: 0 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Further reduce the global search width on very small screens. */
+  .tp-global-search {
+    min-width: 140px;
+  }
+
+  /* Tighten topbar right cluster. */
+  .tp-topbar-right {
+    gap: 8px;
   }
 }

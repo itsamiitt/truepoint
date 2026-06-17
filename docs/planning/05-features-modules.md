@@ -153,6 +153,17 @@ flowchart TB
   row that the **global entity-resolution** pipeline merges into a golden record
   ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)); cross-source survivorship is the
   master graph's job, not a per-workspace merge ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
+- **Bulk CSV enrichment** *(M17 — [31](./31-bulk-enrichment-pipeline.md))*: the enterprise-scale batch
+  surface — a customer uploads a **sparse CSV** (just names/companies/emails), the rows are
+  **matched-first** against our own data (overlay + global master graph) rather than blindly calling
+  providers, the customer sees a **credit estimate** for the matchable/enrichable rows, then runs the
+  job to **enrich + verify** matched rows and **downloads** the completed file. Match-first
+  (upload → column-map → estimate → run → progress → download) keeps cost and provider spend bounded at
+  millions of rows; large jobs are chunked and run on **AWS Batch** off the request path, charged on
+  **verified results** with credit-back ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).
+  Lives under **Prospect ▸ Import** in the app surface, not a new destination ([11 §4.2](./11-information-architecture.md)).
+  Full design — chunking, match/estimate engine, job lifecycle, and the
+  ADR-0036/0037/0038 decisions — in [31](./31-bulk-enrichment-pipeline.md).
 
 ## 5. Sales Navigator integration — *Post-MVP (M7)*
 
@@ -377,6 +388,7 @@ Surfaces introduced by the IA ([11](./11-information-architecture.md)) — panel
 | Workspaces | | ● | | | | |
 | Import (CSV + providers) | ● | | | | | more sources |
 | Enrichment | | | | ● | | more providers |
+| Bulk CSV enrichment ([31](./31-bulk-enrichment-pipeline.md)) | | | | | | ● (M17) |
 | Sales Navigator | | | | | | ● (M7) |
 | Search & results (+ advanced faceted UX [24](./24-advanced-search-exploration-ux.md)) | | ● | | | | adv. UX + NL (M8/M14) |
 | Record detail + reveal | | | ● | | | |
