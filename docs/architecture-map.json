@@ -22,6 +22,8 @@
     "billing",
     "compliance",
     "crm-sync",
+    "custom-fields",
+    "customFields",
     "data-health",
     "enrichment",
     "export",
@@ -41,6 +43,7 @@
     "settings",
     "settings-billing",
     "settings-compliance",
+    "settings-custom-fields",
     "settings-developer",
     "settings-shell",
     "settings-tenant",
@@ -49,8 +52,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 490,
-  "fileSetHash": "sha256:cbbc809cdfd2b23ccfa86891bb59aa552975ef4d07593a7c297045f503bbe043",
+  "fileCount": 507,
+  "fileSetHash": "sha256:a792609e90c5fa3e915e0da80ce3be9beefef1604640fca2ac42d2271c3682bb",
   "features": {
     "activity": {
       "web": [],
@@ -137,6 +140,32 @@
       "workers": [
         "apps/workers/src/queues/dsar.ts"
       ],
+      "integrations": []
+    },
+    "custom-fields": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/custom-fields/index.ts",
+        "apps/api/src/features/custom-fields/routes.ts"
+      ],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "customFields": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/customFields/manageDefinitions.ts",
+        "packages/core/src/customFields/setValues.ts",
+        "packages/core/src/customFields/validateValue.test.ts",
+        "packages/core/src/customFields/validateValue.ts"
+      ],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "data-health": {
@@ -318,6 +347,7 @@
         "apps/web/src/features/prospect/hooks/useContactSearch.ts",
         "apps/web/src/features/prospect/hooks/useContacts.ts",
         "apps/web/src/features/prospect/hooks/useCreditBalance.ts",
+        "apps/web/src/features/prospect/hooks/useCustomFields.ts",
         "apps/web/src/features/prospect/hooks/useReveal.ts",
         "apps/web/src/features/prospect/hooks/useScores.ts",
         "apps/web/src/features/prospect/hooks/useTypeahead.ts",
@@ -479,6 +509,21 @@
         "apps/web/src/features/settings-compliance/components/SuppressionForm.tsx",
         "apps/web/src/features/settings-compliance/components/SuppressionList.tsx",
         "apps/web/src/features/settings-compliance/index.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "settings-custom-fields": {
+      "web": [
+        "apps/web/src/features/settings-custom-fields/api.ts",
+        "apps/web/src/features/settings-custom-fields/components/CustomFieldsPanel.tsx",
+        "apps/web/src/features/settings-custom-fields/hooks/useCustomFieldDefinitions.ts",
+        "apps/web/src/features/settings-custom-fields/index.ts",
+        "apps/web/src/features/settings-custom-fields/types.ts"
       ],
       "admin": [],
       "api": [],
@@ -686,6 +731,7 @@
       "apps/web/src/app/(shell)/settings/api-keys/page.tsx",
       "apps/web/src/app/(shell)/settings/billing/page.tsx",
       "apps/web/src/app/(shell)/settings/compliance/page.tsx",
+      "apps/web/src/app/(shell)/settings/custom-fields/page.tsx",
       "apps/web/src/app/(shell)/settings/layout.tsx",
       "apps/web/src/app/(shell)/settings/members/page.tsx",
       "apps/web/src/app/(shell)/settings/notifications/page.tsx",
@@ -787,6 +833,7 @@
       "packages/db/src/schema/billing.ts",
       "packages/db/src/schema/compliance.ts",
       "packages/db/src/schema/contacts.ts",
+      "packages/db/src/schema/customFields.ts",
       "packages/db/src/schema/enrichmentJobs.ts",
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
@@ -795,6 +842,7 @@
       "packages/db/src/seed.ts",
       "packages/db/test/activity.itest.ts",
       "packages/db/test/compliance.itest.ts",
+      "packages/db/test/customFields.itest.ts",
       "packages/db/test/home.itest.ts",
       "packages/db/test/import.itest.ts",
       "packages/db/test/intel.itest.ts",
@@ -827,6 +875,7 @@
       "packages/types/src/compliance.ts",
       "packages/types/src/contacts.test.ts",
       "packages/types/src/contacts.ts",
+      "packages/types/src/customFields.ts",
       "packages/types/src/errors.ts",
       "packages/types/src/home.test.ts",
       "packages/types/src/home.ts",
@@ -869,10 +918,14 @@
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
+    "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/enrichmentJobRepository.ts"
   ],
   "warnings": [
     "undeclared domain 'admin' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'customFields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'settings-custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-developer' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-shell' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-tenant' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

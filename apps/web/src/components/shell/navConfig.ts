@@ -58,6 +58,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     items: [
       { label: "General", href: "/settings/workspace", match: "/settings/workspace" },
       { label: "Members", href: "/settings/members", match: "/settings/members" },
+      { label: "Custom fields", href: "/settings/custom-fields", match: "/settings/custom-fields" },
       { label: "Suppression & DSAR", href: "/settings/compliance", match: "/settings/compliance" },
     ],
   },
@@ -97,8 +98,17 @@ export interface PaletteEntry {
 }
 
 export const PALETTE_NAVIGATE: PaletteEntry[] = [
-  ...DESTINATIONS.map<PaletteEntry>((d) => ({ id: `nav-${d.match}`, label: d.label, href: d.href })),
-  { id: "nav-settings", label: "Settings", href: SETTINGS_DESTINATION.href, keywords: ["preferences"] },
+  ...DESTINATIONS.map<PaletteEntry>((d) => ({
+    id: `nav-${d.match}`,
+    label: d.label,
+    href: d.href,
+  })),
+  {
+    id: "nav-settings",
+    label: "Settings",
+    href: SETTINGS_DESTINATION.href,
+    keywords: ["preferences"],
+  },
 ];
 
 export const PALETTE_QUICK: PaletteEntry[] = [
