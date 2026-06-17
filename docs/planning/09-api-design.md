@@ -291,8 +291,8 @@ Anything that touches **millions of rows** is a **first-class async job**, never
 (a million-row load times out long before it finishes). The mechanics — server-owned chunking, streaming
 parse, `COPY`→staging→`ON CONFLICT`, checkpoint/resume, revert-by-batch — live in
 [30 §2–§5](./30-bulk-import-export-pipeline.md) and [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md);
-**03 owns the job tables** (the `bulk_jobs` state + cheap status counters —
-[03 §14](./03-database-design.md#14-planned-schema-additions-app-surface--platform)).
+**03 owns the job tables** (`import_jobs`/`export_jobs`, sharing the `bulk_job_status` enum + cheap status counters —
+[03 §15.2](./03-database-design.md)). Bulk **reveal** jobs reuse the same job-ledger pattern ([03 §15.2](./03-database-design.md)) with the credit reservation of [07 §3A](./07-billing-credits.md) / [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md).
 This section pins only the **REST contract** the three job kinds (`import` / `export` / `bulk_reveal`)
 share. The Salesforce Bulk API 2.0 lifecycle (create → upload → close → process → poll → fetch) is the
 reference shape.

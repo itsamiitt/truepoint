@@ -47,7 +47,7 @@ rejected rows) is the floor for Apollo/ZoomInfo/Clay-grade bulk I/O. The compani
 COPY-to-staging → INSERT…ON CONFLICT pipeline, idempotent / checkpointed / resumable, behind the `imports`
 BullMQ queue with a dead-letter queue (DLQ).** No bulk row data ever transits a synchronous API request.
 
-**1. Job resource + state machine.** A bulk operation is a persisted **`bulk_jobs`** resource (tables owned by
+**1. Job resource + state machine.** A bulk operation is a persisted **`import_jobs`/`export_jobs`** resource (sibling tables owned by
 [03](../03-database-design.md)) with a Salesforce-2.0-shaped state machine:
 
 ```
@@ -135,7 +135,7 @@ so it is locked here rather than rediscovered in implementation.
 - **Positive:** million-row import/export becomes correct and resumable; G-IMP-1 (preview + rejected-rows
   file) is satisfied and G-IMP-2/G-IMP-6 (revert-by-batch, resumable upload) are unblocked; bulk writes stop
   pressuring the live tables; AV-scan gate adds upload safety; the existing `imports` queue + DLQ is reused.
-- **Negative (accepted):** new moving parts — a `bulk_jobs` job-resource + UNLOGGED **non-RLS** staging tables
+- **Negative (accepted):** new moving parts — the `import_jobs`/`export_jobs` job-resource + UNLOGGED **non-RLS** staging tables
   (owned by [03](../03-database-design.md)), a bulk-job API surface (owned by [09](../09-api-design.md)),
   an AV-scan/quarantine step, and the asymmetry that staging is **not** RLS-protected (mitigated: system-owned,
   `job_id`+`workspace_id`-keyed, written-then-moved into live RLS tables under `SET LOCAL` GUC).

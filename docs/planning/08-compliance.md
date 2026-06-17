@@ -280,7 +280,7 @@ Re-verification keeps data accurate (accuracy principle); suppression + DSAR pro
 - **Upload malware scanning (quarantine → scan → enqueue on clean).** Accepting arbitrary customer file
   uploads (CSV/XLSX) is a **malware vector** and a SOC 2 / procurement must-have, so uploads are not trusted
   on arrival. A file lands in a **quarantine S3 bucket** (no app/worker read access), is **scanned for
-  malware** (GuardDuty Malware Protection for S3, or ClamAV — [01 §"Files"](./01-tech-stack.md#1-at-a-glance)),
+  malware** (GuardDuty Malware Protection for S3, or ClamAV — [01 §"Upload security"](./01-tech-stack.md#1-at-a-glance)),
   and the import job is **enqueued only on a clean verdict**. An infected/suspicious verdict **quarantines or
   deletes** the object, **never enqueues** the import, and is audit-logged; the uploader sees a failure. This
   is the single entry condition for the bulk-import pipeline ([30](./30-bulk-import-export-pipeline.md),

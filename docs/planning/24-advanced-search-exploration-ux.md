@@ -53,7 +53,7 @@ Left rail of the Prospect surface (`11 §4.2`). Facet interactions:
 - **Preset/use-case bundles** ("EU fintech decision-makers", "recently funded + hiring") one-click apply.
 - **Recent searches** + suggested refinements; clear-all; active-filter summary bar.
 - **Filter state is serializable** — every filter set encodes to a versioned URL/JSON blob, the same shape
-  persisted by `saved_searches` ([§8](#8-saved-searches-views--sharing), [§7.4](#7-front-end-performance)).
+  persisted by `saved_searches` ([§8](#8-saved-searches-views--sharing), [§7.6](#7-front-end-performance)).
 
 ## 3. Typeahead / autocomplete from indexed values
 

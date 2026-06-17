@@ -26,7 +26,7 @@ bulk job stalls every reveal in the tenant** for its duration. This is the same 
 (2), but it is **self-inflicted by a single operation** and does not need thousands of concurrent agents
 to trigger it: the worst case is one user clicking "reveal all" on a large list. The lease relief in this
 ADR was sequenced to M12 (the high-concurrency tier); the bulk path makes the row-at-a-time decrement a
-bottleneck **as soon as bulk ships**, which is well before M12. The bulk path therefore needs a scalable
+bottleneck **the moment bulk reveal/enrich ships**, which lands in **M12** (alongside, but not gated on, the full standing-lease build-out). The bulk path therefore needs a scalable
 credit-debit story of its own — it cannot wait for the per-workspace lease machinery to arrive.
 
 ## Decision
@@ -118,8 +118,8 @@ release is always a credit back to the pool, never an overspend.
   reveal/enrich, not a deferrable scale optimization. The full per-workspace/team standing leases remain
   at M12; pulling **only** the job-scoped reservation forward is cheap because it reuses the M11 ledger's
   idempotency-keyed entries and adds no new table — just `lease`/`settle`/`release` `entry_type`s. The
-  roadmap ([10](../10-roadmap.md)) sequences the batch reservation in the milestone that introduces bulk,
-  ahead of M12.
+  roadmap ([10](../10-roadmap.md)) sequences the batch reservation in **M12**, the milestone that introduces
+  the bulk pipeline — landing ahead of the full per-workspace/team standing leases within that milestone.
 - **Relation to ADR-0036's job model.** The reservation is bound to the bulk **job** lifecycle:
   admit ⇒ `lease`, complete/cancel/fail ⇒ `settle` + `release`. ADR-0036 owns the job state machine,
   staging, and at-least-once worker delivery; this ADR owns only the **credit** entries keyed by that

@@ -105,7 +105,7 @@ the actual **row-cap + frequency numbers** by [12 §3](./12-settings.md#3-worksp
   `H1`), and **audited** (`08 §5`) — checks re-run **per tick**, not just at schedule creation, so policy
   changes between ticks take effect.
 
-`*` `export_schedules` / `import_schedules` (+ `bulk_jobs`) are a follow-up [03](./03-database-design.md)
+`*` `export_schedules` / `import_schedules` (alongside the `import_jobs`/`export_jobs` ledger) are a follow-up [03 §15.2](./03-database-design.md)
 amendment owned by the bulk pipeline ([ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)).
 
 ## Links

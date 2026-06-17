@@ -49,7 +49,7 @@
   Slack/Teams app, **reverse-ETL/warehouse**, **Chrome extension**, **SMS** channel, BYO
   enrichment-provider keys ([26](./26-integrations-data-delivery.md)). *(M7/M10/M16)*
 - **Import defaults** — dedup rules, default field mapping, **saved mapping templates** + default
-  conflict policy (skip/overwrite/fill-empty/review); per-plan **max file size / row count** (see §6)
+  conflict policy (`skip_existing` / `overwrite` / `fill_empty_only` / `route_to_review`); per-plan **max file size / row count** (see §6)
   ([30](./30-bulk-import-export-pipeline.md), [29 §3](./29-settings-administration-architecture.md)). *(M1)*
 - **Teams & departments** — create teams (`department_type`), assign members + **team roles**, configure
   **personas** (default dashboards/views), **record-visibility** defaults, and **per-team credit budgets**
@@ -123,7 +123,9 @@
 | Audit-log export | — | — | — | ✅ |
 | SLA / priority support | — | — | — | ✅ |
 
-**Bulk import/export limits** (initial per-plan defaults; enforced as entitlements at job submit —
+### 6a. Bulk import/export limits
+
+Initial per-plan defaults; enforced as entitlements at job submit —
 [30](./30-bulk-import-export-pipeline.md), [09](./09-api-design.md); `custom` = negotiated):
 
 | Limit | Free | Pro | Team | Enterprise |

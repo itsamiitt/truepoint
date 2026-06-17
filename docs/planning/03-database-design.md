@@ -788,9 +788,9 @@ because import-only fields like `mapping_config`/`conflict_policy` and export-on
 
 ```sql
 CREATE TYPE bulk_job_status AS ENUM (
-  'pending','uploading','staged','validating','processing','completed','failed','cancelled'
+  'pending','pending_approval','uploading','staged','validating','processing','completed','partial','failed','cancelled'
 );
-CREATE TYPE import_conflict_policy AS ENUM ('keep_existing','overwrite','review_queue');  -- G-IMP-5, 29 §3
+CREATE TYPE import_conflict_policy AS ENUM ('skip_existing','overwrite','fill_empty_only','route_to_review');  -- G-IMP-5, 29 §3/§14a (canonical tokens)
 
 CREATE TABLE import_jobs (
   id                uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
@@ -803,7 +803,7 @@ CREATE TABLE import_jobs (
   source_uri        text NOT NULL,                         -- s3://… raw upload (presigned/multipart — 30)
   result_uri        text,                                  -- s3://… rejected-rows + summary artifact (G-IMP-1)
   mapping_config    jsonb NOT NULL DEFAULT '{}',           -- column→canonical map (mapping templates, G-IMP-3)
-  conflict_policy   import_conflict_policy NOT NULL DEFAULT 'keep_existing',
+  conflict_policy   import_conflict_policy NOT NULL DEFAULT 'fill_empty_only',
   idempotency_key   varchar(255) NOT NULL,                 -- client Idempotency-Key → safe re-submit (§11)
   byte_offset       bigint NOT NULL DEFAULT 0,             -- resume watermark into source_uri (§15.4)
   total_rows        bigint NOT NULL DEFAULT 0,             -- three-way accounting (success/failed/unprocessed)
@@ -836,6 +836,15 @@ CREATE TABLE export_jobs (
 );
 ```
 
+**Job-state & job-kind mapping.** The REST surface ([09 §3.5](./09-api-design.md)) presents friendly state
+names over `bulk_job_status`: `queued`=`pending`, `running`=`processing`, `canceled`=`cancelled`, and
+`partial` = `completed` with non-zero `rejected_rows`/`unprocessed_rows`; `pending_approval` gates jobs over
+the large-job threshold ([09 §3.8](./09-api-design.md), [29 §14a](./29-settings-administration-architecture.md)).
+Bulk **reveal/enrich** jobs (which mutate existing overlay rows rather than insert) reuse this job-ledger
+pattern — a job row carrying the same status/idempotency contract plus the credit-reservation entries of
+[07 §3A](./07-billing-credits.md) / [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md),
+and no `mapping_config`/`query_snapshot`.
+
 **Revert-by-batch (G-IMP-2).** `source_imports.import_job_id` (§5.2) FK-references `import_jobs(id)` (`ON
 DELETE SET NULL` so a purged job ledger doesn't cascade-delete provenance). Undo within the configured
 window is "select the contacts whose **only** provenance is rows from this `import_job_id`, delete those;
@@ -850,10 +859,13 @@ downloadable rejected-rows file (G-IMP-1) and a success-row correlation back to 
 
 The per-import `conflict_policy` (G-IMP-5) maps to a concrete upsert at the INSERT…SELECT step (§15.1):
 
-- **`keep_existing`** → `ON CONFLICT (…) DO NOTHING` (count as `matched_rows`, no write).
+- **`skip_existing`** → `ON CONFLICT (…) DO NOTHING` (count as `matched_rows`, no write).
+- **`fill_empty_only`** *(default)* → `DO UPDATE` writing **only** columns where the existing value is
+  null/blank (never clobbers a populated field) — the conservative top-up default
+  ([29 §14a](./29-settings-administration-architecture.md)).
 - **`overwrite`** → `ON CONFLICT (…) DO UPDATE SET …` guarded by `IS DISTINCT FROM` so unchanged rows don't
   churn `updated_at`/WAL/triggers.
-- **`review_queue`** → stage the diff for human review instead of writing (routes like the ER manual-review
+- **`route_to_review`** → stage the diff for human review instead of writing (routes like the ER manual-review
   queue, §5.1 / [22 §6](./22-data-quality-freshness-lifecycle.md)).
 
 **Conflict target.** The per-workspace overlay uniques (§11): `(workspace_id, email_blind_index)`, falling

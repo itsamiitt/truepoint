@@ -85,7 +85,7 @@ a reviewed sample** to hit the precision/recall targets, **not** hard-coded; the
 un-merge, audited) — **not staff-only**. The staff merge/unmerge console ([13](../13-platform-admin.md),
 [22 §6/§8](../22-data-quality-freshness-lifecycle.md)) remains for Layer-0/global review; the new queue lets a
 customer resolve the fuzzy dupes inside **their own overlay**, including those an import created. Per-import
-conflict policy (`keep_existing`/`overwrite`/`review_queue`, G-IMP-5) and duplicate-sensitivity
+conflict policy (`skip_existing`/`overwrite`/`fill_empty_only`/`route_to_review`, G-IMP-5) and duplicate-sensitivity
 ([29](../29-settings-administration-architecture.md)) select how aggressively imports route to it.
 
 ## Rationale
