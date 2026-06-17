@@ -48,7 +48,9 @@
 - **Integrations** — CRM connect (HubSpot/Salesforce/Pipedrive) + native apps, Sales Navigator,
   Slack/Teams app, **reverse-ETL/warehouse**, **Chrome extension**, **SMS** channel, BYO
   enrichment-provider keys ([26](./26-integrations-data-delivery.md)). *(M7/M10/M16)*
-- **Import defaults** — dedup rules, default field mapping. *(M1)*
+- **Import defaults** — dedup rules, default field mapping, **saved mapping templates** + default
+  conflict policy (skip/overwrite/fill-empty/review); per-plan **max file size / row count** (see §6)
+  ([30](./30-bulk-import-export-pipeline.md), [29 §3](./29-settings-administration-architecture.md)). *(M1)*
 - **Teams & departments** — create teams (`department_type`), assign members + **team roles**, configure
   **personas** (default dashboards/views), **record-visibility** defaults, and **per-team credit budgets**
   ([25](./25-departments-teams-workspaces.md), [ADR-0022](./decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)). *(M15)*
@@ -58,8 +60,9 @@
   ([23](./23-ai-intelligence-layer.md)). *(M14)*
 - **Data freshness & retention** — per-field re-verify cadence + retention/purge policy
   ([22](./22-data-quality-freshness-lifecycle.md)). *(M13)*
-- **Export policies** — row caps + frequency limits + approval for large exports
-  ([26 §8](./26-integrations-data-delivery.md)). *(M16)*
+- **Export policies** — row caps + frequency limits + approval for large exports; large jobs run as an
+  **async streaming export** (gzip/shard/manifest, expiring signed links)
+  ([26 §8](./26-integrations-data-delivery.md), [30 §7](./30-bulk-import-export-pipeline.md)). *(M16)*
 
 ## 4. Tenant settings *(tenant owner / billing — tier as noted)*
 
@@ -119,6 +122,18 @@
 | Data residency | — | — | — | ✅ |
 | Audit-log export | — | — | — | ✅ |
 | SLA / priority support | — | — | — | ✅ |
+
+**Bulk import/export limits** (initial per-plan defaults; enforced as entitlements at job submit —
+[30](./30-bulk-import-export-pipeline.md), [09](./09-api-design.md); `custom` = negotiated):
+
+| Limit | Free | Pro | Team | Enterprise |
+|---|:--:|:--:|:--:|:--:|
+| Max import file size | 25 MB | 100 MB | 1 GB | 5 GB |
+| Max rows / import job | 50K | 500K | 5M | custom |
+| Export row cap / job | 10K | 100K | 1M | custom |
+| Bulk reveal — daily cap | — | 5K | 50K | custom |
+| Concurrent bulk jobs / workspace | 1 | 2 | 5 | custom |
+| Large-job approval threshold | — | — | ≥1M rows | configurable |
 
 *(Tiers/limits are placeholders pending pricing — see [07 §1](./07-billing-credits.md) and [00 §8](./00-overview.md#8-open-questions-tracked-resolved-during-doc-review-or-early-milestones).)*
 

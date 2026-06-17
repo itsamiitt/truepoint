@@ -88,7 +88,13 @@ last-line guarantee that a handler can't read across workspaces ([03 §9](./03-d
 /tasks                          CRUD tasks/reminders (manual + system-generated) (11 §4.4)
 
 /source-imports                 POST: start an import (CSV/CRM/provider); GET status/history
+/source-imports/uploads         POST: request presigned PUT (tenant/workspace/uploadId, short TTL); for >5 GiB multipart: part URLs + complete
+/source-imports/uploads/:id     POST: finalize a staged upload (Idempotency-Key) → creates a bulk job (30 §3, ADR-0036)
 /imports                        alias of /source-imports (11 §6 wiring map)
+
+/jobs/:id                       GET:  bulk-job state machine + counts + progress (import/export/reveal — 30 §2, ADR-0036)
+/jobs/:id/cancel                POST: request cancel (terminal-safe; idempotent)
+/jobs/:id/results               GET:  paginated/streamed per-row results, ?outcome=succeeded|failed|unprocessed
 
 /lists                          CRUD lists
 /lists/:id/members              add/remove members; list members
@@ -109,7 +115,8 @@ last-line guarantee that a handler can't read across workspaces ([03 §9](./03-d
 /billing/webhook                POST: Stripe webhook (no auth; signature-verified)
   # credits/billing have no nav tab — surfaced in Settings ▸ Billing & Credits + a top-bar pill (11, 12 §4)
 
-/exports                        POST: create export (CSV); GET status; signed download URL
+/exports                        POST: create export (CSV) by ids or filter-blob → bulk job; GET status; manifest of signed URLs (30 §4, ADR-0036)
+/exports/:id/manifest           GET:  current presigned-URL manifest (regenerated via the job's status)
 
 /compliance/suppression         CRUD suppression entries (scope global|tenant|workspace)
 /compliance/dsar                POST intake; GET status   (+ public intake variant)
@@ -278,6 +285,174 @@ Credits are **granted only by the webhook**, incrementing the tenant counter `te
 `purchases.stripe_event_id` is **unique** → duplicate webhooks grant exactly once
 ([07 §4](./07-billing-credits.md)).
 
+### 3.5 Bulk async jobs — the uniform contract (import / export / bulk-reveal)
+
+Anything that touches **millions of rows** is a **first-class async job**, never a synchronous request
+(a million-row load times out long before it finishes). The mechanics — server-owned chunking, streaming
+parse, `COPY`→staging→`ON CONFLICT`, checkpoint/resume, revert-by-batch — live in
+[30 §2–§5](./30-bulk-import-export-pipeline.md) and [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md);
+**03 owns the job tables** (the `bulk_jobs` state + cheap status counters —
+[03 §14](./03-database-design.md#14-planned-schema-additions-app-surface--platform)).
+This section pins only the **REST contract** the three job kinds (`import` / `export` / `bulk_reveal`)
+share. The Salesforce Bulk API 2.0 lifecycle (create → upload → close → process → poll → fetch) is the
+reference shape.
+
+**(a) Create** — by **enumerated ids** *or* a **serialized filter-blob** (never both), plus a
+**job-level** `Idempotency-Key` (one key per batch/enqueue — **not** per item, unlike the per-item reveal
+key in [§5](#5-idempotency--concurrency)):
+
+```http
+POST /api/v1/exports
+Idempotency-Key: 9b2e... (one per enqueue)
+{
+  "entity":"contacts",                                                     // what to export; the job kind is "export"
+  "selection": { "filterBlob":"<opaque, server-signed §3.8 handoff>" },   // OR { "ids":["...","..."] }
+  "columns":["fullName","email","title","account.name"],
+  "format":"csv"
+}
+=> 202
+{ "jobId":"...", "status":"queued", "kind":"export", "selectionCount":812043 }
+```
+
+The same envelope drives `POST /source-imports/uploads/:id` (finalize → `import` job) and a
+`POST /contacts/bulk-reveal` (→ `bulk_reveal` job). **Re-POSTing the same `Idempotency-Key` returns the
+existing `jobId`** rather than enqueuing a second job ([§5](#5-idempotency--concurrency)) — so a retried
+enqueue collapses to one job.
+
+**(b) Poll** — `GET /jobs/{id}` exposes the **state machine + cheap counts + progress** (status fields are
+read on a poll loop, so they must be cheap — [30 §2](./30-bulk-import-export-pipeline.md)):
+
+```http
+GET /api/v1/jobs/{id}
+=> 200
+{
+  "id":"...", "kind":"import", "status":"running",
+  "state":"running",            // queued → [pending_approval] → validating → running → completed | failed | canceled | partial
+  "progress": { "pct": 61, "rowsTotal": 1000000, "rowsProcessed": 610000 },
+  "counts":   { "succeeded": 588120, "failed": 21880, "unprocessed": 390000 },
+  "batchIdempotencyKey":"9b2e...",
+  "createdAt":"...", "startedAt":"...", "finishedAt":null,
+  "results": { "succeeded":"/jobs/.../results?outcome=succeeded", "failed":"...", "unprocessed":"..." },
+  "manifest": null              // export-only; populated on completion (§3.7)
+}
+```
+
+`unprocessed` is **first-class**: rows uploaded but never attempted (job hit a cap or failed mid-run) are
+distinct from `failed` and must be resubmittable — fetching only succeeded+failed and assuming the rest
+landed is the classic bulk bug.
+
+**(c) Results — split by outcome, correlate by row not position.** Three paginated/streamed endpoints
+each **echo the input row + the assigned id**, so callers reconcile by content, never by ordinal (parallel
+chunking reorders rows):
+
+```http
+GET /api/v1/jobs/{id}/results?outcome=failed&cursor=&limit=1000
+=> 200
+{
+  "results":[
+    { "rowKey":"csv:000241", "input": { "email":"j.doe@acme.com", "title":"VP Eng" },
+      "error": { "code":"duplicate_in_workspace", "detail":"matches contact ..." } }
+  ],
+  "next_cursor":"..."
+}
+# outcome=succeeded rows add the assigned overlay id + created-vs-matched:
+#   { "rowKey":"csv:000007", "input":{...}, "id":"<contactId>", "outcome":"created" }
+```
+
+Results are also downloadable as a **rejected-rows artifact** (a presigned CSV per outcome, **short TTL +
+workspace access control** — [30 §5](./30-bulk-import-export-pipeline.md)) for resubmission; callers must
+persist what they need before the TTL lapses (the artifact is not retained indefinitely).
+
+**(d) Cancel** — `POST /jobs/{id}/cancel` requests cancellation; it is **terminal-safe** (a no-op once the
+job is `completed`/`failed`) and **idempotent**. In-flight batches finish or roll back per the staging
+revert-by-batch rule ([30 §4](./30-bulk-import-export-pipeline.md)); already-committed rows are surfaced in
+`succeeded` so a cancel never silently loses accounting.
+
+**(e) Governors** ([§5](#5-idempotency--concurrency)) — a **per-tenant in-flight bulk-concurrency cap**
+(queued/running jobs over the cap get `429` + `Retry-After`, they are not dropped) and a **dedicated bulk
+queue-class rate limit** separate from the interactive per-key bucket, so a million-row export can never
+starve dashboard traffic.
+
+### 3.6 Bulk import upload — presigned / multipart
+
+CSV bytes never stream through the API. The client requests a **presigned S3 PUT keyed to
+`tenant/workspace/uploadId` with a short TTL**, uploads directly to S3, then **finalizes** to create the
+job ([30 §3](./30-bulk-import-export-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)):
+
+```http
+POST /api/v1/source-imports/uploads
+{ "filename":"contacts.csv", "bytes": 9100000000 }      // > 5 GiB ⇒ multipart
+=> 200
+{ "uploadId":"...", "method":"multipart", "expiresIn":900,
+  "parts":[ { "partNumber":1, "url":"https://s3...&X-Amz-Expires=900" }, ... ],
+  "complete":"/source-imports/uploads/{uploadId}:complete" }
+# single PUT caps at 5 GiB; larger files use multipart part URLs + a complete call.
+
+POST /api/v1/source-imports/uploads/{uploadId}      // finalize
+Idempotency-Key: 4a7c...
+{ "mapping": { "templateId":"..." }, "mergePolicy":"skip_existing" }   // mapping templates: 30 §3
+=> 202 { "jobId":"...", "status":"queued", "kind":"import" }
+```
+
+Finalize carries the **`Idempotency-Key`** (re-finalizing the same `uploadId`+key returns the same job),
+the **mapping template** (saved column→field maps), and the **explicit merge policy**
+(`skip_existing | overwrite | merge` — default is safe, [30 §4](./30-bulk-import-export-pipeline.md)). Dedup
+runs **before** any reveal/enrich spend ([§5](#5-idempotency--concurrency), [30 §4](./30-bulk-import-export-pipeline.md)).
+
+### 3.7 Bulk export — results contract
+
+An export is **never synchronous**: the worker streams keyset-cursored rows to S3 and the job completes
+with a **manifest of presigned URLs** (a multi-file CSV set, or a single zip for smaller results), each
+with an **expiry**:
+
+```http
+GET /api/v1/jobs/{id}            // export job, completed
+=> 200
+{ "id":"...", "kind":"export", "state":"completed",
+  "manifest": {
+    "format":"csv", "rowCount":812043, "expiresAt":"2026-06-17T12:00:00Z",
+    "files":[ { "url":"https://s3...&X-Amz-Expires=3600", "rows":500000 },
+              { "url":"https://s3...&X-Amz-Expires=3600", "rows":312043 } ]
+  } }
+```
+
+- **Regenerate via status:** an expired manifest is **not** an error — re-`GET /jobs/{id}` (or
+  `GET /exports/{id}/manifest`) mints fresh presigned URLs against the already-written S3 objects; the
+  export is not recomputed.
+- **Row caps:** a selection above the export ceiling fails fast with Problem Details
+  (`code="export_row_cap_exceeded"`, echoing `requested` / `max`) — the caller narrows the filter or
+  splits the job; we never silently truncate.
+
+```json
+{ "type":"https://leadwolf.dev/errors/export_row_cap_exceeded",
+  "title":"Export exceeds row cap", "status":422,
+  "code":"export_row_cap_exceeded", "requested":4200000, "max":2000000 }
+```
+
+### 3.8 Select-all-matching-filter handoff + bulk-reveal governance
+
+A user who "selects all 800k matching rows" must **not** ship 800k ids in a request body. `/search/*`
+returns a **server-signed, opaque `filterBlob`** (the exact query + facet state) that bulk endpoints accept
+in place of an id list (§3.5a); the server re-resolves it at job time against the master graph
+([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), [ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md)).
+A **selection cap** bounds how large a single filter-handoff job may be (same `export_row_cap_exceeded`
+shape, applied to the resolved count).
+
+**Bulk reveal spends money, so it is the most governed job kind:**
+
+- **Credit reservation up front.** A `bulk_reveal` job **reserves** the worst-case credits at enqueue and
+  settles per verified result on completion — **07/[ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)
+  own credit reservation/lease semantics**; this doc only enqueues against them. Charge-by-verified-result
+  ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)) and per-workspace
+  first-reveal-wins ([§3.2](#32-reveal-spends-tenant-credits-idempotent--h1)) are unchanged per row.
+- **Per-user / per-team daily caps + threshold approval.** Daily bulk-reveal volume is capped per user and
+  per team; a job above the approval threshold enters `pending_approval` (a workspace `admin`+ / tenant
+  `billing_admin` approves — RBAC axes per [§4](#4-auth--authorization)) before it leaves `queued`. Over a
+  cap returns Problem Details (`code="bulk_reveal_cap_exceeded"`).
+- **Idempotency-on-enqueue.** The job-level `Idempotency-Key` (§3.5a) means a retried bulk-reveal enqueue
+  **reserves once and reveals once** — the network retry returns the existing `jobId`, and the reservation
+  is not duplicated.
+
 ## 4. Auth & authorization
 
 - **Dashboard:** authentication runs on a dedicated origin **`auth.truepoint.in`** (the IdP/BFF —
@@ -325,6 +500,19 @@ Credits are **granted only by the webhook**, incrementing the tenant counter `te
 - Per-workspace dedup on import (unique `(workspace_id, email_blind_index)` /
   `(workspace_id, linkedin_public_id)` / `(workspace_id, sales_nav_lead_id)`) makes `POST
   /source-imports` safely re-runnable.
+- **Idempotency-on-enqueue for bulk jobs** ([§3.5a](#35-bulk-async-jobs--the-uniform-contract-import--export--bulk-reveal)).
+  Bulk import/export/reveal carry a **job-level** `Idempotency-Key` (one per batch/enqueue, **not** per
+  item). The server records the key against the created job; a re-POST with the same key **returns the
+  existing `jobId`** instead of enqueuing a second job — so a retried enqueue collapses to one job, one
+  credit reservation, one load (resume/revert are then by `jobId` per [30 §4](./30-bulk-import-export-pipeline.md)).
+- **Bulk governors** (multi-tenant fairness for million-row work — [18 §9](./18-scalability-performance.md),
+  [30 §6](./30-bulk-import-export-pipeline.md)):
+  - **Per-tenant in-flight bulk-concurrency cap** — queued/running bulk jobs above the cap get `429` +
+    `Retry-After` (the enqueue is rejected, never dropped); the client retries with its same
+    `Idempotency-Key`.
+  - **Dedicated bulk queue-class rate limit** — bulk endpoints draw on a **separate token bucket** from the
+    interactive per-key/per-session limit ([§1](#1-conventions)), so a large export/import cannot starve
+    dashboard traffic, and bulk abuse can't exhaust the interactive budget.
 
 ## 6. Errors (Problem Details)
 
@@ -381,6 +569,7 @@ outbox** ([20 §2](./20-event-driven-realtime-backbone.md)); **reverse-ETL** + n
 | `outreach.status_changed` | an enrollment's `status` or a contact's `outreach_status` changes ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)) |
 | `enrichment.completed` | an on-demand enrichment job finishes |
 | `import.completed` | a `source_imports` job finishes (counts, dedup outcome) |
+| `bulk_job.state_changed` | a bulk import/export/reveal job changes state (terminal + `pending_approval`); carries `jobId`, `kind`, `counts` ([§3.5](#35-bulk-async-jobs--the-uniform-contract-import--export--bulk-reveal), [30](./30-bulk-import-export-pipeline.md)) |
 | `signal.received` | an intent signal is ingested (`signal_type`, account/contact) — feeds automation ([27](./27-workflow-automation-engine.md)) |
 | `verification.completed` | a `verification_jobs` run finishes (freshness + credit-back, [22](./22-data-quality-freshness-lifecycle.md)) |
 | `list.updated` | a list's membership changes |

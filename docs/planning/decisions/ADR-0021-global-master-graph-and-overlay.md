@@ -49,6 +49,20 @@ reveal ownership). Everything ADR-0006/0007/0009/0013 locked stands: **reveal** 
 now unlocks the **master** verified channel into the overlay; **suppression/consent** gate reveal **and**
 send, now enforced at the **global** layer as well.
 
+**Every overlay row always resolves to a master entity (the import-path matching invariant).** Creating an
+overlay row — including a **default CSV import** ([30-bulk-import-export-pipeline.md](../30-bulk-import-export-pipeline.md),
+[ADR-0036](./ADR-0036-bulk-async-job-and-staging-pipeline.md)) — **always** runs the row through global entity
+resolution (**MATCH-AGAINST** the master graph; see ER below and [ADR-0015](./ADR-0015-entity-resolution-dedup-engine.md))
+and sets the overlay's `master_person_id` / `master_company_id` to the resolved (or newly minted) golden
+identity. This **MATCH-AGAINST step is unconditional and on for every workspace**; it is what gives the overlay
+its survivorship link and lets one global pipeline dedup the universe once. It is **separate** from
+**CONTRIBUTE-TO** the shared universe — i.e. promoting the imported row's *field values* into the golden record
+for other workspaces to benefit from — which is the **co-op** decision and is **opt-in / contractual, off by
+default** ([06 §1](../06-enrichment-engine.md#1-principles)). Matching always happens; contributing does not.
+(Resolution to a master entity is therefore expected for every overlay row; `contacts.master_person_id` /
+`accounts.master_company_id` are nullable in the schema only to tolerate **in-flight staging** before ER
+completes ([03 §5.2](../03-database-design.md#52-per-workspace-overlay-layer-1)), not as a steady state.)
+
 **Entity resolution is global/cross-source** (amends [ADR-0015](./ADR-0015-entity-resolution-dedup-engine.md)):
 deterministic match keys (email blind index, registrable domain, LinkedIn id, E.164 phone) for the common
 case; **blocking + MinHash/LSH** candidate generation to avoid O(n²) at billions; **Splink** probabilistic
@@ -85,6 +99,15 @@ purge, then cascade to overlays) than enumerating copies.
 - **Positive:** a searchable universe (find-anyone → reveal); dedup once globally instead of per-workspace;
   cross-source golden values; **DSAR deletion provable** via the golden identity; reveal/credit/compliance
   machinery preserved.
+- **The global dedup promise holds on the import path.** Because **every** overlay row — including a default
+  CSV import — is **MATCH-AGAINST**-resolved to a master entity (sets `master_person_id` /
+  `master_company_id`; Decision above), imported rows land *inside* the master graph and are deduped against
+  the existing universe (blocking + Splink, [ADR-0015](./ADR-0015-entity-resolution-dedup-engine.md)) rather
+  than as an isolated per-workspace copy. This closes the import-path half of the dedup promise: there is **no
+  default-import escape hatch** that leaves a row unresolved. The bulk pipeline
+  ([30-bulk-import-export-pipeline.md](../30-bulk-import-export-pipeline.md),
+  [ADR-0036](./ADR-0036-bulk-async-job-and-staging-pipeline.md)) stages a million-row CSV and resolves each
+  row before (or as) it materializes the overlay copy.
 - **Negative (consciously accepted):**
   - **LeadWolf is now squarely a "data broker."** CA **Delete Act / DROP** registration + deletion
     processing (from **2026-08-01**) and applicable state broker registries move from a Trust-program line
@@ -96,8 +119,12 @@ purge, then cascade to overlays) than enumerating copies.
     (S3/Iceberg), OpenSearch + ClickHouse, and CDC into all of them.
   - **`source_records` is real lineage** at the master layer — a confidence/survivorship surface ADR-0006
     deliberately avoided. (Per-import `source_imports` stays as the overlay-side provenance.)
-  - **A co-op flywheel is now possible** (workspace-imported data enriching the universe) — but it is a
-    **disclosed, opt-in/contractual** privacy decision, **off by default** ([06 §1](../06-enrichment-engine.md#1-principles)).
+  - **A co-op flywheel is now possible** (workspace-imported data enriching the universe) — but **CONTRIBUTE-TO**
+    the shared universe is a **disclosed, opt-in/contractual** privacy decision, **off by default**
+    ([06 §1](../06-enrichment-engine.md#1-principles)). This gates only **contribution** of imported *field
+    values* into the golden record; it does **not** gate the **MATCH-AGAINST** resolution that links every
+    overlay row to a master entity — matching is always-on (Decision above). Co-op being off therefore does
+    **not** weaken the import-path dedup promise.
 - **Mitigation:** the master graph is **system-owned and not customer-readable** except through masked
   search + paid reveal; suppression/consent are enforced at both layers; deletion cascades golden → source →
   overlays with a verification scan; billions-scale infra (shard/lake/OpenSearch/ClickHouse) is the **scale

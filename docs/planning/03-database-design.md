@@ -558,7 +558,7 @@ CREATE INDEX idx_contacts_master ON contacts (master_person_id) WHERE master_per
 **`contact_reveals`** (event log; first per `(workspace_id,contact_id)` sets ownership — [ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)):
 `id · tenant_id · workspace_id · contact_id · revealed_by_user_id · reveal_type(email|phone|full_profile) · data_source(apollo|zoominfo|linkedin|internal) · credits_consumed int(default 1,>=0) · revealed_fields jsonb · revealed_at`. **Unique `(workspace_id, contact_id, reveal_type)`** for reveal idempotency (the app guard ADR-0007 requires).
 
-**`source_imports`** (provenance under this model): `id · tenant_id · workspace_id · contact_id · imported_by_user_id · source_name(apollo|zoominfo|linkedin|sales_navigator|hubspot|salesforce|clearbit|manual) · source_file · raw_data jsonb · content_hash bytea · imported_at`. (`content_hash` lets us dedup identical payloads — answers an open question.)
+**`source_imports`** (provenance under this model): `id · tenant_id · workspace_id · contact_id · imported_by_user_id · **import_job_id** (FK → `import_jobs`, the batch this row landed in — revert-by-batch, §15.2) · source_name(apollo|zoominfo|linkedin|sales_navigator|hubspot|salesforce|clearbit|manual) · source_file · raw_data jsonb · content_hash bytea · imported_at`. (`content_hash` lets us dedup identical payloads — answers an open question.) For **million-row** uploads this row is written by the async bulk pipeline, not the request thread — the durable job + COPY-staging + dedup-upsert data layer is **§15** ([30](./30-bulk-import-export-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)).
 
 **`sales_nav_links`**: `id · tenant_id · workspace_id · contact_id? · account_id? · link_type(profile|account|saved_search|lead_list|account_list|inmail_thread) · url text · title · notes · created_by_user_id · last_synced_at · created_at · updated_at` + CHECK tying `link_type` to contact/account presence.
 
@@ -627,7 +627,11 @@ lives in the search index (below).
 
 **Partitioning.** Range-partition by month: `activities`, `audit_log`, `contact_reveals`, `intent_signals`,
 `scores`, `source_imports`, `outreach_log`, `provider_calls`, `source_records` (the master evidence
-log), **and the new event/AI/automation logs `outbox`, `ai_requests`, `automation_runs`** (§14).
+log), **and the new event/AI/automation logs `outbox`, `ai_requests`, `automation_runs`** (§14). The bulk
+**`import_jobs`/`export_jobs`** ledgers are **one row per upload** (not per data row), so they are *not*
+partitioned — that keeps their `(workspace_id, idempotency_key)` unique simple (§15.2); UNLOGGED/TEMP
+**staging** tables (§15.1) are short-lived per-batch and dropped on completion, so they are not partitioned
+either. The per-row `source_imports` provenance stays monthly-partitioned as above.
 
 **Master-graph scale (billions, [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** The
 golden tables outgrow a single Aurora writer, so **shard horizontally with Citus** by a hash of the entity /
@@ -722,3 +726,201 @@ workspace/team-level pre-allocated blocks relieving the tenant-counter hot row).
 **Inbox ingestion** (design gate before the M9 build — [10 M9](./10-roadmap.md)): `mailbox_connections`
 (per-user mailbox OAuth state + sync cursors for reply capture into `activities`/Inbox); build-vs-vendor
 open ([00 §8](./00-overview.md)).
+
+## 15. Bulk-load data layer (million-row import/export)
+
+The MVP importer (§5.2, [05 §3](./05-features-modules.md)) writes one `source_imports` row per contact on
+the request path — fine for a few thousand rows, **not** for the million-row CSVs that
+Apollo/ZoomInfo/Salesforce-class workloads demand. At that scale bulk I/O is a **first-class async job**
+(Salesforce Bulk API 2.0 shape: create → upload → close → process → poll → fetch), so this section adds the
+*data layer* the job needs: a durable job ledger, COPY-based staging and its RLS interaction, an explicit
+merge policy, bulk-write physical guidance, and ER sub-blocking. The **mechanics** (worker stages, S3
+upload, streaming parse, backpressure) live in [30 — bulk import/export pipeline](./30-bulk-import-export-pipeline.md);
+the **decision** is [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md). Throughput
+and ER SLOs that this layer must hit are owned by [18 §2/§9](./18-scalability-performance.md) (and the ER
+block-size target paired with §15.5). **Closes G-IMP-2/4/5** ([28](./28-enterprise-readiness-audit.md)) and
+the DB half of the bulk-ER skew gap (G-ER-3; the runtime half is [18 §9](./18-scalability-performance.md)).
+
+### 15.1 COPY into staging, and the RLS interaction
+
+`COPY FROM` is the only way to land millions of rows at Postgres line-rate — but **Postgres disallows `COPY
+FROM` on a table that has RLS enabled** (and even with RLS the row-by-row policy check would defeat the
+point). So the load is two-phase:
+
+1. **Stage outside RLS.** COPY the parsed, server-chunked CSV (~10k-row chunks owned by the worker — [30](./30-bulk-import-export-pipeline.md))
+   into a per-batch **UNLOGGED** (or session **TEMP**) staging table that is **not** RLS-enabled and carries
+   no triggers/FKs. UNLOGGED skips WAL for the transient load (lost on crash — acceptable, the job re-COPYs
+   from the S3 source on resume, §15.4); TEMP is per-connection and auto-drops. The staging table mirrors the
+   canonical contact/account shape plus the raw row text and a `source_row_num` for per-row accounting.
+
+   ```sql
+   -- per-batch, created by the import worker; dropped on job completion (not partitioned, §12)
+   CREATE UNLOGGED TABLE stg_import_<job_id> (
+     source_row_num bigint NOT NULL,            -- 1-based line in the uploaded file → rejected-rows artifact
+     workspace_id   uuid   NOT NULL,            -- carried as a column (no RLS here) for the INSERT…SELECT filter
+     raw            jsonb  NOT NULL,            -- verbatim mapped row (audit + reject file)
+     email_blind_index bytea, linkedin_public_id varchar(255), sales_nav_lead_id varchar(255),
+     account_domain citext,                     -- parent-key affinity sort key (§15.4)
+     -- … canonical contact/account columns …
+     row_status     varchar(12) NOT NULL DEFAULT 'pending'  -- pending|inserted|updated|rejected|unprocessed
+   );
+   -- COPY runs here (no RLS, no triggers) — line-rate load:
+   -- COPY stg_import_<job_id> (source_row_num, workspace_id, raw, …) FROM STDIN WITH (FORMAT csv);
+   ```
+
+2. **Insert into the RLS target under the GUC.** Within a transaction that does
+   `SET LOCAL app.current_workspace_id = '<ws>'` (the same GUC §2/§9 use), run `INSERT INTO contacts (…)
+   SELECT … FROM stg_import_<job_id> WHERE workspace_id = current_setting('app.current_workspace_id')::uuid
+   ON CONFLICT … DO UPDATE …` (§15.3). The RLS `WITH CHECK` predicate (`workspace_id =
+   current_setting('app.current_workspace_id')::uuid`) is enforced on the INSERT side, so a staged row that
+   names another workspace is rejected — staging-outside-RLS does **not** open a cross-tenant hole. The
+   non-`BYPASSRLS` app role keeps the master tables (§9) untouched; bulk evidence into Layer 0 is the ER
+   pipeline's own COPY path ([06 §9](./06-enrichment-engine.md)), not this one.
+
+### 15.2 Bulk-job ledger (`import_jobs` / `export_jobs`)
+
+A durable, cheaply-pollable job row is the spine of the async pipeline. We use **two sibling tables** sharing a
+`bulk_job_status` enum (one `bulk_jobs` table with a `direction` discriminator is the alternative — rejected
+because import-only fields like `mapping_config`/`conflict_policy` and export-only fields like
+`query_snapshot` diverge enough that two tables read cleaner). Both are workspace-scoped (RLS by
+`workspace_id`, §9) and **one row per upload** — low-cardinality, so **not** partitioned (§12); the
+`(workspace_id, idempotency_key)` unique below therefore needs no partition-key inclusion.
+
+```sql
+CREATE TYPE bulk_job_status AS ENUM (
+  'pending','uploading','staged','validating','processing','completed','failed','cancelled'
+);
+CREATE TYPE import_conflict_policy AS ENUM ('keep_existing','overwrite','review_queue');  -- G-IMP-5, 29 §3
+
+CREATE TABLE import_jobs (
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  workspace_id      uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  created_by_user_id uuid REFERENCES users(id),
+  status            bulk_job_status NOT NULL DEFAULT 'pending',
+  source_name       varchar(50) NOT NULL,                  -- same vocab as source_imports.source_name
+  entity_type       varchar(10) NOT NULL CHECK (entity_type IN ('contact','account')),
+  source_uri        text NOT NULL,                         -- s3://… raw upload (presigned/multipart — 30)
+  result_uri        text,                                  -- s3://… rejected-rows + summary artifact (G-IMP-1)
+  mapping_config    jsonb NOT NULL DEFAULT '{}',           -- column→canonical map (mapping templates, G-IMP-3)
+  conflict_policy   import_conflict_policy NOT NULL DEFAULT 'keep_existing',
+  idempotency_key   varchar(255) NOT NULL,                 -- client Idempotency-Key → safe re-submit (§11)
+  byte_offset       bigint NOT NULL DEFAULT 0,             -- resume watermark into source_uri (§15.4)
+  total_rows        bigint NOT NULL DEFAULT 0,             -- three-way accounting (success/failed/unprocessed)
+  new_rows          bigint NOT NULL DEFAULT 0,             -- inserted
+  matched_rows      bigint NOT NULL DEFAULT 0,             -- updated via ON CONFLICT (§15.3)
+  rejected_rows     bigint NOT NULL DEFAULT 0,             -- validation/parse failures → result_uri
+  unprocessed_rows  bigint NOT NULL DEFAULT 0,             -- not yet reached (cancel/fail mid-run)
+  error             text,
+  started_at        timestamptz, finished_at timestamptz,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (workspace_id, idempotency_key)                   -- duplicate submit returns the same job
+);
+CREATE INDEX idx_import_jobs_ws_status ON import_jobs (workspace_id, status);  -- cheap poll/list
+
+CREATE TABLE export_jobs (
+  id                uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id         uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  workspace_id      uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  created_by_user_id uuid REFERENCES users(id),
+  status            bulk_job_status NOT NULL DEFAULT 'pending',
+  query_snapshot    jsonb NOT NULL DEFAULT '{}',           -- filter/columns at request time (consistent snapshot)
+  cursor_watermark  jsonb,                                 -- keyset/cursor checkpoint (§15.4, 26 §8)
+  result_uri        text,                                  -- s3://… gzip stream, multipart export (30; 26 §8)
+  total_rows        bigint NOT NULL DEFAULT 0, exported_rows bigint NOT NULL DEFAULT 0,
+  idempotency_key   varchar(255) NOT NULL,
+  error             text, started_at timestamptz, finished_at timestamptz,
+  created_at        timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (workspace_id, idempotency_key)
+);
+```
+
+**Revert-by-batch (G-IMP-2).** `source_imports.import_job_id` (§5.2) FK-references `import_jobs(id)` (`ON
+DELETE SET NULL` so a purged job ledger doesn't cascade-delete provenance). Undo within the configured
+window is "select the contacts whose **only** provenance is rows from this `import_job_id`, delete those;
+for contacts that pre-existed or have other sources, **revert the fields this batch wrote** from the prior
+`source_imports.raw_data`" — each undone row audited via the existing `contact.delete`/`contact.update` /
+`account.delete`/`account.update` actions (the audit enum has **no** dedicated `import.*` action; imports
+audit through record-CRUD — [audit-log-enum.md](./audit-log-enum.md), [08 §5](./08-compliance.md)), with the
+`import_jobs` row as the batch correlation handle. The `source_row_num` + `result_uri` give the importer a
+downloadable rejected-rows file (G-IMP-1) and a success-row correlation back to the input line.
+
+### 15.3 Explicit conflict policy (ON CONFLICT … DO UPDATE)
+
+The per-import `conflict_policy` (G-IMP-5) maps to a concrete upsert at the INSERT…SELECT step (§15.1):
+
+- **`keep_existing`** → `ON CONFLICT (…) DO NOTHING` (count as `matched_rows`, no write).
+- **`overwrite`** → `ON CONFLICT (…) DO UPDATE SET …` guarded by `IS DISTINCT FROM` so unchanged rows don't
+  churn `updated_at`/WAL/triggers.
+- **`review_queue`** → stage the diff for human review instead of writing (routes like the ER manual-review
+  queue, §5.1 / [22 §6](./22-data-quality-freshness-lifecycle.md)).
+
+**Conflict target.** The per-workspace overlay uniques (§11): `(workspace_id, email_blind_index)`, falling
+back to `(workspace_id, linkedin_public_id)` then `(workspace_id, sales_nav_lead_id)` — the same keys the
+overlay dedups on. **Multiple partial unique indexes can't be a single `ON CONFLICT` target**, so the upsert
+runs as an ordered cascade (try email-BI, then LinkedIn, then sales-nav), or stages a resolved
+`conflict_key` column chosen during dedup (§15.5) and conflicts on that.
+
+```sql
+INSERT INTO contacts (workspace_id, tenant_id, email_blind_index, job_title, custom_fields, …)
+SELECT … FROM stg_import_<job_id>
+WHERE workspace_id = current_setting('app.current_workspace_id')::uuid
+ON CONFLICT (workspace_id, email_blind_index) WHERE email_blind_index IS NOT NULL
+DO UPDATE SET
+  job_title    = EXCLUDED.job_title,
+  -- jsonb merge: import-supplied keys win, existing keys the import didn't touch are preserved
+  custom_fields = contacts.custom_fields || EXCLUDED.custom_fields,
+  updated_at   = now()
+WHERE (contacts.job_title, contacts.custom_fields)
+        IS DISTINCT FROM (EXCLUDED.job_title, contacts.custom_fields || EXCLUDED.custom_fields);
+```
+
+**`custom_fields` jsonb merge rule.** `custom_fields` (the GIN-indexed jsonb column on `contacts`/`accounts`
+— [ADR-0028](./decisions/ADR-0028-record-customization-layer.md), §14) is **shallow-merged
+import-key-wins**: `existing || incoming`, so a key the CSV provides overwrites that one key while every
+other existing key is preserved (never a whole-object replace). Null/empty CSV cells are dropped from
+`incoming` before the merge so a blank column never blanks a populated field. This is the *overlay*
+last-writer-wins policy ([06 §4](./06-enrichment-engine.md)); cross-source field **survivorship** (most-recent
+× most-corroborated) remains the Layer-0 master graph's job (§5.1), not the importer's.
+
+### 15.4 Bulk-write physical guidance
+
+- **Idempotency + resume (G-IMP, ADR-0036).** `idempotency_key` UNIQUE (§15.2) makes a re-submitted upload
+  return the same job. `byte_offset` is the resume watermark into `source_uri`: a worker that dies mid-run
+  re-opens the S3 object at `byte_offset`, re-COPYs only the un-staged tail, and per-chunk dedup +
+  `ON CONFLICT` make replay of an already-applied chunk a no-op. The three-way counters
+  (`new/matched/rejected/unprocessed`, summing to `total_rows`) are the durable accounting.
+- **Index/trigger handling for high-write ingest.** Staging (§15.1) carries **no** secondary indexes or
+  triggers, so COPY is unencumbered. On the RLS target, the `updated_at` trigger (§10) and score-sync stay,
+  but the `IS DISTINCT FROM` guard (§15.3) keeps them from firing on no-op updates. For a *first* large import
+  into an empty/cold workspace, building secondary indexes **after** the bulk INSERT (or `REINDEX` post-load)
+  beats maintaining them per-row; routine incremental imports keep indexes live. Batching the INSERT…SELECT in
+  the worker's ~10k-row chunks bounds transaction size and lock duration.
+- **Parent-key affinity / pre-sort (G-ER-3 DB half).** Parallel import chunks that each upsert the **same**
+  parent `accounts` row (e.g. many contacts at one company) collide and serialize on that row — and Aurora can
+  surface *"unable to lock row"* contention under RLS. Mitigation: **pre-sort / partition the staged rows by
+  `account_domain`** (the affinity key in `stg_import`) so a given parent account is touched by **one** chunk,
+  and **upsert parent `accounts` before child `contacts`** so the FK target exists and chunks don't race to
+  create it. This is the DB-side complement to the runtime ER throughput SLO in
+  [18 §9](./18-scalability-performance.md).
+- **Export keyset cursor.** `export_jobs.cursor_watermark` holds the keyset position (UUID v7 PK is
+  time-ordered, so `WHERE id > :last ORDER BY id LIMIT n` paginates without OFFSET) under a consistent
+  snapshot — the streamed gzip → S3 multipart export ([26 §8](./26-integrations-data-delivery.md),
+  [30](./30-bulk-import-export-pipeline.md)) resumes from it.
+
+### 15.5 ER blocking: oversized-block sub-blocking (G-ER-3 DB half)
+
+Dedup happens **before** enrich and within-file + against the DB ([06 §9](./06-enrichment-engine.md)); the
+candidate-generation step is **blocking** — rows that share a blocking key are compared pairwise. The skew
+risk at a million rows: a single dominant key (e.g. one `email_domain` like `gmail.com`, or a huge employer
+domain) produces a block of hundreds of thousands of rows, and the in-block pairwise comparison is
+**O(block²)** — one fat block dominates the whole run. Mitigation (DB side): **cap block size and sub-block
+oversized blocks on a secondary dimension** — when a primary block (`email_domain`) exceeds a threshold,
+recompute candidates within it using a compound key (`email_domain + metaphone(last_name)`, or `+ first
+initial`, or `+ normalized title`), turning one O(n²) block into many small ones. Blocking keys are
+materialized columns with their own indexes (§12); the oversized-block split adds a **secondary blocking-key
+column** populated on the staging table so the comparison join stays index-driven. The **block-size cap and
+sub-blocking SLO** (max block size, target candidate-pairs/sec) are owned by
+[18 §9](./18-scalability-performance.md), paired with this layer; the global ER pipeline that consumes the
+same technique at billions is [06 §9](./06-enrichment-engine.md) / [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md).

@@ -58,6 +58,37 @@ entity resolution ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engin
 - Lineage flows into compliance: DSAR access shows where data came from; deletion fans out across the chain
   (`08 §4`, `H6`); suppression overrides all sources (`H5`).
 
+### 5.1 Per-import lawful-basis attestation (user uploads)
+
+Licensed providers carry the provider's basis in their contract; **customer uploads (CSV/XLSX/CRM sync) do
+not** — uploaded data is the **highest-risk channel** because the lawful basis is the *uploader's* to assert,
+not ours to infer. So every bulk import job records an explicit **lawful-basis attestation** before its rows
+become usable, closing the gap where upload lineage was silent.
+
+- **Default basis per workspace.** A workspace sets a default upload lawful basis
+  (`legitimate_interest` / `consent` / `public_record`) in settings (`12`), applied to imports that don't
+  override it.
+- **Per-import field + attestation.** The import wizard (`05 §3`) requires the uploader to confirm a
+  **lawful basis for this file** and **attest they have the right to upload and process it** — a checkbox
+  attestation (who/when, the asserted basis, and the per-import notes) recorded on the **import job**
+  ([30](./30-bulk-import-export-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)).
+  The job will not enqueue without it.
+- **Mixed-basis handling.** A file may carry rows of differing bases (e.g. a column flagging consented vs.
+  legitimate-interest rows). The import supports a **per-row basis column mapping**; unmapped rows fall back
+  to the import's declared basis, and the **most restrictive** basis present governs any whole-file decision
+  (e.g. co-op eligibility below).
+- **Propagated to lineage.** The attested basis is written into the per-import `source_imports` lawful-basis
+  snapshot (`08 §11`) so the **lineage chain** above shows *upload* provenance the same way it shows provider
+  provenance — DSAR-answerable and audit-defensible.
+- **Gates co-op contribution.** Only rows whose attested basis permits onward sharing are eligible to feed
+  the **contribution co-op** (§7); a `legitimate_interest`-only or unattested import is **excluded from
+  co-op contribution** regardless of the workspace's co-op opt-in. This makes the co-op flywheel
+  lawful-by-construction, not opt-in-by-accident.
+
+Set-based suppression/DNC screening of imported rows at ingest, upload virus scanning, and the
+rejected-rows artifact policy are specified in compliance (`08 §3.1`/`§9`); the bulk job mechanics live in
+[30](./30-bulk-import-export-pipeline.md) / [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md).
+
 ## 6. EU-compliant sourcing & residency
 
 - For EU subjects, prefer **compliance-first providers** (Cognism/Lusha) and registry sources with clear
@@ -82,8 +113,10 @@ entity resolution ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engin
 
 ## Links
 - **Links to:** [06 §1/§2/§3/§8](./06-enrichment-engine.md), [03 §5](./03-database-design.md),
-  [08 §2/§4/§10/§11](./08-compliance.md), [22](./22-data-quality-freshness-lifecycle.md), [10](./10-roadmap.md),
-  [13 §4](./13-platform-admin.md), [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md),
+  [08 §2/§3.1/§4/§10/§11](./08-compliance.md), [22](./22-data-quality-freshness-lifecycle.md), [10](./10-roadmap.md),
+  [13 §4](./13-platform-admin.md), [30](./30-bulk-import-export-pipeline.md),
+  [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md),
+  [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md),
   [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)
 - **Linked from:** [00 §7](./00-overview.md#7-decision-log), [06 §2](./06-enrichment-engine.md), [08 §11](./08-compliance.md), README
 

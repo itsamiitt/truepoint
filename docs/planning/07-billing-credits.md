@@ -143,6 +143,98 @@ Notes:
   is the one automated path that *increments* the counter, so it is bounded + audited (§7) and feeds the
   ledger-revival trigger ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)).
 
+## 3A. Bulk reveal / enrich credit handling (million-row jobs)
+
+§3 charges **one reveal at a time** under the tenant-row `FOR UPDATE` — correct, but it **serializes every
+reveal tenant-wide** ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md) context;
+G-BIL-2). A million-row CSV reveal/enrich run cannot take that lock a million times. Bulk jobs run on the
+async staging pipeline ([./30-bulk-import-export-pipeline.md](./30-bulk-import-export-pipeline.md),
+[ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)); the credit mechanics for a bulk
+job are below. The **per-row charge policy is unchanged** — every row still settles by verified result
+([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md), §3); this section only changes
+how credits are **reserved and reconciled in bulk**, not what a single reveal costs.
+
+### (a) Pre-flight cost ESTIMATE (shown before the job runs)
+
+Before a bulk reveal/enrich job is confirmed, the user is shown a **worst-case cost estimate**: the number
+of **distinct, not-already-revealed** rows (after dedup, (c) below) × the per-`reveal_type` cost (§1). It is
+labelled **worst-case** because charge-by-verified-result (§3, [ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md))
+means the **actual** spend is usually **lower** — `invalid`/`catch_all`/`unknown`/no-data rows settle at
+**0**, and already-owned workspace copies are **free** (§1). The estimate also reports how many rows are
+**free re-reveals** and how many fall **outside the current balance** so the user can size a top-up (§4)
+before committing. The estimate is informational; it never itself moves the counter.
+
+### (b) Bulk credit RESERVATION / lease (the scalability fix)
+
+When a bulk job is confirmed, it **does not** decrement the tenant counter per row. Instead it
+**pre-authorizes the worst-case batch cost as a single credit lease** for the job, against a
+per-workspace/team lease carved from the tenant pool
+([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md) M12 — *lease the worst-case amount
+for a bulk job, settle on completion, release the remainder*). Mechanics:
+
+- **Reserve once, at job start.** A `SELECT … FOR UPDATE` on the **lease row** (not the `tenants` row)
+  carves the worst-case amount from the tenant pool, with the same `CHECK (>= 0)` guarding the pool. If the
+  pool can't cover the worst case, the job is **not** rejected outright — it confirms at the **affordable**
+  amount and runs with **partial-spend** semantics ((d) below). The tenant counter takes the hot lock
+  **once per job**, not once per row, so a million-row job no longer serializes tenant-wide on the §3 hot
+  lock — this is the **scalability fix** for G-BIL-2.
+- **Spend locally, per row.** Each row's verified charge decrements the **job's lease** under the lease
+  row's own lock (per-workspace/team parallelism, [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md));
+  the `contact_reveals` row is still written per row with `credits_consumed` set by verified result (§3).
+- **Settle on completion, release the remainder.** When the job finishes, the lease **settles**: actual
+  verified spend stays decremented; the **unspent remainder** (worst-case over-reservation — bad-data rows
+  that settled at 0, free re-reveals discovered mid-run) is **released back to the tenant pool**. Settlement
+  and release are audited (`credit.adjust`, [08 §5](./08-compliance.md)). Until M12's lease rows exist, a
+  bulk job degrades to a **single reservation transaction** on the tenant counter at job start/settle
+  (one hot-lock acquisition per job, not per row) — correctness preserved by `CHECK (>= 0)`.
+
+### (c) Dedup BEFORE enrich (never charge a duplicate twice)
+
+Bulk input is **deduplicated before any credits are reserved or spent**. The pipeline collapses duplicate
+rows (same person/identity key, [./30-bulk-import-export-pipeline.md](./30-bulk-import-export-pipeline.md))
+**and** excludes rows whose `(workspace_id, contact_id, reveal_type)` is **already revealed** (free under
+first-reveal-wins, §1) **before** the estimate (a) and reservation (b). A duplicate row therefore enters the
+charge path **once**; the per-reveal unique constraint on `contact_reveals (workspace_id, contact_id,
+reveal_type)` (§2/§3) remains the **final** idempotency backstop if a duplicate slips through.
+
+### (d) Partial-spend / resume when the lease is exhausted
+
+A bulk job is **resumable** and never overdraws. If the lease (or the tenant pool behind it) is exhausted
+mid-job — because the worst case exceeded the balance, concurrent jobs drew the pool down, or a top-up
+hasn't landed — the job **pauses** at the last fully-settled row rather than failing or partial-charging a
+row:
+
+- Rows already processed are **settled and charged** (by verified result); their `contact_reveals` rows are
+  committed, so no work is lost and nothing is double-charged on resume (the unique constraint, §3).
+- The job enters a **`paused_insufficient_credits`** state and surfaces the **shortfall** (rows remaining ×
+  worst-case cost) so the user can **top up** (§4) and **resume**. On resume, dedup (c) re-excludes the
+  already-revealed rows, a fresh lease is reserved for the remainder, and processing continues.
+- This mirrors the single-reveal `INSUFFICIENT_CREDITS` rollback (§3) at **batch granularity**: the unit of
+  failure is a row, never a half-charged row.
+
+### (e) Batch-granularity credit-back for failed / unverified rows
+
+Credit-back ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md), §3) applies to bulk
+exactly as to single reveals, just **aggregated by batch**:
+
+- **Unverified at reveal** (`invalid`/`catch_all`/`unknown`/no-data) — these settle at **0** during the run
+  (b); they are never charged, so there is nothing to credit back. They count toward the *worst-case over
+  the actual* gap released at settlement, not a refund.
+- **Failed rows** (provider error, transient miss) are **not charged** and are reported as a re-runnable
+  remainder of the job, not a silent loss.
+- **Post-hoc credit-back on bounce** — a charged `valid` email from a bulk job that **hard-bounces** within
+  the guarantee window (§3, [08 §6](./08-compliance.md)) is credited back the same way as a single reveal: an
+  audited counter increment (`credit.adjust`). For a large batch these arrive as a **stream** of per-row
+  credit-backs over the window; each is bounded + audited (§7) — there is no separate bulk refund path, only
+  the same per-row path reconciled in aggregate by `billing-recon` (§8).
+
+> **Alignment:** all five mechanics keep the LOCKED invariants — tenant counter as authoritative balance
+> ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)), lease semantics
+> ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)), idempotent charging (§2/§3,
+> [ADR-0004](./decisions/ADR-0004-credit-ledger-idempotency.md)), and charge-for-verified + credit-back
+> ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)). The lease for bulk **is**
+> ADR-0029's M12 lease applied to a whole job; until M12 the degraded single-reservation path above holds.
+
 ## 4. Stripe top-ups (webhook is the source of truth)
 
 ```mermaid
@@ -244,6 +336,13 @@ A scheduled `billing-recon` worker asserts, per tenant:
    (counter becomes a derived cache), lease-based decrement at **M12** (§2).
 3. Subscription plans (seat-based) on top of credits — when? (Post-MVP; tenant entitlements already
    support it.)
+3a. ~~**Bulk credit mechanics** (G-BIL-1, mechanics): how a million-row reveal/enrich job reserves and
+   reconciles credits without serializing on the §3 hot lock.~~ **Resolved** (§3A): pre-flight worst-case
+   **estimate**, a **worst-case lease** per job ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)
+   M12 — settle on completion, release the remainder), **dedup-before-enrich**, **partial-spend / resume** on
+   exhaustion, and **batch-granularity credit-back** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).
+   Pipeline: [./30-bulk-import-export-pipeline.md](./30-bulk-import-export-pipeline.md),
+   [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md).
 4. ~~Policy on charging for `risky`/`catch_all` emails (charge, discount, or warn-only?).~~ **Resolved**
    ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md), §3): charge only for `valid`;
    `invalid`/`catch_all`/`unknown`/no-data → **0**; `risky` → charged-but-flagged (configurable) — plus

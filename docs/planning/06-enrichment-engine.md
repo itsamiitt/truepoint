@@ -10,10 +10,22 @@
 
 ## 1. Principles
 
-- **Two layers ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** Every record feeds
-  the **global master graph** (entity-resolved golden records — Layer 0) **and** the **calling workspace's**
-  overlay copy (Layer 1). Cross-source dedup / merge / survivorship happen **globally** at Layer 0; the
-  overlay keeps workspace-private notes/scores/reveal state.
+- **Two layers ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** Every imported record
+  is **matched against** the **global master graph** (entity-resolved golden records — Layer 0) so the
+  **calling workspace's** overlay copy (Layer 1) is linked to a `master_person_id` / `master_company_id`;
+  cross-source dedup / merge / survivorship happen **globally** at Layer 0; the overlay keeps workspace-private
+  notes/scores/reveal state.
+- **Match-against ≠ contribute-to ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)).** Two
+  distinct operations, not to be conflated:
+  - **Match-against (ALWAYS).** Every import resolves its rows against the existing master universe via the
+    import-path matcher ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) + ER/dedup
+    ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)), setting
+    `contacts.master_person_id` (and `accounts.master_company_id`) on the overlay copy. This is required for
+    overlay linking + survivorship and is **independent of co-op** — a default CSV import **still resolves to a
+    master entity**, even when nothing is contributed back.
+  - **Contribute-to (OPT-IN).** Whether the import's evidence is **persisted into the shared pool** as
+    field-contributing `source_records` is governed by the co-op opt-in below. A default import does **not** feed
+    the shared universe unless opted in.
 - **Cache-first, cost-aware.** Never pay twice for the same provider answer; try cheap/likely sources first.
 - **Charge on reveal, not enrichment.** Enrichment cost is a system metric
   (`provider_calls.cost_micros`); users pay credits only when they **reveal**
@@ -21,9 +33,12 @@
 - **Provenance at both layers.** The master graph keeps immutable `source_records` (per-source raw evidence
   feeding ER — the field-contributing lineage the per-workspace-only model deliberately lacked); the overlay
   keeps a per-import `source_imports` row.
-- **Co-op is opt-in + disclosed.** Workspace-imported data feeds the shared universe **only** under an
+- **Co-op is opt-in + disclosed.** Workspace-imported data **contributes** to the shared universe (its
+  `source_records` becoming field-contributing lineage other workspaces can resolve against) **only** under an
   explicit, disclosed opt-in / contract — **off by default** (a privacy-disclosure obligation; data-side
   research [../research/sales-intelligence-data-research.md](../research/sales-intelligence-data-research.md) §1).
+  Off-by-default scopes **contribution only** — the import still **matches against** the master graph to set
+  `master_person_id` (see above); co-op never gates that link.
 - **Correctness ≠ quality.** Verification (`email_status`) is field **correctness**; lead scoring
   ([§7](#7-lead-scoring--intent-signals)) is prospect **quality**. Never conflate the two
   ([ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)).
@@ -39,11 +54,16 @@
 | **Technographic** | Workers call **BuiltWith / HG Insights / Wappalyzer** to fill an account's tech stack | provenance via `provider_calls`; enriches account technographic fields + emits `tech_install` signals |
 | **Intent data** | Co-op / signal feeds — **Bombora** (B2B intent co-op), **G2**, **6sense** — keyed to accounts/domains | not a contact source; populates `intent_signals` (`signal_source = bombora`/`g2`/`6sense`) |
 
-All **contact** channels land through the same workers: they append a `source_records` row to the **global
-master graph** (deduped globally by the ER pipeline, §9) **and** upsert the **calling workspace's** overlay
-copy, deduped within the workspace on `(workspace_id, email_blind_index)` /
-`(workspace_id, linkedin_public_id)` / `(workspace_id, sales_nav_lead_id)`
-([03 §5](./03-database-design.md#5-data-layer)). The proprietary web-scraper engine stays **removed**; the
+All **contact** channels land through the same workers, which always do two things and conditionally a third
+([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)): (1) **match** each row against the
+**global master graph** (deduped globally by the ER pipeline, §9) to resolve a `master_person_id` /
+`master_company_id`; (2) **upsert** the **calling workspace's** overlay copy linked to that master id, deduped
+within the workspace on `(workspace_id, email_blind_index)` / `(workspace_id, linkedin_public_id)` /
+`(workspace_id, sales_nav_lead_id)` ([03 §5](./03-database-design.md#5-data-layer)); and (3) **only when the
+workspace has opted into the co-op** ([§1](#1-principles)), **append** a field-contributing `source_records`
+row so the import's evidence enters the shared pool. Matching and overlay-linking (1+2) are unconditional;
+contribution (3) is the opt-in step — so a default CSV import resolves to a master entity without feeding the
+shared universe. The proprietary web-scraper engine stays **removed**; the
 global golden pipeline is **back as Layer 0** ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md),
 reviving [ADR-0005](./decisions/ADR-0005-multi-tenancy-and-global-contact-db.md)/[ADR-0003](./decisions/ADR-0003-three-layer-data-model.md)). **Technographic and intent providers
 enrich *accounts* and emit *signals*, not new contacts** — their provenance lives in `provider_calls` and
@@ -112,12 +132,75 @@ flowchart TB
    `expectedHitRate` is learned over time from `provider_calls` (per provider × field).
 3. **Sequential waterfall** — call provider; `hit` → stop; otherwise next. (A "parallel-cheap" mode is
    allowed for low-cost providers when latency matters.)
-4. **Persist** — every response writes a `source_records` row to the **master graph** (raw payload +
-   extracted match keys, for global ER, §9) **and** a per-import `source_imports` row in the overlay, +
-   `provider_calls` (cost/latency/cache_hit). The workspace's `contacts`/`accounts` overlay copy is upserted
-   transactionally and linked to the resolved `master_*_id`; conflicting values in the **overlay** are
-   last-writer-wins within the workspace, while **cross-source merge/survivorship** is the master graph's job
-   (§9), not the overlay's.
+4. **Persist** — every response is **matched** into the **master graph** (raw payload + extracted match keys,
+   for global ER, §9) to resolve `master_*_id`, and writes a per-import `source_imports` row in the overlay +
+   `provider_calls` (cost/latency/cache_hit). The provider evidence is persisted as a field-contributing
+   `source_records` row per the **match-against ≠ contribute-to** rule ([§1](#1-principles)) — paid
+   third-party-provider answers are platform-sourced and feed the shared pool, whereas
+   **workspace-imported** evidence contributes only under co-op opt-in. The workspace's `contacts`/`accounts`
+   overlay copy is upserted transactionally and linked to the resolved `master_*_id`; conflicting values in the
+   **overlay** are last-writer-wins within the workspace, while **cross-source merge/survivorship** is the
+   master graph's job (§9), not the overlay's.
+
+### 4.1 Bulk enrich-on-import (opt-in, credited, post-dedup)
+
+The per-field flow above is **on-demand** (one record/field at a time). A freshly **imported file** can also be
+**bulk-enriched** as one credited batch step — the gap the per-field flow and the §9 bulk *re*-verification both
+left open. It is governed by the workspace **auto-enrich policy** (G-ENR-1;
+[29 §3](./29-settings-administration-architecture.md)) and runs as a stage of the bulk import/export pipeline
+([./30-bulk-import-export-pipeline.md](./30-bulk-import-export-pipeline.md),
+[ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)).
+
+- **Opt-in, off by default.** Enrich-on-import fires only when the workspace's auto-enrich policy enables it —
+  the **import** trigger of that policy, extending its `on_create`/`on_reveal`/`scheduled` triggers — bounded by
+  the policy's **field allowlist** and **monthly budget** (G-ENR-1,
+  [29 §3](./29-settings-administration-architecture.md)). It is a **credited** step — distinct from import
+  itself, which is free — so it is never run silently.
+- **Runs AFTER dedup/ER, never before.** The batch enriches only the **deduped, entity-resolved** set: the
+  import is first matched + ER'd into the master graph ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md),
+  [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md), §9) so that **duplicate rows collapse to
+  one master entity and are enriched (and charged) once**, not once per duplicate. Enrichment keys off
+  `master_person_id`, so a row already covered by a cached/owned master value short-circuits with no call and no
+  charge (per §1 cache-first).
+- **Chunked fan-out, capped concurrency.** The deduped set is split into chunks and fanned out to the
+  enrichment workers, each chunk a per-field waterfall ([§4](#4-the-enrichment-flow-per-requested-field)). A
+  **per-import concurrency cap** bounds how many chunks run at once so one large file cannot starve on-demand
+  reveals or exhaust a provider's tokens; the existing per-provider **token bucket** + **circuit breaker**
+  ([§6](#6-rate-limiting-idempotency-resilience)) still apply across all callers. Chunk sizing + the
+  job-lifecycle state machine are owned by the bulk pipeline
+  ([./30-bulk-import-export-pipeline.md](./30-bulk-import-export-pipeline.md),
+  [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)).
+- **Reserve-then-spend against the §6 budget.** Before fan-out the job **reserves** its worst-case credit cost
+  (the credit-cost preview below) as a hold, then **spends** per actual filled field, releasing the unspent
+  remainder at the end. The reservation interacts with the per-provider + global **daily cost budgets** and
+  **circuit breaker** ([§6](#6-rate-limiting-idempotency-resilience)): a reservation that would exceed the
+  remaining daily budget is rejected up front rather than discovered mid-run. The **credit** reservation
+  mechanism — the workspace/team **credit lease** that holds and decrements the hold — is owned by
+  [07](./07-billing-credits.md) / [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md); this
+  section only specifies that the bulk job uses it.
+- **Resumable when the breaker trips.** If the daily budget is exhausted or a provider breaker opens mid-run,
+  the job **pauses** (does not fail): completed chunks are committed, unprocessed master entities are left
+  marked, the unspent reservation is released, and the job **resumes** from the checkpoint when the breaker
+  half-opens / budget resets — never re-enriching an already-filled entity (idempotent on `master_person_id` +
+  field, [§6](#6-rate-limiting-idempotency-resilience)).
+- **Credit-cost preview before spend.** The job surfaces a **worst-case credit cost up front** — estimated from
+  per-provider hit-rate stats (`provider_calls`, the G-ENR-3 estimate) over the deduped row count × allowlisted
+  fields — so the user confirms the spend before any provider is called. The preview is the same number used as
+  the reservation hold.
+
+Result accounting (which rows filled / missed / were skipped for budget) is reported through the bulk pipeline's
+per-row result split ([./30-bulk-import-export-pipeline.md](./30-bulk-import-export-pipeline.md),
+[ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)); job status is surfaced per G-ENR-4.
+
+> **Closes G-ER-1 + G-ENR-1.** The match-against-vs-contribute-to split (§1, §2) makes a default CSV import
+> resolve to a master entity without feeding the shared pool (**G-ER-1**); enrich-on-import gives the auto-enrich
+> policy its import trigger (**G-ENR-1**, [28 §3.4](./28-enterprise-readiness-audit.md)). Ownership of the
+> adjacent halves: **import-path matching** is [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md);
+> **ER/dedup** is [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md) (amended by ADR-0021);
+> **credit reservation** (the lease that holds + spends) is [07](./07-billing-credits.md) /
+> [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md); the **bulk job lifecycle / staging /
+> result split** is [./30-bulk-import-export-pipeline.md](./30-bulk-import-export-pipeline.md) /
+> [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md).
 
 ## 5. Caching
 
@@ -140,7 +223,9 @@ provider cost/cache for the enrichment workers, not user-facing billing
 - **Idempotency:** enrichment jobs carry an idempotency key; `provider_calls.request_hash` unique +
   Redis in-flight lock prevent duplicate **paid** calls under retries/concurrency.
 - **Cost control:** per-provider + global **daily cost budgets** with alerts; the breaker can be tripped
-  by budget exhaustion. All spend is observable (cost-per-reveal dashboard, [§9](#10-metrics-the-economics-dashboard)).
+  by budget exhaustion. Bulk enrich-on-import jobs ([§4.1](#41-bulk-enrich-on-import-opt-in-credited-post-dedup))
+  **reserve** their worst-case cost against these budgets up front (reserve-then-spend) and **pause/resume** when
+  the breaker trips. All spend is observable (cost-per-reveal dashboard, [§9](#10-metrics-the-economics-dashboard)).
 
 ## 7. Lead scoring & intent signals
 

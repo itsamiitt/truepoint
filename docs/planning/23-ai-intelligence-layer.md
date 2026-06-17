@@ -28,6 +28,7 @@ picks the model per `ai_task_type`:
 | `summarize` | Haiku 4.5 / Sonnet 4.6 | account/contact briefs |
 | `research_agent` | Opus 4.8 | multi-step web research + synthesis |
 | `extract_fields` | Haiku 4.5 | unstructured → structured |
+| `suggest_column_mapping` | Haiku 4.5 | CSV headers + sample values → canonical-field map with per-column confidence (§3, [30](./30-bulk-import-export-pipeline.md)) |
 | `classify_reply` | Haiku 4.5 | reply-intent triage (Inbox/SDR — [28 §3.13](./28-enterprise-readiness-audit.md)) |
 | `embed` | embedding model | semantic vectors (§4) |
 
@@ -44,8 +45,37 @@ work.
 | **Summarization** | account/contact briefs ("why this account matters now") | grounded in owned data + signals |
 | **Agentic account research** | multi-step public-web research → brief (funding, hiring, tech, news) | findings **verified** before becoming fields/signals; isolated browsing |
 | **AI extraction/cleaning** | parse unstructured text (job posts, signatures, registry docs) → structured fields | confidence-scored; low-confidence routes to review |
+| **AI column auto-mapping** | suggest a CSV-header → canonical-field map (with sample values) for the import wizard ([05 §3](./05-features-modules.md), [30](./30-bulk-import-export-pipeline.md)) — see §3.1 | **suggestion only**; per-column confidence; user confirms; low-confidence flagged; never auto-applied |
 | **Reply classification** | label inbound replies (positive / objection / OOO / unsubscribe / bounce) to drive Inbox triage + automation | confidence-gated; auto-actions only above a configured floor, else human triage |
 | **Signal-to-play** | turn a signal into a recommended play executed by the automation engine (`27`) | runs under automation guardrails (`H21`) |
+
+### 3.1 AI column auto-mapping (import wizard)
+
+Column mapping is the highest-failure step of a CSV import — header-vs-canonical-field mismatch causes
+the majority of import failures at scale, so the wizard should propose a map rather than make the user
+build one by hand. The `suggest_column_mapping` task (§2) is an `AiPort` method that takes the upload's
+**headers + a sample of values per column** and returns, **per source column**, a suggested canonical
+target field (contact/account shape, incl. custom-field definitions per [29 §3](./29-settings-administration-architecture.md))
+and a **confidence**. It reuses the `extract_fields` machinery (header text + sample values → structured
+suggestion), narrowed to the canonical schema as the target.
+
+- **Assistive, not autonomous (`H19`, §1).** The map is a **suggestion surfaced for confirmation** in the
+  import wizard ([05 §3](./05-features-modules.md)) — it is **never auto-applied**. Low-confidence and
+  unmapped columns are **flagged** so the user reviews them before the import proceeds; high-confidence
+  columns are pre-filled but still editable.
+- **Propose / store / replay split.** AI **proposes** the map; **settings stores and replays** it. Once
+  the user confirms, persistence is owned by the saved **mapping templates** in
+  [29 §14](./29-settings-administration-architecture.md) (per-source column maps + AI suggestions, `G-IMP-3`)
+  — the AI suggestion seeds a template; subsequent imports of the same source prefill from the saved
+  template and only re-invoke the model for unrecognized headers.
+- **Where it sits in the pipeline.** Mapping is the confirm step before staging/validation in the bulk
+  import/export pipeline — see [30](./30-bulk-import-export-pipeline.md) and
+  [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md).
+- **Grounded & metered like every other call.** Runs on headers + sampled values only (no full-file scan),
+  cached/budgeted per §7, audited in `ai_requests` per §8.
+
+This closes the AI auto-map gap in `G-IMP-3` ([28 §3](./28-enterprise-readiness-audit.md)); the saved-template
+half of `G-IMP-3` is owned by [29 §14](./29-settings-administration-architecture.md).
 
 ## 4. Grounding & semantic search
 
@@ -86,10 +116,13 @@ work.
   scope (`08 §4`); no training on customer data without explicit terms.
 
 ## Links
-- **Links to:** [05 §16](./05-features-modules.md), [06 §9](./06-enrichment-engine.md), [03 §2/§6/§14](./03-database-design.md),
+- **Links to:** [05 §3/§16](./05-features-modules.md), [06 §9](./06-enrichment-engine.md), [03 §2/§6/§14](./03-database-design.md),
   [08 §4/§5/§10](./08-compliance.md), [09](./09-api-design.md), [16 §11](./16-code-organization.md),
   [20](./20-event-driven-realtime-backbone.md), [27](./27-workflow-automation-engine.md), [10](./10-roadmap.md),
-  [ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md), [ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)
+  [29 §3/§14](./29-settings-administration-architecture.md), [30](./30-bulk-import-export-pipeline.md),
+  [28 §3](./28-enterprise-readiness-audit.md),
+  [ADR-0023](./decisions/ADR-0023-ai-provider-and-intelligence-architecture.md), [ADR-0008](./decisions/ADR-0008-lead-scoring-model.md),
+  [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)
 - **Linked from:** [00 §7](./00-overview.md#7-decision-log), [05 §16](./05-features-modules.md), [16 §11](./16-code-organization.md), README
 
 ## Open questions

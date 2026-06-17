@@ -75,6 +75,50 @@ by customer. PII never enters logs/traces (encrypted fields stay masked, `03 §2
   AI-cost-per-tenant) drives pricing (`07`) and optimization runbooks (rightsizing, cache hit-rate,
   Haiku-vs-Opus routing `23`).
 
+## 9. Bulk-job observability & reliability
+
+Million-row CSV import/export jobs ([30](./30-bulk-import-export-pipeline.md),
+[ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)) need their own per-job telemetry on
+top of the RED signals (§1): a partially-failed job must **never silently under-report** what it never
+attempted. [18](./18-scalability-performance.md) owns the throughput SLOs these metrics roll up to; [20](./20-event-driven-realtime-backbone.md)
+owns the job-lifecycle events these metrics are emitted from — this section owns only *seeing* and
+*keeping up* the jobs.
+
+### 9.1 Per-job metrics
+
+Emitted per `job_id` and tagged by tenant/workspace (§1), so any bulk job is filterable like any incident:
+
+- **Throughput:** rows/sec (extends the import `rows/sec` in [28 §metrics](./28-enterprise-readiness-audit.md)) and bytes/sec.
+- **Three-way outcome counts:** **succeeded / failed / unprocessed** — where **unprocessed** is rows the job
+  *never attempted* (it hit a limit, was cancelled, or died mid-run). The three buckets plus duplicates must
+  reconcile to the input row count; an unreconciled total is itself an alertable defect.
+- **Deduped count:** rows collapsed by entity resolution ([06 §9](./06-enrichment-engine.md), [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)), so dedup never hides inside "succeeded".
+- **DLQ depth:** poison batches routed to the bulk dead-letter queue (reuses the §3/§4 DLQ primitive).
+- **Progress:** rows and bytes processed vs. total, so progress is derived from real work done, not elapsed time.
+
+### 9.2 Retry classification (transient vs. deterministic)
+
+Per-row and per-batch failures are classified so retries fix what they can and the rest surfaces honestly:
+
+- **Transient** (row-lock contention, timeouts, replica lag) → **retry with exponential backoff + jitter**
+  (the §4 / [20 §4](./20-event-driven-realtime-backbone.md) primitive) up to a **bounded count**; on exhaustion the rows are surfaced as
+  **unprocessed** (not silently dropped, not counted as failed).
+- **Deterministic** (validation, schema/type, constraint violations) → routed to the **reject file**
+  ([28 §G-IMP-1](./28-enterprise-readiness-audit.md)) with **no retry**; counted as **failed**, never as unprocessed.
+
+This keeps the §9.1 buckets meaningful: only never-attempted rows land in unprocessed, only permanently-bad
+rows land in failed/reject.
+
+### 9.3 Bulk-job alerting
+
+Symptom-based (§3), routed to the same severity ladder + runbooks (§5):
+
+- **Stuck/stalled job:** no progress (§9.1) for a threshold window despite a non-empty queue.
+- **High error-rate:** failed-or-unprocessed share of attempted rows breaches a per-job budget.
+- **DLQ growth:** bulk-DLQ depth rising (folds into the existing DLQ-growth alert, §3).
+- **Unprocessed on completion:** any job that finishes with unprocessed > 0 raises a record so a caller can
+  redrive ([28 §G-EVT-5](./28-enterprise-readiness-audit.md)) the remainder; a bulk-job/DLQ-redrive runbook is added to §5.
+
 ## Links
 - **Links to:** [01 §3/§6/§7](./01-tech-stack.md), [02 §7/§9](./02-architecture.md), [18](./18-scalability-performance.md),
   [10](./10-roadmap.md), [13](./13-platform-admin.md), [20](./20-event-driven-realtime-backbone.md),

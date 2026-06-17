@@ -717,6 +717,32 @@ CRM sync), M11 (org roles, ledger, procurement, SIEM, SLA reporting), M12 (credi
 relay partitioning), M13 (merge UI, auto-enrich policy), M14 (reply classification, feedback loop), M16
 (automation hardening) — plus the standing security program (G-SEC-*) on the Trust track.
 
+## 13. Bulk import/export pipeline remediation (doc 30 + ADR-0036)
+
+The million-row CSV import/export gaps above are remediated by the new
+**[30 — Bulk Import/Export Pipeline](./30-bulk-import-export-pipeline.md)** spec and
+**[ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)** (bulk I/O is a first-class
+async job: presigned-S3 -> stream -> COPY-to-(UNLOGGED)-staging -> `ON CONFLICT`; idempotent, checkpointed,
+resumable; three-way per-row accounting + rejected-rows report; snapshot-consistent streaming export).
+Status moves to **adopted (spec)**, build folded into **M12** ([10](./10-roadmap.md)).
+
+| Gap | Remediation via doc 30 + ADR-0036 | Status |
+|---|---|---|
+| G-IMP-1 | Per-row validation preview + streamed, short-TTL, access-controlled **rejected-rows** S3 artifact ([22](./22-data-quality-freshness-lifecycle.md), [08](./08-compliance.md)) | adopted (spec) |
+| G-IMP-2 | **Revert-by-batch** within a retention window (`source_imports`->batch FK — [03](./03-database-design.md)) | adopted (spec) |
+| G-IMP-3 | **Saved mapping templates** ([29](./29-settings-administration-architecture.md)/[12 §3](./12-settings.md)) + **AI auto-mapping** ([23](./23-ai-intelligence-layer.md)) | adopted (spec) |
+| G-IMP-4 | **Scheduled/recurring** imports + Sheets/S3/SFTP ([26 §8](./26-integrations-data-delivery.md)) | adopted (spec) |
+| G-IMP-5 | Explicit `ON CONFLICT` **merge policy** (skip/overwrite/fill-empty/review) + survivorship ([03](./03-database-design.md), [ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)) | adopted (spec) |
+| G-IMP-6 | Presigned **multipart/resumable** upload + plan size/row caps ([09](./09-api-design.md), [12 §6](./12-settings.md)) | adopted (spec) |
+| G-IMP-7 | **Large-import approval** gate + throughput SLOs ([18](./18-scalability-performance.md), [29](./29-settings-administration-architecture.md)) | adopted (spec) |
+| G-BIL-2 | **Bulk credit reservation/lease** relieves the tenant-row hot lock for bulk reveal/enrich ([07](./07-billing-credits.md), [ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)) | adopted (spec) |
+| G-WS-4 | **Per-workspace import quotas** + meters enforced at import ([18](./18-scalability-performance.md), [12 §6](./12-settings.md)) | adopted (spec) |
+| G-ENR-4 | Customer-visible **bulk job status** + `import/export.completed` + progress events ([20](./20-event-driven-realtime-backbone.md), [19](./19-observability-reliability.md)) | adopted (spec) |
+| G-ENR-6 | Customer-facing **duplicate-review** queue (overlay fuzzy dedup) ([ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md)) | adopted (spec) |
+| G-EXP-1/2 *(new)* | **Million-row streaming export** (gzip/shard/manifest) under a **snapshot-consistent** keyset read ([30 §7](./30-bulk-import-export-pipeline.md), [18](./18-scalability-performance.md)) | adopted (spec) |
+| G-CMP-IMP *(new)* | **Lawful-basis-on-import** + set-based suppression screening at ingest/export + **upload AV scan** ([21](./21-data-acquisition-sourcing.md), [08](./08-compliance.md), [01](./01-tech-stack.md)) | adopted (spec) |
+| G-EVT-IMP *(new)* | **Bulk event coalescing** (batched/job-level emission, indexing back-pressure) for million-row bursts ([20](./20-event-driven-realtime-backbone.md)) | adopted (spec) |
+
 ## Links
 - **Links to:** every planning doc [00](./00-overview.md)–[27](./27-workflow-automation-engine.md),
   [departments/](./departments/), and the cited ADRs — notably

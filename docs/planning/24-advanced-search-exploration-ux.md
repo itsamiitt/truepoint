@@ -205,6 +205,42 @@ sync by CDC (`20 §7`). Two engines behind one `SearchPort`:
 overlay), cached in Redis with a short TTL (per-facet, tunable — [§14](#14-open-questions)); CDC keeps the
 read model < 5 s behind writes. Counts shown in the UI are "as-of" and refresh on each refinement.
 
+### 5.1 Index write-throughput under a million-row import burst
+
+The < 5 s search-sync freshness SLO ([§1](#1-principles), [18 §2](./18-scalability-performance.md#2-slos--latency-budgets))
+is easy to hold at steady state and easy to **break** when a single CSV import lands a million rows at once
+([30](./30-bulk-import-export-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)).
+If the index can't absorb the write burst, the grid goes **stale past its SLO** — users filter and the new
+rows aren't there yet. So the index needs an explicit **write-throughput target**, not just a read latency:
+
+- **Index-write SLO:** the search-sync path ([20 §7](./20-event-driven-realtime-backbone.md#7-cdc-projections))
+  must sustain an indexing rate that keeps a 1M-row import searchable within the **bulk freshness budget set
+  in [18 §2](./18-scalability-performance.md#2-slos--latency-budgets)** (1M rows searchable end-to-end inside
+  the import completion budget; not the steady-state < 5 s, which applies to trickle writes). This is the
+  read-side counterpart of 18's ingest throughput SLO.
+- **Bulk indexing mechanics.** During a burst the indexer uses **batch/`_bulk` writes** (not per-row),
+  **coalesced** CDC events ([20 §6](./20-event-driven-realtime-backbone.md#6-backpressure--flow-control) owns
+  event coalescing — a million row writes become batched index ops, not a million un-batched ones), and may
+  **temporarily relax refresh** (OpenSearch `refresh_interval`) for the bulk window, then restore it — trading
+  a few seconds of extra lag for far higher write throughput, while staying inside the bulk budget.
+- **Backpressure, not silent staleness.** If indexing falls behind, search-sync depth/age trips backpressure
+  ([18 §9](./18-scalability-performance.md#9-rate-limiting-quotas--backpressure), `20 §6`) and the grid shows
+  an **"indexing N new rows…" honesty indicator** rather than pretending the result set is complete.
+
+### 5.2 Index multitenancy — collection strategy
+
+How workspaces map onto index collections decides both burst isolation and operability, and must be fixed
+per engine (decision tracked in [ADR-0035](./decisions/ADR-0035-search-query-and-filter-architecture.md)):
+
+| Engine / layer | Strategy | Why |
+|---|---|---|
+| **Typesense** (per-workspace overlay, ≤100M) | **collection-per-workspace** | one tenant's million-row import burst rebuilds/grows only its own collection — natural blast-radius isolation, simple per-workspace reindex/drop, no cross-tenant query leakage. Cost: many collections to operate; mitigated by aliasing + lifecycle automation. |
+| **OpenSearch** (global master graph, billions) | **shared, sharded index** (system-owned) filtered by masking/visibility, **not** per-workspace | billions of golden rows can't be one index-per-workspace (mapping/shard explosion); the global graph is system-owned and reached only via masked search ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), `03 §9`). Tenant scoping is a **filter**, not a separate index. |
+
+A million-row burst into the overlay therefore stays contained to that workspace's Typesense collection; the
+global OpenSearch index absorbs golden-row updates as bulk writes against the shared sharded index per §5.1.
+Aliases (Typesense) / index templates + rollover (OpenSearch) keep reindex/cutover zero-downtime.
+
 **Data-flow:**
 
 ```mermaid
@@ -301,7 +337,8 @@ External research informing this spec:
 
 ## Links
 - **Links to:** [04 §5](./04-ui-ux-design.md), [05 §6/§8](./05-features-modules.md), [11 §4.2](./11-information-architecture.md),
-  [09 §1/§3.1](./09-api-design.md), [18 §2](./18-scalability-performance.md), [20 §7/§8](./20-event-driven-realtime-backbone.md),
+  [09 §1/§3.1](./09-api-design.md), [18 §2/§9](./18-scalability-performance.md), [20 §6/§7/§8](./20-event-driven-realtime-backbone.md),
+  [30](./30-bulk-import-export-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md),
   [22](./22-data-quality-freshness-lifecycle.md), [23](./23-ai-intelligence-layer.md), [25](./25-departments-teams-workspaces.md),
   [27](./27-workflow-automation-engine.md), [03 §12](./03-database-design.md),
   [ADR-0002](./decisions/ADR-0002-search-postgres-then-engine.md), [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md),
@@ -317,3 +354,8 @@ External research informing this spec:
    synonym set; refresh cadence.
 5. **Hybrid vector search milestone** — when (if) to enable BM25+kNN/RRF semantic recall ([23](./23-ai-intelligence-layer.md)); MVP ships lexical+synonym only.
 6. **Per-facet count-cache TTL** — staleness tolerance per facet (e.g. counts vs exact billing-adjacent numbers).
+7. **Index write-burst tuning** ([§5.1](#51-index-write-throughput-under-a-million-row-import-burst)) —
+   `_bulk` batch size and whether to relax `refresh_interval` during a 1M-row import; confirm from the
+   [18 §10](./18-scalability-performance.md) 1M-row load tests ([30](./30-bulk-import-export-pipeline.md)).
+8. **Typesense collection-per-workspace operability** ([§5.2](#52-index-multitenancy--collection-strategy)) —
+   collection count ceiling and lifecycle automation (alias/reindex/drop) at many workspaces.

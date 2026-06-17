@@ -290,6 +290,14 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
 - **Credit leases** ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)):
   workspace/team **lease-based decrement** relieves the tenant-counter hot row for high-concurrency
   tenants; team budgets ride the same lease rows.
+- **Bulk import/export pipeline** ([30](./30-bulk-import-export-pipeline.md),
+  [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)): harden the M1 import into a
+  first-class async bulk job — presigned/multipart upload + AV scan, streaming parse → COPY-to-staging →
+  `ON CONFLICT` upsert, three-way per-row accounting + downloadable rejected-rows report, checkpoint/resume
+  + revert-by-batch, and snapshot-consistent streaming export (gzip/shard/manifest); a **bulk credit
+  reservation** (lease worst-case) keeps a million-row reveal/enrich off the tenant-row hot lock. *DoD adds:*
+  a 1M-row CSV import completes within the [18 §2](./18-scalability-performance.md) ingest SLO with a
+  reconciled rejected-rows report, and a 1M-row export streams to S3 under a consistent snapshot.
 - **DoD:** load test meets the [18 §2](./18-scalability-performance.md) p95 budgets at target concurrency;
   a crash between commit and publish loses **no** event (outbox) and re-delivery is idempotent; DLQ +
   backpressure demoed; a DR drill restores within **RTO 1h / RPO 5m**; SLO dashboards + error-budget
