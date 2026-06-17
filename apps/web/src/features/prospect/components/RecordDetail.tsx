@@ -1,72 +1,129 @@
-// RecordDetail.tsx — the right slide-over record detail (04 §6, 11 §4.2). A single soft-shadowed panel over
-// the grid that preserves context: identity, the lead-score block (fetched on open via fetchScores, ADR-0008
-// — distinct from email_status), the masked email/phone facets, and the Reveal action. Reveal opens the
-// confirmation dialog (RevealDialog); the actual charge/gate run server-side. Esc closes the panel.
+// RecordDetail.tsx — the record detail rebuilt on the foundation Drawer (04 §6, 11 §4.2). Preserves context
+// over the grid: identity, the lead-score breakdown (composite + icp/intent/engagement, fetched on open via
+// useScores — ADR-0008, distinct from email_status), provenance + a Data-Health StatusBadge, an activity
+// timeline that surfaces logged notes (EmptyState if none / not-built), and the actions (Reveal, Add to list,
+// Enroll, Export). Every async surface goes through the State Kit; the actual charge/gate run server-side.
 "use client";
 
 import type { MaskedContact, RevealType } from "@leadwolf/types";
-import { useEffect, useState } from "react";
-import { type ScoreHistoryRow, fetchScores } from "../api";
 import {
+  Avatar,
+  Drawer,
+  EmptyState,
+  Progress,
+  StateSwitch,
+  StatusBadge,
+  TpButton,
+  useToast,
+} from "@leadwolf/ui";
+import { Activity, Download, ListPlus, Send, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { addContactsToList, enrollContacts } from "../api";
+import { useActivities } from "../hooks/useActivities";
+import { useScores } from "../hooks/useScores";
+import { exportMaskedCsv } from "../export";
+import styles from "../prospect.module.css";
+import {
+  ACTIVITY_TYPE_LABELS,
   EMAIL_STATUS_LABELS,
   SENIORITY_LABELS,
+  dataHealthTone,
   displayName,
-  emailGlyphFor,
-  maskedEmail,
 } from "../types";
 import { RevealDialog } from "./RevealDialog";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="tp-detail-field">
-      <span className="tp-detail-label">{label}</span>
-      <span className="tp-detail-value">{value}</span>
+    <div className={styles.field}>
+      <span className={styles.fieldLabel}>{label}</span>
+      <span className={styles.fieldValue}>{value}</span>
     </div>
   );
 }
 
-function ScorePanel({ contactId }: { contactId: string }) {
-  const [scores, setScores] = useState<ScoreHistoryRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let live = true;
-    setLoading(true);
-    setError(null);
-    void (async () => {
-      try {
-        const rows = await fetchScores(contactId);
-        if (live) setScores(rows);
-      } catch (e) {
-        if (live) setError(e instanceof Error ? e.message : "Could not load scores");
-      } finally {
-        if (live) setLoading(false);
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [contactId]);
-
-  if (loading) return <p className="app-muted">Loading score…</p>;
-  if (error) return <p className="lw-error">{error}</p>;
-
+/** The lead-score breakdown: a big composite + a row per sub-score with a thin Progress bar (out of 100). */
+function ScoreBreakdown({ contactId }: { contactId: string }) {
+  const { scores, error, loading, reload } = useScores(contactId);
   const latest = scores?.[0];
-  if (!latest) return <p className="app-muted">Not scored yet.</p>;
 
   return (
-    <div className="tp-score-grid">
-      <div className="tp-score-composite">
-        <span className="tp-score-big">{latest.compositeScore}</span>
-        <span className="tp-detail-label">Composite</span>
-      </div>
-      <div className="tp-score-parts">
-        <Field label="ICP fit" value={String(latest.icpFit)} />
-        <Field label="Intent" value={String(latest.intentScore)} />
-        <Field label="Engagement" value={String(latest.engagementScore)} />
-      </div>
-    </div>
+    <StateSwitch
+      loading={loading}
+      error={error}
+      empty={!loading && !latest}
+      onRetry={reload}
+      skeleton={<Progress value={0} aria-label="Loading score" />}
+      emptyState={<EmptyState title="Not scored yet" description="A score lands after the next scoring run." />}
+    >
+      {latest ? (
+        <div className={styles.scoreGrid}>
+          <div className={styles.scoreComposite}>
+            <span className={styles.scoreBig}>{latest.compositeScore}</span>
+            <span className={styles.scoreCompositeLabel}>Composite</span>
+          </div>
+          <div className={styles.scoreParts}>
+            {(
+              [
+                ["ICP fit", latest.icpFit],
+                ["Intent", latest.intentScore],
+                ["Engagement", latest.engagementScore],
+              ] as const
+            ).map(([label, value]) => (
+              <div className={styles.scorePart} key={label}>
+                <div className={styles.scorePartHead}>
+                  <span className={styles.scorePartLabel}>{label}</span>
+                  <span className={styles.scorePartValue}>{value}</span>
+                </div>
+                <Progress value={value} max={100} label={`${label} ${value}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </StateSwitch>
+  );
+}
+
+/** The activity timeline — EmptyState when there's nothing, or when the M8 backend isn't built (available:false). */
+function ActivityTimeline({ contactId }: { contactId: string }) {
+  const { feed, error, loading, reload } = useActivities(contactId);
+  const rows = feed?.activities ?? [];
+
+  return (
+    <StateSwitch
+      loading={loading}
+      error={error}
+      empty={!loading && rows.length === 0}
+      onRetry={reload}
+      emptyState={
+        <EmptyState
+          icon={<Activity size={24} />}
+          title={feed?.available ? "No activity yet" : "Timeline not connected"}
+          description={
+            feed?.available
+              ? "Sends, opens, replies and calls will appear here."
+              : "Activity history ships with the outreach engine (M8)."
+          }
+        />
+      }
+    >
+      <ul className={styles.timeline}>
+        {rows.map((a) => (
+          <li className={styles.timelineItem} key={a.id}>
+            <span className={styles.timelineDot} aria-hidden />
+            <div className={styles.timelineMeta}>
+              <span className={styles.timelineType}>
+                {ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType.replace(/_/g, " ")}
+              </span>
+              {a.note ? <span className={styles.timelineNote}>{a.note}</span> : null}
+              <span className={styles.timelineTime}>
+                {new Date(a.occurredAt).toLocaleString()}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </StateSwitch>
   );
 }
 
@@ -75,107 +132,162 @@ export function RecordDetail({
   onClose,
   onRevealed,
 }: {
-  contact: MaskedContact;
+  /** The selected row; null closes the Drawer. */
+  contact: MaskedContact | null;
   onClose: () => void;
   onRevealed: (contactId: string) => void;
 }) {
+  const toast = useToast();
   const [revealType, setRevealType] = useState<RevealType | null>(null);
-  const glyph = emailGlyphFor(contact);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      // Esc closes the slide-over — but let the dialog handle its own Esc first when open.
-      if (e.key === "Escape" && revealType === null) onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, revealType]);
+  const open = contact != null;
+  // While the reveal Dialog is open it owns Esc/backdrop; swallow the Drawer's own close so one Esc doesn't
+  // collapse both layers (the foundation Drawer + Dialog both bind a window Esc handler).
+  const closeDrawer = () => {
+    if (revealType === null) onClose();
+  };
 
-  const location =
-    [contact.locationCity, contact.locationCountry].filter(Boolean).join(", ") || "—";
+  const notWired = (what: string) =>
+    toast.toast({
+      title: `${what} isn't available yet`,
+      description: "It connects once that backend ships — nothing was changed.",
+    });
+
+  const onAddToList = async () => {
+    if (!contact) return;
+    try {
+      const { ok } = await addContactsToList("__default__", [contact.id]);
+      if (ok) toast.success("Added to list");
+      else notWired("Lists");
+    } catch (e) {
+      toast.error("Could not add to list", e instanceof Error ? e.message : undefined);
+    }
+  };
+
+  const onEnroll = async () => {
+    if (!contact) return;
+    try {
+      const { ok } = await enrollContacts([contact.id]);
+      if (ok) toast.success("Enrolled");
+      else notWired("Sequences");
+    } catch (e) {
+      toast.error("Could not enroll", e instanceof Error ? e.message : undefined);
+    }
+  };
+
+  const location = contact
+    ? [contact.locationCity, contact.locationCountry].filter(Boolean).join(", ") || "—"
+    : "—";
 
   return (
-    <aside className="tp-slideover" aria-label="Record detail">
-      <header className="tp-slideover-head">
-        <div>
-          <h2 className="tp-slideover-title">{displayName(contact)}</h2>
-          <p className="tp-slideover-sub">{contact.jobTitle ?? "—"}</p>
-        </div>
-        <button className="tp-icon-btn" type="button" onClick={onClose} aria-label="Close detail">
-          ✕
-        </button>
-      </header>
-
-      <div className="tp-slideover-body">
-        <section className="tp-detail-section">
-          <h3 className="tp-detail-heading">Identity</h3>
-          <div className="tp-detail-fields">
-            <Field
-              label="Seniority"
-              value={contact.seniorityLevel ? SENIORITY_LABELS[contact.seniorityLevel] : "—"}
-            />
-            <Field label="Department" value={contact.department ?? "—"} />
-            <Field label="Location" value={location} />
-            <Field label="Outreach" value={contact.outreachStatus.replace(/_/g, " ")} />
+    <Drawer
+      open={open}
+      onClose={closeDrawer}
+      title={contact ? displayName(contact) : "Record"}
+      width={480}
+      footer={
+        contact ? (
+          <div className={styles.drawerActions}>
+            <TpButton
+              variant="primary"
+              size="sm"
+              leftIcon={<Sparkles size={15} />}
+              onClick={() => setRevealType("full_profile")}
+            >
+              {contact.isRevealed ? "View revealed" : "Reveal"}
+            </TpButton>
+            <TpButton variant="ghost" size="sm" leftIcon={<ListPlus size={15} />} onClick={onAddToList}>
+              Add to list
+            </TpButton>
+            <TpButton variant="ghost" size="sm" leftIcon={<Send size={15} />} onClick={onEnroll}>
+              Enroll
+            </TpButton>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              leftIcon={<Download size={15} />}
+              onClick={() => {
+                exportMaskedCsv([contact], "contact.csv");
+                toast.success("Exported");
+              }}
+            >
+              Export
+            </TpButton>
           </div>
-        </section>
-
-        <section className="tp-detail-section">
-          <h3 className="tp-detail-heading">Contact data</h3>
-          <div className="tp-detail-fields">
-            <div className="tp-detail-field">
-              <span className="tp-detail-label">Email</span>
-              <span className="tp-detail-value">
-                <span
-                  className={`tp-glyph tp-glyph--${glyph.tone}`}
-                  title={glyph.label}
-                  aria-label={glyph.label}
-                >
-                  {glyph.mark}
-                </span>
-                {maskedEmail(contact)}
-                <span className="tp-detail-meta">{EMAIL_STATUS_LABELS[contact.emailStatus]}</span>
-              </span>
+        ) : undefined
+      }
+    >
+      {contact ? (
+        <div className={styles.detail}>
+          <div className={styles.identity}>
+            <Avatar name={displayName(contact)} size={44} />
+            <div className={styles.identityMeta}>
+              <span className={styles.identityName}>{displayName(contact)}</span>
+              <span className={styles.identitySub}>{contact.jobTitle ?? "—"}</span>
             </div>
-            <Field label="Phone" value={contact.hasPhone ? "🔒 masked" : "—"} />
           </div>
-        </section>
 
-        <section className="tp-detail-section">
-          <h3 className="tp-detail-heading">Lead score</h3>
-          <ScorePanel contactId={contact.id} />
-        </section>
-      </div>
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Identity</h3>
+              <StatusBadge tone={dataHealthTone(contact)}>
+                {contact.hasEmail ? EMAIL_STATUS_LABELS[contact.emailStatus] : "No email"}
+              </StatusBadge>
+            </div>
+            <div className={styles.fieldGrid}>
+              <Field
+                label="Seniority"
+                value={contact.seniorityLevel ? SENIORITY_LABELS[contact.seniorityLevel] : "—"}
+              />
+              <Field label="Department" value={contact.department ?? "—"} />
+              <Field label="Location" value={location} />
+              <Field label="Outreach" value={contact.outreachStatus.replace(/_/g, " ")} />
+              <Field
+                label="Email"
+                value={
+                  contact.hasEmail ? (contact.emailDomain ? `•••@${contact.emailDomain}` : "•••") : "—"
+                }
+              />
+              <Field label="Phone" value={contact.hasPhone ? "Locked — reveal" : "—"} />
+            </div>
+          </section>
 
-      <footer className="tp-slideover-foot">
-        {contact.isRevealed ? (
-          <button
-            className="app-button"
-            type="button"
-            onClick={() => setRevealType("full_profile")}
-            title="Already owned in this workspace — re-reveal is free"
-          >
-            View revealed data
-          </button>
-        ) : (
-          <button
-            className="app-button"
-            type="button"
-            onClick={() => setRevealType("full_profile")}
-          >
-            Reveal
-          </button>
-        )}
-      </footer>
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Lead score</h3>
+            </div>
+            <ScoreBreakdown contactId={contact.id} />
+          </section>
 
-      {revealType !== null && (
-        <RevealDialog
-          contact={contact}
-          revealType={revealType}
-          onClose={() => setRevealType(null)}
-          onRevealed={onRevealed}
-        />
-      )}
-    </aside>
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Provenance</h3>
+            </div>
+            <div className={styles.fieldGrid}>
+              <Field
+                label="Ownership"
+                value={contact.isRevealed ? "Revealed in this workspace" : "Masked"}
+              />
+              <Field label="Added" value={new Date(contact.createdAt).toLocaleDateString()} />
+            </div>
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Activity</h3>
+            </div>
+            <ActivityTimeline contactId={contact.id} />
+          </section>
+
+          <RevealDialog
+            contact={contact}
+            revealType={revealType ?? "full_profile"}
+            open={revealType !== null}
+            onClose={() => setRevealType(null)}
+            onRevealed={onRevealed}
+          />
+        </div>
+      ) : null}
+    </Drawer>
   );
 }

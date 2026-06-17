@@ -1,0 +1,453 @@
+/* prospect.module.css — layout for the Prospect master/detail surface (filter rail · results grid · record
+ * Drawer · sticky bulk bar). Color + controls come from --tp-* tokens + the @leadwolf/ui primitives; this
+ * file is layout/structure only. */
+
+.page {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 24px;
+  padding: 24px 28px 96px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Filter rail ─────────────────────────────────────────────────────────────────────────────────────── */
+.rail {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.railHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.railTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+}
+.facet {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.facetLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tp-ink-2);
+}
+.chipWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.checkRow {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Results column ──────────────────────────────────────────────────────────────────────────────────── */
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.resultsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.headLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.count {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+.headRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Active-filter summary */
+.summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+}
+.summaryLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tp-ink-3);
+}
+.summarySpacer {
+  flex: 1;
+}
+
+/* Cells inside the DataTable */
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.nameMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.title {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--tp-ink-2);
+}
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.glyphOk {
+  color: var(--success);
+}
+.glyphWarn {
+  color: var(--warning);
+}
+.glyphNone {
+  color: var(--tp-ink-4);
+}
+.lock {
+  color: var(--tp-ink-4);
+  display: inline-flex;
+}
+.headCheck,
+.rowCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Record-detail Drawer body ───────────────────────────────────────────────────────────────────────── */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.identityMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.identityName {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+.identitySub {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sectionTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+}
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fieldLabel {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.fieldValue {
+  font-size: 13px;
+  color: var(--tp-ink);
+  word-break: break-word;
+}
+
+/* Score breakdown */
+.scoreGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: center;
+}
+.scoreComposite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 16px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface-2);
+  min-width: 84px;
+}
+.scoreBig {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--tp-ink);
+}
+.scoreCompositeLabel {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.scoreParts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.scorePart {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.scorePartHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.scorePartLabel {
+  color: var(--tp-ink-3);
+}
+.scorePartValue {
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+/* Activity timeline */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.timelineItem {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+.timelineItem:last-child {
+  border-bottom: 0;
+}
+.timelineDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--tp-ink-4);
+  margin-top: 5px;
+  flex: 0 0 auto;
+}
+.timelineMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.timelineType {
+  font-size: 13px;
+  color: var(--tp-ink);
+}
+.timelineNote {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+.timelineTime {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+
+.drawerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ── Sticky bulk-action bar ──────────────────────────────────────────────────────────────────────────── */
+.bulkBar {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: var(--tp-z-popover, 50);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--tp-ink);
+  color: #fff;
+  border-radius: 999px;
+  box-shadow: var(--tp-shadow-bar, 0 8px 24px rgba(0, 0, 0, 0.18));
+  animation: tp-rise var(--tp-duration-fast, 160ms) var(--tp-ease, ease) both;
+}
+@keyframes tp-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+.bulkCount {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bulkBalance {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+.bulkBalance strong {
+  color: #fff;
+}
+.bulkSep {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.18);
+}
+.bulkActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Reveal-dialog result */
+.dialogNote {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tp-ink-3);
+}
+.revealResult {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+.revealPair {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.revealKey {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.revealValue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--tp-ink);
+  word-break: break-all;
+}
+.revealMeta {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+.inlineAlert {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface-2);
+}
+.inlineAlertMsg {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+.topupLink {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-cobalt);
+  text-decoration: none;
+}
+.topupLink:hover {
+  text-decoration: underline;
+}
+.progress {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
