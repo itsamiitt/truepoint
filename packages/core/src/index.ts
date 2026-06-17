@@ -8,6 +8,16 @@ export { parseImportFile, parseCsv, type ParsedCsv } from "./import/parseFile.ts
 export type { RawRow } from "./import/columnMap.ts";
 export { blindIndex } from "./import/blindIndex.ts";
 export { encryptPii, decryptPii } from "./import/encryptPii.ts";
+// Pre-commit validation preview + rejected-rows artifact + conflict policy (30 §4, ADR-0036; G-IMP-1/5).
+export {
+  validateRow,
+  rejectedRowsFor,
+  identitySignature,
+  type RowVerdict,
+  type RowIdentity,
+} from "./import/validateRow.ts";
+export { buildImportPreview, type PreviewOptions } from "./import/preview.ts";
+export { rejectedRowsToCsv } from "./import/rejectedRowsCsv.ts";
 
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
 export { assertNotSuppressed, type SuppressionKeys } from "./compliance/assertNotSuppressed.ts";

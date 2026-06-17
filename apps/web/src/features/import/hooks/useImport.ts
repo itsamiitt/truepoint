@@ -5,7 +5,7 @@
 // timers are torn down on unmount and at the start of every new run so nothing leaks or double-fires.
 "use client";
 
-import type { ColumnMapping, ImportSummary, SourceName } from "@leadwolf/types";
+import type { ColumnMapping, ConflictPolicy, ImportSummary, SourceName } from "@leadwolf/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getImportJob, postImport } from "../api";
 import {
@@ -21,6 +21,7 @@ export interface RunArgs {
   file: File;
   sourceName: SourceName;
   mapping: ColumnMapping;
+  conflictPolicy: ConflictPolicy;
 }
 
 /** Poll cadence and ceiling: ~1.5s between polls, giving up after ~2 min so the UI never hangs forever. */

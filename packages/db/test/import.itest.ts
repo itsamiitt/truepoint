@@ -124,11 +124,18 @@ describe("M1 import & dedup DoD", () => {
       sourceName: "manual",
       sourceFile: "dupes.csv",
       mapping: MAPPING,
+      // Exercise last-writer-wins dedup-by-update explicitly: the 2 in-file Jane variants MATCH the first
+      // Jane and UPDATE it. (The default conflict policy is now `skip` (G-IMP-5), under which those matches
+      // would be held back as `duplicates` instead — see the conflict-policy itest. This test pins the
+      // overwrite path that proves one-contact-per-identity via update.)
+      conflictPolicy: "overwrite",
       rows: DUPES,
     });
     expect(summary.created).toBe(3);
     expect(summary.matched).toBe(2);
     expect(summary.skipped).toBe(0);
+    expect(summary.duplicates).toBe(0);
+    expect(summary.rejected).toBe(0);
     expect(summary.errors).toHaveLength(0);
     expect(await countContacts(wsA)).toBe(3);
   });

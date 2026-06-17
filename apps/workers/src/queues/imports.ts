@@ -49,15 +49,19 @@ export async function processImport(job: Job<ImportJobData>): Promise<ImportSumm
     processed: summary.total,
     created: summary.created,
     matched: summary.matched,
-    skipped: summary.skipped,
-    failed: summary.errors.length,
+    // Both an idempotent re-import no-op (`skipped`) and a conflict-policy `skip` duplicate are
+    // not-newly-landed; surface them together as the progress UI's "skipped" lane.
+    skipped: summary.skipped + summary.duplicates,
+    // `failed` is the count of rows that did NOT land due to validation/constraint rejects (G-IMP-1).
+    failed: summary.rejected,
   };
   await job.updateProgress(done);
 
-  // A wholly-failed import (nothing created/matched/skipped) is retryable at the job level — a transient
-  // outage that fails every row should retry, not silently "complete" with zero imported. Partial success
-  // returns normally and its per-row errors travel in summary.errors.
-  if (summary.total > 0 && summary.created + summary.matched + summary.skipped === 0) {
+  // A wholly-failed import (no row created/matched/skipped/deduped) is retryable at the job level — a
+  // transient outage that fails every row should retry, not silently "complete" with zero progress. Partial
+  // success returns normally; its per-row rejects travel in summary.rejectedRows / summary.errors.
+  const landed = summary.created + summary.matched + summary.skipped + summary.duplicates;
+  if (summary.total > 0 && landed === 0) {
     throw new ImportFailedError(summary);
   }
   return summary;

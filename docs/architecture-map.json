@@ -49,8 +49,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 490,
-  "fileSetHash": "sha256:cbbc809cdfd2b23ccfa86891bb59aa552975ef4d07593a7c297045f503bbe043",
+  "fileCount": 509,
+  "fileSetHash": "sha256:c986ac0a9f21f5b5df0b7018a5e969579d13a0d544342fbcfe00dad6365bdc62",
   "features": {
     "activity": {
       "web": [],
@@ -228,6 +228,7 @@
         "apps/web/src/features/import/importJob.test.ts",
         "apps/web/src/features/import/importJob.ts",
         "apps/web/src/features/import/index.ts",
+        "apps/web/src/features/import/rejectedRowsCsv.ts",
         "apps/web/src/features/import/types.ts"
       ],
       "admin": [],
@@ -246,7 +247,13 @@
         "packages/core/src/import/normalize.ts",
         "packages/core/src/import/parseFile.test.ts",
         "packages/core/src/import/parseFile.ts",
-        "packages/core/src/import/runImport.ts"
+        "packages/core/src/import/preview.test.ts",
+        "packages/core/src/import/preview.ts",
+        "packages/core/src/import/rejectedRowsCsv.test.ts",
+        "packages/core/src/import/rejectedRowsCsv.ts",
+        "packages/core/src/import/runImport.ts",
+        "packages/core/src/import/validateRow.test.ts",
+        "packages/core/src/import/validateRow.ts"
       ],
       "db": [
         "packages/db/src/repositories/sourceImportRepository.ts"
@@ -335,6 +342,11 @@
     "reports": {
       "web": [
         "apps/web/src/features/reports/api.ts",
+        "apps/web/src/features/reports/charts/BarChart.tsx",
+        "apps/web/src/features/reports/charts/DistributionChart.tsx",
+        "apps/web/src/features/reports/charts/FunnelChart.tsx",
+        "apps/web/src/features/reports/charts/LineChart.tsx",
+        "apps/web/src/features/reports/charts/index.ts",
         "apps/web/src/features/reports/components/CreditUsageSection.tsx",
         "apps/web/src/features/reports/components/DataHealthSection.tsx",
         "apps/web/src/features/reports/components/DeliverabilitySection.tsx",
@@ -343,6 +355,12 @@
         "apps/web/src/features/reports/components/LeadScoreSection.tsx",
         "apps/web/src/features/reports/components/ReportsPage.tsx",
         "apps/web/src/features/reports/components/TeamActivitySection.tsx",
+        "apps/web/src/features/reports/export/downloadXlsx.ts",
+        "apps/web/src/features/reports/export/exportData.test.ts",
+        "apps/web/src/features/reports/export/exportData.ts",
+        "apps/web/src/features/reports/export/index.ts",
+        "apps/web/src/features/reports/export/xlsxWriter.test.ts",
+        "apps/web/src/features/reports/export/xlsxWriter.ts",
         "apps/web/src/features/reports/hooks/useReports.ts",
         "apps/web/src/features/reports/index.ts",
         "apps/web/src/features/reports/rollups.ts",
@@ -726,6 +744,7 @@
       "apps/workers/src/logger.test.ts",
       "apps/workers/src/logger.ts",
       "apps/workers/src/register.ts",
+      "apps/workers/test/imports.conflict.itest.ts",
       "apps/workers/test/imports.queue.itest.ts",
       "apps/workers/test/imports.resilience.itest.ts"
     ],

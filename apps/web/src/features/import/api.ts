@@ -6,8 +6,10 @@ import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   ColumnMapping,
+  ConflictPolicy,
   ImportJobRef,
   ImportJobStatusResponse,
+  ImportPreview,
   MaskedContact,
   SourceName,
 } from "@leadwolf/types";
@@ -25,14 +27,38 @@ export async function postImport(args: {
   file: File;
   sourceName: SourceName;
   mapping: ColumnMapping;
+  conflictPolicy: ConflictPolicy;
 }): Promise<ImportJobRef> {
   const form = new FormData();
   form.set("file", args.file);
   form.set("sourceName", args.sourceName);
   form.set("mapping", JSON.stringify(args.mapping));
+  form.set("conflictPolicy", args.conflictPolicy);
   const res = await fetchWithAuth(`${API_BASE}/api/v1/imports`, { method: "POST", body: form });
   if (!res.ok) throw new Error(await problemMessage(res, "Import failed"));
   return (await res.json()) as ImportJobRef;
+}
+
+/**
+ * Pre-commit validation preview (G-IMP-1): upload the file + mapping and get back counts (total/valid/
+ * rejected/duplicate) + sample rejected rows WITHOUT enqueuing an import. The wizard requires the user to
+ * confirm this before running the real import.
+ */
+export async function postImportPreview(args: {
+  file: File;
+  sourceName: SourceName;
+  mapping: ColumnMapping;
+}): Promise<ImportPreview> {
+  const form = new FormData();
+  form.set("file", args.file);
+  form.set("sourceName", args.sourceName);
+  form.set("mapping", JSON.stringify(args.mapping));
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/imports/preview`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not validate import"));
+  return (await res.json()) as ImportPreview;
 }
 
 /**

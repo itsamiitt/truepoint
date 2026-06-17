@@ -4,7 +4,15 @@
 // PII — no plaintext or ciphertext email/phone may ride the masked list. Pure unit test (no DB).
 
 import { describe, expect, it } from "bun:test";
-import { maskedContactSchema } from "./contacts.ts";
+import {
+  DEFAULT_CONFLICT_POLICY,
+  conflictPolicy,
+  importPreviewSchema,
+  importRequestSchema,
+  importSummarySchema,
+  maskedContactSchema,
+  rejectedRowSchema,
+} from "./contacts.ts";
 
 const valid = {
   id: "00000000-0000-7000-8000-000000000001",
@@ -55,5 +63,78 @@ describe("maskedContactSchema", () => {
     const parsed = maskedContactSchema.parse({ ...valid, email: "jane@acme.com", phoneEnc: "x" });
     expect("email" in parsed).toBe(false);
     expect("phoneEnc" in parsed).toBe(false);
+  });
+});
+
+describe("conflictPolicy (G-IMP-5)", () => {
+  it("accepts the three policies and rejects anything else", () => {
+    expect(conflictPolicy.options).toEqual(["overwrite", "skip", "keep_both"]);
+    expect(conflictPolicy.safeParse("review").success).toBe(false);
+  });
+
+  it("the safe default is skip (no silent overwrite)", () => {
+    expect(DEFAULT_CONFLICT_POLICY).toBe("skip");
+  });
+
+  it("importRequestSchema defaults conflictPolicy to the safe default when omitted", () => {
+    const parsed = importRequestSchema.parse({ sourceName: "manual", mapping: { email: "Email" } });
+    expect(parsed.conflictPolicy).toBe("skip");
+  });
+
+  it("importRequestSchema honors an explicit policy", () => {
+    const parsed = importRequestSchema.parse({
+      sourceName: "manual",
+      mapping: { email: "Email" },
+      conflictPolicy: "overwrite",
+    });
+    expect(parsed.conflictPolicy).toBe("overwrite");
+  });
+});
+
+describe("rejectedRowSchema (G-IMP-1 artifact)", () => {
+  it("accepts a field-level reject and a whole-row reject (field=null)", () => {
+    expect(
+      rejectedRowSchema.safeParse({
+        row: 0,
+        field: "email",
+        reason: "Malformed email address.",
+        raw: { Email: "bad" },
+      }).success,
+    ).toBe(true);
+    expect(
+      rejectedRowSchema.safeParse({ row: 3, field: null, reason: "No key.", raw: {} }).success,
+    ).toBe(true);
+  });
+});
+
+describe("importSummarySchema (three-way accounting)", () => {
+  it("carries rejected / duplicates / rejectedRows alongside the legacy tallies", () => {
+    const parsed = importSummarySchema.parse({
+      total: 3,
+      created: 1,
+      matched: 0,
+      skipped: 0,
+      rejected: 1,
+      duplicates: 1,
+      errors: [{ row: 2, message: "bad" }],
+      rejectedRows: [{ row: 2, field: "email", reason: "bad", raw: { Email: "x" } }],
+    });
+    expect(parsed.rejected).toBe(1);
+    expect(parsed.duplicates).toBe(1);
+    expect(parsed.rejectedRows).toHaveLength(1);
+  });
+});
+
+describe("importPreviewSchema", () => {
+  it("accepts a preview with a sample of rejected rows", () => {
+    const parsed = importPreviewSchema.parse({
+      total: 5,
+      valid: 3,
+      rejected: 1,
+      duplicate: 1,
+      sampleRejectedRows: [{ row: 4, field: null, reason: "No key.", raw: { Name: "x" } }],
+    });
+    expect(parsed.valid).toBe(3);
+    expect(parsed.sampleRejectedRows).toHaveLength(1);
   });
 });
