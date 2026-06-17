@@ -41,14 +41,16 @@
     "settings",
     "settings-billing",
     "settings-compliance",
+    "settings-developer",
     "settings-shell",
+    "settings-tenant",
     "settings-user",
     "settings-workspace",
     "templates",
     "workspaces"
   ],
-  "fileCount": 457,
-  "fileSetHash": "sha256:10cfd8c55835dd208e4ae9dc72d36348598b7a05cae2af81fc7702ed9033fd3c",
+  "fileCount": 490,
+  "fileSetHash": "sha256:cbbc809cdfd2b23ccfa86891bb59aa552975ef4d07593a7c297045f503bbe043",
   "features": {
     "activity": {
       "web": [],
@@ -159,11 +161,20 @@
         "apps/api/src/features/enrichment/routes.ts"
       ],
       "core": [
+        "packages/core/src/enrichment/bulk/estimate.test.ts",
+        "packages/core/src/enrichment/bulk/estimate.ts",
+        "packages/core/src/enrichment/bulk/masterGraphMatcher.ts",
+        "packages/core/src/enrichment/bulk/matchPort.ts",
+        "packages/core/src/enrichment/bulk/overlayMatcher.test.ts",
+        "packages/core/src/enrichment/bulk/overlayMatcher.ts",
         "packages/core/src/enrichment/enrichContact.ts",
+        "packages/core/src/enrichment/matchKeys.test.ts",
+        "packages/core/src/enrichment/matchKeys.ts",
         "packages/core/src/enrichment/providerPort.ts",
         "packages/core/src/enrichment/requestHash.ts",
         "packages/core/src/enrichment/waterfall.test.ts",
-        "packages/core/src/enrichment/waterfall.ts"
+        "packages/core/src/enrichment/waterfall.ts",
+        "packages/core/src/enrichment/waterfallBulk.test.ts"
       ],
       "db": [
         "packages/db/src/repositories/providerCallRepository.ts"
@@ -300,12 +311,15 @@
         "apps/web/src/features/prospect/components/ProspectPage.tsx",
         "apps/web/src/features/prospect/components/RecordDetail.tsx",
         "apps/web/src/features/prospect/components/RevealDialog.tsx",
+        "apps/web/src/features/prospect/export.ts",
+        "apps/web/src/features/prospect/hooks/useActivities.ts",
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
         "apps/web/src/features/prospect/hooks/useContactSearch.ts",
         "apps/web/src/features/prospect/hooks/useContacts.ts",
         "apps/web/src/features/prospect/hooks/useCreditBalance.ts",
         "apps/web/src/features/prospect/hooks/useReveal.ts",
+        "apps/web/src/features/prospect/hooks/useScores.ts",
         "apps/web/src/features/prospect/hooks/useTypeahead.ts",
         "apps/web/src/features/prospect/index.ts",
         "apps/web/src/features/prospect/searchApi.ts",
@@ -447,7 +461,8 @@
         "apps/web/src/features/settings-billing/components/BillingPage.tsx",
         "apps/web/src/features/settings-billing/components/UsageTable.tsx",
         "apps/web/src/features/settings-billing/hooks/useBilling.ts",
-        "apps/web/src/features/settings-billing/index.ts"
+        "apps/web/src/features/settings-billing/index.ts",
+        "apps/web/src/features/settings-billing/types.ts"
       ],
       "admin": [],
       "api": [],
@@ -472,12 +487,48 @@
       "workers": [],
       "integrations": []
     },
+    "settings-developer": {
+      "web": [
+        "apps/web/src/features/settings-developer/api.ts",
+        "apps/web/src/features/settings-developer/components/ApiDocsPanel.tsx",
+        "apps/web/src/features/settings-developer/components/ApiKeysPanel.tsx",
+        "apps/web/src/features/settings-developer/components/DeveloperPage.tsx",
+        "apps/web/src/features/settings-developer/components/OAuthAppsPanel.tsx",
+        "apps/web/src/features/settings-developer/components/WebhooksPanel.tsx",
+        "apps/web/src/features/settings-developer/hooks/useApiKeys.ts",
+        "apps/web/src/features/settings-developer/hooks/useOAuthApps.ts",
+        "apps/web/src/features/settings-developer/hooks/useWebhooks.ts",
+        "apps/web/src/features/settings-developer/index.ts",
+        "apps/web/src/features/settings-developer/types.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "settings-shell": {
       "web": [
         "apps/web/src/features/settings-shell/components/SettingsNav.tsx",
         "apps/web/src/features/settings-shell/components/SettingsPlaceholder.tsx",
         "apps/web/src/features/settings-shell/components/SettingsScopeLayout.tsx",
         "apps/web/src/features/settings-shell/index.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "settings-tenant": {
+      "web": [
+        "apps/web/src/features/settings-tenant/api.ts",
+        "apps/web/src/features/settings-tenant/components/OrganizationPanel.tsx",
+        "apps/web/src/features/settings-tenant/hooks/useOrganization.ts",
+        "apps/web/src/features/settings-tenant/index.ts",
+        "apps/web/src/features/settings-tenant/types.ts"
       ],
       "admin": [],
       "api": [],
@@ -736,6 +787,7 @@
       "packages/db/src/schema/billing.ts",
       "packages/db/src/schema/compliance.ts",
       "packages/db/src/schema/contacts.ts",
+      "packages/db/src/schema/enrichmentJobs.ts",
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
       "packages/db/src/schema/outreach.ts",
@@ -770,6 +822,8 @@
       "packages/types/src/auth.ts",
       "packages/types/src/billing.test.ts",
       "packages/types/src/billing.ts",
+      "packages/types/src/bulkEnrichment.test.ts",
+      "packages/types/src/bulkEnrichment.ts",
       "packages/types/src/compliance.ts",
       "packages/types/src/contacts.test.ts",
       "packages/types/src/contacts.ts",
@@ -814,11 +868,14 @@
   "unassigned": [
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
-    "apps/web/next.config.mjs"
+    "apps/web/next.config.mjs",
+    "packages/db/src/repositories/enrichmentJobRepository.ts"
   ],
   "warnings": [
     "undeclared domain 'admin' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'settings-developer' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-shell' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'settings-tenant' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-user' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-workspace' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder"
   ],

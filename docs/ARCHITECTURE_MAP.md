@@ -22,8 +22,8 @@
 > rollups across credit-usage/funnel/data-health/deliverability/intent/lead-score/team-activity), a now-real
 > **Inbox** (unified reply **threads** + **tasks**), and a **Settings shell** (nested `SettingsScopeLayout` +
 > scope nav over User/Workspace/Tenant/Developer) whose **User** (Profile/Security/Notifications) and
-> **Workspace** (General/Members) scopes are now live alongside Billing & Compliance; Tenant/Developer
-> remain placeholders. Import is **async** (API returns `202 + jobId`, the web slice polls; a BullMQ producer
+> **Workspace** (General/Members) scopes — joined now by **Tenant** (Organization) and
+> **Developer** (API keys / OAuth apps / webhooks / API docs) — are live alongside Billing & Compliance. Import is **async** (API returns `202 + jobId`, the web slice polls; a BullMQ producer
 > enqueues the parsed rows).
 > **`search` domain (contract-first, now wired through the stack):** query-semantics core (title
 > canonicalization + synonym/abbreviation expansion + an engine-agnostic title-filter planner), the
@@ -33,9 +33,10 @@
 > hardening: an Edge-safe **boot self-test** (`instrumentation.ts` → Node-only `bootSelfTest.ts`), typed
 > transactional **email templates**, an **infra-vs-credentials** failure classifier, and a client-IP
 > **binding** policy.
-> **457 source files · 4 domain-vocabulary warnings (`admin`, `settings-shell`, `settings-user`,
-> `settings-workspace` — see Notes) · 3 framework-root files unbucketed** (`apps/{auth,web}/next.config.mjs`
-> + `apps/auth/postcss.config.mjs` — see Notes). `apps/admin` (the staff console app) remains a **target**;
+> **490 source files · 6 domain-vocabulary warnings (`admin`, `settings-shell`, `settings-user`,
+> `settings-workspace`, `settings-tenant`, `settings-developer` — see Notes) · 4 unbucketed** (3
+> framework-root configs `apps/{auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs`, plus
+> `packages/db/src/repositories/enrichmentJobRepository.ts` — see Notes). `apps/admin` (the staff console app) remains a **target**;
 > the `admin` *domain* is the platform-admin **API** + `platformAdmin` middleware. Design:
 > [04](./planning/04-ui-ux-design.md), [10-roadmap.md](./planning/10-roadmap.md),
 > [11 §6](./planning/11-information-architecture.md), [07 §3](./planning/07-billing-credits.md),
@@ -124,12 +125,18 @@ apps/                           # deployable processes (thin transport adapters)
 
 ### enrichment — *M4 provider waterfall* ([06](./planning/06-enrichment-engine.md))
 - **core:** `packages/core/src/enrichment/` — `providerPort.ts` (the 06 §3 contract; core OWNS the port),
-  `waterfall.ts` (trust÷cost ordering + per-provider breaker; `*.test.ts`), `requestHash.ts`,
-  `enrichContact.ts` (cache-first → budget breaker → waterfall → overlay upsert + provenance + cost row, one tx)
+  `waterfall.ts` (trust÷cost ordering + per-provider breaker; `*.test.ts`) + `waterfallBulk.test.ts` (bulk
+  path), `requestHash.ts`, `enrichContact.ts` (cache-first → budget breaker → waterfall → overlay upsert +
+  provenance + cost row, one tx)
+- **core (match engine — Wave 2 entity resolution, ADR-0015/0021):** `matchPort.ts` (the match contract),
+  `matchKeys.ts` (deterministic match keys; `*.test.ts`), `masterGraphMatcher.ts` (global master-graph
+  match), `overlayMatcher.ts` (per-workspace overlay match; `*.test.ts`), `estimate.ts` (bulk match/enrich
+  cost estimate; `*.test.ts`)
 - **integrations:** `packages/integrations/src/enrichment/{httpProvider,providers}.ts` — Apollo/ZoomInfo/
   Clearbit VendorSpecs over one HTTP shape; injectable `fetchJson` → contract tests, zero live spend
-- **db:** `providerCallRepository.ts` (cache lookup + cost ledger + daily-spend sum) · **api:**
-  `apps/api/src/features/enrichment/*` (POST `/enrichment/:entity/:id`) · **workers:** `queues/enrichment.ts`
+- **db:** `providerCallRepository.ts` (cache lookup + cost ledger + daily-spend sum); `enrichmentJobRepository.ts`
+  (bulk-enrichment job rows — **currently `unassigned[]`: `enrichment_job` not in `REPO_DOMAIN` yet**, see Notes)
+  · **api:** `apps/api/src/features/enrichment/*` (POST `/enrichment/:entity/:id`) · **workers:** `queues/enrichment.ts`
 
 ### data-health — *M4 verification* ([06 §9](./planning/06-enrichment-engine.md), ADR-0013)
 - **core:** `packages/core/src/data-health/` — `emailVerifier.ts` (dedicated-verifier port; passThrough +
@@ -275,9 +282,13 @@ The `apps/web` SPA wraps every destination in the **AppShell** (auth gate + side
     `useWorkspace`) + `MembersPanel` (via `useMembers`) over `api.ts`; routes `/settings/{workspace,members}`.
   - **settings-billing** (`/settings/billing` — balance + `UsageTable`) and **settings-compliance**
     (`/settings/compliance` — `SuppressionForm` + `SuppressionList` + public `DsarForm`).
-  - Remaining `/settings/{organization}` [Tenant] + `/settings/{api-keys}` [Developer] are **placeholders**.
-  *Folder slugs `settings-shell`, `settings-user`, `settings-workspace` are not yet in `CANONICAL_DOMAINS`
-  — see Notes.*
+  - **settings-tenant** (`features/settings-tenant/*`, Tenant scope) — `OrganizationPanel` (via
+    `useOrganization`) over `api.ts`; route `/settings/organization`. **Now live** (was a placeholder).
+  - **settings-developer** (`features/settings-developer/*`, Developer scope) — `ApiKeysPanel`/`OAuthAppsPanel`/
+    `WebhooksPanel`/`ApiDocsPanel` (via `useApiKeys`/`useOAuthApps`/`useWebhooks`) over `api.ts`; route
+    `/settings/api-keys`. **Now live** (was a placeholder).
+  *Folder slugs `settings-shell`, `settings-user`, `settings-workspace`, `settings-tenant`, `settings-developer`
+  are not yet in `CANONICAL_DOMAINS` — see Notes.*
 - **`@leadwolf/ui` kit:** see the [Shared / platform areas](#shared--platform-areas-live) section below.
 
 _Remaining domains (`lists`, `crm-sync`, `export`, `api-public`, `ai`, `alerts`, `templates`,
@@ -402,12 +413,16 @@ flowchart TD
   under `apps/<app>/src/`, and the generator only classifies files under `src/`. A **framework constraint,
   not a placement error** — documented here per the repo's map-hygiene rule (we don't special-case the
   generator for them).
-- **Domain-vocabulary warnings (4):** the folder slugs **`admin`** (`apps/api/src/features/admin/`),
-  **`settings-shell`**, **`settings-user`**, and **`settings-workspace`** (under `apps/web/src/features/`)
-  are bucketed correctly but are **not yet in `CANONICAL_DOMAINS`** (`lib/arch-map.mjs`). All four are real,
-  intentional features (the settings-* trio are the Settings scope slices). Reconcile by either adding the
-  slugs to the canonical list (the same way `settings-billing`/`settings-compliance` were declared — a
-  [`plan-weaver`](../.claude/skills/plan-weaver/SKILL.md) + generator change) or renaming the folders to
-  canonical slugs. Left as flagged warnings (the established handling for the pre-existing `admin` warning),
-  not papered over — `settings-shell`/`-user`/`-workspace` are a consistent destination-keyed family worth
-  declaring together.
+- **Domain-vocabulary warnings (6):** the folder slugs **`admin`** (`apps/api/src/features/admin/`) and the
+  five Settings scopes **`settings-shell`**, **`settings-user`**, **`settings-workspace`**, **`settings-tenant`**,
+  **`settings-developer`** (under `apps/web/src/features/`) are bucketed correctly but are **not yet in
+  `CANONICAL_DOMAINS`** (`lib/arch-map.mjs`). All are real, intentional features (the `settings-*` family are the
+  Settings scope slices). Reconcile by either adding the slugs to the canonical list (the same way
+  `settings-billing`/`settings-compliance` were declared — a [`plan-weaver`](../.claude/skills/plan-weaver/SKILL.md)
+  + generator change) or renaming the folders. Left as flagged warnings (the established handling for the
+  pre-existing `admin` warning), not papered over — the `settings-*` slices are a consistent destination-keyed
+  family worth declaring together.
+- **Unmapped repository (1, in `unassigned[]`):** `packages/db/src/repositories/enrichmentJobRepository.ts`
+  — a repository whose entity (`enrichment_job`) isn't in `REPO_DOMAIN` (`lib/arch-map.mjs`), so it can't be
+  bucketed to a domain. It belongs to **enrichment**; reconcile by adding `enrichment_job → enrichment` to
+  `REPO_DOMAIN` (the spec-sanctioned way to extend the declared maps as the schema grows). Flagged, not papered over.
