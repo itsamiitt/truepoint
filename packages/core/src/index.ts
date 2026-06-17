@@ -79,3 +79,13 @@ export {
   type CreditGrantEvent,
 } from "./billing/stripeWebhook.ts";
 export { buildHomeSummary, type BuildHomeSummaryInput } from "./home/buildHomeSummary.ts";
+
+// Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
+export { normalizeTitle } from "./search/normalizeTitle.ts";
+export {
+  canonicalizeTitle,
+  findCanonicalTitle,
+  type CanonicalizedTitle,
+} from "./search/canonicalizeTitle.ts";
+export { expandTitleTerm } from "./search/expandQuery.ts";
+export { CANONICAL_TITLES, type CanonicalTitle } from "./search/titleTaxonomy.ts";
