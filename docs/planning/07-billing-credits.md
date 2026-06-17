@@ -234,7 +234,54 @@ A scheduled `billing-recon` worker asserts, per tenant:
 - **Stripe CLI** integration: replay a webhook twice → credits granted once.
 - **Testcontainers** integration tests for the reveal transaction under concurrency.
 
-## 11. Open questions
+## 11. Bulk enrichment billing ([ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md))
+
+Bulk CSV enrichment ([30](./30-bulk-enrichment-pipeline.md)) **reuses the reveal/credit machinery above
+unchanged** — it is the per-row reveal path (§3) run at job scale, not a second billing system. Each
+enriched row that resolves to a workspace contact runs the same in-tx reveal claim against the same tenant
+counter, so all of §2/§3's invariants (`FOR UPDATE` + `CHECK (reveal_credit_balance >= 0)` + unique
+`contact_reveals (workspace_id, contact_id, reveal_type)` + `Idempotency-Key`) hold per row, for free.
+
+- **Charge per verified match, same rules as §3** ([ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)).
+  A row is charged only for `valid` verified data; `invalid`/`catch_all`/`unknown`/provider-miss → **0**
+  (a `contact_reveals` row is still written with `credits_consumed = 0` so the user sees the unusable
+  outcome), `risky` → charged-but-flagged. Per-type cost is the **placeholder** of §1 — the bulk job reads
+  the same configured cost, **never a hardcoded number**. **Credit-back on bounce** applies identically:
+  a charged `valid` email that later hard-bounces within the guarantee window is auto-credited back via
+  the audited `credit.adjust` increment (§3, [08 §6](./08-compliance.md)).
+- **Internal-overlay re-reveals stay 0 (first-reveal-wins).** When a bulk row matches a contact the
+  workspace **already revealed**, the `ON CONFLICT (workspace_id, contact_id, reveal_type) DO NOTHING`
+  claim charges **0** (§1, §3) — re-running a job, or enriching rows that overlap existing workspace data,
+  never double-charges. Charging is a function of *new* verified matches, not input rows.
+- **Pre-run estimate + explicit confirmation (no surprise spend).** Before a job runs, a sampled
+  match-rate pass produces a **credit forecast** persisted to `enrichment_jobs.credit_estimate_micros`,
+  surfaced to the user; the job sits in status **`awaiting_confirmation`** until the user confirms. Because
+  the estimate is a forecast (sample match-rate × placeholder per-match cost), the **authoritative charge
+  is still the sum of per-row §3 transactions** — actual spend is recorded in
+  `enrichment_jobs.credit_spent_micros` over `charged_rows` (rows that consumed > 0), and reconciled in §8
+  exactly like every other reveal. The estimate informs consent; it never substitutes for the in-tx
+  `CHECK >= 0` guard, which still hard-stops a job that would overdraw mid-run (`INSUFFICIENT_CREDITS`).
+- **Per-tenant bulk quota + concurrency cap (noisy-neighbor protection).** A bulk job is entitlement-gated
+  before the credit check (§5): a **per-tenant bulk quota** (rows/day or jobs/day, a `features` flag —
+  placeholder per §1) and a **concurrency cap** (max in-flight bulk jobs per tenant) bound any one tenant's
+  share of shared enrichment capacity. A **daily provider-spend budget breaker** trips bulk matching when a
+  tenant's provider cost (`provider_calls.cost_micros`, [06](./06-enrichment-engine.md)) crosses its daily
+  ceiling — the bulk analogue of the per-tenant enrichment circuit-breaker, protecting both margin and
+  co-tenants. These caps gate *job admission*; they are orthogonal to credit balance (a tenant can be within
+  quota yet out of credits, or vice-versa).
+- **Lease-based decrement for high-concurrency tenants** ([ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md)).
+  A large job's many concurrent per-row decrements all contend on the single `FOR UPDATE` tenant row — the
+  hot-lock §2 calls out. From **M12** the job acquires a **credit lease** (a reserved slice of the tenant
+  pool) and decrements against the lease, settling the remainder back on completion; this relieves the
+  tenant-row contention without weakening the `balance == SUM(delta)` invariant the M11 `credit_ledger`
+  establishes. Until M12 the per-row §3 path is authoritative for bulk too.
+
+Cost/quota blowout is tracked as **Risk #25** (owner **M17**) in the roadmap risk register
+([10](./10-roadmap.md)); the decision and the full forecast/quota design live in
+[ADR-0038](./decisions/ADR-0038-bulk-enrichment-billing-forecast-and-quota.md) and
+[30 §6/§7](./30-bulk-enrichment-pipeline.md).
+
+## 12. Open questions
 
 1. **Reveal pricing by `reveal_type`** (email vs phone vs full_profile), pack sizes/prices, signup
    bonus, expiry. *(Placeholders in §1; the pricing **policy** — transparent, no-lock-in — is decided in
