@@ -117,6 +117,18 @@ export {
 } from "./billing/stripeWebhook.ts";
 export { buildHomeSummary, type BuildHomeSummaryInput } from "./home/buildHomeSummary.ts";
 
+// Workspace pipeline-stage layer (G-REV-7, ADR-0028): author/edit stages mapping to a canonical
+// outreach_status, and assign a contact → roll its outreach_status up to the stage's mapping in one tx.
+export {
+  createStage,
+  updateStage,
+  assignStage,
+  type CreateStageInput,
+  type UpdateStageInput,
+  type AssignStageInput,
+  type AssignStageResult,
+} from "./pipelineStages/manageStages.ts";
+
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";
 export {

@@ -13,10 +13,11 @@ import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importRoutes } from "./features/import/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
+import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
 import { salesNavRoutes } from "./features/sales-navigator/index.ts";
-import { searchRoutes } from "./features/search/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
+import { searchRoutes } from "./features/search/index.ts";
 import { workspacesRoutes } from "./features/workspaces/index.ts";
 import { onError } from "./middleware/error.ts";
 import { rateLimit } from "./middleware/rateLimit.ts";
@@ -41,6 +42,9 @@ app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path ov
 app.route("/api/v1/search", searchRoutes); // 24/ADR-0035: filtered search, typeahead, facet counts
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/outreach", outreachRoutes);
+// Pipeline stages (G-REV-7, ADR-0028): workspace stage CRUD + POST /contacts/:id/stage rollup. Mounted on
+// its OWN base so /contacts/:id/stage cannot collide with the /api/v1/contacts reveal/scoring/activity slices.
+app.route("/api/v1/pipeline-stages", pipelineStagesRoutes);
 app.route("/api/v1/billing", billingRoutes);
 app.route("/api/v1/credits", creditsRoutes);
 app.route("/api/v1/enrichment", enrichmentRoutes);

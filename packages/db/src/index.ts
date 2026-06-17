@@ -146,3 +146,9 @@ export {
   type ContactMatchKeys,
   type ContactMatchCandidate,
 } from "./repositories/enrichmentJobRepository.ts";
+export {
+  pipelineStageRepository,
+  type StageCreateValues,
+  type StageUpdateValues,
+  type StageRecord,
+} from "./repositories/pipelineStageRepository.ts";

@@ -18,6 +18,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { tenants, users, workspaces } from "./auth.ts";
+import { pipelineStages } from "./pipelineStages.ts";
 
 // Shared column idioms (kept local per the self-contained-schema convention in auth.ts).
 const citext = customType<{ data: string }>({ dataType: () => "citext" });
@@ -94,6 +95,11 @@ export const contacts = pgTable(
     locationCity: varchar("location_city", { length: 100 }),
     priorityScore: integer("priority_score"), // cache of latest scores.composite_score (M4)
     outreachStatus: varchar("outreach_status", { length: 50 }).notNull().default("new"),
+    // Workspace pipeline-stage assignment (G-REV-7, ADR-0028). Nullable: a contact may sit in no stage; on
+    // stage delete the assignment clears (SET NULL) while outreach_status (the rollup) is left untouched.
+    pipelineStageId: uuid("pipeline_stage_id").references(() => pipelineStages.id, {
+      onDelete: "set null",
+    }),
     isRevealed: boolean("is_revealed").notNull().default(false),
     revealedByUserId: uuid("revealed_by_user_id").references(() => users.id),
     revealedAt: timestamp("revealed_at", { withTimezone: true }),

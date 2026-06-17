@@ -5,7 +5,7 @@
 // Enroll, Export). Every async surface goes through the State Kit; the actual charge/gate run server-side.
 "use client";
 
-import type { MaskedContact, RevealType } from "@leadwolf/types";
+import type { MaskedContact, OutreachStatus, RevealType } from "@leadwolf/types";
 import {
   Avatar,
   Drawer,
@@ -19,9 +19,9 @@ import {
 import { Activity, Download, ListPlus, Send, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { addContactsToList, enrollContacts } from "../api";
+import { exportMaskedCsv } from "../export";
 import { useActivities } from "../hooks/useActivities";
 import { useScores } from "../hooks/useScores";
-import { exportMaskedCsv } from "../export";
 import styles from "../prospect.module.css";
 import {
   ACTIVITY_TYPE_LABELS,
@@ -31,6 +31,7 @@ import {
   displayName,
 } from "../types";
 import { RevealDialog } from "./RevealDialog";
+import { StageSelector } from "./StageSelector";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -53,7 +54,12 @@ function ScoreBreakdown({ contactId }: { contactId: string }) {
       empty={!loading && !latest}
       onRetry={reload}
       skeleton={<Progress value={0} aria-label="Loading score" />}
-      emptyState={<EmptyState title="Not scored yet" description="A score lands after the next scoring run." />}
+      emptyState={
+        <EmptyState
+          title="Not scored yet"
+          description="A score lands after the next scoring run."
+        />
+      }
     >
       {latest ? (
         <div className={styles.scoreGrid}>
@@ -116,9 +122,7 @@ function ActivityTimeline({ contactId }: { contactId: string }) {
                 {ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType.replace(/_/g, " ")}
               </span>
               {a.note ? <span className={styles.timelineNote}>{a.note}</span> : null}
-              <span className={styles.timelineTime}>
-                {new Date(a.occurredAt).toLocaleString()}
-              </span>
+              <span className={styles.timelineTime}>{new Date(a.occurredAt).toLocaleString()}</span>
             </div>
           </li>
         ))}
@@ -139,8 +143,19 @@ export function RecordDetail({
 }) {
   const toast = useToast();
   const [revealType, setRevealType] = useState<RevealType | null>(null);
+  // Live override of the contact's outreach_status after a stage assignment rolls it up server-side, so the
+  // Identity field reflects the new status without re-fetching the masked list. Keyed to the contact id so it
+  // applies ONLY to the contact it was set for — switching records (A→B) ignores A's override with no flash.
+  const [statusOverride, setStatusOverride] = useState<{
+    id: string;
+    status: OutreachStatus;
+  } | null>(null);
 
   const open = contact != null;
+  const outreachStatus =
+    (statusOverride?.id === contact?.id ? statusOverride?.status : undefined) ??
+    contact?.outreachStatus ??
+    "new";
   // While the reveal Dialog is open it owns Esc/backdrop; swallow the Drawer's own close so one Esc doesn't
   // collapse both layers (the foundation Drawer + Dialog both bind a window Esc handler).
   const closeDrawer = () => {
@@ -196,7 +211,12 @@ export function RecordDetail({
             >
               {contact.isRevealed ? "View revealed" : "Reveal"}
             </TpButton>
-            <TpButton variant="ghost" size="sm" leftIcon={<ListPlus size={15} />} onClick={onAddToList}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              leftIcon={<ListPlus size={15} />}
+              onClick={onAddToList}
+            >
               Add to list
             </TpButton>
             <TpButton variant="ghost" size="sm" leftIcon={<Send size={15} />} onClick={onEnroll}>
@@ -241,15 +261,32 @@ export function RecordDetail({
               />
               <Field label="Department" value={contact.department ?? "—"} />
               <Field label="Location" value={location} />
-              <Field label="Outreach" value={contact.outreachStatus.replace(/_/g, " ")} />
+              <Field label="Outreach" value={outreachStatus.replace(/_/g, " ")} />
               <Field
                 label="Email"
                 value={
-                  contact.hasEmail ? (contact.emailDomain ? `•••@${contact.emailDomain}` : "•••") : "—"
+                  contact.hasEmail
+                    ? contact.emailDomain
+                      ? `•••@${contact.emailDomain}`
+                      : "•••"
+                    : "—"
                 }
               />
               <Field label="Phone" value={contact.hasPhone ? "Locked — reveal" : "—"} />
             </div>
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Pipeline</h3>
+            </div>
+            {/* key per contact so the selector's local state remounts cleanly when switching records. */}
+            <StageSelector
+              key={contact.id}
+              contactId={contact.id}
+              stageId={null}
+              onAssigned={(status) => setStatusOverride({ id: contact.id, status })}
+            />
           </section>
 
           <section className={styles.section}>
