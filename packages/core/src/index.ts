@@ -30,7 +30,13 @@ export type {
   ProviderFieldResult,
 } from "./enrichment/providerPort.ts";
 export { requestHash } from "./enrichment/requestHash.ts";
-export { runWaterfall, orderProviders, resetBreakers } from "./enrichment/waterfall.ts";
+export {
+  runWaterfall,
+  runWaterfallBulk,
+  orderProviders,
+  resetBreakers,
+  type BulkWaterfallOptions,
+} from "./enrichment/waterfall.ts";
 export {
   registrableDomain,
   toE164,
@@ -42,6 +48,26 @@ export {
   type CanonicalNameResult,
   type MatchKeys,
 } from "./enrichment/matchKeys.ts";
+
+// Bulk match-first resolution (31 §5, ADR-0037): the MatchPort seam + overlay (real) / master-graph (stub)
+// matchers + the sample-based cost estimate. DI-only — these never import @leadwolf/db (the worker wires it).
+export type {
+  MatchPort,
+  MatchContext,
+  MatchRowResult,
+  Candidate,
+  CandidateFinder,
+} from "./enrichment/bulk/matchPort.ts";
+export {
+  createOverlayMatcher,
+  type OverlayMatcherOptions,
+} from "./enrichment/bulk/overlayMatcher.ts";
+export { createMasterGraphMatcher } from "./enrichment/bulk/masterGraphMatcher.ts";
+export {
+  estimateBulkEnrich,
+  type EstimateInput,
+  type ProviderHitStats,
+} from "./enrichment/bulk/estimate.ts";
 
 export {
   passThroughVerifier,
