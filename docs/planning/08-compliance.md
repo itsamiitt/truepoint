@@ -381,3 +381,28 @@ joined to — the engineering incident-response lifecycle ([19 §5](./19-observa
   `platform_audit_log` — the artifact regulators and SOC 2 auditors ask for.
 - **Readiness:** counsel-approved notification templates + a tested runbook (game-day exercised) are a
   **Trust-track readiness item** ([10](./10-roadmap.md)); the checklist gate is §12.
+
+## 17. Bulk CSV enrichment (no new compliance path)
+
+Bulk CSV enrichment ([30](./30-bulk-enrichment-pipeline.md),
+[ADR-0036](./decisions/ADR-0036-bulk-csv-enrichment-pipeline.md), milestone M17) uploads a sparse CSV,
+matches each row against our own data, then enriches/verifies the matches at scale. It is the **single
+reveal path run many times over a batch** — it introduces **no new compliance mechanism**; every control
+above already covers it.
+
+- **Suppression gate (same in-tx gate).** Each bulk match runs the same `assertNotSuppressed`
+  ([§3](#3-suppression--do-not-contact-dnc)) **inside the reveal-tx** before any reveal or charge —
+  global/tenant/workspace scopes unchanged. A suppressed row gets `match_outcome = suppressed`, is
+  **never revealed, exported, or charged** (charge-only-for-`valid`,
+  [06 §9](./06-enrichment-engine.md#9-data-quality--verification),
+  [ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md)), and the attempt is
+  audit-logged like any single reveal.
+- **DSAR fan-out (no new copies to chase).** Bulk-created overlay rows + their `source_imports`,
+  `contact_reveals`, `activities`, `provider_calls`, and caches are ordinary overlay/provenance copies, so
+  the existing `dsar-delete` fan-out ([§4.2](#42-delete-the-hard-one--fans-out-across-every-copy)) already
+  resolves the golden identity and purges them across every workspace — no bulk-specific delete path.
+- **Co-op stays opt-in + disclosed.** Bulk-imported data feeds the **global master graph** / co-op **only**
+  under the existing explicit, disclosed opt-in ([06 §1](./06-enrichment-engine.md#1-principles)) — **off by
+  default**; bulk import does not change that contract.
+- **Phone enrichment respects DNC/consent.** Any phone fill in a bulk batch honours the same DNC/consent
+  controls ([§2](#2-lawful-basis--consent), [§3](#3-suppression--do-not-contact-dnc)) as single enrichment.
