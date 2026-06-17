@@ -51,7 +51,7 @@
 |---|---|---|---|---|---|---|---|
 | General (name, slug, region, tz, branding) | identity ([12 §3](./12-settings.md)) | — | text/region | WA | `workspaces` | shell labels | std |
 | Default record visibility | new records' `record_visibility` ([12 §3](./12-settings.md), H18) | `workspace` | workspace·team·owner | WA | overlay row default | create forms preselect | std |
-| ✚ Dedup conflict policy (G-IMP-5) | matched-duplicate field handling on import/enrich | `keep_existing` | keep_existing·overwrite·review_queue | WA | import/enrich upsert branch | import wizard shows policy | std |
+| ✚ Import conflict policy (G-IMP-5) | matched-duplicate field handling on import/enrich (the per-import override + workspace default; full design §14a) | `fill_empty_only` | skip_existing·overwrite·fill_empty_only·route_to_review | WA | import/enrich upsert branch ([03](./03-database-design.md) owns the `ON CONFLICT` SQL) | import wizard shows + overrides policy | std |
 | ✚ Auto-enrich policy (G-ENR-1) | when enrichment fires + field allowlist + monthly budget | off | triggers (on_create·on_reveal·scheduled), field list, budget int | WA | enqueue rules on events; budget check | Data Health shows policy + burn | std |
 | ✚ Provider preferences (G-ENR-5) | pin/exclude providers in the waterfall | platform order | ordered subset | WA | waterfall ordering bound by `provider_configs` | enrichment panel note | std |
 | ICP & scoring weights | score configuration ([12 §3](./12-settings.md), [ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)) | platform template | weight set | WA | re-score job | score breakdown reflects | std |
@@ -61,7 +61,7 @@
 | ✚ Tags governance (G-REV-6) | who may create tags; tag list | members may create | roles; tag CRUD | WA | `tags` tables | tag pickers, bulk tag | std |
 | ✚ Trash retention (G-REV-4) | restore window for deleted records | 30 days | 7–90 days | WA | purge job schedule | Trash panel countdown | std |
 | ✚ Required fields on create (§6) | enforce completeness | none | field set | WA | validation in `types` | create forms mark required | std |
-| Import defaults | mapping template + dedup rules ([12 §3](./12-settings.md)) | — | per §14 | WA | import pipeline | wizard prefill | std |
+| Import defaults | default mapping template + default conflict policy ([12 §3](./12-settings.md)) | — | per §14/§14a | WA | import pipeline ([30](./30-bulk-import-export-pipeline.md)) | wizard prefill | std |
 | Suppression / DNC (workspace scope) | workspace DNC list ([08 §3](./08-compliance.md)) | empty | entries + CSV | WA·CA | `suppression_list` | compliance panel | `suppression.add/remove` |
 | Sending & deliverability | → §7 | — | — | WA | — | — | std |
 | Teams & departments | create teams, personas, budgets ([12 §3](./12-settings.md)) | — | per §4 | WA | `teams`/budgets | team switcher | std |
@@ -69,7 +69,7 @@
 | AI assistant | → §11 | — | — | WA | — | — | std |
 | Data freshness & retention | re-verify cadence + purge policy ([12 §3](./12-settings.md), [22](./22-data-quality-freshness-lifecycle.md)) | platform SLAs | per-field cadences | WA·CA | `data_quality_rules`/`verification_jobs` | Data Health shows SLAs | std |
 | Export policies | caps/frequency/approval ([26 §8](./26-integrations-data-delivery.md)) | plan defaults | per §14 | WA | export guard | export center notices | std |
-| ✚ Bulk-reveal governance (G-REV-1) | per-user daily reveal cap + approval threshold | off | caps int; threshold int | WA·BA | reveal guard pre-tx | bulk bar shows cap/approval | std + `reveal` meta |
+| ✚ Bulk-reveal / export approval thresholds (G-REV-1, G-IMP-7) | per-user daily reveal cap + the row threshold above which bulk reveal / import / export needs approval (full design §14a; matrix §19) | off | caps int; thresholds int | WA·BA | reveal/import/export guard pre-tx ([30](./30-bulk-import-export-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)) | bulk bar shows cap/approval | std + `reveal` meta |
 | ✚ Workspace archive (G-WS-1) | archive → read-only → purge lifecycle | active | active·archived | WA (TO confirm) | RLS read-only mode; purge timer | banner + restore | std |
 | ✚ Quota meters (G-WS-4) | contact/storage usage vs plan caps | — | read-only | view: all | counters | usage bars + warnings | — |
 
@@ -208,14 +208,81 @@
 
 | Setting | What it does | Default | Values | Edit | Backend impact | Frontend behavior | Audit |
 |---|---|---|---|---|---|---|---|
-| Mapping templates (✚ G-IMP-3) | saved per-source column maps + AI suggestions | none | templates | WA·U | import pipeline prefill | wizard template picker | std |
-| Conflict policy | → §3 row (G-IMP-5) | — | — | — | — | — | — |
+| Mapping templates (✚ G-IMP-3) | saved per-source column maps, stored + replayed per source (full design §14a; AI auto-map suggestion lives in [23](./23-ai-intelligence-layer.md)) | none | templates | WA·U | import pipeline prefill ([30](./30-bulk-import-export-pipeline.md)) | wizard template picker | std |
+| Conflict policy | → §3 row + §14a (G-IMP-5) | — | — | — | — | — | — |
 | ✚ Scheduled imports (G-IMP-4) | recurring S3/SFTP/Sheets ingestion | off | source + cadence | WA | scheduled import jobs | import history labels | std |
-| ✚ Import limits & preview | size/row caps (plan) + mandatory preview over N rows | preview ≥ 10K rows | ints | plan/WA | staging pass (G-IMP-1) | preview + error file | std |
-| ✚ Import approval (G-IMP-7) | approval over N rows | off | threshold | WA | approval gate | pending state | std + approval |
-| Export caps & approvals | row caps + frequency + approval ([26 §8](./26-integrations-data-delivery.md)) | plan defaults | ints + threshold | WA | export guard | export center notices | `export` |
+| ✚ Import limits & preview | max file size + max row count (plan caps in [12 §6a](./12-settings.md)) + mandatory preview over N rows | preview ≥ 10K rows | ints | plan/WA | staging pass (G-IMP-1, [30](./30-bulk-import-export-pipeline.md)) | preview + error file | std |
+| ✚ Import approval (G-IMP-7) | approval over N rows (threshold numbers in [12 §6a](./12-settings.md)) | off | threshold | WA | approval gate ([ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)) | pending state | std + approval |
+| Export caps & approvals | row caps + frequency + approval ([26 §8](./26-integrations-data-delivery.md); plan numbers in [12 §6a](./12-settings.md)) | plan defaults | ints + threshold | WA | export guard | export center notices | `export` |
 | ✚ Export watermarking (G-INT-7) | trace columns/metadata on exports | off | on·off | SA·WA | export pipeline | noted on download | `export` |
 | ✚ Export destination rules | restrict reverse-ETL/webhook targets (ties §13 allowlist) | any | allowlist | SA | delivery guard | destination errors | std |
+
+### 14a. Bulk import/export controls — deep dive (✚ G-IMP-5, G-IMP-3, G-IMP-7, G-REV-1)
+
+The three governance settings above are summary rows; this section is the buildable design they point to.
+All of them operate on the **staging → preview → commit** pipeline ([30](./30-bulk-import-export-pipeline.md),
+[ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)) — settings here decide *policy*; the
+job mechanics, chunking, and the actual `ON CONFLICT` upsert SQL live elsewhere ([03](./03-database-design.md)
+owns the conflict SQL; [23](./23-ai-intelligence-layer.md) owns AI auto-mapping).
+
+**Conflict policy (G-IMP-5).** Resolves what happens to a **matched duplicate** (same blind-index match key,
+[03 §11](./03-database-design.md)) when an incoming row collides with an existing field value. One enum, set
+per import (overriding the workspace default in §3 / [12 §3](./12-settings.md)):
+
+| Policy value | Field-level behavior on a match | Use it for |
+|---|---|---|
+| `skip_existing` | leave the matched record untouched; only **insert net-new** rows | append-only loads where the CRM is the source of truth |
+| `overwrite` | incoming non-empty value **replaces** the existing value | the file is the authoritative refresh |
+| `fill_empty_only` *(default)* | write **only** where the existing field is null/blank; never clobber a value | safe enrichment-style top-ups — the conservative default |
+| `route_to_review` | **don't auto-apply** conflicting fields; stage each conflict as a pending diff in the **review queue** (below) | high-trust datasets where a human decides field by field |
+
+`route_to_review` is per-field within a row: non-conflicting fields commit immediately under
+`fill_empty_only` semantics, and only the *contested* fields are held — so a partial commit is normal.
+
+**Review queue (the `route_to_review` branch).** A workspace-scoped queue of pending field-level conflicts
+produced by `route_to_review` imports (and reused by the G-ENR-6 / §6 fuzzy-merge candidates so there is one
+reviewer surface, not two):
+
+- **Item shape.** `{ import_batch_id, record_id, source_import_id, field, existing_value, incoming_value,
+  match_confidence, status ∈ pending·accepted·rejected·superseded }`, provenance carried from
+  `source_imports` ([03 §11](./03-database-design.md)).
+- **Actions.** Per item or bulk: **accept incoming** (apply the new value), **keep existing** (reject),
+  or **accept-all-from-this-source**. Each decision is an upsert through the same conflict path
+  ([03](./03-database-design.md) SQL) so audit/provenance stay uniform.
+- **Workflow.** Resolver role `WA` (or `TM`/`U` if the workspace delegates queue triage); **SLA + aging**
+  surfaces via the notification matrix (§15, `imports` class); unresolved items expire to `superseded`
+  on the next authoritative load of the same field and are logged, never silently dropped.
+- **Audit.** Each resolution writes `settings.update`-class provenance plus the per-record change; the batch
+  links its review outcomes for import-undo (G-IMP-2, [30](./30-bulk-import-export-pipeline.md)).
+
+**Bulk-reveal / import / export approval thresholds (G-REV-1, G-IMP-7).** A single row-count threshold model,
+reused across the three bulk verbs; the **numbers per plan** are published in [12 §6a](./12-settings.md), the
+**approval routing** is the matrix in §19:
+
+- **Reveal** — per-user daily cap + a per-action threshold above which a reveal needs `WA`/`BA` sign-off
+  (the preventive control for insider scraping, G-REV-1).
+- **Import** — over the plan/workspace row threshold the staged job parks in `pending_approval` before commit
+  (G-IMP-7); approver `WA`.
+- **Export** — over the cap the export job parks for `WA` approval ([26 §8](./26-integrations-data-delivery.md)).
+
+All three resolve through the **effective-value API** (§1) so a tenant floor can tighten a workspace setting,
+and all write an approval record into the §19 matrix outcome.
+
+**Saved column-mapping templates (G-IMP-3 — persistence half).** Mapping (source header → canonical/custom
+field) is the #1 import failure point, so we **store and replay** it rather than re-deriving each run:
+
+- **Store.** A template is `{ id, workspace_id, source_name (apollo|zoominfo|linkedin|sales_navigator|
+  hubspot|salesforce|clearbit|manual, matching `source_imports.source_name` in [03 §11](./03-database-design.md)),
+  name, version, column_map (header → field, including custom fields per §6 / G-REV-5), default_conflict_policy,
+  created_by, scope ∈ workspace·user }`. Editing bumps `version` (prior versions retained for reproducibility +
+  import-undo).
+- **Replay.** On a new import the wizard **auto-selects the template matching the detected source** and
+  prefills the mapping + its default conflict policy; the user can override per run without mutating the saved
+  template. A workspace **default template** (§3 "Import defaults", [12 §3](./12-settings.md)) is applied when
+  no source-specific template matches.
+- **Boundary.** Persistence + replay live here; the **AI auto-map *suggestion*** that proposes a mapping for an
+  unrecognized header (Claude `extract_fields`, with confidence) lives in [23](./23-ai-intelligence-layer.md) —
+  this setting consumes an accepted suggestion *as* a new/updated template, it does not generate one.
 
 ## 15. Notification settings (scope: user + team defaults — G-NTF-1)
 

@@ -100,6 +100,18 @@ change; uses existing surfaces):
   [ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md),
   [ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md) (+ decision-log rows in
   [00 §7](./00-overview.md#7-decision-log)).
+- **Bulk import/export at million-row scale:** new spec [30](./30-bulk-import-export-pipeline.md) +
+  [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md) (first-class async bulk job:
+  presigned-S3 → stream → COPY-to-staging → `ON CONFLICT`; idempotent/checkpointed/resumable; three-way
+  per-row accounting + rejected-rows report; snapshot-consistent streaming export). Remediates the bulk
+  import/export gaps tracked in [28 §13](./28-enterprise-readiness-audit.md) (G-IMP-1..7, G-EXP-1/2, G-BIL-2,
+  G-WS-4, G-ENR-4/6) and touches [03](./03-database-design.md), [09](./09-api-design.md),
+  [07](./07-billing-credits.md)/[ADR-0029](./decisions/ADR-0029-credit-ledger-and-lease-decrement.md),
+  [06](./06-enrichment-engine.md), [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)/[ADR-0015](./decisions/ADR-0015-entity-resolution-dedup-engine.md),
+  [18](./18-scalability-performance.md)/[24](./24-advanced-search-exploration-ux.md), [20](./20-event-driven-realtime-backbone.md),
+  [22](./22-data-quality-freshness-lifecycle.md), [21](./21-data-acquisition-sourcing.md)/[08](./08-compliance.md)/[01](./01-tech-stack.md),
+  [29](./29-settings-administration-architecture.md)/[12](./12-settings.md), [26](./26-integrations-data-delivery.md),
+  [23](./23-ai-intelligence-layer.md), [19](./19-observability-reliability.md), [27](./27-workflow-automation-engine.md).
 - **[07](./07-billing-credits.md):** new commercial-policy section (§1A) + charge-by-status in the reveal
   transaction (§3); resolved charge-policy open question.
 - **[08](./08-compliance.md):** new certifications/Trust-Center section (§15) + deliverability depth (§6) +

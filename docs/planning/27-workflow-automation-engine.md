@@ -53,6 +53,8 @@ create_task | push_crm | send_webhook | adjust_score`. Actions compose in order;
   its own rule); **per-team automation policies** in settings bound allowed triggers/actions (`12`,
   `25 §8`).
 - **Budgets:** reveal/enrich/AI actions debit per-team budgets (`H2`/`H18`); hard-cap blocks.
+- **Bulk-origin safety:** triggers from a bulk import are **suppressed/batched by default** and never
+  auto-enroll or fire billable side-effects per row (`§10`).
 - **Dry-run + staged enable** before a rule goes live.
 
 ## 8. Recipe / play library
@@ -66,6 +68,45 @@ Prebuilt, parameterized plays seed departments (`25`): lead/account **routing**,
 
 Build/manage in a Settings automation surface (`12`); status + history on Home/Reports per department;
 live run status via SSE (`20 §8`). API + webhooks expose runs (`09`, `26`).
+
+## 10. Safe-by-default automation for bulk-origin records
+
+A million-row CSV import ([30](./30-bulk-import-export-pipeline.md),
+[ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)) emits a burst of
+`record.created`/`record.updated`. Treated like single-record edits, it would fan out a million
+`enroll_sequence`/send/enrich actions — a runaway, billable side-effect. The principle is **safe-by-default
+side effects**: a bulk load **must not** auto-enroll rows into active sequences or fire billable actions.
+**Promotion to active is deliberate** — a human explicitly opts a reviewed batch into a sequence; the import
+itself is inert for automation.
+
+- **Bulk-origin signal.** `record.created`/`record.updated` from an import carry an `origin: bulk_import`
+  flag with the `import_batch_id` (and the same flag rides the job-level `import.completed` event, `20 §2`).
+  This is set by the bulk pipeline (`30`), not by automation. The **event-coalescing mechanism that batches
+  or collapses the burst lives in [20](./20-event-driven-realtime-backbone.md)** — automation is a
+  consumer of the coalesced stream, not the coalescer.
+- **Default trigger behaviour for bulk-origin events:**
+  - `enroll_sequence` and other billable/contact-touching actions (send, reveal, enrich, `push_crm`,
+    `send_webhook`) **do not fire per row.** A rule whose trigger matches a `bulk_import`-origin event is
+    **suppressed** unless it is explicitly marked **bulk-safe** by the rule owner.
+  - Non-billable, idempotent actions (`add_to_list`, `update_field`, `adjust_score`, `assign_owner`) may run
+    but are **batched**, not per-row, when the trigger is bulk-origin.
+  - The suppressed/deferred decision is recorded in `automation_runs` (outcome = `skipped:bulk_origin`) so it
+    is auditable, not silent.
+- **Deliberate promotion.** Acting on an imported batch is a separate, explicit step: the user selects the
+  reviewed batch (or a saved segment over it) and enrolls it via a `manual` trigger (`§3`) or a one-off
+  bulk action from the grid (`24 §7`). Promotion re-checks **suppression + reveal gating** (`H5`/`H1`) and
+  debits budgets per action, exactly as a normal enrollment does.
+- **Guardrail / quota interaction (anti-fan-out).** Even a bulk-safe rule is bounded so a deliberate
+  promotion can't melt the system:
+  - The **per-workspace/team rate limits and loop guards** (`§7`) apply to the promoted batch; enrollment is
+    metered through the automation queue (`20 §4`) at the configured throughput, not all at once.
+  - **Budgets/quotas** (`H2`/`H18`) are checked **in-tx per action**; a `hard_cap` team is **blocked at
+    budget** part-way through a batch rather than overshooting — the remainder is reported as
+    `blocked:budget` in `automation_runs`. **Billing safety and the per-team budget/hard-cap model are owned
+    by [07](./07-billing-credits.md)**; this section only defers to them.
+  - A **batch-enrollment cap** (per-team policy, `12`/`25 §8`) bounds how many records one promotion may
+    enroll; exceeding it requires an explicit confirm/admin override, surfaced before the action runs (not
+    after the fan-out).
 
 ## Links
 - **Links to:** [20](./20-event-driven-realtime-backbone.md), [03 §6/§7/§14](./03-database-design.md), [05 §13](./05-features-modules.md),

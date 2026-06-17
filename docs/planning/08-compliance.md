@@ -67,6 +67,43 @@ async function assertNotSuppressed(contact, workspaceId, tenantId, tx) {
   verification `bounce`) **auto-adds a suppression row** ([§6](#6-sending-compliance-can-spam--gdpreprivacy)).
 - Data: `suppression_list` ([03 §8](./03-database-design.md#8-billing--compliance)).
 
+### 3.1 Ingest-time suppression screening (bulk imports — set-based)
+
+The per-row `assertNotSuppressed` above is correct for the **reveal** and **send** paths (one contact at a
+time). A **million-row import** must not loop it: every imported row is screened against
+suppression/DNC **at ingest, in a single set-based pass**, **before any row can be used, enriched, or
+charged** — so a suppressed subject can never be revealed/enriched/exported even momentarily.
+
+- **Where it runs.** In the bulk-import staging pipeline ([30](./30-bulk-import-export-pipeline.md),
+  [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)): staged rows are matched against
+  `suppression_list` by `email`/`domain`/`phone`/`contact_id` (via blind indexes) in a **single set-based
+  join** over the staging table — not a row-at-a-time call per row.
+- **Order of operations.** Suppression screening happens **before** enrichment, reveal, or any credit
+  charge. Suppressed rows are **dropped from the usable set** (routed to the rejected-rows artifact with a
+  `suppressed` reason — [§9](#9-security-controls-supporting-compliance)) and **never enriched or charged**;
+  this preserves the *"never revealed, exported, or sent to"* invariant ([§3](#3-suppression--do-not-contact-dnc))
+  at bulk scale. The set-based screen is logged once per import (`suppression`-screen audit), not per row.
+- **Scopes** are the same `global` / `tenant` / `workspace` set as §3; a `global` row (a DSAR objection /
+  CCPA opt-out / bounce) excludes the subject from **every** import.
+
+### 3.2 Export-time suppression + ownership filtering (set-based)
+
+Exports ([26 §1](./26-integrations-data-delivery.md), [05 §12](./05-features-modules.md)) are
+suppression-checked and reveal-respecting, but at export scale that filtering is **set-based**, not
+row-at-a-time:
+
+- **Bounded by the revealed-record count.** An export only ever contains **revealed, owned** fields, so the
+  candidate set is the workspace's `contact_reveals` (its owned records), **not** the global graph — the work
+  is bounded by *what the workspace has revealed*, not by catalogue size.
+- **Set-based join.** The export query is a single **anti-join** of that revealed/owned set against
+  `suppression_list` (global/tenant/workspace scopes, by blind index) — suppressed and un-revealed rows are
+  filtered out in one pass, never by per-row `assertNotSuppressed` calls in a loop.
+- **Result.** No suppressed contact and no unowned/un-revealed field can leave via export, regardless of
+  export size; the export is audit-logged ([§5](#5-audit-logging)) and delivered via a short-lived signed URL
+  (see export-file retention, [§7](#7-data-retention-storage-limitation), and the rejected-artifact policy,
+  [§9](#9-security-controls-supporting-compliance)). Bulk-export mechanics live in
+  [30](./30-bulk-import-export-pipeline.md) / [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md).
+
 ## 4. DSAR — Data Subject Access Requests
 
 Self-serve intake (public page) + admin workflow. Identity of the requester is verified before acting.
@@ -214,6 +251,8 @@ purge on DSAR/suppression.**
 | `provider_calls` | Rolling window (cache TTL + analytics) | Time partitions aged out |
 | `audit_log` | Long retention (compliance) | Monthly partitions; policy-defined window |
 | Export files (S3) | Short-lived | Signed expiring URLs + lifecycle deletion |
+| Rejected-rows import artifacts (S3) | Short-lived (echoes raw PII — [§9](#9-security-controls-supporting-compliance)) | Short TTL + access-controlled presigned URL + lifecycle deletion; purged on DSAR |
+| Quarantined uploads (S3, pre-scan) | Transient | Deleted on clean-and-imported or on infected verdict ([§9](#9-security-controls-supporting-compliance)) |
 
 Re-verification keeps data accurate (accuracy principle); suppression + DSAR provide the deletion path
 (storage-limitation + erasure). *Confirm exact windows with legal.*
@@ -238,6 +277,22 @@ Re-verification keeps data accurate (accuracy principle); suppression + DSAR pro
   decryption only in the reveal and **send** paths.
 - **Masking:** search/list views never carry PII to the client; only reveals do.
 - **Secrets:** Secrets Manager + KMS; no secrets in repo/images.
+- **Upload malware scanning (quarantine → scan → enqueue on clean).** Accepting arbitrary customer file
+  uploads (CSV/XLSX) is a **malware vector** and a SOC 2 / procurement must-have, so uploads are not trusted
+  on arrival. A file lands in a **quarantine S3 bucket** (no app/worker read access), is **scanned for
+  malware** (GuardDuty Malware Protection for S3, or ClamAV — [01 §"Upload security"](./01-tech-stack.md#1-at-a-glance)),
+  and the import job is **enqueued only on a clean verdict**. An infected/suspicious verdict **quarantines or
+  deletes** the object, **never enqueues** the import, and is audit-logged; the uploader sees a failure. This
+  is the single entry condition for the bulk-import pipeline ([30](./30-bulk-import-export-pipeline.md),
+  [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)) and complements CI SAST/DAST,
+  which scans *our* code, not *user* uploads ([15 §G-SEC-1](./15-gap-remediation.md)).
+- **Rejected-rows artifact (PII retention + access control).** The rejected-rows file an import produces
+  (rows dropped for being suppressed [§3.1](#31-ingest-time-suppression-screening-bulk-imports--set-based),
+  invalid, or duplicate) **echoes raw PII**, so it is treated as a PII artifact, not a convenience download:
+  **short TTL** (S3 lifecycle expiry, on the order of the export-file window — [§7](#7-data-retention-storage-limitation)),
+  **access-controlled** to the import's workspace/owner, and reached only via a **presigned URL that is a
+  bearer token** (short-expiry, single-purpose, audit-logged on issue). Like every PII surface it is **purged
+  on DSAR delete** ([§4.2](#42-delete-the-hard-one--fans-out-across-every-copy)).
 
 ## 10. Vendor / sub-processor management
 
@@ -284,6 +339,15 @@ per-workspace CRM. Data still also lands in each workspace overlay
 - [ ] Self-serve DSAR intake (access/delete/rectify) live and tested end-to-end.
 - [ ] Suppression (global/tenant/workspace) enforced inside the reveal-tx **and the send-tx**
       (tested unbypassable).
+- [ ] **Bulk imports:** every imported row screened against suppression/DNC **at ingest (set-based)** before
+      use/enrich/charge ([§3.1](#31-ingest-time-suppression-screening-bulk-imports--set-based)); a
+      **lawful-basis attestation** recorded per import ([21 §5.1](./21-data-acquisition-sourcing.md));
+      uploads **virus-scanned in quarantine** and enqueued only on a clean verdict
+      ([§9](#9-security-controls-supporting-compliance)).
+- [ ] **Bulk exports:** suppression + ownership filtering is a **set-based join bounded by the
+      revealed-record count** ([§3.2](#32-export-time-suppression--ownership-filtering-set-based)).
+- [ ] **Rejected-rows artifact:** short TTL + access-controlled presigned URL + purged on DSAR
+      ([§9](#9-security-controls-supporting-compliance)).
 - [ ] CCPA "Do Not Sell/Share" opt-out honored (→ suppression).
 - [ ] DSAR delete **fan-out** + verification scan passes; no residual PII across **all per-workspace
       copies** + `source_imports`/`contact_reveals`/`activities`/`outreach_log` + caches.

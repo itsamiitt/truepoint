@@ -26,6 +26,7 @@
 | Vector / semantic | **pgvector** embeddings (semantic search / RAG — [23](./23-ai-intelligence-layer.md)) | Aurora |
 | Auth | **Self-built on Lucia** + Postgres + Redis ([ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md)) | API service |
 | Files | S3 (pre-signed up/download; CloudFront for public) | Native |
+| Upload security | **Antivirus/malware scan of user uploads** — GuardDuty Malware Protection for S3 (or self-hosted **ClamAV**); quarantine bucket → scan → release-on-clean gates the import job ([30 §1](./30-bulk-import-export-pipeline.md), [08](./08-compliance.md)) | Native / ECS |
 | Email | SES (React Email; SNS→SQS bounce/complaint) | Native |
 | CDN/DDoS | CloudFront + WAF + Shield | Native |
 | DNS/TLS | Route 53 + ACM | Native |
@@ -77,7 +78,7 @@ The internal **`apps/admin`** console (separate ECS service) connects under a **
 
 ## 4. Background workers
 
-Separate ECS Fargate service (same codebase, different entry point), consuming **BullMQ** on Redis; auto-scales on queue-depth metric. Worker types: **enrichment** (Apollo/ZoomInfo/Clearbit), **entity-resolution** (global ER: normalize → blocking/MinHash-LSH → Splink → survivorship — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)), **scoring**, **imports** (CSV/XLSX → dedup → insert), **CRM sync** (Salesforce/HubSpot/Pipedrive), **outreach delivery** (→ SES or external sequencer), **webhook delivery**, **search-sync** (CDC → OpenSearch + Typesense + ClickHouse). One-off heavy jobs (full re-score, bulk re-enrich, **batch ER on Spark/Athena over the lake**) run on **AWS Batch**.
+Separate ECS Fargate service (same codebase, different entry point), consuming **BullMQ** on Redis; auto-scales on queue-depth metric. Worker types: **enrichment** (Apollo/ZoomInfo/Clearbit), **entity-resolution** (global ER: normalize → blocking/MinHash-LSH → Splink → survivorship — [ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)), **scoring**, **imports** (presigned-S3 upload → **AV scan** → streaming parse → COPY-to-staging → dedup → `ON CONFLICT` upsert; async job + checkpoint/resume — [30](./30-bulk-import-export-pipeline.md), [ADR-0036](./decisions/ADR-0036-bulk-async-job-and-staging-pipeline.md)), **CRM sync** (Salesforce/HubSpot/Pipedrive), **outreach delivery** (→ SES or external sequencer), **webhook delivery**, **search-sync** (CDC → OpenSearch + Typesense + ClickHouse). One-off heavy jobs (full re-score, bulk re-enrich, **batch ER on Spark/Athena over the lake**) run on **AWS Batch**.
 
 ## 5. Repositories (two)
 
