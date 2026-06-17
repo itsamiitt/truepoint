@@ -4,6 +4,7 @@
 // row added after enrollment (bounce/unsubscribe/DNC) still stops the message, auto-append the
 // postal-address + unsubscribe footer, send through the injected port, then advance the log + audit `send`.
 
+import { env } from "@leadwolf/config";
 import {
   type TenantScope,
   outreachLogRepository,
@@ -32,10 +33,10 @@ export interface SendStepResult {
   status: "active" | "completed";
 }
 
-/** CAN-SPAM footer (08 §6) — AUTO-APPENDED to every send, never left to the template author. The
- * unsubscribe target is an M9 placeholder; the public one-click endpoint lands with the M12 SES pass. */
+/** CAN-SPAM footer (08 §6) — AUTO-APPENDED to every send, never left to the template author. The unsubscribe
+ * target points at the configured app origin (the public one-click endpoint lands with the M12 SES pass). */
 function withComplianceFooter(body: string, physicalAddress: string, logId: string): string {
-  return `${body}\n\n---\n${physicalAddress}\nUnsubscribe: https://app.leadwolf.dev/unsubscribe/${logId}`;
+  return `${body}\n\n---\n${physicalAddress}\nUnsubscribe: ${env.APP_ORIGINS[0]}/unsubscribe/${logId}`;
 }
 
 export async function sendStep(input: SendStepInput): Promise<SendStepResult> {
