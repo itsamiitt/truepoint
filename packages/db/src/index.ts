@@ -63,6 +63,13 @@ export {
   type ImportBatchRow,
 } from "./repositories/sourceImportRepository.ts";
 export {
+  tagRepository,
+  type TagRow,
+  type TagInsert,
+  type TagUpdate,
+  type AssignInput,
+} from "./repositories/tagRepository.ts";
+export {
   revealRepository,
   type ContactForReveal,
   type RevealClaimInput,

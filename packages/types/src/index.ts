@@ -5,6 +5,7 @@ export * from "./contacts.ts";
 export * from "./pipelineStages.ts";
 export * from "./customFields.ts";
 export * from "./importTemplates.ts";
+export * from "./tags.ts";
 export * from "./bulkEnrichment.ts";
 export * from "./billing.ts";
 export * from "./intel.ts";

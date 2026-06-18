@@ -32,3 +32,8 @@ export { searchContacts, suggestField, fetchFacetCounts, aiSearch } from "./sear
 // NL → a validated contactQuery and applies it on confirm via useContactSearch (human-in-the-loop).
 export { AiSearchBox } from "./components/AiSearchBox";
 export { ParsedFilterPreview } from "./components/ParsedFilterPreview";
+// Record-customization tag layer (ADR-0028, G-REV-6): tag chip + picker (RecordDetail) + the workspace-tag
+// + tagged-records hooks the filter rail uses.
+export { TagChip } from "./components/TagChip";
+export { TagPicker } from "./components/TagPicker";
+export { useTags, useTaggedIds } from "./hooks/useTags";

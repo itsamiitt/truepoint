@@ -28,6 +28,9 @@ import { searchRoutes } from "./features/search/index.ts";
 import { webhooksRoutes } from "./features/webhooks/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
+import { scoringRoutes } from "./features/scoring/index.ts";
+import { searchRoutes } from "./features/search/index.ts";
+import { tagsRoutes } from "./features/tags/index.ts";
 import { workspacesRoutes } from "./features/workspaces/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
@@ -63,6 +66,7 @@ app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + r
 app.route("/api/v1/ai-search", aiSearchRoutes); // 23/ADR-0023: NL → validated filter (for confirmation)
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/custom-fields", customFieldsRoutes); // ADR-0028: field definitions + typed-jsonb values
+app.route("/api/v1/tags", tagsRoutes); // ADR-0028/G-REV-6: workspace tags + record assignments + filter
 app.route("/api/v1/outreach", outreachRoutes);
 // Pipeline stages (G-REV-7, ADR-0028): workspace stage CRUD + POST /contacts/:id/stage rollup. Mounted on
 // its OWN base so /contacts/:id/stage cannot collide with the /api/v1/contacts reveal/scoring/activity slices.

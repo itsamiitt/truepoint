@@ -22,6 +22,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useContactSearch } from "../hooks/useContactSearch";
 import { useContacts } from "../hooks/useContacts";
+import { useTaggedIds, useTags } from "../hooks/useTags";
 import styles from "../prospect.module.css";
 import {
   EMPTY_FILTER,
@@ -54,17 +55,26 @@ export function ProspectPage() {
   // (23, ADR-0023). The visible MVP grid stays client-side (useContacts); we also mirror the AI free-text
   // into the client filter so the user sees the effect immediately on the loaded rows (05 §5).
   const { setText: setSearchText, setFilters: setSearchFilters } = useContactSearch();
+  const { tags, reload: reloadTags } = useTags();
   const [filter, setFilter] = useState<ProspectFilter>(EMPTY_FILTER);
   const [scope, setScope] = useState<ResultScope>("contacts");
   const [density, setDensity] = useState("comfortable");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => applyFilter(contacts, filter), [contacts, filter]);
+  // Filter-by-tag (ADR-0028, G-REV-6) is list-only: resolve the union of record ids carrying the selected
+  // tags, then applyFilter narrows the loaded rows against it. tagNames labels the active-filter chips.
+  const taggedIds = useTaggedIds(filter.tags);
+  const tagNames = useMemo(() => Object.fromEntries(tags.map((t) => [t.id, t.name])), [tags]);
+
+  const filtered = useMemo(
+    () => applyFilter(contacts, filter, taggedIds),
+    [contacts, filter, taggedIds],
+  );
   const selected = useMemo(
     () => contacts.find((c) => c.id === selectedId) ?? null,
     [contacts, selectedId],
   );
-  const chips = useMemo(() => activeFilterChips(filter), [filter]);
+  const chips = useMemo(() => activeFilterChips(filter, tagNames), [filter, tagNames]);
 
   // Apply a VALIDATED filter the user confirmed in the AI NL box (23, ADR-0023). Drives the server-search
   // hook with the precise structured filter (setText/setFilters — the path real server search uses), AND
@@ -213,6 +223,7 @@ export function ProspectPage() {
         contacts={contacts}
         onAiApply={applyAiQuery}
       />
+      <FilterRail filter={filter} onChange={setFilter} contacts={contacts} tags={tags} />
 
       <section className={styles.results}>
         <div className={styles.resultsHead}>
@@ -302,6 +313,7 @@ export function ProspectPage() {
         contact={selected}
         onClose={() => setSelectedId(null)}
         onRevealed={(id) => markRevealed(id)}
+        onTagsChanged={reloadTags}
       />
 
       {bulk.count > 0 && (

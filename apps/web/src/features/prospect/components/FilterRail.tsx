@@ -5,6 +5,7 @@
 "use client";
 
 import type { ContactQuery, MaskedContact } from "@leadwolf/types";
+import type { MaskedContact, Tag } from "@leadwolf/types";
 import { Combobox, FieldGroup, TpCheckbox, TpChip, TpInput } from "@leadwolf/ui";
 import { useMemo } from "react";
 import styles from "../prospect.module.css";
@@ -17,12 +18,14 @@ import {
   toggleFacet,
 } from "../types";
 import { AiSearchBox } from "./AiSearchBox";
+import { TagChip } from "./TagChip";
 
 export function FilterRail({
   filter,
   onChange,
   contacts,
   onAiApply,
+  tags = [],
 }: {
   filter: ProspectFilter;
   onChange: (next: ProspectFilter) => void;
@@ -33,6 +36,8 @@ export function FilterRail({
    * useContactSearch setText/setFilters. Optional so the rail still renders where AI isn't wired.
    */
   onAiApply?: (query: ContactQuery) => void;
+  /** The workspace's tags (ADR-0028, G-REV-6) — rendered as toggleable filter facets. */
+  tags?: Tag[];
 }) {
   const departments = useMemo(
     () => distinctValues(contacts, (c) => c.department).map((v) => ({ value: v, label: v })),
@@ -114,6 +119,23 @@ export function FilterRail({
           ))}
         </div>
       </div>
+
+      {tags.length > 0 && (
+        <div className={styles.facet}>
+          <span className={styles.facetLabel}>Tags</span>
+          <div className={styles.chipWrap}>
+            {tags.map((t) => (
+              <TagChip
+                key={t.id}
+                name={t.name}
+                color={t.color}
+                active={filter.tags.includes(t.id)}
+                onClick={() => onChange({ ...filter, tags: toggleFacet(filter.tags, t.id) })}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={styles.facet}>
         <span className={styles.facetLabel}>Department</span>

@@ -31,6 +31,11 @@ import { addContactsToList, enrollContacts } from "../api";
 import { exportMaskedCsv } from "../export";
 import { useActivities } from "../hooks/useActivities";
 import { useCustomFields } from "../hooks/useCustomFields";
+import { Activity, Download, ListPlus, Send, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { type RecordTag, addContactsToList, enrollContacts, fetchRecordTags } from "../api";
+import { exportMaskedCsv } from "../export";
+import { useActivities } from "../hooks/useActivities";
 import { useScores } from "../hooks/useScores";
 import styles from "../prospect.module.css";
 import {
@@ -42,6 +47,7 @@ import {
 } from "../types";
 import { RevealDialog } from "./RevealDialog";
 import { StageSelector } from "./StageSelector";
+import { TagPicker } from "./TagPicker";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -308,15 +314,53 @@ function CustomFieldInput({
   }
 }
 
+/** The record's tags + the assign/unassign picker (ADR-0028, G-REV-6). Loads on open; the picker mutates. */
+function RecordTags({
+  contactId,
+  onTagCreated,
+}: {
+  contactId: string;
+  /** Bubbles up when a NEW workspace tag is created, so the filter rail's tag list can refresh. */
+  onTagCreated?: () => void;
+}) {
+  const toast = useToast();
+  const [tags, setTags] = useState<RecordTag[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    fetchRecordTags(contactId, "contact")
+      .then((t) => {
+        if (live) setTags(t);
+      })
+      .catch((e) => toast.error("Could not load tags", e instanceof Error ? e.message : undefined));
+    return () => {
+      live = false;
+    };
+  }, [contactId, toast]);
+
+  return (
+    <TagPicker
+      recordId={contactId}
+      entity="contact"
+      assigned={tags}
+      onChange={setTags}
+      onTagCreated={onTagCreated}
+    />
+  );
+}
+
 export function RecordDetail({
   contact,
   onClose,
   onRevealed,
+  onTagsChanged,
 }: {
   /** The selected row; null closes the Drawer. */
   contact: MaskedContact | null;
   onClose: () => void;
   onRevealed: (contactId: string) => void;
+  /** Called when the record's tags change in a way that affects the workspace tag list (a new tag created). */
+  onTagsChanged?: () => void;
 }) {
   const toast = useToast();
   const [revealType, setRevealType] = useState<RevealType | null>(null);
@@ -464,6 +508,9 @@ export function RecordDetail({
               stageId={null}
               onAssigned={(status) => setStatusOverride({ id: contact.id, status })}
             />
+              <h3 className={styles.sectionTitle}>Tags</h3>
+            </div>
+            <RecordTags key={contact.id} contactId={contact.id} onTagCreated={onTagsChanged} />
           </section>
 
           <section className={styles.section}>
