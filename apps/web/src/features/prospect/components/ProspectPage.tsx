@@ -6,20 +6,21 @@
 // come from the slice.
 "use client";
 
-import type { MaskedContact } from "@leadwolf/types";
+import type { ContactQuery, MaskedContact } from "@leadwolf/types";
 import {
   type Column,
   DataTable,
   EmptyState,
   SegmentedControl,
   StateSwitch,
+  Tooltip,
   TpButton,
   TpChip,
-  Tooltip,
 } from "@leadwolf/ui";
 import { Building2, Users } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useBulkSelection } from "../hooks/useBulkSelection";
+import { useContactSearch } from "../hooks/useContactSearch";
 import { useContacts } from "../hooks/useContacts";
 import styles from "../prospect.module.css";
 import {
@@ -49,6 +50,10 @@ const DENSITIES = [
 
 export function ProspectPage() {
   const { contacts, error, loading, reload, markRevealed } = useContacts();
+  // The server-search hook backs the AI NL box: a confirmed AI filter is applied via setText/setFilters
+  // (23, ADR-0023). The visible MVP grid stays client-side (useContacts); we also mirror the AI free-text
+  // into the client filter so the user sees the effect immediately on the loaded rows (05 §5).
+  const { setText: setSearchText, setFilters: setSearchFilters } = useContactSearch();
   const [filter, setFilter] = useState<ProspectFilter>(EMPTY_FILTER);
   const [scope, setScope] = useState<ResultScope>("contacts");
   const [density, setDensity] = useState("comfortable");
@@ -60,6 +65,26 @@ export function ProspectPage() {
     [contacts, selectedId],
   );
   const chips = useMemo(() => activeFilterChips(filter), [filter]);
+
+  // Apply a VALIDATED filter the user confirmed in the AI NL box (23, ADR-0023). Drives the server-search
+  // hook with the precise structured filter (setText/setFilters — the path real server search uses), AND
+  // folds the parsed intent into the visible MVP grid: the free-text plus every include-term value become
+  // the client filter's free-text query (applyFilter substring-matches name/title/company/department), so a
+  // parse like title=VP of Engineering actually narrows the loaded rows instead of resetting to all (05 §5).
+  const applyAiQuery = useCallback(
+    (query: ContactQuery) => {
+      setSearchText(query.text ?? "");
+      setSearchFilters(query.filters);
+      const includeTerms = query.filters
+        .filter(
+          (c): c is Extract<typeof c, { kind: "term" }> => c.kind === "term" && c.op !== "exclude",
+        )
+        .flatMap((c) => c.values);
+      const gridQuery = [query.text ?? "", ...includeTerms].join(" ").trim();
+      setFilter((f) => ({ ...EMPTY_FILTER, query: gridQuery || f.query }));
+    },
+    [setSearchText, setSearchFilters],
+  );
 
   // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection above).
   const bulk = useBulkSelection();
@@ -140,7 +165,11 @@ export function ProspectPage() {
         cell: (c) => {
           const g = emailGlyphFor(c);
           const cls =
-            g.tone === "ok" ? styles.glyphOk : g.tone === "warn" ? styles.glyphWarn : styles.glyphNone;
+            g.tone === "ok"
+              ? styles.glyphOk
+              : g.tone === "warn"
+                ? styles.glyphWarn
+                : styles.glyphNone;
           return (
             <Tooltip label={g.label}>
               <span className={`${styles.glyph} ${cls}`} aria-label={g.label}>
@@ -178,7 +207,12 @@ export function ProspectPage() {
 
   return (
     <div className={styles.page} data-density={density}>
-      <FilterRail filter={filter} onChange={setFilter} contacts={contacts} />
+      <FilterRail
+        filter={filter}
+        onChange={setFilter}
+        contacts={contacts}
+        onAiApply={applyAiQuery}
+      />
 
       <section className={styles.results}>
         <div className={styles.resultsHead}>

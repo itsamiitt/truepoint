@@ -12,3 +12,12 @@ export {
   type FetchJson,
   type VendorSpec,
 } from "./enrichment/httpProvider.ts";
+
+// AI adapters (23, ADR-0023): the Anthropic Claude adapter fulfilling core's AiPort for NL→structured
+// search. Injected at the app/composition layer; core declares the port and never imports this.
+export {
+  anthropicNlSearchAdapter,
+  type NlSearchAdapterOptions,
+  type FetchJson as AiFetchJson,
+  defaultFetchJson as defaultAiFetchJson,
+} from "./anthropic/nlSearchAdapter.ts";

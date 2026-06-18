@@ -4,7 +4,7 @@
 // every facet filters the already-loaded rows client-side (types.applyFilter). Composition + view state only.
 "use client";
 
-import type { MaskedContact } from "@leadwolf/types";
+import type { ContactQuery, MaskedContact } from "@leadwolf/types";
 import { Combobox, FieldGroup, TpCheckbox, TpChip, TpInput } from "@leadwolf/ui";
 import { useMemo } from "react";
 import styles from "../prospect.module.css";
@@ -16,16 +16,23 @@ import {
   distinctValues,
   toggleFacet,
 } from "../types";
+import { AiSearchBox } from "./AiSearchBox";
 
 export function FilterRail({
   filter,
   onChange,
   contacts,
+  onAiApply,
 }: {
   filter: ProspectFilter;
   onChange: (next: ProspectFilter) => void;
   /** The loaded rows — facet value sets (department, country) are derived from these (05 §5). */
   contacts: MaskedContact[];
+  /**
+   * Apply a VALIDATED filter compiled by the AI NL box (23, ADR-0023). Wired by the page to
+   * useContactSearch setText/setFilters. Optional so the rail still renders where AI isn't wired.
+   */
+  onAiApply?: (query: ContactQuery) => void;
 }) {
   const departments = useMemo(
     () => distinctValues(contacts, (c) => c.department).map((v) => ({ value: v, label: v })),
@@ -40,6 +47,12 @@ export function FilterRail({
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>
       </div>
+
+      {onAiApply ? (
+        <FieldGroup label="Ask AI">
+          <AiSearchBox onApply={onAiApply} />
+        </FieldGroup>
+      ) : null}
 
       <FieldGroup label="Search" htmlFor="tp-f-query">
         <TpInput
