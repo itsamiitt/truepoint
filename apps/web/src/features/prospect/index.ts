@@ -15,3 +15,14 @@ export { StageManagementPanel } from "./components/StageManagementPanel";
 export { StageSelector } from "./components/StageSelector";
 export { useStages } from "./hooks/useStages";
 export { fetchStages, createStage, updateStage, assignStage } from "./stagesApi";
+// Saved searches / segments (M8, 24 §8): "Save search" + the apply/rename/delete list for the rail. Wire
+// <SaveSearchPanel currentQuery={…} onApply={(f) => { setText(f.text ?? ""); setFilters(f.filters); }}/>
+// into ProspectPage's left rail; the panel re-runs the search via useContactSearch on apply.
+export { SaveSearchPanel } from "./components/SaveSearchPanel";
+export { useSavedSearches } from "./hooks/useSavedSearches";
+export {
+  listSavedSearches,
+  createSavedSearch,
+  updateSavedSearch,
+  deleteSavedSearch,
+} from "./savedSearchApi";

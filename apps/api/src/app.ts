@@ -16,6 +16,7 @@ import { outreachRoutes } from "./features/outreach/index.ts";
 import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
 import { salesNavRoutes } from "./features/sales-navigator/index.ts";
+import { savedSearchesRoutes } from "./features/saved-searches/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
 import { workspacesRoutes } from "./features/workspaces/index.ts";
@@ -40,6 +41,7 @@ app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal
 app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path overlap either
 app.route("/api/v1/search", searchRoutes); // 24/ADR-0035: filtered search, typeahead, facet counts
+app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + re-apply filter sets
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/outreach", outreachRoutes);
 // Pipeline stages (G-REV-7, ADR-0028): workspace stage CRUD + POST /contacts/:id/stage rollup. Mounted on

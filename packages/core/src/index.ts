@@ -149,3 +149,15 @@ export {
 export { expandTitleTerm } from "./search/expandQuery.ts";
 export { planTitleFilter, type TitleFilterPlan } from "./search/planTitleFilter.ts";
 export { CANONICAL_TITLES, type CanonicalTitle } from "./search/titleTaxonomy.ts";
+
+// Saved searches / segments (M8, 24 §8): persist + re-apply the validated contactQuery blob; owner-gated
+// mutations; private-vs-workspace visibility.
+export {
+  createSavedSearch,
+  listSavedSearches,
+  updateSavedSearch,
+  deleteSavedSearch,
+  type CreateSavedSearchInput,
+  type UpdateSavedSearchInput,
+  type DeleteSavedSearchInput,
+} from "./savedSearches/savedSearches.ts";

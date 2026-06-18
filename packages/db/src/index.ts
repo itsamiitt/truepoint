@@ -152,3 +152,7 @@ export {
   type StageUpdateValues,
   type StageRecord,
 } from "./repositories/pipelineStageRepository.ts";
+  savedSearchRepository,
+  type SavedSearchRow,
+  type SavedSearchInsert,
+} from "./repositories/savedSearchRepository.ts";
