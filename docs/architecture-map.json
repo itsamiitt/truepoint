@@ -49,8 +49,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 490,
-  "fileSetHash": "sha256:cbbc809cdfd2b23ccfa86891bb59aa552975ef4d07593a7c297045f503bbe043",
+  "fileCount": 502,
+  "fileSetHash": "sha256:8e0def601b36b5dfe9c777b6e7458b86321a09b506250f89aefb6b38ed8d8ca3",
   "features": {
     "activity": {
       "web": [],
@@ -374,13 +374,25 @@
       "integrations": []
     },
     "sales-navigator": {
-      "web": [],
+      "web": [
+        "apps/web/src/features/sales-navigator/api.ts",
+        "apps/web/src/features/sales-navigator/components/CaptureForm.tsx",
+        "apps/web/src/features/sales-navigator/components/LinksTable.tsx",
+        "apps/web/src/features/sales-navigator/components/SalesNavPage.tsx",
+        "apps/web/src/features/sales-navigator/hooks/useSalesNavLinks.ts",
+        "apps/web/src/features/sales-navigator/index.ts",
+        "apps/web/src/features/sales-navigator/types.ts"
+      ],
       "admin": [],
       "api": [
         "apps/api/src/features/sales-navigator/index.ts",
         "apps/api/src/features/sales-navigator/routes.ts"
       ],
-      "core": [],
+      "core": [
+        "packages/core/src/sales-navigator/captureLink.ts",
+        "packages/core/src/sales-navigator/parseLink.test.ts",
+        "packages/core/src/sales-navigator/parseLink.ts"
+      ],
       "db": [
         "packages/db/src/repositories/salesNavLinkRepository.ts"
       ],
@@ -682,6 +694,7 @@
       "apps/web/src/app/(shell)/layout.tsx",
       "apps/web/src/app/(shell)/prospect/page.tsx",
       "apps/web/src/app/(shell)/reports/page.tsx",
+      "apps/web/src/app/(shell)/sales-navigator/page.tsx",
       "apps/web/src/app/(shell)/sequences/page.tsx",
       "apps/web/src/app/(shell)/settings/api-keys/page.tsx",
       "apps/web/src/app/(shell)/settings/billing/page.tsx",
@@ -801,6 +814,7 @@
       "packages/db/test/itestDb.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/reveal.itest.ts",
+      "packages/db/test/salesNav.itest.ts",
       "packages/db/test/suppressionMgmt.itest.ts",
       "packages/db/test/workspaceSwitch.itest.ts"
     ],

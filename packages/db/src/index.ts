@@ -115,6 +115,7 @@ export {
   salesNavLinkRepository,
   type SalesNavLinkInsert,
   type SalesNavLinkRecord,
+  type SalesNavInsertResult,
 } from "./repositories/salesNavLinkRepository.ts";
 export {
   sequenceRepository,

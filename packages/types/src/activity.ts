@@ -74,11 +74,50 @@ export const salesNavLinkType = z.enum([
 ]);
 export type SalesNavLinkType = z.infer<typeof salesNavLinkType>;
 
-/** POST /sales-navigator/links — a human pastes the link; nothing is automated against LinkedIn. */
+/**
+ * A free-text label (tag) on a captured link. Bounded + non-empty so the chip list stays meaningful and a
+ * caller can't paste an essay as a "label". Trimmed at the edge so " sdr " and "sdr" collapse.
+ */
+export const salesNavLabel = z.string().trim().min(1).max(40);
+
+/**
+ * POST /sales-navigator/links — a human pastes the link; nothing is automated against LinkedIn (ADR-0009).
+ * `note`/`labels` are the optional capture metadata; `external_id` may carry a sales_nav_lead_id the human
+ * already knows, but the server also parses one from a `/sales/lead/...` URL when omitted.
+ */
 export const salesNavLinkSchema = z.object({
   link_type: salesNavLinkType,
   url: z.string().url().max(500),
-  external_id: z.string().max(255).optional(),
+  // Trimmed; a blank/whitespace-only value is dropped (→ undefined) so it never becomes an empty-string
+  // dedup key in the (workspace_id, sales_nav_lead_id) index.
+  external_id: z
+    .string()
+    .trim()
+    .max(255)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
   contact_id: z.string().uuid().optional(),
+  note: z.string().trim().max(2000).optional(),
+  labels: z.array(salesNavLabel).max(20).optional(),
 });
 export type SalesNavLinkRequest = z.infer<typeof salesNavLinkSchema>;
+
+/** One captured link as the list view (GET /sales-navigator/links) renders it. No PII; workspace-scoped. */
+export interface SalesNavLinkDTO {
+  id: string;
+  linkType: SalesNavLinkType;
+  url: string;
+  externalId: string | null;
+  note: string | null;
+  labels: string[];
+  contactId: string | null;
+  accountId: string | null;
+  capturedAt: string; // ISO-8601 — when the human captured it (defaults to insert time)
+  createdAt: string; // ISO-8601 — the row's creation timestamp
+}
+
+/** POST /sales-navigator/links response: the new id, plus whether an identical (workspace_id, url) already existed. */
+export interface SalesNavCaptureResult {
+  id: string;
+  deduped: boolean;
+}
