@@ -12,16 +12,12 @@ import type {
   CanonicalField,
   ColumnMapping,
   ConflictPolicy,
+  ImportMappingTemplate,
   ImportPreview,
   SourceName,
 } from "@leadwolf/types";
 import { useEffect, useRef, useState } from "react";
-import { postImportPreview } from "../api";
-  ImportMappingTemplate,
-  SourceName,
-} from "@leadwolf/types";
-import { useEffect, useRef, useState } from "react";
-import { listMappingTemplates, saveMappingTemplate } from "../api";
+import { listMappingTemplates, postImportPreview, saveMappingTemplate } from "../api";
 import { useImport } from "../hooks/useImport";
 import { rejectedRowsToCsv } from "../rejectedRowsCsv";
 import { IDENTITY_FIELDS, MAPPABLE_FIELDS, type MappableField, SOURCE_OPTIONS } from "../types";

@@ -5,11 +5,11 @@
 // Enroll, Export). Every async surface goes through the State Kit; the actual charge/gate run server-side.
 "use client";
 
-import type { MaskedContact, OutreachStatus, RevealType } from "@leadwolf/types";
 import type {
   CustomFieldValueDto,
   CustomFieldValueInput,
   MaskedContact,
+  OutreachStatus,
   RevealType,
 } from "@leadwolf/types";
 import {
@@ -27,15 +27,10 @@ import {
 } from "@leadwolf/ui";
 import { Activity, Download, ListPlus, Pencil, Send, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { addContactsToList, enrollContacts } from "../api";
-import { exportMaskedCsv } from "../export";
-import { useActivities } from "../hooks/useActivities";
-import { useCustomFields } from "../hooks/useCustomFields";
-import { Activity, Download, ListPlus, Send, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
 import { type RecordTag, addContactsToList, enrollContacts, fetchRecordTags } from "../api";
 import { exportMaskedCsv } from "../export";
 import { useActivities } from "../hooks/useActivities";
+import { useCustomFields } from "../hooks/useCustomFields";
 import { useScores } from "../hooks/useScores";
 import styles from "../prospect.module.css";
 import {
@@ -508,6 +503,10 @@ export function RecordDetail({
               stageId={null}
               onAssigned={(status) => setStatusOverride({ id: contact.id, status })}
             />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
               <h3 className={styles.sectionTitle}>Tags</h3>
             </div>
             <RecordTags key={contact.id} contactId={contact.id} onTagCreated={onTagsChanged} />

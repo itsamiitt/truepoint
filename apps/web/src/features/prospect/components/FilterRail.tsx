@@ -4,8 +4,7 @@
 // every facet filters the already-loaded rows client-side (types.applyFilter). Composition + view state only.
 "use client";
 
-import type { ContactQuery, MaskedContact } from "@leadwolf/types";
-import type { MaskedContact, Tag } from "@leadwolf/types";
+import type { ContactQuery, MaskedContact, Tag } from "@leadwolf/types";
 import { Combobox, FieldGroup, TpCheckbox, TpChip, TpInput } from "@leadwolf/ui";
 import { useMemo } from "react";
 import styles from "../prospect.module.css";

@@ -123,6 +123,8 @@ export const PALETTE_QUICK: PaletteEntry[] = [
     label: "Enrichment jobs",
     href: "/enrichment/jobs",
     keywords: ["enrich", "bulk", "status", "job", "progress"],
+  },
+  {
     id: "act-salesnav",
     label: "Capture Sales Navigator link",
     href: "/sales-navigator",

@@ -168,10 +168,12 @@ export {
   type StageUpdateValues,
   type StageRecord,
 } from "./repositories/pipelineStageRepository.ts";
+export {
   savedSearchRepository,
   type SavedSearchRow,
   type SavedSearchInsert,
 } from "./repositories/savedSearchRepository.ts";
+export {
   enrichmentPolicyRepository,
   type EnrichmentPolicyRecord,
   type EnrichmentPolicyUpsert,
@@ -188,6 +190,7 @@ export {
   type PlatformMemberRow,
   type PlatformUserRow,
 } from "./repositories/platformAdminReads.ts";
+export {
   webhookRepository,
   type WebhookSubscriptionInsert,
   type WebhookSubscriptionRecord,
@@ -196,10 +199,12 @@ export {
   type WebhookDeliveryRecord,
   type WebhookDeliveryForReplay,
 } from "./repositories/webhookRepository.ts";
+export {
   importMappingTemplateRepository,
   type ImportMappingTemplateSaveValues,
   type ImportMappingTemplateRecord,
 } from "./repositories/importMappingTemplateRepository.ts";
+export {
   featureFlagRepository,
   type FeatureFlagRecord,
   type TenantFeatureFlagRecord,

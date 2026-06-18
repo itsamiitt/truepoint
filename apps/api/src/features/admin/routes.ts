@@ -3,12 +3,13 @@
 // recorded in platform_audit_log; results are bounded (PLATFORM_READ_LIMIT) — no unbounded cross-tenant
 // scans. Transport only: the bounded read shapes live in @leadwolf/db (platformAdminRepository). This is the
 // highest-privilege surface in the api; nothing reaches it without pa===true.
-import { PLATFORM_READ_LIMIT, platformAdminRepository, withPlatformTx } from "@leadwolf/db";
-import { NotFoundError } from "@leadwolf/types";
-// recorded in platform_audit_log; results are bounded (limit 500) — no unbounded cross-tenant scans.
-// Transport only. This is the highest-privilege surface in the api; nothing reaches it without pa===true.
 import { evaluateFlagsForTenant } from "@leadwolf/core";
-import { featureFlagRepository, schema, withPlatformTx } from "@leadwolf/db";
+import {
+  PLATFORM_READ_LIMIT,
+  featureFlagRepository,
+  platformAdminRepository,
+  withPlatformTx,
+} from "@leadwolf/db";
 import {
   NotFoundError,
   ValidationError,
@@ -96,6 +97,8 @@ adminRoutes.get("/system-health", async (c) => {
       deadLetter,
     },
   });
+});
+
 // ── Feature flags (13 §3.5, ADR-0011) ──────────────────────────────────────────────────────────────────
 // All reads + writes go through withPlatformTx: cross-tenant owner visibility + an in-tx platform_audit_log
 // row. Writes use the ADR-0032 platform-audit action vocabulary (feature_flag.set). Flags are global +
