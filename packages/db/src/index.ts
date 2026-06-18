@@ -23,6 +23,7 @@ export {
   authEmailTokenRepository,
   type UserRecord,
   type SessionRecord,
+  type AdminSessionRecord,
   type CreateSessionInput,
   type MfaMethodRecord,
   type CreateEmailTokenInput,
