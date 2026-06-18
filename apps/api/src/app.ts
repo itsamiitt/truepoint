@@ -21,6 +21,9 @@ import { savedSearchesRoutes } from "./features/saved-searches/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
 import { settingsRoutes } from "./features/settings/index.ts";
+import { scoringRoutes } from "./features/scoring/index.ts";
+import { searchRoutes } from "./features/search/index.ts";
+import { webhooksRoutes } from "./features/webhooks/index.ts";
 import { workspacesRoutes } from "./features/workspaces/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
@@ -60,6 +63,8 @@ app.route("/api/v1/billing", billingRoutes);
 app.route("/api/v1/credits", creditsRoutes);
 app.route("/api/v1/enrichment", enrichmentRoutes);
 app.route("/api/v1/settings", settingsRoutes); // workspace settings (auto-enrich policy, G-ENR-1)
+// Outbound webhooks (developer settings, 09 §10, 12 §5): CRUD subscriptions + delivery log + replay/self-test.
+app.route("/api/v1/webhooks", webhooksRoutes);
 // Public DSAR intake must register BEFORE the authenticated compliance router, whose `*` middleware
 // would otherwise 401 the session-less form (08 §4).
 app.route("/api/v1/compliance/dsar", dsarPublicRoutes);

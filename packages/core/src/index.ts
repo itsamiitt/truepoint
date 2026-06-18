@@ -196,6 +196,32 @@ export {
   AiBudgetExceededError,
   type AiBudgetStore,
 } from "./ai/budgetGuard.ts";
+// Outbound webhooks (09 §10, 26 §4, G-INT-5): create/sign/dispatch/replay with an SSRF guard. The signing
+// scheme is the same HMAC-SHA256 as the inbound Stripe verifier (billing/stripeWebhook.ts).
+export {
+  createWebhookSubscription,
+  sendTestEvent,
+  replayDelivery,
+  SsrfError,
+  type CreateSubscriptionInput,
+  type CreateSubscriptionResult,
+  type SendTestEventInput,
+  type ReplayDeliveryInput,
+  type ReplayOutcome,
+} from "./webhooks/webhooks.ts";
+export {
+  dispatchToSubscription,
+  type DispatchInput,
+  type DispatchResult,
+} from "./webhooks/dispatch.ts";
+export {
+  signWebhookPayload,
+  generateSigningSecret,
+  secretPrefixOf,
+  encryptSigningSecret,
+  decryptSigningSecret,
+} from "./webhooks/sign.ts";
+export { assertSafeWebhookUrl, isBlockedAddress } from "./webhooks/ssrfGuard.ts";
 
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";

@@ -174,3 +174,11 @@ export {
   type PlatformMemberRow,
   type PlatformUserRow,
 } from "./repositories/platformAdminReads.ts";
+  webhookRepository,
+  type WebhookSubscriptionInsert,
+  type WebhookSubscriptionRecord,
+  type WebhookDispatchTarget,
+  type WebhookDeliveryInsert,
+  type WebhookDeliveryRecord,
+  type WebhookDeliveryForReplay,
+} from "./repositories/webhookRepository.ts";

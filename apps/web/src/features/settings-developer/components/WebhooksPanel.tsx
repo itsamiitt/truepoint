@@ -17,9 +17,10 @@ import {
   TpInput,
   useToast,
 } from "@leadwolf/ui";
-import { Copy, Webhook as WebhookIcon } from "lucide-react";
+import { Copy, RefreshCw, Send, Webhook as WebhookIcon } from "lucide-react";
 import { useState } from "react";
 import { useWebhooks } from "../hooks/useWebhooks";
+import styles from "../settings-developer.module.css";
 import {
   DELIVERY_LABEL,
   DELIVERY_TONE,
@@ -29,7 +30,6 @@ import {
   type WebhookDelivery,
   type WebhookEvent,
 } from "../types";
-import styles from "../settings-developer.module.css";
 
 function formatDate(iso?: string | null): string {
   if (!iso) return "—";
@@ -39,7 +39,7 @@ function formatDate(iso?: string | null): string {
 
 export function WebhooksPanel() {
   const toast = useToast();
-  const { feed, deliveries, loading, error, reload, create, remove } = useWebhooks();
+  const { feed, deliveries, loading, error, reload, create, remove, test, replay } = useWebhooks();
 
   const [subscribing, setSubscribing] = useState(false);
   const [url, setUrl] = useState("");
@@ -48,6 +48,7 @@ export function WebhooksPanel() {
 
   const [secret, setSecret] = useState<string | null>(null);
   const [toRemove, setToRemove] = useState<Webhook | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null); // a row mid-test/replay
 
   const notWired = () =>
     toast.toast({
@@ -56,7 +57,9 @@ export function WebhooksPanel() {
     });
 
   const toggleEvent = (event: WebhookEvent) =>
-    setEvents((prev) => (prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]));
+    setEvents((prev) =>
+      prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event],
+    );
 
   const resetSubscribe = () => {
     setSubscribing(false);
@@ -92,6 +95,41 @@ export function WebhooksPanel() {
     setToRemove(null);
   };
 
+  const describeResult = (status?: "succeeded" | "failed", code?: number | null): string =>
+    status === "succeeded"
+      ? `Endpoint responded ${code ?? "OK"}`
+      : `Delivery failed${code != null ? ` (${code})` : ""}`;
+
+  const onTest = async (w: Webhook) => {
+    setBusyId(w.id);
+    try {
+      const result = await test(w.id);
+      if (!result.ok) return notWired();
+      if (result.status === "succeeded")
+        toast.success("Test event delivered", describeResult(result.status, result.responseCode));
+      else toast.error("Test event failed", describeResult(result.status, result.responseCode));
+    } catch (e) {
+      toast.error("Could not send the test event", e instanceof Error ? e.message : undefined);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const onReplay = async (d: WebhookDelivery) => {
+    setBusyId(d.id);
+    try {
+      const result = await replay(d.id);
+      if (!result.ok) return notWired();
+      if (result.status === "succeeded")
+        toast.success("Delivery replayed", describeResult(result.status, result.responseCode));
+      else toast.error("Replay failed", describeResult(result.status, result.responseCode));
+    } catch (e) {
+      toast.error("Could not replay the delivery", e instanceof Error ? e.message : undefined);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const copySecret = async () => {
     if (!secret) return;
     try {
@@ -123,6 +161,11 @@ export function WebhooksPanel() {
       ),
     },
     {
+      key: "secret",
+      header: "Secret",
+      cell: (w) => <span className={styles.mono}>{w.secretPrefix ?? "—"}</span>,
+    },
+    {
       key: "status",
       header: "Status",
       cell: (w) => (
@@ -136,9 +179,21 @@ export function WebhooksPanel() {
       header: "",
       align: "right",
       cell: (w) => (
-        <TpButton variant="ghost" size="sm" onClick={() => setToRemove(w)}>
-          Remove
-        </TpButton>
+        <span className={styles.rowActions}>
+          <TpButton
+            variant="secondary"
+            size="sm"
+            leftIcon={<Send size={13} />}
+            loading={busyId === w.id}
+            disabled={busyId != null && busyId !== w.id}
+            onClick={() => onTest(w)}
+          >
+            Test
+          </TpButton>
+          <TpButton variant="ghost" size="sm" onClick={() => setToRemove(w)}>
+            Remove
+          </TpButton>
+        </span>
       ),
     },
   ];
@@ -148,12 +203,16 @@ export function WebhooksPanel() {
       key: "event",
       header: "Event",
       sortValue: (d) => d.event,
-      cell: (d) => <span className={styles.mono}>{EVENT_LABEL[d.event]}</span>,
+      cell: (d) => (
+        <span className={styles.mono}>{EVENT_LABEL[d.event as WebhookEvent] ?? d.event}</span>
+      ),
     },
     {
       key: "outcome",
       header: "Outcome",
-      cell: (d) => <StatusBadge tone={DELIVERY_TONE[d.outcome]}>{DELIVERY_LABEL[d.outcome]}</StatusBadge>,
+      cell: (d) => (
+        <StatusBadge tone={DELIVERY_TONE[d.outcome]}>{DELIVERY_LABEL[d.outcome]}</StatusBadge>
+      ),
     },
     {
       key: "code",
@@ -162,17 +221,27 @@ export function WebhooksPanel() {
       cell: (d) => <span className={styles.muted}>{d.status ?? "—"}</span>,
     },
     {
-      key: "attempts",
-      header: "Attempts",
-      align: "right",
-      sortValue: (d) => d.attempts,
-      cell: (d) => <span className={styles.muted}>{d.attempts}</span>,
-    },
-    {
       key: "created",
       header: "When",
       sortValue: (d) => d.createdAt,
       cell: (d) => <span className={styles.muted}>{formatDate(d.createdAt)}</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      cell: (d) => (
+        <TpButton
+          variant="ghost"
+          size="sm"
+          leftIcon={<RefreshCw size={13} />}
+          loading={busyId === d.id}
+          disabled={(busyId != null && busyId !== d.id) || d.webhookId == null}
+          onClick={() => onReplay(d)}
+        >
+          Replay
+        </TpButton>
+      ),
     },
   ];
 
@@ -182,8 +251,8 @@ export function WebhooksPanel() {
         <div className={styles.panelHeadText}>
           <h2 className={styles.panelTitle}>Webhooks</h2>
           <p className={styles.panelDesc}>
-            Subscribe an endpoint to signed outbound events. Verify payloads with the signing secret shown once
-            at creation.
+            Subscribe an endpoint to signed outbound events. Verify payloads with the signing secret
+            shown once at creation.
           </p>
         </div>
         <TpButton leftIcon={<WebhookIcon size={15} />} onClick={() => setSubscribing(true)}>
@@ -196,7 +265,10 @@ export function WebhooksPanel() {
           <span className={styles.connectNoteIcon}>
             <WebhookIcon size={15} />
           </span>
-          <span>The webhooks backend isn&apos;t connected yet (M10). Subscriptions will appear here once it ships.</span>
+          <span>
+            The webhooks backend isn&apos;t connected yet (M10). Subscriptions will appear here once
+            it ships.
+          </span>
         </div>
       ) : null}
 
@@ -311,7 +383,9 @@ export function WebhooksPanel() {
         footer={<TpButton onClick={() => setSecret(null)}>Done</TpButton>}
       >
         <div className={styles.secretBox}>
-          <p className={styles.secretWarn}>Store this secret securely — it won&apos;t be shown again.</p>
+          <p className={styles.secretWarn}>
+            Store this secret securely — it won&apos;t be shown again.
+          </p>
           <div className={styles.secretRow}>
             <code className={styles.secretValue}>{secret}</code>
             <TpButton variant="secondary" leftIcon={<Copy size={14} />} onClick={copySecret}>
@@ -326,9 +400,7 @@ export function WebhooksPanel() {
         open={toRemove != null}
         onClose={() => setToRemove(null)}
         title="Remove webhook?"
-        description={
-          toRemove ? `${toRemove.url} will stop receiving events.` : undefined
-        }
+        description={toRemove ? `${toRemove.url} will stop receiving events.` : undefined}
         footer={
           <>
             <TpButton variant="ghost" onClick={() => setToRemove(null)}>
