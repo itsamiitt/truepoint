@@ -10,6 +10,7 @@ export * from "./billing.ts";
 export * from "./intel.ts";
 export * from "./enrichmentPolicy.ts";
 export * from "./compliance.ts";
+export * from "./featureFlags.ts";
 export * from "./activity.ts";
 export * from "./outreach.ts";
 export * from "./home.ts";

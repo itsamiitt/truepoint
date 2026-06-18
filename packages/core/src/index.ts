@@ -230,6 +230,13 @@ export {
   decryptSigningSecret,
 } from "./webhooks/sign.ts";
 export { assertSafeWebhookUrl, isBlockedAddress } from "./webhooks/ssrfGuard.ts";
+// Platform feature flags (13 §3.5, ADR-0011): the pure evaluation rule + the DB-backed read helpers.
+export { evaluateFlag, isFlagEnabled, type FlagState } from "./featureFlags/evaluateFlag.ts";
+export {
+  evaluateFlagsForTenant,
+  evaluateFlagForTenant,
+  isFlagEnabledForTenant,
+} from "./featureFlags/flagsForTenant.ts";
 
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";

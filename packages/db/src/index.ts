@@ -193,3 +193,8 @@ export {
   type ImportMappingTemplateSaveValues,
   type ImportMappingTemplateRecord,
 } from "./repositories/importMappingTemplateRepository.ts";
+  featureFlagRepository,
+  type FeatureFlagRecord,
+  type TenantFeatureFlagRecord,
+  type FeatureFlagUpsertValues,
+} from "./repositories/featureFlagRepository.ts";
