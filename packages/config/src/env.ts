@@ -31,6 +31,12 @@ export const appEnvSchema = z
     NEXT_PUBLIC_APP_ORIGIN: z.string().url().optional(),
     NEXT_PUBLIC_AUTH_ORIGIN: z.string().url().optional(),
 
+    // RFC 9457 problem-details `type` namespace, used ONLY when the api renders an error (server-side). It is a
+    // stable identifier, not a live page that must resolve — but keeping it configurable avoids baking a brand
+    // domain into packages/types (a browser-imported leaf that must never read process.env). Trailing slash so
+    // the code is appended directly: `${ERROR_TYPE_BASE_URL}invalid_token`.
+    ERROR_TYPE_BASE_URL: z.string().url().default("https://truepoint.in/errors/"),
+
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
     REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(2_592_000),
     AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive().max(120).default(60),

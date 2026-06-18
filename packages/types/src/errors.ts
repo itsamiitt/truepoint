@@ -1,7 +1,8 @@
 // errors.ts — RFC 9457 Problem Details and the typed error classes the whole platform throws (09 §6).
 // A handler renders any AppError via toProblemDetails(); we never leak internals or PII in errors.
-
-const ERROR_BASE = "https://leadwolf.dev/errors/";
+// This is a browser-imported leaf package, so it must NOT read process.env / import @leadwolf/config. The
+// `type` namespace is injected by the server-side renderer (apps/api) via toProblemDetails(typeBase); the
+// fallback below is a brand-free relative URI (RFC 9457 permits relative `type` values).
 
 export interface ProblemDetails {
   type: string;
@@ -34,9 +35,9 @@ export class AppError extends Error {
     this.extensions = args.extensions ?? {};
   }
 
-  toProblemDetails(): ProblemDetails {
+  toProblemDetails(typeBase = "/errors/"): ProblemDetails {
     return {
-      type: `${ERROR_BASE}${this.code}`,
+      type: `${typeBase}${this.code}`,
       title: this.title,
       status: this.status,
       code: this.code,

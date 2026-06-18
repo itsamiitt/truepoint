@@ -1,5 +1,6 @@
 // token.ts — short-lived access-JWT mint/verify + JWKS publication (ADR-0016). EdDSA, 15-min TTL, audience
-// = the app origin. apps/api verifies statelessly against the JWKS; the access token lives in memory only.
+// = the app origin. apps/api verifies statelessly against the JWKS (served at /auth/.well-known/jwks.json,
+// under the auth app's "/auth" basePath); the access token lives in memory only.
 
 import { env } from "@leadwolf/config";
 import { type AccessTokenClaims, accessTokenClaimsSchema } from "@leadwolf/types";
@@ -13,7 +14,11 @@ const publicKey = () => importSPKI(env.JWT_PUBLIC_KEY_PEM, ALG);
 // verifyAccessToken (the apps/api path) verifies against the auth origin's PUBLISHED JWKS, selecting the key
 // by `kid` — so the api needs no local public PEM and key rotation works (publish the next key in JWKS, the
 // api picks it up; jose caches the set ~5 min). Lazy so importing this module opens no socket.
-const jwksUrl = new URL("/.well-known/jwks.json", env.AUTH_ORIGIN);
+// The auth app runs at basePath "/auth" (apps/auth/next.config.mjs), so ALL its routes — including the JWKS
+// endpoint — live under /auth/*. The URL MUST carry that prefix: in the multi-domain deployment Caddy proxies
+// auth.* → the auth container passing the path through unchanged, so a bare /.well-known/jwks.json 404s and
+// every token fails verification (401 invalid_token). This matches authClient.ts, which prefixes /auth too.
+const jwksUrl = new URL("/auth/.well-known/jwks.json", env.AUTH_ORIGIN);
 let _jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
 // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
 const remoteJwks = () => (_jwks ??= createRemoteJWKSet(jwksUrl));
@@ -61,7 +66,7 @@ export async function verifyAccessToken(
   return accessTokenClaimsSchema.parse(payload);
 }
 
-/** Public signing keys served at auth.truepoint.in/.well-known/jwks.json (current key; add next on rotation). */
+/** Public signing keys served at auth.<domain>/auth/.well-known/jwks.json (current key; add next on rotation). */
 export async function getJwks(): Promise<{ keys: Array<Record<string, unknown>> }> {
   const jwk = await exportJWK(await publicKey());
   return { keys: [{ ...jwk, use: "sig", alg: ALG, kid: env.JWT_SIGNING_KID }] };
