@@ -10,3 +10,4 @@ export * from "./outreach.ts";
 export * from "./enrichmentJobs.ts";
 export * from "./pipelineStages.ts";
 export * from "./savedSearches.ts";
+export * from "./enrichmentPolicy.ts";

@@ -30,6 +30,15 @@ export type {
   ProviderFieldResult,
 } from "./enrichment/providerPort.ts";
 export { requestHash } from "./enrichment/requestHash.ts";
+// Auto-enrich policy enforcement (G-ENR-1; 29 §3, 06 §4.1): the pure decision + the DB-backed guard the
+// enrichment entry point consults before any system-initiated auto-enrich.
+export {
+  decideAutoEnrich,
+  enforceAutoEnrichPolicy,
+  type AutoEnrichDecision,
+  type AutoEnrichDecisionInput,
+  type AutoEnrichDenyReason,
+} from "./enrichment/policy.ts";
 export {
   runWaterfall,
   runWaterfallBulk,

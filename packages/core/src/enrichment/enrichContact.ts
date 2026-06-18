@@ -15,12 +15,14 @@ import {
 } from "@leadwolf/db";
 import {
   type EnrichField,
+  type EnrichTrigger,
   NotFoundError,
   ProviderBudgetExceededError,
   sourceName as sourceNameEnum,
 } from "@leadwolf/types";
 import { blindIndex } from "../import/blindIndex.ts";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
+import { type AutoEnrichDenyReason, enforceAutoEnrichPolicy } from "./policy.ts";
 import type { EnrichRequest, EnrichmentProvider, ProviderFieldResult } from "./providerPort.ts";
 import { requestHash } from "./requestHash.ts";
 import { runWaterfall } from "./waterfall.ts";
@@ -31,13 +33,22 @@ export interface EnrichContactInput {
   fields: EnrichField[];
   providers: EnrichmentProvider[];
   requestedByUserId?: string | null;
+  /**
+   * When set, this is a SYSTEM-initiated auto-enrich and the per-workspace auto-enrich policy (G-ENR-1) is
+   * enforced FIRST: the trigger must be enabled, the requested fields are narrowed to the allowlist, and the
+   * run is skipped once the monthly budget cap is reached. Omit it for a manual/user-initiated enrich (the
+   * default), which bypasses the policy exactly as before — this keeps the change additive.
+   */
+  trigger?: EnrichTrigger;
 }
 
 export interface EnrichContactResult {
-  status: "cache_hit" | "enriched" | "unfilled";
+  status: "cache_hit" | "enriched" | "unfilled" | "policy_skipped";
   provider: string | null;
   filled: EnrichField[];
   costMicros: number;
+  /** Set only when `status` is `policy_skipped` — why the auto-enrich policy denied the run (G-ENR-1). */
+  policyReason?: AutoEnrichDenyReason;
 }
 
 function startOfUtcDay(now = new Date()): Date {
@@ -67,6 +78,28 @@ function toWriteValues(fields: ProviderFieldResult[]): Partial<ContactWriteValue
 }
 
 export async function enrichContact(input: EnrichContactInput): Promise<EnrichContactResult> {
+  // 0) Auto-enrich policy gate (G-ENR-1) — ONLY for system-initiated runs (a `trigger` is set). The guard
+  //    runs BEFORE the work transaction: it denies a disabled policy / non-enabled trigger, narrows the
+  //    requested fields to the allowlist, and stops at the monthly budget cap. A manual enrich (no trigger)
+  //    skips this entirely, leaving the existing reveal-initiated path untouched.
+  let fields = input.fields;
+  if (input.trigger) {
+    const decision = await enforceAutoEnrichPolicy(input.scope, {
+      trigger: input.trigger,
+      requestedFields: input.fields,
+    });
+    if (!decision.allowed) {
+      return {
+        status: "policy_skipped",
+        provider: null,
+        filled: [],
+        costMicros: 0,
+        policyReason: decision.reason ?? undefined,
+      };
+    }
+    fields = decision.allowedFields; // only the allowlisted fields reach the waterfall
+  }
+
   return withTenantTx(input.scope, async (tx) => {
     const contact = await revealRepository.getContactForReveal(tx, input.contactId);
     if (!contact) throw new NotFoundError("Contact not found in this workspace.");
@@ -74,7 +107,7 @@ export async function enrichContact(input: EnrichContactInput): Promise<EnrichCo
     const request: EnrichRequest = {
       workspaceId: input.scope.workspaceId,
       entityType: "contact",
-      fields: input.fields,
+      fields,
       subject: {
         email: contact.emailEnc ? decryptPii(contact.emailEnc) : undefined,
         companyDomain: contact.emailDomain ?? undefined,

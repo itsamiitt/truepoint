@@ -156,3 +156,8 @@ export {
   type SavedSearchRow,
   type SavedSearchInsert,
 } from "./repositories/savedSearchRepository.ts";
+  enrichmentPolicyRepository,
+  type EnrichmentPolicyRecord,
+  type EnrichmentPolicyUpsert,
+  type EnrichmentPolicyPatch,
+} from "./repositories/enrichmentPolicyRepository.ts";

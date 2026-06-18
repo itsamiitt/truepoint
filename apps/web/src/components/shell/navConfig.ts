@@ -58,6 +58,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     items: [
       { label: "General", href: "/settings/workspace", match: "/settings/workspace" },
       { label: "Members", href: "/settings/members", match: "/settings/members" },
+      { label: "Auto-enrich", href: "/settings/auto-enrich", match: "/settings/auto-enrich" },
       { label: "Suppression & DSAR", href: "/settings/compliance", match: "/settings/compliance" },
     ],
   },

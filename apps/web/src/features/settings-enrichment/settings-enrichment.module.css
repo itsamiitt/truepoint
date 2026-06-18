@@ -1,0 +1,23 @@
+/* settings-enrichment.module.css — layout for the Workspace ▸ Auto-enrich settings panel (G-ENR-1). Color
+ * comes from --tp-* tokens + the @leadwolf/ui primitives; layout/structure only. */
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.optionHint {
+  display: block;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+.formActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.note {
+  font-size: 13px;
+  color: var(--tp-ink-4);
+}
