@@ -97,11 +97,31 @@ export const canonicalContactRowSchema = z.object({
 });
 export type CanonicalContactRow = z.infer<typeof canonicalContactRowSchema>;
 
+// ── Conflict policy (G-IMP-5) ────────────────────────────────────────────────────────────────────────
+/**
+ * What the import does when an incoming row matches an existing workspace contact by a dedup key (30 §3/§7,
+ * ADR-0036 §4). Replaces the old silent last-writer-wins (the G-IMP-5 gap) with an explicit, user-chosen
+ * policy threaded all the way into `runImport`'s `ON CONFLICT` step:
+ *   - `overwrite`  — update the existing contact with the incoming values (the legacy last-writer-wins).
+ *   - `skip`       — keep the existing contact unchanged; the incoming row is counted as a duplicate, not applied.
+ *   - `keep_both`  — intent: keep BOTH as separate records. The overlay enforces one contact per identity key
+ *                    per workspace (03 §5/§11), so a genuinely separate record needs ER survivorship
+ *                    (30 §5, ADR-0021); until that lands, a match under keep_both is held back as a duplicate
+ *                    (not overwritten), while a NON-matching row inserts as a new contact.
+ */
+export const conflictPolicy = z.enum(["overwrite", "skip", "keep_both"]);
+export type ConflictPolicy = z.infer<typeof conflictPolicy>;
+
+/** The safe default: keep existing data on a match (no silent overwrite). The user opts into overwriting. */
+export const DEFAULT_CONFLICT_POLICY: ConflictPolicy = "skip";
+
 // ── Import request / result DTOs ───────────────────────────────────────────────────────────────────────
 export const importRequestSchema = z.object({
   sourceName: sourceName,
   sourceFile: z.string().max(255).optional(),
   mapping: columnMappingSchema,
+  /** How to resolve a match against an existing workspace contact (G-IMP-5). Defaults to `skip` (no overwrite). */
+  conflictPolicy: conflictPolicy.default(DEFAULT_CONFLICT_POLICY),
 });
 export type ImportRequest = z.infer<typeof importRequestSchema>;
 
@@ -115,15 +135,50 @@ export const importRowErrorSchema = z.object({
 });
 export type ImportRowError = z.infer<typeof importRowErrorSchema>;
 
-/** The tally returned to the importer (05 §3): how many new vs matched-existing-in-workspace vs skipped. */
+/**
+ * A rejected input row + WHY it was rejected (30 §4, ADR-0036 §7 — the rejected-rows artifact). One reason
+ * per offending field (`field` is null for a whole-row reason, e.g. "no identity key"). Echoes the RAW input
+ * row so a downloadable rejected-rows file lets the user fix and re-import only the failures. Because `raw`
+ * carries un-masked PII, this only ever rides the import-owner's own summary — never a shared/list surface.
+ */
+export const rejectedRowSchema = z.object({
+  row: z.number().int().nonnegative(), // 0-based index in the parsed file
+  field: z.string().nullable(), // canonical field at fault, or null for a whole-row reason
+  reason: z.string(),
+  raw: z.record(z.string(), z.string()), // the verbatim source row (header → value)
+});
+export type RejectedRow = z.infer<typeof rejectedRowSchema>;
+
+/** The tally returned to the importer (05 §3, 30 §4): new vs matched vs skipped, plus the three-way reject /
+ *  duplicate accounting and the downloadable rejected-rows artifact (G-IMP-1). `rejected` rows never landed;
+ *  `duplicates` matched an existing contact and were not applied under a `skip` policy. */
 export const importSummarySchema = z.object({
   total: z.number().int().nonnegative(),
   created: z.number().int().nonnegative(),
   matched: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
+  /** Rows that failed validation/constraints and did NOT land (= rejectedRows.length distinct rows). */
+  rejected: z.number().int().nonnegative(),
+  /** Rows held back because they matched an existing contact under a `skip` conflict policy. */
+  duplicates: z.number().int().nonnegative(),
   errors: z.array(importRowErrorSchema),
+  /** The rejected-rows artifact (G-IMP-1): each reject + reason + raw row, for a downloadable error file. */
+  rejectedRows: z.array(rejectedRowSchema),
 });
 export type ImportSummary = z.infer<typeof importSummarySchema>;
+
+/** Counts for the pre-commit validation preview (30 §4, G-IMP-1) — what the wizard shows before the user
+ *  confirms the import. `duplicate` is the WITHIN-FILE duplicate estimate (against-existing dedup is the
+ *  worker's job); `valid` is rows that would attempt to land. total = valid + rejected + duplicate. */
+export const importPreviewSchema = z.object({
+  total: z.number().int().nonnegative(),
+  valid: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+  duplicate: z.number().int().nonnegative(),
+  /** A bounded sample of rejected rows with per-field reasons (the full set is too large to ship inline). */
+  sampleRejectedRows: z.array(rejectedRowSchema),
+});
+export type ImportPreview = z.infer<typeof importPreviewSchema>;
 
 // ── Async import job (queue) DTOs (16 §3.2) ──────────────────────────────────────────────────────────────
 /**
@@ -147,7 +202,8 @@ export type ImportJobRef = z.infer<typeof importJobRefSchema>;
 /** Dead-letter queue name for import jobs that exhaust their retries (16 §3.2). Shared producer/consumer. */
 export const IMPORTS_DLQ = "imports-dlq";
 
-/** Coarse progress the import worker reports via job.updateProgress; the status endpoint echoes it back. */
+/** Coarse progress the import worker reports via job.updateProgress; the status endpoint echoes it back.
+ *  `failed` mirrors summary.rejected (rows that did not land); kept named `failed` for the progress UI. */
 export const importProgressSchema = z.object({
   total: z.number().int().nonnegative(),
   processed: z.number().int().nonnegative(),

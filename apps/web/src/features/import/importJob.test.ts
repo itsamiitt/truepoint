@@ -14,7 +14,10 @@ const summary: ImportSummary = {
   created: 2,
   matched: 1,
   skipped: 0,
+  rejected: 0,
+  duplicates: 0,
   errors: [{ row: 4, message: "bad email" }],
+  rejectedRows: [],
 };
 
 /** A full status envelope (GET /imports/:jobId), defaulting to an in-progress poll with no summary yet. */

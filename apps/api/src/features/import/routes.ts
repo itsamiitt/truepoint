@@ -5,15 +5,20 @@
 // (parse the request, enqueue, shape the response) and no business logic. The workspace is taken from the
 // VERIFIED token via the tenancy middleware, never the request body (16 §7).
 
-import { parseImportFile } from "@leadwolf/core";
+import { buildImportPreview, parseImportFile } from "@leadwolf/core";
 import {
+  type ColumnMapping,
+  DEFAULT_CONFLICT_POLICY,
   ForbiddenError,
   type ImportJobRef,
   type ImportJobStatus,
   type ImportJobStatusResponse,
+  type ImportPreview,
   ImportValidationError,
   NotFoundError,
+  type SourceName,
   columnMappingSchema,
+  conflictPolicy,
   importProgressSchema,
   importSummarySchema,
   sourceName,
@@ -49,14 +54,12 @@ function toImportJobStatus(state: string): ImportJobStatus {
   }
 }
 
-importRoutes.post("/", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId)
-    throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
-  const tenantId = c.get("tenantId");
-  const claims = c.get("claims");
-
-  const form = await c.req.formData();
+/** Parse the shared import form fields (file + sourceName + mapping); throws ImportValidationError on bad input. */
+async function parseImportForm(form: FormData): Promise<{
+  file: File;
+  sourceName: SourceName;
+  mapping: ColumnMapping;
+}> {
   const file = form.get("file");
   if (!(file instanceof File))
     throw new ImportValidationError("A CSV file is required (field 'file').");
@@ -75,13 +78,51 @@ importRoutes.post("/", async (c) => {
   const parsedMapping = columnMappingSchema.safeParse(mapping);
   if (!parsedMapping.success) throw new ImportValidationError("Invalid column mapping.");
 
+  return { file, sourceName: parsedSource.data, mapping: parsedMapping.data };
+}
+
+// Pre-commit validation PREVIEW (G-IMP-1): parse + validate the upload and return counts (total/valid/
+// rejected/duplicate) + a sample of rejected rows with reasons — WITHOUT enqueuing anything. The wizard
+// shows this and requires the user to confirm before the actual import runs. No DB writes, no job.
+importRoutes.post("/preview", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
+
+  const form = await c.req.formData();
+  const { file, mapping } = await parseImportForm(form);
+  const parsed = parseImportFile(await file.text(), file.name);
+  const preview: ImportPreview = buildImportPreview(parsed.rows, mapping);
+  return c.json(preview, 200);
+});
+
+importRoutes.post("/", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
+  const tenantId = c.get("tenantId");
+  const claims = c.get("claims");
+
+  const form = await c.req.formData();
+  const { file, sourceName: src, mapping } = await parseImportForm(form);
+
+  // Explicit conflict policy (G-IMP-5) — default `skip` (no silent overwrite) when the field is absent.
+  const policyRaw = form.get("conflictPolicy");
+  const parsedPolicy =
+    policyRaw == null
+      ? { success: true as const, data: DEFAULT_CONFLICT_POLICY }
+      : conflictPolicy.safeParse(policyRaw);
+  if (!parsedPolicy.success)
+    throw new ImportValidationError("'conflictPolicy' must be one of: overwrite, skip, keep_both.");
+
   const parsed = parseImportFile(await file.text(), file.name);
   const jobId = await enqueueImport({
     scope: { tenantId, workspaceId },
     importedByUserId: claims.sub,
-    sourceName: parsedSource.data,
+    sourceName: src,
     sourceFile: file.name,
-    mapping: parsedMapping.data,
+    mapping,
+    conflictPolicy: parsedPolicy.data,
     rows: parsed.rows,
   });
   const body: ImportJobRef = { jobId, status: "queued" };
