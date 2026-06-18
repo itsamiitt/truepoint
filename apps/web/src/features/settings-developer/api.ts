@@ -18,6 +18,7 @@ import type {
   WebhookDelivery,
   WebhookEvent,
   WebhookSecret,
+  WebhookTestResult,
   WebhooksFeed,
 } from "./types";
 
@@ -114,10 +115,7 @@ export async function fetchWebhooks(): Promise<WebhooksFeed> {
   return { available: true, webhooks: body.webhooks ?? [] };
 }
 
-export async function createWebhook(
-  url: string,
-  events: WebhookEvent[],
-): Promise<WebhookSecret> {
+export async function createWebhook(url: string, events: WebhookEvent[]): Promise<WebhookSecret> {
   const res = await fetchWithAuth(WEBHOOKS, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -136,10 +134,52 @@ export async function deleteWebhook(id: string): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
+/** The server's per-attempt delivery row (status = outcome, responseCode = HTTP, attemptedAt = when). */
+interface DeliveryWire {
+  id: string;
+  webhookId?: string | null;
+  event: string;
+  status: "succeeded" | "failed" | "pending";
+  responseCode?: number | null;
+  attemptedAt: string;
+}
+
 export async function fetchDeliveries(): Promise<DeliveryFeed> {
   const res = await fetchWithAuth(`${WEBHOOKS}/deliveries`);
   if (notBuilt(res.status)) return { available: false, deliveries: [] };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load the delivery log"));
-  const body = (await res.json()) as { deliveries?: WebhookDelivery[] };
-  return { available: true, deliveries: body.deliveries ?? [] };
+  const body = (await res.json()) as { deliveries?: DeliveryWire[] };
+  const deliveries: WebhookDelivery[] = (body.deliveries ?? []).map((d) => ({
+    id: d.id,
+    webhookId: d.webhookId ?? null,
+    event: d.event,
+    outcome: d.status,
+    status: d.responseCode ?? null,
+    createdAt: d.attemptedAt,
+  }));
+  return { available: true, deliveries };
+}
+
+/** Fire a self-test ping at a subscription (POST /webhooks/:id/test). */
+export async function testWebhook(id: string): Promise<WebhookTestResult> {
+  const res = await fetchWithAuth(`${WEBHOOKS}/${id}/test`, { method: "POST" });
+  if (notBuilt(res.status)) return { ok: false };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not send the test event"));
+  const body = (await res.json()) as {
+    status?: "succeeded" | "failed";
+    responseCode?: number | null;
+  };
+  return { ok: true, status: body.status, responseCode: body.responseCode ?? null };
+}
+
+/** Re-POST a past delivery with a freshly computed signature (POST /webhooks/deliveries/:id/replay). */
+export async function replayDelivery(id: string): Promise<WebhookTestResult> {
+  const res = await fetchWithAuth(`${WEBHOOKS}/deliveries/${id}/replay`, { method: "POST" });
+  if (notBuilt(res.status)) return { ok: false };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not replay the delivery"));
+  const body = (await res.json()) as {
+    status?: "succeeded" | "failed";
+    responseCode?: number | null;
+  };
+  return { ok: true, status: body.status, responseCode: body.responseCode ?? null };
 }

@@ -146,3 +146,12 @@ export {
   type ContactMatchKeys,
   type ContactMatchCandidate,
 } from "./repositories/enrichmentJobRepository.ts";
+export {
+  webhookRepository,
+  type WebhookSubscriptionInsert,
+  type WebhookSubscriptionRecord,
+  type WebhookDispatchTarget,
+  type WebhookDeliveryInsert,
+  type WebhookDeliveryRecord,
+  type WebhookDeliveryForReplay,
+} from "./repositories/webhookRepository.ts";

@@ -1,11 +1,25 @@
 // useWebhooks.ts — loads the tenant's webhook subscriptions (GET /webhooks) and the delivery log
-// (GET /webhooks/deliveries) with loading/error + reload, plus create / remove mutators that refresh on success.
-// Create returns the one-time signing secret to the caller (shown once). Presentation state only.
+// (GET /webhooks/deliveries) with loading/error + reload, plus create / remove / test / replay mutators that
+// refresh on success. Create returns the one-time signing secret to the caller (shown once). test fires a
+// self-test ping; replay re-POSTs a past delivery with a fresh signature. Presentation state only.
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { createWebhook, deleteWebhook, fetchDeliveries, fetchWebhooks } from "../api";
-import type { DeliveryFeed, WebhookEvent, WebhookSecret, WebhooksFeed } from "../types";
+import {
+  createWebhook,
+  deleteWebhook,
+  fetchDeliveries,
+  fetchWebhooks,
+  replayDelivery,
+  testWebhook,
+} from "../api";
+import type {
+  DeliveryFeed,
+  WebhookEvent,
+  WebhookSecret,
+  WebhookTestResult,
+  WebhooksFeed,
+} from "../types";
 
 export function useWebhooks() {
   const [feed, setFeed] = useState<WebhooksFeed | null>(null);
@@ -49,5 +63,23 @@ export function useWebhooks() {
     [reload],
   );
 
-  return { feed, deliveries, error, loading, reload, create, remove };
+  const test = useCallback(
+    async (id: string): Promise<WebhookTestResult> => {
+      const result = await testWebhook(id);
+      if (result.ok) await reload(); // a self-test appends a delivery-log row
+      return result;
+    },
+    [reload],
+  );
+
+  const replay = useCallback(
+    async (id: string): Promise<WebhookTestResult> => {
+      const result = await replayDelivery(id);
+      if (result.ok) await reload(); // a replay appends a new delivery-log row
+      return result;
+    },
+    [reload],
+  );
+
+  return { feed, deliveries, error, loading, reload, create, remove, test, replay };
 }

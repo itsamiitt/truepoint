@@ -6,11 +6,7 @@
 // ── API keys ──────────────────────────────────────────────────────────────────────────────────────────────
 
 /** A documented API-key scope (09 §4 — scopes gate endpoints). */
-export type ApiKeyScope =
-  | "search:read"
-  | "reveal:write"
-  | "outreach:write"
-  | "export:write";
+export type ApiKeyScope = "search:read" | "reveal:write" | "outreach:write" | "export:write";
 
 /** A tenant-scoped API key (hashed + prefixed; the secret is shown once at create time only). */
 export interface ApiKey {
@@ -77,12 +73,22 @@ export interface Webhook {
   url: string;
   events: WebhookEvent[];
   active: boolean;
+  /** Non-secret display prefix of the signing secret, e.g. "whsec_a1b2…". */
+  secretPrefix?: string;
   createdAt: string;
 }
 
 export interface WebhooksFeed {
   available: boolean;
   webhooks: Webhook[];
+}
+
+/** Result of a self-test ping or a delivery replay (POST /:id/test, /deliveries/:id/replay). */
+export interface WebhookTestResult {
+  ok: boolean;
+  /** HTTP status the endpoint returned, or null when the request never completed. */
+  status?: "succeeded" | "failed";
+  responseCode?: number | null;
 }
 
 /** Returned once on subscribe — the signing secret used to verify payload signatures. */
@@ -93,14 +99,16 @@ export interface WebhookSecret {
   signingSecret?: string | null;
 }
 
-/** A single delivery-log entry (09 §10 — delivery log + retries). */
+/** A single delivery-log entry (09 §10 — delivery log + replay). One row per attempt (incl. self-tests). */
 export interface WebhookDelivery {
   id: string;
-  event: WebhookEvent;
-  /** HTTP status of the most recent attempt, or null while pending. */
+  /** The subscription this attempt targeted (null when the subscription was later deleted). */
+  webhookId?: string | null;
+  /** Event type — a subscribed event, or a synthetic `webhook.test` for self-test pings. */
+  event: string;
+  /** HTTP status of the attempt, or null when the request never completed. */
   status?: number | null;
   outcome: "succeeded" | "failed" | "pending";
-  attempts: number;
   createdAt: string;
 }
 
@@ -127,7 +135,11 @@ export const SCOPE_LABEL: Record<ApiKeyScope, string> = {
 
 export const EVENT_OPTIONS: { value: WebhookEvent; label: string; description: string }[] = [
   { value: "reveal.completed", label: "reveal.completed", description: "A reveal commits" },
-  { value: "score.updated", label: "score.updated", description: "A contact's priority score changes" },
+  {
+    value: "score.updated",
+    label: "score.updated",
+    description: "A contact's priority score changes",
+  },
   {
     value: "outreach.status_changed",
     label: "outreach.status_changed",
