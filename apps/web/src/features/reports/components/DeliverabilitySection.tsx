@@ -43,7 +43,11 @@ export function DeliverabilitySection({ onConnect }: { onConnect: () => void }) 
           title="Connect sending to see deliverability"
           description="Sequence sends, opens, replies, and bounces will populate these rates once a mailbox is connected and the analytics pipeline is live. Deeper send analytics ship post-MVP."
           action={
-            <TpButton variant="secondary" leftIcon={<Icon icon={Send} size={16} />} onClick={onConnect}>
+            <TpButton
+              variant="secondary"
+              leftIcon={<Icon icon={Send} size={16} />}
+              onClick={onConnect}
+            >
               Connect sending
             </TpButton>
           }

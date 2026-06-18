@@ -1,40 +1,14 @@
-// FunnelSection.tsx — the Pipeline funnel dashboard: contacts per outreach status as a labeled stage list
-// with proportional CSS bars + a conversion % per journey stage. The journey stages lead; the off-ramp
-// statuses sit in a muted secondary block. StateSwitch handles loading/empty/error. Presentation only.
+// FunnelSection.tsx — the Pipeline funnel dashboard: contacts per outreach status, drawn as an on-brand SVG
+// FunnelChart for the journey (new → in_sequence → replied → meeting_booked) and a monochrome BarChart for the
+// off-ramps, each paired with a screen-reader-friendly exact-figures list. StateSwitch handles
+// loading/empty/error. Presentation only.
 "use client";
 
 import { EmptyState, Icon, StateSwitch } from "@leadwolf/ui";
 import { Filter } from "lucide-react";
+import { BarChart, FunnelChart } from "../charts";
 import styles from "../reports.module.css";
-import type { FunnelRollup, FunnelStage } from "../types";
-
-function StageRow({
-  stage,
-  max,
-  muted,
-  showConversion,
-}: {
-  stage: FunnelStage;
-  max: number;
-  muted?: boolean;
-  showConversion?: boolean;
-}) {
-  return (
-    <li className={styles.barRow}>
-      <span className={styles.barLabel}>{stage.label}</span>
-      <span className={styles.barTrack}>
-        <span
-          className={muted ? `${styles.barFill} ${styles.barFillMuted}` : styles.barFill}
-          style={{ width: `${(stage.count / max) * 100}%` }}
-        />
-      </span>
-      <span className={styles.barValue}>
-        {stage.count.toLocaleString()}
-        {showConversion ? <span className={styles.barConv}> · {stage.conversionPct}%</span> : null}
-      </span>
-    </li>
-  );
-}
+import type { FunnelRollup } from "../types";
 
 export function FunnelSection({
   rollup,
@@ -64,22 +38,48 @@ export function FunnelSection({
       {rollup ? (
         <>
           <p className={styles.cardHint}>
-            {rollup.total.toLocaleString()} contact{rollup.total === 1 ? "" : "s"} by outreach status
-            — conversion measured from the top of the journey.
+            {rollup.total.toLocaleString()} contact{rollup.total === 1 ? "" : "s"} by outreach
+            status — conversion measured from the top of the journey.
           </p>
-          <ul className={styles.barList}>
+
+          <div className={styles.chartBlock}>
+            <FunnelChart
+              data={rollup.primary.map((s) => ({
+                key: s.status,
+                label: s.label,
+                count: s.count,
+                conversionPct: s.conversionPct,
+              }))}
+              max={rollup.maxCount}
+              ariaLabel="Pipeline journey funnel"
+            />
+          </div>
+          <ul className={styles.figureList}>
             {rollup.primary.map((stage) => (
-              <StageRow key={stage.status} stage={stage} max={rollup.maxCount} showConversion />
+              <li key={stage.status} className={styles.figureRow}>
+                <span className={styles.figureLabel}>{stage.label}</span>
+                <span className={styles.figureValue}>
+                  {stage.count.toLocaleString()}
+                  <span className={styles.barConv}> · {stage.conversionPct}%</span>
+                </span>
+              </li>
             ))}
           </ul>
 
           <div className={styles.secondaryBlock}>
             <p className={styles.secondaryLabel}>Out of the funnel</p>
-            <ul className={styles.barList}>
-              {rollup.secondary.map((stage) => (
-                <StageRow key={stage.status} stage={stage} max={rollup.maxCount} muted />
-              ))}
-            </ul>
+            <div className={styles.chartBlock}>
+              <BarChart
+                data={rollup.secondary.map((s) => ({
+                  key: s.status,
+                  label: s.label,
+                  value: s.count,
+                  muted: true,
+                }))}
+                max={rollup.maxCount}
+                ariaLabel="Out-of-funnel statuses"
+              />
+            </div>
           </div>
         </>
       ) : null}

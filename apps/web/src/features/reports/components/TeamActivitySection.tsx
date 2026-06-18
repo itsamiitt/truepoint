@@ -1,13 +1,17 @@
-// TeamActivitySection.tsx — the Team activity dashboard: a sortable DataTable of each member's contribution
-// (contacts owned/revealed, credits spent, engaged) derived from the masked owner ids on contacts + usage.
-// Member identity is PII-free (a short label from the id) until a workspace-members endpoint lands. StateSwitch
-// handles loading/empty/error. Presentation only over the team rollup.
+// TeamActivitySection.tsx — the Team activity dashboard: an on-brand SVG BarChart of contacts revealed per
+// member over a sortable DataTable of each member's full contribution (revealed / engaged / credits), derived
+// from the masked owner ids on contacts + usage. Member identity is PII-free (a short label from the id) until a
+// workspace-members endpoint lands. StateSwitch handles loading/empty/error. Presentation only.
 "use client";
 
 import { type Column, DataTable, EmptyState, Icon, StatTile, StateSwitch } from "@leadwolf/ui";
 import { Users } from "lucide-react";
+import { BarChart } from "../charts";
 import styles from "../reports.module.css";
 import type { TeamMemberRow, TeamRollup } from "../types";
+
+/** Cap the chart to the top members by reveals so a large team stays legible (the full set is in the table). */
+const CHART_LIMIT = 8;
 
 const COLUMNS: Column<TeamMemberRow>[] = [
   {
@@ -76,6 +80,20 @@ export function TeamActivitySection({
               label="Contacts revealed"
               value={rollup.totalRevealed.toLocaleString()}
               sublabel="Across the team in this range"
+            />
+          </div>
+
+          <h3 className={styles.subheading}>Contacts revealed by member</h3>
+          <div className={styles.chartBlock}>
+            <BarChart
+              data={rollup.rows.slice(0, CHART_LIMIT).map((r) => ({
+                key: r.userId,
+                label: r.label,
+                value: r.revealed,
+                caption: `${r.revealed.toLocaleString()} · ${r.credits.toLocaleString()} cr`,
+              }))}
+              max={rollup.rows[0]?.revealed ?? 1}
+              ariaLabel="Contacts revealed per member"
             />
           </div>
 

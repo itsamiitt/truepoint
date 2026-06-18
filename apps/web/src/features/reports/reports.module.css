@@ -76,7 +76,46 @@
   color: var(--tp-ink-2);
 }
 
-/* ── Proportional CSS bars (credit days + funnel stages) ───────────────────────────────────────── */
+/* ── SVG chart blocks + accompanying exact-figure lists ────────────────────────────────────────── */
+/* A chart sits in its own breathing room; the figure list below keeps the precise, screen-reader-safe values. */
+.chartBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 16px;
+}
+
+.figureList {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 4px 16px;
+}
+
+.figureRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.figureLabel {
+  color: var(--tp-ink-3);
+}
+
+.figureValue {
+  color: var(--tp-ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Proportional CSS bars (legacy bar list — still used by placeholder dashboards) ─────────────── */
 .barList {
   list-style: none;
   margin: 0;

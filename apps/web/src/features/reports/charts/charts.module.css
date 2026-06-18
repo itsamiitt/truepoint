@@ -1,0 +1,109 @@
+/*
+ * charts.module.css — co-located styles for the Reports SVG charts. On-brand per the TruePoint tokens
+ * (packages/ui/src/tokens.css): monochrome --tp-ink-* fills + gridlines, a single cobalt accent for the
+ * "primary" series, status tones reserved for data-health only. Flat and calm — no shadows, no gradients,
+ * hairline axes. Motion is GPU-friendly (opacity/transform) and collapses under prefers-reduced-motion via
+ * the shared baseline in tokens.css.
+ */
+
+.chart {
+  width: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.chartFrame {
+  width: 100%;
+}
+
+/* Axis / gridline hairlines. */
+.axis {
+  stroke: var(--tp-hairline-2);
+  stroke-width: 1;
+}
+
+.grid {
+  stroke: var(--tp-hairline);
+  stroke-width: 1;
+}
+
+/* Tick + value labels — muted, tabular numbers. */
+.tick {
+  fill: var(--tp-ink-4);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.axisLabel {
+  fill: var(--tp-ink-3);
+  font-size: 10px;
+  font-family: var(--font-sans);
+}
+
+.valueLabel {
+  fill: var(--tp-ink-2);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bars / marks — default monochrome ink. */
+.bar {
+  fill: var(--tp-ink-2);
+  transition: fill var(--tp-duration-fast) var(--tp-ease);
+}
+
+.barMuted {
+  fill: var(--tp-ink-4);
+}
+
+.barAccent {
+  fill: var(--tp-cobalt);
+}
+
+/* Status-toned bars (data-health distribution only). */
+.toneSuccess {
+  fill: var(--success);
+}
+.toneWarning {
+  fill: var(--warning);
+}
+.toneDanger {
+  fill: var(--danger);
+}
+.toneMuted {
+  fill: var(--tp-ink-4);
+}
+
+/* Line / sparkline. */
+.line {
+  fill: none;
+  stroke: var(--tp-ink-2);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.area {
+  fill: var(--tp-cobalt-50);
+  opacity: 0.7;
+}
+
+.dot {
+  fill: var(--tp-cobalt);
+}
+
+/* Funnel trapezoids. */
+.funnelBand {
+  fill: var(--tp-ink-2);
+}
+
+.funnelBandMuted {
+  fill: var(--tp-ink-4);
+}
+
+/* Subtle entrance for the whole chart group (opacity only → GPU-friendly, reduced-motion safe). */
+.enter {
+  animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
+}

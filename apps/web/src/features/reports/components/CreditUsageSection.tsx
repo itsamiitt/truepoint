@@ -1,10 +1,11 @@
 // CreditUsageSection.tsx — the Credit usage dashboard: balance + trailing-7-day reveal/credit StatTiles, a
-// sortable per-reveal-type DataTable, and the 14-day per-day bar list (pure CSS widths, no chart lib).
+// sortable per-reveal-type DataTable, and the 14-day spend trend as an on-brand SVG sparkline (LineChart).
 // StateSwitch handles loading/empty/error. Presentation only over the credit rollup.
 "use client";
 
 import { type Column, DataTable, EmptyState, Icon, StatTile, StateSwitch } from "@leadwolf/ui";
 import { Coins } from "lucide-react";
+import { BarChart, LineChart } from "../charts";
 import styles from "../reports.module.css";
 import type { CreditRollup, CreditTypeRow } from "../types";
 
@@ -81,6 +82,20 @@ export function CreditUsageSection({
           </div>
 
           <h3 className={styles.subheading}>Spend by reveal type</h3>
+          {rollup.byType.length > 0 ? (
+            <div className={styles.chartBlock}>
+              <BarChart
+                data={rollup.byType.map((r) => ({
+                  key: r.revealType,
+                  label: r.label,
+                  value: r.credits,
+                  caption: `${r.credits.toLocaleString()} cr · ${r.reveals.toLocaleString()} reveals`,
+                }))}
+                max={Math.max(...rollup.byType.map((r) => r.credits), 1)}
+                ariaLabel="Credits spent by reveal type"
+              />
+            </div>
+          ) : null}
           <DataTable
             columns={TYPE_COLUMNS}
             rows={rollup.byType}
@@ -97,24 +112,15 @@ export function CreditUsageSection({
           {quiet ? (
             <p className={styles.muted}>No credit spend in the last 14 days.</p>
           ) : (
-            <ul className={styles.barList}>
-              {rollup.days.map((d) => (
-                <li key={d.key} className={styles.barRow}>
-                  <span className={styles.barLabel}>{d.label}</span>
-                  <span className={styles.barTrack}>
-                    <span
-                      className={styles.barFill}
-                      style={{ width: `${(d.credits / rollup.maxCredits) * 100}%` }}
-                    />
-                  </span>
-                  <span className={styles.barValue}>
-                    {d.credits > 0
-                      ? `${d.credits} cr · ${d.reveals} reveal${d.reveals === 1 ? "" : "s"}`
-                      : "—"}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div className={styles.chartBlock}>
+              <LineChart
+                data={rollup.days.map((d) => ({ key: d.key, label: d.label, value: d.credits }))}
+                ariaLabel="Credits spent per day over the last 14 days"
+              />
+              <p className={styles.muted}>
+                Peak {rollup.maxCredits.toLocaleString()} credits in a day.
+              </p>
+            </div>
           )}
         </>
       ) : null}
