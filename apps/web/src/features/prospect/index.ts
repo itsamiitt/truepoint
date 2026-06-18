@@ -8,3 +8,9 @@ export { FacetTypeahead } from "./components/FacetTypeahead";
 export { useContactSearch } from "./hooks/useContactSearch";
 export { useTypeahead } from "./hooks/useTypeahead";
 export { searchContacts, suggestField, fetchFacetCounts } from "./searchApi";
+
+// Record-customization tag layer (ADR-0028, G-REV-6): tag chip + picker (RecordDetail) + the workspace-tag
+// + tagged-records hooks the filter rail uses.
+export { TagChip } from "./components/TagChip";
+export { TagPicker } from "./components/TagPicker";
+export { useTags, useTaggedIds } from "./hooks/useTags";

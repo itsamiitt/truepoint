@@ -13,14 +13,15 @@ import {
   EmptyState,
   SegmentedControl,
   StateSwitch,
+  Tooltip,
   TpButton,
   TpChip,
-  Tooltip,
 } from "@leadwolf/ui";
 import { Building2, Users } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useContacts } from "../hooks/useContacts";
+import { useTaggedIds, useTags } from "../hooks/useTags";
 import styles from "../prospect.module.css";
 import {
   EMPTY_FILTER,
@@ -49,17 +50,26 @@ const DENSITIES = [
 
 export function ProspectPage() {
   const { contacts, error, loading, reload, markRevealed } = useContacts();
+  const { tags, reload: reloadTags } = useTags();
   const [filter, setFilter] = useState<ProspectFilter>(EMPTY_FILTER);
   const [scope, setScope] = useState<ResultScope>("contacts");
   const [density, setDensity] = useState("comfortable");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => applyFilter(contacts, filter), [contacts, filter]);
+  // Filter-by-tag (ADR-0028, G-REV-6) is list-only: resolve the union of record ids carrying the selected
+  // tags, then applyFilter narrows the loaded rows against it. tagNames labels the active-filter chips.
+  const taggedIds = useTaggedIds(filter.tags);
+  const tagNames = useMemo(() => Object.fromEntries(tags.map((t) => [t.id, t.name])), [tags]);
+
+  const filtered = useMemo(
+    () => applyFilter(contacts, filter, taggedIds),
+    [contacts, filter, taggedIds],
+  );
   const selected = useMemo(
     () => contacts.find((c) => c.id === selectedId) ?? null,
     [contacts, selectedId],
   );
-  const chips = useMemo(() => activeFilterChips(filter), [filter]);
+  const chips = useMemo(() => activeFilterChips(filter, tagNames), [filter, tagNames]);
 
   // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection above).
   const bulk = useBulkSelection();
@@ -140,7 +150,11 @@ export function ProspectPage() {
         cell: (c) => {
           const g = emailGlyphFor(c);
           const cls =
-            g.tone === "ok" ? styles.glyphOk : g.tone === "warn" ? styles.glyphWarn : styles.glyphNone;
+            g.tone === "ok"
+              ? styles.glyphOk
+              : g.tone === "warn"
+                ? styles.glyphWarn
+                : styles.glyphNone;
           return (
             <Tooltip label={g.label}>
               <span className={`${styles.glyph} ${cls}`} aria-label={g.label}>
@@ -178,7 +192,7 @@ export function ProspectPage() {
 
   return (
     <div className={styles.page} data-density={density}>
-      <FilterRail filter={filter} onChange={setFilter} contacts={contacts} />
+      <FilterRail filter={filter} onChange={setFilter} contacts={contacts} tags={tags} />
 
       <section className={styles.results}>
         <div className={styles.resultsHead}>
@@ -268,6 +282,7 @@ export function ProspectPage() {
         contact={selected}
         onClose={() => setSelectedId(null)}
         onRevealed={(id) => markRevealed(id)}
+        onTagsChanged={reloadTags}
       />
 
       {bulk.count > 0 && (

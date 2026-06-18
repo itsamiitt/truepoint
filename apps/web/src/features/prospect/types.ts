@@ -4,12 +4,7 @@
 // model the rail renders + applies client-side (search is list-only at MVP — 05 §5), and the active-filter
 // summary the rail surfaces above the grid.
 
-import type {
-  EmailStatus,
-  MaskedContact,
-  OutreachStatus,
-  SeniorityLevel,
-} from "@leadwolf/types";
+import type { EmailStatus, MaskedContact, OutreachStatus, SeniorityLevel } from "@leadwolf/types";
 
 /** A status glyph descriptor: the mark + its accessible label + a CSS modifier for the (rare) status color. */
 export interface EmailGlyph {
@@ -113,6 +108,8 @@ export interface ProspectFilter {
   seniority: SeniorityLevel[];
   emailStatus: EmailStatus[];
   outreachStatus: OutreachStatus[];
+  /** Selected tag ids (ADR-0028, G-REV-6) — a row matches when it carries ANY selected tag (OR semantics). */
+  tags: string[];
   /** Searchable single-value facets (Combobox over the loaded rows' distinct values). */
   department: string | null;
   country: string | null;
@@ -125,6 +122,7 @@ export const EMPTY_FILTER: ProspectFilter = {
   seniority: [],
   emailStatus: [],
   outreachStatus: [],
+  tags: [],
   department: null,
   country: null,
   hasEmail: false,
@@ -138,6 +136,7 @@ export function isEmptyFilter(f: ProspectFilter): boolean {
     f.seniority.length === 0 &&
     f.emailStatus.length === 0 &&
     f.outreachStatus.length === 0 &&
+    f.tags.length === 0 &&
     f.department === null &&
     f.country === null &&
     !f.hasEmail &&
@@ -157,8 +156,14 @@ export interface ActiveFilterChip {
   clear: (f: ProspectFilter) => ProspectFilter;
 }
 
-/** Derive the active-filter chip list for the summary row (one chip per set facet value). */
-export function activeFilterChips(f: ProspectFilter): ActiveFilterChip[] {
+/**
+ * Derive the active-filter chip list for the summary row (one chip per set facet value). `tagNames` maps a
+ * selected tag id → its display name (the page passes its loaded tag list); ids without a name are skipped.
+ */
+export function activeFilterChips(
+  f: ProspectFilter,
+  tagNames: Record<string, string> = {},
+): ActiveFilterChip[] {
   const chips: ActiveFilterChip[] = [];
   if (f.query.trim()) {
     chips.push({
@@ -188,6 +193,15 @@ export function activeFilterChips(f: ProspectFilter): ActiveFilterChip[] {
       clear: (cur) => ({ ...cur, outreachStatus: cur.outreachStatus.filter((v) => v !== s) }),
     });
   }
+  for (const id of f.tags) {
+    // Still render a clearable chip when the name is unknown (tag deleted / not yet loaded) — otherwise a
+    // stale selected tag would keep filtering the grid with no way to remove that one facet.
+    chips.push({
+      key: `tag:${id}`,
+      label: `Tag: ${tagNames[id] ?? "—"}`,
+      clear: (cur) => ({ ...cur, tags: cur.tags.filter((v) => v !== id) }),
+    });
+  }
   if (f.department) {
     chips.push({
       key: "department",
@@ -207,10 +221,20 @@ export function activeFilterChips(f: ProspectFilter): ActiveFilterChip[] {
   return chips;
 }
 
-/** Apply the faceted rail filter to the masked rows (query · seniority · email-status · outreach · etc.). */
-export function applyFilter(contacts: MaskedContact[], filter: ProspectFilter): MaskedContact[] {
+/**
+ * Apply the faceted rail filter to the masked rows (query · seniority · email-status · outreach · tags · …).
+ * Tags filter list-only: `taggedIds` is the union of record ids carrying any selected tag (resolved by the
+ * page from the tags API); null means "no tag filter active". Tags aren't on MaskedContact, so membership
+ * is checked against this set rather than a row field.
+ */
+export function applyFilter(
+  contacts: MaskedContact[],
+  filter: ProspectFilter,
+  taggedIds: Set<string> | null = null,
+): MaskedContact[] {
   const q = filter.query.trim().toLowerCase();
   return contacts.filter((c) => {
+    if (taggedIds && !taggedIds.has(c.id)) return false;
     if (filter.hasEmail && !c.hasEmail) return false;
     if (filter.hasPhone && !c.hasPhone) return false;
     if (filter.seniority.length > 0) {

@@ -17,11 +17,11 @@ import {
   useToast,
 } from "@leadwolf/ui";
 import { Activity, Download, ListPlus, Send, Sparkles } from "lucide-react";
-import { useState } from "react";
-import { addContactsToList, enrollContacts } from "../api";
+import { useEffect, useState } from "react";
+import { type RecordTag, addContactsToList, enrollContacts, fetchRecordTags } from "../api";
+import { exportMaskedCsv } from "../export";
 import { useActivities } from "../hooks/useActivities";
 import { useScores } from "../hooks/useScores";
-import { exportMaskedCsv } from "../export";
 import styles from "../prospect.module.css";
 import {
   ACTIVITY_TYPE_LABELS,
@@ -31,6 +31,7 @@ import {
   displayName,
 } from "../types";
 import { RevealDialog } from "./RevealDialog";
+import { TagPicker } from "./TagPicker";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -53,7 +54,12 @@ function ScoreBreakdown({ contactId }: { contactId: string }) {
       empty={!loading && !latest}
       onRetry={reload}
       skeleton={<Progress value={0} aria-label="Loading score" />}
-      emptyState={<EmptyState title="Not scored yet" description="A score lands after the next scoring run." />}
+      emptyState={
+        <EmptyState
+          title="Not scored yet"
+          description="A score lands after the next scoring run."
+        />
+      }
     >
       {latest ? (
         <div className={styles.scoreGrid}>
@@ -116,9 +122,7 @@ function ActivityTimeline({ contactId }: { contactId: string }) {
                 {ACTIVITY_TYPE_LABELS[a.activityType] ?? a.activityType.replace(/_/g, " ")}
               </span>
               {a.note ? <span className={styles.timelineNote}>{a.note}</span> : null}
-              <span className={styles.timelineTime}>
-                {new Date(a.occurredAt).toLocaleString()}
-              </span>
+              <span className={styles.timelineTime}>{new Date(a.occurredAt).toLocaleString()}</span>
             </div>
           </li>
         ))}
@@ -127,15 +131,53 @@ function ActivityTimeline({ contactId }: { contactId: string }) {
   );
 }
 
+/** The record's tags + the assign/unassign picker (ADR-0028, G-REV-6). Loads on open; the picker mutates. */
+function RecordTags({
+  contactId,
+  onTagCreated,
+}: {
+  contactId: string;
+  /** Bubbles up when a NEW workspace tag is created, so the filter rail's tag list can refresh. */
+  onTagCreated?: () => void;
+}) {
+  const toast = useToast();
+  const [tags, setTags] = useState<RecordTag[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    fetchRecordTags(contactId, "contact")
+      .then((t) => {
+        if (live) setTags(t);
+      })
+      .catch((e) => toast.error("Could not load tags", e instanceof Error ? e.message : undefined));
+    return () => {
+      live = false;
+    };
+  }, [contactId, toast]);
+
+  return (
+    <TagPicker
+      recordId={contactId}
+      entity="contact"
+      assigned={tags}
+      onChange={setTags}
+      onTagCreated={onTagCreated}
+    />
+  );
+}
+
 export function RecordDetail({
   contact,
   onClose,
   onRevealed,
+  onTagsChanged,
 }: {
   /** The selected row; null closes the Drawer. */
   contact: MaskedContact | null;
   onClose: () => void;
   onRevealed: (contactId: string) => void;
+  /** Called when the record's tags change in a way that affects the workspace tag list (a new tag created). */
+  onTagsChanged?: () => void;
 }) {
   const toast = useToast();
   const [revealType, setRevealType] = useState<RevealType | null>(null);
@@ -196,7 +238,12 @@ export function RecordDetail({
             >
               {contact.isRevealed ? "View revealed" : "Reveal"}
             </TpButton>
-            <TpButton variant="ghost" size="sm" leftIcon={<ListPlus size={15} />} onClick={onAddToList}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              leftIcon={<ListPlus size={15} />}
+              onClick={onAddToList}
+            >
               Add to list
             </TpButton>
             <TpButton variant="ghost" size="sm" leftIcon={<Send size={15} />} onClick={onEnroll}>
@@ -245,11 +292,22 @@ export function RecordDetail({
               <Field
                 label="Email"
                 value={
-                  contact.hasEmail ? (contact.emailDomain ? `•••@${contact.emailDomain}` : "•••") : "—"
+                  contact.hasEmail
+                    ? contact.emailDomain
+                      ? `•••@${contact.emailDomain}`
+                      : "•••"
+                    : "—"
                 }
               />
               <Field label="Phone" value={contact.hasPhone ? "Locked — reveal" : "—"} />
             </div>
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Tags</h3>
+            </div>
+            <RecordTags key={contact.id} contactId={contact.id} onTagCreated={onTagsChanged} />
           </section>
 
           <section className={styles.section}>

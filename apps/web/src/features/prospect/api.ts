@@ -5,7 +5,15 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { ActivityRow, MaskedContact, RevealResponse, RevealType } from "@leadwolf/types";
+import type {
+  ActivityRow,
+  MaskedContact,
+  RevealResponse,
+  RevealType,
+  Tag,
+  TagColor,
+  TaggableEntity,
+} from "@leadwolf/types";
 
 /**
  * A backend error mapped to its RFC-9457 Problem Details (09 §6). Carries the stable machine `code`
@@ -99,6 +107,80 @@ export async function revealContact(id: string, revealType: RevealType): Promise
   });
   if (!res.ok) throw await toApiError(res, "Reveal failed");
   return (await res.json()) as RevealResponse;
+}
+
+// ── Tags (ADR-0028, G-REV-6): workspace tag definitions + record assignments + filter-by-tag. ───────────
+/** GET /tags — the workspace's tags with live usage counts (the picker list + the filter facets). */
+export async function fetchTags(): Promise<Tag[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/tags`);
+  if (!res.ok) throw await toApiError(res, "Could not load tags");
+  const data = (await res.json()) as { tags: Tag[] };
+  return data.tags;
+}
+
+/** POST /tags — create a workspace tag; returns its id. 409 (tag_name_taken) surfaces as an ApiError. */
+export async function createTag(name: string, color: TagColor): Promise<{ id: string }> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/tags`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, color }),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not create tag");
+  return (await res.json()) as { id: string };
+}
+
+/** POST /tags/:id/assign — attach a tag to a record (idempotent server-side). */
+export async function assignTag(
+  tagId: string,
+  entity: TaggableEntity,
+  recordId: string,
+): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/tags/${tagId}/assign`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ entity, record_id: recordId }),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not assign tag");
+}
+
+/** POST /tags/:id/unassign — detach a tag from a record (a no-op if not assigned). */
+export async function unassignTag(
+  tagId: string,
+  entity: TaggableEntity,
+  recordId: string,
+): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/tags/${tagId}/unassign`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ entity, record_id: recordId }),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not remove tag");
+}
+
+/** An assigned tag on a record — the lighter per-record shape (no usage/createdAt). Derived from the
+ *  canonical Tag so it can never drift from it (the single source of truth in @leadwolf/types). */
+export type RecordTag = Pick<Tag, "id" | "name" | "color">;
+
+/** GET /tags/records/:entity/:recordId — the tags assigned to one record (RecordDetail "Tags" section). */
+export async function fetchRecordTags(
+  recordId: string,
+  entity: TaggableEntity = "contact",
+): Promise<RecordTag[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/tags/records/${entity}/${recordId}`);
+  if (!res.ok) throw await toApiError(res, "Could not load tags");
+  const data = (await res.json()) as { tags: RecordTag[] };
+  return data.tags;
+}
+
+/** GET /tags/:id/records — the record ids carrying a tag (drives client-side filter-by-tag). */
+export async function fetchRecordsByTag(
+  tagId: string,
+  entity: TaggableEntity = "contact",
+): Promise<string[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/tags/${tagId}/records?entity=${entity}`);
+  if (!res.ok) throw await toApiError(res, "Could not load tagged records");
+  const data = (await res.json()) as { recordIds: string[] };
+  return data.recordIds;
 }
 
 /** The contact activity timeline (09 §3, M8). `available:false` means the route isn't built yet (404/501). */

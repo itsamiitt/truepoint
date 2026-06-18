@@ -117,6 +117,20 @@ export {
 } from "./billing/stripeWebhook.ts";
 export { buildHomeSummary, type BuildHomeSummaryInput } from "./home/buildHomeSummary.ts";
 
+// Record-customization tag layer (ADR-0028, G-REV-6): workspace-scoped tags + record assignments. Tag
+// mutations are audit-free for now (no tag.* action in the 08 §5 closed enum) — follow-up to add them.
+export {
+  createTag,
+  updateTag,
+  deleteTag,
+  assignTag,
+  unassignTag,
+  TagNameConflictError,
+  type CreateTagInput,
+  type UpdateTagInput,
+  type AssignTagInput,
+} from "./prospect/tags.ts";
+
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";
 export {
