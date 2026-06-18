@@ -83,6 +83,7 @@ export function sectionTitleFor(pathname: string): string {
   }
   if (pathname.startsWith("/import")) return "Import";
   if (pathname.startsWith("/enrichment/jobs")) return "Enrichment jobs";
+  if (pathname.startsWith("/sales-navigator")) return "Sales Navigator";
   return "TruePoint";
 }
 
@@ -120,6 +121,10 @@ export const PALETTE_QUICK: PaletteEntry[] = [
     label: "Enrichment jobs",
     href: "/enrichment/jobs",
     keywords: ["enrich", "bulk", "status", "job", "progress"],
+    id: "act-salesnav",
+    label: "Capture Sales Navigator link",
+    href: "/sales-navigator",
+    keywords: ["sales navigator", "linkedin", "lead", "capture"],
   },
   {
     id: "act-topup",

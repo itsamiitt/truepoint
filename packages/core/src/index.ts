@@ -113,6 +113,15 @@ export {
 } from "./scoring/computeScore.ts";
 export { logActivity, type LogActivityInput } from "./activity/logActivity.ts";
 
+// Sales Navigator assisted (HITL) capture (05 §5, M7, ADR-0009): a human pastes a link; we parse a dedup id
+// and best-guess type, then dedup-insert. Never automates against LinkedIn.
+export {
+  captureSalesNavLink,
+  type CaptureLinkInput,
+  type CaptureLinkResult,
+} from "./sales-navigator/captureLink.ts";
+export { parseSalesNavLink, type ParsedSalesNavLink } from "./sales-navigator/parseLink.ts";
+
 export {
   createSequence,
   addStep,
