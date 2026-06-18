@@ -120,3 +120,47 @@ export const authPolicySchema = z.object({
   sessionTimeoutSeconds: z.number().int().positive().optional(),
 });
 export type AuthPolicy = z.infer<typeof authPolicySchema>;
+
+// ── Admin session management (G-AUTH-2, 17 §5/§10) ───────────────────────────────────────────────────
+// Workspace admins (owner|admin) can list the active sessions of the members of their workspace and revoke
+// one, or force a member to re-authenticate (revoke all of that member's sessions in this workspace). The
+// session id is opaque (Lucia, not a uuid). No refresh-token/PII secrets are ever exposed — the list carries
+// only the human-meaningful device/location/time signals (17 §10).
+
+/** One active session row in the workspace-admin sessions table. */
+export const adminSessionSchema = z.object({
+  id: z.string(), // opaque session id (Lucia) — not a uuid
+  userId: z.string().uuid(),
+  userEmail: z.string().email(),
+  userName: z.string().nullable(),
+  ipAddress: z.string().nullable(),
+  userAgent: z.string().nullable(),
+  createdAt: z.string(), // ISO-8601
+  lastSeenAt: z.string().nullable(), // ISO-8601
+  expiresAt: z.string(), // ISO-8601
+  current: z.boolean(), // true if this is the requesting admin's own current session
+});
+export type AdminSession = z.infer<typeof adminSessionSchema>;
+
+export const adminSessionListSchema = z.object({
+  sessions: z.array(adminSessionSchema),
+});
+export type AdminSessionList = z.infer<typeof adminSessionListSchema>;
+
+/** Path param for revoking a single session — the opaque session id. */
+export const sessionIdParamSchema = z.object({
+  sessionId: z.string().min(1).max(255),
+});
+export type SessionIdParam = z.infer<typeof sessionIdParamSchema>;
+
+/** Path param for force-reauth — the target member's user id (uuid). */
+export const memberIdParamSchema = z.object({
+  userId: z.string().uuid(),
+});
+export type MemberIdParam = z.infer<typeof memberIdParamSchema>;
+
+/** Result of a revoke / force-reauth call — how many active sessions were ended. */
+export const sessionRevokeResultSchema = z.object({
+  revoked: z.number().int().nonnegative(),
+});
+export type SessionRevokeResult = z.infer<typeof sessionRevokeResultSchema>;

@@ -57,3 +57,28 @@ export const TIMEZONES = [
   "Australia/Sydney",
   "UTC",
 ];
+
+// ── Security ▸ Sessions (G-AUTH-2): a workspace admin lists members' active sessions and revokes them ──────
+export interface WorkspaceSession {
+  /** Opaque session id (used as the row key + for the revoke call). */
+  id: string;
+  userId: string;
+  userEmail: string;
+  userName?: string | null;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  /** ISO timestamp. */
+  createdAt: string;
+  /** ISO timestamp or null if never refreshed. */
+  lastSeenAt?: string | null;
+  /** ISO timestamp. */
+  expiresAt: string;
+  /** True if this is the viewing admin's own current session. */
+  current: boolean;
+}
+
+/** `available` is false when the sessions route isn't built yet (404/501). */
+export interface SessionsFeed {
+  available: boolean;
+  sessions: WorkspaceSession[];
+}

@@ -21,6 +21,9 @@ import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
 import { settingsRoutes } from "./features/settings/index.ts";
 import { workspacesRoutes } from "./features/workspaces/index.ts";
+import { scoringRoutes } from "./features/scoring/index.ts";
+import { searchRoutes } from "./features/search/index.ts";
+import { workspaceSecurityRoutes, workspacesRoutes } from "./features/workspaces/index.ts";
 import { onError } from "./middleware/error.ts";
 import { rateLimit } from "./middleware/rateLimit.ts";
 
@@ -36,6 +39,9 @@ app.route("/api/v1/auth", authRoutes);
 // Platform super-admin (ADR-0032): pa-gated, cross-tenant, audited — NOT workspace-scoped. Highest privilege.
 app.route("/api/v1/admin", adminRoutes);
 app.route("/api/v1/workspaces", workspacesRoutes);
+// Workspace-admin session management (G-AUTH-2): /security/sessions + revoke/force-reauth. The /security/*
+// paths don't overlap workspacesRoutes' GET / (same shared-prefix pattern as /api/v1/contacts).
+app.route("/api/v1/workspaces", workspaceSecurityRoutes);
 app.route("/api/v1/home", homeRoutes);
 app.route("/api/v1/imports", importRoutes);
 app.route("/api/v1/contacts", revealRoutes);

@@ -22,6 +22,16 @@ export { rejectedRowsToCsv } from "./import/rejectedRowsCsv.ts";
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
 export { assertNotSuppressed, type SuppressionKeys } from "./compliance/assertNotSuppressed.ts";
 export { writeAudit, type AuditEntryInput } from "./compliance/writeAudit.ts";
+
+// Workspace-admin session management (G-AUTH-2, 17 §5/§10): list/revoke/force-reauth, admin-gated + audited.
+export {
+  listMemberSessions,
+  revokeMemberSession,
+  forceReauthMember,
+  type AdminSessionScope,
+  type AdminSessionView,
+} from "./auth/adminSessions.ts";
+
 export { createDsarRequest } from "./compliance/dsarIntake.ts";
 export { deleteFanout, type DeleteFanoutResult } from "./compliance/deleteFanout.ts";
 export { assembleAccessReport, type AccessReport } from "./compliance/assembleAccessReport.ts";

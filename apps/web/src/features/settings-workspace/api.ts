@@ -4,7 +4,14 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { MembersFeed, WorkspaceGeneral, WorkspaceMember, WorkspaceRole } from "./types";
+import type {
+  MembersFeed,
+  SessionsFeed,
+  WorkspaceGeneral,
+  WorkspaceMember,
+  WorkspaceRole,
+  WorkspaceSession,
+} from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -69,5 +76,36 @@ export async function removeMember(id: string): Promise<{ ok: boolean }> {
   });
   if (notBuilt(res.status)) return { ok: false };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not remove the member"));
+  return { ok: true };
+}
+
+// ── Security ▸ Sessions (G-AUTH-2) ────────────────────────────────────────────────────────────────────
+export async function fetchSessions(): Promise<SessionsFeed> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/workspaces/security/sessions`);
+  if (notBuilt(res.status)) return { available: false, sessions: [] };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load sessions"));
+  const body = (await res.json()) as { sessions?: WorkspaceSession[] };
+  return { available: true, sessions: body.sessions ?? [] };
+}
+
+// For the session MUTATIONS the route exists once the GET does, so a 404 is a REAL "already gone / not in
+// this workspace" (the core throws NotFoundError) and must surface — only a 501 means "not built yet".
+export async function revokeSession(sessionId: string): Promise<{ ok: boolean }> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/workspaces/security/sessions/${encodeURIComponent(sessionId)}/revoke`,
+    { method: "POST" },
+  );
+  if (res.status === 501) return { ok: false };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not revoke the session"));
+  return { ok: true };
+}
+
+export async function forceReauthMember(userId: string): Promise<{ ok: boolean }> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/workspaces/security/members/${encodeURIComponent(userId)}/force-reauth`,
+    { method: "POST" },
+  );
+  if (res.status === 501) return { ok: false };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not sign the member out"));
   return { ok: true };
 }
