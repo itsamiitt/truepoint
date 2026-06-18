@@ -10,6 +10,7 @@ import { aiSearchRoutes } from "./features/ai/index.ts";
 import { authRoutes } from "./features/auth/index.ts";
 import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
+import { customFieldsRoutes } from "./features/custom-fields/index.ts";
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importRoutes } from "./features/import/index.ts";
@@ -24,6 +25,8 @@ import { settingsRoutes } from "./features/settings/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
 import { webhooksRoutes } from "./features/webhooks/index.ts";
+import { scoringRoutes } from "./features/scoring/index.ts";
+import { searchRoutes } from "./features/search/index.ts";
 import { workspacesRoutes } from "./features/workspaces/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
@@ -55,6 +58,7 @@ app.route("/api/v1/search", searchRoutes); // 24/ADR-0035: filtered search, type
 app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + re-apply filter sets
 app.route("/api/v1/ai-search", aiSearchRoutes); // 23/ADR-0023: NL → validated filter (for confirmation)
 app.route("/api/v1/sales-navigator", salesNavRoutes);
+app.route("/api/v1/custom-fields", customFieldsRoutes); // ADR-0028: field definitions + typed-jsonb values
 app.route("/api/v1/outreach", outreachRoutes);
 // Pipeline stages (G-REV-7, ADR-0028): workspace stage CRUD + POST /contacts/:id/stage rollup. Mounted on
 // its OWN base so /contacts/:id/stage cannot collide with the /api/v1/contacts reveal/scoring/activity slices.

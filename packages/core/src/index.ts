@@ -245,3 +245,21 @@ export {
   type UpdateSavedSearchInput,
   type DeleteSavedSearchInput,
 } from "./savedSearches/savedSearches.ts";
+// Record customization (custom fields — ADR-0028, gap G-REV-5): registry CRUD + typed-jsonb value set/get +
+// the pure type validator (reused by import mapping later).
+export {
+  validateValue,
+  type FieldDefinitionForValidation,
+} from "./customFields/validateValue.ts";
+export {
+  createDefinition,
+  updateDefinition,
+  listDefinitions,
+  type CreateDefinitionInput,
+  type UpdateDefinitionInput,
+} from "./customFields/manageDefinitions.ts";
+export {
+  setCustomFieldValues,
+  getCustomFieldValues,
+  type SetValuesInput,
+} from "./customFields/setValues.ts";

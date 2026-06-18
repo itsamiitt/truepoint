@@ -9,6 +9,7 @@ import {
   char,
   check,
   customType,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -53,6 +54,9 @@ export const accounts = pgTable(
     hqCountry: varchar("hq_country", { length: 100 }),
     hqCity: varchar("hq_city", { length: 100 }),
     icpFitScore: integer("icp_fit_score"),
+    // Typed-jsonb custom-field values (ADR-0028, 03 §14): shallow-merged `existing || incoming`; validated
+    // against custom_field_definitions at the app edge. GIN-indexed for facet/filter queries.
+    customFields: jsonb("custom_fields").notNull().default({}),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -65,6 +69,7 @@ export const accounts = pgTable(
       "accounts_icp_fit_range",
       sql`${t.icpFitScore} IS NULL OR ${t.icpFitScore} BETWEEN 0 AND 100`,
     ),
+    customFieldsGin: index("idx_accounts_custom_fields_gin").using("gin", t.customFields),
   }),
 );
 
@@ -107,6 +112,9 @@ export const contacts = pgTable(
     region: char("region", { length: 2 }).notNull().default("US"),
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }), // DSAR tombstone (08 §4.2): set + PII nulled
+    // Typed-jsonb custom-field values (ADR-0028, 03 §14): shallow-merged `existing || incoming` (03 §15.3);
+    // validated against custom_field_definitions at the app edge. GIN-indexed for facet/filter queries.
+    customFields: jsonb("custom_fields").notNull().default({}),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -143,6 +151,7 @@ export const contacts = pgTable(
       sql`${t.isRevealed} = (${t.revealedByUserId} IS NOT NULL)`,
     ),
     revealAt: check("contacts_reveal_at", sql`${t.isRevealed} = (${t.revealedAt} IS NOT NULL)`),
+    customFieldsGin: index("idx_contacts_custom_fields_gin").using("gin", t.customFields),
   }),
 );
 

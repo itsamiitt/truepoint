@@ -3,6 +3,7 @@ export * from "./errors.ts";
 export * from "./auth.ts";
 export * from "./contacts.ts";
 export * from "./pipelineStages.ts";
+export * from "./customFields.ts";
 export * from "./bulkEnrichment.ts";
 export * from "./billing.ts";
 export * from "./intel.ts";

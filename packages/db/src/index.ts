@@ -45,6 +45,13 @@ export {
 } from "./repositories/workspaceRepository.ts";
 export { accountRepository, type AccountUpsertInput } from "./repositories/accountRepository.ts";
 export {
+  customFieldRepository,
+  type CustomFieldValue,
+  type CustomFieldDefinitionInsert,
+  type CustomFieldDefinitionUpdate,
+  type CustomFieldDefinitionRecord,
+} from "./repositories/customFieldRepository.ts";
+export {
   contactRepository,
   type ContactWriteValues,
   type DedupKeys,

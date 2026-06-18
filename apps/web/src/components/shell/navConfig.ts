@@ -60,6 +60,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
       { label: "Members", href: "/settings/members", match: "/settings/members" },
       { label: "Auto-enrich", href: "/settings/auto-enrich", match: "/settings/auto-enrich" },
       { label: "Sessions", href: "/settings/sessions", match: "/settings/sessions" },
+      { label: "Custom fields", href: "/settings/custom-fields", match: "/settings/custom-fields" },
       { label: "Suppression & DSAR", href: "/settings/compliance", match: "/settings/compliance" },
     ],
   },

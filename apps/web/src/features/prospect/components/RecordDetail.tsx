@@ -6,6 +6,12 @@
 "use client";
 
 import type { MaskedContact, OutreachStatus, RevealType } from "@leadwolf/types";
+import type {
+  CustomFieldValueDto,
+  CustomFieldValueInput,
+  MaskedContact,
+  RevealType,
+} from "@leadwolf/types";
 import {
   Avatar,
   Drawer,
@@ -14,13 +20,17 @@ import {
   StateSwitch,
   StatusBadge,
   TpButton,
+  TpInput,
+  TpSelect,
+  TpSwitch,
   useToast,
 } from "@leadwolf/ui";
-import { Activity, Download, ListPlus, Send, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { Activity, Download, ListPlus, Pencil, Send, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 import { addContactsToList, enrollContacts } from "../api";
 import { exportMaskedCsv } from "../export";
 import { useActivities } from "../hooks/useActivities";
+import { useCustomFields } from "../hooks/useCustomFields";
 import { useScores } from "../hooks/useScores";
 import styles from "../prospect.module.css";
 import {
@@ -129,6 +139,173 @@ function ActivityTimeline({ contactId }: { contactId: string }) {
       </ul>
     </StateSwitch>
   );
+}
+
+/** Render one custom-field value read-only (date/url/boolean/select/number/text all stringify sensibly). */
+function displayValue(v: CustomFieldValueDto): string {
+  if (v.value === null || v.value === "") return "—";
+  if (v.fieldType === "boolean") return v.value ? "Yes" : "No";
+  return String(v.value);
+}
+
+/**
+ * Custom fields (ADR-0028): a record's workspace-defined values, read inline. A minimal inline edit toggles a
+ * per-type control (text/number/date/url input, boolean switch, select dropdown) and saves the shallow-merge
+ * via useCustomFields.save — type validation runs server-side. Self-contained; not built (M8) → EmptyState.
+ */
+function CustomFieldsSection({ contactId }: { contactId: string }) {
+  const toast = useToast();
+  const { feed, error, loading, saving, reload, save } = useCustomFields(contactId);
+  const values = feed?.values ?? [];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Record<string, CustomFieldValueInput>>({});
+
+  // Seed the draft from the loaded values whenever we enter edit mode / the values change.
+  useEffect(() => {
+    if (editing) {
+      setDraft(Object.fromEntries((feed?.values ?? []).map((v) => [v.key, v.value])));
+    }
+  }, [editing, feed?.values]);
+
+  const onSave = async () => {
+    try {
+      const ok = await save(draft);
+      if (ok) {
+        toast.success("Custom fields saved");
+        setEditing(false);
+      } else {
+        toast.toast({
+          title: "Not available yet",
+          description: "Custom fields persist once the API ships.",
+        });
+      }
+    } catch (e) {
+      toast.error("Could not save", e instanceof Error ? e.message : undefined);
+    }
+  };
+
+  const setDraftValue = (key: string, value: CustomFieldValueInput) =>
+    setDraft((d) => ({ ...d, [key]: value }));
+
+  return (
+    <StateSwitch
+      loading={loading}
+      error={error}
+      empty={!loading && values.length === 0}
+      onRetry={reload}
+      emptyState={
+        <EmptyState
+          title={feed?.available ? "No custom fields" : "Custom fields not connected"}
+          description={
+            feed?.available
+              ? "Define fields in Settings ▸ Workspace ▸ Custom fields."
+              : "Custom fields ship with the record-customization layer (M8)."
+          }
+        />
+      }
+    >
+      {editing ? (
+        <div className={styles.fieldGrid}>
+          {values.map((v) => (
+            <div className={styles.field} key={v.key}>
+              <span className={styles.fieldLabel}>{v.label}</span>
+              <CustomFieldInput
+                field={v}
+                value={draft[v.key] ?? null}
+                onChange={(val) => setDraftValue(v.key, val)}
+              />
+            </div>
+          ))}
+          <div className={styles.drawerActions}>
+            <TpButton variant="primary" size="sm" loading={saving} onClick={onSave}>
+              Save
+            </TpButton>
+            <TpButton variant="ghost" size="sm" onClick={() => setEditing(false)}>
+              Cancel
+            </TpButton>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className={styles.fieldGrid}>
+            {values.map((v) => (
+              <Field key={v.key} label={v.label} value={displayValue(v)} />
+            ))}
+          </div>
+          <div className={styles.drawerActions}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              leftIcon={<Pencil size={14} />}
+              onClick={() => setEditing(true)}
+            >
+              Edit fields
+            </TpButton>
+          </div>
+        </>
+      )}
+    </StateSwitch>
+  );
+}
+
+/** A single per-type custom-field edit control (used inside the inline editor). */
+function CustomFieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: CustomFieldValueDto;
+  value: CustomFieldValueInput;
+  onChange: (value: CustomFieldValueInput) => void;
+}) {
+  const id = `cf-edit-${field.key}`;
+  switch (field.fieldType) {
+    case "boolean":
+      return (
+        <TpSwitch id={id} checked={value === true} onChange={(e) => onChange(e.target.checked)} />
+      );
+    case "select":
+      return (
+        <TpSelect
+          id={id}
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange(e.target.value || null)}
+        >
+          <option value="">—</option>
+          {(field.options ?? []).map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </TpSelect>
+      );
+    case "number":
+      return (
+        <TpInput
+          id={id}
+          type="number"
+          value={value === null ? "" : String(value)}
+          onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+        />
+      );
+    case "date":
+      return (
+        <TpInput
+          id={id}
+          type="date"
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange(e.target.value || null)}
+        />
+      );
+    default:
+      return (
+        <TpInput
+          id={id}
+          value={typeof value === "string" ? value : value === null ? "" : String(value)}
+          onChange={(e) => onChange(e.target.value || null)}
+        />
+      );
+  }
 }
 
 export function RecordDetail({
@@ -307,6 +484,13 @@ export function RecordDetail({
               />
               <Field label="Added" value={new Date(contact.createdAt).toLocaleDateString()} />
             </div>
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Custom fields</h3>
+            </div>
+            <CustomFieldsSection contactId={contact.id} />
           </section>
 
           <section className={styles.section}>
