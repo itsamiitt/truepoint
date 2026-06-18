@@ -146,3 +146,9 @@ export {
   type ContactMatchKeys,
   type ContactMatchCandidate,
 } from "./repositories/enrichmentJobRepository.ts";
+export {
+  featureFlagRepository,
+  type FeatureFlagRecord,
+  type TenantFeatureFlagRecord,
+  type FeatureFlagUpsertValues,
+} from "./repositories/featureFlagRepository.ts";

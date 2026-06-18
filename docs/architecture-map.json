@@ -25,6 +25,8 @@
     "data-health",
     "enrichment",
     "export",
+    "feature-flags",
+    "featureFlags",
     "home",
     "import",
     "inbox",
@@ -32,6 +34,7 @@
     "notifications",
     "outreach",
     "prospect",
+    "provider-configs",
     "reports",
     "reveal",
     "sales-navigator",
@@ -49,8 +52,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 490,
-  "fileSetHash": "sha256:cbbc809cdfd2b23ccfa86891bb59aa552975ef4d07593a7c297045f503bbe043",
+  "fileCount": 510,
+  "fileSetHash": "sha256:92e9cf3e6ee093f223c110a84cc6865849001395bc8f1ad56deda8d6a507938b",
   "features": {
     "activity": {
       "web": [],
@@ -182,6 +185,35 @@
       "workers": [
         "apps/workers/src/queues/enrichment.ts"
       ],
+      "integrations": []
+    },
+    "feature-flags": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/feature-flags/api.ts",
+        "apps/admin/src/features/feature-flags/components/FeatureFlagsPage.tsx",
+        "apps/admin/src/features/feature-flags/components/NewFlagDialog.tsx",
+        "apps/admin/src/features/feature-flags/components/OverrideDialog.tsx",
+        "apps/admin/src/features/feature-flags/hooks/useFeatureFlags.ts",
+        "apps/admin/src/features/feature-flags/index.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "featureFlags": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/featureFlags/evaluateFlag.test.ts",
+        "packages/core/src/featureFlags/evaluateFlag.ts",
+        "packages/core/src/featureFlags/flagsForTenant.ts"
+      ],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "home": {
@@ -326,6 +358,21 @@
         "apps/web/src/features/prospect/types.ts"
       ],
       "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "provider-configs": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/provider-configs/api.ts",
+        "apps/admin/src/features/provider-configs/components/ProviderConfigsPage.tsx",
+        "apps/admin/src/features/provider-configs/hooks/useProviderConfigs.ts",
+        "apps/admin/src/features/provider-configs/index.ts",
+        "apps/admin/src/features/provider-configs/types.ts"
+      ],
       "api": [],
       "core": [],
       "db": [],
@@ -589,6 +636,10 @@
     }
   },
   "shared": {
+    "apps/admin/app": [
+      "apps/admin/src/app/(shell)/feature-flags/page.tsx",
+      "apps/admin/src/app/(shell)/provider-configs/page.tsx"
+    ],
     "apps/api": [
       "apps/api/src/app.ts",
       "apps/api/src/server.ts"
@@ -788,6 +839,7 @@
       "packages/db/src/schema/compliance.ts",
       "packages/db/src/schema/contacts.ts",
       "packages/db/src/schema/enrichmentJobs.ts",
+      "packages/db/src/schema/featureFlags.ts",
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
       "packages/db/src/schema/outreach.ts",
@@ -795,6 +847,7 @@
       "packages/db/src/seed.ts",
       "packages/db/test/activity.itest.ts",
       "packages/db/test/compliance.itest.ts",
+      "packages/db/test/featureFlags.itest.ts",
       "packages/db/test/home.itest.ts",
       "packages/db/test/import.itest.ts",
       "packages/db/test/intel.itest.ts",
@@ -828,6 +881,7 @@
       "packages/types/src/contacts.test.ts",
       "packages/types/src/contacts.ts",
       "packages/types/src/errors.ts",
+      "packages/types/src/featureFlags.ts",
       "packages/types/src/home.test.ts",
       "packages/types/src/home.ts",
       "packages/types/src/index.ts",
@@ -869,10 +923,14 @@
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
-    "packages/db/src/repositories/enrichmentJobRepository.ts"
+    "packages/db/src/repositories/enrichmentJobRepository.ts",
+    "packages/db/src/repositories/featureFlagRepository.ts"
   ],
   "warnings": [
     "undeclared domain 'admin' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'feature-flags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'featureFlags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'provider-configs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-developer' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-shell' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-tenant' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
