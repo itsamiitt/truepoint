@@ -5,6 +5,7 @@
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
+  AiSearchResponse,
   ContactHit,
   ContactQuery,
   FacetCount,
@@ -48,6 +49,21 @@ export async function suggestField(
   const res = await fetchWithAuth(`${API_BASE}/api/v1/search/suggest?${qs.toString()}`, { signal });
   if (!res.ok) throw await toError(res, "Suggest failed");
   return ((await res.json()) as { suggestions: Suggestion[] }).suggestions;
+}
+
+/**
+ * POST /ai-search — compile a natural-language query into a VALIDATED structured filter for confirmation
+ * (23, ADR-0023). Returns the filter only (not results); the caller previews it and applies it on confirm
+ * via searchContacts. The backend enforces the per-tenant budget + prompt-injection guard.
+ */
+export async function aiSearch(text: string): Promise<AiSearchResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/ai-search`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw await toError(res, "AI search failed");
+  return (await res.json()) as AiSearchResponse;
 }
 
 /** POST /search/facets — live counts per facet for the current query (24 §5). */

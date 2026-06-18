@@ -117,6 +117,27 @@ export {
 } from "./billing/stripeWebhook.ts";
 export { buildHomeSummary, type BuildHomeSummaryInput } from "./home/buildHomeSummary.ts";
 
+// AI intelligence layer (23, ADR-0023): the AiPort seam + NL→structured-search compilation with the
+// prompt-injection guard + per-tenant budget guard. DI-only — core OWNS the port; the Anthropic adapter
+// (packages/integrations) implements it; core never imports integrations.
+export type { AiPort, SearchSchemaContext, ParseSearchResult } from "./ai/aiPort.ts";
+export { AiParseError } from "./ai/aiPort.ts";
+export {
+  compileSearchQuery,
+  buildSearchSchemaContext,
+  AiInputRejectedError,
+  type CompileSearchQueryInput,
+} from "./ai/compileSearchQuery.ts";
+export { sanitizeNlQuery, looksLikeInjection } from "./ai/promptGuard.ts";
+export {
+  reserveAiBudget,
+  releaseAiBudget,
+  createInMemoryBudgetStore,
+  utcDayKey,
+  AiBudgetExceededError,
+  type AiBudgetStore,
+} from "./ai/budgetGuard.ts";
+
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";
 export {

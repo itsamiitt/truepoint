@@ -49,8 +49,8 @@
     "templates",
     "workspaces"
   ],
-  "fileCount": 490,
-  "fileSetHash": "sha256:cbbc809cdfd2b23ccfa86891bb59aa552975ef4d07593a7c297045f503bbe043",
+  "fileCount": 505,
+  "fileSetHash": "sha256:2c4a31154e4e48dca43b80e76dde3548b5d347c59317aa4f0b70ba5cce869cc5",
   "features": {
     "activity": {
       "web": [],
@@ -76,6 +76,27 @@
         "apps/api/src/features/admin/routes.ts"
       ],
       "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "ai": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/ai/aiPortProvider.ts",
+        "apps/api/src/features/ai/index.ts",
+        "apps/api/src/features/ai/routes.ts"
+      ],
+      "core": [
+        "packages/core/src/ai/aiPort.ts",
+        "packages/core/src/ai/budgetGuard.test.ts",
+        "packages/core/src/ai/budgetGuard.ts",
+        "packages/core/src/ai/compileSearchQuery.test.ts",
+        "packages/core/src/ai/compileSearchQuery.ts",
+        "packages/core/src/ai/promptGuard.test.ts",
+        "packages/core/src/ai/promptGuard.ts"
+      ],
       "db": [],
       "workers": [],
       "integrations": []
@@ -304,10 +325,12 @@
         "apps/web/src/features/prospect/api.ts",
         "apps/web/src/features/prospect/bulkReveal.test.ts",
         "apps/web/src/features/prospect/bulkReveal.ts",
+        "apps/web/src/features/prospect/components/AiSearchBox.tsx",
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
         "apps/web/src/features/prospect/components/FilterRail.tsx",
+        "apps/web/src/features/prospect/components/ParsedFilterPreview.tsx",
         "apps/web/src/features/prospect/components/ProspectPage.tsx",
         "apps/web/src/features/prospect/components/RecordDetail.tsx",
         "apps/web/src/features/prospect/components/RevealDialog.tsx",
@@ -805,6 +828,8 @@
       "packages/db/test/workspaceSwitch.itest.ts"
     ],
     "packages/integrations": [
+      "packages/integrations/src/anthropic/nlSearchAdapter.test.ts",
+      "packages/integrations/src/anthropic/nlSearchAdapter.ts",
       "packages/integrations/src/enrichment/httpProvider.ts",
       "packages/integrations/src/enrichment/providers.test.ts",
       "packages/integrations/src/enrichment/providers.ts",
@@ -818,6 +843,7 @@
     ],
     "packages/types": [
       "packages/types/src/activity.ts",
+      "packages/types/src/aiSearch.ts",
       "packages/types/src/auditCoverage.test.ts",
       "packages/types/src/auth.ts",
       "packages/types/src/billing.test.ts",

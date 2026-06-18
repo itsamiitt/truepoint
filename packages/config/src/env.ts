@@ -89,6 +89,18 @@ export const appEnvSchema = z
     TYPESENSE_URL: z.string().url().optional(),
     TYPESENSE_API_KEY: z.string().optional(),
     SMTP_URL: z.string().optional(),
+
+    // AI provider (23, ADR-0023). Anthropic Claude behind the AiPort. The API key is a SECRET — read only
+    // here, never hardcoded; an absent key makes the adapter fail closed (ai_unavailable), it never throws
+    // at construction. The base URL + model id are env-driven so the model is a configurable default
+    // (product-self-knowledge: `claude-opus-4-8`), swappable without a code change.
+    ANTHROPIC_API_KEY: z.string().optional(),
+    ANTHROPIC_BASE_URL: z.string().url().default("https://api.anthropic.com"),
+    ANTHROPIC_VERSION: z.string().default("2023-06-01"),
+    AI_NL_SEARCH_MODEL: z.string().min(1).default("claude-opus-4-8"),
+    // Max NL→search model calls per tenant per UTC day — the per-tenant request budget guard (23 §7). A
+    // call that would exceed this is rejected with a budget error BEFORE any model spend.
+    AI_NL_SEARCH_DAILY_BUDGET: z.coerce.number().int().positive().default(200),
   })
   .superRefine((val, ctx) => {
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.

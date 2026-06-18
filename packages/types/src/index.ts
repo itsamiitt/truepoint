@@ -10,3 +10,4 @@ export * from "./activity.ts";
 export * from "./outreach.ts";
 export * from "./home.ts";
 export * from "./search.ts";
+export * from "./aiSearch.ts";

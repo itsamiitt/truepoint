@@ -198,3 +198,17 @@ export class ProviderBudgetExceededError extends AppError {
     });
   }
 }
+
+/** The tenant's daily AI NL-search budget is exhausted — calls pause until the UTC-day window resets (23 §7). */
+export class AiBudgetExhaustedError extends AppError {
+  constructor(detail?: string) {
+    super({ status: 429, code: "ai_budget_exhausted", title: "AI search budget reached", detail });
+  }
+}
+
+/** The AI provider is unreachable or could not return a valid filter — never leaks the model/prompt (23, ADR-0023). */
+export class AiUnavailableError extends AppError {
+  constructor(detail?: string) {
+    super({ status: 502, code: "ai_unavailable", title: "AI search is unavailable", detail });
+  }
+}
