@@ -13,6 +13,7 @@ import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { homeRoutes } from "./features/home/index.ts";
+import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
 import { importRoutes } from "./features/import/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
@@ -50,6 +51,9 @@ app.route("/api/v1/workspaces", workspacesRoutes);
 // paths don't overlap workspacesRoutes' GET / (same shared-prefix pattern as /api/v1/contacts).
 app.route("/api/v1/workspaces", workspaceSecurityRoutes);
 app.route("/api/v1/home", homeRoutes);
+// Mapping-templates BEFORE the import router: imports has a `GET /:jobId` that would otherwise capture
+// `/imports/mapping-templates` as a job id. The more specific prefix must register first (Hono first-match).
+app.route("/api/v1/imports/mapping-templates", importMappingTemplatesRoutes);
 app.route("/api/v1/imports", importRoutes);
 app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal

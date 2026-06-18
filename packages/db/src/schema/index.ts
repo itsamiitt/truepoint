@@ -13,3 +13,4 @@ export * from "./pipelineStages.ts";
 export * from "./savedSearches.ts";
 export * from "./enrichmentPolicy.ts";
 export * from "./webhooks.ts";
+export * from "./importMappingTemplates.ts";

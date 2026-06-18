@@ -189,3 +189,7 @@ export {
   type WebhookDeliveryRecord,
   type WebhookDeliveryForReplay,
 } from "./repositories/webhookRepository.ts";
+  importMappingTemplateRepository,
+  type ImportMappingTemplateSaveValues,
+  type ImportMappingTemplateRecord,
+} from "./repositories/importMappingTemplateRepository.ts";

@@ -17,6 +17,11 @@ import type {
 } from "@leadwolf/types";
 import { useEffect, useRef, useState } from "react";
 import { postImportPreview } from "../api";
+  ImportMappingTemplate,
+  SourceName,
+} from "@leadwolf/types";
+import { useEffect, useRef, useState } from "react";
+import { listMappingTemplates, saveMappingTemplate } from "../api";
 import { useImport } from "../hooks/useImport";
 import { rejectedRowsToCsv } from "../rejectedRowsCsv";
 import { IDENTITY_FIELDS, MAPPABLE_FIELDS, type MappableField, SOURCE_OPTIONS } from "../types";
@@ -62,6 +67,61 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Saved mapping templates (G-IMP-3): the workspace's named, replayable column maps. Applying one pre-fills
+  // the mapper; saving the current map (re)creates a named template by upsert. Additive to the import flow.
+  const [templates, setTemplates] = useState<ImportMappingTemplate[]>([]);
+  const [templateName, setTemplateName] = useState("");
+  const [templateMsg, setTemplateMsg] = useState<string | null>(null);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    listMappingTemplates()
+      .then((t) => {
+        if (active) setTemplates(t);
+      })
+      .catch(() => {
+        /* templates are a convenience — a load failure must never block importing */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  function onApplyTemplate(id: string): void {
+    const t = templates.find((x) => x.id === id);
+    if (!t) return;
+    // Keep only fields the mapper actually renders a control for, so an API-/automation-created template
+    // can never inject hidden, un-editable mapping state that would silently ride along on import.
+    const next: Partial<Record<CanonicalField, string>> = {};
+    for (const mf of MAPPABLE_FIELDS) {
+      const header = t.mapping[mf.field];
+      if (header) next[mf.field] = header;
+    }
+    setMapping(next);
+    setTemplateName(t.name);
+    setTemplateMsg(`Applied template "${t.name}".`);
+  }
+
+  async function onSaveTemplate(): Promise<void> {
+    const name = templateName.trim();
+    const cleaned: Record<string, string> = {};
+    for (const [k, v] of Object.entries(mapping)) if (v) cleaned[k] = v;
+    if (!name || Object.keys(cleaned).length === 0) return;
+    setSavingTemplate(true);
+    setTemplateMsg(null);
+    try {
+      const saved = await saveMappingTemplate({ name, mapping: cleaned as ColumnMapping });
+      // Upsert into the local list (replace a same-id match, else prepend).
+      setTemplates((prev) => [saved, ...prev.filter((t) => t.id !== saved.id)]);
+      setTemplateMsg(`Saved template "${saved.name}".`);
+    } catch (e) {
+      setTemplateMsg(e instanceof Error ? e.message : "Could not save template.");
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
 
   // Notify the parent exactly once per completed import (the job settles asynchronously via polling, so this
   // can't be done inline in onSubmit). The ref guards against re-firing on unrelated re-renders.
@@ -170,6 +230,25 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
         </label>
       </div>
 
+      {headers.length > 0 && templates.length > 0 && (
+        <label className="lw-field">
+          <span>Apply a saved template</span>
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) onApplyTemplate(e.target.value);
+            }}
+          >
+            <option value="">— choose a template —</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       {headers.length > 0 && (
         <div className="lw-mapper">
           {GROUPS.map((group) => (
@@ -199,6 +278,30 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
           ))}
         </div>
       )}
+
+      {headers.length > 0 && (
+        <div className="lw-row">
+          <label className="lw-field">
+            <span>Save this mapping as a template</span>
+            <input
+              type="text"
+              placeholder="Template name"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+            />
+          </label>
+          <button
+            className="app-button"
+            type="button"
+            disabled={savingTemplate || !templateName.trim() || !identityMapped}
+            onClick={() => void onSaveTemplate()}
+          >
+            {savingTemplate ? "Saving…" : "Save as template"}
+          </button>
+        </div>
+      )}
+
+      {templateMsg && <p className="app-muted">{templateMsg}</p>}
 
       {!identityMapped && headers.length > 0 && (
         <p className="app-muted">

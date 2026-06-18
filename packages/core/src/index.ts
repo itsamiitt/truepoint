@@ -6,6 +6,14 @@
 export { runImport, type RunImportInput } from "./import/runImport.ts";
 export { parseImportFile, parseCsv, type ParsedCsv } from "./import/parseFile.ts";
 export type { RawRow } from "./import/columnMap.ts";
+export {
+  saveMappingTemplate,
+  listMappingTemplates,
+  getMappingTemplate,
+  applyMappingTemplate,
+  deleteMappingTemplate,
+  type SaveMappingTemplateInput,
+} from "./import/templates.ts";
 export { blindIndex } from "./import/blindIndex.ts";
 export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 // Pre-commit validation preview + rejected-rows artifact + conflict policy (30 §4, ADR-0036; G-IMP-1/5).
