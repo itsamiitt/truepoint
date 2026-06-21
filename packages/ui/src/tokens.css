@@ -40,8 +40,8 @@
   --tp-btn: #111827;
   --tp-btn-700: #0b1220;
 
-  /* Semantic (rare, intentional) — product UI accent + status (04 §3) */
-  --accent: #4f46e5;
+  /* Semantic status colors (rare, intentional) — reserved for status ONLY (04 §3). The brand accent is
+     Cobalt (--tp-cobalt, fills/logo only); the old Wolf-Indigo --accent has been retired. */
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
@@ -102,6 +102,8 @@
 
   /* Secondary radius for chips + small controls, alongside the 8px --radius. */
   --tp-radius-sm: 6px;
+  /* Card/surface radius — softer than controls, per the Brand Kit asset cards (14–16px). */
+  --tp-radius-card: 14px;
 }
 
 html {

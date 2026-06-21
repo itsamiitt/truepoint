@@ -8,7 +8,7 @@ import type { TagColor } from "@leadwolf/types";
 /** Palette key → the CSS custom property the tag dot is filled with. Neutral uses the muted ink token. */
 export const TAG_COLOR_VAR: Record<TagColor, string> = {
   neutral: "var(--tp-ink-4)",
-  accent: "var(--accent)",
+  accent: "var(--tp-cobalt-tint)",
   success: "var(--success)",
   warning: "var(--warning)",
   danger: "var(--danger)",

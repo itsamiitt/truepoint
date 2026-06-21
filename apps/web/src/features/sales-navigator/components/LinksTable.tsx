@@ -79,7 +79,7 @@ export function LinksTable({
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
-            color: "var(--accent)",
+            color: "var(--tp-ink)",
             maxWidth: 360,
             overflow: "hidden",
             textOverflow: "ellipsis",

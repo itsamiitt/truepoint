@@ -162,17 +162,31 @@ body {
   font-weight: 700;
 }
 
-/* Brand mark — a small cobalt fill (logo color; never used as text). */
-.tp-brand-mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  background: var(--tp-cobalt);
+/* Boot/redirect splash — the mark over a calm status line; the mark breathes while we resolve the session. */
+.tp-boot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
-.tp-brand-mark--lg {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+.tp-boot svg {
+  animation: tp-breathe 1.8s var(--tp-ease) infinite;
+}
+@keyframes tp-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Brand lockup (sign-in / loading states) — the three-chevron mark + True/Point wordmark. */
+.tp-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 /* Shell grid: fixed rail + a fluid main column. Height uses dvh for mobile browser chrome handling. */
@@ -212,12 +226,12 @@ body {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 6px 8px 14px;
+  padding: 8px 8px 16px;
 }
-.tp-brand-name {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+.tp-brand .tp-brand-lockup {
+  border-radius: var(--radius);
+  padding: 2px;
+  margin: -2px;
 }
 .tp-nav {
   display: flex;
@@ -425,7 +439,6 @@ body {
   background: var(--tp-surface-3);
   color: var(--tp-ink);
 }
-
 
 /* Credit pill — the only place a warning color is allowed in the chrome (low balance). */
 .tp-credit-pill {

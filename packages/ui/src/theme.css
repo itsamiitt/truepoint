@@ -36,7 +36,7 @@
   --color-secondary-foreground: var(--tp-ink);
   --color-muted: var(--tp-surface-2);
   --color-muted-foreground: var(--tp-ink-3);
-  --color-accent: var(--accent);
+  --color-accent: var(--tp-cobalt);
   --color-accent-foreground: #ffffff;
   --color-destructive: var(--danger);
   --color-destructive-foreground: #ffffff;

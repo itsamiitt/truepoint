@@ -441,11 +441,11 @@
 .topupLink {
   font-size: 13px;
   font-weight: 600;
-  color: var(--tp-cobalt);
-  text-decoration: none;
+  color: var(--tp-ink);
+  text-decoration: underline;
 }
 .topupLink:hover {
-  text-decoration: underline;
+  color: var(--tp-ink-2);
 }
 .progress {
   font-size: 13px;

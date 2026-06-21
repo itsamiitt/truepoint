@@ -1,14 +1,22 @@
-/* HomePage.module.css — modern layout for the Home cockpit. Layout + rhythm only; color + surfaces come
-   from the --tp-* tokens and @leadwolf/ui primitives. Grid collapses: 3-col tiles → 2-col at 860px → 1-col
-   at 540px; widget grid: 2-col → 1-col at 860px. */
+/* HomePage.module.css — the Home cockpit, styled to the TruePoint Brand Kit: a faint surface-2 canvas with
+   white, hairline-bordered cards (one whisper-soft shadow), Geist Mono micro-labels (uppercase, tracked),
+   and Cobalt used ONLY as a fill (the top score bar, the quick-action glyph) — never as text. Hierarchy
+   comes from weight + size. Layout + rhythm here; color + type come from the --tp-* tokens. Grid collapses:
+   3-col tiles → 2-col at 860px → 1-col at 540px; widget grid: 2-col → 1-col at 860px. */
 
-/* ── Page shell ─────────────────────────────────────────────────────────────────────────────────────── */
+/* ── Page canvas + centered column ───────────────────────────────────────────────────────────────────── */
 .page {
+  min-height: 100%;
+  background: var(--tp-surface-2);
+}
+
+.inner {
   display: flex;
   flex-direction: column;
   gap: 28px;
-  padding: 32px 32px 64px;
   max-width: 1200px;
+  margin: 0 auto;
+  padding: 36px 32px 72px;
   animation: tp-rise-in var(--tp-duration-slow) var(--tp-ease-out) both;
 }
 
@@ -24,16 +32,28 @@
 .headingText {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
   min-width: 0;
+}
+
+/* Mono eyebrow — the Brand Kit's section marker (uppercase, tracked, muted). */
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tp-ink-4);
 }
 
 .title {
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 600;
   color: var(--tp-ink);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
 }
 
 .subtitle {
@@ -58,25 +78,22 @@
 .quickAction {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 18px 10px 12px;
+  gap: 11px;
+  padding: 11px 18px 11px 12px;
   border: 1px solid var(--tp-hairline-2);
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 500;
   color: var(--tp-ink);
   text-decoration: none;
   background: var(--tp-surface);
-  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.05), 0 1px 2px rgba(17, 24, 39, 0.04);
-  transition:
-    background var(--tp-duration-fast) var(--tp-ease),
-    border-color var(--tp-duration-fast) var(--tp-ease),
-    box-shadow var(--tp-duration-fast) var(--tp-ease),
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+  transition: background var(--tp-duration-fast) var(--tp-ease), border-color
+    var(--tp-duration-fast) var(--tp-ease), box-shadow var(--tp-duration-fast) var(--tp-ease),
     transform var(--tp-duration-fast) var(--tp-ease);
 }
 
 .quickAction:hover {
-  background: var(--tp-surface-2);
   border-color: var(--tp-ink-4);
   box-shadow: 0 4px 12px rgba(17, 24, 39, 0.08);
   transform: translateY(-1px);
@@ -84,7 +101,7 @@
 
 .quickAction:active {
   transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(17, 24, 39, 0.05);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
 }
 
 .quickAction:focus-visible {
@@ -92,7 +109,7 @@
   outline-offset: 2px;
 }
 
-/* Icon bubble: cobalt-50 tint with cobalt icon — brand-allowed fill usage (04 §3). */
+/* Icon bubble: cobalt-50 tint with cobalt icon — brand-allowed FILL usage (color is earned). */
 .quickActionGlyph {
   display: inline-flex;
   align-items: center;
@@ -110,6 +127,16 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+
+/* Mono uppercase KPI label (passed into the shared StatTile as its `label`). */
+.kpiLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tp-ink-4);
 }
 
 /* ── Widget grid (two columns; cards declare their own span) ──────────────────────────────────────── */
@@ -136,35 +163,36 @@
 .cardTitleWrap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   min-width: 0;
 }
 
-/* Icon badge with subtle background */
+/* Muted inline glyph — no heavy bubble (keeps the header minimal). */
 .cardTitleIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: var(--tp-surface-3);
-  color: var(--tp-ink-3);
+  color: var(--tp-ink-4);
   flex-shrink: 0;
 }
 
+/* Card title — sans, semibold, sentence case (Brand Kit card-head style, not an eyebrow). */
 .cardTitle {
   margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--tp-ink-3);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tp-ink);
 }
 
+/* Card hint — the machine-verified, mono uppercase micro-label on the right. */
 .cardHint {
   margin: 0;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--tp-ink-4);
   white-space: nowrap;
 }
@@ -180,7 +208,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 0;
+  padding: 11px 0;
   border-top: 1px solid var(--tp-hairline);
   font-size: 13px;
 }
@@ -220,7 +248,7 @@
 .rowAside {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 0 0 auto;
 }
 
@@ -250,18 +278,53 @@
   white-space: nowrap;
 }
 
+/* Score = mono number + a track/fill bar. The single top score earns the Cobalt fill + ink-bold number;
+   every other score uses an ink-3 fill. (Brand Kit "the lead one earns the color".) */
 .score {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.scoreTrack {
+  width: 64px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tp-surface-3);
+  overflow: hidden;
+}
+
+.scoreFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tp-ink-3);
+}
+
+.scoreNum {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--tp-ink-2);
   font-variant-numeric: tabular-nums;
+  width: 26px;
+  text-align: right;
+}
+
+.scoreTop .scoreFill {
+  background: var(--tp-cobalt);
+}
+
+.scoreTop .scoreNum {
+  color: var(--tp-ink);
+  font-weight: 600;
 }
 
 /* ── Burn sparkline ───────────────────────────────────────────────────────────────────────────────── */
 .sparkWrap {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .sparkSvg {
@@ -310,7 +373,7 @@
 .metric {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .metricValue {
@@ -323,12 +386,16 @@
 }
 
 .metricLabel {
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--tp-ink-4);
 }
 
 .replyRate {
-  margin-top: 14px;
+  margin-top: 16px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -356,12 +423,12 @@
 
 /* ── Responsive breakpoints ───────────────────────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
-  .page {
-    padding: 24px 20px 48px;
+  .inner {
+    padding: 24px 20px 56px;
     gap: 20px;
   }
   .title {
-    font-size: 20px;
+    font-size: 23px;
   }
   .tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -375,12 +442,12 @@
 }
 
 @media (max-width: 540px) {
-  .page {
-    padding: 20px 16px 40px;
+  .inner {
+    padding: 20px 16px 44px;
     gap: 16px;
   }
   .title {
-    font-size: 18px;
+    font-size: 20px;
   }
   .tiles {
     grid-template-columns: 1fr;
@@ -389,11 +456,14 @@
     gap: 8px;
   }
   .quickAction {
-    padding: 9px 14px 9px 10px;
+    padding: 10px 14px 10px 10px;
     font-size: 13px;
   }
   .quickActionGlyph {
     width: 26px;
     height: 26px;
+  }
+  .scoreTrack {
+    display: none;
   }
 }

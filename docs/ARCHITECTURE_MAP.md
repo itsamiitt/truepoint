@@ -232,7 +232,9 @@ The `apps/web` SPA wraps every destination in the **AppShell** (auth gate + side
 - **shell** (shared): `apps/web/src/components/shell/` — `AppShell.tsx` (auth gate: silent token refresh →
   PKCE redirect if unsigned → composes sidebar+topbar+children; mounts the command palette, shortcuts
   dialog, toasts, density), `Sidebar.tsx` (lucide nav from `navConfig` + Settings pinned + team/workspace/
-  user controls), `TopBar.tsx` (section title + global-search trigger + density toggle + shortcuts +
+  user controls), `Logo.tsx` (the Brand-Kit lockup: the three-chevron mark with the Cobalt apex + the
+  `True`/`Point` weight-shift wordmark, plus a reversed dark-surface variant; used by the Sidebar brand row
+  and the AppShell loading/error states), `TopBar.tsx` (section title + global-search trigger + density toggle + shortcuts +
   notifications bell + credit pill), `navConfig.ts` (**single source of truth**: the destinations Home/
   Prospect/**Search**/Sequences/Inbox/Reports + the pinned Settings + the 4-scope settings sub-nav,
   consumed by rail/title/palette/settings layout), `DensityProvider.tsx` (comfortable⇄compact via a
