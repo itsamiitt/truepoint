@@ -3,12 +3,16 @@
 // matches a row stored as "Chief Executive Officer" (24 §4) via the core taxonomy. Production search runs on
 // OpenSearch (global) / Typesense (overlay); those adapters land here later behind the same interface.
 //
-// Scope/limits (documented, not silent): term filters + free-text + title canonicalization + suggest +
-// facet counts + keyset paging are supported. Range filters and industry/technology/skill facets are NOT
-// (the masked contact view has no such columns) — range clauses are ignored by this adapter only.
+// Scope/limits (documented, not silent): term filters (incl. the owner/outreach_status/email_status facets),
+// boolean data-signal filters backed by the masked view (has_email/has_phone/is_revealed), free-text, title
+// canonicalization, suggest, facet counts, and keyset paging are supported. Range filters, the join-backed
+// facets (industry/technology/skill/source/funding_stage/company_stage), and the join-backed signals
+// (has_linkedin/never_contacted/do_not_contact/duplicate/complete) are NOT — those clauses are skipped by
+// THIS adapter only; the Postgres adapter implements them against the real columns/joins.
 
 import { planTitleFilter } from "@leadwolf/core";
 import type {
+  BoolFilter,
   ContactHit,
   ContactQuery,
   FacetCount,
@@ -16,8 +20,8 @@ import type {
   SearchCtx,
   SearchPage,
   SearchPort,
-  Suggestion,
   SuggestQuery,
+  Suggestion,
   TermFilter,
 } from "@leadwolf/types";
 import { facetDisplay, facetKeys, isCanonicalId, normalizeForField } from "./fields.ts";
@@ -94,10 +98,26 @@ export function createInMemorySearchPort(seed: readonly IndexedContact[]): Searc
 function matchesQuery(row: ContactHit, query: ContactQuery): boolean {
   for (const clause of query.filters) {
     if (clause.kind === "term" && !matchesTerm(row, clause)) return false;
+    if (clause.kind === "bool" && !matchesBool(row, clause)) return false;
     // range clauses are unsupported by the dev adapter (no numeric facets on the masked view) — skipped.
   }
   if (query.text && !matchesText(row, query.text)) return false;
   return true;
+}
+
+/** Boolean data-signal match (24 §2). Supports the signals backed by the masked view; the join-backed ones
+ *  (has_linkedin/never_contacted/do_not_contact/duplicate/complete) are NOT filtered by the dev adapter. */
+function matchesBool(row: ContactHit, filter: BoolFilter): boolean {
+  switch (filter.field) {
+    case "has_email":
+      return row.hasEmail === filter.value;
+    case "has_phone":
+      return row.hasPhone === filter.value;
+    case "is_revealed":
+      return row.isRevealed === filter.value;
+    default:
+      return true; // join-backed signal — implemented by the Postgres adapter, skipped here.
+  }
 }
 
 function matchesTerm(row: ContactHit, filter: TermFilter): boolean {

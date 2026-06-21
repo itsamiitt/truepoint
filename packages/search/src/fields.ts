@@ -46,17 +46,31 @@ export function facetDisplay(row: ContactHit, field: FacetKey): FacetValue[] {
       return row.department ? [{ key: normalizeTitle(row.department), label: row.department }] : [];
     case "location": {
       const out: FacetValue[] = [];
-      if (row.locationCity) out.push({ key: normalizeTitle(row.locationCity), label: row.locationCity });
+      if (row.locationCity)
+        out.push({ key: normalizeTitle(row.locationCity), label: row.locationCity });
       if (row.locationCountry)
         out.push({ key: normalizeTitle(row.locationCountry), label: row.locationCountry });
       return out;
     }
     case "company":
-      return row.emailDomain ? [{ key: row.emailDomain.toLowerCase(), label: row.emailDomain }] : [];
+      return row.emailDomain
+        ? [{ key: row.emailDomain.toLowerCase(), label: row.emailDomain }]
+        : [];
+    // Engagement facets backed by the masked view (the soft-owner search dimensions).
+    case "owner":
+      return row.ownerUserId ? [{ key: row.ownerUserId, label: row.ownerUserId }] : [];
+    case "outreach_status":
+      return [{ key: row.outreachStatus, label: row.outreachStatus }];
+    case "email_status":
+      return [{ key: row.emailStatus, label: row.emailStatus }];
     case "industry":
     case "technology":
     case "skill":
-      // Not present on the masked contact view — the real index carries these; the dev adapter can't.
+    case "source":
+    case "funding_stage":
+    case "company_stage":
+      // Not present on the masked contact view — the real index / Postgres adapter carries these (account +
+      // source-import joins); the dev adapter can't project them.
       return [];
     default:
       return [];
