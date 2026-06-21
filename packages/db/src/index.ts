@@ -174,6 +174,12 @@ export {
   type SavedSearchInsert,
 } from "./repositories/savedSearchRepository.ts";
 export {
+  listRepository,
+  type ListRow,
+  type ListInsert,
+  type AddMembersInput,
+} from "./repositories/listRepository.ts";
+export {
   enrichmentPolicyRepository,
   type EnrichmentPolicyRecord,
   type EnrichmentPolicyUpsert,

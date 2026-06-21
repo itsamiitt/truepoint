@@ -15,6 +15,7 @@ import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
 import { importRoutes } from "./features/import/index.ts";
+import { listsRoutes } from "./features/lists/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
@@ -54,6 +55,7 @@ app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — 
 app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path overlap either
 app.route("/api/v1/search", searchRoutes); // 24/ADR-0035: filtered search, typeahead, facet counts
 app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + re-apply filter sets
+app.route("/api/v1/lists", listsRoutes); // 24: static prospect lists (bulk add-to-list)
 app.route("/api/v1/ai-search", aiSearchRoutes); // 23/ADR-0023: NL → validated filter (for confirmation)
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/custom-fields", customFieldsRoutes); // ADR-0028: field definitions + typed-jsonb values

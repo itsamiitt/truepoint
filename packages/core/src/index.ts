@@ -273,6 +273,24 @@ export {
   type UpdateSavedSearchInput,
   type DeleteSavedSearchInput,
 } from "./savedSearches/savedSearches.ts";
+// Static prospect lists (24, bulk add-to-list): workspace-shared collections; owner-gated rename/delete;
+// cross-workspace-safe membership writes returning an affected count.
+export {
+  createList,
+  listLists,
+  updateList,
+  deleteList,
+  addContactsToList,
+  addContactsToNewList,
+  removeContactsFromList,
+  type CreateListInput,
+  type UpdateListInput,
+  type DeleteListInput,
+  type AddToListInput,
+  type AddToNewListInput,
+  type RemoveFromListInput,
+  type ListMembershipResult,
+} from "./prospect/lists.ts";
 // Record customization (custom fields — ADR-0028, gap G-REV-5): registry CRUD + typed-jsonb value set/get +
 // the pure type validator (reused by import mapping later).
 export {

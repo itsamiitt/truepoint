@@ -66,8 +66,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 689,
-  "fileSetHash": "sha256:b80fb08e995fcf760081323edd77c258ad856d5c92d2ab85ae64f3e81561f930",
+  "fileCount": 695,
+  "fileSetHash": "sha256:2ea8bc4479d6023783cdb80e52035cf73b01395c25e52eab6e5bf9dd42e0fe55",
   "features": {
     "activity": {
       "web": [],
@@ -413,6 +413,20 @@
       "workers": [],
       "integrations": []
     },
+    "lists": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/lists/index.ts",
+        "apps/api/src/features/lists/routes.ts"
+      ],
+      "core": [],
+      "db": [
+        "packages/db/src/repositories/listRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
     "outreach": {
       "web": [],
       "admin": [],
@@ -502,6 +516,7 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/prospect/lists.ts",
         "packages/core/src/prospect/tags.ts"
       ],
       "db": [],
@@ -1172,6 +1187,7 @@
       "packages/db/src/schema/importMappingTemplates.ts",
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
+      "packages/db/src/schema/lists.ts",
       "packages/db/src/schema/outreach.ts",
       "packages/db/src/schema/pipelineStages.ts",
       "packages/db/src/schema/salesnav.ts",
@@ -1236,6 +1252,7 @@
       "packages/types/src/importTemplates.ts",
       "packages/types/src/index.ts",
       "packages/types/src/intel.ts",
+      "packages/types/src/lists.ts",
       "packages/types/src/outreach.ts",
       "packages/types/src/pipelineStages.ts",
       "packages/types/src/savedSearch.test.ts",

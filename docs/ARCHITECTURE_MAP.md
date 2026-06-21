@@ -378,7 +378,9 @@ flowchart TD
     `button`/`input`/`label`/`checkbox`/`radio-group`/`badge`/`alert`/`separator`.
 - **`packages/db`** — `client.ts` (`withTenantTx`/`withPrivilegedTx`/`closeDb`), `applyMigrations.ts`
   (bootstrap → drizzle → RLS), `bootstrapAdmin.ts`, `migrate.ts`, `seed.ts`, `schema/{auth,contacts,billing,
-  intel,compliance,activity,salesnav,outreach}.ts` + `schema/index.ts`, `drizzle.config.ts`, `index.ts`, and
+  intel,compliance,activity,salesnav,outreach,savedSearches,lists}.ts` (`lists`/`list_members` = static
+  prospect lists for bulk add-to-list; `contacts.owner_user_id` = the soft owner for the Prospect search) +
+  `schema/index.ts`, `drizzle.config.ts`, `index.ts`, and
   `test/` — `itestDb.ts` (Testcontainers **or** `ITEST_DATABASE_URL`) + the DoD suites
   `{import,reveal,intel,compliance,activity,outreach,home,workspaceSwitch,suppressionMgmt}.itest.ts` (run in
   **separate** processes — the db client is a module singleton). RLS in `src/rls/*.sql` (one per schema,

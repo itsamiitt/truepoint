@@ -175,7 +175,9 @@ export const contactRepository = {
         locationCity: r.locationCity,
         outreachStatus: r.outreachStatus as MaskedContact["outreachStatus"],
         isRevealed: r.isRevealed,
-        ownerUserId: r.revealedByUserId, // T4b: member dimension (null until revealed) — non-PII user FK.
+        // Soft owner (the assignable "My prospects" dimension); falls back to the first-reveal owner for rows
+        // not yet assigned/backfilled. Non-PII user FK.
+        ownerUserId: r.ownerUserId ?? r.revealedByUserId,
         createdAt: r.createdAt.toISOString(), // T4b: date dimension (created_at is non-null).
       }));
     });
