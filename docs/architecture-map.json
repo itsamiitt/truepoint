@@ -66,8 +66,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 688,
-  "fileSetHash": "sha256:86fabce52abec4ae0eb3c03cf5af5d840d123f29a52efee7ce3c61c2e25e3e28",
+  "fileCount": 689,
+  "fileSetHash": "sha256:b80fb08e995fcf760081323edd77c258ad856d5c92d2ab85ae64f3e81561f930",
   "features": {
     "activity": {
       "web": [],
@@ -1079,6 +1079,7 @@
       "apps/web/src/components/shell/CreditPill.tsx",
       "apps/web/src/components/shell/DensityProvider.tsx",
       "apps/web/src/components/shell/GlobalSearch.tsx",
+      "apps/web/src/components/shell/Logo.tsx",
       "apps/web/src/components/shell/NotificationsBell.tsx",
       "apps/web/src/components/shell/ShortcutsDialog.tsx",
       "apps/web/src/components/shell/Sidebar.tsx",

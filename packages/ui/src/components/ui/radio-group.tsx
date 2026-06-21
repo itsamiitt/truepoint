@@ -27,7 +27,7 @@ export function RadioOption({
         className,
       )}
     >
-      <input type="radio" className="size-4 shrink-0 accent-[var(--accent)]" {...props} />
+      <input type="radio" className="size-4 shrink-0 accent-[var(--tp-cobalt)]" {...props} />
       {children}
     </label>
   );

@@ -1,6 +1,6 @@
 // checkbox.tsx — a native <input type="checkbox"> (so it submits with NO JavaScript — the "trust this
-// device" box must work no-JS). Tailwind-themed; the check uses the Wolf-Indigo accent. Compose inside a
-// <label> for the text.
+// device" box must work no-JS). Tailwind-themed; the checked fill uses the Cobalt brand accent (a fill,
+// brand-allowed). Compose inside a <label> for the text.
 "use client";
 
 import type { InputHTMLAttributes } from "react";
@@ -10,7 +10,7 @@ export function Checkbox({ className, ...props }: InputHTMLAttributes<HTMLInputE
   return (
     <input
       type="checkbox"
-      className={cn("size-4 shrink-0 rounded border-input accent-[var(--accent)]", className)}
+      className={cn("size-4 shrink-0 rounded border-input accent-[var(--tp-cobalt)]", className)}
       {...props}
     />
   );

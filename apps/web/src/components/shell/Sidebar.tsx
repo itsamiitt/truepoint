@@ -8,6 +8,7 @@ import { Avatar, DropdownMenu, Icon } from "@leadwolf/ui";
 import { X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Logo } from "./Logo";
 import { type NavDestination, DESTINATIONS, SETTINGS_DESTINATION, isActive } from "./navConfig";
 import { TeamSwitcher } from "./TeamSwitcher";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
@@ -74,8 +75,9 @@ export function Sidebar({
   return (
     <aside className={`tp-sidebar${isOpen ? " is-open" : ""}`}>
       <div className="tp-brand">
-        <span className="tp-brand-mark" aria-hidden="true" />
-        <span className="tp-brand-name">TruePoint</span>
+        <Link className="tp-brand-lockup" href="/home" aria-label="TruePoint — Home">
+          <Logo markSize={22} wordSize={16} />
+        </Link>
         {onClose ? (
           <button
             type="button"

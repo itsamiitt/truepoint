@@ -10,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { CommandPalette } from "./CommandPalette";
 import { DensityProvider } from "./DensityProvider";
+import { Brandmark, Logo } from "./Logo";
 import { ShortcutsDialog } from "./ShortcutsDialog";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
@@ -67,6 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
       <div className="tp-center-screen">
         <div className="tp-signin-card">
+          <Logo markSize={30} wordSize={22} />
           <p className="app-muted">
             We couldn't reach sign-in. Check your connection and try again.
           </p>
@@ -88,9 +90,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (auth !== "signed-in") {
     return (
       <div className="tp-center-screen">
-        <p className="app-muted">
-          {auth === "redirecting" ? "Redirecting to sign in…" : "Loading…"}
-        </p>
+        <div className="tp-boot">
+          <Brandmark size={34} title="TruePoint" />
+          <p className="app-muted">
+            {auth === "redirecting" ? "Redirecting to sign in…" : "Loading…"}
+          </p>
+        </div>
       </div>
     );
   }

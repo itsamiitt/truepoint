@@ -4,7 +4,14 @@
 // the parent supplies the resolved loading/error/empty flags and the children for the loaded state.
 "use client";
 
-import { Card, EmptyState, Icon, type IconComponent, LoadingState, StateSwitch } from "@leadwolf/ui";
+import {
+  Card,
+  EmptyState,
+  Icon,
+  type IconComponent,
+  LoadingState,
+  StateSwitch,
+} from "@leadwolf/ui";
 import type { CSSProperties, ReactNode } from "react";
 import styles from "./HomePage.module.css";
 
@@ -43,7 +50,15 @@ export function WidgetCard({
   style?: CSSProperties;
 }) {
   return (
-    <Card style={style}>
+    <Card
+      style={{
+        background: "var(--tp-surface)",
+        border: "1px solid var(--tp-hairline-2)",
+        borderRadius: "var(--tp-radius-card)",
+        boxShadow: "0 1px 2px rgba(17, 24, 39, 0.04)",
+        ...style,
+      }}
+    >
       <div className={styles.cardHeader}>
         <div className={styles.cardTitleWrap}>
           {icon ? (
