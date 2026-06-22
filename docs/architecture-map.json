@@ -12,6 +12,7 @@
     "packages"
   ],
   "domains": [
+    "account-search",
     "activity",
     "admin",
     "admin-settings",
@@ -21,6 +22,7 @@
     "auth",
     "billing",
     "compliance",
+    "contacts-bulk",
     "crm-sync",
     "custom-fields",
     "customFields",
@@ -66,9 +68,21 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 689,
-  "fileSetHash": "sha256:b80fb08e995fcf760081323edd77c258ad856d5c92d2ab85ae64f3e81561f930",
+  "fileCount": 737,
+  "fileSetHash": "sha256:368e7b3b0f33687966cfc92de347a28f20a32db42ce1261726e3d234e68887fd",
   "features": {
+    "account-search": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/account-search/index.ts",
+        "apps/api/src/features/account-search/routes.ts"
+      ],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "activity": {
       "web": [],
       "admin": [],
@@ -177,6 +191,18 @@
       "workers": [
         "apps/workers/src/queues/dsar.ts"
       ],
+      "integrations": []
+    },
+    "contacts-bulk": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/contacts-bulk/index.ts",
+        "apps/api/src/features/contacts-bulk/routes.ts"
+      ],
+      "core": [],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "custom-fields": {
@@ -413,6 +439,20 @@
       "workers": [],
       "integrations": []
     },
+    "lists": {
+      "web": [],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/lists/index.ts",
+        "apps/api/src/features/lists/routes.ts"
+      ],
+      "core": [],
+      "db": [
+        "packages/db/src/repositories/listRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
     "outreach": {
       "web": [],
       "admin": [],
@@ -461,24 +501,41 @@
     },
     "prospect": {
       "web": [
+        "apps/web/src/features/prospect/accountFilterGroups.test.ts",
+        "apps/web/src/features/prospect/accountFilterGroups.ts",
+        "apps/web/src/features/prospect/accountSearchApi.ts",
         "apps/web/src/features/prospect/api.ts",
+        "apps/web/src/features/prospect/bulkActionsApi.ts",
+        "apps/web/src/features/prospect/bulkResourcesApi.ts",
         "apps/web/src/features/prospect/bulkReveal.test.ts",
         "apps/web/src/features/prospect/bulkReveal.ts",
+        "apps/web/src/features/prospect/components/AccountDetailDrawer.tsx",
+        "apps/web/src/features/prospect/components/AccountFilterPanel.tsx",
+        "apps/web/src/features/prospect/components/AccountsTable.tsx",
         "apps/web/src/features/prospect/components/AiSearchBox.tsx",
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
+        "apps/web/src/features/prospect/components/FilterPanel.tsx",
         "apps/web/src/features/prospect/components/FilterRail.tsx",
         "apps/web/src/features/prospect/components/ParsedFilterPreview.tsx",
         "apps/web/src/features/prospect/components/ProspectPage.tsx",
+        "apps/web/src/features/prospect/components/ProspectToolbar.tsx",
+        "apps/web/src/features/prospect/components/QuickViewDrawer.tsx",
+        "apps/web/src/features/prospect/components/RecentSearches.tsx",
         "apps/web/src/features/prospect/components/RecordDetail.tsx",
         "apps/web/src/features/prospect/components/RevealDialog.tsx",
+        "apps/web/src/features/prospect/components/RowActions.tsx",
         "apps/web/src/features/prospect/components/SaveSearchPanel.tsx",
         "apps/web/src/features/prospect/components/StageManagementPanel.tsx",
         "apps/web/src/features/prospect/components/StageSelector.tsx",
         "apps/web/src/features/prospect/components/TagChip.tsx",
         "apps/web/src/features/prospect/components/TagPicker.tsx",
         "apps/web/src/features/prospect/export.ts",
+        "apps/web/src/features/prospect/filterGroups.test.ts",
+        "apps/web/src/features/prospect/filterGroups.ts",
+        "apps/web/src/features/prospect/hooks/useAccountFacetCounts.ts",
+        "apps/web/src/features/prospect/hooks/useAccountSearch.ts",
         "apps/web/src/features/prospect/hooks/useActivities.ts",
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
@@ -486,6 +543,10 @@
         "apps/web/src/features/prospect/hooks/useContacts.ts",
         "apps/web/src/features/prospect/hooks/useCreditBalance.ts",
         "apps/web/src/features/prospect/hooks/useCustomFields.ts",
+        "apps/web/src/features/prospect/hooks/useFacetCounts.ts",
+        "apps/web/src/features/prospect/hooks/useProspectSearch.ts",
+        "apps/web/src/features/prospect/hooks/useRecentSearches.test.ts",
+        "apps/web/src/features/prospect/hooks/useRecentSearches.ts",
         "apps/web/src/features/prospect/hooks/useReveal.ts",
         "apps/web/src/features/prospect/hooks/useSavedSearches.ts",
         "apps/web/src/features/prospect/hooks/useScores.ts",
@@ -495,6 +556,8 @@
         "apps/web/src/features/prospect/index.ts",
         "apps/web/src/features/prospect/savedSearchApi.ts",
         "apps/web/src/features/prospect/searchApi.ts",
+        "apps/web/src/features/prospect/searchUrlState.test.ts",
+        "apps/web/src/features/prospect/searchUrlState.ts",
         "apps/web/src/features/prospect/stagesApi.ts",
         "apps/web/src/features/prospect/tagColors.ts",
         "apps/web/src/features/prospect/types.ts"
@@ -502,6 +565,13 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/prospect/accountSearch.ts",
+        "packages/core/src/prospect/bulkActions.ts",
+        "packages/core/src/prospect/dedup.test.ts",
+        "packages/core/src/prospect/dedup.ts",
+        "packages/core/src/prospect/firmographics.test.ts",
+        "packages/core/src/prospect/firmographics.ts",
+        "packages/core/src/prospect/lists.ts",
         "packages/core/src/prospect/tags.ts"
       ],
       "db": [],
@@ -1172,6 +1242,7 @@
       "packages/db/src/schema/importMappingTemplates.ts",
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
+      "packages/db/src/schema/lists.ts",
       "packages/db/src/schema/outreach.ts",
       "packages/db/src/schema/pipelineStages.ts",
       "packages/db/src/schema/salesnav.ts",
@@ -1179,6 +1250,7 @@
       "packages/db/src/schema/tags.ts",
       "packages/db/src/schema/webhooks.ts",
       "packages/db/src/seed.ts",
+      "packages/db/test/accountSearch.itest.ts",
       "packages/db/test/activity.itest.ts",
       "packages/db/test/adminSessions.itest.ts",
       "packages/db/test/compliance.itest.ts",
@@ -1191,11 +1263,13 @@
       "packages/db/test/importTemplates.itest.ts",
       "packages/db/test/intel.itest.ts",
       "packages/db/test/itestDb.ts",
+      "packages/db/test/lists.itest.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/reveal.itest.ts",
       "packages/db/test/salesNav.itest.ts",
       "packages/db/test/savedSearches.itest.ts",
+      "packages/db/test/search.itest.ts",
       "packages/db/test/suppressionMgmt.itest.ts",
       "packages/db/test/tags.itest.ts",
       "packages/db/test/webhooks.itest.ts",
@@ -1216,12 +1290,14 @@
       "packages/search/src/index.ts"
     ],
     "packages/types": [
+      "packages/types/src/accountsSearch.ts",
       "packages/types/src/activity.ts",
       "packages/types/src/aiSearch.ts",
       "packages/types/src/auditCoverage.test.ts",
       "packages/types/src/auth.ts",
       "packages/types/src/billing.test.ts",
       "packages/types/src/billing.ts",
+      "packages/types/src/bulkActions.ts",
       "packages/types/src/bulkEnrichment.test.ts",
       "packages/types/src/bulkEnrichment.ts",
       "packages/types/src/compliance.ts",
@@ -1236,6 +1312,7 @@
       "packages/types/src/importTemplates.ts",
       "packages/types/src/index.ts",
       "packages/types/src/intel.ts",
+      "packages/types/src/lists.ts",
       "packages/types/src/outreach.ts",
       "packages/types/src/pipelineStages.ts",
       "packages/types/src/savedSearch.test.ts",
@@ -1279,6 +1356,9 @@
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
+    "apps/workers/src/queues/dedup.ts",
+    "apps/workers/src/queues/firmographics.ts",
+    "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/enrichmentJobRepository.ts",
     "packages/db/src/repositories/enrichmentPolicyRepository.ts",
@@ -1286,11 +1366,14 @@
     "packages/db/src/repositories/importMappingTemplateRepository.ts",
     "packages/db/src/repositories/pipelineStageRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
+    "packages/db/src/repositories/searchRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",
     "packages/db/src/repositories/webhookRepository.ts"
   ],
   "warnings": [
+    "undeclared domain 'account-search' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'admin' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'contacts-bulk' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'customFields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'enrichment-jobs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

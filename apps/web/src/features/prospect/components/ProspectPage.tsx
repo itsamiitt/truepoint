@@ -1,13 +1,23 @@
-// ProspectPage.tsx — the prospect master/detail surface (04 §5, 11 §4.2): a faceted filter rail, an active-
-// filter summary, a Contacts⇄Accounts segmented control, the results DataTable (sortable, density-aware,
-// masked email/phone glyphs + a row-select column), the record-detail Drawer, and a sticky bulk-action bar.
-// Search is list-only at MVP (05 §5), so the rail filters the loaded rows client-side. This is the slice's
-// public component (mounted by the thin (shell)/prospect route). Composition + view state; data + masking
-// come from the slice.
+// ProspectPage.tsx — the prospect master/detail surface (04 §5, 11 §4.2, 24): a faceted FilterPanel rail
+// (now also hosting Saved + Recent searches in its header slot) driving a server ContactQuery, a top search
+// box + AI NL box, a results header with a sort + column-chooser toolbar, the results table (sortable,
+// density-aware, masked glyphs, row-select, per-row overflow menu) with a list⇄card toggle and keyset "Load
+// more", a lightweight QuickView preview Drawer that hands off to the heavy RecordDetail, and the sticky
+// bulk-action bar (the full Phase-3 bulk surface). Search/filter state lives in the URL (useProspectSearch →
+// searchUrlState), so a view is shareable and restored on refresh/back. Composition + view state; data +
+// masking + all mutations come from the slice (api/bulkActionsApi).
 "use client";
 
-import type { ContactQuery, MaskedContact } from "@leadwolf/types";
+import type {
+  AccountFacetKey,
+  ContactHit,
+  ContactQuery,
+  FacetKey,
+  MaskedAccount,
+  MaskedContact,
+} from "@leadwolf/types";
 import {
+  Avatar,
   type Column,
   DataTable,
   EmptyState,
@@ -15,106 +25,192 @@ import {
   StateSwitch,
   Tooltip,
   TpButton,
-  TpChip,
+  TpInput,
 } from "@leadwolf/ui";
 import { Building2, Users } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";
+import { useAccountSearch } from "../hooks/useAccountSearch";
 import { useBulkSelection } from "../hooks/useBulkSelection";
-import { useContactSearch } from "../hooks/useContactSearch";
-import { useContacts } from "../hooks/useContacts";
-import { useTaggedIds, useTags } from "../hooks/useTags";
+import { useFacetCounts } from "../hooks/useFacetCounts";
+import { useProspectSearch } from "../hooks/useProspectSearch";
+import { useRecentSearches } from "../hooks/useRecentSearches";
+import { useTags } from "../hooks/useTags";
 import styles from "../prospect.module.css";
-import {
-  EMPTY_FILTER,
-  type ProspectFilter,
-  type ResultScope,
-  activeFilterChips,
-  applyFilter,
-  displayName,
-  emailGlyphFor,
-  isEmptyFilter,
-  maskedEmail,
-} from "../types";
-import { BulkActionBar } from "./BulkActionBar";
-import { FilterRail } from "./FilterRail";
+import { type ResultScope, displayName, emailGlyphFor, maskedEmail } from "../types";
+import { AccountDetailDrawer } from "./AccountDetailDrawer";
+import { AccountFilterPanel } from "./AccountFilterPanel";
+import { AccountsTable } from "./AccountsTable";
+import { AiSearchBox } from "./AiSearchBox";
+import { BulkActionBar, type RowBulkAction } from "./BulkActionBar";
+import { FilterPanel } from "./FilterPanel";
+import { ProspectToolbar } from "./ProspectToolbar";
+import { QuickViewDrawer } from "./QuickViewDrawer";
+import { RecentSearches } from "./RecentSearches";
 import { RecordDetail } from "./RecordDetail";
+import { RowActions } from "./RowActions";
+import { SaveSearchPanel } from "./SaveSearchPanel";
 
 const SCOPES = [
   { value: "contacts", label: "Contacts" },
   { value: "accounts", label: "Accounts" },
 ];
-
 const DENSITIES = [
   { value: "comfortable", label: "Comfortable" },
   { value: "compact", label: "Compact" },
 ];
+const VIEWS = [
+  { value: "list", label: "List" },
+  { value: "card", label: "Cards" },
+];
+// The fixed-option facets that get live counts in the sidebar (POST /search/facets).
+const COUNT_FIELDS: FacetKey[] = ["seniority", "outreach_status", "email_status", "source"];
+// The fixed-option account facets that get live counts in the Accounts sidebar (POST /account-search/facets).
+const ACCOUNT_COUNT_FIELDS: AccountFacetKey[] = [
+  "industry",
+  "company_stage",
+  "funding_stage",
+  "revenue_range",
+  "employee_band",
+];
+
+// The toggleable result columns (the "select" checkbox + "actions" menu are always shown, not toggleable).
+const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "company", label: "Company" },
+  { key: "email", label: "Email" },
+  { key: "address", label: "Address" },
+  { key: "phone", label: "Phone" },
+];
+const DEFAULT_VISIBLE = TOGGLEABLE_COLUMNS.map((c) => c.key);
 
 export function ProspectPage() {
-  const { contacts, error, loading, reload, markRevealed } = useContacts();
-  // The server-search hook backs the AI NL box: a confirmed AI filter is applied via setText/setFilters
-  // (23, ADR-0023). The visible MVP grid stays client-side (useContacts); we also mirror the AI free-text
-  // into the client filter so the user sees the effect immediately on the loaded rows (05 §5).
-  const { setText: setSearchText, setFilters: setSearchFilters } = useContactSearch();
-  const { tags, reload: reloadTags } = useTags();
-  const [filter, setFilter] = useState<ProspectFilter>(EMPTY_FILTER);
-  const [scope, setScope] = useState<ResultScope>("contacts");
+  const search = useProspectSearch();
+  const {
+    query,
+    view,
+    setQuery,
+    setView,
+    hits,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+    reload,
+    markRevealed,
+  } = search;
+  const counts = useFacetCounts(query, COUNT_FIELDS);
+  const recent = useRecentSearches();
+  const { tags } = useTags();
+
+  // Company-level (accounts) scope engine — independent of the contacts query, its own URL params (aq/asort/af).
+  const accountSearch = useAccountSearch();
+  const accountCounts = useAccountFacetCounts(accountSearch.query, ACCOUNT_COUNT_FIELDS);
+  const [accountDetail, setAccountDetail] = useState<MaskedAccount | null>(null);
+
+  // Scope lives in the URL (?scope=accounts) so the active surface is shareable + restored on refresh/back.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const scope: ResultScope = searchParams?.get("scope") === "accounts" ? "accounts" : "contacts";
+  const setScope = useCallback(
+    (next: ResultScope) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      if (next === "accounts") params.set("scope", "accounts");
+      else params.delete("scope");
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
+
   const [density, setDensity] = useState("comfortable");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE);
+  // A pending row-level bulk action: the single id to seed + which bulk dialog to open.
+  const [rowAction, setRowAction] = useState<RowBulkAction | null>(null);
 
-  // Filter-by-tag (ADR-0028, G-REV-6) is list-only: resolve the union of record ids carrying the selected
-  // tags, then applyFilter narrows the loaded rows against it. tagNames labels the active-filter chips.
-  const taggedIds = useTaggedIds(filter.tags);
-  const tagNames = useMemo(() => Object.fromEntries(tags.map((t) => [t.id, t.name])), [tags]);
-
-  const filtered = useMemo(
-    () => applyFilter(contacts, filter, taggedIds),
-    [contacts, filter, taggedIds],
-  );
-  const selected = useMemo(
-    () => contacts.find((c) => c.id === selectedId) ?? null,
-    [contacts, selectedId],
-  );
-  const chips = useMemo(() => activeFilterChips(filter, tagNames), [filter, tagNames]);
-
-  // Apply a VALIDATED filter the user confirmed in the AI NL box (23, ADR-0023). Drives the server-search
-  // hook with the precise structured filter (setText/setFilters — the path real server search uses), AND
-  // folds the parsed intent into the visible MVP grid: the free-text plus every include-term value become
-  // the client filter's free-text query (applyFilter substring-matches name/title/company/department), so a
-  // parse like title=VP of Engineering actually narrows the loaded rows instead of resetting to all (05 §5).
-  const applyAiQuery = useCallback(
-    (query: ContactQuery) => {
-      setSearchText(query.text ?? "");
-      setSearchFilters(query.filters);
-      const includeTerms = query.filters
-        .filter(
-          (c): c is Extract<typeof c, { kind: "term" }> => c.kind === "term" && c.op !== "exclude",
-        )
-        .flatMap((c) => c.values);
-      const gridQuery = [query.text ?? "", ...includeTerms].join(" ").trim();
-      setFilter((f) => ({ ...EMPTY_FILTER, query: gridQuery || f.query }));
+  // "View N contacts" from the account drawer: switch to the Contacts scope and pin the contacts query to that
+  // account via the `company` term filter (the backend ilike-matches it against accounts.domain / accounts.name /
+  // contacts.emailDomain). Prefer the account domain (the most precise key); fall back to the company name.
+  const viewAccountContacts = useCallback(
+    (account: MaskedAccount) => {
+      const pin = account.domain ?? account.name;
+      const filters: ContactQuery["filters"] = [
+        ...query.filters.filter((c) => !(c.kind === "term" && c.field === "company")),
+        { kind: "term", field: "company", op: "include", values: [pin] },
+      ];
+      setQuery({ ...query, filters });
+      setAccountDetail(null);
+      setScope("contacts");
     },
-    [setSearchText, setSearchFilters],
+    [query, setQuery, setScope],
   );
 
-  // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection above).
+  // Top free-text box: a local mirror committed to the query after a short debounce (typeahead feel), and
+  // re-synced when the query changes externally (AI apply / URL restore).
+  const [textInput, setTextInput] = useState(query.text ?? "");
+  useEffect(() => setTextInput(query.text ?? ""), [query.text]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: debounce-commit keyed on the local input.
+  useEffect(() => {
+    const t = textInput.trim();
+    if (t === (query.text ?? "")) return;
+    const id = setTimeout(() => setQuery({ ...query, text: t || undefined }), 300);
+    return () => clearTimeout(id);
+  }, [textInput]);
+
+  // Record each committed query into the per-browser recents (the hook dedupes + ignores empty queries).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: record only when the query identity changes.
+  useEffect(() => {
+    recent.add(query);
+  }, [query]);
+
+  // Accounts free-text box: the same debounce-commit pattern, committed to the account query.
+  const [accountTextInput, setAccountTextInput] = useState(accountSearch.query.text ?? "");
+  useEffect(() => setAccountTextInput(accountSearch.query.text ?? ""), [accountSearch.query.text]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: debounce-commit keyed on the local input.
+  useEffect(() => {
+    const t = accountTextInput.trim();
+    if (t === (accountSearch.query.text ?? "")) return;
+    const id = setTimeout(
+      () => accountSearch.setQuery({ ...accountSearch.query, text: t || undefined }),
+      300,
+    );
+    return () => clearTimeout(id);
+  }, [accountTextInput]);
+
+  const selected = useMemo(() => hits.find((c) => c.id === selectedId) ?? null, [hits, selectedId]);
+  const preview = useMemo(() => hits.find((c) => c.id === previewId) ?? null, [hits, previewId]);
+
+  // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection).
   const bulk = useBulkSelection();
-  const shownIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const shownIds = useMemo(() => hits.map((c) => c.id), [hits]);
   const allShownSelected = shownIds.length > 0 && shownIds.every((id) => bulk.selectedIds.has(id));
   const selectedContacts = useMemo(
-    () => contacts.filter((c) => bulk.selectedIds.has(c.id)),
-    [contacts, bulk.selectedIds],
+    () => hits.filter((c) => bulk.selectedIds.has(c.id)),
+    [hits, bulk.selectedIds],
   );
-  // Only contacts with a maskable email and not yet revealed can be bulk-revealed (07 §3).
   const revealableIds = useMemo(
     () => selectedContacts.filter((c) => c.hasEmail && !c.isRevealed).map((c) => c.id),
     [selectedContacts],
   );
 
-  const columns: Column<MaskedContact>[] = useMemo(
+  // Seed the bulk selection to a single row, then ask the bar to open the matching dialog.
+  const startRowAction = useCallback(
+    (id: string, action: RowBulkAction) => {
+      bulk.clear();
+      bulk.setMany([id], true);
+      setRowAction(action);
+    },
+    [bulk.clear, bulk.setMany],
+  );
+
+  const allColumns: Column<ContactHit>[] = useMemo(
     () => [
       {
         key: "select",
-        // The header checkbox selects/clears every visible row; click stays out of the row-open handler.
         header: (
           <span
             className={styles.headCheck}
@@ -211,19 +307,61 @@ export function ProspectPage() {
             <span className={styles.glyphNone}>—</span>
           ),
       },
+      {
+        key: "actions",
+        header: "",
+        align: "right",
+        width: 48,
+        cell: (c) => (
+          <span
+            className={styles.rowCheck}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <RowActions
+              contact={c}
+              onAddToList={() => startRowAction(c.id, "list")}
+              onTag={() => startRowAction(c.id, "addTags")}
+              onChangeStatus={() => startRowAction(c.id, "status")}
+            />
+          </span>
+        ),
+      },
     ],
-    [allShownSelected, shownIds, bulk],
+    [allShownSelected, shownIds, bulk, startRowAction],
+  );
+
+  // Filter the toggleable columns by the chooser; the always-on select + actions columns stay.
+  const columns = useMemo(
+    () =>
+      allColumns.filter(
+        (c) => c.key === "select" || c.key === "actions" || visibleColumns.includes(c.key),
+      ),
+    [allColumns, visibleColumns],
   );
 
   return (
     <div className={styles.page} data-density={density}>
-      <FilterRail
-        filter={filter}
-        onChange={setFilter}
-        contacts={contacts}
-        onAiApply={applyAiQuery}
-      />
-      <FilterRail filter={filter} onChange={setFilter} contacts={contacts} tags={tags} />
+      {scope === "accounts" ? (
+        <AccountFilterPanel
+          query={accountSearch.query}
+          onChange={accountSearch.setQuery}
+          counts={accountCounts}
+        />
+      ) : (
+        <FilterPanel
+          query={query}
+          onChange={setQuery}
+          counts={counts}
+          header={
+            <>
+              <SaveSearchPanel currentQuery={query} onApply={setQuery} />
+              <RecentSearches recents={recent.recents} onApply={setQuery} onClear={recent.clear} />
+            </>
+          }
+        />
+      )}
 
       <section className={styles.results}>
         <div className={styles.resultsHead}>
@@ -234,15 +372,40 @@ export function ProspectPage() {
               onChange={(v) => setScope(v as ResultScope)}
               aria-label="Result type"
             />
-            {scope === "contacts" && (
+            {scope === "contacts" ? (
               <span className={styles.count}>
                 {loading
                   ? "Loading…"
-                  : `${filtered.length.toLocaleString()} of ${contacts.length.toLocaleString()}`}
+                  : `${hits.length.toLocaleString()}${hasMore ? "+" : ""} contacts`}
+              </span>
+            ) : (
+              <span className={styles.count}>
+                {accountSearch.loading
+                  ? "Loading…"
+                  : `${accountSearch.accounts.length.toLocaleString()}${
+                      accountSearch.hasMore ? "+" : ""
+                    } companies`}
               </span>
             )}
           </div>
           <div className={styles.headRight}>
+            {scope === "contacts" && (
+              <>
+                <ProspectToolbar
+                  query={query}
+                  onChange={setQuery}
+                  columns={TOGGLEABLE_COLUMNS}
+                  visibleColumns={visibleColumns}
+                  onVisibleColumnsChange={setVisibleColumns}
+                />
+                <SegmentedControl
+                  items={VIEWS}
+                  value={view}
+                  onChange={(v) => setView(v as "list" | "card")}
+                  aria-label="View"
+                />
+              </>
+            )}
             <SegmentedControl
               items={DENSITIES}
               value={density}
@@ -252,82 +415,166 @@ export function ProspectPage() {
           </div>
         </div>
 
-        {scope === "contacts" && !isEmptyFilter(filter) && (
-          <div className={styles.summary}>
-            <span className={styles.summaryLabel}>Filters</span>
-            {chips.map((chip) => (
-              <TpChip key={chip.key} onRemove={() => setFilter((f) => chip.clear(f))}>
-                {chip.label}
-              </TpChip>
-            ))}
-            <span className={styles.summarySpacer} />
-            <TpButton variant="link" size="sm" onClick={() => setFilter(EMPTY_FILTER)}>
-              Clear all
-            </TpButton>
+        {scope === "contacts" ? (
+          <div className={styles.searchRow}>
+            <TpInput
+              type="search"
+              placeholder="Search name, title, company, email, LinkedIn…"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              aria-label="Search prospects"
+            />
+            <AiSearchBox onApply={(q: ContactQuery) => setQuery(q)} />
+          </div>
+        ) : (
+          <div className={styles.searchRow}>
+            <TpInput
+              type="search"
+              placeholder="Search company name or domain…"
+              value={accountTextInput}
+              onChange={(e) => setAccountTextInput(e.target.value)}
+              aria-label="Search companies"
+            />
           </div>
         )}
 
         {scope === "accounts" ? (
-          <EmptyState
-            icon={<Building2 size={28} />}
-            title="Accounts view is coming"
-            description="The account-level rollup of your prospects lands in a later milestone. Switch back to Contacts to work the list."
-          />
+          <StateSwitch
+            loading={accountSearch.loading}
+            error={accountSearch.error}
+            empty={!accountSearch.loading && accountSearch.accounts.length === 0}
+            onRetry={accountSearch.reload}
+            emptyState={
+              <EmptyState
+                icon={<Building2 size={28} />}
+                title="No companies"
+                description="No accounts match this search. Adjust your firmographic filters or import more from the Import surface."
+              />
+            }
+          >
+            <AccountsTable
+              accounts={accountSearch.accounts}
+              loading={accountSearch.loading}
+              onOpen={setAccountDetail}
+              density={density}
+            />
+            {accountSearch.hasMore && (
+              <div className={styles.loadMore}>
+                <TpButton
+                  variant="secondary"
+                  size="sm"
+                  loading={accountSearch.loading}
+                  onClick={accountSearch.loadMore}
+                >
+                  Load more
+                </TpButton>
+              </div>
+            )}
+          </StateSwitch>
         ) : (
           <StateSwitch
             loading={loading}
             error={error}
-            empty={!loading && contacts.length === 0}
+            empty={!loading && hits.length === 0}
             onRetry={reload}
             emptyState={
               <EmptyState
                 icon={<Users size={28} />}
-                title="No contacts yet"
-                description="Import a CSV from the Import surface to populate this workspace, then prospect, score and reveal here."
+                title="No matches"
+                description="No contacts match this search. Adjust your filters or import more from the Import surface."
               />
             }
           >
-            <DataTable
-              columns={columns}
-              rows={filtered}
-              rowKey={(c) => c.id}
-              onRowClick={(c) => setSelectedId(c.id)}
-              isSelected={(c) => c.id === selectedId}
-              empty={
-                <EmptyState
-                  title="No matches"
-                  description="No contacts match these filters."
-                  action={
-                    <TpButton variant="secondary" size="sm" onClick={() => setFilter(EMPTY_FILTER)}>
-                      Clear filters
-                    </TpButton>
-                  }
-                />
-              }
-            />
+            {view === "card" ? (
+              <CardGrid hits={hits} onOpen={setPreviewId} />
+            ) : (
+              <DataTable
+                columns={columns}
+                rows={hits}
+                rowKey={(c) => c.id}
+                onRowClick={(c) => setPreviewId(c.id)}
+                isSelected={(c) => c.id === previewId}
+              />
+            )}
+            {hasMore && (
+              <div className={styles.loadMore}>
+                <TpButton variant="secondary" size="sm" loading={loading} onClick={loadMore}>
+                  Load more
+                </TpButton>
+              </div>
+            )}
           </StateSwitch>
         )}
       </section>
+
+      {/* Lightweight preview → hands off to the heavy RecordDetail. */}
+      <QuickViewDrawer
+        contact={preview}
+        onClose={() => setPreviewId(null)}
+        onOpenFull={
+          preview
+            ? () => {
+                setSelectedId(preview.id);
+                setPreviewId(null);
+              }
+            : undefined
+        }
+      />
 
       <RecordDetail
         contact={selected}
         onClose={() => setSelectedId(null)}
         onRevealed={(id) => markRevealed(id)}
-        onTagsChanged={reloadTags}
+      />
+
+      {/* Read-only company preview; "View N contacts" pins the contacts query to this account + switches scope. */}
+      <AccountDetailDrawer
+        account={accountDetail}
+        onClose={() => setAccountDetail(null)}
+        onViewContacts={viewAccountContacts}
       />
 
       {bulk.count > 0 && (
         <BulkActionBar
-          count={bulk.count}
+          selection={bulk}
+          query={query}
           selectedContacts={selectedContacts}
           revealableIds={revealableIds}
-          onClear={bulk.clear}
+          tags={tags}
+          requestedAction={rowAction}
+          onRequestHandled={() => setRowAction(null)}
           onRevealed={(ids) => {
             for (const id of ids) markRevealed(id);
             bulk.clear();
           }}
+          onMutated={() => {
+            reload();
+          }}
         />
       )}
+    </div>
+  );
+}
+
+/** Compact card view of the results (the list⇄card toggle's card mode). */
+function CardGrid({ hits, onOpen }: { hits: MaskedContact[]; onOpen: (id: string) => void }) {
+  return (
+    <div className={styles.cardGrid}>
+      {hits.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          className={styles.prospectCard}
+          onClick={() => onOpen(c.id)}
+        >
+          <Avatar name={displayName(c)} size={32} />
+          <span className={styles.cardMeta}>
+            <span className={styles.name}>{displayName(c)}</span>
+            <span className={styles.title}>{c.jobTitle ?? "—"}</span>
+            <span className={styles.mono}>{c.emailDomain ?? "—"}</span>
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

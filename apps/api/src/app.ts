@@ -4,17 +4,20 @@
 import { appOrigins } from "@leadwolf/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { accountSearchRoutes } from "./features/account-search/index.ts";
 import { activityRoutes } from "./features/activity/index.ts";
 import { adminRoutes } from "./features/admin/index.ts";
 import { aiSearchRoutes } from "./features/ai/index.ts";
 import { authRoutes } from "./features/auth/index.ts";
 import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
+import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
 import { importRoutes } from "./features/import/index.ts";
+import { listsRoutes } from "./features/lists/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
@@ -49,11 +52,17 @@ app.route("/api/v1/home", homeRoutes);
 // `/imports/mapping-templates` as a job id. The more specific prefix must register first (Hono first-match).
 app.route("/api/v1/imports/mapping-templates", importMappingTemplatesRoutes);
 app.route("/api/v1/imports", importRoutes);
+// Bulk actions BEFORE the reveal router: the literal `bulk` segment must register before reveal's `/:id/reveal`
+// so a bulk path is never captured as a contact id (same first-match pattern as imports/mapping-templates).
+app.route("/api/v1/contacts/bulk", contactsBulkRoutes); // 24 Phase-3: owner/tags/status/archive/enrich/export
 app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal
 app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path overlap either
 app.route("/api/v1/search", searchRoutes); // 24/ADR-0035: filtered search, typeahead, facet counts
+// 24/ADR-0035 company-level (accounts) search — own base; no prefix overlap with /api/v1/search (distinct path).
+app.route("/api/v1/account-search", accountSearchRoutes); // search/facets/count (POST) + suggest (GET)
 app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + re-apply filter sets
+app.route("/api/v1/lists", listsRoutes); // 24: static prospect lists (bulk add-to-list)
 app.route("/api/v1/ai-search", aiSearchRoutes); // 23/ADR-0023: NL → validated filter (for confirmation)
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/custom-fields", customFieldsRoutes); // ADR-0028: field definitions + typed-jsonb values

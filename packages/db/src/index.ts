@@ -43,7 +43,11 @@ export {
   type InvitationByToken,
   type CreateInvitationInput,
 } from "./repositories/workspaceRepository.ts";
-export { accountRepository, type AccountUpsertInput } from "./repositories/accountRepository.ts";
+export {
+  accountRepository,
+  type AccountFirmographicsPatch,
+  type AccountUpsertInput,
+} from "./repositories/accountRepository.ts";
 export {
   customFieldRepository,
   type CustomFieldValue,
@@ -54,6 +58,7 @@ export {
 export {
   contactRepository,
   type ContactWriteValues,
+  type DedupContactRow,
   type DedupKeys,
   type HotLeadRow,
 } from "./repositories/contactRepository.ts";
@@ -103,6 +108,7 @@ export {
 } from "./repositories/scoreRepository.ts";
 export {
   intentSignalRepository,
+  type FirmographicSignalRow,
   type IntentSignalInsert,
   type IntentSignalRow,
 } from "./repositories/intentSignalRepository.ts";
@@ -173,6 +179,17 @@ export {
   type SavedSearchRow,
   type SavedSearchInsert,
 } from "./repositories/savedSearchRepository.ts";
+export {
+  listRepository,
+  type ListRow,
+  type ListInsert,
+  type AddMembersInput,
+} from "./repositories/listRepository.ts";
+export {
+  searchRepository,
+  type SearchResultPage,
+} from "./repositories/searchRepository.ts";
+export { accountSearchRepository } from "./repositories/accountSearchRepository.ts";
 export {
   enrichmentPolicyRepository,
   type EnrichmentPolicyRecord,

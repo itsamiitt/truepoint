@@ -47,7 +47,9 @@ export function RevealDialog({
       onRevealed(contact.id);
       toast.success(
         res.alreadyOwned ? "Already owned — no credits charged" : "Contact revealed",
-        res.alreadyOwned ? undefined : `Charged ${res.creditsCharged} credit${res.creditsCharged === 1 ? "" : "s"}.`,
+        res.alreadyOwned
+          ? undefined
+          : `Charged ${res.creditsCharged} credit${res.creditsCharged === 1 ? "" : "s"}.`,
       );
     }
   }
@@ -103,9 +105,7 @@ export function RevealDialog({
         </>
       )}
 
-      {suppressed && (
-        <p className={styles.dialogNote}>This contact is on a do-not-contact list.</p>
-      )}
+      {suppressed && <p className={styles.dialogNote}>This contact is on a do-not-contact list.</p>}
 
       {result && (
         <>
@@ -115,7 +115,9 @@ export function RevealDialog({
                 <dt className={styles.revealKey}>Email</dt>
                 <dd className={styles.revealValue}>
                   {result.email}
-                  {result.emailStatus && <StatusBadge tone="muted">{result.emailStatus}</StatusBadge>}
+                  {result.emailStatus && (
+                    <StatusBadge tone="muted">{result.emailStatus}</StatusBadge>
+                  )}
                 </dd>
               </div>
             )}

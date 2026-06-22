@@ -5,6 +5,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   char,
   check,
@@ -53,6 +54,12 @@ export const accounts = pgTable(
     revenueRange: varchar("revenue_range", { length: 50 }),
     hqCountry: varchar("hq_country", { length: 100 }),
     hqCity: varchar("hq_city", { length: 100 }),
+    // Firmographic facets for advanced search (24 §2). `technologies` = array of normalized tech slugs;
+    // `fundingStage`/`companyStage` are coarse strings kept in clear for faceting; `foundedYear` → company age.
+    technologies: jsonb("technologies").notNull().default([]),
+    fundingStage: varchar("funding_stage", { length: 50 }),
+    companyStage: varchar("company_stage", { length: 50 }),
+    foundedYear: integer("founded_year"),
     icpFitScore: integer("icp_fit_score"),
     // Typed-jsonb custom-field values (ADR-0028, 03 §14): shallow-merged `existing || incoming`; validated
     // against custom_field_definitions at the app edge. GIN-indexed for facet/filter queries.
@@ -70,6 +77,14 @@ export const accounts = pgTable(
       sql`${t.icpFitScore} IS NULL OR ${t.icpFitScore} BETWEEN 0 AND 100`,
     ),
     customFieldsGin: index("idx_accounts_custom_fields_gin").using("gin", t.customFields),
+    // GIN over the technologies array so `technology` facet filters (contains) stay index-backed.
+    technologiesGin: index("idx_accounts_technologies_gin").using("gin", t.technologies),
+    // Account-search sort/filter support (24/ADR-0035, company-level search): composite with workspace_id so
+    // the facet/sort stays index-backed under the RLS workspace predicate (never a seq-scan).
+    wsIndustryIdx: index("idx_accounts_ws_industry").on(t.workspaceId, t.industry),
+    wsEmployeeIdx: index("idx_accounts_ws_employee_count").on(t.workspaceId, t.employeeCount),
+    wsNameIdx: index("idx_accounts_ws_name").on(t.workspaceId, t.name),
+    wsCreatedIdx: index("idx_accounts_ws_created_at").on(t.workspaceId, t.createdAt),
   }),
 );
 
@@ -81,6 +96,11 @@ export const contacts = pgTable(
     tenantId: tenantId(),
     workspaceId: workspaceId(),
     accountId: uuid("account_id").references(() => accounts.id, { onDelete: "set null" }),
+    // Soft owner (24, soft-owner model): the assignable owner powering the "My prospects" / by-owner filter
+    // and assign/reassign. DISTINCT from the immutable revealedByUserId (first-reveal credit owner). Visibility
+    // stays workspace-wide via RLS — owner is a FILTER dimension, never a per-row access wall. SET NULL on user
+    // delete (the contact stays in the workspace, just unassigned).
+    ownerUserId: uuid("owner_user_id").references(() => users.id, { onDelete: "set null" }),
     firstName: varchar("first_name", { length: 100 }),
     lastName: varchar("last_name", { length: 100 }),
     emailEnc: bytea("email_enc"), // AES-GCM ciphertext; masked until reveal
@@ -111,6 +131,14 @@ export const contacts = pgTable(
     jurisdiction: char("jurisdiction", { length: 2 }),
     region: char("region", { length: 2 }).notNull().default("US"),
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+    // Likely-duplicate pointer (24 data-signals): set by the dedup worker to the canonical contact this row
+    // merges into; null = not a known duplicate. Powers the "find/hide probable duplicates" facet. Self-FK.
+    duplicateOfContactId: uuid("duplicate_of_contact_id").references(
+      (): AnyPgColumn => contacts.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     deletedAt: timestamp("deleted_at", { withTimezone: true }), // DSAR tombstone (08 §4.2): set + PII nulled
     // Typed-jsonb custom-field values (ADR-0028, 03 §14): shallow-merged `existing || incoming` (03 §15.3);
     // validated against custom_field_definitions at the app edge. GIN-indexed for facet/filter queries.
@@ -152,6 +180,17 @@ export const contacts = pgTable(
     ),
     revealAt: check("contacts_reveal_at", sql`${t.isRevealed} = (${t.revealedAt} IS NOT NULL)`),
     customFieldsGin: index("idx_contacts_custom_fields_gin").using("gin", t.customFields),
+    // Owner filter ("My prospects" / by-owner) — composite with workspace so the facet stays index-backed.
+    ownerIdx: index("idx_contacts_ws_owner").on(t.workspaceId, t.ownerUserId),
+    // Duplicate facet — partial (only rows flagged as a likely duplicate).
+    duplicateIdx: index("idx_contacts_duplicate_of")
+      .on(t.duplicateOfContactId)
+      .where(sql`${t.duplicateOfContactId} IS NOT NULL`),
+    // Per-account contact rollup (account-search contactCount/revealedContactCount, 24/ADR-0035): composite
+    // with workspace_id so the correlated count subquery stays index-backed under the RLS workspace predicate.
+    wsAccountIdx: index("idx_contacts_ws_account")
+      .on(t.workspaceId, t.accountId)
+      .where(sql`${t.accountId} IS NOT NULL`),
   }),
 );
 

@@ -3,8 +3,8 @@
 // facet counts group by canonical occupation, and workspace isolation + keyset paging hold (24 §3–§6).
 
 import { describe, expect, test } from "bun:test";
-import type { ContactQuery, IndexedContact, SearchCtx } from "./index.ts";
 import { createInMemorySearchPort } from "./inMemorySearchPort.ts";
+import type { ContactQuery, IndexedContact, SearchCtx } from "./index.ts";
 
 const WS = "ws-1";
 const ctx: SearchCtx = { workspaceId: WS };
@@ -36,10 +36,30 @@ function query(over: Partial<ContactQuery> = {}): ContactQuery {
 }
 
 const seed: IndexedContact[] = [
-  contact({ id: "1", jobTitle: "Chief Executive Officer", seniorityLevel: "c_suite", createdAt: "2026-01-05T00:00:00.000Z" }),
-  contact({ id: "2", jobTitle: "CEO", seniorityLevel: "c_suite", createdAt: "2026-01-04T00:00:00.000Z" }),
-  contact({ id: "3", jobTitle: "Software Engineer", seniorityLevel: "ic", createdAt: "2026-01-03T00:00:00.000Z" }),
-  contact({ id: "4", jobTitle: "Chief Executive Officer", seniorityLevel: "c_suite", workspaceId: "ws-2" }),
+  contact({
+    id: "1",
+    jobTitle: "Chief Executive Officer",
+    seniorityLevel: "c_suite",
+    createdAt: "2026-01-05T00:00:00.000Z",
+  }),
+  contact({
+    id: "2",
+    jobTitle: "CEO",
+    seniorityLevel: "c_suite",
+    createdAt: "2026-01-04T00:00:00.000Z",
+  }),
+  contact({
+    id: "3",
+    jobTitle: "Software Engineer",
+    seniorityLevel: "ic",
+    createdAt: "2026-01-03T00:00:00.000Z",
+  }),
+  contact({
+    id: "4",
+    jobTitle: "Chief Executive Officer",
+    seniorityLevel: "c_suite",
+    workspaceId: "ws-2",
+  }),
 ];
 
 describe("inMemorySearchPort.searchContacts", () => {
@@ -55,7 +75,11 @@ describe("inMemorySearchPort.searchContacts", () => {
   test("workspace isolation: ws-2's CEO never appears for ws-1", async () => {
     const port = createInMemorySearchPort(seed);
     const page = await port.searchContacts(
-      query({ filters: [{ kind: "term", field: "title", op: "include", values: ["Chief Executive Officer"] }] }),
+      query({
+        filters: [
+          { kind: "term", field: "title", op: "include", values: ["Chief Executive Officer"] },
+        ],
+      }),
       ctx,
     );
     expect(page.hits.every((h) => h.id !== "4")).toBe(true);
@@ -81,7 +105,10 @@ describe("inMemorySearchPort.searchContacts", () => {
     const first = await port.searchContacts(query({ limit: 2 }), ctx);
     expect(first.hits.map((h) => h.id)).toEqual(["1", "2"]);
     expect(first.nextCursor).toBe("2");
-    const second = await port.searchContacts(query({ limit: 2, cursor: first.nextCursor ?? undefined }), ctx);
+    const second = await port.searchContacts(
+      query({ limit: 2, cursor: first.nextCursor ?? undefined }),
+      ctx,
+    );
     expect(second.hits.map((h) => h.id)).toEqual(["3"]);
     expect(second.nextCursor).toBeNull();
   });
@@ -90,7 +117,10 @@ describe("inMemorySearchPort.searchContacts", () => {
 describe("inMemorySearchPort.suggest", () => {
   test("typing 'ceo' suggests 'Chief Executive Officer' with its canonical id and count", async () => {
     const port = createInMemorySearchPort(seed);
-    const out = await port.suggest({ field: "title", prefix: "ceo", limit: 10, scope: "workspace" }, ctx);
+    const out = await port.suggest(
+      { field: "title", prefix: "ceo", limit: 10, scope: "workspace" },
+      ctx,
+    );
     const ceo = out.find((s) => s.canonicalId === "chief_executive_officer");
     expect(ceo).toBeDefined();
     expect(ceo?.displayLabel).toBe("Chief Executive Officer");
@@ -99,7 +129,10 @@ describe("inMemorySearchPort.suggest", () => {
 
   test("typing 'soft' suggests Software Engineer", async () => {
     const port = createInMemorySearchPort(seed);
-    const out = await port.suggest({ field: "title", prefix: "soft", limit: 10, scope: "workspace" }, ctx);
+    const out = await port.suggest(
+      { field: "title", prefix: "soft", limit: 10, scope: "workspace" },
+      ctx,
+    );
     expect(out.some((s) => s.canonicalId === "software_engineer")).toBe(true);
   });
 });
@@ -112,5 +145,37 @@ describe("inMemorySearchPort.facetCounts", () => {
     expect(ceo?.count).toBe(2);
     const swe = counts.find((c) => c.value === "software_engineer");
     expect(swe?.count).toBe(1);
+  });
+});
+
+describe("inMemorySearchPort owner + data-signal filters", () => {
+  const owned: IndexedContact[] = [
+    contact({ id: "o1", ownerUserId: "u1", hasEmail: true, isRevealed: true }),
+    contact({ id: "o2", ownerUserId: "u2", hasEmail: false }),
+  ];
+
+  test("the owner facet returns only that owner's rows (the 'My prospects' filter)", async () => {
+    const port = createInMemorySearchPort(owned);
+    const page = await port.searchContacts(
+      query({ filters: [{ kind: "term", field: "owner", op: "include", values: ["u1"] }] }),
+      ctx,
+    );
+    expect(page.hits.map((h) => h.id)).toEqual(["o1"]);
+  });
+
+  test("a has_email=false bool filter isolates rows with no email", async () => {
+    const port = createInMemorySearchPort(owned);
+    const page = await port.searchContacts(
+      query({ filters: [{ kind: "bool", field: "has_email", value: false }] }),
+      ctx,
+    );
+    expect(page.hits.map((h) => h.id)).toEqual(["o2"]);
+  });
+
+  test("owner facet counts group by owner within the workspace", async () => {
+    const port = createInMemorySearchPort(owned);
+    const counts = await port.facetCounts(query(), ["owner"], ctx);
+    expect(counts.find((c) => c.value === "u1")?.count).toBe(1);
+    expect(counts.find((c) => c.value === "u2")?.count).toBe(1);
   });
 });

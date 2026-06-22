@@ -1,6 +1,15 @@
 // Public surface of the prospect feature slice — the page component the (shell)/prospect route renders.
 export { ProspectPage } from "./components/ProspectPage";
 
+// Prospect-search redesign (24): the results toolbar (sort + column chooser), the lightweight QuickView
+// preview Drawer, the per-row overflow menu, and the per-browser Recent-searches row. ProspectPage composes
+// these; they're exported for reuse/testing and to keep the slice surface explicit.
+export { ProspectToolbar } from "./components/ProspectToolbar";
+export { QuickViewDrawer } from "./components/QuickViewDrawer";
+export { RowActions } from "./components/RowActions";
+export { RecentSearches } from "./components/RecentSearches";
+export { useRecentSearches, type RecentSearch } from "./hooks/useRecentSearches";
+
 // Advanced search/filter (24, ADR-0035): server-driven typeahead filter rail + search hooks/client.
 // Wire <FilterRail onChange={setFilters}/> + useContactSearch() into ProspectPage's left rail + grid.
 export { FilterRail } from "./components/FilterRail";
@@ -26,6 +35,21 @@ export {
   deleteSavedSearch,
 } from "./savedSearchApi";
 export { searchContacts, suggestField, fetchFacetCounts, aiSearch } from "./searchApi";
+
+// Company-level (accounts) search (24, ADR-0035): the firmographic sibling of the Contacts surface. ProspectPage
+// renders these under the "Accounts" scope (filter rail + results grid + read-only detail drawer), driven by
+// useAccountSearch + useAccountFacetCounts against the real /account-search API. Exported for reuse/testing.
+export { AccountFilterPanel } from "./components/AccountFilterPanel";
+export { AccountsTable } from "./components/AccountsTable";
+export { AccountDetailDrawer } from "./components/AccountDetailDrawer";
+export { useAccountSearch } from "./hooks/useAccountSearch";
+export { useAccountFacetCounts } from "./hooks/useAccountFacetCounts";
+export {
+  searchAccounts,
+  fetchAccountFacetCounts,
+  suggestAccountField,
+  countAccounts,
+} from "./accountSearchApi";
 
 // AI NL→search (23, ADR-0023): the natural-language box + the validated-filter preview. The box compiles
 // NL → a validated contactQuery and applies it on confirm via useContactSearch (human-in-the-loop).

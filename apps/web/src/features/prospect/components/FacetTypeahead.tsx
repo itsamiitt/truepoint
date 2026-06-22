@@ -40,7 +40,9 @@ export function FacetTypeahead({
       {showMenu ? (
         <div
           className="tp-ui-popover tp-ui-popover--start"
+          // biome-ignore lint/a11y/useSemanticElements: an ARIA combobox listbox popover, not a native <select>.
           role="listbox"
+          tabIndex={-1}
           style={{ width: "100%", maxHeight: 260, overflow: "auto" }}
         >
           <div className="tp-ui-menu">
@@ -57,7 +59,9 @@ export function FacetTypeahead({
                 <button
                   key={s.canonicalId ?? s.value}
                   type="button"
+                  // biome-ignore lint/a11y/useSemanticElements: an ARIA listbox option (a clickable suggestion row).
                   role="option"
+                  aria-selected={false}
                   className="tp-ui-menu-item"
                   onClick={() => {
                     onAdd(s.value);

@@ -2,6 +2,7 @@
 // the verified token (never the body), validation is Zod at the edge, and all search logic lives behind the
 // SearchPort (packages/search). POST is used for contacts/facets (structured query bodies); suggest is GET.
 
+import { searchCount } from "@leadwolf/core";
 import {
   ForbiddenError,
   ValidationError,
@@ -28,8 +29,27 @@ searchRoutes.post("/contacts", async (c) => {
   if (!parsed.success) throw new ValidationError("Invalid search query.");
 
   const port = await buildWorkspaceSearchPort({ tenantId: c.get("tenantId"), workspaceId });
-  const page = await port.searchContacts(parsed.data, { workspaceId });
+  const page = await port.searchContacts(parsed.data, {
+    workspaceId,
+    userId: c.get("claims").sub,
+  });
   return c.json(page);
+});
+
+/**
+ * POST /search/count — the TOTAL matching, workspace-visible contacts for a ContactQuery (24 Phase-3
+ * select-all-across-search). Same filters/owner-scoping as /search/contacts; returns { total } (exact, uncapped
+ * — only the per-request bulk mutation footprint is capped). Powers the "Select all N results" affordance.
+ */
+searchRoutes.post("/count", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+
+  const parsed = contactQuery.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError("Invalid search query.");
+
+  const result = await searchCount({ tenantId: c.get("tenantId"), workspaceId }, parsed.data);
+  return c.json(result);
 });
 
 /** Typeahead suggestions drawn from indexed values (24 §3). field + prefix as query params. */
@@ -47,7 +67,10 @@ searchRoutes.get("/suggest", async (c) => {
   if (!parsed.success) throw new ValidationError("Invalid suggest request (need field + prefix).");
 
   const port = await buildWorkspaceSearchPort({ tenantId: c.get("tenantId"), workspaceId });
-  const suggestions = await port.suggest(parsed.data, { workspaceId });
+  const suggestions = await port.suggest(parsed.data, {
+    workspaceId,
+    userId: c.get("claims").sub,
+  });
   return c.json({ suggestions });
 });
 
@@ -60,6 +83,9 @@ searchRoutes.post("/facets", async (c) => {
   if (!parsed.success) throw new ValidationError("Invalid facet request (need query + fields).");
 
   const port = await buildWorkspaceSearchPort({ tenantId: c.get("tenantId"), workspaceId });
-  const facets = await port.facetCounts(parsed.data.query, parsed.data.fields, { workspaceId });
+  const facets = await port.facetCounts(parsed.data.query, parsed.data.fields, {
+    workspaceId,
+    userId: c.get("claims").sub,
+  });
   return c.json({ facets });
 });

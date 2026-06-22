@@ -12,6 +12,7 @@ export * from "./outreach.ts";
 export * from "./enrichmentJobs.ts";
 export * from "./pipelineStages.ts";
 export * from "./savedSearches.ts";
+export * from "./lists.ts";
 export * from "./enrichmentPolicy.ts";
 export * from "./webhooks.ts";
 export * from "./importMappingTemplates.ts";

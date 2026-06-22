@@ -40,6 +40,13 @@
   text-transform: uppercase;
   color: var(--tp-ink-3);
 }
+/* The rail header slot (saved + recent searches) injected between the pills and the filter groups. */
+.railSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 14px;
+}
 .facet {
   display: flex;
   flex-direction: column;
@@ -88,6 +95,56 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* Top search row: free-text box + AI NL box. */
+.searchRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.searchRow > :first-child {
+  flex: 1 1 280px;
+  min-width: 220px;
+}
+
+/* Keyset "Load more" footer under the results. */
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+/* Card view (the list⇄card toggle). */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.prospectCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  text-align: left;
+  font: inherit;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-card);
+  cursor: pointer;
+  transition: border-color var(--tp-duration-fast) var(--tp-ease), box-shadow
+    var(--tp-duration-fast) var(--tp-ease);
+}
+.prospectCard:hover {
+  border-color: var(--tp-ink-4);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
+}
+.cardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 /* Active-filter summary */
@@ -389,6 +446,42 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+/* The inline "Select all matching" escalation inside the bulk bar (on the dark Ink surface). */
+.bulkLink {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.bulkLink:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ── Bulk-action dialog bodies (pickers + confirms) ────────────────────────────────────────────────────── */
+.dialogStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dialogOr {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  text-align: center;
+}
+.dialogCheckRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--tp-ink);
+  cursor: pointer;
 }
 
 /* Reveal-dialog result */

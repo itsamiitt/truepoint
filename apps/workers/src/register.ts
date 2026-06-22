@@ -7,12 +7,18 @@ import type { ImportDeadLetter } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { log } from "./logger.ts";
+import { DEDUP_QUEUE, type DedupJobData, processDedup } from "./queues/dedup.ts";
 import { DSAR_QUEUE, type DsarJobData, processDsar } from "./queues/dsar.ts";
 import {
   ENRICHMENT_QUEUE,
   type EnrichmentJobData,
   processEnrichment,
 } from "./queues/enrichment.ts";
+import {
+  FIRMOGRAPHICS_QUEUE,
+  type FirmographicsJobData,
+  processFirmographics,
+} from "./queues/firmographics.ts";
 import {
   IMPORTS_DLQ,
   IMPORTS_QUEUE,
@@ -33,6 +39,10 @@ export const enrichmentQueue = new Queue<EnrichmentJobData>(ENRICHMENT_QUEUE, { 
 export const scoringQueue = new Queue<ScoringJobData>(SCORING_QUEUE, { connection });
 export const dsarQueue = new Queue<DsarJobData>(DSAR_QUEUE, { connection });
 export const outreachQueue = new Queue<OutreachJobData>(OUTREACH_QUEUE, { connection });
+export const dedupQueue = new Queue<DedupJobData>(DEDUP_QUEUE, { connection });
+export const firmographicsQueue = new Queue<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, {
+  connection,
+});
 
 /** Submit a parsed import for background processing (the async alternative to the inline api path). */
 export async function enqueueImport(data: ImportJobData): Promise<void> {
@@ -60,6 +70,18 @@ export async function enqueueDsar(data: DsarJobData): Promise<string> {
 /** Submit one enrollment-step delivery (05 §13; step delays arrive as BullMQ job delays). */
 export async function enqueueOutreach(data: OutreachJobData, delayMs = 0): Promise<string> {
   const job = await outreachQueue.add("send", data, delayMs > 0 ? { delay: delayMs } : undefined);
+  return String(job.id);
+}
+
+/** Submit a per-workspace contact dedup pass (24 Phase-0.5; e.g. after an import or on a schedule). */
+export async function enqueueDedup(data: DedupJobData): Promise<string> {
+  const job = await dedupQueue.add("dedup", data);
+  return String(job.id);
+}
+
+/** Submit a per-workspace firmographics rollup (24 Phase-0.5; surfaces intent_signals onto account facets). */
+export async function enqueueFirmographics(data: FirmographicsJobData): Promise<string> {
+  const job = await firmographicsQueue.add("firmographics", data);
   return String(job.id);
 }
 
@@ -91,6 +113,24 @@ export function startWorkers(): Worker[] {
       }),
     );
   });
+  // A completed import is where cross-source duplicates appear and new signals land → kick the (idempotent,
+  // off-thread) per-workspace rollups so the duplicate + firmographic search facets stay current. Best-effort:
+  // a rollup-enqueue failure never fails the import.
+  importsWorker.on("completed", (job) => {
+    const scope = job?.data?.scope;
+    if (!scope) return;
+    const data = { tenantId: scope.tenantId, workspaceId: scope.workspaceId };
+    void enqueueDedup(data).catch((e) =>
+      log.error("imports: dedup enqueue failed", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
+    void enqueueFirmographics(data).catch((e) =>
+      log.error("imports: firmographics enqueue failed", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
+  });
   return [
     importsWorker,
     instrument(
@@ -105,6 +145,11 @@ export function startWorkers(): Worker[] {
     instrument(
       new Worker<OutreachJobData>(OUTREACH_QUEUE, processOutreach, { connection }),
       OUTREACH_QUEUE,
+    ),
+    instrument(new Worker<DedupJobData>(DEDUP_QUEUE, processDedup, { connection }), DEDUP_QUEUE),
+    instrument(
+      new Worker<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, processFirmographics, { connection }),
+      FIRMOGRAPHICS_QUEUE,
     ),
   ];
 }

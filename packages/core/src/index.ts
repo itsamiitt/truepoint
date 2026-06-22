@@ -273,6 +273,71 @@ export {
   type UpdateSavedSearchInput,
   type DeleteSavedSearchInput,
 } from "./savedSearches/savedSearches.ts";
+// Static prospect lists (24, bulk add-to-list): workspace-shared collections; owner-gated rename/delete;
+// cross-workspace-safe membership writes returning an affected count.
+export {
+  createList,
+  listLists,
+  updateList,
+  deleteList,
+  addContactsToList,
+  addContactsToNewList,
+  removeContactsFromList,
+  type CreateListInput,
+  type UpdateListInput,
+  type DeleteListInput,
+  type AddToListInput,
+  type AddToNewListInput,
+  type RemoveFromListInput,
+  type ListMembershipResult,
+} from "./prospect/lists.ts";
+// Phase-3 bulk actions over the prospect search results (24): owner assign/reassign (policy-gated), bulk tags
+// (add/remove), bulk status, bulk archive (soft), bulk enroll, bulk enrich (enqueue), role-gated CSV export, and
+// the select-all-across-search count. Each is workspace-scoped, visible-id-filtered, affected-count, audited
+// where the closed 08 §5 enum has an action.
+export {
+  assignOwner,
+  bulkAssignTags,
+  bulkRemoveTags,
+  bulkChangeStatus,
+  bulkArchive,
+  bulkEnroll,
+  bulkEnrich,
+  bulkExportCsv,
+  searchCount,
+  type BulkSelectionInput,
+  type BulkAssignOwnerInput,
+  type BulkTagsInput,
+  type BulkStatusInput,
+  type BulkEnrollInput,
+  type BulkEnrichInput,
+  type BulkExportInput,
+} from "./prospect/bulkActions.ts";
+// Company-level (accounts) search count (24/ADR-0035): the firmographic sibling of searchCount. Thin delegate
+// to the @leadwolf/db accountSearchRepository (no query-semantics layer needed for accounts).
+export { searchAccountsCount } from "./prospect/accountSearch.ts";
+// Contact dedup pass (24 Phase-0.5): flags likely-duplicate contacts (name+domain key) by writing
+// duplicate_of_contact_id → the canonical, powering the duplicate search facet. Soft (pointer only), per-
+// workspace (RLS), idempotent — run by the dedup queue worker.
+export {
+  runDedup,
+  computeDuplicateGroups,
+  pickCanonical,
+  completenessScore,
+  dedupKey,
+  type DuplicateGroup,
+  type RunDedupResult,
+} from "./prospect/dedup.ts";
+// Firmographics rollup (24 Phase-0.5): surfaces existing intent_signals (tech_install/funding_round) onto the
+// account firmographic facets so the technographic/funding filters aren't empty. Run by the firmographics worker.
+export {
+  runFirmographicRollup,
+  aggregateFirmographics,
+  normalizeTech,
+  type AccountFirmographics,
+  type RunFirmographicRollupResult,
+} from "./prospect/firmographics.ts";
+
 // Record customization (custom fields — ADR-0028, gap G-REV-5): registry CRUD + typed-jsonb value set/get +
 // the pure type validator (reused by import mapping later).
 export {

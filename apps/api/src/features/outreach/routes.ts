@@ -6,6 +6,7 @@
 
 import {
   addStep,
+  bulkEnroll,
   consoleSender,
   createSequence,
   enrollContact,
@@ -17,11 +18,13 @@ import {
   ForbiddenError,
   ValidationError,
   addStepSchema,
+  bulkEnrollSchema,
   createSequenceSchema,
   enrollSchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const outreachRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -94,6 +97,33 @@ outreachRoutes.post("/sequences/:id/enroll", async (c) => {
   }
   return c.json({ logId: result.logId, status: result.status }, 201);
 });
+
+/**
+ * POST /sequences/:id/enroll-bulk — enroll a SELECTION into the sequence (24 Phase-3 bulk). Body carries EITHER
+ * { contactIds } OR { criteria: ContactQuery } (select-all-across-search; resolved + capped in core). Idempotent
+ * per contact. Returns { affected, enrolled, alreadyEnrolled, skipped }. Requires an active workspace membership.
+ */
+outreachRoutes.post(
+  "/sequences/:id/enroll-bulk",
+  requireRole("owner", "admin", "member", "viewer"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId)
+      throw new ForbiddenError("no_workspace", "Select a workspace before enrolling.");
+    const parsed = bulkEnrollSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success)
+      throw new ValidationError("Body must be one of { contactIds | criteria }.");
+    const result = await bulkEnroll({
+      scope: { tenantId: c.get("tenantId"), workspaceId },
+      callerUserId: c.get("claims").sub,
+      role: (c as unknown as { get: (k: "role") => RoleVariables["role"] }).get("role"),
+      sequenceId: c.req.param("id"),
+      contactIds: parsed.data.contactIds,
+      criteria: parsed.data.criteria,
+    });
+    return c.json(result, 200);
+  },
+);
 
 outreachRoutes.get("/sequences/:id/log", async (c) => {
   const workspaceId = c.get("workspaceId");

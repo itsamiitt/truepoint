@@ -21,6 +21,16 @@ export const facetKey = z.enum([
   "skill",
   "seniority",
   "department",
+  // Engagement + firmographic + source facets (soft-owner search). `owner` powers "My prospects"/by-owner;
+  // the rest filter on contact/account columns. The dev adapter projects the masked-view-backed ones
+  // (owner/outreach_status/email_status); source/funding_stage/company_stage need the account/import joins
+  // the Postgres adapter does (the dev adapter returns no values for them).
+  "owner",
+  "outreach_status",
+  "email_status",
+  "source",
+  "funding_stage",
+  "company_stage",
 ]);
 export type FacetKey = z.infer<typeof facetKey>;
 
@@ -108,9 +118,34 @@ export const rangeFilter = z
   .refine((r) => r.gte !== undefined || r.lte !== undefined, "range needs gte or lte");
 export type RangeFilter = z.infer<typeof rangeFilter>;
 
+/**
+ * A boolean data-signal clause (24 §2 "Data signals"): does the contact have an email / phone / LinkedIn,
+ * is it revealed, never-contacted, do-not-contact (suppressed), a likely duplicate, or a complete record.
+ * `value` selects the side (true = has it / is it). The dev adapter supports the masked-view-backed ones
+ * (has_email/has_phone/is_revealed); the rest need joins the Postgres adapter does.
+ */
+export const boolFilterField = z.enum([
+  "has_email",
+  "has_phone",
+  "has_linkedin",
+  "is_revealed",
+  "never_contacted",
+  "do_not_contact",
+  "duplicate",
+  "complete",
+]);
+export type BoolFilterField = z.infer<typeof boolFilterField>;
+
+export const boolFilter = z.object({
+  kind: z.literal("bool"),
+  field: boolFilterField,
+  value: z.boolean(),
+});
+export type BoolFilter = z.infer<typeof boolFilter>;
+
 // Note: z.union (not discriminatedUnion) because rangeFilter carries a .refine() (a ZodEffects), which
 // discriminatedUnion rejects. The literal `kind` still makes each branch unambiguous to consumers.
-export const filterClause = z.union([termFilter, rangeFilter]);
+export const filterClause = z.union([termFilter, rangeFilter, boolFilter]);
 export type FilterClause = z.infer<typeof filterClause>;
 
 /** A validated search request. `cursor` drives keyset pagination (24 §6); never offset. */
@@ -134,6 +169,9 @@ export type FacetCountsRequest = z.infer<typeof facetCountsRequest>;
 /** Tenant scope every SearchPort call is filtered by — never cross-workspace (ADR-0006). */
 export interface SearchCtx {
   workspaceId: string;
+  /** The verified caller (the route sets it from claims.sub). Powers the owner ("My prospects") filter and
+   *  recent-search attribution. Optional so existing callers/tests compile; the API always provides it. */
+  userId?: string;
 }
 
 /** A single result row: the masked contact view + its resolved canonical title id (24 §4.2). */
