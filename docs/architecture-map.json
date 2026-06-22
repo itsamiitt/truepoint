@@ -66,8 +66,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 695,
-  "fileSetHash": "sha256:2ea8bc4479d6023783cdb80e52035cf73b01395c25e52eab6e5bf9dd42e0fe55",
+  "fileCount": 696,
+  "fileSetHash": "sha256:cb35658ec26bc124f55b2813239c21b363f026c6d5ea49c0b276db3f16b43825",
   "features": {
     "activity": {
       "web": [],
@@ -1207,6 +1207,7 @@
       "packages/db/test/importTemplates.itest.ts",
       "packages/db/test/intel.itest.ts",
       "packages/db/test/itestDb.ts",
+      "packages/db/test/lists.itest.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/reveal.itest.ts",

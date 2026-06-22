@@ -28,7 +28,10 @@ searchRoutes.post("/contacts", async (c) => {
   if (!parsed.success) throw new ValidationError("Invalid search query.");
 
   const port = await buildWorkspaceSearchPort({ tenantId: c.get("tenantId"), workspaceId });
-  const page = await port.searchContacts(parsed.data, { workspaceId });
+  const page = await port.searchContacts(parsed.data, {
+    workspaceId,
+    userId: c.get("claims").sub,
+  });
   return c.json(page);
 });
 
@@ -47,7 +50,10 @@ searchRoutes.get("/suggest", async (c) => {
   if (!parsed.success) throw new ValidationError("Invalid suggest request (need field + prefix).");
 
   const port = await buildWorkspaceSearchPort({ tenantId: c.get("tenantId"), workspaceId });
-  const suggestions = await port.suggest(parsed.data, { workspaceId });
+  const suggestions = await port.suggest(parsed.data, {
+    workspaceId,
+    userId: c.get("claims").sub,
+  });
   return c.json({ suggestions });
 });
 
@@ -60,6 +66,9 @@ searchRoutes.post("/facets", async (c) => {
   if (!parsed.success) throw new ValidationError("Invalid facet request (need query + fields).");
 
   const port = await buildWorkspaceSearchPort({ tenantId: c.get("tenantId"), workspaceId });
-  const facets = await port.facetCounts(parsed.data.query, parsed.data.fields, { workspaceId });
+  const facets = await port.facetCounts(parsed.data.query, parsed.data.fields, {
+    workspaceId,
+    userId: c.get("claims").sub,
+  });
   return c.json({ facets });
 });
