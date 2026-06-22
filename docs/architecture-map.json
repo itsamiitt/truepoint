@@ -66,8 +66,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 700,
-  "fileSetHash": "sha256:c102e248cd762d5da3c43275787fa52fd381f991b459609691091b2426a57a2a",
+  "fileCount": 702,
+  "fileSetHash": "sha256:ec459b05cbed9d18a2afc5db5b9a8ab710e16f8d37b65f2c43276a0a7d5d1570",
   "features": {
     "activity": {
       "web": [],
@@ -493,6 +493,8 @@
         "apps/web/src/features/prospect/components/TagChip.tsx",
         "apps/web/src/features/prospect/components/TagPicker.tsx",
         "apps/web/src/features/prospect/export.ts",
+        "apps/web/src/features/prospect/filterGroups.test.ts",
+        "apps/web/src/features/prospect/filterGroups.ts",
         "apps/web/src/features/prospect/hooks/useActivities.ts",
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
