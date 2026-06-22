@@ -90,6 +90,56 @@
   gap: 10px;
 }
 
+/* Top search row: free-text box + AI NL box. */
+.searchRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.searchRow > :first-child {
+  flex: 1 1 280px;
+  min-width: 220px;
+}
+
+/* Keyset "Load more" footer under the results. */
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+/* Card view (the list⇄card toggle). */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.prospectCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  text-align: left;
+  font: inherit;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--tp-radius-card);
+  cursor: pointer;
+  transition: border-color var(--tp-duration-fast) var(--tp-ease), box-shadow
+    var(--tp-duration-fast) var(--tp-ease);
+}
+.prospectCard:hover {
+  border-color: var(--tp-ink-4);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
+}
+.cardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 /* Active-filter summary */
 .summary {
   display: flex;
