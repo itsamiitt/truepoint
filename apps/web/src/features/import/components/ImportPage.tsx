@@ -15,9 +15,9 @@ export function ImportPage() {
       <h1>Contacts</h1>
       <ImportWizard onImported={() => void reload()} />
 
-      <section className="lw-card">
+      <section className="tp-card">
         <h2>Workspace contacts {loading ? "" : `(${contacts.length})`}</h2>
-        {error ? <p className="lw-error">{error}</p> : <ContactsTable contacts={contacts} />}
+        {error ? <p className="tp-error">{error}</p> : <ContactsTable contacts={contacts} />}
       </section>
     </main>
   );

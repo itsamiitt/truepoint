@@ -16,7 +16,7 @@ export function ContactsTable({ contacts }: { contacts: MaskedContact[] }) {
     );
   }
   return (
-    <table className="lw-table">
+    <table className="tp-table">
       <thead>
         <tr>
           <th>Name</th>

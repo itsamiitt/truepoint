@@ -28,7 +28,7 @@ body {
   padding: 0 16px;
   font: inherit;
   font-weight: 500;
-  color: #fff;
+  color: var(--tp-on-fill);
   background: var(--tp-btn);
   border: 0;
   border-radius: var(--radius);
@@ -285,7 +285,7 @@ body {
   z-index: calc(var(--tp-z-drawer) - 1);
   padding: 0;
   border: 0;
-  background: rgba(17, 24, 39, 0.4);
+  background: var(--tp-scrim);
   cursor: default;
   animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
 }

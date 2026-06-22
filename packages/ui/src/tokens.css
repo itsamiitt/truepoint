@@ -17,6 +17,8 @@
   --tp-ink-2: #374151;
   --tp-ink-3: #6b7280;
   --tp-ink-4: #9ca3af;
+  /* Foreground on filled/dark surfaces — button text, control marks, type on ink/twilight. Solid white. */
+  --tp-on-fill: #ffffff;
 
   /* Surfaces */
   --tp-surface: #ffffff;
@@ -35,6 +37,8 @@
 
   /* Special surfaces */
   --tp-twilight: #0c0e1a;
+  /* Scrim / backdrop behind overlays (modal, mobile sidebar) — ink at low alpha. */
+  --tp-scrim: rgba(17, 24, 39, 0.4);
 
   /* Primary action button = Ink (white text), hover darker */
   --tp-btn: #111827;
@@ -45,6 +49,8 @@
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
+  /* Darker danger tone — destructive-button hover + error text on light surfaces. */
+  --danger-700: #b91c1c;
 
   /* Nav/interaction states */
   --nav-active-fill: #e8e8e8;

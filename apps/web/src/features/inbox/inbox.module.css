@@ -146,7 +146,7 @@
 .messageOut {
   align-self: flex-end;
   background: var(--tp-ink);
-  color: #fff;
+  color: var(--tp-on-fill);
 }
 .messageBody {
   white-space: pre-wrap;
@@ -156,7 +156,7 @@
   color: var(--tp-ink-4);
 }
 .messageOut .messageTime {
-  color: rgba(255, 255, 255, 0.6);
+  color: color-mix(in srgb, var(--tp-on-fill) 60%, transparent);
 }
 .replyBox {
   display: flex;

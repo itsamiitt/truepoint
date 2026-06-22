@@ -4,6 +4,7 @@
 // acted on. Presentation + local view state only — the request is recorded server-side via api.submitDsar.
 "use client";
 
+import { TpButton, TpInput, TpSelect } from "@leadwolf/ui";
 import { type FormEvent, useState } from "react";
 import { type DsarInput, type DsarReceipt, submitDsar } from "../api";
 import styles from "../compliance.module.css";
@@ -51,10 +52,10 @@ export function DsarForm() {
 
       <form className={styles.form} onSubmit={(e) => void onSubmit(e)}>
         <div className={styles.row}>
-          <label className={styles.field}>
+          <label className={styles.field} htmlFor="dsar-request-type">
             <span className={styles.label}>Request type</span>
-            <select
-              className={styles.select}
+            <TpSelect
+              id="dsar-request-type"
               value={requestType}
               onChange={(e) => setRequestType(e.target.value as DsarInput["request_type"])}
             >
@@ -63,13 +64,13 @@ export function DsarForm() {
                   {r.label}
                 </option>
               ))}
-            </select>
+            </TpSelect>
           </label>
 
-          <label className={styles.field}>
+          <label className={styles.field} htmlFor="dsar-email">
             <span className={styles.label}>Email address</span>
-            <input
-              className={styles.input}
+            <TpInput
+              id="dsar-email"
               type="email"
               value={email}
               placeholder="you@example.com"
@@ -80,9 +81,9 @@ export function DsarForm() {
         </div>
 
         <div className={styles.actions}>
-          <button className={styles.button} type="submit" disabled={!canSubmit}>
+          <TpButton type="submit" disabled={!canSubmit}>
             {busy ? "Submitting…" : "Submit request"}
-          </button>
+          </TpButton>
           {error && <p className={styles.error}>{error}</p>}
         </div>
       </form>

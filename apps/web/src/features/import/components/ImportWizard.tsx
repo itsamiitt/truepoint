@@ -180,14 +180,14 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
   }
 
   return (
-    <section className="lw-card">
+    <section className="tp-card">
       <h2>Import contacts</h2>
       <p className="app-muted">
         Upload a CSV, map its columns, validate, and we&apos;ll dedupe into this workspace.
       </p>
 
-      <div className="lw-row">
-        <label className="lw-field">
+      <div className="tp-row">
+        <label className="tp-field">
           <span>Source</span>
           <select
             value={sourceName}
@@ -203,7 +203,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
             ))}
           </select>
         </label>
-        <label className="lw-field">
+        <label className="tp-field">
           <span>CSV file</span>
           <input
             type="file"
@@ -211,7 +211,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
           />
         </label>
-        <label className="lw-field">
+        <label className="tp-field">
           <span>On duplicate</span>
           <select
             value={conflictPolicy}
@@ -227,7 +227,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
       </div>
 
       {headers.length > 0 && templates.length > 0 && (
-        <label className="lw-field">
+        <label className="tp-field">
           <span>Apply a saved template</span>
           <select
             value=""
@@ -246,12 +246,12 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
       )}
 
       {headers.length > 0 && (
-        <div className="lw-mapper">
+        <div className="tp-mapper">
           {GROUPS.map((group) => (
-            <fieldset key={group} className="lw-group">
+            <fieldset key={group} className="tp-group">
               <legend>{group}</legend>
               {MAPPABLE_FIELDS.filter((f: MappableField) => f.group === group).map((f) => (
-                <label key={f.field} className="lw-field">
+                <label key={f.field} className="tp-field">
                   <span>{f.label}</span>
                   <select
                     value={mapping[f.field] ?? ""}
@@ -276,8 +276,8 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
       )}
 
       {headers.length > 0 && (
-        <div className="lw-row">
-          <label className="lw-field">
+        <div className="tp-row">
+          <label className="tp-field">
             <span>Save this mapping as a template</span>
             <input
               type="text"
@@ -305,7 +305,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
         </p>
       )}
 
-      <div className="lw-row">
+      <div className="tp-row">
         <button
           className="app-button"
           type="button"
@@ -323,10 +323,10 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
         </button>
       </div>
 
-      {previewError && <p className="lw-error">{previewError}</p>}
+      {previewError && <p className="tp-error">{previewError}</p>}
 
       {preview && status !== "done" && (
-        <div className="lw-summary">
+        <div className="tp-summary">
           <strong>Validation preview.</strong> {preview.valid} valid · {preview.duplicate} duplicate
           {preview.duplicate === 1 ? "" : "s"} · {preview.rejected} rejected (of {preview.total}{" "}
           rows)
@@ -337,7 +337,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
                 import.
               </p>
               {preview.sampleRejectedRows.length > 0 && (
-                <ul className="lw-errors">
+                <ul className="tp-errors">
                   {preview.sampleRejectedRows.slice(0, 5).map((r, i) => (
                     <li key={`${r.row}-${r.field ?? "row"}-${i}`}>
                       Row {r.row + 1}
@@ -365,10 +365,10 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
         </p>
       )}
 
-      {error && <p className="lw-error">{error}</p>}
+      {error && <p className="tp-error">{error}</p>}
 
       {status === "done" && summary && (
-        <div className="lw-summary">
+        <div className="tp-summary">
           <strong>Import complete.</strong> {summary.created} new · {summary.matched} matched ·{" "}
           {summary.duplicates} duplicate{summary.duplicates === 1 ? "" : "s"} · {summary.skipped}{" "}
           skipped
@@ -381,7 +381,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
             </p>
           )}
           {summary.rejectedRows.length > 0 && (
-            <ul className="lw-errors">
+            <ul className="tp-errors">
               {summary.rejectedRows.slice(0, 5).map((r, i) => (
                 // Two reasons can share a row, so the row index alone is not a unique key.
                 <li key={`${r.row}-${r.field ?? "row"}-${i}`}>

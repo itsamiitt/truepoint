@@ -4,6 +4,7 @@
 // via api.addSuppression and gates BOTH reveals and sends, in-transaction.
 "use client";
 
+import { TpButton, TpInput, TpSelect } from "@leadwolf/ui";
 import { type FormEvent, useState } from "react";
 import { type AddableMatchType, type AddableScope, addSuppression } from "../api";
 import styles from "../compliance.module.css";
@@ -88,10 +89,10 @@ export function SuppressionForm() {
 
       <form className={styles.form} onSubmit={(e) => void onSubmit(e)}>
         <div className={styles.row}>
-          <label className={styles.field}>
+          <label className={styles.field} htmlFor="suppression-scope">
             <span className={styles.label}>Scope</span>
-            <select
-              className={styles.select}
+            <TpSelect
+              id="suppression-scope"
               value={scope}
               onChange={(e) => setScope(e.target.value as AddableScope)}
             >
@@ -100,13 +101,13 @@ export function SuppressionForm() {
                   {s.label}
                 </option>
               ))}
-            </select>
+            </TpSelect>
           </label>
 
-          <label className={styles.field}>
+          <label className={styles.field} htmlFor="suppression-match-type">
             <span className={styles.label}>Match type</span>
-            <select
-              className={styles.select}
+            <TpSelect
+              id="suppression-match-type"
               value={matchType}
               onChange={(e) => onMatchTypeChange(e.target.value as AddableMatchType)}
             >
@@ -115,15 +116,15 @@ export function SuppressionForm() {
                   {m.label}
                 </option>
               ))}
-            </select>
+            </TpSelect>
           </label>
         </div>
 
         <div className={styles.row}>
-          <label className={styles.field}>
+          <label className={styles.field} htmlFor="suppression-value">
             <span className={styles.label}>{meta.label}</span>
-            <input
-              className={styles.input}
+            <TpInput
+              id="suppression-value"
               type={meta.type}
               value={value}
               placeholder={meta.placeholder}
@@ -132,10 +133,10 @@ export function SuppressionForm() {
             />
           </label>
 
-          <label className={styles.field}>
+          <label className={styles.field} htmlFor="suppression-reason">
             <span className={styles.label}>Reason (optional)</span>
-            <input
-              className={styles.input}
+            <TpInput
+              id="suppression-reason"
               type="text"
               value={reason}
               placeholder="e.g. existing customer, opted out"
@@ -146,9 +147,9 @@ export function SuppressionForm() {
         </div>
 
         <div className={styles.actions}>
-          <button className={styles.button} type="submit" disabled={!canSubmit}>
+          <TpButton type="submit" disabled={!canSubmit}>
             {busy ? "Adding…" : "Add to suppression list"}
-          </button>
+          </TpButton>
           {addedId && (
             <p className={styles.success}>
               <span className={styles.successDot} aria-hidden="true" />
