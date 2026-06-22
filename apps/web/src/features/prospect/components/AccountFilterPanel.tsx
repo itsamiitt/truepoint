@@ -1,26 +1,28 @@
 // AccountFilterPanel.tsx — the firmographic faceted filter sidebar (the Accounts sibling of FilterPanel.tsx),
-// driving the server `AccountQuery` directly via the pure helpers in ../accountFilterGroups (multi-select within
-// a facet = OR, across facets = AND, include/exclude give negative filters). Renders the five collapsible
-// firmographic groups from ACCOUNT_FILTER_GROUPS; reuses FacetTypeahead for the high-cardinality facets that map
-// onto a server FacetKey, and a free-text add for the account-only facets (sub_industry / hq_country / hq_city)
-// that have no contacts-side typeahead index. Shows live per-option counts when the page supplies them. Removable
-// pills (activeChips) + clear-all sit at the top. Presentation only — the page owns the query state + the URL.
+// driving the server `AccountQuery` via the pure helpers in ../accountFilterGroups. Same design as FilterPanel:
+// the firmographic groups are ACCORDIONS COLLAPSED BY DEFAULT (active-count badge per header), term facets
+// support the is/is-not MULTI-CONDITION pattern (each condition an independent inline tag, flips on click, ✕
+// removes), and the Prospect/Account scope switch is hosted at the top of the rail. Reuses FacetTypeahead for
+// the high-cardinality facets that map onto a server FacetKey, and a free-text add for the account-only facets.
 "use client";
 
 import type { AccountQuery, AccountTermField, FacetKey } from "@leadwolf/types";
-import { TpChip, TpInput } from "@leadwolf/ui";
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { TpInput } from "@leadwolf/ui";
+import { type ReactNode, useState } from "react";
 import {
   ACCOUNT_FILTER_GROUPS,
   type AccountFacetDef,
+  type AccountFilterGroup,
   type TermOp,
-  activeChips,
+  addTermCondition,
   clearAllFilters,
+  flipTermCondition,
   getRange,
-  getTermValues,
+  groupActiveCount,
   hasActiveFilters,
+  removeTermCondition,
   setRange,
-  toggleTermValue,
+  termConditions,
 } from "../accountFilterGroups";
 import styles from "../prospect.module.css";
 import { FacetTypeahead } from "./FacetTypeahead";
@@ -35,18 +37,19 @@ export function AccountFilterPanel({
   query,
   onChange,
   counts,
+  scopeSwitch,
 }: {
   query: AccountQuery;
   onChange: (next: AccountQuery) => void;
   /** Live per-option counts keyed `${field}:${value}` (from POST /search/accounts/facets). Optional. */
   counts?: Map<string, number>;
+  /** The Prospect/Account scope switch, hosted at the top of the sidebar. */
+  scopeSwitch?: ReactNode;
 }) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [ops, setOps] = useState<Record<string, TermOp>>({});
-  const chips = activeChips(query);
-
   return (
     <aside className={styles.rail} aria-label="Company filters">
+      {scopeSwitch != null ? <div className={styles.railScope}>{scopeSwitch}</div> : null}
+
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>
         {hasActiveFilters(query) ? (
@@ -60,69 +63,77 @@ export function AccountFilterPanel({
         ) : null}
       </div>
 
-      {chips.length > 0 ? (
-        <div className={styles.chipWrap} style={{ marginBottom: 14 }}>
-          {chips.map((c) => (
-            <TpChip key={c.id} onRemove={() => onChange(c.remove(query))}>
-              {c.label}
-            </TpChip>
-          ))}
-        </div>
-      ) : null}
-
-      {ACCOUNT_FILTER_GROUPS.map((group) => {
-        const isCollapsed = collapsed[group.id] ?? false;
-        return (
-          <section key={group.id} style={{ borderTop: "1px solid var(--tp-hairline)" }}>
-            <button
-              type="button"
-              aria-expanded={!isCollapsed}
-              onClick={() => setCollapsed((s) => ({ ...s, [group.id]: !isCollapsed }))}
-              style={groupHeadStyle}
-            >
-              <span>{group.title}</span>
-              <span aria-hidden style={{ color: "var(--tp-ink-4)" }}>
-                {isCollapsed ? "+" : "−"}
-              </span>
-            </button>
-            {!isCollapsed ? (
-              <div style={{ paddingBottom: 12, display: "flex", flexDirection: "column", gap: 14 }}>
-                {group.facets.map((facet) => (
-                  <FacetControl
-                    key={facetKeyOf(facet)}
-                    facet={facet}
-                    query={query}
-                    onChange={onChange}
-                    op={facet.kind === "term" ? (ops[facet.field] ?? "include") : "include"}
-                    onOpChange={(o) =>
-                      facet.kind === "term" && setOps((s) => ({ ...s, [facet.field]: o }))
-                    }
-                    counts={counts}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </section>
-        );
-      })}
+      {ACCOUNT_FILTER_GROUPS.map((group) => (
+        <GroupSection
+          key={group.id}
+          group={group}
+          query={query}
+          onChange={onChange}
+          counts={counts}
+        />
+      ))}
     </aside>
   );
 }
 
-// ── one facet control ───────────────────────────────────────────────────────────────────────────────────
+function GroupSection({
+  group,
+  query,
+  onChange,
+  counts,
+}: {
+  group: AccountFilterGroup;
+  query: AccountQuery;
+  onChange: (q: AccountQuery) => void;
+  counts?: Map<string, number>;
+}) {
+  const [open, setOpen] = useState(false); // collapsed by default
+  const activeCount = groupActiveCount(
+    query,
+    group.facets.map((f) => f.field),
+  );
+  return (
+    <section className={styles.group}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={styles.groupHead}
+      >
+        <span className={styles.groupTitle}>
+          {group.title}
+          {activeCount > 0 ? <span className={styles.groupBadge}>{activeCount}</span> : null}
+        </span>
+        <span aria-hidden className={styles.groupChevron}>
+          {open ? "−" : "+"}
+        </span>
+      </button>
+      {open ? (
+        <div className={styles.groupBody}>
+          {group.facets.map((facet) => (
+            <FacetControl
+              key={facetKeyOf(facet)}
+              facet={facet}
+              query={query}
+              onChange={onChange}
+              counts={counts}
+            />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function FacetControl({
   facet,
   query,
   onChange,
-  op,
-  onOpChange,
   counts,
 }: {
   facet: AccountFacetDef;
   query: AccountQuery;
   onChange: (q: AccountQuery) => void;
-  op: TermOp;
-  onOpChange: (op: TermOp) => void;
   counts?: Map<string, number>;
 }) {
   if (facet.kind === "range")
@@ -135,73 +146,107 @@ function FacetControl({
         onChange={onChange}
       />
     );
+  return <TermFacet facet={facet} query={query} onChange={onChange} counts={counts} />;
+}
 
-  // term facet: an Is / Is not op toggle + the value picker for that op.
-  const selected = getTermValues(query, facet.field, op);
+function TermFacet({
+  facet,
+  query,
+  onChange,
+  counts,
+}: {
+  facet: Extract<AccountFacetDef, { kind: "term" }>;
+  query: AccountQuery;
+  onChange: (q: AccountQuery) => void;
+  counts?: Map<string, number>;
+}) {
+  const [addOp, setAddOp] = useState<TermOp>("include");
+  const conditions = termConditions(query, facet.field);
+  const applied = new Set(conditions.map((c) => c.value));
   const typeaheadKey = facet.input === "typeahead" ? TYPEAHEAD_FACET_KEY[facet.field] : undefined;
+  const options = (facet.options ?? []).filter((o) => !applied.has(o.value));
 
   return (
     <div className={styles.facet}>
-      <div
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
-      >
-        <span className={styles.facetLabel}>{facet.label}</span>
-        <OpToggle op={op} onChange={onOpChange} />
-      </div>
-      {facet.input === "typeahead" ? (
-        typeaheadKey ? (
-          <FacetTypeahead
-            field={typeaheadKey}
-            label={facet.label}
-            selected={selected}
-            onAdd={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
-            onRemove={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
-          />
-        ) : (
-          <FreeTextAdd
-            label={facet.label}
-            selected={selected}
-            onAdd={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
-            onRemove={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
-          />
-        )
-      ) : (
-        <div className={styles.chipWrap}>
-          {(facet.options ?? []).length === 0 ? (
-            <span style={{ fontSize: 12, color: "var(--tp-ink-4)" }}>No options</span>
+      <span className={styles.facetLabel}>{facet.label}</span>
+
+      {conditions.length > 0 ? (
+        <div className={styles.condList}>
+          {conditions.map((c) => (
+            <span key={`${c.op}:${c.value}`} className={styles.condTag}>
+              <button
+                type="button"
+                className={styles.condType}
+                data-op={c.op}
+                title="Toggle is / is not"
+                onClick={() => onChange(flipTermCondition(query, facet.field, c.op, c.value))}
+              >
+                {c.op === "include" ? "is" : "is not"}
+              </button>
+              <span className={styles.condValue}>{c.label}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${c.label}`}
+                className={styles.condRemove}
+                onClick={() => onChange(removeTermCondition(query, facet.field, c.op, c.value))}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <div className={styles.addRow}>
+        <OpToggle op={addOp} onChange={setAddOp} />
+        {facet.input === "typeahead" ? (
+          typeaheadKey ? (
+            <FacetTypeahead
+              field={typeaheadKey}
+              label={facet.label}
+              selected={[...applied]}
+              onAdd={(v) => onChange(addTermCondition(query, facet.field, addOp, v))}
+              onRemove={(v) => onChange(removeTermCondition(query, facet.field, "include", v))}
+            />
           ) : (
-            (facet.options ?? []).map((o) => {
+            <FreeTextAdd
+              label={facet.label}
+              onAdd={(v) => onChange(addTermCondition(query, facet.field, addOp, v))}
+            />
+          )
+        ) : null}
+      </div>
+
+      {facet.input !== "typeahead" ? (
+        <div className={styles.chipWrap}>
+          {options.length === 0 ? (
+            <span className={styles.facetEmpty}>
+              {applied.size > 0 ? "All options selected" : "No options"}
+            </span>
+          ) : (
+            options.map((o) => {
               const count = counts?.get(`${facet.field}:${o.value}`);
               return (
-                <TpChip
+                <button
                   key={o.value}
-                  active={selected.includes(o.value)}
-                  onClick={() => onChange(toggleTermValue(query, facet.field, op, o.value))}
+                  type="button"
+                  className={styles.addChip}
+                  onClick={() => onChange(addTermCondition(query, facet.field, addOp, o.value))}
                 >
-                  {o.label}
+                  + {o.label}
                   {count !== undefined ? ` (${count.toLocaleString()})` : ""}
-                </TpChip>
+                </button>
               );
             })
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
 /** Free-text value add for account-only facets with no contacts-side typeahead index (hq_country/hq_city/…). */
-function FreeTextAdd({
-  label,
-  selected,
-  onAdd,
-  onRemove,
-}: {
-  label: string;
-  selected: string[];
-  onAdd: (value: string) => void;
-  onRemove: (value: string) => void;
-}) {
+function FreeTextAdd({ label, onAdd }: { label: string; onAdd: (value: string) => void }) {
   const [value, setValue] = useState("");
   const commit = () => {
     const v = value.trim();
@@ -209,34 +254,23 @@ function FreeTextAdd({
     setValue("");
   };
   return (
-    <div style={{ display: "block" }}>
-      <TpInput
-        value={value}
-        placeholder={`Add ${label.toLowerCase()}…`}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commit();
-          }
-        }}
-      />
-      {selected.length > 0 ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-          {selected.map((v) => (
-            <TpChip key={v} onRemove={() => onRemove(v)}>
-              {v}
-            </TpChip>
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <TpInput
+      value={value}
+      placeholder={`Add ${label.toLowerCase()}…`}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        }
+      }}
+    />
   );
 }
 
 function OpToggle({ op, onChange }: { op: TermOp; onChange: (op: TermOp) => void }) {
   return (
-    <span style={{ display: "inline-flex", gap: 4 }}>
+    <span className={styles.opToggle}>
       <MiniToggle active={op === "include"} onClick={() => onChange("include")}>
         is
       </MiniToggle>
@@ -260,16 +294,8 @@ function MiniToggle({
     <button
       type="button"
       onClick={onClick}
-      style={{
-        font: "inherit",
-        fontSize: 11,
-        padding: "1px 7px",
-        borderRadius: 999,
-        cursor: "pointer",
-        border: "1px solid var(--tp-hairline-2)",
-        background: active ? "var(--tp-ink)" : "var(--tp-surface)",
-        color: active ? "var(--tp-surface)" : "var(--tp-ink-3)",
-      }}
+      className={styles.miniToggle}
+      data-active={active ? "true" : undefined}
     >
       {children}
     </button>
@@ -298,7 +324,7 @@ function RangeControl({
         {label}
         {unit ? ` (${unit})` : ""}
       </span>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div className={styles.rangeRow}>
         <TpInput
           type="number"
           placeholder="Min"
@@ -315,22 +341,6 @@ function RangeControl({
     </div>
   );
 }
-
-// ── helpers ─────────────────────────────────────────────────────────────────────────────────────────────
-const groupHeadStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  width: "100%",
-  padding: "12px 0",
-  font: "inherit",
-  fontSize: 13,
-  fontWeight: 600,
-  color: "var(--tp-ink)",
-  background: "none",
-  border: 0,
-  cursor: "pointer",
-};
 
 function facetKeyOf(facet: AccountFacetDef): string {
   return `${facet.kind}:${facet.field}`;

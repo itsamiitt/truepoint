@@ -5,13 +5,18 @@ import { describe, expect, test } from "bun:test";
 import type { ContactQuery } from "@leadwolf/types";
 import {
   activeChips,
+  addTermCondition,
   clearAllFilters,
+  flipTermCondition,
   getBool,
   getRange,
   getTermValues,
+  groupActiveCount,
   hasActiveFilters,
+  removeTermCondition,
   setBool,
   setRange,
+  termConditions,
   toggleTermValue,
 } from "./filterGroups.ts";
 
@@ -78,5 +83,47 @@ describe("filterGroups helpers", () => {
     expect(cleared.text).toBe("growth");
     expect(cleared.sort).toBe("score_desc");
     expect(hasActiveFilters(cleared)).toBe(false);
+  });
+});
+
+describe("is/is-not multi-condition helpers", () => {
+  test("is and is-not coexist on one field as independent conditions", () => {
+    let q = addTermCondition(base, "outreach_status", "include", "new");
+    q = addTermCondition(q, "outreach_status", "exclude", "unsubscribed");
+    const conds = termConditions(q, "outreach_status");
+    expect(conds).toHaveLength(2);
+    expect(conds.find((c) => c.value === "new")?.op).toBe("include");
+    expect(conds.find((c) => c.value === "unsubscribed")?.op).toBe("exclude");
+  });
+
+  test("a value is single-typed: adding it under the other op moves it (never duplicates)", () => {
+    let q = addTermCondition(base, "seniority", "include", "vp");
+    q = addTermCondition(q, "seniority", "exclude", "vp"); // re-add as is-not
+    expect(getTermValues(q, "seniority", "include")).toEqual([]);
+    expect(getTermValues(q, "seniority", "exclude")).toEqual(["vp"]);
+    expect(termConditions(q, "seniority")).toHaveLength(1);
+  });
+
+  test("flip toggles a condition's type in place", () => {
+    let q = addTermCondition(base, "industry", "include", "Software");
+    q = flipTermCondition(q, "industry", "include", "Software");
+    expect(termConditions(q, "industry")[0]?.op).toBe("exclude");
+    q = flipTermCondition(q, "industry", "exclude", "Software");
+    expect(termConditions(q, "industry")[0]?.op).toBe("include");
+  });
+
+  test("remove drops exactly one condition", () => {
+    let q = addTermCondition(base, "seniority", "include", "vp");
+    q = addTermCondition(q, "seniority", "include", "director");
+    q = removeTermCondition(q, "seniority", "include", "vp");
+    expect(termConditions(q, "seniority").map((c) => c.value)).toEqual(["director"]);
+  });
+
+  test("groupActiveCount counts term values + bool/range across a group's fields", () => {
+    let q = addTermCondition(base, "seniority", "include", "vp");
+    q = addTermCondition(q, "seniority", "exclude", "ic");
+    q = setBool(q, "has_email", true); // different group → not counted for [seniority,title]
+    expect(groupActiveCount(q, ["seniority", "title"])).toBe(2);
+    expect(groupActiveCount(q, ["has_email"])).toBe(1);
   });
 });

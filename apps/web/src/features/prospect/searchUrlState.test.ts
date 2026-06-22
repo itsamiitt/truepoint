@@ -1,22 +1,19 @@
-// searchUrlState.test.ts — the Prospect URL-state round-trip proof (Done-When #5). Covers: a full query
-// (text + sort + term include/exclude + bool + range + view) survives serialise→parse unchanged; a pristine
-// state yields a clean (empty) URL; and a mangled/invalid filter blob degrades to an empty query instead of
-// throwing. Pure unit test — no DB, no DOM.
+// searchUrlState.test.ts — the Prospect URL-state round-trip proof (Done-When #5). Covers: a full ContactQuery
+// (text + sort + term include/exclude + bool + range) survives serialise→parse unchanged; a pristine query
+// yields a clean URL; a mangled/invalid filter blob degrades to an empty query instead of throwing; and
+// non-query params (e.g. ?scope) survive a query write. Pure unit test — no DB, no DOM.
 
 import { describe, expect, test } from "bun:test";
 import type { ContactQuery } from "@leadwolf/types";
 import {
-  type ProspectViewState,
   emptyQuery,
-  paramsToState,
-  searchStringToState,
-  stateToParams,
-  stateToSearchString,
+  paramsToQuery,
+  queryToParams,
+  queryToSearchString,
+  searchStringToQuery,
 } from "./searchUrlState.ts";
 
-function roundTrip(state: ProspectViewState): ProspectViewState {
-  return searchStringToState(stateToSearchString(state));
-}
+const roundTrip = (q: ContactQuery): ContactQuery => searchStringToQuery(queryToSearchString(q));
 
 const FULL: ContactQuery = {
   text: "growth",
@@ -31,48 +28,49 @@ const FULL: ContactQuery = {
 };
 
 describe("prospect URL state round-trip", () => {
-  test("a full query + view survives serialise → parse unchanged", () => {
-    const state: ProspectViewState = { query: FULL, view: "card" };
-    const back = roundTrip(state);
-    expect(back.view).toBe("card");
-    expect(back.query.text).toBe("growth");
-    expect(back.query.sort).toBe("score_desc");
-    expect(back.query.filters).toEqual(FULL.filters);
+  test("a full query survives serialise → parse unchanged", () => {
+    const back = roundTrip(FULL);
+    expect(back.text).toBe("growth");
+    expect(back.sort).toBe("score_desc");
+    expect(back.filters).toEqual(FULL.filters);
   });
 
-  test("a pristine state yields a clean URL (only defaults → no params)", () => {
-    const params = stateToParams({ query: emptyQuery(), view: "list" });
-    expect(params.toString()).toBe("");
+  test("a pristine query yields a clean URL (only defaults → no params)", () => {
+    expect(queryToParams(emptyQuery()).toString()).toBe("");
   });
 
-  test("text + sort + view are readable params; filters are one encoded blob", () => {
-    const params = stateToParams({ query: FULL, view: "card" });
+  test("text + sort are readable params; filters are one encoded blob", () => {
+    const params = queryToParams(FULL);
     expect(params.get("q")).toBe("growth");
     expect(params.get("sort")).toBe("score_desc");
-    expect(params.get("view")).toBe("card");
     expect(params.get("f")).toBeTruthy(); // opaque but present
   });
 
+  test("non-query params (e.g. ?scope) survive a query write; stale query keys are cleared", () => {
+    const base = new URLSearchParams("scope=accounts&q=old&sort=created_desc");
+    const out = queryToParams({ ...emptyQuery(), text: "new" }, base);
+    expect(out.get("scope")).toBe("accounts"); // preserved
+    expect(out.get("q")).toBe("new"); // overwritten
+    expect(out.has("sort")).toBe(false); // stale query key cleared (new query uses default sort)
+  });
+
   test("a mangled filter blob degrades to an empty query (never throws)", () => {
-    const state = paramsToState(new URLSearchParams("q=hi&f=%%%not-base64%%%"));
-    expect(state.query.text).toBe("hi");
-    expect(state.query.filters).toEqual([]); // invalid blob dropped, not fatal
+    const q = paramsToQuery(new URLSearchParams("q=hi&f=%%%not-base64%%%"));
+    expect(q.text).toBe("hi");
+    expect(q.filters).toEqual([]); // invalid blob dropped, not fatal
   });
 
   test("an invalid filter clause (bad facet) is rejected → empty query, not a crash", () => {
-    // Encode a filters array with an unknown facet; contactQuery.safeParse must reject it on read.
     const bad = btoa(JSON.stringify([{ kind: "term", field: "not_a_facet", values: ["x"] }]))
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
       .replace(/=+$/, "");
-    const state = paramsToState(new URLSearchParams(`f=${bad}`));
-    expect(state.query.filters).toEqual([]);
+    expect(paramsToQuery(new URLSearchParams(`f=${bad}`)).filters).toEqual([]);
   });
 
-  test("default sort + list view are omitted from the URL", () => {
-    const params = stateToParams({ query: { ...emptyQuery(), text: "x" }, view: "list" });
+  test("default sort is omitted from the URL", () => {
+    const params = queryToParams({ ...emptyQuery(), text: "x" });
     expect(params.has("sort")).toBe(false);
-    expect(params.has("view")).toBe(false);
     expect(params.get("q")).toBe("x");
   });
 });

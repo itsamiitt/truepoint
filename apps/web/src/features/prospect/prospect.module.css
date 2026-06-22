@@ -21,7 +21,7 @@
   top: 16px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   max-height: calc(100vh - 32px);
   overflow-y: auto;
   padding-right: 4px;
@@ -40,17 +40,17 @@
   text-transform: uppercase;
   color: var(--tp-ink-3);
 }
-/* The rail header slot (saved + recent searches) injected between the pills and the filter groups. */
+/* The rail header slot (saved + recent searches) injected under the head, before the filter groups. */
 .railSection {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding-bottom: 14px;
+  gap: 10px;
+  padding-bottom: 8px;
 }
 .facet {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .facetLabel {
   font-size: 12px;
@@ -116,35 +116,166 @@
   padding: 8px 0 4px;
 }
 
-/* Card view (the list⇄card toggle). */
-.cardGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 12px;
+/* ── Filter accordion (collapsed by default) + is/is-not conditions ─────────────────────────────────────── */
+.railScope {
+  padding-bottom: 2px;
 }
-.prospectCard {
+.group {
+  border-top: 1px solid var(--tp-hairline);
+}
+.groupHead {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px;
-  text-align: left;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 0;
   font: inherit;
-  background: var(--tp-surface);
-  border: 1px solid var(--tp-hairline-2);
-  border-radius: var(--tp-radius-card);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  background: none;
+  border: 0;
   cursor: pointer;
-  transition: border-color var(--tp-duration-fast) var(--tp-ease), box-shadow
-    var(--tp-duration-fast) var(--tp-ease);
 }
-.prospectCard:hover {
-  border-color: var(--tp-ink-4);
-  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.06);
+.groupTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
-.cardMeta {
+.groupBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--tp-surface);
+  background: var(--tp-cobalt);
+}
+.groupChevron {
+  color: var(--tp-ink-4);
+  font-size: 14px;
+}
+.groupBody {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 10px;
+  padding: 2px 0 10px;
+}
+.facetRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.facetEmpty {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+/* The applied is/is-not conditions for a term facet — each an independent, inline tag. */
+.condList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.condTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 2px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: 8px;
+  background: var(--tp-surface-2);
+}
+.condType {
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--tp-ink);
+  cursor: pointer;
+  color: var(--tp-surface);
+  background: var(--tp-ink);
+}
+/* "is not" reads as a negative → outline rather than solid, so it's scannable at a glance. */
+.condType[data-op="exclude"] {
+  color: var(--tp-ink-2);
+  background: var(--tp-surface);
+  border-color: var(--tp-hairline-2);
+}
+.condValue {
+  flex: 1;
+  font-size: 12px;
+  color: var(--tp-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.condRemove {
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--tp-ink-4);
+}
+.condRemove:hover {
+  color: var(--tp-ink);
+}
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.addRow > :last-child {
+  flex: 1;
   min-width: 0;
+}
+.opToggle {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.miniToggle {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid var(--tp-hairline-2);
+  background: var(--tp-surface);
+  color: var(--tp-ink-3);
+}
+.miniToggle[data-active="true"] {
+  background: var(--tp-ink);
+  color: var(--tp-surface);
+  border-color: var(--tp-ink);
+}
+.addChip {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px dashed var(--tp-hairline-2);
+  background: var(--tp-surface);
+  color: var(--tp-ink-2);
+}
+.addChip:hover {
+  border-style: solid;
+  border-color: var(--tp-ink-4);
+}
+.rangeRow {
+  display: flex;
+  gap: 8px;
 }
 
 /* Active-filter summary */

@@ -1,40 +1,35 @@
-// searchUrlState.ts — the single source of truth for serialising the Prospect search/filter state to and
-// from the page URL (Done-When #5: a view is shareable, bookmarkable, and restored correctly after refresh or
-// the back button). State is the validated server `ContactQuery` (search.ts) plus the list/card view toggle;
-// pagination (cursor/limit) is deliberately EPHEMERAL and never written to the URL. The filter set is carried
-// as one compact, URL-safe encoded blob and re-validated through the `contactQuery` Zod schema on read, so a
-// hand-mangled or stale URL can never crash the page — it falls back to an empty (valid) query. Pure module:
-// no React, no DOM beyond URLSearchParams; fully unit-tested.
+// searchUrlState.ts — the single source of truth for serialising the Prospect search/filter `ContactQuery` to
+// and from the page URL (Done-When #5: a search is shareable, bookmarkable, and restored correctly after
+// refresh or the back button). Pagination (cursor/limit) is deliberately EPHEMERAL and never written to the
+// URL. The filter set is carried as one compact, URL-safe encoded blob and re-validated through the
+// `contactQuery` Zod schema on read, so a hand-mangled or stale URL can never crash the page — it falls back to
+// an empty (valid) query. The query keys (q/sort/f) are written onto a CALLER-SUPPLIED params object so
+// non-query params (e.g. ?scope) survive. Pure module: no React, no DOM beyond URLSearchParams; unit-tested.
 
 import { type ContactQuery, contactQuery } from "@leadwolf/types";
 
-export type ProspectView = "list" | "card";
-
-export interface ProspectViewState {
-  query: ContactQuery;
-  view: ProspectView;
-}
+const QUERY_KEYS = ["q", "sort", "f"] as const;
 
 /** An empty, valid query (all Zod defaults applied) — the safe fallback for an absent/invalid URL. */
 export function emptyQuery(): ContactQuery {
   return contactQuery.parse({});
 }
 
-/** Serialise the view state to URL params. Defaults (relevance sort, list view, no text/filters) are omitted
- *  so a pristine view yields a clean URL. `limit`/`cursor` are NOT persisted (pagination is ephemeral). */
-export function stateToParams(state: ProspectViewState): URLSearchParams {
-  const params = new URLSearchParams();
-  const { query, view } = state;
+/** Write the query keys (q/sort/f) onto `into` (a fresh params by default), clearing any stale query keys
+ *  first while leaving every other param (e.g. ?scope) untouched. Defaults (relevance sort, no text/filters)
+ *  are omitted so a pristine query yields a clean URL. `limit`/`cursor` are NOT persisted. */
+export function queryToParams(query: ContactQuery, into?: URLSearchParams): URLSearchParams {
+  const params = into ?? new URLSearchParams();
+  for (const k of QUERY_KEYS) params.delete(k);
   if (query.text) params.set("q", query.text);
   if (query.sort && query.sort !== "relevance") params.set("sort", query.sort);
   if (query.filters.length > 0) params.set("f", encodeFilters(query.filters));
-  if (view !== "list") params.set("view", view);
   return params;
 }
 
-/** Parse view state back from URL params. The filter blob is re-validated through `contactQuery`; anything
- *  invalid degrades to an empty query rather than throwing (a robust, shareable-URL contract). */
-export function paramsToState(params: URLSearchParams): ProspectViewState {
+/** Parse the ContactQuery back from URL params. The filter blob is re-validated through `contactQuery`;
+ *  anything invalid degrades to an empty query rather than throwing (a robust, shareable-URL contract). */
+export function paramsToQuery(params: URLSearchParams): ContactQuery {
   const candidate = {
     text: params.get("q") ?? undefined,
     sort: params.get("sort") ?? undefined,
@@ -42,19 +37,17 @@ export function paramsToState(params: URLSearchParams): ProspectViewState {
     // limit is ephemeral; let the schema default apply.
   };
   const parsed = contactQuery.safeParse(candidate);
-  const query = parsed.success ? parsed.data : emptyQuery();
-  const view: ProspectView = params.get("view") === "card" ? "card" : "list";
-  return { query, view };
+  return parsed.success ? parsed.data : emptyQuery();
 }
 
-/** Convenience: the URL search string (no leading "?") for a state — what the page pushes to history. */
-export function stateToSearchString(state: ProspectViewState): string {
-  return stateToParams(state).toString();
+/** Convenience: the URL search string (no leading "?") for a query, merged onto optional base params. */
+export function queryToSearchString(query: ContactQuery, base?: URLSearchParams): string {
+  return queryToParams(query, base).toString();
 }
 
-/** Convenience: parse from a raw search string (with or without a leading "?"). */
-export function searchStringToState(search: string): ProspectViewState {
-  return paramsToState(new URLSearchParams(search.startsWith("?") ? search.slice(1) : search));
+/** Convenience: parse a query from a raw search string (with or without a leading "?"). */
+export function searchStringToQuery(search: string): ContactQuery {
+  return paramsToQuery(new URLSearchParams(search.startsWith("?") ? search.slice(1) : search));
 }
 
 // ── filter blob codec (unicode-safe base64url of the filters JSON) ──────────────────────────────────────
