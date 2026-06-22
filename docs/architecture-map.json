@@ -66,8 +66,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 698,
-  "fileSetHash": "sha256:0489b5eb81b0200b8ff3d32696a90a48c4abc4fa450cf7f0cd7ced9606f3f0a7",
+  "fileCount": 700,
+  "fileSetHash": "sha256:c102e248cd762d5da3c43275787fa52fd381f991b459609691091b2426a57a2a",
   "features": {
     "activity": {
       "web": [],
@@ -509,6 +509,8 @@
         "apps/web/src/features/prospect/index.ts",
         "apps/web/src/features/prospect/savedSearchApi.ts",
         "apps/web/src/features/prospect/searchApi.ts",
+        "apps/web/src/features/prospect/searchUrlState.test.ts",
+        "apps/web/src/features/prospect/searchUrlState.ts",
         "apps/web/src/features/prospect/stagesApi.ts",
         "apps/web/src/features/prospect/tagColors.ts",
         "apps/web/src/features/prospect/types.ts"
