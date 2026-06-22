@@ -79,6 +79,12 @@ export const accounts = pgTable(
     customFieldsGin: index("idx_accounts_custom_fields_gin").using("gin", t.customFields),
     // GIN over the technologies array so `technology` facet filters (contains) stay index-backed.
     technologiesGin: index("idx_accounts_technologies_gin").using("gin", t.technologies),
+    // Account-search sort/filter support (24/ADR-0035, company-level search): composite with workspace_id so
+    // the facet/sort stays index-backed under the RLS workspace predicate (never a seq-scan).
+    wsIndustryIdx: index("idx_accounts_ws_industry").on(t.workspaceId, t.industry),
+    wsEmployeeIdx: index("idx_accounts_ws_employee_count").on(t.workspaceId, t.employeeCount),
+    wsNameIdx: index("idx_accounts_ws_name").on(t.workspaceId, t.name),
+    wsCreatedIdx: index("idx_accounts_ws_created_at").on(t.workspaceId, t.createdAt),
   }),
 );
 
@@ -180,6 +186,11 @@ export const contacts = pgTable(
     duplicateIdx: index("idx_contacts_duplicate_of")
       .on(t.duplicateOfContactId)
       .where(sql`${t.duplicateOfContactId} IS NOT NULL`),
+    // Per-account contact rollup (account-search contactCount/revealedContactCount, 24/ADR-0035): composite
+    // with workspace_id so the correlated count subquery stays index-backed under the RLS workspace predicate.
+    wsAccountIdx: index("idx_contacts_ws_account")
+      .on(t.workspaceId, t.accountId)
+      .where(sql`${t.accountId} IS NOT NULL`),
   }),
 );
 

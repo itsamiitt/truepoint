@@ -183,6 +183,7 @@ export {
   searchRepository,
   type SearchResultPage,
 } from "./repositories/searchRepository.ts";
+export { accountSearchRepository } from "./repositories/accountSearchRepository.ts";
 export {
   enrichmentPolicyRepository,
   type EnrichmentPolicyRecord,

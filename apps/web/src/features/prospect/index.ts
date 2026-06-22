@@ -36,6 +36,21 @@ export {
 } from "./savedSearchApi";
 export { searchContacts, suggestField, fetchFacetCounts, aiSearch } from "./searchApi";
 
+// Company-level (accounts) search (24, ADR-0035): the firmographic sibling of the Contacts surface. ProspectPage
+// renders these under the "Accounts" scope (filter rail + results grid + read-only detail drawer), driven by
+// useAccountSearch + useAccountFacetCounts against the real /account-search API. Exported for reuse/testing.
+export { AccountFilterPanel } from "./components/AccountFilterPanel";
+export { AccountsTable } from "./components/AccountsTable";
+export { AccountDetailDrawer } from "./components/AccountDetailDrawer";
+export { useAccountSearch } from "./hooks/useAccountSearch";
+export { useAccountFacetCounts } from "./hooks/useAccountFacetCounts";
+export {
+  searchAccounts,
+  fetchAccountFacetCounts,
+  suggestAccountField,
+  countAccounts,
+} from "./accountSearchApi";
+
 // AI NL→search (23, ADR-0023): the natural-language box + the validated-filter preview. The box compiles
 // NL → a validated contactQuery and applies it on confirm via useContactSearch (human-in-the-loop).
 export { AiSearchBox } from "./components/AiSearchBox";

@@ -36,6 +36,13 @@
       "when": 1782080927315,
       "tag": "0004_new_fenris",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782113776580,
+      "tag": "0005_account_search_indexes",
+      "breakpoints": true
     }
   ]
 }

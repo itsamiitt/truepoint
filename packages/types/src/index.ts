@@ -16,6 +16,7 @@ export * from "./activity.ts";
 export * from "./outreach.ts";
 export * from "./home.ts";
 export * from "./search.ts";
+export * from "./accountsSearch.ts";
 export * from "./savedSearch.ts";
 export * from "./lists.ts";
 export * from "./bulkActions.ts";

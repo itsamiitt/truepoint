@@ -313,6 +313,9 @@ export {
   type BulkEnrichInput,
   type BulkExportInput,
 } from "./prospect/bulkActions.ts";
+// Company-level (accounts) search count (24/ADR-0035): the firmographic sibling of searchCount. Thin delegate
+// to the @leadwolf/db accountSearchRepository (no query-semantics layer needed for accounts).
+export { searchAccountsCount } from "./prospect/accountSearch.ts";
 
 // Record customization (custom fields — ADR-0028, gap G-REV-5): registry CRUD + typed-jsonb value set/get +
 // the pure type validator (reused by import mapping later).

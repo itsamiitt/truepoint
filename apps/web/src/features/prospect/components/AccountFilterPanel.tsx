@@ -1,59 +1,52 @@
-// FilterPanel.tsx — the Apollo/ZoomInfo-style faceted filter sidebar (24 §2), rebuilt to drive the server
-// `ContactQuery` directly via the pure helpers in ../filterGroups (so multi-select within a facet = OR, across
-// facets = AND, and include/exclude give negative filters). Renders the five collapsible groups from
-// FILTER_GROUPS; reuses FacetTypeahead for high-cardinality facets and shows live per-option counts when the
-// page supplies them. Removable pills (activeChips) + clear-all sit at the top. Presentation only — the page
-// owns the query state, persists it to the URL (searchUrlState), and fetches counts. Not wired into
-// ProspectPage yet (that swap lands next, preserving the existing bulk/detail wiring).
+// AccountFilterPanel.tsx — the firmographic faceted filter sidebar (the Accounts sibling of FilterPanel.tsx),
+// driving the server `AccountQuery` directly via the pure helpers in ../accountFilterGroups (multi-select within
+// a facet = OR, across facets = AND, include/exclude give negative filters). Renders the five collapsible
+// firmographic groups from ACCOUNT_FILTER_GROUPS; reuses FacetTypeahead for the high-cardinality facets that map
+// onto a server FacetKey, and a free-text add for the account-only facets (sub_industry / hq_country / hq_city)
+// that have no contacts-side typeahead index. Shows live per-option counts when the page supplies them. Removable
+// pills (activeChips) + clear-all sit at the top. Presentation only — the page owns the query state + the URL.
 "use client";
 
-import type { BoolFilterField, ContactQuery } from "@leadwolf/types";
+import type { AccountQuery, AccountTermField, FacetKey } from "@leadwolf/types";
 import { TpChip, TpInput } from "@leadwolf/ui";
 import { type CSSProperties, type ReactNode, useState } from "react";
 import {
-  FILTER_GROUPS,
-  type FacetDef,
+  ACCOUNT_FILTER_GROUPS,
+  type AccountFacetDef,
   type TermOp,
   activeChips,
   clearAllFilters,
-  getBool,
   getRange,
   getTermValues,
   hasActiveFilters,
-  setBool,
   setRange,
   toggleTermValue,
-} from "../filterGroups";
+} from "../accountFilterGroups";
 import styles from "../prospect.module.css";
 import { FacetTypeahead } from "./FacetTypeahead";
 
-export interface OwnerOption {
-  value: string;
-  label: string;
-}
+// Account term fields that ALSO exist on the contacts-side FacetKey index → reuse the server typeahead.
+const TYPEAHEAD_FACET_KEY: Partial<Record<AccountTermField, FacetKey>> = {
+  industry: "industry",
+  technology: "technology",
+};
 
-export function FilterPanel({
+export function AccountFilterPanel({
   query,
   onChange,
   counts,
-  owners = [],
-  header,
 }: {
-  query: ContactQuery;
-  onChange: (next: ContactQuery) => void;
-  /** Live per-option counts keyed `${field}:${value}` (from POST /search/facets). Optional. */
+  query: AccountQuery;
+  onChange: (next: AccountQuery) => void;
+  /** Live per-option counts keyed `${field}:${value}` (from POST /search/accounts/facets). Optional. */
   counts?: Map<string, number>;
-  /** Teammates (+ a "Me" entry the page prepends) for the Owner facet. */
-  owners?: OwnerOption[];
-  /** Optional rail content (saved + recent searches) rendered after the active-filter pills, before groups. */
-  header?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [ops, setOps] = useState<Record<string, TermOp>>({});
   const chips = activeChips(query);
 
   return (
-    <aside className={styles.rail} aria-label="Filters">
+    <aside className={styles.rail} aria-label="Company filters">
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>
         {hasActiveFilters(query) ? (
@@ -77,9 +70,7 @@ export function FilterPanel({
         </div>
       ) : null}
 
-      {header != null ? <div className={styles.railSection}>{header}</div> : null}
-
-      {FILTER_GROUPS.map((group) => {
+      {ACCOUNT_FILTER_GROUPS.map((group) => {
         const isCollapsed = collapsed[group.id] ?? false;
         return (
           <section key={group.id} style={{ borderTop: "1px solid var(--tp-hairline)" }}>
@@ -107,7 +98,6 @@ export function FilterPanel({
                       facet.kind === "term" && setOps((s) => ({ ...s, [facet.field]: o }))
                     }
                     counts={counts}
-                    owners={owners}
                   />
                 ))}
               </div>
@@ -127,26 +117,19 @@ function FacetControl({
   op,
   onOpChange,
   counts,
-  owners,
 }: {
-  facet: FacetDef;
-  query: ContactQuery;
-  onChange: (q: ContactQuery) => void;
+  facet: AccountFacetDef;
+  query: AccountQuery;
+  onChange: (q: AccountQuery) => void;
   op: TermOp;
   onOpChange: (op: TermOp) => void;
   counts?: Map<string, number>;
-  owners: OwnerOption[];
 }) {
-  if (facet.kind === "bool")
-    return (
-      <BoolControl field={facet.field} label={facet.label} query={query} onChange={onChange} />
-    );
   if (facet.kind === "range")
     return (
       <RangeControl
         field={facet.field}
         label={facet.label}
-        valueKind={facet.valueKind}
         unit={facet.unit}
         query={query}
         onChange={onChange}
@@ -155,7 +138,7 @@ function FacetControl({
 
   // term facet: an Is / Is not op toggle + the value picker for that op.
   const selected = getTermValues(query, facet.field, op);
-  const options = facet.input === "owner" ? owners : (facet.options ?? []);
+  const typeaheadKey = facet.input === "typeahead" ? TYPEAHEAD_FACET_KEY[facet.field] : undefined;
 
   return (
     <div className={styles.facet}>
@@ -166,19 +149,28 @@ function FacetControl({
         <OpToggle op={op} onChange={onOpChange} />
       </div>
       {facet.input === "typeahead" ? (
-        <FacetTypeahead
-          field={facet.field}
-          label={facet.label}
-          selected={selected}
-          onAdd={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
-          onRemove={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
-        />
+        typeaheadKey ? (
+          <FacetTypeahead
+            field={typeaheadKey}
+            label={facet.label}
+            selected={selected}
+            onAdd={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
+            onRemove={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
+          />
+        ) : (
+          <FreeTextAdd
+            label={facet.label}
+            selected={selected}
+            onAdd={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
+            onRemove={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
+          />
+        )
       ) : (
         <div className={styles.chipWrap}>
-          {options.length === 0 ? (
+          {(facet.options ?? []).length === 0 ? (
             <span style={{ fontSize: 12, color: "var(--tp-ink-4)" }}>No options</span>
           ) : (
-            options.map((o) => {
+            (facet.options ?? []).map((o) => {
               const count = counts?.get(`${facet.field}:${o.value}`);
               return (
                 <TpChip
@@ -194,6 +186,50 @@ function FacetControl({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Free-text value add for account-only facets with no contacts-side typeahead index (hq_country/hq_city/…). */
+function FreeTextAdd({
+  label,
+  selected,
+  onAdd,
+  onRemove,
+}: {
+  label: string;
+  selected: string[];
+  onAdd: (value: string) => void;
+  onRemove: (value: string) => void;
+}) {
+  const [value, setValue] = useState("");
+  const commit = () => {
+    const v = value.trim();
+    if (v) onAdd(v);
+    setValue("");
+  };
+  return (
+    <div style={{ display: "block" }}>
+      <TpInput
+        value={value}
+        placeholder={`Add ${label.toLowerCase()}…`}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+        }}
+      />
+      {selected.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+          {selected.map((v) => (
+            <TpChip key={v} onRemove={() => onRemove(v)}>
+              {v}
+            </TpChip>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -240,61 +276,22 @@ function MiniToggle({
   );
 }
 
-function BoolControl({
-  field,
-  label,
-  query,
-  onChange,
-}: {
-  field: BoolFilterField;
-  label: string;
-  query: ContactQuery;
-  onChange: (q: ContactQuery) => void;
-}) {
-  const current = getBool(query, field);
-  const opt = (value: boolean | undefined, text: string) => (
-    <MiniToggle active={current === value} onClick={() => onChange(setBool(query, field, value))}>
-      {text}
-    </MiniToggle>
-  );
-  return (
-    <div className={styles.facet}>
-      <div
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
-      >
-        <span className={styles.facetLabel}>{label}</span>
-        <span style={{ display: "inline-flex", gap: 4 }}>
-          {opt(undefined, "Any")}
-          {opt(true, "Yes")}
-          {opt(false, "No")}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function RangeControl({
   field,
   label,
-  valueKind,
   unit,
   query,
   onChange,
 }: {
   field: string;
   label: string;
-  valueKind: "number" | "date";
   unit?: string;
-  query: ContactQuery;
-  onChange: (q: ContactQuery) => void;
+  query: AccountQuery;
+  onChange: (q: AccountQuery) => void;
 }) {
   const { gte, lte } = getRange(query, field);
-  const toInput = (n: number | undefined) =>
-    n === undefined ? "" : valueKind === "date" ? msToDateInput(n) : String(n);
-  const fromInput = (s: string): number | undefined => {
-    if (!s) return undefined;
-    return valueKind === "date" ? dateInputToMs(s) : Number(s);
-  };
+  const toInput = (n: number | undefined) => (n === undefined ? "" : String(n));
+  const fromInput = (s: string): number | undefined => (s ? Number(s) : undefined);
   return (
     <div className={styles.facet}>
       <span className={styles.facetLabel}>
@@ -303,13 +300,13 @@ function RangeControl({
       </span>
       <div style={{ display: "flex", gap: 8 }}>
         <TpInput
-          type={valueKind === "date" ? "date" : "number"}
+          type="number"
           placeholder="Min"
           value={toInput(gte)}
           onChange={(e) => onChange(setRange(query, field, fromInput(e.target.value), lte))}
         />
         <TpInput
-          type={valueKind === "date" ? "date" : "number"}
+          type="number"
           placeholder="Max"
           value={toInput(lte)}
           onChange={(e) => onChange(setRange(query, field, gte, fromInput(e.target.value)))}
@@ -335,15 +332,6 @@ const groupHeadStyle: CSSProperties = {
   cursor: "pointer",
 };
 
-function facetKeyOf(facet: FacetDef): string {
+function facetKeyOf(facet: AccountFacetDef): string {
   return `${facet.kind}:${facet.field}`;
-}
-
-/** epoch-ms → <input type=date> value (YYYY-MM-DD, UTC). */
-function msToDateInput(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
-}
-/** <input type=date> value → epoch-ms at UTC midnight. */
-function dateInputToMs(s: string): number {
-  return new Date(`${s}T00:00:00.000Z`).getTime();
 }
