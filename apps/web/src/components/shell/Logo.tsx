@@ -28,7 +28,11 @@ export function Brandmark({
       role={title ? "img" : "presentation"}
       aria-hidden={title ? undefined : true}
       aria-label={title}
-      style={{ display: "block", color: reversed ? "#fff" : "var(--tp-ink)", flexShrink: 0 }}
+      style={{
+        display: "block",
+        color: reversed ? "var(--tp-on-fill)" : "var(--tp-ink)",
+        flexShrink: 0,
+      }}
     >
       {title ? <title>{title}</title> : null}
       {/* Apex — the single earned accent (Cobalt fill). */}
@@ -55,7 +59,7 @@ export function Wordmark({
         fontSize: size,
         letterSpacing: "-0.02em",
         lineHeight: 1,
-        color: reversed ? "#fff" : "var(--tp-ink)",
+        color: reversed ? "var(--tp-on-fill)" : "var(--tp-ink)",
         whiteSpace: "nowrap",
         ...style,
       }}

@@ -25,9 +25,9 @@
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  transition: background var(--tp-duration-fast) var(--tp-ease),
-    border-color var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast) var(--tp-ease),
-    opacity var(--tp-duration-fast) var(--tp-ease);
+  transition: background var(--tp-duration-fast) var(--tp-ease), border-color
+    var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast) var(--tp-ease), opacity
+    var(--tp-duration-fast) var(--tp-ease);
 }
 .tp-ui-btn:disabled,
 .tp-ui-btn[aria-disabled="true"] {
@@ -44,7 +44,7 @@
 }
 .tp-ui-btn--primary {
   background: var(--tp-btn);
-  color: #fff;
+  color: var(--tp-on-fill);
 }
 .tp-ui-btn--primary:not(:disabled):hover {
   background: var(--tp-btn-700);
@@ -67,10 +67,10 @@
 }
 .tp-ui-btn--danger {
   background: var(--danger);
-  color: #fff;
+  color: var(--tp-on-fill);
 }
 .tp-ui-btn--danger:not(:disabled):hover {
-  background: #b91c1c;
+  background: var(--danger-700);
 }
 .tp-ui-btn--link {
   height: auto;
@@ -96,7 +96,8 @@
   background: transparent;
   color: var(--tp-ink-3);
   cursor: pointer;
-  transition: background var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast) var(--tp-ease);
+  transition: background var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast)
+    var(--tp-ease);
 }
 .tp-ui-iconbtn:not(:disabled):hover {
   background: var(--nav-hover-fill);
@@ -173,8 +174,8 @@ select.tp-ui-field {
   cursor: pointer;
   position: relative;
   flex: 0 0 auto;
-  transition: background var(--tp-duration-fast) var(--tp-ease),
-    border-color var(--tp-duration-fast) var(--tp-ease);
+  transition: background var(--tp-duration-fast) var(--tp-ease), border-color
+    var(--tp-duration-fast) var(--tp-ease);
 }
 .tp-ui-checkbox input:checked {
   background: var(--tp-btn);
@@ -187,7 +188,7 @@ select.tp-ui-field {
   top: 2px;
   width: 4px;
   height: 8px;
-  border: solid #fff;
+  border: solid var(--tp-on-fill);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
@@ -198,7 +199,7 @@ select.tp-ui-field {
   top: 6px;
   width: 8px;
   height: 2px;
-  background: #fff;
+  background: var(--tp-on-fill);
 }
 .tp-ui-checkbox input:indeterminate {
   background: var(--tp-btn);
@@ -231,7 +232,7 @@ select.tp-ui-field {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--tp-on-fill);
   transition: transform var(--tp-duration) var(--tp-ease);
 }
 .tp-ui-switch:checked {
@@ -386,7 +387,8 @@ select.tp-ui-field {
   color: var(--tp-ink-3);
   border-radius: var(--tp-radius-sm);
   cursor: pointer;
-  transition: background var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast) var(--tp-ease);
+  transition: background var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast)
+    var(--tp-ease);
 }
 .tp-ui-segmented-item:hover {
   color: var(--tp-ink);
@@ -578,7 +580,7 @@ select.tp-ui-field {
   z-index: var(--tp-z-popover);
   padding: 5px 8px;
   background: var(--tp-ink);
-  color: #fff;
+  color: var(--tp-on-fill);
   font-size: 12px;
   line-height: 1.3;
   white-space: nowrap;

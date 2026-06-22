@@ -148,7 +148,7 @@ export function LinksTable({
   ];
 
   return (
-    <section className="lw-card">
+    <section className="tp-card">
       <h2>Captured links {loading ? "" : `(${links.length})`}</h2>
       <StateSwitch
         loading={loading}

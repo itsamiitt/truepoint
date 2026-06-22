@@ -1,6 +1,20 @@
-# Brand Identity — LeadWolf
+# Brand Identity — TruePoint (formerly LeadWolf)
 
-> The brand system for **LeadWolf**. It is deliberately the *same* visual language as the product
+> [!IMPORTANT]
+> **Superseded — the product is now _TruePoint_, not _LeadWolf_.** The authoritative brand source is
+> [`Guidelines/TruePoint Brand Kit.html`](../../Guidelines/TruePoint%20Brand%20Kit.html) and the live design
+> tokens in [`packages/ui/src/tokens.css`](../../packages/ui/src/tokens.css). The corrected canonical facts
+> below **override** the legacy text that follows:
+> - **Name:** TruePoint. The wordmark is "True" (weight 400) + "Point" (weight 700–800), one color.
+> - **Mark:** three stacked chevrons converging on an apex — the apex stroke is Cobalt, the rest is ink.
+> - **Accent — Cobalt `#2563C9`** (`--tp-cobalt`): fills / mark / accents **only, never body text**. The old
+>   "Wolf-Indigo" `#4F46E5` is **retired** repo-wide.
+> - **Primary button = Ink `#111827`** (`--tp-btn`), not the accent.
+> - **Type:** Geist + Geist Mono. **Light theme only.**
+>
+> The "LeadWolf" name and wolf metaphor in the sections below are retained for historical context only.
+
+> The brand system. It is deliberately the *same* visual language as the product
 > ([04-ui-ux-design.md](./04-ui-ux-design.md)): **clean, light, near-monochrome**, with one restrained
 > accent. Quiet confidence, not loud sales-tech.
 
@@ -96,14 +110,14 @@ with **one** primary accent used sparingly and semantic colors reserved for stat
 | Border | `--border-default` | `#E5E7EB` | inputs, cards |
 | Text — primary | `--text-primary` | `#111827` | near-black, headings/body |
 | Text — secondary | `--text-secondary` | `#6B7280` | muted grey, labels/icons |
-| **Accent — "Wolf Indigo"** | `--accent` | `#4F46E5` | **rare**: primary CTA, active emphasis, the logo "eye" |
+| **Accent — "Cobalt"** | `--tp-cobalt` | `#2563C9` | **rare**: fills, the mark apex, active emphasis — **never body text**. The primary CTA is Ink (`--tp-btn` `#111827`), not the accent. |
 | Success | `--success` | `#16A34A` | verified email, healthy |
 | Warning | `--warning` | `#D97706` | low credits, risky email |
 | Danger | `--danger` | `#DC2626` | invalid, destructive |
 
-**The accent rule:** color is *earned*. ~90% of any screen is monochrome; **Wolf Indigo** appears only on
-the single most important action or state. The name's nocturnal-hunter spirit lives in this deep
-**indigo/twilight** accent — *not* in a dark theme (a dark "dusk" UI was explicitly rejected, see
+**The accent rule:** color is *earned*. ~90% of any screen is monochrome; **Cobalt** appears only as a *fill*
+on the single most important action or state (and on the mark apex) — never as body text. The accent lives in
+this deep **cobalt** tone — *not* in a dark theme (a dark "dusk" UI was explicitly rejected, see
 [04](./04-ui-ux-design.md)).
 
 ## 8. Typography
@@ -133,11 +147,11 @@ the single most important action or state. The name's nocturnal-hunter spirit li
 
 ## 11. Quick-reference (the 10-second brand)
 
-- **Name:** LeadWolf — precise, relentless pack hunter for the right leads.
-- **Look:** clean light monochrome + one Wolf-Indigo accent.
-- **Voice:** direct, calm-confident, jargon-free; "pack", never "predator".
-- **Tagline:** *Hunt your best leads.*
-- **Type:** Geist / Inter. **Icons:** Lucide. **Accent:** `#4F46E5`, used rarely.
+- **Name:** TruePoint — precise, signal-driven prospecting for the right leads.
+- **Look:** clean light monochrome + one Cobalt accent (fills only, never text).
+- **Voice:** direct, calm-confident, jargon-free.
+- **Tagline:** *Hunt your best leads.* *(legacy — pending a TruePoint tagline)*
+- **Type:** Geist / Geist Mono. **Icons:** Lucide. **Accent:** Cobalt `#2563C9` (fills only); **buttons:** Ink `#111827`.
 
 ## 12. Open items
 1. Final tagline selection (§5).

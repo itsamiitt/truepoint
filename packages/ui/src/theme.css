@@ -31,15 +31,15 @@
   --color-popover: var(--tp-surface);
   --color-popover-foreground: var(--tp-ink);
   --color-primary: var(--tp-btn);
-  --color-primary-foreground: #ffffff;
+  --color-primary-foreground: var(--tp-on-fill);
   --color-secondary: var(--tp-surface-3);
   --color-secondary-foreground: var(--tp-ink);
   --color-muted: var(--tp-surface-2);
   --color-muted-foreground: var(--tp-ink-3);
   --color-accent: var(--tp-cobalt);
-  --color-accent-foreground: #ffffff;
+  --color-accent-foreground: var(--tp-on-fill);
   --color-destructive: var(--danger);
-  --color-destructive-foreground: #ffffff;
+  --color-destructive-foreground: var(--tp-on-fill);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-border: var(--tp-hairline-2);

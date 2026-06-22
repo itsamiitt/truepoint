@@ -87,7 +87,7 @@ export function CaptureForm({
   };
 
   return (
-    <form className="lw-card" onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
+    <form className="tp-card" onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
       <div style={{ display: "grid", gap: 4 }}>
         <span style={{ fontSize: 13, fontWeight: 600 }}>Capture a Sales Navigator link</span>
         <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>

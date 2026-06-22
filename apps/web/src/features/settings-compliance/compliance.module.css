@@ -87,64 +87,11 @@
   color: var(--tp-ink-2);
 }
 
-.input,
-.select {
-  appearance: none;
-  height: 38px;
-  padding: 0 12px;
-  font: inherit;
-  font-size: 14px;
-  color: var(--tp-ink);
-  background: var(--tp-surface);
-  border: 1px solid var(--tp-hairline-2);
-  border-radius: var(--radius);
-}
-
-.select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236b7280' stroke-width='1.5' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 32px;
-}
-
-.input::placeholder {
-  color: var(--tp-ink-4);
-}
-
-.input:focus-visible,
-.select:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-  border-color: var(--tp-ink-4);
-}
-
 .actions {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.button {
-  appearance: none;
-  height: 38px;
-  padding: 0 16px;
-  font: inherit;
-  font-weight: 500;
-  color: #fff;
-  background: var(--tp-btn);
-  border: 0;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-
-.button:hover:not(:disabled) {
-  background: var(--tp-btn-700);
-}
-
-.button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* ── Feedback ──────────────────────────────────────────────────────────────────────────────────── */

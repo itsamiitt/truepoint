@@ -32,7 +32,7 @@ body {
   padding: 0 16px;
   font: inherit;
   font-weight: 500;
-  color: #fff;
+  color: var(--tp-on-fill);
   background: var(--tp-btn);
   border: 0;
   border-radius: var(--radius);
@@ -55,27 +55,27 @@ body {
 }
 
 /* Import wizard + contacts table (import feature slice). */
-.lw-card {
+.tp-card {
   margin-top: 24px;
   padding: 20px;
   background: var(--tp-surface-2);
   border: 1px solid var(--tp-hairline-2);
   border-radius: var(--radius);
 }
-.lw-row {
+.tp-row {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
   margin: 12px 0;
 }
-.lw-field {
+.tp-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
 }
-.lw-field select,
-.lw-field input {
+.tp-field select,
+.tp-field input {
   height: 36px;
   padding: 0 8px;
   font: inherit;
@@ -84,47 +84,47 @@ body {
   background: var(--tp-surface);
   color: var(--tp-ink);
 }
-.lw-mapper {
+.tp-mapper {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
   margin: 16px 0;
 }
-.lw-group {
+.tp-group {
   border: 1px solid var(--tp-hairline-2);
   border-radius: var(--radius);
   padding: 8px 12px 12px;
 }
-.lw-group legend {
+.tp-group legend {
   font-size: 12px;
   font-weight: 600;
   color: var(--tp-ink-3);
 }
-.lw-summary {
+.tp-summary {
   margin-top: 14px;
   font-size: 14px;
 }
-.lw-errors {
+.tp-errors {
   margin: 6px 0 0;
   padding-left: 18px;
   color: var(--tp-ink-3);
 }
-.lw-error {
+.tp-error {
   margin-top: 12px;
-  color: #b42318;
+  color: var(--danger-700);
 }
-.lw-table {
+.tp-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
-.lw-table th,
-.lw-table td {
+.tp-table th,
+.tp-table td {
   text-align: left;
   padding: 8px 10px;
   border-bottom: 1px solid var(--tp-hairline-2);
 }
-.lw-table th {
+.tp-table th {
   color: var(--tp-ink-3);
   font-weight: 600;
 }
@@ -415,7 +415,7 @@ body {
   position: fixed;
   inset: 0;
   z-index: calc(var(--tp-z-drawer) - 1);
-  background: rgba(17, 24, 39, 0.4);
+  background: var(--tp-scrim);
   animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
 }
 
