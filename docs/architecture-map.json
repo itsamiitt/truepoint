@@ -66,8 +66,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 696,
-  "fileSetHash": "sha256:cb35658ec26bc124f55b2813239c21b363f026c6d5ea49c0b276db3f16b43825",
+  "fileCount": 697,
+  "fileSetHash": "sha256:5d4dd89b4a44a0035a2e7aa38e62ecbb3332b3eaef42de308c5f6e18e794f6f2",
   "features": {
     "activity": {
       "web": [],
@@ -1304,6 +1304,7 @@
     "packages/db/src/repositories/importMappingTemplateRepository.ts",
     "packages/db/src/repositories/pipelineStageRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
+    "packages/db/src/repositories/searchRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",
     "packages/db/src/repositories/webhookRepository.ts"
   ],

@@ -180,6 +180,10 @@ export {
   type AddMembersInput,
 } from "./repositories/listRepository.ts";
 export {
+  searchRepository,
+  type SearchResultPage,
+} from "./repositories/searchRepository.ts";
+export {
   enrichmentPolicyRepository,
   type EnrichmentPolicyRecord,
   type EnrichmentPolicyUpsert,
