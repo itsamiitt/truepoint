@@ -66,8 +66,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 705,
-  "fileSetHash": "sha256:a93de24599e6efdc694784d709bfee42a4446fc2e4e3b3cf03d06b5a9dba415c",
+  "fileCount": 707,
+  "fileSetHash": "sha256:1ca39dad147ff3378c000512484e53c6c3a35891151dc9d695ef6daae9a341cc",
   "features": {
     "activity": {
       "web": [],
@@ -505,6 +505,8 @@
         "apps/web/src/features/prospect/hooks/useCustomFields.ts",
         "apps/web/src/features/prospect/hooks/useFacetCounts.ts",
         "apps/web/src/features/prospect/hooks/useProspectSearch.ts",
+        "apps/web/src/features/prospect/hooks/useRecentSearches.test.ts",
+        "apps/web/src/features/prospect/hooks/useRecentSearches.ts",
         "apps/web/src/features/prospect/hooks/useReveal.ts",
         "apps/web/src/features/prospect/hooks/useSavedSearches.ts",
         "apps/web/src/features/prospect/hooks/useScores.ts",
