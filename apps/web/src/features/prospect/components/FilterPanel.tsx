@@ -37,6 +37,7 @@ export function FilterPanel({
   onChange,
   counts,
   owners = [],
+  header,
 }: {
   query: ContactQuery;
   onChange: (next: ContactQuery) => void;
@@ -44,6 +45,8 @@ export function FilterPanel({
   counts?: Map<string, number>;
   /** Teammates (+ a "Me" entry the page prepends) for the Owner facet. */
   owners?: OwnerOption[];
+  /** Optional rail content (saved + recent searches) rendered after the active-filter pills, before groups. */
+  header?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [ops, setOps] = useState<Record<string, TermOp>>({});
@@ -73,6 +76,8 @@ export function FilterPanel({
           ))}
         </div>
       ) : null}
+
+      {header != null ? <div className={styles.railSection}>{header}</div> : null}
 
       {FILTER_GROUPS.map((group) => {
         const isCollapsed = collapsed[group.id] ?? false;

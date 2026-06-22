@@ -1,6 +1,15 @@
 // Public surface of the prospect feature slice — the page component the (shell)/prospect route renders.
 export { ProspectPage } from "./components/ProspectPage";
 
+// Prospect-search redesign (24): the results toolbar (sort + column chooser), the lightweight QuickView
+// preview Drawer, the per-row overflow menu, and the per-browser Recent-searches row. ProspectPage composes
+// these; they're exported for reuse/testing and to keep the slice surface explicit.
+export { ProspectToolbar } from "./components/ProspectToolbar";
+export { QuickViewDrawer } from "./components/QuickViewDrawer";
+export { RowActions } from "./components/RowActions";
+export { RecentSearches } from "./components/RecentSearches";
+export { useRecentSearches, type RecentSearch } from "./hooks/useRecentSearches";
+
 // Advanced search/filter (24, ADR-0035): server-driven typeahead filter rail + search hooks/client.
 // Wire <FilterRail onChange={setFilters}/> + useContactSearch() into ProspectPage's left rail + grid.
 export { FilterRail } from "./components/FilterRail";

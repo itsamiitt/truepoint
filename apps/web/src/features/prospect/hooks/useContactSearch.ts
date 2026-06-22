@@ -50,5 +50,15 @@ export function useContactSearch() {
     if (cursor) void run(cursor);
   }, [cursor, run]);
 
-  return { filters, setFilters, text, setText, hits, loading, error, hasMore: cursor !== null, loadMore };
+  return {
+    filters,
+    setFilters,
+    text,
+    setText,
+    hits,
+    loading,
+    error,
+    hasMore: cursor !== null,
+    loadMore,
+  };
 }

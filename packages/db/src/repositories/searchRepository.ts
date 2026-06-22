@@ -265,6 +265,42 @@ export const searchRepository = {
     });
   },
 
+  /**
+   * The TOTAL count of workspace-visible contacts matching a query (same WHERE as searchContacts, no paging) —
+   * powers select-all-across-search ("Select all N results"). Workspace-isolated via RLS (withTenantTx). Exact,
+   * uncapped count: only the per-request bulk MUTATION footprint is capped (the caller slices resolveVisibleIds).
+   */
+  async countContacts(scope: TenantScope, query: ContactQuery): Promise<number> {
+    return withTenantTx(scope, async (tx) => {
+      const where = buildWhere(query);
+      const rows = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(contacts)
+        .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+        .where(where);
+      return rows[0]?.n ?? 0;
+    });
+  },
+
+  /**
+   * Resolve a query to the matching workspace-visible contact ids (the select-all-across-search → bulk-op
+   * bridge): same filters/owner-scoping as searchContacts, sliced to `limit` ids in the stable search order
+   * (created_at desc, id desc). The caller passes BULK_SELECTION_CAP as the limit so a runaway "select all"
+   * can never resolve an unbounded id set into a single bulk mutation. Workspace-isolated via RLS. tx-aware so
+   * the caller resolves ids INSIDE the same withTenantTx as the mutation (no cross-tx visibility gap).
+   */
+  async resolveVisibleIds(tx: Tx, query: ContactQuery, limit: number): Promise<string[]> {
+    const where = buildWhere(query);
+    const rows = await tx
+      .select({ id: contacts.id })
+      .from(contacts)
+      .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+      .where(where)
+      .orderBy(sql`${contacts.createdAt} DESC, ${contacts.id} DESC`)
+      .limit(limit);
+    return rows.map((r) => r.id);
+  },
+
   /** Live facet counts: per requested facet, the count of matching contacts per value, EXCLUDING that
    *  facet's own term filter (so its options stay independently countable). Top 50 values per facet. */
   async facetCounts(

@@ -127,9 +127,12 @@ export const contacts = pgTable(
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
     // Likely-duplicate pointer (24 data-signals): set by the dedup worker to the canonical contact this row
     // merges into; null = not a known duplicate. Powers the "find/hide probable duplicates" facet. Self-FK.
-    duplicateOfContactId: uuid("duplicate_of_contact_id").references((): AnyPgColumn => contacts.id, {
-      onDelete: "set null",
-    }),
+    duplicateOfContactId: uuid("duplicate_of_contact_id").references(
+      (): AnyPgColumn => contacts.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     deletedAt: timestamp("deleted_at", { withTimezone: true }), // DSAR tombstone (08 §4.2): set + PII nulled
     // Typed-jsonb custom-field values (ADR-0028, 03 §14): shallow-merged `existing || incoming` (03 §15.3);
     // validated against custom_field_definitions at the app edge. GIN-indexed for facet/filter queries.

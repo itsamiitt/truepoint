@@ -291,6 +291,29 @@ export {
   type RemoveFromListInput,
   type ListMembershipResult,
 } from "./prospect/lists.ts";
+// Phase-3 bulk actions over the prospect search results (24): owner assign/reassign (policy-gated), bulk tags
+// (add/remove), bulk status, bulk archive (soft), bulk enroll, bulk enrich (enqueue), role-gated CSV export, and
+// the select-all-across-search count. Each is workspace-scoped, visible-id-filtered, affected-count, audited
+// where the closed 08 §5 enum has an action.
+export {
+  assignOwner,
+  bulkAssignTags,
+  bulkRemoveTags,
+  bulkChangeStatus,
+  bulkArchive,
+  bulkEnroll,
+  bulkEnrich,
+  bulkExportCsv,
+  searchCount,
+  type BulkSelectionInput,
+  type BulkAssignOwnerInput,
+  type BulkTagsInput,
+  type BulkStatusInput,
+  type BulkEnrollInput,
+  type BulkEnrichInput,
+  type BulkExportInput,
+} from "./prospect/bulkActions.ts";
+
 // Record customization (custom fields — ADR-0028, gap G-REV-5): registry CRUD + typed-jsonb value set/get +
 // the pure type validator (reused by import mapping later).
 export {

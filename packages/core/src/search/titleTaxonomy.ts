@@ -106,7 +106,13 @@ const ENGINEERING: CanonicalTitle[] = [
     label: "VP of Engineering",
     seniority: "vp",
     jobFunction: "engineering",
-    aliases: ["vp eng", "vp engineering", "vice president engineering", "vp of eng", "head of engineering"],
+    aliases: [
+      "vp eng",
+      "vp engineering",
+      "vice president engineering",
+      "vp of eng",
+      "head of engineering",
+    ],
   },
   {
     id: "engineering_manager",
@@ -127,7 +133,12 @@ const ENGINEERING: CanonicalTitle[] = [
     label: "Senior Software Engineer",
     seniority: "ic",
     jobFunction: "engineering",
-    aliases: ["senior swe", "senior software developer", "sr software engineer", "staff software engineer"],
+    aliases: [
+      "senior swe",
+      "senior software developer",
+      "sr software engineer",
+      "staff software engineer",
+    ],
   },
   {
     id: "data_engineer",
@@ -144,7 +155,13 @@ const PRODUCT_DESIGN: CanonicalTitle[] = [
     label: "Product Manager",
     seniority: "manager",
     jobFunction: "product",
-    aliases: ["pm", "product mgr", "senior product manager", "sr product manager", "group product manager"],
+    aliases: [
+      "pm",
+      "product mgr",
+      "senior product manager",
+      "sr product manager",
+      "group product manager",
+    ],
   },
   {
     id: "vp_product",
@@ -182,7 +199,12 @@ const GTM: CanonicalTitle[] = [
     label: "Account Executive",
     seniority: "ic",
     jobFunction: "sales",
-    aliases: ["ae", "senior account executive", "sr account executive", "enterprise account executive"],
+    aliases: [
+      "ae",
+      "senior account executive",
+      "sr account executive",
+      "enterprise account executive",
+    ],
   },
   {
     id: "vp_marketing",

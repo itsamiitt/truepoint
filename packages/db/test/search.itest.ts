@@ -11,6 +11,7 @@
 //   (5) suggest returns prefix matches; keyset pagination walks every row without overlap.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { ContactQuery } from "@leadwolf/types";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
@@ -82,9 +83,9 @@ async function seedContact(s: ContactSeed): Promise<string> {
   return (c as { id: string }).id;
 }
 
-const query = (over: Record<string, unknown> = {}) => ({
+const query = (over: Partial<ContactQuery> = {}): ContactQuery => ({
   filters: [],
-  sort: "relevance" as const,
+  sort: "relevance",
   limit: 50,
   ...over,
 });
@@ -163,9 +164,8 @@ afterAll(async () => {
 const scopeA = () => ({ tenantId: tenantA, workspaceId: wsA });
 const scopeB = () => ({ tenantId: tenantB, workspaceId: wsB });
 
-// biome-ignore lint/suspicious/noExplicitAny: the itest passes plain query literals to the repo.
-const run = (scope: ReturnType<typeof scopeA>, q: Record<string, unknown>) =>
-  db.searchRepository.searchContacts(scope, q as any);
+const run = (scope: ReturnType<typeof scopeA>, q: ContactQuery) =>
+  db.searchRepository.searchContacts(scope, q);
 
 describe("Postgres searchRepository — owner-scoped faceted search (24)", () => {
   test("workspace isolation: B's contacts never surface in A and vice-versa", async () => {
@@ -232,7 +232,7 @@ describe("Postgres searchRepository — owner-scoped faceted search (24)", () =>
   });
 
   test("live facet counts group per value and ignore the facet's own term filter", async () => {
-    const owners = await db.searchRepository.facetCounts(scopeA(), query() as never, ["owner"]);
+    const owners = await db.searchRepository.facetCounts(scopeA(), query(), ["owner"]);
     expect(owners.find((f) => f.value === ownerA)?.count).toBe(2);
     expect(owners.find((f) => f.value === coworkerA)?.count).toBe(1);
 
@@ -241,14 +241,12 @@ describe("Postgres searchRepository — owner-scoped faceted search (24)", () =>
       scopeA(),
       query({
         filters: [{ kind: "term", field: "seniority", op: "include", values: ["vp"] }],
-      }) as never,
+      }),
       ["seniority"],
     );
     expect(seniority.map((f) => f.value).sort()).toEqual(["c_suite", "ic", "vp"]);
 
-    const industry = await db.searchRepository.facetCounts(scopeA(), query() as never, [
-      "industry",
-    ]);
+    const industry = await db.searchRepository.facetCounts(scopeA(), query(), ["industry"]);
     expect(industry.find((f) => f.value === "Software")?.count).toBe(1);
   });
 

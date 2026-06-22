@@ -40,6 +40,13 @@
   text-transform: uppercase;
   color: var(--tp-ink-3);
 }
+/* The rail header slot (saved + recent searches) injected between the pills and the filter groups. */
+.railSection {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 14px;
+}
 .facet {
   display: flex;
   flex-direction: column;
@@ -439,6 +446,42 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+/* The inline "Select all matching" escalation inside the bulk bar (on the dark Ink surface). */
+.bulkLink {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.bulkLink:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ── Bulk-action dialog bodies (pickers + confirms) ────────────────────────────────────────────────────── */
+.dialogStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dialogOr {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  text-align: center;
+}
+.dialogCheckRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--tp-ink);
+  cursor: pointer;
 }
 
 /* Reveal-dialog result */

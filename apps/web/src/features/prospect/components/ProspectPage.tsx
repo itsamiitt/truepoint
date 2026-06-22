@@ -1,8 +1,11 @@
 // ProspectPage.tsx — the prospect master/detail surface (04 §5, 11 §4.2, 24): a faceted FilterPanel rail
-// driving a server ContactQuery, a top search box + AI NL box, the results table (sortable, density-aware,
-// masked glyphs, row-select) with a list⇄card toggle and keyset "Load more", the record-detail Drawer, and
-// the sticky bulk-action bar. Search/filter state lives in the URL (useProspectSearch → searchUrlState), so a
-// view is shareable and restored on refresh/back. Composition + view state; data + masking come from the slice.
+// (now also hosting Saved + Recent searches in its header slot) driving a server ContactQuery, a top search
+// box + AI NL box, a results header with a sort + column-chooser toolbar, the results table (sortable,
+// density-aware, masked glyphs, row-select, per-row overflow menu) with a list⇄card toggle and keyset "Load
+// more", a lightweight QuickView preview Drawer that hands off to the heavy RecordDetail, and the sticky
+// bulk-action bar (the full Phase-3 bulk surface). Search/filter state lives in the URL (useProspectSearch →
+// searchUrlState), so a view is shareable and restored on refresh/back. Composition + view state; data +
+// masking + all mutations come from the slice (api/bulkActionsApi).
 "use client";
 
 import type { ContactHit, ContactQuery, FacetKey, MaskedContact } from "@leadwolf/types";
@@ -18,16 +21,23 @@ import {
   TpInput,
 } from "@leadwolf/ui";
 import { Building2, Users } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useFacetCounts } from "../hooks/useFacetCounts";
 import { useProspectSearch } from "../hooks/useProspectSearch";
+import { useRecentSearches } from "../hooks/useRecentSearches";
+import { useTags } from "../hooks/useTags";
 import styles from "../prospect.module.css";
 import { type ResultScope, displayName, emailGlyphFor, maskedEmail } from "../types";
 import { AiSearchBox } from "./AiSearchBox";
-import { BulkActionBar } from "./BulkActionBar";
+import { BulkActionBar, type RowBulkAction } from "./BulkActionBar";
 import { FilterPanel } from "./FilterPanel";
+import { ProspectToolbar } from "./ProspectToolbar";
+import { QuickViewDrawer } from "./QuickViewDrawer";
+import { RecentSearches } from "./RecentSearches";
 import { RecordDetail } from "./RecordDetail";
+import { RowActions } from "./RowActions";
+import { SaveSearchPanel } from "./SaveSearchPanel";
 
 const SCOPES = [
   { value: "contacts", label: "Contacts" },
@@ -43,6 +53,16 @@ const VIEWS = [
 ];
 // The fixed-option facets that get live counts in the sidebar (POST /search/facets).
 const COUNT_FIELDS: FacetKey[] = ["seniority", "outreach_status", "email_status", "source"];
+
+// The toggleable result columns (the "select" checkbox + "actions" menu are always shown, not toggleable).
+const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "company", label: "Company" },
+  { key: "email", label: "Email" },
+  { key: "address", label: "Address" },
+  { key: "phone", label: "Phone" },
+];
+const DEFAULT_VISIBLE = TOGGLEABLE_COLUMNS.map((c) => c.key);
 
 export function ProspectPage() {
   const search = useProspectSearch();
@@ -60,10 +80,16 @@ export function ProspectPage() {
     markRevealed,
   } = search;
   const counts = useFacetCounts(query, COUNT_FIELDS);
+  const recent = useRecentSearches();
+  const { tags } = useTags();
 
   const [scope, setScope] = useState<ResultScope>("contacts");
   const [density, setDensity] = useState("comfortable");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEFAULT_VISIBLE);
+  // A pending row-level bulk action: the single id to seed + which bulk dialog to open.
+  const [rowAction, setRowAction] = useState<RowBulkAction | null>(null);
 
   // Top free-text box: a local mirror committed to the query after a short debounce (typeahead feel), and
   // re-synced when the query changes externally (AI apply / URL restore).
@@ -77,7 +103,14 @@ export function ProspectPage() {
     return () => clearTimeout(id);
   }, [textInput]);
 
+  // Record each committed query into the per-browser recents (the hook dedupes + ignores empty queries).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: record only when the query identity changes.
+  useEffect(() => {
+    recent.add(query);
+  }, [query]);
+
   const selected = useMemo(() => hits.find((c) => c.id === selectedId) ?? null, [hits, selectedId]);
+  const preview = useMemo(() => hits.find((c) => c.id === previewId) ?? null, [hits, previewId]);
 
   // Multi-row selection for the bulk-action bar (distinct from the single-row Drawer selection).
   const bulk = useBulkSelection();
@@ -92,7 +125,17 @@ export function ProspectPage() {
     [selectedContacts],
   );
 
-  const columns: Column<ContactHit>[] = useMemo(
+  // Seed the bulk selection to a single row, then ask the bar to open the matching dialog.
+  const startRowAction = useCallback(
+    (id: string, action: RowBulkAction) => {
+      bulk.clear();
+      bulk.setMany([id], true);
+      setRowAction(action);
+    },
+    [bulk.clear, bulk.setMany],
+  );
+
+  const allColumns: Column<ContactHit>[] = useMemo(
     () => [
       {
         key: "select",
@@ -192,13 +235,53 @@ export function ProspectPage() {
             <span className={styles.glyphNone}>—</span>
           ),
       },
+      {
+        key: "actions",
+        header: "",
+        align: "right",
+        width: 48,
+        cell: (c) => (
+          <span
+            className={styles.rowCheck}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="presentation"
+          >
+            <RowActions
+              contact={c}
+              onAddToList={() => startRowAction(c.id, "list")}
+              onTag={() => startRowAction(c.id, "addTags")}
+              onChangeStatus={() => startRowAction(c.id, "status")}
+            />
+          </span>
+        ),
+      },
     ],
-    [allShownSelected, shownIds, bulk],
+    [allShownSelected, shownIds, bulk, startRowAction],
+  );
+
+  // Filter the toggleable columns by the chooser; the always-on select + actions columns stay.
+  const columns = useMemo(
+    () =>
+      allColumns.filter(
+        (c) => c.key === "select" || c.key === "actions" || visibleColumns.includes(c.key),
+      ),
+    [allColumns, visibleColumns],
   );
 
   return (
     <div className={styles.page} data-density={density}>
-      <FilterPanel query={query} onChange={setQuery} counts={counts} />
+      <FilterPanel
+        query={query}
+        onChange={setQuery}
+        counts={counts}
+        header={
+          <>
+            <SaveSearchPanel currentQuery={query} onApply={setQuery} />
+            <RecentSearches recents={recent.recents} onApply={setQuery} onClear={recent.clear} />
+          </>
+        }
+      />
 
       <section className={styles.results}>
         <div className={styles.resultsHead}>
@@ -218,6 +301,15 @@ export function ProspectPage() {
             )}
           </div>
           <div className={styles.headRight}>
+            {scope === "contacts" && (
+              <ProspectToolbar
+                query={query}
+                onChange={setQuery}
+                columns={TOGGLEABLE_COLUMNS}
+                visibleColumns={visibleColumns}
+                onVisibleColumnsChange={setVisibleColumns}
+              />
+            )}
             <SegmentedControl
               items={VIEWS}
               value={view}
@@ -267,14 +359,14 @@ export function ProspectPage() {
             }
           >
             {view === "card" ? (
-              <CardGrid hits={hits} onOpen={setSelectedId} />
+              <CardGrid hits={hits} onOpen={setPreviewId} />
             ) : (
               <DataTable
                 columns={columns}
                 rows={hits}
                 rowKey={(c) => c.id}
-                onRowClick={(c) => setSelectedId(c.id)}
-                isSelected={(c) => c.id === selectedId}
+                onRowClick={(c) => setPreviewId(c.id)}
+                isSelected={(c) => c.id === previewId}
               />
             )}
             {hasMore && (
@@ -288,6 +380,20 @@ export function ProspectPage() {
         )}
       </section>
 
+      {/* Lightweight preview → hands off to the heavy RecordDetail. */}
+      <QuickViewDrawer
+        contact={preview}
+        onClose={() => setPreviewId(null)}
+        onOpenFull={
+          preview
+            ? () => {
+                setSelectedId(preview.id);
+                setPreviewId(null);
+              }
+            : undefined
+        }
+      />
+
       <RecordDetail
         contact={selected}
         onClose={() => setSelectedId(null)}
@@ -296,13 +402,19 @@ export function ProspectPage() {
 
       {bulk.count > 0 && (
         <BulkActionBar
-          count={bulk.count}
+          selection={bulk}
+          query={query}
           selectedContacts={selectedContacts}
           revealableIds={revealableIds}
-          onClear={bulk.clear}
+          tags={tags}
+          requestedAction={rowAction}
+          onRequestHandled={() => setRowAction(null)}
           onRevealed={(ids) => {
             for (const id of ids) markRevealed(id);
             bulk.clear();
+          }}
+          onMutated={() => {
+            reload();
           }}
         />
       )}

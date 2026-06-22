@@ -23,6 +23,14 @@ const WRITTEN = new Set<string>([
   "consent.withdraw",
   "dsar.access",
   "dsar.delete",
+  // Phase-3 bulk actions over the prospect search results (24; packages/core bulkActions): owner reassign +
+  // status change → contact.update; soft-archive → contact.delete; bulk tags → tag.assign / tag.unassign;
+  // role-gated CSV export → export.
+  "contact.update",
+  "contact.delete",
+  "tag.assign",
+  "tag.unassign",
+  "export",
   // auth events wired via recordAuthEvent (packages/auth, ADR-0031)
   "login.success",
   "signup",
@@ -35,7 +43,6 @@ const WRITTEN = new Set<string>([
 // §5.2 — defined in the closed enum but not yet wired to a writeAudit() call-site.
 const PENDING = new Set<string>([
   // data / money / compliance (no existing service path yet)
-  "export",
   "unsubscribe",
   "suppression.remove",
   "dsar.rectify",
@@ -45,8 +52,6 @@ const PENDING = new Set<string>([
   "apikey.use",
   // record / config mutations (services land at M8 / M16)
   "contact.create",
-  "contact.update",
-  "contact.delete",
   "account.create",
   "account.update",
   "account.delete",
@@ -69,8 +74,6 @@ const PENDING = new Set<string>([
   "tag.create",
   "tag.update",
   "tag.delete",
-  "tag.assign",
-  "tag.unassign",
   "pipeline_stage.create",
   "pipeline_stage.update",
   "pipeline_stage.delete",
