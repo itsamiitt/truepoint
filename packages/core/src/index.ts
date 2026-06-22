@@ -328,6 +328,15 @@ export {
   type DuplicateGroup,
   type RunDedupResult,
 } from "./prospect/dedup.ts";
+// Firmographics rollup (24 Phase-0.5): surfaces existing intent_signals (tech_install/funding_round) onto the
+// account firmographic facets so the technographic/funding filters aren't empty. Run by the firmographics worker.
+export {
+  runFirmographicRollup,
+  aggregateFirmographics,
+  normalizeTech,
+  type AccountFirmographics,
+  type RunFirmographicRollupResult,
+} from "./prospect/firmographics.ts";
 
 // Record customization (custom fields — ADR-0028, gap G-REV-5): registry CRUD + typed-jsonb value set/get +
 // the pure type validator (reused by import mapping later).

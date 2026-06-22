@@ -15,6 +15,11 @@ import {
   processEnrichment,
 } from "./queues/enrichment.ts";
 import {
+  FIRMOGRAPHICS_QUEUE,
+  type FirmographicsJobData,
+  processFirmographics,
+} from "./queues/firmographics.ts";
+import {
   IMPORTS_DLQ,
   IMPORTS_QUEUE,
   type ImportJobData,
@@ -35,6 +40,9 @@ export const scoringQueue = new Queue<ScoringJobData>(SCORING_QUEUE, { connectio
 export const dsarQueue = new Queue<DsarJobData>(DSAR_QUEUE, { connection });
 export const outreachQueue = new Queue<OutreachJobData>(OUTREACH_QUEUE, { connection });
 export const dedupQueue = new Queue<DedupJobData>(DEDUP_QUEUE, { connection });
+export const firmographicsQueue = new Queue<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, {
+  connection,
+});
 
 /** Submit a parsed import for background processing (the async alternative to the inline api path). */
 export async function enqueueImport(data: ImportJobData): Promise<void> {
@@ -71,6 +79,12 @@ export async function enqueueDedup(data: DedupJobData): Promise<string> {
   return String(job.id);
 }
 
+/** Submit a per-workspace firmographics rollup (24 Phase-0.5; surfaces intent_signals onto account facets). */
+export async function enqueueFirmographics(data: FirmographicsJobData): Promise<string> {
+  const job = await firmographicsQueue.add("firmographics", data);
+  return String(job.id);
+}
+
 /** Attach structured completed/failed logging to a worker (per-queue observability). Never logs payloads. */
 function instrument<T = unknown>(worker: Worker<T>, queue: string): Worker<T> {
   worker.on("completed", (job) => log.info("job completed", { queue, jobId: job.id }));
@@ -99,14 +113,20 @@ export function startWorkers(): Worker[] {
       }),
     );
   });
-  // A completed import is where cross-source duplicates appear → kick a (idempotent, off-thread) dedup pass for
-  // that workspace so the "duplicate" search facet stays current. Best-effort: a dedup-enqueue failure never
-  // fails the import.
+  // A completed import is where cross-source duplicates appear and new signals land → kick the (idempotent,
+  // off-thread) per-workspace rollups so the duplicate + firmographic search facets stay current. Best-effort:
+  // a rollup-enqueue failure never fails the import.
   importsWorker.on("completed", (job) => {
     const scope = job?.data?.scope;
     if (!scope) return;
-    void enqueueDedup({ tenantId: scope.tenantId, workspaceId: scope.workspaceId }).catch((e) =>
+    const data = { tenantId: scope.tenantId, workspaceId: scope.workspaceId };
+    void enqueueDedup(data).catch((e) =>
       log.error("imports: dedup enqueue failed", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
+    void enqueueFirmographics(data).catch((e) =>
+      log.error("imports: firmographics enqueue failed", {
         error: e instanceof Error ? e.message : String(e),
       }),
     );
@@ -127,5 +147,9 @@ export function startWorkers(): Worker[] {
       OUTREACH_QUEUE,
     ),
     instrument(new Worker<DedupJobData>(DEDUP_QUEUE, processDedup, { connection }), DEDUP_QUEUE),
+    instrument(
+      new Worker<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, processFirmographics, { connection }),
+      FIRMOGRAPHICS_QUEUE,
+    ),
   ];
 }

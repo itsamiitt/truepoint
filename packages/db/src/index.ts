@@ -43,7 +43,11 @@ export {
   type InvitationByToken,
   type CreateInvitationInput,
 } from "./repositories/workspaceRepository.ts";
-export { accountRepository, type AccountUpsertInput } from "./repositories/accountRepository.ts";
+export {
+  accountRepository,
+  type AccountFirmographicsPatch,
+  type AccountUpsertInput,
+} from "./repositories/accountRepository.ts";
 export {
   customFieldRepository,
   type CustomFieldValue,
@@ -104,6 +108,7 @@ export {
 } from "./repositories/scoreRepository.ts";
 export {
   intentSignalRepository,
+  type FirmographicSignalRow,
   type IntentSignalInsert,
   type IntentSignalRow,
 } from "./repositories/intentSignalRepository.ts";
