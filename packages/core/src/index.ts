@@ -123,6 +123,26 @@ export {
 } from "./data-health/emailVerifier.ts";
 export { chargeFor, type ChargeInput } from "./data-health/chargeFor.ts";
 export { validatePhone } from "./data-health/validatePhone.ts";
+// Data quality & freshness keystone (22 §2–§3, ADR-0025): the 0–100 data_quality_score composite + cold-start
+// re-weighting + completeness weights + verification sub-score + freshness SLAs/bands/decay. Pure + set-reusable;
+// import-commit, the freshness sweep, and the masked DTO badge all wire it.
+export {
+  computeContactDataQuality,
+  dataQualityScore,
+  completenessSubScore,
+  verificationSubScore,
+  verificationMean,
+  freshnessSubScore,
+  freshnessStatusFor,
+  COMPLETENESS_WEIGHTS,
+  FRESHNESS_SLA_DAYS,
+  COLD_START_FRESHNESS,
+  type ContactQualityInput,
+  type ContactQualityResult,
+  type CompletenessField,
+  type QualitySubScores,
+  type FreshnessField,
+} from "./data-health/dataQualityScore.ts";
 
 export {
   computeScore,

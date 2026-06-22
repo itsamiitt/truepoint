@@ -53,3 +53,9 @@ export type EnrichField = z.infer<typeof enrichField>;
 export const enrichmentRequestSchema = z.object({
   fields: z.array(enrichField).min(1),
 });
+
+// ── Data quality & freshness (22, ADR-0025) ────────────────────────────────────────────────────────────
+// freshness_status derives from age / re-verify-SLA (22 §3): <0.5 fresh, <1.0 aging, <1.5 stale, else expired.
+// Distinct from data_quality_score (the 0–100 composite) and from email_status (single-field correctness).
+export const freshnessStatus = z.enum(["fresh", "aging", "stale", "expired"]);
+export type FreshnessStatus = z.infer<typeof freshnessStatus>;
