@@ -58,7 +58,7 @@ packages/                       # side-effect-free libraries, each exported via 
     client.ts(withTenantTx · withPrivilegedTx · closeDb)  applyMigrations.ts  bootstrapAdmin.ts  migrate.ts  seed.ts
     repositories/{user,workspace,account,contact,sourceImport,reveal,credit,suppression,audit,idempotency,
                   score,intentSignal,providerCall,consent,dsar,activity,salesNavLink,sequence,outreachLog}Repository.ts
-    test/{import,reveal,intel,compliance,activity,outreach,home,workspaceSwitch,suppressionMgmt,lists}.itest.ts + itestDb.ts
+    test/{import,reveal,intel,compliance,activity,outreach,home,workspaceSwitch,suppressionMgmt,lists,search}.itest.ts + itestDb.ts
   core/    src/                 # domain logic [LIVE]: import · reveal · billing · compliance · enrichment · data-health · scoring · activity · outreach · search · home
   auth/    src/                 # self-built auth primitives (no HTTP): login/mfa/registration/invitations/password/sso/switchWorkspace + ipBinding + log
   search/  src/                 # SearchPort adapters + field projection — inMemorySearchPort (dev/test) now; OpenSearch/Typesense later  [LIVE]
@@ -382,7 +382,7 @@ flowchart TD
   prospect lists for bulk add-to-list; `contacts.owner_user_id` = the soft owner for the Prospect search) +
   `schema/index.ts`, `drizzle.config.ts`, `index.ts`, and
   `test/` — `itestDb.ts` (Testcontainers **or** `ITEST_DATABASE_URL`) + the DoD suites
-  `{import,reveal,intel,compliance,activity,outreach,home,workspaceSwitch,suppressionMgmt,lists}.itest.ts` (run in
+  `{import,reveal,intel,compliance,activity,outreach,home,workspaceSwitch,suppressionMgmt,lists,search}.itest.ts` (run in
   **separate** processes — the db client is a module singleton). RLS in `src/rls/*.sql` (one per schema,
   applied sorted) uses the `NULLIF(current_setting(…, true), '')::uuid` **fail-closed** idiom; triggers:
   reveal-ownership + audit-append (`billing.sql`), `last_activity_at` sync (`activity.sql`), sequences

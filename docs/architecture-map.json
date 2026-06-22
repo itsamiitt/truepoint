@@ -66,8 +66,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 697,
-  "fileSetHash": "sha256:5d4dd89b4a44a0035a2e7aa38e62ecbb3332b3eaef42de308c5f6e18e794f6f2",
+  "fileCount": 698,
+  "fileSetHash": "sha256:0489b5eb81b0200b8ff3d32696a90a48c4abc4fa450cf7f0cd7ced9606f3f0a7",
   "features": {
     "activity": {
       "web": [],
@@ -1213,6 +1213,7 @@
       "packages/db/test/reveal.itest.ts",
       "packages/db/test/salesNav.itest.ts",
       "packages/db/test/savedSearches.itest.ts",
+      "packages/db/test/search.itest.ts",
       "packages/db/test/suppressionMgmt.itest.ts",
       "packages/db/test/tags.itest.ts",
       "packages/db/test/webhooks.itest.ts",
