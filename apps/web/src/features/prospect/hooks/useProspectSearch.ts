@@ -1,24 +1,21 @@
 // useProspectSearch.ts — the engine for the server-driven prospect grid (24 §5/§6, Done-When #1/#3/#5). The
-// page URL is the single source of truth: the active ContactQuery + list/card view are DERIVED from the URL
-// (searchUrlState), so a view is shareable and restored on refresh / back. setQuery/setView write back through
-// router.replace; the search re-runs whenever the (URL-derived) query changes. Exposes keyset "load more" and
-// an optimistic markRevealed so a reveal flips the row without a refetch. Replaces the client-side useContacts
-// path for the filtered grid.
+// page URL is the single source of truth: the active ContactQuery is DERIVED from the URL (searchUrlState), so
+// a search is shareable and restored on refresh / back. setQuery writes back through router.replace; the search
+// re-runs whenever the (URL-derived) query changes. Exposes keyset "load more" and an optimistic markRevealed
+// so a reveal flips the row without a refetch. Replaces the client-side useContacts path for the filtered grid.
 "use client";
 
 import type { ContactHit, ContactQuery } from "@leadwolf/types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { searchContacts } from "../searchApi";
-import { type ProspectView, paramsToState, stateToSearchString } from "../searchUrlState";
+import { paramsToQuery, queryToSearchString } from "../searchUrlState";
 
 const PAGE_SIZE = 50;
 
 export interface ProspectSearch {
   query: ContactQuery;
-  view: ProspectView;
   setQuery: (next: ContactQuery) => void;
-  setView: (next: ProspectView) => void;
   hits: ContactHit[];
   loading: boolean;
   error: string | null;
@@ -34,9 +31,9 @@ export function useProspectSearch(): ProspectSearch {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // URL → state (the source of truth). Re-derives whenever the query string changes (refresh, back, share).
-  const { query, view } = useMemo(
-    () => paramsToState(new URLSearchParams(searchParams?.toString() ?? "")),
+  // URL → query (the source of truth). Re-derives whenever the query string changes (refresh, back, share).
+  const query = useMemo(
+    () => paramsToQuery(new URLSearchParams(searchParams?.toString() ?? "")),
     [searchParams],
   );
 
@@ -45,18 +42,17 @@ export function useProspectSearch(): ProspectSearch {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Write a new state to the URL. replace (not push) so per-edit changes don't flood history; the URL still
-  // fully captures the view for refresh/share. pathname-relative so it stays on the prospect route.
-  const commit = useCallback(
-    (next: { query?: ContactQuery; view?: ProspectView }) => {
-      const qs = stateToSearchString({ query: next.query ?? query, view: next.view ?? view });
+  // Write a new query to the URL. replace (not push) so per-edit changes don't flood history; the URL still
+  // fully captures the search for refresh/share. pathname-relative so it stays on the prospect route. The
+  // scope param (?scope=accounts) is preserved by writing only the contacts keys.
+  const setQuery = useCallback(
+    (next: ContactQuery) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      const qs = queryToSearchString(next, params);
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
-    [router, pathname, query, view],
+    [router, pathname, searchParams],
   );
-
-  const setQuery = useCallback((next: ContactQuery) => commit({ query: next }), [commit]);
-  const setView = useCallback((next: ProspectView) => commit({ view: next }), [commit]);
 
   const run = useCallback(
     async (fromCursor: string | null) => {
@@ -100,9 +96,7 @@ export function useProspectSearch(): ProspectSearch {
 
   return {
     query,
-    view,
     setQuery,
-    setView,
     hits,
     loading,
     error,

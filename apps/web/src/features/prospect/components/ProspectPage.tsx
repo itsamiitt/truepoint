@@ -1,11 +1,11 @@
-// ProspectPage.tsx — the prospect master/detail surface (04 §5, 11 §4.2, 24): a faceted FilterPanel rail
-// (now also hosting Saved + Recent searches in its header slot) driving a server ContactQuery, a top search
-// box + AI NL box, a results header with a sort + column-chooser toolbar, the results table (sortable,
-// density-aware, masked glyphs, row-select, per-row overflow menu) with a list⇄card toggle and keyset "Load
-// more", a lightweight QuickView preview Drawer that hands off to the heavy RecordDetail, and the sticky
-// bulk-action bar (the full Phase-3 bulk surface). Search/filter state lives in the URL (useProspectSearch →
-// searchUrlState), so a view is shareable and restored on refresh/back. Composition + view state; data +
-// masking + all mutations come from the slice (api/bulkActionsApi).
+// ProspectPage.tsx — the prospect master/detail surface (04 §5, 11 §4.2, 24): the faceted sidebar (which also
+// hosts the Prospect/Account scope switch + Saved/Recent searches) driving a server ContactQuery, a top search
+// box + AI NL box, a results header with a sort + column-chooser toolbar, the results table (list only —
+// sortable, density-aware, masked glyphs, row-select, per-row overflow menu) with keyset "Load more", a
+// lightweight QuickView preview Drawer that hands off to the heavy RecordDetail, and the sticky bulk-action bar
+// (the full Phase-3 bulk surface). Search/filter state lives in the URL (useProspectSearch → searchUrlState),
+// so a view is shareable and restored on refresh/back. Composition only; data + masking + mutations come from
+// the slice (api/bulkActionsApi).
 "use client";
 
 import type {
@@ -14,10 +14,8 @@ import type {
   ContactQuery,
   FacetKey,
   MaskedAccount,
-  MaskedContact,
 } from "@leadwolf/types";
 import {
-  Avatar,
   type Column,
   DataTable,
   EmptyState,
@@ -60,10 +58,6 @@ const DENSITIES = [
   { value: "comfortable", label: "Comfortable" },
   { value: "compact", label: "Compact" },
 ];
-const VIEWS = [
-  { value: "list", label: "List" },
-  { value: "card", label: "Cards" },
-];
 // The fixed-option facets that get live counts in the sidebar (POST /search/facets).
 const COUNT_FIELDS: FacetKey[] = ["seniority", "outreach_status", "email_status", "source"];
 // The fixed-option account facets that get live counts in the Accounts sidebar (POST /account-search/facets).
@@ -87,19 +81,7 @@ const DEFAULT_VISIBLE = TOGGLEABLE_COLUMNS.map((c) => c.key);
 
 export function ProspectPage() {
   const search = useProspectSearch();
-  const {
-    query,
-    view,
-    setQuery,
-    setView,
-    hits,
-    loading,
-    error,
-    hasMore,
-    loadMore,
-    reload,
-    markRevealed,
-  } = search;
+  const { query, setQuery, hits, loading, error, hasMore, loadMore, reload, markRevealed } = search;
   const counts = useFacetCounts(query, COUNT_FIELDS);
   const recent = useRecentSearches();
   const { tags } = useTags();
@@ -341,6 +323,16 @@ export function ProspectPage() {
     [allColumns, visibleColumns],
   );
 
+  // The Prospect/Account scope switch now lives INSIDE the sidebar (top of the rail), passed to both panels.
+  const scopeSwitch = (
+    <SegmentedControl
+      items={SCOPES}
+      value={scope}
+      onChange={(v) => setScope(v as ResultScope)}
+      aria-label="Result type"
+    />
+  );
+
   return (
     <div className={styles.page} data-density={density}>
       {scope === "accounts" ? (
@@ -348,12 +340,14 @@ export function ProspectPage() {
           query={accountSearch.query}
           onChange={accountSearch.setQuery}
           counts={accountCounts}
+          scopeSwitch={scopeSwitch}
         />
       ) : (
         <FilterPanel
           query={query}
           onChange={setQuery}
           counts={counts}
+          scopeSwitch={scopeSwitch}
           header={
             <>
               <SaveSearchPanel currentQuery={query} onApply={setQuery} />
@@ -366,12 +360,6 @@ export function ProspectPage() {
       <section className={styles.results}>
         <div className={styles.resultsHead}>
           <div className={styles.headLeft}>
-            <SegmentedControl
-              items={SCOPES}
-              value={scope}
-              onChange={(v) => setScope(v as ResultScope)}
-              aria-label="Result type"
-            />
             {scope === "contacts" ? (
               <span className={styles.count}>
                 {loading
@@ -390,21 +378,13 @@ export function ProspectPage() {
           </div>
           <div className={styles.headRight}>
             {scope === "contacts" && (
-              <>
-                <ProspectToolbar
-                  query={query}
-                  onChange={setQuery}
-                  columns={TOGGLEABLE_COLUMNS}
-                  visibleColumns={visibleColumns}
-                  onVisibleColumnsChange={setVisibleColumns}
-                />
-                <SegmentedControl
-                  items={VIEWS}
-                  value={view}
-                  onChange={(v) => setView(v as "list" | "card")}
-                  aria-label="View"
-                />
-              </>
+              <ProspectToolbar
+                query={query}
+                onChange={setQuery}
+                columns={TOGGLEABLE_COLUMNS}
+                visibleColumns={visibleColumns}
+                onVisibleColumnsChange={setVisibleColumns}
+              />
             )}
             <SegmentedControl
               items={DENSITIES}
@@ -485,17 +465,13 @@ export function ProspectPage() {
               />
             }
           >
-            {view === "card" ? (
-              <CardGrid hits={hits} onOpen={setPreviewId} />
-            ) : (
-              <DataTable
-                columns={columns}
-                rows={hits}
-                rowKey={(c) => c.id}
-                onRowClick={(c) => setPreviewId(c.id)}
-                isSelected={(c) => c.id === previewId}
-              />
-            )}
+            <DataTable
+              columns={columns}
+              rows={hits}
+              rowKey={(c) => c.id}
+              onRowClick={(c) => setPreviewId(c.id)}
+              isSelected={(c) => c.id === previewId}
+            />
             {hasMore && (
               <div className={styles.loadMore}>
                 <TpButton variant="secondary" size="sm" loading={loading} onClick={loadMore}>
@@ -552,29 +528,6 @@ export function ProspectPage() {
           }}
         />
       )}
-    </div>
-  );
-}
-
-/** Compact card view of the results (the list⇄card toggle's card mode). */
-function CardGrid({ hits, onOpen }: { hits: MaskedContact[]; onOpen: (id: string) => void }) {
-  return (
-    <div className={styles.cardGrid}>
-      {hits.map((c) => (
-        <button
-          key={c.id}
-          type="button"
-          className={styles.prospectCard}
-          onClick={() => onOpen(c.id)}
-        >
-          <Avatar name={displayName(c)} size={32} />
-          <span className={styles.cardMeta}>
-            <span className={styles.name}>{displayName(c)}</span>
-            <span className={styles.title}>{c.jobTitle ?? "—"}</span>
-            <span className={styles.mono}>{c.emailDomain ?? "—"}</span>
-          </span>
-        </button>
-      ))}
     </div>
   );
 }

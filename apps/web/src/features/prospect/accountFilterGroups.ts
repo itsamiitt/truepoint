@@ -186,6 +186,80 @@ export function toggleTermValue(
   return setTermValues(query, field, op, next);
 }
 
+// ── is/is-not multi-condition view (mirrors filterGroups.ts; a field → an array of {type,value} conditions) ──
+/** One is/is-not condition on a term field (a UI row/tag). `op:"include"`=is, `op:"exclude"`=is not. */
+export interface TermCondition {
+  op: TermOp;
+  value: string;
+  label: string;
+}
+
+/** Every condition set on a term field (include first, then exclude), flattened for the UI. */
+export function termConditions(query: AccountQuery, field: AccountTermField): TermCondition[] {
+  const out: TermCondition[] = [];
+  for (const op of ["include", "exclude"] as const) {
+    for (const value of getTermValues(query, field, op)) {
+      out.push({ op, value, label: optionLabel(field, value) });
+    }
+  }
+  return out;
+}
+
+const otherOp = (op: TermOp): TermOp => (op === "include" ? "exclude" : "include");
+
+/** Add `value` as a condition of `op`, removing it from the other op so a value is never both is + is-not. */
+export function addTermCondition(
+  query: AccountQuery,
+  field: AccountTermField,
+  op: TermOp,
+  value: string,
+): AccountQuery {
+  const cleared = setTermValues(
+    query,
+    field,
+    otherOp(op),
+    getTermValues(query, field, otherOp(op)).filter((v) => v !== value),
+  );
+  const cur = getTermValues(cleared, field, op);
+  return cur.includes(value) ? cleared : setTermValues(cleared, field, op, [...cur, value]);
+}
+
+/** Remove one condition `(field, op, value)`. */
+export function removeTermCondition(
+  query: AccountQuery,
+  field: AccountTermField,
+  op: TermOp,
+  value: string,
+): AccountQuery {
+  return setTermValues(
+    query,
+    field,
+    op,
+    getTermValues(query, field, op).filter((v) => v !== value),
+  );
+}
+
+/** Flip a condition's type (is ↔ is not) for one value, keeping it single-typed. */
+export function flipTermCondition(
+  query: AccountQuery,
+  field: AccountTermField,
+  op: TermOp,
+  value: string,
+): AccountQuery {
+  return addTermCondition(removeTermCondition(query, field, op, value), field, otherOp(op), value);
+}
+
+/** Count of active conditions whose field belongs to a group (drives the collapsed-header badge). */
+export function groupActiveCount(query: AccountQuery, fields: string[]): number {
+  const set = new Set(fields);
+  let n = 0;
+  for (const c of query.filters) {
+    if (!set.has(c.field)) continue;
+    n += c.kind === "term" ? c.values.length : 1;
+  }
+  return n;
+}
+
 export function getRange(query: AccountQuery, field: string): { gte?: number; lte?: number } {
   const c = query.filters.find((cl) => cl.kind === "range" && cl.field === field);
   return c && c.kind === "range" ? { gte: c.gte, lte: c.lte } : {};

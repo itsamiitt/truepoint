@@ -1,28 +1,31 @@
-// FilterPanel.tsx — the Apollo/ZoomInfo-style faceted filter sidebar (24 §2), rebuilt to drive the server
-// `ContactQuery` directly via the pure helpers in ../filterGroups (so multi-select within a facet = OR, across
-// facets = AND, and include/exclude give negative filters). Renders the five collapsible groups from
-// FILTER_GROUPS; reuses FacetTypeahead for high-cardinality facets and shows live per-option counts when the
-// page supplies them. Removable pills (activeChips) + clear-all sit at the top. Presentation only — the page
-// owns the query state, persists it to the URL (searchUrlState), and fetches counts. Not wired into
-// ProspectPage yet (that swap lands next, preserving the existing bulk/detail wiring).
+// FilterPanel.tsx — the Apollo/ZoomInfo-style faceted filter sidebar (24 §2). Drives the server `ContactQuery`
+// via the pure helpers in ../filterGroups. Design: the five FILTER_GROUPS are ACCORDIONS COLLAPSED BY DEFAULT
+// (a count badge on each header keeps active filters discoverable while collapsed); a term facet supports the
+// full is/is-not MULTI-CONDITION pattern — each condition renders as its own inline tag (its type flips on
+// click, ✕ removes), and a value picker + an is/is-not add-type toggle add new ones. Applied tags live INLINE
+// inside their own section (no separate chip row). The Prospect/Account scope switch is hosted here (top of the
+// rail). Presentation only — the page owns query state, URL persistence, and counts.
 "use client";
 
 import type { BoolFilterField, ContactQuery } from "@leadwolf/types";
-import { TpChip, TpInput } from "@leadwolf/ui";
-import { type CSSProperties, type ReactNode, useState } from "react";
+import { TpInput } from "@leadwolf/ui";
+import { type ReactNode, useState } from "react";
 import {
   FILTER_GROUPS,
   type FacetDef,
+  type FilterGroup,
   type TermOp,
-  activeChips,
+  addTermCondition,
   clearAllFilters,
+  flipTermCondition,
   getBool,
   getRange,
-  getTermValues,
+  groupActiveCount,
   hasActiveFilters,
+  removeTermCondition,
   setBool,
   setRange,
-  toggleTermValue,
+  termConditions,
 } from "../filterGroups";
 import styles from "../prospect.module.css";
 import { FacetTypeahead } from "./FacetTypeahead";
@@ -38,6 +41,7 @@ export function FilterPanel({
   counts,
   owners = [],
   header,
+  scopeSwitch,
 }: {
   query: ContactQuery;
   onChange: (next: ContactQuery) => void;
@@ -45,15 +49,15 @@ export function FilterPanel({
   counts?: Map<string, number>;
   /** Teammates (+ a "Me" entry the page prepends) for the Owner facet. */
   owners?: OwnerOption[];
-  /** Optional rail content (saved + recent searches) rendered after the active-filter pills, before groups. */
+  /** Optional rail content (saved + recent searches) rendered under the head, before the groups. */
   header?: ReactNode;
+  /** The Prospect/Account scope switch, hosted at the top of the sidebar. */
+  scopeSwitch?: ReactNode;
 }) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [ops, setOps] = useState<Record<string, TermOp>>({});
-  const chips = activeChips(query);
-
   return (
     <aside className={styles.rail} aria-label="Filters">
+      {scopeSwitch != null ? <div className={styles.railScope}>{scopeSwitch}</div> : null}
+
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>
         {hasActiveFilters(query) ? (
@@ -67,55 +71,73 @@ export function FilterPanel({
         ) : null}
       </div>
 
-      {chips.length > 0 ? (
-        <div className={styles.chipWrap} style={{ marginBottom: 14 }}>
-          {chips.map((c) => (
-            <TpChip key={c.id} onRemove={() => onChange(c.remove(query))}>
-              {c.label}
-            </TpChip>
+      {header != null ? <div className={styles.railSection}>{header}</div> : null}
+
+      {FILTER_GROUPS.map((group) => (
+        <GroupSection
+          key={group.id}
+          group={group}
+          query={query}
+          onChange={onChange}
+          counts={counts}
+          owners={owners}
+        />
+      ))}
+    </aside>
+  );
+}
+
+// ── one accordion group (collapsed by default) ──────────────────────────────────────────────────────────
+function GroupSection({
+  group,
+  query,
+  onChange,
+  counts,
+  owners,
+}: {
+  group: FilterGroup;
+  query: ContactQuery;
+  onChange: (q: ContactQuery) => void;
+  counts?: Map<string, number>;
+  owners: OwnerOption[];
+}) {
+  const [open, setOpen] = useState(false); // collapsed by default
+  const activeCount = groupActiveCount(
+    query,
+    group.facets.map((f) => f.field),
+  );
+
+  return (
+    <section className={styles.group}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={styles.groupHead}
+      >
+        <span className={styles.groupTitle}>
+          {group.title}
+          {activeCount > 0 ? <span className={styles.groupBadge}>{activeCount}</span> : null}
+        </span>
+        <span aria-hidden className={styles.groupChevron}>
+          {open ? "−" : "+"}
+        </span>
+      </button>
+      {open ? (
+        <div className={styles.groupBody}>
+          {group.facets.map((facet) => (
+            <FacetControl
+              key={facetKeyOf(facet)}
+              facet={facet}
+              query={query}
+              onChange={onChange}
+              counts={counts}
+              owners={owners}
+            />
           ))}
         </div>
       ) : null}
-
-      {header != null ? <div className={styles.railSection}>{header}</div> : null}
-
-      {FILTER_GROUPS.map((group) => {
-        const isCollapsed = collapsed[group.id] ?? false;
-        return (
-          <section key={group.id} style={{ borderTop: "1px solid var(--tp-hairline)" }}>
-            <button
-              type="button"
-              aria-expanded={!isCollapsed}
-              onClick={() => setCollapsed((s) => ({ ...s, [group.id]: !isCollapsed }))}
-              style={groupHeadStyle}
-            >
-              <span>{group.title}</span>
-              <span aria-hidden style={{ color: "var(--tp-ink-4)" }}>
-                {isCollapsed ? "+" : "−"}
-              </span>
-            </button>
-            {!isCollapsed ? (
-              <div style={{ paddingBottom: 12, display: "flex", flexDirection: "column", gap: 14 }}>
-                {group.facets.map((facet) => (
-                  <FacetControl
-                    key={facetKeyOf(facet)}
-                    facet={facet}
-                    query={query}
-                    onChange={onChange}
-                    op={facet.kind === "term" ? (ops[facet.field] ?? "include") : "include"}
-                    onOpChange={(o) =>
-                      facet.kind === "term" && setOps((s) => ({ ...s, [facet.field]: o }))
-                    }
-                    counts={counts}
-                    owners={owners}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </section>
-        );
-      })}
-    </aside>
+    </section>
   );
 }
 
@@ -124,16 +146,12 @@ function FacetControl({
   facet,
   query,
   onChange,
-  op,
-  onOpChange,
   counts,
   owners,
 }: {
   facet: FacetDef;
   query: ContactQuery;
   onChange: (q: ContactQuery) => void;
-  op: TermOp;
-  onOpChange: (op: TermOp) => void;
   counts?: Map<string, number>;
   owners: OwnerOption[];
 }) {
@@ -152,55 +170,108 @@ function FacetControl({
         onChange={onChange}
       />
     );
+  return (
+    <TermFacet facet={facet} query={query} onChange={onChange} counts={counts} owners={owners} />
+  );
+}
 
-  // term facet: an Is / Is not op toggle + the value picker for that op.
-  const selected = getTermValues(query, facet.field, op);
-  const options = facet.input === "owner" ? owners : (facet.options ?? []);
+// ── term facet: multi-condition (is / is not), each condition an independent inline tag ──────────────────
+function TermFacet({
+  facet,
+  query,
+  onChange,
+  counts,
+  owners,
+}: {
+  facet: Extract<FacetDef, { kind: "term" }>;
+  query: ContactQuery;
+  onChange: (q: ContactQuery) => void;
+  counts?: Map<string, number>;
+  owners: OwnerOption[];
+}) {
+  // The type a newly-picked value is added as. Each value is single-typed; this only controls NEW additions.
+  const [addOp, setAddOp] = useState<TermOp>("include");
+  const conditions = termConditions(query, facet.field);
+  const applied = new Set(conditions.map((c) => c.value));
+  const options = (facet.input === "owner" ? owners : (facet.options ?? [])).filter(
+    (o) => !applied.has(o.value),
+  );
 
   return (
     <div className={styles.facet}>
-      <div
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
-      >
-        <span className={styles.facetLabel}>{facet.label}</span>
-        <OpToggle op={op} onChange={onOpChange} />
+      <span className={styles.facetLabel}>{facet.label}</span>
+
+      {conditions.length > 0 ? (
+        <div className={styles.condList}>
+          {conditions.map((c) => (
+            <span key={`${c.op}:${c.value}`} className={styles.condTag}>
+              <button
+                type="button"
+                className={styles.condType}
+                data-op={c.op}
+                title="Toggle is / is not"
+                onClick={() => onChange(flipTermCondition(query, facet.field, c.op, c.value))}
+              >
+                {c.op === "include" ? "is" : "is not"}
+              </button>
+              <span className={styles.condValue}>{c.label}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${c.label}`}
+                className={styles.condRemove}
+                onClick={() => onChange(removeTermCondition(query, facet.field, c.op, c.value))}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <div className={styles.addRow}>
+        <OpToggle op={addOp} onChange={setAddOp} />
+        {facet.input === "typeahead" ? (
+          <FacetTypeahead
+            field={facet.field}
+            label={facet.label}
+            selected={[...applied]}
+            onAdd={(v) => onChange(addTermCondition(query, facet.field, addOp, v))}
+            onRemove={(v) => onChange(removeTermCondition(query, facet.field, "include", v))}
+          />
+        ) : null}
       </div>
-      {facet.input === "typeahead" ? (
-        <FacetTypeahead
-          field={facet.field}
-          label={facet.label}
-          selected={selected}
-          onAdd={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
-          onRemove={(v) => onChange(toggleTermValue(query, facet.field, op, v))}
-        />
-      ) : (
+
+      {facet.input !== "typeahead" ? (
         <div className={styles.chipWrap}>
           {options.length === 0 ? (
-            <span style={{ fontSize: 12, color: "var(--tp-ink-4)" }}>No options</span>
+            <span className={styles.facetEmpty}>
+              {applied.size > 0 ? "All options selected" : "No options"}
+            </span>
           ) : (
             options.map((o) => {
               const count = counts?.get(`${facet.field}:${o.value}`);
               return (
-                <TpChip
+                <button
                   key={o.value}
-                  active={selected.includes(o.value)}
-                  onClick={() => onChange(toggleTermValue(query, facet.field, op, o.value))}
+                  type="button"
+                  className={styles.addChip}
+                  onClick={() => onChange(addTermCondition(query, facet.field, addOp, o.value))}
                 >
-                  {o.label}
+                  + {o.label}
                   {count !== undefined ? ` (${count.toLocaleString()})` : ""}
-                </TpChip>
+                </button>
               );
             })
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
 function OpToggle({ op, onChange }: { op: TermOp; onChange: (op: TermOp) => void }) {
   return (
-    <span style={{ display: "inline-flex", gap: 4 }}>
+    <span className={styles.opToggle}>
       <MiniToggle active={op === "include"} onClick={() => onChange("include")}>
         is
       </MiniToggle>
@@ -224,16 +295,8 @@ function MiniToggle({
     <button
       type="button"
       onClick={onClick}
-      style={{
-        font: "inherit",
-        fontSize: 11,
-        padding: "1px 7px",
-        borderRadius: 999,
-        cursor: "pointer",
-        border: "1px solid var(--tp-hairline-2)",
-        background: active ? "var(--tp-ink)" : "var(--tp-surface)",
-        color: active ? "var(--tp-surface)" : "var(--tp-ink-3)",
-      }}
+      className={styles.miniToggle}
+      data-active={active ? "true" : undefined}
     >
       {children}
     </button>
@@ -258,17 +321,13 @@ function BoolControl({
     </MiniToggle>
   );
   return (
-    <div className={styles.facet}>
-      <div
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
-      >
-        <span className={styles.facetLabel}>{label}</span>
-        <span style={{ display: "inline-flex", gap: 4 }}>
-          {opt(undefined, "Any")}
-          {opt(true, "Yes")}
-          {opt(false, "No")}
-        </span>
-      </div>
+    <div className={styles.facetRow}>
+      <span className={styles.facetLabel}>{label}</span>
+      <span className={styles.opToggle}>
+        {opt(undefined, "Any")}
+        {opt(true, "Yes")}
+        {opt(false, "No")}
+      </span>
     </div>
   );
 }
@@ -301,7 +360,7 @@ function RangeControl({
         {label}
         {unit ? ` (${unit})` : ""}
       </span>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div className={styles.rangeRow}>
         <TpInput
           type={valueKind === "date" ? "date" : "number"}
           placeholder="Min"
@@ -320,21 +379,6 @@ function RangeControl({
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────────────────────────────────────
-const groupHeadStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  width: "100%",
-  padding: "12px 0",
-  font: "inherit",
-  fontSize: 13,
-  fontWeight: 600,
-  color: "var(--tp-ink)",
-  background: "none",
-  border: 0,
-  cursor: "pointer",
-};
-
 function facetKeyOf(facet: FacetDef): string {
   return `${facet.kind}:${facet.field}`;
 }
