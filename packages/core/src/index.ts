@@ -316,6 +316,18 @@ export {
 // Company-level (accounts) search count (24/ADR-0035): the firmographic sibling of searchCount. Thin delegate
 // to the @leadwolf/db accountSearchRepository (no query-semantics layer needed for accounts).
 export { searchAccountsCount } from "./prospect/accountSearch.ts";
+// Contact dedup pass (24 Phase-0.5): flags likely-duplicate contacts (name+domain key) by writing
+// duplicate_of_contact_id → the canonical, powering the duplicate search facet. Soft (pointer only), per-
+// workspace (RLS), idempotent — run by the dedup queue worker.
+export {
+  runDedup,
+  computeDuplicateGroups,
+  pickCanonical,
+  completenessScore,
+  dedupKey,
+  type DuplicateGroup,
+  type RunDedupResult,
+} from "./prospect/dedup.ts";
 
 // Record customization (custom fields — ADR-0028, gap G-REV-5): registry CRUD + typed-jsonb value set/get +
 // the pure type validator (reused by import mapping later).

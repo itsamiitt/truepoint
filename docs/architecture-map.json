@@ -68,8 +68,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 731,
-  "fileSetHash": "sha256:4e860999dbb892e2a5449ec98e377358278fccdbc87a9db6b7d1e725a7ad3e11",
+  "fileCount": 734,
+  "fileSetHash": "sha256:4c00f5d9af27413426f33f71638e39961ecaa49d18952928fbbb1b5b896d3fa8",
   "features": {
     "account-search": {
       "web": [],
@@ -567,6 +567,8 @@
       "core": [
         "packages/core/src/prospect/accountSearch.ts",
         "packages/core/src/prospect/bulkActions.ts",
+        "packages/core/src/prospect/dedup.test.ts",
+        "packages/core/src/prospect/dedup.ts",
         "packages/core/src/prospect/lists.ts",
         "packages/core/src/prospect/tags.ts"
       ],
@@ -1352,6 +1354,7 @@
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
+    "apps/workers/src/queues/dedup.ts",
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/enrichmentJobRepository.ts",

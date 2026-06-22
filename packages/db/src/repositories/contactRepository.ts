@@ -56,6 +56,23 @@ function definedOnly<T extends object>(v: T): Partial<T> {
   return Object.fromEntries(Object.entries(v).filter(([, val]) => val !== undefined)) as Partial<T>;
 }
 
+/** The minimal, non-PII row the dedup worker needs: identity fields for the match key + completeness signals
+ *  for canonical selection. `hasPhone` is derived from the encrypted column (never the plaintext). */
+export interface DedupContactRow {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  emailDomain: string | null;
+  jobTitle: string | null;
+  linkedinUrl: string | null;
+  seniorityLevel: string | null;
+  department: string | null;
+  locationCountry: string | null;
+  hasPhone: boolean;
+  isRevealed: boolean;
+  createdAt: Date;
+}
+
 export const contactRepository = {
   /** Find an existing contact in the workspace by the first dedup key that hits (email → linkedin → sales-nav). */
   async findByDedupKeys(
@@ -239,6 +256,76 @@ export const contactRepository = {
       .update(contacts)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
       .where(and(inArray(contacts.id, ids), isNull(contacts.deletedAt)))
+      .returning({ id: contacts.id });
+    return rows.length;
+  },
+
+  /**
+   * Every live contact's dedup-relevant, NON-PII fields for the workspace (RLS-scoped via the caller's tx) —
+   * the input to the dedup pass. Tombstoned rows are excluded. `hasPhone` is derived from the encrypted column
+   * (the plaintext is never read). Bounded by the workspace size; the dedup worker runs off the request thread.
+   */
+  async listForDedup(tx: Tx): Promise<DedupContactRow[]> {
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        emailDomain: contacts.emailDomain,
+        jobTitle: contacts.jobTitle,
+        linkedinUrl: contacts.linkedinUrl,
+        seniorityLevel: contacts.seniorityLevel,
+        department: contacts.department,
+        locationCountry: contacts.locationCountry,
+        phoneEnc: contacts.phoneEnc,
+        isRevealed: contacts.isRevealed,
+        createdAt: contacts.createdAt,
+      })
+      .from(contacts)
+      .where(isNull(contacts.deletedAt));
+    return rows.map((r) => ({
+      id: r.id,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      emailDomain: r.emailDomain,
+      jobTitle: r.jobTitle,
+      linkedinUrl: r.linkedinUrl,
+      seniorityLevel: r.seniorityLevel,
+      department: r.department,
+      locationCountry: r.locationCountry,
+      hasPhone: r.phoneEnc != null,
+      isRevealed: r.isRevealed,
+      createdAt: r.createdAt,
+    }));
+  },
+
+  /**
+   * Clear every duplicate pointer in the workspace (partial — only rows currently flagged). The dedup pass
+   * recomputes from scratch each run, so it clears first, then re-points the live groups (flagDuplicates). RLS
+   * scopes this to the caller's workspace. duplicate_of_contact_id is a derived/system annotation, so updatedAt
+   * is intentionally NOT bumped. Returns how many flags were cleared.
+   */
+  async clearDuplicateFlags(tx: Tx): Promise<number> {
+    const rows = await tx
+      .update(contacts)
+      .set({ duplicateOfContactId: null })
+      .where(isNotNull(contacts.duplicateOfContactId))
+      .returning({ id: contacts.id });
+    return rows.length;
+  },
+
+  /**
+   * Point a set of duplicate contacts at their canonical contact (duplicate_of_contact_id = canonicalId).
+   * canonicalId + duplicateIds are all same-workspace by construction (the dedup pass groups within one
+   * RLS-scoped read); RLS is the backstop. Self-reference is impossible (canonical is excluded from its own
+   * duplicateIds). Returns the number of rows flagged.
+   */
+  async flagDuplicates(tx: Tx, canonicalId: string, duplicateIds: string[]): Promise<number> {
+    if (duplicateIds.length === 0) return 0;
+    const rows = await tx
+      .update(contacts)
+      .set({ duplicateOfContactId: canonicalId })
+      .where(inArray(contacts.id, duplicateIds))
       .returning({ id: contacts.id });
     return rows.length;
   },

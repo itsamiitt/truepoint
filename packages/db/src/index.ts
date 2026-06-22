@@ -54,6 +54,7 @@ export {
 export {
   contactRepository,
   type ContactWriteValues,
+  type DedupContactRow,
   type DedupKeys,
   type HotLeadRow,
 } from "./repositories/contactRepository.ts";
