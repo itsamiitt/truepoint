@@ -66,8 +66,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 702,
-  "fileSetHash": "sha256:ec459b05cbed9d18a2afc5db5b9a8ab710e16f8d37b65f2c43276a0a7d5d1570",
+  "fileCount": 703,
+  "fileSetHash": "sha256:4ee81191e2e74adfb4c84cd0cac5992e7cceae28b06732b93add92928161b072",
   "features": {
     "activity": {
       "web": [],
@@ -482,6 +482,7 @@
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
+        "apps/web/src/features/prospect/components/FilterPanel.tsx",
         "apps/web/src/features/prospect/components/FilterRail.tsx",
         "apps/web/src/features/prospect/components/ParsedFilterPreview.tsx",
         "apps/web/src/features/prospect/components/ProspectPage.tsx",
