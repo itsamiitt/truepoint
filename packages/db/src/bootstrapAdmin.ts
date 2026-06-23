@@ -5,7 +5,14 @@
 // on @leadwolf/auth). Idempotent — safe to re-run; self-heals the is_platform_admin column.
 import { eq, sql } from "drizzle-orm";
 import { db } from "./client.ts";
-import { tenantMembers, tenants, users, workspaceMembers, workspaces } from "./schema/auth.ts";
+import {
+  platformStaff,
+  tenantMembers,
+  tenants,
+  users,
+  workspaceMembers,
+  workspaces,
+} from "./schema/auth.ts";
 
 export interface BootstrapAdminInput {
   email: string;
@@ -116,15 +123,32 @@ export async function provisionBootstrapAdmin(
           .returning({ id: workspaces.id })
       )[0]!.id;
 
-  // Owner memberships (idempotent on the unique (tenant,user) / (workspace,user) keys).
+  // Owner memberships (idempotent on the unique (tenant,user) / (workspace,user) keys). org_role='owner' is
+  // set EXPLICITLY here: the migrate-time backfill (rls/platform.sql) keys off is_tenant_owner and ran before
+  // this user existed, so without this the Auth Admin (requireOrgRole) would not recognise the bootstrap
+  // admin as org owner.
   await db
     .insert(tenantMembers)
-    .values({ tenantId, userId, isTenantOwner: true, status: "active" })
-    .onConflictDoNothing();
+    .values({ tenantId, userId, isTenantOwner: true, orgRole: "owner", status: "active" })
+    .onConflictDoUpdate({
+      target: [tenantMembers.tenantId, tenantMembers.userId],
+      set: { isTenantOwner: true, orgRole: "owner", status: "active" },
+    });
   await db
     .insert(workspaceMembers)
     .values({ workspaceId, userId, role: "owner", status: "active", joinedAt: new Date() })
     .onConflictDoNothing();
+
+  // Platform STAFF super_admin (ADR-0011): same ordering problem — the migrate-time platform_staff backfill
+  // keys off is_platform_admin and ran before this user existed. Grant it here, or requireStaffRole would
+  // 403 the bootstrap admin on the staff-console RBAC surfaces (Staff / Providers / Audit log).
+  await db
+    .insert(platformStaff)
+    .values({ userId, staffRole: "super_admin", status: "active" })
+    .onConflictDoUpdate({
+      target: platformStaff.userId,
+      set: { staffRole: "super_admin", status: "active", revokedAt: null },
+    });
 
   return { userId, tenantId, workspaceId };
 }
