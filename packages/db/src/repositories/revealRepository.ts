@@ -72,10 +72,13 @@ export const revealRepository = {
     return rows.length > 0;
   },
 
-  /** Usage history for Settings ▸ Billing & Credits (07 §9). Workspace-scoped via RLS. */
-  async listByWorkspace(scope: TenantScope, limit = 100): Promise<RevealUsageRow[]> {
-    return withTenantTx(scope, (tx) =>
-      tx
+  /**
+   * Usage history for Settings ▸ Billing & Credits (07 §9). Workspace-scoped via RLS. Pass `tx` to compose
+   * this into a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it for a standalone read.
+   */
+  async listByWorkspace(scope: TenantScope, limit = 100, tx?: Tx): Promise<RevealUsageRow[]> {
+    const run = (t: Tx): Promise<RevealUsageRow[]> =>
+      t
         .select({
           id: contactReveals.id,
           contactId: contactReveals.contactId,
@@ -92,7 +95,7 @@ export const revealRepository = {
           ),
         )
         .orderBy(desc(contactReveals.revealedAt))
-        .limit(limit),
-    );
+        .limit(limit);
+    return tx ? run(tx) : withTenantTx(scope, run);
   },
 };

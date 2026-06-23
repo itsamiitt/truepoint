@@ -1,7 +1,17 @@
 // buildHomeSummary.ts — compose the Home dashboard DTO (07 §2) from the workspace-scoped repository reads,
-// in ONE fan-out (Promise.all). Pure domain logic: no HTTP. PII never enters this shape — hotLeads carry
+// in ONE shared withTenantTx. Pure domain logic: no HTTP. PII never enters this shape — hotLeads carry
 // facets only and the activity feed carries minimized audit columns only (the repos already enforce that).
 // `sent` is derived here from the activity email_sent bucket, since it lives in the activity domain.
+//
+// Performance (audit root cause #3/#7): every read here is a TENANT-scoped repository read, and each one used
+// to open its OWN withTenantTx (BEGIN → SET LOCAL ROLE leadwolf_app → 1-2 set_config GUCs → query → COMMIT).
+// Nine of them in parallel pinned up to 9-10 pool connections on the FIRST authenticated page and paid the
+// role+GUC setup ~9×. We now open ONE withTenantTx and pass that single scoped `tx` into all nine reads, so the
+// whole summary runs in one transaction with one role+GUC setup on one connection. Isolation is unchanged: the
+// reads still run as the non-BYPASSRLS leadwolf_app role with app.current_tenant_id / app.current_workspace_id
+// set LOCAL from the SESSION-derived scope — RLS enforces tenant+workspace isolation exactly as before. The
+// reads run sequentially because postgres.js serializes queries on a single reserved-transaction connection;
+// they share one connection now, so this is the same total work without the per-read GUC overhead.
 
 import {
   type TenantScope,
@@ -13,6 +23,7 @@ import {
   revealRepository,
   sequenceRepository,
   sourceImportRepository,
+  withTenantTx,
 } from "@leadwolf/db";
 import type { HomeSummary, RevealType } from "@leadwolf/types";
 
@@ -22,7 +33,7 @@ export interface BuildHomeSummaryInput {
 
 export async function buildHomeSummary({ scope }: BuildHomeSummaryInput): Promise<HomeSummary> {
   const tenantScope: TenantScope = scope;
-  const [
+  const {
     creditBalance,
     burn,
     recentReveals,
@@ -32,17 +43,17 @@ export async function buildHomeSummary({ scope }: BuildHomeSummaryInput): Promis
     performance,
     activityCounts,
     activityFeed,
-  ] = await Promise.all([
-    creditRepository.getBalance(tenantScope),
-    creditRepository.burnByDay(tenantScope),
-    revealRepository.listByWorkspace(tenantScope, 10),
-    contactRepository.topByPriority(tenantScope, 5),
-    sourceImportRepository.recentBatches(tenantScope, 5),
-    providerCallRepository.recentActivity(tenantScope, 5),
-    sequenceRepository.performanceSnapshot(tenantScope),
-    activityRepository.countByTypeForWorkspace(tenantScope, 30),
-    auditRepository.listByWorkspace(tenantScope, 15),
-  ]);
+  } = await withTenantTx(tenantScope, async (tx) => ({
+    creditBalance: await creditRepository.getBalance(tenantScope, tx),
+    burn: await creditRepository.burnByDay(tenantScope, 30, tx),
+    recentReveals: await revealRepository.listByWorkspace(tenantScope, 10, tx),
+    hotLeads: await contactRepository.topByPriority(tenantScope, 5, tx),
+    recentImports: await sourceImportRepository.recentBatches(tenantScope, 5, tx),
+    enrichmentActivity: await providerCallRepository.recentActivity(tenantScope, 5, tx),
+    performance: await sequenceRepository.performanceSnapshot(tenantScope, tx),
+    activityCounts: await activityRepository.countByTypeForWorkspace(tenantScope, 30, tx),
+    activityFeed: await auditRepository.listByWorkspace(tenantScope, 15, tx),
+  }));
 
   return {
     creditBalance,

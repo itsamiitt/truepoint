@@ -113,10 +113,12 @@ export const auditRepository = {
    * Workspace activity feed for the Home dashboard — this workspace's rows PLUS tenant-level rows
    * (workspace_id IS NULL), newest first. MINIMIZED PROJECTION: metadata/ip/userAgent are NEVER selected
    * (those carry PII). Distinct from listByTenant, which returns the raw rows for the compliance viewer.
+   * Pass `tx` to run on a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it for
+   * a standalone read.
    */
-  async listByWorkspace(scope: TenantScope, limit = 15): Promise<ActivityFeedRow[]> {
-    return withTenantTx(scope, (tx) =>
-      tx
+  async listByWorkspace(scope: TenantScope, limit = 15, tx?: Tx): Promise<ActivityFeedRow[]> {
+    const run = (t: Tx): Promise<ActivityFeedRow[]> =>
+      t
         .select({
           id: auditLog.id,
           action: auditLog.action,
@@ -136,7 +138,7 @@ export const auditRepository = {
           ),
         )
         .orderBy(desc(auditLog.occurredAt))
-        .limit(limit),
-    );
+        .limit(limit);
+    return tx ? run(tx) : withTenantTx(scope, run);
   },
 };

@@ -365,10 +365,12 @@ export const contactRepository = {
   /**
    * The highest-priority leads for the Home dashboard (top N by priority_score). FACETS ONLY — the
    * encrypted email/phone are never selected. DSAR tombstones never surface (08 §4.2). Workspace-scoped.
+   * Pass `tx` to run on a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it
+   * for a standalone read.
    */
-  async topByPriority(scope: TenantScope, limit = 5): Promise<HotLeadRow[]> {
-    return withTenantTx(scope, async (tx) => {
-      const rows = await tx
+  async topByPriority(scope: TenantScope, limit = 5, tx?: Tx): Promise<HotLeadRow[]> {
+    const run = async (t: Tx): Promise<HotLeadRow[]> => {
+      const rows = await t
         .select({
           id: contacts.id,
           firstName: contacts.firstName,
@@ -384,6 +386,7 @@ export const contactRepository = {
         .orderBy(desc(contacts.priorityScore))
         .limit(limit);
       return rows.map((r) => ({ ...r, priorityScore: r.priorityScore ?? 0 }));
-    });
+    };
+    return tx ? run(tx) : withTenantTx(scope, run);
   },
 };
