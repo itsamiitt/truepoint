@@ -20,18 +20,42 @@
 	}
 }
 
+# Shared site body, parameterised by the upstream (service:port). Each site below imports it so the
+# edge behaviour stays identical across all four subdomains and is defined in exactly one place.
+#
+#   encode zstd gzip
+#     Compress upstream responses at the edge (RC#10). Next.js can only emit gzip; Caddy negotiates the
+#     best encoding the client accepts (zstd preferred, gzip fallback) so HTML/JSON/JS shrink on the wire.
+#     `encode` is content-type aware: it skips already-compressed media (images, video, fonts, .gz/.br/.zst)
+#     and tiny payloads, so there's no harmful double-compression.
+#
+#   lb_try_duration 5s / lb_try_interval 250ms
+#     Cold-start cushion (RC#12). On a single-host deploy a `docker compose up -d` recreates the only
+#     container for a service, leaving a brief window where the upstream refuses connections. Without a
+#     retry, Caddy turns that connection-refused straight into a 502. These let Caddy retry the dial for
+#     up to 5s (every 250ms) so a request that arrives mid-recreate waits for the new container instead of
+#     erroring. Caddy only retries when no bytes have been written to the upstream yet, so non-idempotent
+#     requests are not silently replayed.
+(site_proxy) {
+	encode zstd gzip
+	reverse_proxy {args[0]} {
+		lb_try_duration 5s
+		lb_try_interval 250ms
+	}
+}
+
 auth.truepoint.in {
-	reverse_proxy auth:3000
+	import site_proxy auth:3000
 }
 
 app.truepoint.in {
-	reverse_proxy web:3002
+	import site_proxy web:3002
 }
 
 api.truepoint.in {
-	reverse_proxy api:3001
+	import site_proxy api:3001
 }
 
 admin.truepoint.in {
-	reverse_proxy admin:3003
+	import site_proxy admin:3003
 }

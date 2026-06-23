@@ -71,6 +71,13 @@ echo "==> [3/4] Running database migrations…"
 timeout 300 "${COMPOSE[@]}" run --rm migrate
 
 # ── 4. App services + edge proxy ──────────────────────────────────────────────────
+# SINGLE-HOST DEPLOY DOWNTIME WINDOW: each service runs as exactly one container, so `up -d` RECREATES it
+# (stop old → start new) with a brief gap where the upstream refuses connections. A true zero-downtime
+# rolling deploy (≥2 replicas, start-new-before-stop-old) needs Swarm/k8s or an external LB and is out of
+# scope for this single-host preview. The gap is now cushioned by Caddy's `lb_try_duration` (Caddyfile):
+# a request arriving mid-recreate retries the dial for a few seconds and waits for the new container
+# instead of 502-ing immediately. Caddy is recreated LAST (it depends_on the apps being healthy), so the
+# proxy is the last thing to blip and its retry cushion covers the apps' recreate gaps.
 echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, admin, caddy)…"
 "${COMPOSE[@]}" up -d api auth workers web admin caddy
 
