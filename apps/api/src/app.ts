@@ -3,6 +3,7 @@
 
 import { appOrigins } from "@leadwolf/config";
 import { Hono } from "hono";
+import { compress } from "hono/compress";
 import { cors } from "hono/cors";
 import { accountSearchRoutes } from "./features/account-search/index.ts";
 import { activityRoutes } from "./features/activity/index.ts";
@@ -34,8 +35,22 @@ import { rateLimit } from "./middleware/rateLimit.ts";
 
 export const app = new Hono();
 
+// How long (seconds) a browser may cache the credentialed CORS preflight. Without it, every sign-in re-runs
+// an OPTIONS round-trip before each /api/v1 JSON POST and the Bearer GET /session (perf RC#5). 10 min is well
+// under Chromium's cap; the origin/credentials decision is still re-applied server-side on the actual request.
+const CORS_PREFLIGHT_MAX_AGE = 600;
+
 app.onError(onError);
-app.use("*", cors({ origin: [...appOrigins()], credentials: true }));
+// Compress text/JSON responses (perf RC#10). Mounted first so it wraps every downstream response body; it
+// honours Accept-Encoding, skips HEAD and already-encoded responses, and only reads the response (no request
+// body), so authn/parsing are untouched. The api serves no SSE/long-poll surface, so there is no stream to
+// buffer; the one non-JSON body (the bulk CSV export) is a complete in-memory string that gzips well.
+app.use("*", compress());
+// Add max-age only — origin allow-list and credentials behaviour are unchanged from before.
+app.use(
+  "*",
+  cors({ origin: [...appOrigins()], credentials: true, maxAge: CORS_PREFLIGHT_MAX_AGE }),
+);
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 // Coarse per-caller throttle on the resource surface (IP-keyed here; per-subject once authn has set claims).
