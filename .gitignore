@@ -26,3 +26,15 @@ next-env.d.ts
 
 # TypeScript incremental-build state (written by tsc --noEmit with incremental projects)
 *.tsbuildinfo
+
+# claude.ai/design sync (/design-sync) — staging scripts, generated bundle, scratch build, machine state.
+# The durable inputs under .design-sync/ (config.json, NOTES.md, conventions.md, previews/, build-ui.mjs)
+# ARE committed; everything below is regenerated per run / per clone.
+.ds-sync/
+ds-bundle/
+.design-sync/.cache/
+.design-sync/learnings/
+.design-sync/node_modules
+packages/ui/.ds-tsconfig.json
+# (the scratch built-package goes in packages/ui/dist/ — already covered by the dist/ rule above,
+#  and excluded from the architecture-map scan, which skips dist/ segments)

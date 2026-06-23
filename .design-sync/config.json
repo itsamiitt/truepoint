@@ -1,0 +1,31 @@
+{
+  "projectId": "8701fad5-fc47-48dc-8b1d-6cfe419da901",
+  "shape": "package",
+  "pkg": "@leadwolf/ui",
+  "globalName": "TruePointUI",
+  "entry": "packages/ui/dist/index.js",
+  "srcDir": "../src",
+  "cssEntry": "_compiled.css",
+  "extraFonts": ["_fonts.css"],
+  "buildCmd": "node .design-sync/build-ui.mjs",
+  "readmeHeader": ".design-sync/conventions.md",
+  "overrides": {
+    "Dialog": { "cardMode": "single", "viewport": "720x520" },
+    "Drawer": { "cardMode": "single", "viewport": "880x560" },
+    "DataTable": { "cardMode": "column" },
+    "Popover": { "cardMode": "single", "viewport": "620x460" },
+    "DropdownMenu": { "cardMode": "single", "viewport": "620x500" },
+    "Tooltip": { "cardMode": "single", "viewport": "480x300" },
+    "ToastProvider": { "cardMode": "single", "viewport": "640x460" },
+    "EmptyState": { "cardMode": "column" },
+    "ErrorState": { "cardMode": "column" },
+    "FieldGroup": { "cardMode": "column" },
+    "FormRow": { "cardMode": "column" },
+    "FormSection": { "cardMode": "column" },
+    "LoadingState": { "cardMode": "column" },
+    "Skeleton": { "cardMode": "column" },
+    "StateSwitch": { "cardMode": "column" },
+    "StatTile": { "cardMode": "column" },
+    "Tabs": { "cardMode": "column" }
+  }
+}
