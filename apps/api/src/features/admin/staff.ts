@@ -45,8 +45,11 @@ staffRoutes.post("/", async (c) => {
   const parsed = grantStaffSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const { userId, staffRole } = parsed.data;
-  await withPlatformTx(actorOf(c), "admin.grant_staff", (tx) =>
-    staffRepository.grant(tx, userId, staffRole, c.get("claims").sub),
+  await withPlatformTx(
+    actorOf(c),
+    "admin.grant_staff",
+    (tx) => staffRepository.grant(tx, userId, staffRole, c.get("claims").sub),
+    { targetType: "user", targetId: userId, metadata: { staffRole } },
   );
   return c.json({ ok: true, userId, staffRole });
 });
@@ -54,8 +57,11 @@ staffRoutes.post("/", async (c) => {
 /** Revoke a user's staff role (sets status=revoked + revoked_at). Audited "admin.revoke_staff". */
 staffRoutes.delete("/:userId", async (c) => {
   const userId = c.req.param("userId");
-  await withPlatformTx(actorOf(c), "admin.revoke_staff", (tx) =>
-    staffRepository.revoke(tx, userId),
+  await withPlatformTx(
+    actorOf(c),
+    "admin.revoke_staff",
+    (tx) => staffRepository.revoke(tx, userId),
+    { targetType: "user", targetId: userId },
   );
   return c.json({ ok: true, userId });
 });

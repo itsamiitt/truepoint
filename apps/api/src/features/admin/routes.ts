@@ -63,8 +63,11 @@ adminRoutes.get("/tenants", async (c) => {
 // ── Tenant detail (13 §3.1) — the org plus its workspaces + members. Each list is bounded. ──
 adminRoutes.get("/tenants/:id", async (c) => {
   const tenantId = c.req.param("id");
-  const detail = await withPlatformTx(actorOf(c), "admin.get_tenant", (tx) =>
-    platformAdminRepository.getTenantDetail(tx, tenantId),
+  const detail = await withPlatformTx(
+    actorOf(c),
+    "admin.get_tenant",
+    (tx) => platformAdminRepository.getTenantDetail(tx, tenantId),
+    { targetType: "tenant", targetId: tenantId, tenantId },
   );
   if (!detail) throw new NotFoundError("Tenant not found.");
   return c.json(detail);
@@ -170,16 +173,21 @@ adminRoutes.post("/feature-flags/:key/tenant", async (c) => {
   const parsed = featureFlagTenantToggleSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const { tenant_id, enabled } = parsed.data;
-  await withPlatformTx(actorOf(c), "feature_flag.set", async (tx) => {
-    // The flag must exist before an override can reference it (FK + a clearer 404 than a constraint error).
-    const def = await featureFlagRepository.getGlobal(tx, key);
-    if (!def) throw new NotFoundError(`Unknown feature flag '${key}'.`);
-    if (enabled === null) {
-      await featureFlagRepository.clearTenantOverride(tx, key, tenant_id);
-    } else {
-      await featureFlagRepository.setTenantOverride(tx, key, tenant_id, enabled);
-    }
-  });
+  await withPlatformTx(
+    actorOf(c),
+    "feature_flag.set",
+    async (tx) => {
+      // The flag must exist before an override can reference it (FK + a clearer 404 than a constraint error).
+      const def = await featureFlagRepository.getGlobal(tx, key);
+      if (!def) throw new NotFoundError(`Unknown feature flag '${key}'.`);
+      if (enabled === null) {
+        await featureFlagRepository.clearTenantOverride(tx, key, tenant_id);
+      } else {
+        await featureFlagRepository.setTenantOverride(tx, key, tenant_id, enabled);
+      }
+    },
+    { targetType: "feature_flag", targetId: key, tenantId: tenant_id, metadata: { enabled } },
+  );
   return c.json({ ok: true, key, tenantId: tenant_id, enabled });
 });
 

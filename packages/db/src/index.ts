@@ -10,6 +10,7 @@ export {
   type Tx,
   type TenantScope,
   type PlatformActor,
+  type PlatformAuditTarget,
 } from "./client.ts";
 export {
   provisionBootstrapAdmin,

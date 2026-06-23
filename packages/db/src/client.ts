@@ -63,6 +63,19 @@ export interface PlatformActor {
 }
 
 /**
+ * Optional TARGET context for the platform-audit row (ADR-0032) — WHAT a privileged action acted on, so the
+ * immutable trail names the impersonated tenant/user, the staff user whose role changed, the tenant whose
+ * flag was overridden, etc. Omit for plain cross-tenant list reads (no single target).
+ */
+export interface PlatformAuditTarget {
+  targetType?: string;
+  targetId?: string;
+  tenantId?: string;
+  workspaceId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * Run `fn` with PLATFORM (cross-tenant) visibility — the audited super-admin path (ADR-0032). The base
  * connection is the DB owner, which bypasses RLS, so this does NOT drop to leadwolf_app (unlike
  * withTenantTx); it can read across EVERY workspace. EVERY call writes a platform_audit_log row in the
@@ -73,11 +86,15 @@ export async function withPlatformTx<T>(
   actor: PlatformActor,
   action: string,
   fn: (tx: Tx) => Promise<T>,
+  target: PlatformAuditTarget = {},
 ): Promise<T> {
   return db.transaction(async (tx) => {
     await tx.execute(
-      sql`INSERT INTO platform_audit_log (actor_user_id, action, ip)
-          VALUES (${actor.userId}::uuid, ${action}, ${actor.ip ?? null})`,
+      sql`INSERT INTO platform_audit_log
+            (actor_user_id, action, target_type, target_id, tenant_id, workspace_id, ip, metadata)
+          VALUES (${actor.userId}::uuid, ${action}, ${target.targetType ?? null}, ${target.targetId ?? null},
+                  ${target.tenantId ?? null}::uuid, ${target.workspaceId ?? null}::uuid, ${actor.ip ?? null},
+                  ${target.metadata ? JSON.stringify(target.metadata) : null}::jsonb)`,
     );
     return fn(tx);
   });

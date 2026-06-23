@@ -37,20 +37,27 @@ CREATE POLICY members_tenant_isolation ON workspace_members
     SELECT id FROM workspaces WHERE tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
   ));
 
+-- USING + WITH CHECK on all three: the Auth Admin now WRITES these under the app role (withTenantTx), so the
+-- write side must also be constrained to the active tenant (defence-in-depth — the app role can't stamp a row
+-- with another tenant's id). The auth service's pre-tenant provisioning runs on the owner connection, which
+-- ENABLE (not FORCE) RLS leaves exempt.
 ALTER TABLE tenant_domains ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_domains_isolation ON tenant_domains;
 CREATE POLICY tenant_domains_isolation ON tenant_domains
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 ALTER TABLE tenant_sso_configs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_sso_isolation ON tenant_sso_configs;
 CREATE POLICY tenant_sso_isolation ON tenant_sso_configs
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 ALTER TABLE tenant_auth_policies ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_auth_policy_isolation ON tenant_auth_policies;
 CREATE POLICY tenant_auth_policy_isolation ON tenant_auth_policies
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 -- tenant_members + invitations: tenant-scoped for the app role (read under withTenantTx).
 ALTER TABLE tenant_members ENABLE ROW LEVEL SECURITY;

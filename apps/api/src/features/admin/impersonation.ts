@@ -60,15 +60,25 @@ impersonationRoutes.post("/", async (c) => {
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const input = parsed.data;
   const actor = actorOf(c);
-  const session = await withPlatformTx(actor, "admin.impersonate.start", (tx) =>
-    impersonationRepository.start(tx, {
-      staffUserId: actor.userId,
-      targetTenantId: input.targetTenantId,
-      targetWorkspaceId: input.targetWorkspaceId ?? null,
-      targetUserId: input.targetUserId ?? null,
-      reason: input.reason,
-      ip: actor.ip,
-    }),
+  const session = await withPlatformTx(
+    actor,
+    "admin.impersonate.start",
+    (tx) =>
+      impersonationRepository.start(tx, {
+        staffUserId: actor.userId,
+        targetTenantId: input.targetTenantId,
+        targetWorkspaceId: input.targetWorkspaceId ?? null,
+        targetUserId: input.targetUserId ?? null,
+        reason: input.reason,
+        ip: actor.ip,
+      }),
+    {
+      targetType: "tenant",
+      targetId: input.targetTenantId,
+      tenantId: input.targetTenantId,
+      workspaceId: input.targetWorkspaceId,
+      metadata: { targetUserId: input.targetUserId ?? null, reason: input.reason },
+    },
   );
   // WIRE: mint a scoped, time-boxed impersonation access token (audience = target tenant/workspace/user,
   // exp = session.expiresAt, carrying the impersonation session id) and return it here. Until that lands,
@@ -79,12 +89,17 @@ impersonationRoutes.post("/", async (c) => {
 /** End an impersonation session early. Audited "admin.impersonate.end". 404 on an unknown id. */
 impersonationRoutes.delete("/:id", async (c) => {
   const id = c.req.param("id");
-  await withPlatformTx(actorOf(c), "admin.impersonate.end", async (tx) => {
-    const touched = await impersonationRepository.end(tx, id);
-    // Throw INSIDE the tx so a bogus id rolls back the audit row (no "ended" trace for a session that
-    // never existed).
-    if (touched === 0) throw new NotFoundError("Impersonation session not found.");
-  });
+  await withPlatformTx(
+    actorOf(c),
+    "admin.impersonate.end",
+    async (tx) => {
+      const touched = await impersonationRepository.end(tx, id);
+      // Throw INSIDE the tx so a bogus id rolls back the audit row (no "ended" trace for a session that
+      // never existed).
+      if (touched === 0) throw new NotFoundError("Impersonation session not found.");
+    },
+    { targetType: "impersonation_session", targetId: id },
+  );
   return c.json({ ok: true, id });
 });
 
