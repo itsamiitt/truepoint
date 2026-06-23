@@ -4,6 +4,8 @@
 
 import { env } from "@leadwolf/config";
 import {
+  type TenantMembership,
+  type WorkspaceSummary,
   authPolicyRepository,
   tenantMemberRepository,
   userRepository,
@@ -12,11 +14,59 @@ import {
 import { ForbiddenError } from "@leadwolf/types";
 import { recordAuthEvent } from "./auditEvent.ts";
 import { issueCode } from "./code.ts";
+import { log } from "./log.ts";
 import { type LoginTransaction, patchLoginTransaction } from "./loginTransaction.ts";
 import { authorizeTenantSelection } from "./scopeGuard.ts";
 import { createSession } from "./session.ts";
 
 export type LoginStep = "mfa" | "org" | "workspace" | "complete";
+
+// Same-request read cache: resolveNextStep already fetches the user's org list and (sometimes) the workspace
+// list for the resolved tenant. finalizeLogin would otherwise re-query the identical rows a moment later in
+// the same request. Stash those reads against the in-memory txn OBJECT (the SAME reference flows from
+// resolveNextStep → finishLogin → finalizeLogin in every caller) so finalizeLogin can reuse them.
+//
+// Why a WeakMap and not a field on the txn: the txn is JSON-serialized into Redis (loginTransaction.ts), so a
+// field would risk persisting a stale membership snapshot across the multi-step flow. The WeakMap is purely
+// in-memory and per-object, so it NEVER persists and NEVER crosses a request — across requests (the org /
+// workspace step runs against a fresh txn parsed from Redis) the hint is simply absent and finalizeLogin
+// falls back to a fresh, authoritative read. The cache is a performance hint only: the authorization
+// decisions in finalizeLogin (authorizeTenantSelection / the workspace-membership check) are UNCHANGED — they
+// run over exactly the rows they would have re-fetched, against the same untrusted client selection.
+interface ResolvedScope {
+  orgs?: TenantMembership[];
+  // Workspaces are tenant-scoped, so a cached list is keyed by the tenant it was read under.
+  readonly workspacesByTenant: Map<string, WorkspaceSummary[]>;
+}
+const resolvedScope = new WeakMap<LoginTransaction, ResolvedScope>();
+
+// One mutable per-request scope per txn object; created on first read, mutated in place thereafter. The login
+// flow is strictly sequential within a request (resolveNextStep then finalizeLogin, each awaited), so there is
+// no concurrent access to a single txn's scope.
+function scopeFor(txn: LoginTransaction): ResolvedScope {
+  let scope = resolvedScope.get(txn);
+  if (!scope) {
+    scope = { workspacesByTenant: new Map() };
+    resolvedScope.set(txn, scope);
+  }
+  return scope;
+}
+
+async function getOrgs(txn: LoginTransaction): Promise<TenantMembership[]> {
+  const scope = scopeFor(txn);
+  if (scope.orgs) return scope.orgs;
+  scope.orgs = await tenantMemberRepository.listForUser(txn.userId);
+  return scope.orgs;
+}
+
+async function getWorkspaces(txn: LoginTransaction, tenantId: string): Promise<WorkspaceSummary[]> {
+  const scope = scopeFor(txn);
+  const cached = scope.workspacesByTenant.get(tenantId);
+  if (cached) return cached;
+  const ws = await workspaceRepository.listForUser(tenantId, txn.userId);
+  scope.workspacesByTenant.set(tenantId, ws);
+  return ws;
+}
 
 export async function resolveNextStep(txnId: string, txn: LoginTransaction): Promise<LoginStep> {
   // MFA: required when the user has a verified method enrolled (user opt-in). Tenant/workspace policy
@@ -29,7 +79,7 @@ export async function resolveNextStep(txnId: string, txn: LoginTransaction): Pro
   // Org: pick when the identity belongs to >1 org; a single membership auto-selects (persisted, no UI step).
   let tenantId = txn.tenantId;
   if (!tenantId) {
-    const orgs = await tenantMemberRepository.listForUser(txn.userId);
+    const orgs = await getOrgs(txn);
     if (orgs.length > 1) return "org";
     tenantId = orgs[0]?.tenantId;
     if (!tenantId) return "complete"; // no membership (edge) — finalizeLogin surfaces it
@@ -38,7 +88,7 @@ export async function resolveNextStep(txnId: string, txn: LoginTransaction): Pro
 
   // Workspace: pick when the chosen org has >1 accessible workspace; a single one auto-selects.
   if (!txn.workspaceId) {
-    const ws = await workspaceRepository.listForUser(tenantId, txn.userId);
+    const ws = await getWorkspaces(txn, tenantId);
     if (ws.length > 1) return "workspace";
   }
   return "complete";
@@ -79,7 +129,11 @@ export async function finalizeLogin(
   // org/workspace selection steps) is UNTRUSTED: it must match an ACTIVE membership, or it is a forged
   // cross-tenant selection. The minted JWT's tid/wid drive the downstream RLS GUC, so an unvalidated
   // selection here is a cross-tenant breach — the same authorization switchWorkspace enforces. (Phase 0a.)
-  const orgs = await tenantMemberRepository.listForUser(txn.userId);
+  //
+  // getOrgs reuses the membership list resolveNextStep already read THIS request (same txn object), or reads
+  // it fresh when finalizeLogin runs in a later request (the org/workspace step). Either way the list is the
+  // user's REAL active memberships and authorizeTenantSelection is the unchanged authoritative gate.
+  const orgs = await getOrgs(txn);
   const tenantId = authorizeTenantSelection(orgs, txn.tenantId);
 
   // MFA enforcement (ADR-0018): a tenant that MANDATES MFA must not complete login without it — fail closed
@@ -103,22 +157,24 @@ export async function finalizeLogin(
     const role = await workspaceRepository.getRoleForUser(tenantId, workspaceId, txn.userId);
     if (!role) throw new ForbiddenError("workspace_forbidden");
   } else {
-    const ws = await workspaceRepository.listForUser(tenantId, txn.userId);
+    const ws = await getWorkspaces(txn, tenantId);
     if (ws.length === 1) workspaceId = ws[0]?.id;
   }
 
-  const session = await createSession({
-    userId: txn.userId,
-    tenantId,
-    workspaceId,
-    appOrigin: txn.appOrigin,
-    ipAddress: txn.clientIp,
-    userAgent: ctx.userAgent,
-  });
-  await userRepository.touchLastLogin(txn.userId);
-
-  // Carry the platform super-admin flag (ADR-0032) into the cross-domain code → access-token `pa` claim.
-  const user = await userRepository.findById(txn.userId);
+  // Two genuinely-independent reads gate the code and must both complete before it is minted: the durable
+  // session (its sessionId binds the code) and the platform super-admin flag (ADR-0032 → access-token `pa`
+  // claim). Run them concurrently — neither depends on the other.
+  const [session, user] = await Promise.all([
+    createSession({
+      userId: txn.userId,
+      tenantId,
+      workspaceId,
+      appOrigin: txn.appOrigin,
+      ipAddress: txn.clientIp,
+      userAgent: ctx.userAgent,
+    }),
+    userRepository.findById(txn.userId),
+  ]);
 
   const code = await issueCode({
     userId: txn.userId,
@@ -131,18 +187,37 @@ export async function finalizeLogin(
     isPlatformAdmin: user?.isPlatformAdmin ?? false,
   });
 
-  // login.success — authentication fully succeeded (ADR-0031 §2; covers password/magic/SSO via finalize).
-  await recordAuthEvent({
-    tenantId,
-    workspaceId: workspaceId ?? null,
-    actorUserId: txn.userId,
-    action: "login.success",
-    entityType: "user",
-    entityId: txn.userId,
-    metadata: { sessionId: session.sessionId },
-    ipAddress: txn.clientIp,
-    userAgent: ctx.userAgent ?? null,
-    originDomain: new URL(env.AUTH_ORIGIN).host,
+  // Off the critical path: the last-login stamp and the success-audit row do NOT gate the issued code/redirect
+  // — both are non-authoritative side effects. apps/auth is a long-lived `next start` (Node) process, so a
+  // detached promise runs after the response on the same process. The login.success audit event is STILL
+  // emitted (recordAuthEvent swallows its own failures, ADR-0031 §1) — it is just not awaited before
+  // returning; ADR-0031 explicitly classes auth audit as observational, best-effort, and NOT transactionally
+  // guaranteed, so not awaiting it does not weaken any durability promise (a process recycle in the brief
+  // window between response and settle could drop it — the same best-effort risk a failed insert already
+  // carries). login.success — authentication fully succeeded (ADR-0031 §2; covers password/magic/SSO).
+  void Promise.allSettled([
+    userRepository.touchLastLogin(txn.userId),
+    recordAuthEvent({
+      tenantId,
+      workspaceId: workspaceId ?? null,
+      actorUserId: txn.userId,
+      action: "login.success",
+      entityType: "user",
+      entityId: txn.userId,
+      metadata: { sessionId: session.sessionId },
+      ipAddress: txn.clientIp,
+      userAgent: ctx.userAgent ?? null,
+      originDomain: new URL(env.AUTH_ORIGIN).host,
+    }),
+  ]).then((results) => {
+    // touchLastLogin has no error handler of its own (recordAuthEvent does). Surface a failed last-login stamp
+    // as a warning so a regression is not silent — never log the userId or any identifier/PII.
+    if (results[0]?.status === "rejected") {
+      const reason = results[0].reason;
+      log.warn("login.touchLastLogin.failed", {
+        err: reason instanceof Error ? reason.name : "unknown",
+      });
+    }
   });
 
   return {
