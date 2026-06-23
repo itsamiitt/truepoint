@@ -103,6 +103,21 @@ services:
       retries: 6
       start_period: 40s
 
+  # Staff console (admin.truepoint.in). Same image; reaches the api over the internal network and signs staff
+  # in through the shared auth origin (the `pa` claim). Its origin must be in APP_ORIGINS (CORS + token aud).
+  admin:
+    <<: *app
+    command: ["bun", "run", "--filter", "@leadwolf/admin", "start"]
+    depends_on:
+      redis: { condition: service_healthy }
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3003/',{redirect:'manual'}).then(()=>process.exit(0),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
   # ── Edge: TLS termination + subdomain routing (auto Let's Encrypt) ──────────────
   caddy:
     image: caddy:2
@@ -115,6 +130,7 @@ services:
       web: { condition: service_healthy }
       auth: { condition: service_healthy }
       api: { condition: service_healthy }
+      admin: { condition: service_healthy }
     restart: unless-stopped
 
 volumes:

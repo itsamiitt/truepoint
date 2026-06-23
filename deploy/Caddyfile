@@ -31,3 +31,7 @@ app.truepoint.in {
 api.truepoint.in {
 	reverse_proxy api:3001
 }
+
+admin.truepoint.in {
+	reverse_proxy admin:3003
+}

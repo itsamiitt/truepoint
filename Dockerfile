@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
-# TruePoint — ONE image for all four services (web, auth, api, workers).
+# TruePoint — ONE image for all five services (web, auth, admin, api, workers).
 #   • api / workers run TypeScript directly under Bun (no build step).
-#   • web / auth are Next.js apps (next build → next start; not standalone).
+#   • web / auth / admin are Next.js apps (next build → next start; not standalone).
 # The compose file overrides CMD per service, so the same image runs everything.
 #
 # Build-time env arrives via a BuildKit secret (id=dotenv) so NO secret value lands
@@ -27,11 +27,12 @@ RUN bun install --frozen-lockfile
 RUN --mount=type=secret,id=dotenv \
     sh -c 'set -a; [ -f /run/secrets/dotenv ] && . /run/secrets/dotenv; set +a; \
            bun run --filter "@leadwolf/web" build && \
-           bun run --filter "@leadwolf/auth-app" build'
+           bun run --filter "@leadwolf/auth-app" build && \
+           bun run --filter "@leadwolf/admin" build'
 
 ENV NODE_ENV=production
-# web 3002 · auth 3000 · api 3001
-EXPOSE 3000 3001 3002
+# web 3002 · auth 3000 · api 3001 · admin 3003
+EXPOSE 3000 3001 3002 3003
 
 # Default command; overridden per-service in docker-compose.prod.yml.
 CMD ["bun", "run", "--filter", "@leadwolf/api", "start"]

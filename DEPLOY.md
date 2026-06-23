@@ -18,6 +18,7 @@ see [Caveats](#caveats) before exposing it to real users.
 | caddy     | :80 / :443                  | caddy:2           | TLS + routes the subdomains below  |
 | web       | `https://app.truepoint.in`  | Next.js (`start`) | Main app UI — the URL you visit    |
 | auth      | `https://auth.truepoint.in` | Next.js (`start`) | Dedicated auth origin (IdP)        |
+| admin     | `https://admin.truepoint.in`| Next.js (`start`) | Internal staff console (platform admin) |
 | api       | `https://api.truepoint.in`  | Bun + Hono        | Public API; `/health` for checks   |
 | workers   | — (internal)                | Bun + BullMQ      | Background jobs                    |
 | redis     | — (internal)                | redis:7           | cache / queues / pub-sub           |
@@ -25,7 +26,7 @@ see [Caveats](#caveats) before exposing it to real users.
 | mailhog   | :8025 (localhost)           | mailhog           | captures outgoing email            |
 | postgres  | **external**                | Neon / RDS        | set via `DATABASE_URL`             |
 
-All four app services run from **one image** (`leadwolf:latest`) built once. Only Caddy
+All five app services run from **one image** (`leadwolf:latest`) built once. Only Caddy
 publishes ports to the internet (80/443); the app services are reached internally.
 
 ---
@@ -34,7 +35,7 @@ publishes ports to the internet (80/443); the app services are reached internall
 
 - Ubuntu **22.04 or 24.04**, **≥ 4 GB RAM** (8 GB comfortable — the Next build is memory-hungry), ≥ 10 GB disk.
 - A managed **Postgres** (Neon/RDS) connection string.
-- **DNS**: `A` records for `app`, `auth`, and `api` (`.truepoint.in`) all pointing at this server's public IP.
+- **DNS**: `A` records for `app`, `auth`, `api`, and `admin` (`.truepoint.in`) all pointing at this server's public IP.
 - **Ports 80 + 443** reachable from the internet (open them in the cloud firewall / EC2 Security Group). Caddy needs port 80 for the Let's Encrypt challenge.
 - `sudo` access.
 
@@ -102,7 +103,7 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 ```
 
-> DNS for `app`/`auth`/`api.truepoint.in` must resolve to this server **before** you deploy,
+> DNS for `app`/`auth`/`api`/`admin.truepoint.in` must resolve to this server **before** you deploy,
 > or Caddy can't obtain TLS certificates.
 
 ## Step 6 — Deploy

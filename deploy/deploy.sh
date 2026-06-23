@@ -71,8 +71,8 @@ echo "==> [3/4] Running database migrations…"
 timeout 300 "${COMPOSE[@]}" run --rm migrate
 
 # ── 4. App services + edge proxy ──────────────────────────────────────────────────
-echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, caddy)…"
-"${COMPOSE[@]}" up -d api auth workers web caddy
+echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, admin, caddy)…"
+"${COMPOSE[@]}" up -d api auth workers web admin caddy
 
 # ── 5. Post-deploy smoke gate: prove sign-in can actually MINT, or fail the deploy loudly ───────────────
 # The slim oven/bun image has no curl/wget — use bun -e. `up -d` already waited on healthchecks (Caddy
