@@ -9,6 +9,10 @@ import { APP_ORIGIN, AUTH_ORIGIN } from "./publicConfig";
 let accessToken: string | null = null;
 let expiresAtMs = 0;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+// In-flight de-dup: the auth gate and the route's first data fetch both call silentRefresh on cold load.
+// Without this they'd fire two redundant cross-origin /token/refresh calls (and the slower one could rotate
+// the cookie out from under the faster one). A single shared promise collapses them into one network round-trip.
+let refreshInFlight: Promise<boolean> | null = null;
 
 const PKCE_VERIFIER_KEY = "lw_pkce_verifier";
 const STATE_KEY = "lw_oauth_state";
@@ -42,8 +46,10 @@ function setToken(token: string, expiresIn: number): void {
   refreshTimer = setTimeout(() => void silentRefresh(), leadMs);
 }
 
-/** Drop the in-memory token + cancel the pending refresh. The auth-origin cookie is cleared server-side. */
-function clearToken(): void {
+/** Drop the in-memory token + cancel the pending refresh. The auth-origin cookie is cleared server-side.
+ * Exported so the shell can discard a token the SERVER has rejected (a 401/403 on a protected read) and
+ * re-gate to a fresh login — the client-side expiry check alone can't detect a server-side revocation. */
+export function clearAccessToken(): void {
   accessToken = null;
   expiresAtMs = 0;
   if (refreshTimer) clearTimeout(refreshTimer);
@@ -89,20 +95,28 @@ export async function completeLogin(code: string, returnedState: string): Promis
   setToken(data.accessToken, data.expiresIn);
 }
 
-/** Silent refresh against the auth origin (the refresh cookie rides the same-site credentialed fetch). */
+/** Silent refresh against the auth origin (the refresh cookie rides the same-site credentialed fetch).
+ * Concurrent callers share one in-flight request: the shell gate and the route's first data fetch both ask
+ * for a refresh on cold load, and collapsing them avoids a duplicate cross-origin round-trip + cookie race. */
 export async function silentRefresh(): Promise<boolean> {
-  try {
-    const res = await fetch(`${AUTH_ORIGIN}/auth/token/refresh`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { accessToken: string; expiresIn: number };
-    setToken(data.accessToken, data.expiresIn);
-    return true;
-  } catch {
-    return false;
-  }
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${AUTH_ORIGIN}/auth/token/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return false;
+      const data = (await res.json()) as { accessToken: string; expiresIn: number };
+      setToken(data.accessToken, data.expiresIn);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
 }
 
 /** Fetch with the in-memory access token, attempting one silent refresh if it's missing/expired. */
@@ -127,7 +141,7 @@ export async function logout(): Promise<void> {
   } catch {
     // Best-effort: logout must always feel complete to the user even if the network call fails.
   }
-  clearToken();
+  clearAccessToken();
   window.location.assign(APP_ORIGIN);
 }
 
