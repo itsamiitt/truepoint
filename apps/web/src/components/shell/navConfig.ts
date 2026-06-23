@@ -69,6 +69,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     items: [
       { label: "Billing & credits", href: "/settings/billing", match: "/settings/billing" },
       { label: "Organization", href: "/settings/organization", match: "/settings/organization" },
+      {
+        label: "Security & access",
+        href: "/settings/security-access",
+        match: "/settings/security-access",
+      },
     ],
   },
   {

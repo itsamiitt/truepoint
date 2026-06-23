@@ -112,6 +112,19 @@
   border-top: 1px solid var(--tp-hairline);
 }
 
+/* ── Security & access option list (allowed login methods) ──────────────────────────────────────── */
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.optionHint {
+  display: block;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  margin-top: 2px;
+}
+
 @media (max-width: 640px) {
   .summaryTiles {
     grid-template-columns: 1fr;

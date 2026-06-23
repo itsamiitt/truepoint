@@ -68,8 +68,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 752,
-  "fileSetHash": "sha256:e90ae5f889f483d3f08908858849fadc16a53cf9fe9a45972fdf82bf3b3285b7",
+  "fileCount": 755,
+  "fileSetHash": "sha256:569e53d2f37cb26094a443aa9f639d9c32a85563ff8c7e7a811281a73bbc6fb2",
   "features": {
     "account-search": {
       "web": [],
@@ -878,6 +878,8 @@
       "web": [
         "apps/web/src/features/settings-tenant/api.ts",
         "apps/web/src/features/settings-tenant/components/OrganizationPanel.tsx",
+        "apps/web/src/features/settings-tenant/components/SecurityAccessPanel.tsx",
+        "apps/web/src/features/settings-tenant/hooks/useAuthPolicy.ts",
         "apps/web/src/features/settings-tenant/hooks/useOrganization.ts",
         "apps/web/src/features/settings-tenant/index.ts",
         "apps/web/src/features/settings-tenant/types.ts"
@@ -1141,6 +1143,7 @@
       "apps/web/src/app/(shell)/settings/notifications/page.tsx",
       "apps/web/src/app/(shell)/settings/organization/page.tsx",
       "apps/web/src/app/(shell)/settings/profile/page.tsx",
+      "apps/web/src/app/(shell)/settings/security-access/page.tsx",
       "apps/web/src/app/(shell)/settings/security/page.tsx",
       "apps/web/src/app/(shell)/settings/sessions/page.tsx",
       "apps/web/src/app/(shell)/settings/workspace/page.tsx",

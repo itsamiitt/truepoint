@@ -9,6 +9,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import type { AuthPolicy } from "@leadwolf/types";
 import type {
   MembersSummary,
   Organization,
@@ -50,6 +51,36 @@ export async function fetchWorkspaces(): Promise<WorkspacesFeed> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load workspaces"));
   const body = (await res.json()) as { workspaces?: TenantWorkspace[] };
   return { available: true, workspaces: body.workspaces ?? [] };
+}
+
+// ── Tenant ▸ Security & access (auth policy, ADR-0018) ─────────────────────────────────────────────────
+//   GET /settings/security/auth-policy → the org's auth policy (security_admin|owner; 403 otherwise)
+//   PUT /settings/security/auth-policy → replace the policy
+
+/** Load the org auth policy. 403 (not security_admin/owner) → { forbidden: true } so the panel shows a
+ *  quiet access message; the endpoint otherwise always returns a policy (the platform default when unset). */
+export async function fetchAuthPolicy(): Promise<{
+  policy: AuthPolicy | null;
+  forbidden: boolean;
+}> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/settings/security/auth-policy`);
+  if (res.status === 403) return { policy: null, forbidden: true };
+  if (notBuilt(res.status)) return { policy: null, forbidden: false };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the security policy"));
+  return { policy: (await res.json()) as AuthPolicy, forbidden: false };
+}
+
+export async function saveAuthPolicy(policy: AuthPolicy): Promise<{ ok: boolean }> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/settings/security/auth-policy`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(policy),
+  });
+  if (res.status === 403)
+    throw new Error("You need the owner or security-admin role to change this.");
+  if (notBuilt(res.status)) return { ok: false };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not save the security policy"));
+  return { ok: true };
 }
 
 export async function fetchMembersSummary(): Promise<MembersSummary> {
