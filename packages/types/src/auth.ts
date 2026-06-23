@@ -135,6 +135,17 @@ export const accessTokenClaimsSchema = z.object({
 });
 export type AccessTokenClaims = z.infer<typeof accessTokenClaimsSchema>;
 
+// ── Auth audit (Auth Admin ▸ Security view) — a shaped auth event (no metadata/userAgent); occurredAt ISO ──
+export const authAuditEntrySchema = z.object({
+  id: z.string(),
+  action: z.string(),
+  actorUserId: z.string().uuid().nullable(),
+  ipAddress: z.string().nullable(),
+  originDomain: z.string().nullable(),
+  occurredAt: z.string(),
+});
+export type AuthAuditEntry = z.infer<typeof authAuditEntrySchema>;
+
 // ── Auth policy (ADR-0018; strictest-wins resolution lives in packages/auth) ─────────────────────────
 export const authPolicySchema = z.object({
   mfaEnforcement: mfaEnforcement,

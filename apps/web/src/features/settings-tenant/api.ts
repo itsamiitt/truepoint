@@ -9,7 +9,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { AuthPolicy } from "@leadwolf/types";
+import type { AuthAuditEntry, AuthPolicy } from "@leadwolf/types";
 import type {
   MembersSummary,
   Organization,
@@ -81,6 +81,15 @@ export async function saveAuthPolicy(policy: AuthPolicy): Promise<{ ok: boolean 
   if (notBuilt(res.status)) return { ok: false };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not save the security policy"));
   return { ok: true };
+}
+
+/** The org's recent auth events for the Security view. 403/not-built → [] (the panel gates on the policy). */
+export async function fetchAuthAudit(): Promise<AuthAuditEntry[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/settings/security/auth-audit`);
+  if (res.status === 403 || notBuilt(res.status)) return [];
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the auth audit log"));
+  const body = (await res.json()) as { events?: AuthAuditEntry[] };
+  return body.events ?? [];
 }
 
 export async function fetchMembersSummary(): Promise<MembersSummary> {

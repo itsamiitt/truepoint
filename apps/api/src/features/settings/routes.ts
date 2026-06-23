@@ -6,7 +6,7 @@
 // concurrent PATCHes can't lost-update). No enrichment is triggered here — this configures the policy the
 // core guard (enforceAutoEnrichPolicy) consults on a system-initiated enrich.
 
-import { authPolicyRepository, enrichmentPolicyRepository } from "@leadwolf/db";
+import { auditRepository, authPolicyRepository, enrichmentPolicyRepository } from "@leadwolf/db";
 import {
   type EnrichmentPolicyResponse,
   ForbiddenError,
@@ -87,3 +87,10 @@ settingsRoutes.put(
     return c.json(parsed.data, 200);
   },
 );
+
+// Recent auth events for the org (login/MFA/SSO/session/token) — the security-review feed. Read-only,
+// security_admin|owner, shaped to non-PII-heavy fields. Bounded to the 100 most recent.
+settingsRoutes.get("/security/auth-audit", requireOrgRole("security_admin", "owner"), async (c) => {
+  const events = await auditRepository.listAuthEvents({ tenantId: c.get("tenantId") }, 100);
+  return c.json({ events: events.map((e) => ({ ...e, occurredAt: e.occurredAt.toISOString() })) });
+});

@@ -3,9 +3,43 @@
 // layer (trigger in rls/billing.sql), so this repository deliberately exposes no mutation helpers.
 
 import type { AuditAction } from "@leadwolf/types";
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { auditLog } from "../schema/billing.ts";
+
+// The auth-domain slice of the audit vocabulary (ADR-0031) — what the Auth Admin ▸ Security audit shows.
+const AUTH_AUDIT_ACTIONS = [
+  "login.success",
+  "login.failure",
+  "login.locked",
+  "mfa.challenge",
+  "mfa.success",
+  "mfa.failure",
+  "password.reset.request",
+  "password.reset.complete",
+  "sso.initiated",
+  "sso.callback",
+  "token.issued",
+  "token.refresh",
+  "token.revoke",
+  "device.trusted",
+  "device.revoked",
+  "session.revoked",
+  "code.issued",
+  "code.exchanged",
+  "signup",
+  "oauth.link",
+] as const;
+
+/** A shaped auth-audit row for the Security view — the security-relevant signals, never metadata/userAgent. */
+export interface AuthAuditRow {
+  id: string;
+  action: string;
+  actorUserId: string | null;
+  ipAddress: string | null;
+  originDomain: string | null;
+  occurredAt: Date;
+}
 
 /** A minimized audit entry for the Home activity feed — NO metadata/ip/userAgent (never leak PII). */
 export interface ActivityFeedRow {
@@ -33,6 +67,34 @@ export interface AuditEntryInput {
 export const auditRepository = {
   async insert(tx: Tx, entry: AuditEntryInput): Promise<void> {
     await tx.insert(auditLog).values({ ...entry, metadata: entry.metadata ?? {} });
+  },
+
+  /**
+   * Tenant-scoped recent AUTH events (Auth Admin ▸ Security audit). Filtered to the auth action vocabulary
+   * and shaped to the security-relevant fields (action / actor / ip / origin / time) — never metadata or
+   * userAgent. RLS-scoped read, newest first.
+   */
+  async listAuthEvents(scope: TenantScope, limit = 100): Promise<AuthAuditRow[]> {
+    return withTenantTx(scope, (tx) =>
+      tx
+        .select({
+          id: auditLog.id,
+          action: auditLog.action,
+          actorUserId: auditLog.actorUserId,
+          ipAddress: auditLog.ipAddress,
+          originDomain: auditLog.originDomain,
+          occurredAt: auditLog.occurredAt,
+        })
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.tenantId, scope.tenantId),
+            inArray(auditLog.action, [...AUTH_AUDIT_ACTIONS]),
+          ),
+        )
+        .orderBy(desc(auditLog.occurredAt))
+        .limit(limit),
+    );
   },
 
   /** Tenant-scoped recent entries (Settings ▸ Compliance audit viewer, M5). */

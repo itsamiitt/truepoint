@@ -68,8 +68,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 755,
-  "fileSetHash": "sha256:569e53d2f37cb26094a443aa9f639d9c32a85563ff8c7e7a811281a73bbc6fb2",
+  "fileCount": 756,
+  "fileSetHash": "sha256:6f5566c2363b6e0f31d29d527c86d42be4896a113ad33f83c511d6d7e08a8a46",
   "features": {
     "account-search": {
       "web": [],
@@ -877,6 +877,7 @@
     "settings-tenant": {
       "web": [
         "apps/web/src/features/settings-tenant/api.ts",
+        "apps/web/src/features/settings-tenant/components/AuthAuditList.tsx",
         "apps/web/src/features/settings-tenant/components/OrganizationPanel.tsx",
         "apps/web/src/features/settings-tenant/components/SecurityAccessPanel.tsx",
         "apps/web/src/features/settings-tenant/hooks/useAuthPolicy.ts",
