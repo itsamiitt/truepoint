@@ -68,8 +68,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 739,
-  "fileSetHash": "sha256:53cc760393ff868a1a37f953c5984b97575a5648b2249cc6e5f4e29e12c75f61",
+  "fileCount": 743,
+  "fileSetHash": "sha256:a94c6a896117d907db7f0ee194a6b4cd788eb7f5fa35ff335e4a26288a299851",
   "features": {
     "account-search": {
       "web": [],
@@ -1021,6 +1021,7 @@
     ],
     "apps/admin/components": [
       "apps/admin/src/components/shell/AdminShell.tsx",
+      "apps/admin/src/components/shell/Brandmark.tsx",
       "apps/admin/src/components/shell/Sidebar.tsx",
       "apps/admin/src/components/shell/TopBar.tsx",
       "apps/admin/src/components/shell/navConfig.ts"
@@ -1203,6 +1204,8 @@
       "packages/auth/src/rateLimit.ts",
       "packages/auth/src/refresh.ts",
       "packages/auth/src/registration.ts",
+      "packages/auth/src/scopeGuard.test.ts",
+      "packages/auth/src/scopeGuard.ts",
       "packages/auth/src/secrets.ts",
       "packages/auth/src/session.ts",
       "packages/auth/src/signupTransaction.ts",
@@ -1268,6 +1271,7 @@
       "packages/db/test/lists.itest.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
+      "packages/db/test/platformAuditLog.itest.ts",
       "packages/db/test/reveal.itest.ts",
       "packages/db/test/salesNav.itest.ts",
       "packages/db/test/savedSearches.itest.ts",

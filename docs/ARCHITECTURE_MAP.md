@@ -198,7 +198,8 @@ apps/                           # deployable processes (thin transport adapters)
 - **api:** `apps/api/src/features/auth/{routes,index}.ts` (GET `/auth/session` incl. the live workspace
   **role**); RBAC primitives `apps/api/src/middleware/{requireRole,platformAdmin}.ts` (+ tests)
 - **db:** `userRepository.ts` (global users + sessions + email-verification codes); `workspaceRepository.ts`
-- **shared primitives:** `packages/auth/*` — login (`identifierLookup`/`login`/`loginTransaction`/`flow`),
+- **shared primitives:** `packages/auth/*` — login (`identifierLookup`/`login`/`loginTransaction`/`flow` +
+  `scopeGuard` — authorizes the client-supplied org/workspace against real memberships before minting the JWT),
   `botCheck`/`rateLimit`/`policy` anti-abuse, **registration** (`registration`/`emailVerification`/
   `signupTransaction`), **invitations**, **password + magic-link** (`password`/`passwordReset`/`refresh`),
   **SSO** (`sso/{types,providers,mockIdp,jit}` + `ssoTransaction`), **workspace switch** (`switchWorkspace`),
