@@ -35,7 +35,9 @@ import { rateLimit } from "./middleware/rateLimit.ts";
 export const app = new Hono();
 
 app.onError(onError);
-app.use("*", cors({ origin: [...appOrigins()], credentials: true }));
+// exposeHeaders: ETag must be readable cross-origin (app.* → api.*) or the browser strips it and the
+// Home summary's conditional-request (If-None-Match → 304) revalidation is silently dead in production.
+app.use("*", cors({ origin: [...appOrigins()], credentials: true, exposeHeaders: ["ETag"] }));
 
 app.get("/health", (c) => c.json({ status: "ok" }));
 // Coarse per-caller throttle on the resource surface (IP-keyed here; per-subject once authn has set claims).
