@@ -76,6 +76,15 @@ services:
   api:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/api", "start"]
+    # Reserve a modest CPU/memory floor for this latency-sensitive service so a noisy neighbour on the
+    # same host can't starve it during a sign-in/redirect (RC#12). Reservations are a soft floor (not a
+    # hard cap), so this never throttles the service — it only guarantees the scheduler keeps room for it.
+    # Conservative values, sized for a single small host shared by all services; raise if the host is larger.
+    deploy:
+      resources:
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     healthcheck:
       # Use bun (always in the image), not wget — the oven/bun base is debian-slim and has no wget/curl.
       test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))\""]
@@ -87,6 +96,13 @@ services:
   auth:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/auth-app", "start"]
+    # Same latency-sensitive floor as api (RC#12): sign-in token mint + cross-domain redirect must stay fast
+    # even under contention. Soft reservation only (no hard cap) — guarantees scheduler headroom, never throttles.
+    deploy:
+      resources:
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     healthcheck:
       # Any HTTP response (200/redirect) = server up; fetch only throws on a refused connection.
       test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3000/login',{redirect:'manual'}).then(()=>process.exit(0),()=>process.exit(1))\""]
@@ -131,7 +147,11 @@ services:
   # ── Edge: TLS termination + subdomain routing (auto Let's Encrypt) ──────────────
   caddy:
     image: caddy:2
-    ports: ["80:80", "443:443"]
+    # 80/tcp = HTTP→HTTPS redirect + ACME; 443/tcp = HTTP/1.1 + HTTP/2; 443/udp = QUIC / HTTP/3 (RC#10).
+    # Caddy 2 advertises and serves HTTP/3 by default (Alt-Svc), but the kernel must actually receive the
+    # UDP/443 datagrams — without this publish the QUIC listener is unreachable and clients silently fall
+    # back to TCP, so HTTP/3 is never negotiated. Open UDP/443 in the host firewall / EC2 Security Group too.
+    ports: ["80:80", "443:443", "443:443/udp"]
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
