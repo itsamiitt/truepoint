@@ -71,6 +71,11 @@ const GRANTS = `
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_admin;
   ALTER DEFAULT PRIVILEGES IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO leadwolf_admin;
+  -- platform_audit_log is the staff cross-tenant audit trail (ADR-0032): the customer app role must have NO
+  -- access. RLS (rls/platform.sql) already denies it every row, but the blanket grant above also handed it
+  -- table privileges — REVOKE them so leadwolf_app cannot read or tamper the audit trail even if a policy
+  -- were later added by mistake. The owner/withPlatformTx writer is unaffected (it is the table owner).
+  REVOKE ALL ON platform_audit_log FROM leadwolf_app;
 `;
 
 async function exists(path: string): Promise<boolean> {

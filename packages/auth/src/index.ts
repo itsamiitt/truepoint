@@ -30,7 +30,15 @@ export {
   type LoginTransaction,
   type LoginTransactionInput,
 } from "./loginTransaction.ts";
-export { resolveNextStep, finalizeLogin, type LoginStep, type FinalizedLogin } from "./flow.ts";
+export {
+  resolveNextStep,
+  finalizeLogin,
+  isActiveTenantMember,
+  isActiveWorkspaceMember,
+  type LoginStep,
+  type FinalizedLogin,
+} from "./flow.ts";
+export { authorizeTenantSelection } from "./scopeGuard.ts";
 export { verifyMfaCode } from "./mfaVerify.ts";
 export { encryptSecret, decryptSecret } from "./secrets.ts";
 export {

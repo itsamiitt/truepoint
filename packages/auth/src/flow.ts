@@ -4,10 +4,11 @@
 
 import { env } from "@leadwolf/config";
 import { tenantMemberRepository, userRepository, workspaceRepository } from "@leadwolf/db";
-import { InvalidCredentialsError } from "@leadwolf/types";
+import { ForbiddenError } from "@leadwolf/types";
 import { recordAuthEvent } from "./auditEvent.ts";
 import { issueCode } from "./code.ts";
 import { type LoginTransaction, patchLoginTransaction } from "./loginTransaction.ts";
+import { authorizeTenantSelection } from "./scopeGuard.ts";
 import { createSession } from "./session.ts";
 
 export type LoginStep = "mfa" | "org" | "workspace" | "complete";
@@ -38,6 +39,25 @@ export async function resolveNextStep(txnId: string, txn: LoginTransaction): Pro
   return "complete";
 }
 
+/** Defence-in-depth for the org-selection step: is this (client-supplied) org an ACTIVE membership of the
+ *  user? Lets selectOrg reject a forged tenantId early with a graceful redirect — finalizeLogin remains the
+ *  authoritative gate (it re-checks before minting the token). */
+export async function isActiveTenantMember(userId: string, tenantId: string): Promise<boolean> {
+  const orgs = await tenantMemberRepository.listForUser(userId);
+  return orgs.some((o) => o.tenantId === tenantId);
+}
+
+/** Defence-in-depth for the workspace-selection step: is this (client-supplied) workspace an ACTIVE
+ *  membership of the user within the tenant? (getRoleForUser is tenant-scoped, so a workspace in another
+ *  tenant yields no membership.) */
+export async function isActiveWorkspaceMember(
+  userId: string,
+  tenantId: string,
+  workspaceId: string,
+): Promise<boolean> {
+  return (await workspaceRepository.getRoleForUser(tenantId, workspaceId, userId)) !== null;
+}
+
 export interface FinalizedLogin {
   code: string;
   refreshToken: string;
@@ -50,16 +70,19 @@ export async function finalizeLogin(
   txn: LoginTransaction,
   ctx: { userAgent?: string },
 ): Promise<FinalizedLogin> {
-  // Resolve the active org (explicit or single membership) and workspace (explicit or single).
-  let tenantId = txn.tenantId;
-  if (!tenantId) {
-    const orgs = await tenantMemberRepository.listForUser(txn.userId);
-    tenantId = orgs[0]?.tenantId;
-  }
-  if (!tenantId) throw new InvalidCredentialsError(); // no org membership — cannot complete
+  // Resolve + AUTHORIZE the active org and workspace. A client-supplied tenantId/workspaceId (from the
+  // org/workspace selection steps) is UNTRUSTED: it must match an ACTIVE membership, or it is a forged
+  // cross-tenant selection. The minted JWT's tid/wid drive the downstream RLS GUC, so an unvalidated
+  // selection here is a cross-tenant breach — the same authorization switchWorkspace enforces. (Phase 0a.)
+  const orgs = await tenantMemberRepository.listForUser(txn.userId);
+  const tenantId = authorizeTenantSelection(orgs, txn.tenantId);
 
   let workspaceId = txn.workspaceId;
-  if (!workspaceId) {
+  if (workspaceId) {
+    // Untrusted client selection: must be an active workspace membership WITHIN the resolved tenant.
+    const role = await workspaceRepository.getRoleForUser(tenantId, workspaceId, txn.userId);
+    if (!role) throw new ForbiddenError("workspace_forbidden");
+  } else {
     const ws = await workspaceRepository.listForUser(tenantId, txn.userId);
     if (ws.length === 1) workspaceId = ws[0]?.id;
   }

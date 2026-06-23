@@ -24,7 +24,9 @@ export async function provisionBootstrapAdmin(
 ): Promise<BootstrapAdminResult> {
   // Self-heal: ensure the column + the platform audit table exist even where the schema migration hasn't
   // (re)run on this DB. platform_audit_log is platform-scoped (NOT workspace-RLS); only the owner /
-  // withPlatformTx writes it (leadwolf_app is never granted access). (ADR-0032.)
+  // withPlatformTx writes it. Its authoritative lockdown — RLS deny-all to leadwolf_app + append-only
+  // trigger + REVOKE of the blanket grant — lives in rls/platform.sql + applyMigrations (ADR-0032); this
+  // CREATE IF NOT EXISTS is only a redundant self-heal with identical columns.
   await db.execute(
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_platform_admin boolean NOT NULL DEFAULT false`,
   );

@@ -4,7 +4,11 @@
 
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { finishLogin } from "@/lib/finishLogin";
-import { getLoginTransaction, patchLoginTransaction } from "@leadwolf/auth";
+import {
+  getLoginTransaction,
+  isActiveWorkspaceMember,
+  patchLoginTransaction,
+} from "@leadwolf/auth";
 import { workspaceSelectionSchema } from "@leadwolf/types";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -19,6 +23,14 @@ export async function selectWorkspace(formData: FormData): Promise<void> {
     workspaceId: String(formData.get("workspaceId") ?? ""),
   });
   if (!parsed.success) redirect("/workspace?error=1");
+  // The submitted workspace is untrusted client input: only proceed if the user is an active member of it
+  // within the selected tenant. finalizeLogin re-checks authoritatively before minting the token.
+  if (
+    !txn.tenantId ||
+    !(await isActiveWorkspaceMember(txn.userId, txn.tenantId, parsed.data.workspaceId))
+  ) {
+    redirect("/workspace?error=1");
+  }
 
   await patchLoginTransaction(txnId, { workspaceId: parsed.data.workspaceId });
   await finishLogin(txnId, { ...txn, workspaceId: parsed.data.workspaceId });
