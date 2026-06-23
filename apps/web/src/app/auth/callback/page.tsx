@@ -1,5 +1,9 @@
 // page.tsx — app.truepoint.in/auth/callback: receives the single-use code from the auth origin, validates
-// the round-tripped state, exchanges the code for an in-memory access token (ADR-0016), then returns home.
+// the round-tripped state, exchanges the code for an in-memory access token (ADR-0016), then goes straight to
+// the work surface via a CLIENT-SIDE router navigation (not window.location.replace). A full-document reload
+// would tear down the JS context and DISCARD the just-minted in-memory token, forcing the shell into a second,
+// redundant silent refresh — and would still need the extra "/" → "/prospect" hop. A client nav keeps the
+// token alive and lands directly on the destination, so the shell renders signed-in with zero extra round-trips.
 // A `ran` ref guards the effect against React StrictMode's double-invoke, which would otherwise consume the
 // single-use state/code twice and self-inflict `invalid_state`. On a recoverable failure (stale/expired/
 // single-use state) we auto-restart a fresh login exactly once — guarded by a sessionStorage flag that
@@ -8,7 +12,12 @@
 "use client";
 
 import { RECOVERY_KEY, completeLogin, recoveryActionFor, startLogin } from "@/lib/authClient";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+
+// The default signed-in destination (Prospect, 04 §3). Navigating here directly from the callback collapses
+// the old callback → "/" → "/prospect" chain into a single hop.
+const POST_LOGIN_DESTINATION = "/prospect";
 
 /** Map the exchange failure reason to a user-facing message. The raw reason is logged for DevTools. */
 function messageFor(reason: string): string {
@@ -22,11 +31,13 @@ function messageFor(reason: string): string {
 }
 
 export default function CallbackPage() {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   // One-shot guard: React StrictMode mounts effects twice in dev, and a remount would re-run the body.
   // Running it more than once would consume the single-use state/code twice and self-inflict invalid_state.
   const ran = useRef(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: run-once exchange; router is a stable singleton.
   useEffect(() => {
     if (ran.current) return;
     ran.current = true;
@@ -42,7 +53,9 @@ export default function CallbackPage() {
     completeLogin(code, state)
       .then(() => {
         sessionStorage.removeItem(RECOVERY_KEY); // clean exit — let a future failure recover once
-        window.location.replace("/");
+        // Client-side nav (NOT window.location): keeps the just-minted in-memory token alive across the hop
+        // so the shell renders signed-in without a redundant silent refresh, and lands on the destination directly.
+        router.replace(POST_LOGIN_DESTINATION);
       })
       .catch(async (err: unknown) => {
         const reason = err instanceof Error ? err.message : "unknown";

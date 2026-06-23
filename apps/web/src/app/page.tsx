@@ -1,21 +1,9 @@
 // page.tsx — the app root. The work surface is the (shell) route group; "/" just redirects to the default
-// destination (Prospect, 04 §3). Auth/session resolution now lives in the AppShell (which wraps every
-// (shell) route), not here. A client redirect keeps this a pure SPA hop with no flash of root content.
-"use client";
-
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+// destination (Prospect, 04 §3). Auth/session resolution lives in the AppShell (which wraps every (shell)
+// route), not here. This is a Server Component: the redirect is issued server-side (no client bundle, no
+// useEffect hop, no flash of root content) so a direct visit to "/" never ships an intermediate page.
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.replace("/prospect");
-  }, [router]);
-
-  return (
-    <div className="tp-center-screen">
-      <p className="app-muted">Loading…</p>
-    </div>
-  );
+  redirect("/prospect");
 }
