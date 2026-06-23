@@ -6,15 +6,17 @@
 // concurrent PATCHes can't lost-update). No enrichment is triggered here — this configures the policy the
 // core guard (enforceAutoEnrichPolicy) consults on a system-initiated enrich.
 
-import { enrichmentPolicyRepository } from "@leadwolf/db";
+import { authPolicyRepository, enrichmentPolicyRepository } from "@leadwolf/db";
 import {
   type EnrichmentPolicyResponse,
   ForbiddenError,
   ValidationError,
+  authPolicySchema,
   updateEnrichmentPolicySchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { requireOrgRole } from "../../middleware/requireOrgRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const settingsRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -61,3 +63,27 @@ settingsRoutes.patch("/auto-enrich", async (c) => {
   const response = await loadPolicyResponse(scope);
   return c.json(response, 200);
 });
+
+// ── Tenant auth policy (Auth Admin ▸ Security & Access, ADR-0018, 17 §10). TENANT-scoped (not a workspace
+// setting) and gated to security_admin or owner. The raw per-tenant policy the org configures; the
+// strictest-wins resolution applied at login lives in packages/auth. The PUT is audited in the repository. ──
+settingsRoutes.get(
+  "/security/auth-policy",
+  requireOrgRole("security_admin", "owner"),
+  async (c) => {
+    const policy = await authPolicyRepository.getForTenant(c.get("tenantId"));
+    return c.json(policy, 200);
+  },
+);
+
+settingsRoutes.put(
+  "/security/auth-policy",
+  requireOrgRole("security_admin", "owner"),
+  async (c) => {
+    const parsed = authPolicySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success)
+      throw new ValidationError("Invalid auth policy.", { issues: parsed.error.issues });
+    await authPolicyRepository.upsert(c.get("tenantId"), parsed.data, c.get("claims").sub);
+    return c.json(parsed.data, 200);
+  },
+);
