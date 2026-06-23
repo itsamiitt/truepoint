@@ -60,6 +60,16 @@ services:
     restart: "no"
     command: ["bun", "run", "packages/db/src/seed.ts"]
 
+  # Provision/refresh the platform Bootstrap Admin (ADR-0032) from BOOTSTRAP_ADMIN_EMAIL/PASSWORD in
+  # .env.production — the super-admin who can reach admin.truepoint.in. One-shot (profile 'bootstrap');
+  # idempotent (upserts the user + updates the Argon2id password hash). Run AFTER migrate, once:
+  #   docker compose -f docker-compose.prod.yml --profile bootstrap run --rm bootstrap-admin
+  bootstrap-admin:
+    <<: *app
+    profiles: ["bootstrap"]
+    restart: "no"
+    command: ["bun", "run", "apps/auth/src/lib/bootstrapAdmin.ts"]
+
   # ── Application services ────────────────────────────────────────────────────────
   # App services publish NO host ports — Caddy reaches them over the internal network
   # (api:3001, auth:3000, web:3002) and exposes them publicly via the subdomains below.
