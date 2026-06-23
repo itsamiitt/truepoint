@@ -9,6 +9,7 @@ import {
   boolean,
   check,
   customType,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -101,6 +102,10 @@ export const providerCalls = pgTable(
   (t) => ({
     // One persisted answer per (workspace, request) — concurrent duplicates collapse onto it.
     uniqWsHash: uniqueIndex("uniq_provider_calls_ws_hash").on(t.workspaceId, t.requestHash),
+    // Dashboard "recent provider calls" / enrichment-cost feed (providerCallRepository: WHERE workspace_id ...
+    // ORDER BY called_at DESC): composite with workspace_id so the recency read stays index-backed under the
+    // RLS workspace predicate instead of a seq-scan + sort on this high-volume ledger (perf RC#9).
+    wsCalledAtIdx: index("idx_provider_calls_ws_called_at").on(t.workspaceId, t.calledAt.desc()),
     statusEnum: check(
       "provider_calls_status_enum",
       sql`${t.status} IN ('hit','miss','rate_limited','error')`,

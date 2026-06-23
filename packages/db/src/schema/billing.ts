@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import {
   check,
   customType,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -69,6 +70,13 @@ export const contactReveals = pgTable(
       sql`${t.dataSource} IN ('apollo','zoominfo','linkedin','internal')`,
     ),
     creditsNonNegative: check("contact_reveals_credits_nonneg", sql`${t.creditsConsumed} >= 0`),
+    // Dashboard "recent reveals" read (revealRepository: WHERE workspace_id ... ORDER BY revealed_at DESC):
+    // composite with workspace_id so the recency feed stays index-backed under the RLS workspace predicate
+    // instead of a seq-scan + sort on this high-volume event log (perf RC#9).
+    wsRevealedAtIdx: index("idx_contact_reveals_ws_revealed_at").on(
+      t.workspaceId,
+      t.revealedAt.desc(),
+    ),
   }),
 );
 
@@ -199,5 +207,28 @@ export const auditLog = pgTable(
         'code.issued','code.exchanged','signup','oauth.link'
       )`,
     ),
+    // Dashboard activity feed + compliance viewer (auditRepository.listByTenant/listByWorkspace: WHERE
+    // tenant_id = ... ORDER BY occurred_at DESC LIMIT N). Composite so the newest-first slice is a backwards
+    // index scan, not a seq-scan + sort on this append-only, ever-growing log (perf RC#9). The workspace feed
+    // adds an OR workspace_id IS NULL / = :ws clause on top of the same tenant+recency prefix, which this
+    // index still serves.
+    tenantOccurredAtIdx: index("idx_audit_log_tenant_occurred_at").on(
+      t.tenantId,
+      t.occurredAt.desc(),
+    ),
+    // Auth Admin ▸ Security audit (auditRepository.listAuthEvents: WHERE tenant_id = ... AND action IN
+    // (auth actions) ORDER BY occurred_at DESC). PARTIAL on just the auth-domain action slice so this index
+    // stays tiny relative to the full log while serving the filtered recency read. The predicate mirrors
+    // AUTH_AUDIT_ACTIONS in auditRepository.ts — keep the two in sync if the auth vocabulary changes.
+    tenantAuthOccurredAtIdx: index("idx_audit_log_tenant_auth_occurred_at")
+      .on(t.tenantId, t.occurredAt.desc())
+      .where(
+        sql`${t.action} IN (
+          'login.success','login.failure','login.locked','mfa.challenge','mfa.success','mfa.failure',
+          'password.reset.request','password.reset.complete','sso.initiated','sso.callback',
+          'token.issued','token.refresh','token.revoke','device.trusted','device.revoked','session.revoked',
+          'code.issued','code.exchanged','signup','oauth.link'
+        )`,
+      ),
   }),
 );
