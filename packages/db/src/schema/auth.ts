@@ -69,12 +69,36 @@ export const tenantMembers = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    isTenantOwner: boolean("is_tenant_owner").notNull().default(false),
+    isTenantOwner: boolean("is_tenant_owner").notNull().default(false), // legacy — derived into org_role below
+    // Granular org role (ADR-0030): owner|billing_admin|security_admin|compliance_admin|member. `owner`
+    // implies all; backfilled from is_tenant_owner. Enforced by requireOrgRole. Mirrors the @leadwolf/types
+    // `orgRole` enum + the org_role CHECK in the migration.
+    orgRole: varchar("org_role", { length: 50 }).notNull().default("member"),
     status: varchar("status", { length: 50 }).notNull().default("active"), // active|invited|removed
     invitedByUserId: uuid("invited_by_user_id"),
     createdAt: createdAt(),
   },
   (t) => ({ uniqMember: uniqueIndex("uniq_tenant_member").on(t.tenantId, t.userId) }),
+);
+
+// Platform STAFF identities (ADR-0011): who may operate the platform across tenants, and at what role.
+// PLATFORM-owned (no tenant scope) and deny-all to leadwolf_app (rls/platform.sql) — a staff role is NEVER a
+// customer org/workspace capability. Backfilled from users.is_platform_admin (→ super_admin). The `pa` claim
+// stays the coarse "can reach the console" gate; this table carries the granular role for requireStaffRole.
+export const platformStaff = pgTable(
+  "platform_staff",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    staffRole: varchar("staff_role", { length: 50 }).notNull(), // super_admin|support|billing_ops|compliance_officer|read_only
+    status: varchar("status", { length: 50 }).notNull().default("active"), // active|revoked
+    grantedByUserId: uuid("granted_by_user_id"),
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => ({ uniqStaff: uniqueIndex("uniq_platform_staff_user").on(t.userId) }),
 );
 
 export const workspaces = pgTable(

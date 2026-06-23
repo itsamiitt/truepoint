@@ -39,3 +39,26 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS platform_audit_log_no_mutation ON platform_audit_log;
 CREATE TRIGGER platform_audit_log_no_mutation BEFORE UPDATE OR DELETE ON platform_audit_log
   FOR EACH ROW EXECUTE FUNCTION platform_audit_log_append_only();
+
+-- ── platform_staff — granular platform STAFF roles (ADR-0011, Phase 1). PLATFORM-owned: written by the
+-- owner / withPlatformTx and read for authz on the owner connection; the customer app role must NOT see who
+-- can operate the platform. Same posture as platform_audit_log — ENABLE (not FORCE) RLS + NO policy denies
+-- leadwolf_app while the owner reads/writes — but MUTABLE (grant/revoke), so NO append-only trigger. The
+-- table + tenant_members.org_role are created by the Drizzle migration; this file applies RLS, the DB-level
+-- role CHECKs (no ALTER TYPE — varchar + CHECK), and the idempotent backfills from the legacy booleans.
+ALTER TABLE platform_staff ENABLE ROW LEVEL SECURITY;
+
+-- Constrain the role vocabularies at the DB (mirror the @leadwolf/types orgRole/staffRole enums).
+ALTER TABLE tenant_members DROP CONSTRAINT IF EXISTS tenant_members_org_role_check;
+ALTER TABLE tenant_members ADD CONSTRAINT tenant_members_org_role_check
+  CHECK (org_role IN ('owner', 'billing_admin', 'security_admin', 'compliance_admin', 'member'));
+ALTER TABLE platform_staff DROP CONSTRAINT IF EXISTS platform_staff_role_check;
+ALTER TABLE platform_staff ADD CONSTRAINT platform_staff_role_check
+  CHECK (staff_role IN ('super_admin', 'support', 'billing_ops', 'compliance_officer', 'read_only'));
+
+-- Backfill the granular roles from the legacy booleans (idempotent): every is_tenant_owner member becomes
+-- org_role 'owner'; every is_platform_admin user becomes an active super_admin staff row.
+UPDATE tenant_members SET org_role = 'owner' WHERE is_tenant_owner = true AND org_role <> 'owner';
+INSERT INTO platform_staff (user_id, staff_role, status)
+  SELECT id, 'super_admin', 'active' FROM users WHERE is_platform_admin = true
+  ON CONFLICT (user_id) DO NOTHING;

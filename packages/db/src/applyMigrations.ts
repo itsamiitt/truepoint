@@ -76,6 +76,10 @@ const GRANTS = `
   -- table privileges — REVOKE them so leadwolf_app cannot read or tamper the audit trail even if a policy
   -- were later added by mistake. The owner/withPlatformTx writer is unaffected (it is the table owner).
   REVOKE ALL ON platform_audit_log FROM leadwolf_app;
+  -- platform_staff (ADR-0011) is platform-owned the same way — the app role must not read who operates the
+  -- platform. RLS denies it; REVOKE the blanket grant too. The owner connection (requireStaffRole lookup +
+  -- grant/revoke writes) is unaffected.
+  REVOKE ALL ON platform_staff FROM leadwolf_app;
 `;
 
 async function exists(path: string): Promise<boolean> {

@@ -43,6 +43,13 @@
       "when": 1782113776580,
       "tag": "0005_account_search_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782194518804,
+      "tag": "0006_kind_tomorrow_man",
+      "breakpoints": true
     }
   ]
 }

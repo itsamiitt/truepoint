@@ -196,7 +196,8 @@ apps/                           # deployable processes (thin transport adapters)
 
 ### auth — *M2, global identity* ([05 §1](./planning/05-features-modules.md), [17](./planning/17-authentication.md), ADR-0019/0020)
 - **api:** `apps/api/src/features/auth/{routes,index}.ts` (GET `/auth/session` incl. the live workspace
-  **role**); RBAC primitives `apps/api/src/middleware/{requireRole,platformAdmin}.ts` (+ tests)
+  **role**); RBAC primitives `apps/api/src/middleware/{requireRole,requireOrgRole,requireStaffRole,platformAdmin}.ts`
+  — the workspace / org (ADR-0030) / platform-staff (ADR-0011) role tiers + the `pa` gate (+ roleGuards tests)
 - **db:** `userRepository.ts` (global users + sessions + email-verification codes); `workspaceRepository.ts`
 - **shared primitives:** `packages/auth/*` — login (`identifierLookup`/`login`/`loginTransaction`/`flow` +
   `scopeGuard` — authorizes the client-supplied org/workspace against real memberships before minting the JWT),

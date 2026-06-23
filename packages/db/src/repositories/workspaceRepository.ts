@@ -4,7 +4,7 @@
 // lookup; an invite by email) run on the global client; workspace lists run under withTenantTx (RLS).
 // All co-located here because they form one cohesive aggregate that maps to the `workspaces` domain.
 
-import type { WorkspaceRole } from "@leadwolf/types";
+import type { OrgRole, WorkspaceRole } from "@leadwolf/types";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db, withTenantTx } from "../client.ts";
 import {
@@ -95,6 +95,26 @@ export const tenantMemberRepository = {
       tenantName: r.tenantName,
       isTenantOwner: r.isTenantOwner,
     }));
+  },
+
+  // The active org role (owner|billing_admin|security_admin|compliance_admin|member) for a member, or null
+  // if not an active member of the tenant (ADR-0030). RLS-scoped: read under the caller's tenant GUC, so a
+  // user in another tenant simply has no membership row here. Enforced by requireOrgRole.
+  async getOrgRole(tenantId: string, userId: string): Promise<OrgRole | null> {
+    return withTenantTx({ tenantId }, async (tx) => {
+      const rows = await tx
+        .select({ orgRole: tenantMembers.orgRole })
+        .from(tenantMembers)
+        .where(
+          and(
+            eq(tenantMembers.tenantId, tenantId),
+            eq(tenantMembers.userId, userId),
+            eq(tenantMembers.status, "active"),
+          ),
+        )
+        .limit(1);
+      return rows[0] ? (rows[0].orgRole as OrgRole) : null;
+    });
   },
 
   async create(input: {

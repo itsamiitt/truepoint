@@ -68,8 +68,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 743,
-  "fileSetHash": "sha256:a94c6a896117d907db7f0ee194a6b4cd788eb7f5fa35ff335e4a26288a299851",
+  "fileCount": 747,
+  "fileSetHash": "sha256:ebef46bd4cd9b0c498eab85586dc7746fff30f4f207f153d3e46518773fd08dd",
   "features": {
     "account-search": {
       "web": [],
@@ -1043,8 +1043,10 @@
       "apps/api/src/middleware/platformAdmin.test.ts",
       "apps/api/src/middleware/platformAdmin.ts",
       "apps/api/src/middleware/rateLimit.ts",
-      "apps/api/src/middleware/requireRole.test.ts",
+      "apps/api/src/middleware/requireOrgRole.ts",
       "apps/api/src/middleware/requireRole.ts",
+      "apps/api/src/middleware/requireStaffRole.ts",
+      "apps/api/src/middleware/roleGuards.test.ts",
       "apps/api/src/middleware/tenancy.ts"
     ],
     "apps/auth": [
@@ -1273,6 +1275,7 @@
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/platformAuditLog.itest.ts",
       "packages/db/test/reveal.itest.ts",
+      "packages/db/test/roleModel.itest.ts",
       "packages/db/test/salesNav.itest.ts",
       "packages/db/test/savedSearches.itest.ts",
       "packages/db/test/search.itest.ts",
@@ -1371,6 +1374,7 @@
     "packages/db/src/repositories/featureFlagRepository.ts",
     "packages/db/src/repositories/importMappingTemplateRepository.ts",
     "packages/db/src/repositories/pipelineStageRepository.ts",
+    "packages/db/src/repositories/platformStaffRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
     "packages/db/src/repositories/searchRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",

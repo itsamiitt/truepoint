@@ -16,6 +16,31 @@ export type MfaEnforcement = z.infer<typeof mfaEnforcement>;
 export const workspaceRole = z.enum(["owner", "admin", "member", "viewer"]);
 export type WorkspaceRole = z.infer<typeof workspaceRole>;
 
+// Tenant/org-level roles (ADR-0030): granular org administration, one tier ABOVE the workspace. Separate
+// from workspaceRole and from the platform staff tier — never mixed. `owner` implies every org capability;
+// the others scope a single domain (billing / auth+SSO+SCIM / compliance+DSAR). Resolved server-side from
+// tenant_members.org_role and enforced by requireOrgRole.
+export const orgRole = z.enum([
+  "owner",
+  "billing_admin",
+  "security_admin",
+  "compliance_admin",
+  "member",
+]);
+export type OrgRole = z.infer<typeof orgRole>;
+
+// Platform STAFF roles (ADR-0011): operate the whole platform ACROSS tenants. NEVER mixed with the customer
+// org/workspace roles — held in the platform_staff table (deny-all to the app role) and gated by
+// requireStaffRole after the `pa` claim. `super_admin` implies every staff capability.
+export const staffRole = z.enum([
+  "super_admin",
+  "support",
+  "billing_ops",
+  "compliance_officer",
+  "read_only",
+]);
+export type StaffRole = z.infer<typeof staffRole>;
+
 // ── Step 1: identifier-first (ADR-0017) ──────────────────────────────────────────────────────────────
 export const identifierSchema = z.object({
   email: z.string().email().max(320),
