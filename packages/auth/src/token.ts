@@ -18,7 +18,14 @@ const publicKey = () => importSPKI(env.JWT_PUBLIC_KEY_PEM, ALG);
 // endpoint — live under /auth/*. The URL MUST carry that prefix: in the multi-domain deployment Caddy proxies
 // auth.* → the auth container passing the path through unchanged, so a bare /.well-known/jwks.json 404s and
 // every token fails verification (401 invalid_token). This matches authClient.ts, which prefixes /auth too.
-const jwksUrl = new URL("/auth/.well-known/jwks.json", env.AUTH_ORIGIN);
+//
+// FETCH LOCATION ONLY: when INTERNAL_AUTH_ORIGIN is set (e.g. http://auth:3000 on the docker network) the api
+// reads the key set over the internal network instead of hairpinning out through the public edge (public DNS →
+// TLS → Caddy → back to the auth container it already shares a network with). This moves WHERE the keys are
+// fetched, nothing else — verifyAccessToken below still pins the token's issuer/audience to the PUBLIC
+// AUTH_ORIGIN, so the internal http origin is never trusted as the claim authority. Unset → fall back to
+// AUTH_ORIGIN (dev/local/test unchanged). The "/auth" basePath prefix is required for the internal host too.
+const jwksUrl = new URL("/auth/.well-known/jwks.json", env.INTERNAL_AUTH_ORIGIN ?? env.AUTH_ORIGIN);
 let _jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
 // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
 const remoteJwks = () => (_jwks ??= createRemoteJWKSet(jwksUrl));

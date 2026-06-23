@@ -15,6 +15,20 @@ export const appEnvSchema = z
 
     // Auth service boundary (ADR-0016): the IdP origin + the app origins it may issue tokens to.
     AUTH_ORIGIN: z.string().url(),
+    // In-cluster origin used ONLY to FETCH the auth JWKS (apps/api token verification). Optional: when set
+    // (e.g. http://auth:3000 on the docker network) the api reads the signing keys over the internal network
+    // instead of hairpinning out through the public edge (public DNS → TLS → Caddy → back to the auth
+    // container that shares its network). The network LOCATION of the key set moves; the token's issuer/
+    // audience are STILL validated against the PUBLIC AUTH_ORIGIN — this never changes the trust boundary.
+    // Unset → token.ts falls back to AUTH_ORIGIN, so dev/local/test behaviour is unchanged. Require an
+    // http(s) scheme: z.string().url() alone accepts a bare "auth:3000" (it reads "auth" as the scheme), which
+    // would pass boot validation but make `new URL("/auth/...", base)` unusable and 401 every request. Failing
+    // fast at boot on a scheme-less host:port is the operator-typo guard.
+    INTERNAL_AUTH_ORIGIN: z
+      .string()
+      .url()
+      .refine((u) => /^https?:\/\//.test(u), { message: "must start with http:// or https://" })
+      .optional(),
     APP_ORIGINS: z.string().transform(csv).pipe(z.array(z.string().url()).min(1)),
     AUTH_COOKIE_DOMAIN: z.string().min(1),
 
