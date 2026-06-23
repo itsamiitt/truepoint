@@ -22,3 +22,4 @@ export * from "./lists.ts";
 export * from "./bulkActions.ts";
 export * from "./aiSearch.ts";
 export * from "./webhooks.ts";
+export * from "./providerConfigs.ts";

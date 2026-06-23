@@ -68,8 +68,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 747,
-  "fileSetHash": "sha256:ebef46bd4cd9b0c498eab85586dc7746fff30f4f207f153d3e46518773fd08dd",
+  "fileCount": 751,
+  "fileSetHash": "sha256:ce9f5a0c9f8d62f841bcab395704620ad915f8ce4cf7484b4f0e3d936d0ea86f",
   "features": {
     "account-search": {
       "web": [],
@@ -104,6 +104,7 @@
       "admin": [],
       "api": [
         "apps/api/src/features/admin/index.ts",
+        "apps/api/src/features/admin/providerConfigs.ts",
         "apps/api/src/features/admin/routes.ts"
       ],
       "core": [],
@@ -1274,6 +1275,7 @@
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/platformAuditLog.itest.ts",
+      "packages/db/test/providerConfigs.itest.ts",
       "packages/db/test/reveal.itest.ts",
       "packages/db/test/roleModel.itest.ts",
       "packages/db/test/salesNav.itest.ts",
@@ -1324,6 +1326,7 @@
       "packages/types/src/lists.ts",
       "packages/types/src/outreach.ts",
       "packages/types/src/pipelineStages.ts",
+      "packages/types/src/providerConfigs.ts",
       "packages/types/src/savedSearch.test.ts",
       "packages/types/src/savedSearch.ts",
       "packages/types/src/search.ts",
@@ -1375,6 +1378,7 @@
     "packages/db/src/repositories/importMappingTemplateRepository.ts",
     "packages/db/src/repositories/pipelineStageRepository.ts",
     "packages/db/src/repositories/platformStaffRepository.ts",
+    "packages/db/src/repositories/providerConfigRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
     "packages/db/src/repositories/searchRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",

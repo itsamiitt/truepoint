@@ -209,6 +209,11 @@ export {
 } from "./repositories/platformAdminReads.ts";
 // Platform STAFF role lookup (ADR-0011) — owner-connection read for requireStaffRole authz.
 export { platformStaffRepository } from "./repositories/platformStaffRepository.ts";
+// Provider configs (13 §3.6) — platform-global enable/budget + cross-tenant month-to-date spend.
+export {
+  providerConfigRepository,
+  type ProviderConfigRow,
+} from "./repositories/providerConfigRepository.ts";
 export {
   webhookRepository,
   type WebhookSubscriptionInsert,

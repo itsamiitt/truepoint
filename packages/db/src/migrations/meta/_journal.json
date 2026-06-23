@@ -50,6 +50,13 @@
       "when": 1782194518804,
       "tag": "0006_kind_tomorrow_man",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782195578530,
+      "tag": "0007_sudden_northstar",
+      "breakpoints": true
     }
   ]
 }

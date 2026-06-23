@@ -107,3 +107,16 @@ export const providerCalls = pgTable(
     ),
   }),
 );
+
+// ── provider_configs — PLATFORM-global enrichment-provider settings (13 §3.6): enable/disable + the
+// per-month cost budget + rate cap. NO secrets here (provider API keys live in env/KMS). Read by the
+// platform-admin console (owner) and the enrichment budget breaker (the app role may SELECT — it is global
+// config, not tenant data); only the owner/withPlatformTx path writes it (rls/providerConfigs.sql).
+export const providerConfigs = pgTable("provider_configs", {
+  provider: varchar("provider", { length: 50 }).primaryKey(), // apollo|zoominfo|clearbit|…
+  label: varchar("label", { length: 100 }).notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  rateLimitPerMin: integer("rate_limit_per_min"), // null = unlimited
+  monthlyBudgetCents: integer("monthly_budget_cents"), // null = unset
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
