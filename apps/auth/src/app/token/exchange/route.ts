@@ -6,6 +6,14 @@
 // `invalid_auth_code` + a diagnostic `reason`; the code store being unreachable or token signing failing →
 // 503 `auth_unavailable` with the reason in the SERVER LOG only. Audit writes are best-effort (they swallow
 // internally) and never gate token issuance. We never log the code, verifier, token, or raw client IP.
+//
+// PERF: the two audit events (code.exchanged, token.issued) are emitted off the response path — the caller's
+// first token must NOT wait on two DB audit inserts that don't gate correctness. The code is still consumed +
+// validated and the token still minted BEFORE we respond; only the await on the (best-effort, self-swallowing)
+// audit writes is removed. Each event still fires at its original point in the flow (code.exchanged right
+// after the code is consumed — so the consumed-but-mint-failed path is still recorded — and token.issued after
+// a successful mint), so semantics are unchanged. On a long-lived Bun server the detached promise outlives the
+// response. Ordering of validation/consume/mint vs. response is unchanged.
 
 import { clientIp } from "@/lib/clientIp";
 import { corsHeaders } from "@/lib/cors";
@@ -59,19 +67,25 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ code: "auth_unavailable" }, { status: 503, headers: cors });
   }
 
-  // code.exchanged — the single-use code was consumed + validated (ADR-0031 §2). Best-effort; never the code.
-  await recordAuthEvent({
+  // Audit (best-effort, never the code/token) — emitted OFF the response path so the caller's first token does
+  // not wait on DB inserts that don't gate correctness. recordAuthEvent swallows its own errors, so a detached
+  // `void` promise can't raise an unhandled rejection; on the long-lived Bun server it outlives the response.
+  // The two events stay at their original points so semantics are unchanged — only the await is removed.
+  const auditBase = {
     tenantId: binding.tenantId,
     workspaceId: binding.workspaceId ?? null,
     actorUserId: binding.userId,
-    action: "code.exchanged",
-    entityType: "user",
+    entityType: "user" as const,
     entityId: binding.userId,
     metadata: { sessionId: binding.sessionId },
     ipAddress: ip,
     userAgent: req.headers.get("user-agent"),
     originDomain: origin,
-  });
+  };
+
+  // code.exchanged — the single-use code was consumed + validated (ADR-0031 §2). Emitted now (before mint, as
+  // before) so the consumed-but-mint-failed path is still recorded; just no longer awaited. Never the code.
+  void recordAuthEvent({ ...auditBase, action: "code.exchanged" });
 
   // 2. Mint the access JWT. A signing failure (missing/garbled key, KID) is a SERVER fault, NOT a bad code —
   //    surface it as 503 (don't invite the client to "retry with a better code"); log the reason only.
@@ -93,19 +107,9 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ code: "auth_unavailable" }, { status: 503, headers: cors });
   }
 
-  // token.issued — an access JWT was minted (ADR-0031 §2). Best-effort; never the token string.
-  await recordAuthEvent({
-    tenantId: binding.tenantId,
-    workspaceId: binding.workspaceId ?? null,
-    actorUserId: binding.userId,
-    action: "token.issued",
-    entityType: "user",
-    entityId: binding.userId,
-    metadata: { sessionId: binding.sessionId },
-    ipAddress: ip,
-    userAgent: req.headers.get("user-agent"),
-    originDomain: origin,
-  });
+  // token.issued — an access JWT was minted (ADR-0031 §2). Emitted now (after mint, as before); just no longer
+  // awaited. Never the token string.
+  void recordAuthEvent({ ...auditBase, action: "token.issued" });
 
   return Response.json(
     { accessToken: minted.token, tokenType: "Bearer", expiresIn: minted.expiresIn },
