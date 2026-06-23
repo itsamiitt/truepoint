@@ -4,6 +4,7 @@
 // calm "You're all caught up." Dismiss on outside click + Escape so the panel never traps focus.
 "use client";
 
+import { TpIconButton } from "@leadwolf/ui";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import styles from "./NotificationsBell.module.css";
@@ -35,12 +36,10 @@ export function NotificationsBell() {
 
   return (
     <div className={styles.root} ref={rootRef}>
-      <button
-        className="tp-icon-btn"
-        type="button"
+      <TpIconButton
+        label={label}
         aria-haspopup="true"
         aria-expanded={open}
-        aria-label={label}
         onClick={() => setOpen((v) => !v)}
       >
         <span aria-hidden="true">◔</span>
@@ -49,7 +48,7 @@ export function NotificationsBell() {
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
-      </button>
+      </TpIconButton>
 
       {open && (
         <section className={styles.menu} aria-label="Notifications">
@@ -67,14 +66,13 @@ export function NotificationsBell() {
                       <span className={styles.itemDetail}>{n.detail}</span>
                     </span>
                   </Link>
-                  <button
+                  <TpIconButton
                     className={styles.dismiss}
-                    type="button"
-                    aria-label={`Dismiss: ${n.title}`}
+                    label={`Dismiss: ${n.title}`}
                     onClick={() => dismiss(n.id)}
                   >
                     ×
-                  </button>
+                  </TpIconButton>
                 </li>
               ))}
             </ul>

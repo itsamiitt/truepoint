@@ -20,54 +20,6 @@
   animation: tp-rise-in var(--tp-duration-slow) var(--tp-ease-out) both;
 }
 
-/* ── Heading row ─────────────────────────────────────────────────────────────────────────────────────── */
-.heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.headingText {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* Mono eyebrow — the Brand Kit's section marker (uppercase, tracked, muted). */
-.eyebrow {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--tp-ink-4);
-}
-
-.title {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--tp-ink);
-  letter-spacing: -0.025em;
-  line-height: 1.05;
-}
-
-.subtitle {
-  margin: 0;
-  font-size: 14px;
-  color: var(--tp-ink-3);
-  font-weight: 400;
-}
-
-.refresh {
-  flex: 0 0 auto;
-  padding-top: 2px;
-}
-
 /* ── Quick actions (deep-link row) ──────────────────────────────────────────────────────────────────── */
 .quickActions {
   display: flex;
@@ -427,9 +379,6 @@
     padding: 24px 20px 56px;
     gap: 20px;
   }
-  .title {
-    font-size: 23px;
-  }
   .tiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -445,9 +394,6 @@
   .inner {
     padding: 20px 16px 44px;
     gap: 16px;
-  }
-  .title {
-    font-size: 20px;
   }
   .tiles {
     grid-template-columns: 1fr;

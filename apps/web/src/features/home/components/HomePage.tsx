@@ -5,6 +5,7 @@
 // Monochrome; color appears only via StatusBadge tones. Public slice component.
 "use client";
 
+import { PageHeader } from "@/components/PageHeader";
 import { Skeleton, StatTile, StatusBadge, TpButton } from "@leadwolf/ui";
 import { RefreshCw } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
@@ -48,13 +49,11 @@ export function HomePage() {
   return (
     <main className={styles.page}>
       <div className={styles.inner}>
-        <header className={styles.heading}>
-          <div className={styles.headingText}>
-            <p className={styles.eyebrow}>Workspace overview</p>
-            <h1 className={styles.title}>Home</h1>
-            <p className={styles.subtitle}>Your workspace at a glance.</p>
-          </div>
-          <div className={styles.refresh}>
+        <PageHeader
+          eyebrow="Workspace overview"
+          title="Home"
+          subtitle="Your workspace at a glance."
+          actions={
             <TpButton
               variant="secondary"
               size="sm"
@@ -64,8 +63,8 @@ export function HomePage() {
             >
               Refresh
             </TpButton>
-          </div>
-        </header>
+          }
+        />
 
         <QuickActionsRow />
 

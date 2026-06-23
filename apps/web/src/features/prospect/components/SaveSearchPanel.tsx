@@ -86,7 +86,7 @@ export function SaveSearchPanel({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-2)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--tp-ink-2)" }}>
           Saved searches
@@ -97,7 +97,7 @@ export function SaveSearchPanel({
       </div>
 
       {error ? (
-        <span style={{ fontSize: 12, color: "var(--tp-danger)" }}>{error}</span>
+        <span style={{ fontSize: 12, color: "var(--danger)" }}>{error}</span>
       ) : loading ? (
         <span style={{ fontSize: 12, color: "var(--tp-ink-4)" }}>Loading…</span>
       ) : searches.length === 0 ? (
@@ -117,11 +117,14 @@ export function SaveSearchPanel({
           }}
         >
           {searches.map((s) => (
-            <li key={s.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <li
+              key={s.id}
+              style={{ display: "flex", alignItems: "center", gap: "var(--tp-space-1)" }}
+            >
               <button
                 type="button"
                 className="tp-ui-menu-item"
-                style={{ flex: 1, textAlign: "left", borderRadius: 8 }}
+                style={{ flex: 1, textAlign: "left", borderRadius: "var(--radius)" }}
                 onClick={() => onApply(s.filters)}
                 title="Apply this search"
               >
@@ -180,7 +183,7 @@ export function SaveSearchPanel({
           </>
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-3)" }}>
           <FieldGroup label="Name" htmlFor="tp-ss-name">
             <TpInput
               id="tp-ss-name"

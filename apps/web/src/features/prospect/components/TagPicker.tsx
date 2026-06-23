@@ -129,10 +129,18 @@ export function TagPicker({
         )}
       >
         <div
-          style={{ minWidth: 220, display: "flex", flexDirection: "column", gap: 8, padding: 4 }}
+          style={{
+            minWidth: 220,
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--tp-space-2)",
+            padding: "var(--tp-space-1)",
+          }}
         >
           {loading ? (
-            <div style={{ display: "flex", justifyContent: "center", padding: 8 }}>
+            <div
+              style={{ display: "flex", justifyContent: "center", padding: "var(--tp-space-2)" }}
+            >
               <Spinner />
             </div>
           ) : (
@@ -154,7 +162,9 @@ export function TagPicker({
             </div>
           )}
 
-          <div style={{ borderTop: "1px solid var(--tp-hairline-2)", paddingTop: 8 }}>
+          <div
+            style={{ borderTop: "1px solid var(--tp-hairline-2)", paddingTop: "var(--tp-space-2)" }}
+          >
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <TpInput
                 placeholder="New tag…"
@@ -174,7 +184,7 @@ export function TagPicker({
                 Add
               </TpButton>
             </div>
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <div style={{ display: "flex", gap: 6, marginTop: "var(--tp-space-2)" }}>
               {TAG_COLOR_OPTIONS.map((c) => (
                 <button
                   key={c}

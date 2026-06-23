@@ -109,25 +109,6 @@ body {
   padding-left: 18px;
   color: var(--tp-ink-3);
 }
-.tp-error {
-  margin-top: 12px;
-  color: var(--danger-700);
-}
-.tp-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.tp-table th,
-.tp-table td {
-  text-align: left;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--tp-hairline-2);
-}
-.tp-table th {
-  color: var(--tp-ink-3);
-  font-weight: 600;
-}
 
 /* ============================================================================
  * App shell (components/shell/**) — the 6-destination chrome (04 §3–§4, 11 §3).

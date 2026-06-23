@@ -21,6 +21,7 @@ import {
   FieldGroup,
   type MenuItem,
   TpButton,
+  TpCheckbox,
   TpInput,
   TpSelect,
   useToast,
@@ -787,10 +788,13 @@ function TagPickerDialog({
       ) : (
         <div className={styles.dialogStack}>
           {tags.map((t) => (
-            <label key={t.id} className={styles.dialogCheckRow}>
-              <input type="checkbox" checked={picked.has(t.id)} onChange={() => toggle(t.id)} />
-              <span>{t.name}</span>
-            </label>
+            <TpCheckbox
+              key={t.id}
+              className={styles.dialogCheckRow}
+              label={t.name}
+              checked={picked.has(t.id)}
+              onChange={() => toggle(t.id)}
+            />
           ))}
         </div>
       )}

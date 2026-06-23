@@ -1,0 +1,83 @@
+/* PageHeader.module.css — the shared (shell) page header. Two variants via [data-variant]:
+   "cockpit" (Home: mono eyebrow + 28px title) and "destination" (everything else: 22px title).
+   Values lifted verbatim from the prior per-feature heading blocks so adopting this changes nothing
+   visually — it only removes the duplication. Layout + rhythm here; color + type from --tp-* tokens. */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--tp-space-4);
+  flex-wrap: wrap;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Destination headers (no eyebrow) sit tight; cockpit headers breathe a little more. */
+.header[data-variant="destination"] .text {
+  gap: var(--tp-space-1);
+}
+
+.header[data-variant="cockpit"] .text {
+  gap: var(--tp-space-2);
+}
+
+/* Mono eyebrow — the Brand Kit's section marker (uppercase, tracked, muted). */
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tp-ink-4);
+}
+
+.title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.header[data-variant="destination"] .title {
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.header[data-variant="cockpit"] .title {
+  font-size: 28px;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--tp-ink-3);
+}
+
+/* Right-aligned actions slot (e.g. a Refresh button) — never shrinks. */
+.actions {
+  flex: 0 0 auto;
+  padding-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-2);
+}
+
+@media (max-width: 860px) {
+  .header[data-variant="cockpit"] .title {
+    font-size: 23px;
+  }
+}
+
+@media (max-width: 540px) {
+  .header[data-variant="cockpit"] .title {
+    font-size: 20px;
+  }
+}

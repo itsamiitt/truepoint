@@ -46,7 +46,7 @@ export function AiSearchBox({ onApply }: { onApply: (query: ContactQuery) => voi
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-2)" }}>
       <div style={{ display: "flex", gap: 6 }}>
         <TpInput
           value={text}

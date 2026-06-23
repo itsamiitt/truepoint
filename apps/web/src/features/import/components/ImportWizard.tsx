@@ -16,6 +16,7 @@ import type {
   ImportPreview,
   SourceName,
 } from "@leadwolf/types";
+import { ErrorState, TpButton, TpInput, TpSelect } from "@leadwolf/ui";
 import { useEffect, useRef, useState } from "react";
 import { listMappingTemplates, postImportPreview, saveMappingTemplate } from "../api";
 import { useImport } from "../hooks/useImport";
@@ -189,7 +190,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
       <div className="tp-row">
         <label className="tp-field">
           <span>Source</span>
-          <select
+          <TpSelect
             value={sourceName}
             onChange={(e) => {
               setSourceName(e.target.value as SourceName);
@@ -201,11 +202,11 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
                 {s.label}
               </option>
             ))}
-          </select>
+          </TpSelect>
         </label>
         <label className="tp-field">
           <span>CSV file</span>
-          <input
+          <TpInput
             type="file"
             accept=".csv,text/csv"
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
@@ -213,7 +214,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
         </label>
         <label className="tp-field">
           <span>On duplicate</span>
-          <select
+          <TpSelect
             value={conflictPolicy}
             onChange={(e) => setConflictPolicy(e.target.value as ConflictPolicy)}
           >
@@ -222,14 +223,14 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
                 {o.label}
               </option>
             ))}
-          </select>
+          </TpSelect>
         </label>
       </div>
 
       {headers.length > 0 && templates.length > 0 && (
         <label className="tp-field">
           <span>Apply a saved template</span>
-          <select
+          <TpSelect
             value=""
             onChange={(e) => {
               if (e.target.value) onApplyTemplate(e.target.value);
@@ -241,7 +242,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
                 {t.name}
               </option>
             ))}
-          </select>
+          </TpSelect>
         </label>
       )}
 
@@ -253,7 +254,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
               {MAPPABLE_FIELDS.filter((f: MappableField) => f.group === group).map((f) => (
                 <label key={f.field} className="tp-field">
                   <span>{f.label}</span>
-                  <select
+                  <TpSelect
                     value={mapping[f.field] ?? ""}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -267,7 +268,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
                         {h}
                       </option>
                     ))}
-                  </select>
+                  </TpSelect>
                 </label>
               ))}
             </fieldset>
@@ -279,21 +280,21 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
         <div className="tp-row">
           <label className="tp-field">
             <span>Save this mapping as a template</span>
-            <input
+            <TpInput
               type="text"
               placeholder="Template name"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value)}
             />
           </label>
-          <button
-            className="app-button"
+          <TpButton
+            variant="secondary"
             type="button"
             disabled={savingTemplate || !templateName.trim() || !identityMapped}
             onClick={() => void onSaveTemplate()}
           >
             {savingTemplate ? "Saving…" : "Save as template"}
-          </button>
+          </TpButton>
         </div>
       )}
 
@@ -306,24 +307,24 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
       )}
 
       <div className="tp-row">
-        <button
-          className="app-button"
+        <TpButton
+          variant="secondary"
           type="button"
           disabled={!canValidate}
           onClick={() => void onValidate()}
         >
           {previewBusy ? "Validating…" : "Validate"}
-        </button>
-        <button className="app-button" type="button" disabled={!canSubmit} onClick={onSubmit}>
+        </TpButton>
+        <TpButton variant="primary" type="button" disabled={!canSubmit} onClick={onSubmit}>
           {status === "submitting"
             ? "Uploading…"
             : status === "processing"
               ? "Processing…"
               : "Confirm & import"}
-        </button>
+        </TpButton>
       </div>
 
-      {previewError && <p className="tp-error">{previewError}</p>}
+      {previewError && <ErrorState title="Couldn’t validate the file" detail={previewError} />}
 
       {preview && status !== "done" && (
         <div className="tp-summary">
@@ -365,7 +366,7 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
         </p>
       )}
 
-      {error && <p className="tp-error">{error}</p>}
+      {error && <ErrorState title="Import failed" detail={error} />}
 
       {status === "done" && summary && (
         <div className="tp-summary">
@@ -375,9 +376,9 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
           {summary.rejected > 0 && <> · {summary.rejected} rejected</>}
           {summary.rejectedRows.length > 0 && (
             <p>
-              <button className="app-button" type="button" onClick={onDownloadRejected}>
+              <TpButton variant="secondary" type="button" onClick={onDownloadRejected}>
                 Download rejected rows ({summary.rejected})
-              </button>
+              </TpButton>
             </p>
           )}
           {summary.rejectedRows.length > 0 && (

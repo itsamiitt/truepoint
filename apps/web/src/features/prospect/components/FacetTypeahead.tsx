@@ -27,7 +27,9 @@ export function FacetTypeahead({
 
   return (
     <div className="tp-ui-anchor" style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "var(--tp-ink-4)", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 12, color: "var(--tp-ink-4)", marginBottom: "var(--tp-space-1)" }}>
+        {label}
+      </div>
       <TpInput
         value={query}
         placeholder={`Search ${label.toLowerCase()}…`}

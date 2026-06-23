@@ -5,6 +5,7 @@
 // ClickHouse /reports/* pipeline (ADR-0010) is post-MVP. Public slice component.
 "use client";
 
+import { PageHeader } from "@/components/PageHeader";
 import { Combobox, Icon, SegmentedControl, Tabs, TpButton, useToast } from "@leadwolf/ui";
 import { Download, RotateCw } from "lucide-react";
 import { useState } from "react";
@@ -102,12 +103,10 @@ export function ReportsPage() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.heading}>
-        <h1 className={styles.title}>Reports</h1>
-        <p className={styles.subtitle}>
-          Pipeline, spend, deliverability, team, and data health for this workspace.
-        </p>
-      </header>
+      <PageHeader
+        title="Reports"
+        subtitle="Pipeline, spend, deliverability, team, and data health for this workspace."
+      />
 
       <div className={styles.tabsRow}>
         <Tabs

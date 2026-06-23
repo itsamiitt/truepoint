@@ -6,6 +6,7 @@
 // Progress tones. Public slice component.
 "use client";
 
+import { PageHeader } from "@/components/PageHeader";
 import { DataTable, EmptyState, Progress, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
 import type { Column } from "@leadwolf/ui";
 import { Database, RefreshCw } from "lucide-react";
@@ -88,26 +89,24 @@ export function EnrichmentJobsPage() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.heading}>
-        <div className={styles.headingText}>
-          <h1 className={styles.title}>Enrichment jobs</h1>
-          <p className={styles.subtitle}>
-            Track your bulk enrichment runs — status, progress, and results update live.
-          </p>
-        </div>
-        <div className={styles.refresh}>
-          {polling ? <span className={styles.liveTag}>Live</span> : null}
-          <TpButton
-            variant="secondary"
-            size="sm"
-            leftIcon={<RefreshCw size={14} />}
-            loading={loading}
-            onClick={() => void reload()}
-          >
-            Refresh
-          </TpButton>
-        </div>
-      </header>
+      <PageHeader
+        title="Enrichment jobs"
+        subtitle="Track your bulk enrichment runs — status, progress, and results update live."
+        actions={
+          <div className={styles.refresh}>
+            {polling ? <span className={styles.liveTag}>Live</span> : null}
+            <TpButton
+              variant="secondary"
+              size="sm"
+              leftIcon={<RefreshCw size={14} />}
+              loading={loading}
+              onClick={() => void reload()}
+            >
+              Refresh
+            </TpButton>
+          </div>
+        }
+      />
 
       <section className={styles.card}>
         <StateSwitch

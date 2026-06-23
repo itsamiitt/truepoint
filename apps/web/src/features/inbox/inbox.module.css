@@ -8,23 +8,6 @@
   padding: 28px 32px 48px;
   max-width: 980px;
 }
-.header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--tp-ink);
-}
-.subtitle {
-  margin: 0;
-  font-size: 14px;
-  color: var(--tp-ink-3);
-}
 .body {
   min-height: 320px;
 }

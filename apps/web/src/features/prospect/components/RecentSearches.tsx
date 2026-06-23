@@ -5,7 +5,7 @@
 "use client";
 
 import type { ContactQuery } from "@leadwolf/types";
-import { TpChip } from "@leadwolf/ui";
+import { TpButton, TpChip } from "@leadwolf/ui";
 import type { RecentSearch } from "../hooks/useRecentSearches";
 import styles from "../prospect.module.css";
 
@@ -26,7 +26,7 @@ export function RecentSearches({
   return (
     <div
       aria-label="Recent searches"
-      style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}
+      style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "var(--tp-space-2)" }}
     >
       <span
         style={{
@@ -46,9 +46,9 @@ export function RecentSearches({
           </TpChip>
         ))}
       </div>
-      <button type="button" className="tp-ui-btn tp-ui-btn--link tp-ui-btn--sm" onClick={onClear}>
+      <TpButton variant="link" size="sm" onClick={onClear}>
         Clear
-      </button>
+      </TpButton>
     </div>
   );
 }

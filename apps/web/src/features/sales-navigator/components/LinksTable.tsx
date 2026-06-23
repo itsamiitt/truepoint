@@ -96,7 +96,7 @@ export function LinksTable({
       header: "Labels",
       cell: (r) =>
         r.labels.length > 0 ? (
-          <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
+          <span style={{ display: "inline-flex", gap: "var(--tp-space-1)", flexWrap: "wrap" }}>
             {r.labels.map((l) => (
               <TpChip key={l}>{l}</TpChip>
             ))}

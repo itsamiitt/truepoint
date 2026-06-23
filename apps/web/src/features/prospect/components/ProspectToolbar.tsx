@@ -41,7 +41,7 @@ export function ProspectToolbar({
     );
 
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: "var(--tp-space-2)" }}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
         <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Sort</span>
         <TpSelect

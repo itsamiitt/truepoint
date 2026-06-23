@@ -23,6 +23,7 @@ import {
   StateSwitch,
   Tooltip,
   TpButton,
+  TpCheckbox,
   TpInput,
 } from "@leadwolf/ui";
 import { Building2, Users } from "lucide-react";
@@ -194,35 +195,23 @@ export function ProspectPage() {
       {
         key: "select",
         header: (
-          <span
+          <TpCheckbox
             className={styles.headCheck}
+            aria-label="Select all shown"
+            checked={allShownSelected}
             onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="presentation"
-          >
-            <input
-              type="checkbox"
-              aria-label="Select all shown"
-              checked={allShownSelected}
-              onChange={(e) => bulk.setMany(shownIds, e.target.checked)}
-            />
-          </span>
+            onChange={(e) => bulk.setMany(shownIds, e.target.checked)}
+          />
         ),
         width: 36,
         cell: (c) => (
-          <span
+          <TpCheckbox
             className={styles.rowCheck}
+            checked={bulk.isSelected(c.id)}
             onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="presentation"
-          >
-            <input
-              type="checkbox"
-              checked={bulk.isSelected(c.id)}
-              onChange={() => bulk.toggle(c.id)}
-              aria-label={`Select ${displayName(c)}`}
-            />
-          </span>
+            onChange={() => bulk.toggle(c.id)}
+            aria-label={`Select ${displayName(c)}`}
+          />
         ),
       },
       {

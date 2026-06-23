@@ -87,8 +87,12 @@ export function CaptureForm({
   };
 
   return (
-    <form className="tp-card" onSubmit={onSubmit} style={{ display: "grid", gap: 12 }}>
-      <div style={{ display: "grid", gap: 4 }}>
+    <form
+      className="tp-card"
+      onSubmit={onSubmit}
+      style={{ display: "grid", gap: "var(--tp-space-3)" }}
+    >
+      <div style={{ display: "grid", gap: "var(--tp-space-1)" }}>
         <span style={{ fontSize: 13, fontWeight: 600 }}>Capture a Sales Navigator link</span>
         <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>
           Paste a LinkedIn / Sales Navigator URL. Assisted only — nothing is sent or automated on
@@ -96,7 +100,7 @@ export function CaptureForm({
         </span>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "var(--tp-space-2)", flexWrap: "wrap" }}>
         <TpSelect
           aria-label="Link type"
           value={linkType}
@@ -137,7 +141,7 @@ export function CaptureForm({
       />
 
       <div style={{ display: "grid", gap: 6 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "var(--tp-space-2)", flexWrap: "wrap" }}>
           <TpInput
             aria-label="Add label"
             placeholder="Add a label, press Enter"

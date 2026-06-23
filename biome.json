@@ -16,6 +16,14 @@
     "enabled": true,
     "rules": {
       "recommended": true,
+      "a11y": {
+        "noLabelWithoutControl": {
+          "level": "error",
+          "options": {
+            "inputComponents": ["TpInput", "TpSelect", "TpTextarea", "TpCheckbox", "Combobox"]
+          }
+        }
+      },
       "style": {
         "noNonNullAssertion": "off",
         "useImportType": "error"

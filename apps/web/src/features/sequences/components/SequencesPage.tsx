@@ -5,6 +5,7 @@
 // we never double-fetch. Public slice component.
 "use client";
 
+import { PageHeader } from "@/components/PageHeader";
 import { Tabs } from "@leadwolf/ui";
 import { useCallback, useState } from "react";
 import { useSequences } from "../hooks/useSequences";
@@ -44,14 +45,10 @@ export function SequencesPage() {
 
   return (
     <main className={styles.page}>
-      <header className={styles.heading}>
-        <div className={styles.headingText}>
-          <h1 className={styles.title}>Sequences</h1>
-          <p className={styles.subtitle}>
-            Multi-step outreach: build a sequence, enroll revealed contacts, send step by step.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        title="Sequences"
+        subtitle="Multi-step outreach: build a sequence, enroll revealed contacts, send step by step."
+      />
 
       <div className={styles.tabsRow}>
         <Tabs

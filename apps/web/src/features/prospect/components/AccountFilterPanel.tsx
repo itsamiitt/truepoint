@@ -7,7 +7,7 @@
 "use client";
 
 import type { AccountQuery, AccountTermField, FacetKey } from "@leadwolf/types";
-import { TpInput } from "@leadwolf/ui";
+import { TpButton, TpInput } from "@leadwolf/ui";
 import { type ReactNode, useState } from "react";
 import {
   ACCOUNT_FILTER_GROUPS,
@@ -53,13 +53,9 @@ export function AccountFilterPanel({
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>
         {hasActiveFilters(query) ? (
-          <button
-            type="button"
-            className="tp-ui-btn tp-ui-btn--ghost tp-ui-btn--sm"
-            onClick={() => onChange(clearAllFilters(query))}
-          >
+          <TpButton variant="ghost" size="sm" onClick={() => onChange(clearAllFilters(query))}>
             Clear all
-          </button>
+          </TpButton>
         ) : null}
       </div>
 

@@ -18,6 +18,7 @@ import {
   TpInput,
   TpSelect,
   TpSwitch,
+  TpTextarea,
   useToast,
 } from "@leadwolf/ui";
 import { Plus } from "lucide-react";
@@ -261,9 +262,8 @@ export function CustomFieldsPanel() {
         </FieldGroup>
         {form.fieldType === "select" ? (
           <FieldGroup label="Options" htmlFor="cf-options" hint="One option per line.">
-            <textarea
+            <TpTextarea
               id="cf-options"
-              className="tp-ui-field"
               rows={4}
               value={optionsText}
               onChange={(e) => setOptionsText(e.target.value)}

@@ -16,34 +16,6 @@
   animation: tp-fade-in 0.18s var(--tp-ease) both;
 }
 
-.heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.headingText {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--tp-ink);
-}
-
-.subtitle {
-  margin: 0;
-  font-size: 14px;
-  color: var(--tp-ink-3);
-}
-
 .tabsRow {
   border-bottom: 1px solid var(--tp-hairline-2);
 }
@@ -586,9 +558,5 @@
 @media (max-width: 720px) {
   .statTiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .heading {
-    flex-direction: column;
   }
 }

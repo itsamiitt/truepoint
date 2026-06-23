@@ -8,7 +8,7 @@
 "use client";
 
 import type { BoolFilterField, ContactQuery } from "@leadwolf/types";
-import { TpInput } from "@leadwolf/ui";
+import { TpButton, TpInput } from "@leadwolf/ui";
 import { type ReactNode, useState } from "react";
 import {
   FILTER_GROUPS,
@@ -61,13 +61,9 @@ export function FilterPanel({
       <div className={styles.railHead}>
         <h2 className={styles.railTitle}>Filters</h2>
         {hasActiveFilters(query) ? (
-          <button
-            type="button"
-            className="tp-ui-btn tp-ui-btn--ghost tp-ui-btn--sm"
-            onClick={() => onChange(clearAllFilters(query))}
-          >
+          <TpButton variant="ghost" size="sm" onClick={() => onChange(clearAllFilters(query))}>
             Clear all
-          </button>
+          </TpButton>
         ) : null}
       </div>
 

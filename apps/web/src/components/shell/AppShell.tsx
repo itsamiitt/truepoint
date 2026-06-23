@@ -5,7 +5,7 @@
 
 import { fetchWithAuth, getAccessToken, silentRefresh, startLogin } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import { ToastProvider } from "@leadwolf/ui";
+import { ToastProvider, TpButton } from "@leadwolf/ui";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { CommandPalette } from "./CommandPalette";
@@ -72,16 +72,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           <p className="app-muted">
             We couldn't reach sign-in. Check your connection and try again.
           </p>
-          <button
-            className="app-button"
-            type="button"
+          <TpButton
+            variant="primary"
             onClick={() => {
               setAuth("loading");
               void runGate();
             }}
           >
             Retry
-          </button>
+          </TpButton>
         </div>
       </div>
     );
@@ -106,10 +105,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="tp-shell">
           {/* Mobile scrim — tap anywhere outside sidebar to close */}
           {sidebarOpen && (
-            <div
+            <button
+              type="button"
               className="tp-sidebar-scrim"
               onClick={() => setSidebarOpen(false)}
-              aria-hidden="true"
+              aria-label="Close navigation"
+              style={{ border: "none", padding: 0, appearance: "none", cursor: "pointer" }}
             />
           )}
           <Sidebar
