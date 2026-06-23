@@ -5,6 +5,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { env } from "@leadwolf/config";
 import { sessionRepository } from "@leadwolf/db";
+import { InvalidTokenError } from "@leadwolf/types";
+import { markManyRevoked, markRevoked } from "./revocation.ts";
 
 const newId = () => randomBytes(24).toString("base64url");
 export const hashRefreshToken = (t: string): string => createHash("sha256").update(t).digest("hex");
@@ -66,8 +68,56 @@ export async function rotateSession(
       deviceId: ctx.deviceId,
     },
   });
+  // Deny-list the OLD session id so its still-unexpired access token stops working immediately, not 15 min
+  // from now — closes the post-switch "old token keeps the old workspace scope" window (W5/W4).
+  await markRevoked(oldSessionId);
   return { sessionId, refreshToken, expiresAt };
 }
 
-export const revokeSession = (sessionId: string): Promise<void> =>
-  sessionRepository.revoke(sessionId);
+/** Revoke a single session AND deny-list its access token so logout takes effect within seconds (17 §5). */
+export async function revokeSession(sessionId: string): Promise<void> {
+  await sessionRepository.revoke(sessionId);
+  await markRevoked(sessionId);
+}
+
+/** Global force-logout: revoke EVERY session of a user and deny-list each token (password change/reset, W6). */
+export async function revokeAllSessionsForUser(userId: string): Promise<void> {
+  const ids = await sessionRepository.revokeAllForUser(userId);
+  await markManyRevoked(ids);
+}
+
+type ActiveSession = NonNullable<
+  Awaited<ReturnType<typeof sessionRepository.findByRefreshTokenHash>>
+>;
+
+// Refresh-token reuse detection (W10/#8, ADR-0016). Rotation revokes the previous token and the browser always
+// sends the LATEST cookie, so a valid client never presents a revoked one. A revoked token presented well after
+// its rotation is therefore a replay of a captured/stolen value → revoke the WHOLE family (every active session
+// of the user) so neither the thief nor the victim keeps access; the victim simply re-authenticates. A
+// near-instant re-presentation is a benign concurrent-refresh race across the rotation boundary (two requests
+// read the same cookie a few ms apart); a short grace window suppresses that false positive.
+const REUSE_GRACE_MS = 30_000;
+
+/**
+ * Resolve the ACTIVE session for a presented refresh token, or throw InvalidTokenError — detecting and
+ * punishing token reuse. Used by every refresh-cookie consumer (silent refresh, workspace switch, org switch)
+ * so reuse detection is enforced uniformly in one place.
+ */
+export async function findActiveSessionOrDetectReuse(
+  presentedRefreshToken: string,
+): Promise<ActiveSession> {
+  const session = await sessionRepository.findByRefreshTokenHash(
+    hashRefreshToken(presentedRefreshToken),
+  );
+  if (!session) throw new InvalidTokenError();
+  if (session.revokedAt) {
+    // A revoked token was presented: a benign rotation race inside the grace window, else a reuse attack →
+    // family revocation. Either way the presented token is rejected.
+    if (Date.now() - session.revokedAt.getTime() > REUSE_GRACE_MS) {
+      await revokeAllSessionsForUser(session.userId);
+    }
+    throw new InvalidTokenError();
+  }
+  if (session.expiresAt.getTime() < Date.now()) throw new InvalidTokenError();
+  return session;
+}

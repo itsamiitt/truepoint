@@ -86,10 +86,18 @@ export async function resolveNextStep(txnId: string, txn: LoginTransaction): Pro
     await patchLoginTransaction(txnId, { tenantId });
   }
 
-  // Workspace: pick when the chosen org has >1 accessible workspace; a single one auto-selects.
+  // Workspace: a single one auto-selects. With several, land on the user's remembered workspace (where they
+  // left off) instead of forcing a pick every login; only prompt when there is no valid remembered one (2c).
   if (!txn.workspaceId) {
     const ws = await getWorkspaces(txn, tenantId);
-    if (ws.length > 1) return "workspace";
+    if (ws.length > 1) {
+      const last = await tenantMemberRepository.getLastWorkspace(tenantId, txn.userId);
+      if (last && ws.some((w) => w.id === last)) {
+        await patchLoginTransaction(txnId, { workspaceId: last });
+        return "complete";
+      }
+      return "workspace";
+    }
   }
   return "complete";
 }
@@ -157,9 +165,20 @@ export async function finalizeLogin(
     const role = await workspaceRepository.getRoleForUser(tenantId, workspaceId, txn.userId);
     if (!role) throw new ForbiddenError("workspace_forbidden");
   } else {
+    // No explicit selection reached finalize (single-workspace fast path, or a flow that skipped the picker):
+    // land on the remembered / default / first workspace deterministically rather than leaving the session
+    // workspace-less, which breaks every workspace-scoped surface. (Issue 2c/2b.)
     const ws = await getWorkspaces(txn, tenantId);
-    if (ws.length === 1) workspaceId = ws[0]?.id;
+    workspaceId =
+      ws.length === 1
+        ? ws[0]?.id
+        : ws.length > 1
+          ? ((await workspaceRepository.resolveLandingWorkspace(tenantId, txn.userId)) ?? undefined)
+          : undefined;
   }
+
+  // Remember the resolved workspace as this org's default so the user's NEXT login lands here (Issue 2c).
+  if (workspaceId) await tenantMemberRepository.setLastWorkspace(tenantId, txn.userId, workspaceId);
 
   // Two genuinely-independent reads gate the code and must both complete before it is minted: the durable
   // session (its sessionId binds the code) and the platform super-admin flag (ADR-0032 → access-token `pa`

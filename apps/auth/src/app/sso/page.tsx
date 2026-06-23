@@ -1,6 +1,7 @@
 // page.tsx — Step 2B: the SSO handoff ("Your organization uses single sign-on"). Reached when the identifier
 // step finds an SSO-enforced domain (existing or first-time user — the callback JIT-provisions). Continuing
 // starts the IdP round-trip (17 §7). SSR, no-JS friendly; carries the tenant + the app's PKCE/return context.
+import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import { Alert, Badge, Button } from "@leadwolf/ui";
 import { initiateSso } from "./actions";
@@ -9,6 +10,7 @@ type SearchParams = Promise<Record<string, string | undefined>>;
 
 export default async function SsoPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
+  await redirectIfAuthenticated(sp.app_origin);
   const tenant = sp.tenant ?? "";
   const email = sp.email ?? "";
   const appOrigin = sp.app_origin ?? "";

@@ -54,6 +54,9 @@ export const users = pgTable("users", {
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   status: varchar("status", { length: 50 }).notNull().default("active"), // active|pending|suspended
   isPlatformAdmin: boolean("is_platform_admin").notNull().default(false), // platform super-admin (ADR-0032)
+  // Stable marker for THE break-glass bootstrap admin (ADR-0034). Provisioning keys off this (not email) so
+  // rotating BOOTSTRAP_ADMIN_EMAIL renames the same record instead of orphaning the old one + creating a second.
+  isBootstrapAdmin: boolean("is_bootstrap_admin").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -75,6 +78,9 @@ export const tenantMembers = pgTable(
     // `orgRole` enum + the org_role CHECK in the migration.
     orgRole: varchar("org_role", { length: 50 }).notNull().default("member"),
     status: varchar("status", { length: 50 }).notNull().default("active"), // active|invited|removed
+    // The user's last active workspace IN this org — the default the login flow lands on / pre-selects, so a
+    // multi-workspace user returns to where they left off instead of re-picking or a non-deterministic pick (2c).
+    lastWorkspaceId: uuid("last_workspace_id"),
     invitedByUserId: uuid("invited_by_user_id"),
     createdAt: createdAt(),
   },

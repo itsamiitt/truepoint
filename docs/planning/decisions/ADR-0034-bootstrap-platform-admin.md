@@ -27,6 +27,14 @@ Implement the bootstrap super-admin as a **flag on the global customer identity*
   still stands (`withTenantTx` drops to the non-bypassing `leadwolf_app` role).
 - The admin is **seeded** (email-verified + active + no MFA → immediate login) with a home TruePoint
   org/workspace; MFA stays **opt-in** (enrolling a method later enforces it), per the existing model.
+- **`.env` is the source of truth (provisioning is repeatable, not one-shot).** `provisionBootstrapAdmin`
+  keys off a stable **`users.is_bootstrap_admin`** marker (migration 0009), not the email. `deploy.sh` runs
+  the `bootstrap` profile automatically **after migrate on every deploy** (guarded; skipped with a notice if
+  the two creds are unset). Each run re-hashes the password and, if `BOOTSTRAP_ADMIN_EMAIL` changed, **renames
+  the same record** (rather than orphaning the old admin + creating a second super-admin). A rename onto an
+  address already owned by a different account fails closed with a clear message. This is the permanent fix
+  for "changed `.env` credentials but the bootstrap admin still can't log in" — the stale-hash root cause was
+  that the one-shot job was never re-run.
 
 ## Consequences
 

@@ -64,6 +64,20 @@
       "when": 1782198320200,
       "tag": "0008_tiresome_mac_gargan",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782217851248,
+      "tag": "0009_perpetual_charles_xavier",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782219006682,
+      "tag": "0010_gifted_king_bedlam",
+      "breakpoints": true
     }
   ]
 }

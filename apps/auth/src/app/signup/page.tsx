@@ -1,6 +1,7 @@
 // page.tsx — Registration step 1: confirm the email to register (ADR-0020). Reached when the identifier step
 // finds no existing identity; the email arrives prefilled but stays editable. Submitting mails a 6-digit code
 // and advances to /verify. SSR, no-JS friendly, carries the app's PKCE/return context as hidden fields.
+import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import { Alert, Button, Input, Label } from "@leadwolf/ui";
 import { startSignup } from "./actions";
@@ -13,6 +14,7 @@ const ERRORS: Record<string, string> = {
 
 export default async function SignupPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
+  await redirectIfAuthenticated(sp.app_origin);
   const email = sp.email ?? "";
   const appOrigin = sp.app_origin ?? "";
   const codeChallenge = sp.code_challenge ?? "";

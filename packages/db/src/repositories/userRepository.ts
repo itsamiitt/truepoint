@@ -340,6 +340,22 @@ export const sessionRepository = {
       .returning({ id: userSessions.id });
     return revoked.length;
   },
+
+  /**
+   * Global force-logout: revoke EVERY active session of `userId` across ALL orgs/workspaces and return the
+   * revoked session ids, so the caller can add them to the access-token revocation deny-list for immediate
+   * effect (not just when the ≤15-min access token expires). Used on password reset/change (17 §revocation).
+   * user_sessions has no tenant RLS, and this is a self-service "log me out everywhere" by user id — no
+   * workspace scoping (unlike revokeAllForMemberInTx, the admin "revoke this member's sessions here" path).
+   */
+  async revokeAllForUser(userId: string): Promise<string[]> {
+    const revoked = await db
+      .update(userSessions)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)))
+      .returning({ id: userSessions.id });
+    return revoked.map((r) => r.id);
+  },
 };
 
 /** A session row enriched with its owner for the workspace-admin sessions table (G-AUTH-2). */

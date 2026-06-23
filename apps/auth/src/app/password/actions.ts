@@ -10,7 +10,14 @@ import { authFailureKind } from "@/lib/authFailure";
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { LOGIN_TXN_COOKIE, LOGIN_TXN_MAX_AGE } from "@/lib/cookies";
 import { finishLogin } from "@/lib/finishLogin";
-import { authenticatePassword, createLoginTransaction, resolveNextStep } from "@leadwolf/auth";
+import {
+  assertCredentialNotLocked,
+  authenticatePassword,
+  createLoginTransaction,
+  recordCredentialFailure,
+  recordCredentialSuccess,
+  resolveNextStep,
+} from "@leadwolf/auth";
 import { isAllowedOrigin } from "@leadwolf/config";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -35,16 +42,29 @@ export async function submitPassword(formData: FormData): Promise<void> {
 
   const clientIp = clientIpFromHeaders(await headers());
 
+  // Brute-force lockout (W7): refuse once this identifier OR IP has failed too many times. A lockout maps to
+  // the SAME uniform "check your credentials" message — never reveal "locked" vs "wrong password" to an
+  // attacker (and lockout is keyed by failed attempts regardless of account existence, so it leaks nothing).
+  try {
+    await assertCredentialNotLocked({ ip: clientIp, identifier: email });
+  } catch {
+    redirect(`/password?${ctx.toString()}&error=1`);
+  }
+
   // Distinguish a credential rejection (uniform "check your credentials") from an infra outage during the
   // user lookup ("temporarily unavailable"). redirect() throws NEXT_REDIRECT, so it MUST stay in the catch.
   let user: Awaited<ReturnType<typeof authenticatePassword>>;
   try {
     user = await authenticatePassword({ email, password });
   } catch (err) {
-    redirect(
-      `/password?${ctx.toString()}&error=${authFailureKind(err) === "credentials" ? "1" : "unavailable"}`,
-    );
+    if (authFailureKind(err) === "credentials") {
+      await recordCredentialFailure({ ip: clientIp, identifier: email }); // count toward the lockout
+      redirect(`/password?${ctx.toString()}&error=1`);
+    }
+    redirect(`/password?${ctx.toString()}&error=unavailable`);
   }
+  // Success: clear the identifier's failure counter so a few earlier typos can't accumulate into a lockout.
+  await recordCredentialSuccess(email);
 
   // Post-verify I/O. A DB/Redis outage here must show "temporarily unavailable", not throw a 500. redirect()
   // throws NEXT_REDIRECT — never call it inside this try (the catch would swallow it). The try only assigns

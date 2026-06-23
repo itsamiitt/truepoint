@@ -3,9 +3,9 @@
 // the route handler stays thin. Throws InvalidTokenError on any failure (unknown / expired / revoked).
 
 import { env } from "@leadwolf/config";
-import { sessionRepository, userRepository } from "@leadwolf/db";
+import { userRepository } from "@leadwolf/db";
 import { InvalidTokenError } from "@leadwolf/types";
-import { hashRefreshToken, rotateSession } from "./session.ts";
+import { findActiveSessionOrDetectReuse, rotateSession } from "./session.ts";
 import { mintAccessToken } from "./token.ts";
 
 export interface RefreshResult {
@@ -19,12 +19,9 @@ export async function refreshAccessToken(args: {
   presentedRefreshToken: string;
   audience: string; // the requesting app origin
 }): Promise<RefreshResult> {
-  const session = await sessionRepository.findByRefreshTokenHash(
-    hashRefreshToken(args.presentedRefreshToken),
-  );
-  if (!session || session.revokedAt || session.expiresAt.getTime() < Date.now()) {
-    throw new InvalidTokenError();
-  }
+  // Validate the presented token + detect reuse: a REVOKED token presented here is a replay of a captured
+  // value (the browser always sends the latest cookie), which revokes the whole session family (W10/#8).
+  const session = await findActiveSessionOrDetectReuse(args.presentedRefreshToken);
 
   const user = await userRepository.findById(session.userId);
   if (!user || user.status !== "active") throw new InvalidTokenError();
@@ -44,6 +41,10 @@ export async function refreshAccessToken(args: {
     workspaceId: session.workspaceId ?? undefined,
     sessionId: issued.sessionId,
     audience: args.audience,
+    // Carry the platform super-admin flag across the silent refresh (ADR-0032): the `pa` claim is minted at
+    // finalizeLogin but the 15-min access token is re-minted here ~every 14 min — without this the staff
+    // console would 403 the admin on the first refresh. `user` is already loaded + status-checked above.
+    isPlatformAdmin: user.isPlatformAdmin ?? false,
   });
 
   return {

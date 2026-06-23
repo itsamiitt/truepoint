@@ -203,11 +203,14 @@ apps/                           # deployable processes (thin transport adapters)
   `scopeGuard` — authorizes the client-supplied org/workspace against real memberships before minting the JWT),
   `botCheck`/`rateLimit`/`policy` anti-abuse, **registration** (`registration`/`emailVerification`/
   `signupTransaction`), **invitations**, **password + magic-link** (`password`/`passwordReset`/`refresh`),
-  **SSO** (`sso/{types,providers,mockIdp,jit}` + `ssoTransaction`), **workspace switch** (`switchWorkspace`),
-  plus **`ipBinding.ts`** (client-IP binding policy strict/prefix/off; IPv6-zone/IPv4-mapped aware) and
-  **`log.ts`** (structured JSON-line logger, no PII)
+  **SSO** (`sso/{types,providers,mockIdp,jit}` + `ssoTransaction`), **workspace + org switch**
+  (`switchWorkspace`/`switchOrg`), **session hardening** (`revocation` access-token deny-list +
+  `findActiveSessionOrDetectReuse` refresh-reuse detection; ADR-0040), plus **`ipBinding.ts`** (client-IP
+  binding policy strict/prefix/off; IPv6-zone/IPv4-mapped aware) and **`log.ts`** (structured JSON-line
+  logger, no PII)
 - **IdP origin:** `apps/auth/*` — screens (sign-in identifier→password→mfa→org→workspace, signup+verify,
-  SSO oidc/saml + mock IdP, forgot/reset/magic) + `/token/*` + `/logout` + `/workspace/switch` + JWKS;
+  SSO oidc/saml + mock IdP, forgot/reset/magic; a `redirectIfAuthenticated` guard bounces signed-in visitors
+  off the auth screens) + `/token/*` + `/logout` + `/workspace/switch` + `/org/switch` + `/orgs` + JWKS;
   **`instrumentation.ts`** (Next boot hook) conditionally loads Node-only **`bootSelfTest.ts`** (JWT
   signing-key self-test, gated by `NEXT_RUNTIME` to keep ioredis out of the Edge bundle); `lib/authFailure.ts`
   (distinguishes uniform "credentials" rejections from "infra" outages); `lib/emails/*` (typed transactional
@@ -247,7 +250,8 @@ The `apps/web` SPA wraps every destination in the **AppShell** (auth gate + side
   `CreditPill.tsx` (balance link to Billing; amber dot < 20; re-fetches on `credits:changed`),
   `NotificationsBell.tsx` + `useNotifications.ts` (client-DERIVED feed — low credits / recent imports /
   replies from `/home/summary` + balance; no notifications backend), `WorkspaceSwitcher.tsx` (lists
-  `/workspaces`, switches via the auth origin)
+  `/workspaces`, switches via the auth origin), `OrgSwitcher.tsx` (multi-org users only; lists the auth
+  origin's `/orgs`, switches via `/org/switch`)
 - **prospect** (web): `apps/web/src/features/prospect/*` — masked grid + `RecordDetail` slide-over +
   `RevealDialog` (single reveal); **bulk reveal**: `useBulkSelection` (id-keyed selection that survives
   re-filtering), `BulkActionBar` (sticky count + live balance + reveal/add-to-list/clear), `BulkRevealDialog`

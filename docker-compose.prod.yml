@@ -60,9 +60,10 @@ services:
     restart: "no"
     command: ["bun", "run", "packages/db/src/seed.ts"]
 
-  # Provision/refresh the platform Bootstrap Admin (ADR-0032) from BOOTSTRAP_ADMIN_EMAIL/PASSWORD in
-  # .env.production — the super-admin who can reach admin.truepoint.in. One-shot (profile 'bootstrap');
-  # idempotent (upserts the user + updates the Argon2id password hash). Run AFTER migrate, once:
+  # Provision/refresh the platform Bootstrap Admin (ADR-0032/0034) from BOOTSTRAP_ADMIN_EMAIL/PASSWORD in
+  # .env.production — the super-admin who can reach admin.truepoint.in. Profile 'bootstrap'; idempotent
+  # (upserts by the is_bootstrap_admin marker + re-writes the Argon2id hash, so a changed password/email in
+  # .env takes effect). deploy.sh runs it automatically AFTER migrate on EVERY deploy; run by hand with:
   #   docker compose -f docker-compose.prod.yml --profile bootstrap run --rm bootstrap-admin
   bootstrap-admin:
     <<: *app

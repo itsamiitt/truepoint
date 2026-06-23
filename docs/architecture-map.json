@@ -71,8 +71,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 802,
-  "fileSetHash": "sha256:295acad86cd2785a4ebcd4fdea1c210efbb91bfa18eba3f2d2129adb406e0abb",
+  "fileCount": 816,
+  "fileSetHash": "sha256:a832fc69e17412c3988f4eca2753367d400e1188ecc47b99dc9d0a89dc19ac3a",
   "features": {
     "account-search": {
       "web": [],
@@ -376,6 +376,7 @@
       "admin": [],
       "api": [
         "apps/api/src/features/home/index.ts",
+        "apps/api/src/features/home/routes.test.ts",
         "apps/api/src/features/home/routes.ts"
       ],
       "core": [
@@ -1103,6 +1104,7 @@
     ],
     "apps/api": [
       "apps/api/src/app.ts",
+      "apps/api/src/instrumentation.ts",
       "apps/api/src/server.ts"
     ],
     "apps/api/middleware": [
@@ -1111,6 +1113,7 @@
       "apps/api/src/middleware/idempotency.ts",
       "apps/api/src/middleware/platformAdmin.test.ts",
       "apps/api/src/middleware/platformAdmin.ts",
+      "apps/api/src/middleware/rateLimit.test.ts",
       "apps/api/src/middleware/rateLimit.ts",
       "apps/api/src/middleware/requireOrgRole.ts",
       "apps/api/src/middleware/requireRole.ts",
@@ -1138,6 +1141,8 @@
       "apps/auth/src/app/mfa/page.tsx",
       "apps/auth/src/app/org/actions.ts",
       "apps/auth/src/app/org/page.tsx",
+      "apps/auth/src/app/org/switch/route.ts",
+      "apps/auth/src/app/orgs/route.ts",
       "apps/auth/src/app/page.tsx",
       "apps/auth/src/app/password/actions.ts",
       "apps/auth/src/app/password/page.tsx",
@@ -1165,6 +1170,7 @@
       "apps/auth/src/lib/authFailure.ts",
       "apps/auth/src/lib/bootstrapAdmin.test.ts",
       "apps/auth/src/lib/bootstrapAdmin.ts",
+      "apps/auth/src/lib/clientIp.test.ts",
       "apps/auth/src/lib/clientIp.ts",
       "apps/auth/src/lib/completeMagic.ts",
       "apps/auth/src/lib/completeSso.ts",
@@ -1181,6 +1187,7 @@
       "apps/auth/src/lib/magicCarry.test.ts",
       "apps/auth/src/lib/magicCarry.ts",
       "apps/auth/src/lib/mailer.ts",
+      "apps/auth/src/lib/sessionGuard.ts",
       "apps/auth/src/lib/ssoConfig.ts"
     ],
     "apps/auth/shared": [
@@ -1229,6 +1236,7 @@
       "apps/web/src/components/shell/GlobalSearch.tsx",
       "apps/web/src/components/shell/Logo.tsx",
       "apps/web/src/components/shell/NotificationsBell.tsx",
+      "apps/web/src/components/shell/OrgSwitcher.tsx",
       "apps/web/src/components/shell/ShortcutsDialog.tsx",
       "apps/web/src/components/shell/Sidebar.tsx",
       "apps/web/src/components/shell/TeamSwitcher.tsx",
@@ -1256,6 +1264,7 @@
     ],
     "packages/auth": [
       "packages/auth/src/auditEvent.ts",
+      "packages/auth/src/botCheck.test.ts",
       "packages/auth/src/botCheck.ts",
       "packages/auth/src/code.test.ts",
       "packages/auth/src/code.ts",
@@ -1279,6 +1288,7 @@
       "packages/auth/src/rateLimit.ts",
       "packages/auth/src/refresh.ts",
       "packages/auth/src/registration.ts",
+      "packages/auth/src/revocation.ts",
       "packages/auth/src/scopeGuard.test.ts",
       "packages/auth/src/scopeGuard.ts",
       "packages/auth/src/secrets.ts",
@@ -1289,12 +1299,15 @@
       "packages/auth/src/sso/providers.ts",
       "packages/auth/src/sso/types.ts",
       "packages/auth/src/ssoTransaction.ts",
+      "packages/auth/src/switchOrg.ts",
       "packages/auth/src/switchWorkspace.ts",
+      "packages/auth/src/token.test.ts",
       "packages/auth/src/token.ts"
     ],
     "packages/config": [
       "packages/config/src/env.ts",
       "packages/config/src/index.ts",
+      "packages/config/src/internalAuthOrigin.test.ts",
       "packages/config/src/keyMaterial.test.ts",
       "packages/config/src/originAllowlist.test.ts",
       "packages/config/src/originConsistency.test.ts"
@@ -1336,6 +1349,7 @@
       "packages/db/test/accountSearch.itest.ts",
       "packages/db/test/activity.itest.ts",
       "packages/db/test/adminSessions.itest.ts",
+      "packages/db/test/bootstrapAdmin.itest.ts",
       "packages/db/test/compliance.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/enrichmentJobStatus.itest.ts",

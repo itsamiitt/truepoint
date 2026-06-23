@@ -29,7 +29,8 @@ export type RecoveryAction = "restart" | "retry" | "fail";
  *   fail    — anything else → generic message.
  */
 export function recoveryActionFor(reason: string): RecoveryAction {
-  if (reason === "invalid_state" || reason === "pkce_mismatch" || reason === "code_not_found") return "restart";
+  if (reason === "invalid_state" || reason === "pkce_mismatch" || reason === "code_not_found")
+    return "restart";
   if (reason === "auth_unavailable") return "retry";
   return "fail";
 }
@@ -162,5 +163,42 @@ export async function switchWorkspace(workspaceId: string): Promise<void> {
   const data = (await res.json()) as { accessToken: string; expiresIn: number };
   setToken(data.accessToken, data.expiresIn);
   window.dispatchEvent(new CustomEvent("workspace:changed", { detail: { workspaceId } }));
+  window.location.reload();
+}
+
+export interface OrgOption {
+  tenantId: string;
+  tenantName: string;
+  isTenantOwner: boolean;
+}
+
+/**
+ * The organizations the signed-in user belongs to (auth origin, credentialed — the org list is cross-tenant, so
+ * it cannot come from api.* which is scoped to the active tenant). Returns the active tenant id so the switcher
+ * can mark the current org. Throws on a non-200 so the caller can show an error state.
+ */
+export async function listOrgs(): Promise<{ orgs: OrgOption[]; activeTenantId: string | null }> {
+  const res = await fetch(`${AUTH_ORIGIN}/auth/orgs`, { credentials: "include" });
+  if (!res.ok) throw new Error("orgs_failed");
+  return (await res.json()) as { orgs: OrgOption[]; activeTenantId: string | null };
+}
+
+/**
+ * Re-pin the active ORGANIZATION (tenant): the auth origin authorizes the target org, lands the session on that
+ * org's remembered/default workspace, rotates the session cookie, and mints a fresh access JWT carrying the new
+ * tid/wid. On success we store the new token, announce org:changed, and reload so every scoped surface
+ * re-fetches under the new org. Throws on a non-200 (e.g. 403 not-a-member) so the caller keeps the current org.
+ */
+export async function switchOrg(tenantId: string): Promise<void> {
+  const res = await fetch(`${AUTH_ORIGIN}/auth/org/switch`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ tenantId }),
+  });
+  if (!res.ok) throw new Error("switch_failed");
+  const data = (await res.json()) as { accessToken: string; expiresIn: number };
+  setToken(data.accessToken, data.expiresIn);
+  window.dispatchEvent(new CustomEvent("org:changed", { detail: { tenantId } }));
   window.location.reload();
 }

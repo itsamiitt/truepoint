@@ -6,9 +6,14 @@
 // when the user has no active role on the target workspace (or it is cross-tenant).
 
 import { env } from "@leadwolf/config";
-import { sessionRepository, userRepository, workspaceRepository } from "@leadwolf/db";
+import {
+  sessionRepository,
+  tenantMemberRepository,
+  userRepository,
+  workspaceRepository,
+} from "@leadwolf/db";
 import { ForbiddenError, InvalidTokenError } from "@leadwolf/types";
-import { hashRefreshToken, rotateSession } from "./session.ts";
+import { findActiveSessionOrDetectReuse, rotateSession } from "./session.ts";
 import { mintAccessToken } from "./token.ts";
 
 export interface SwitchWorkspaceResult {
@@ -23,12 +28,7 @@ export async function switchWorkspace(args: {
   targetWorkspaceId: string;
   audience: string; // the requesting app origin
 }): Promise<SwitchWorkspaceResult> {
-  const session = await sessionRepository.findByRefreshTokenHash(
-    hashRefreshToken(args.presentedRefreshToken),
-  );
-  if (!session || session.revokedAt || session.expiresAt.getTime() < Date.now()) {
-    throw new InvalidTokenError();
-  }
+  const session = await findActiveSessionOrDetectReuse(args.presentedRefreshToken);
 
   const user = await userRepository.findById(session.userId);
   if (!user || user.status !== "active") throw new InvalidTokenError();
@@ -46,6 +46,8 @@ export async function switchWorkspace(args: {
   if (!role) throw new ForbiddenError("workspace_forbidden");
 
   await sessionRepository.setWorkspace(session.id, args.targetWorkspaceId);
+  // Remember it as this org's default so the next login lands here too (Issue 2c).
+  await tenantMemberRepository.setLastWorkspace(session.tenantId, user.id, args.targetWorkspaceId);
   const issued = await rotateSession(session.id, {
     userId: user.id,
     tenantId: session.tenantId,
@@ -60,6 +62,9 @@ export async function switchWorkspace(args: {
     workspaceId: args.targetWorkspaceId,
     sessionId: issued.sessionId,
     audience: args.audience,
+    // Carry the platform super-admin flag across a workspace switch (ADR-0032): without it a platform admin
+    // who switches workspace loses the `pa` claim and is 403'd out of the staff console. `user` is loaded above.
+    isPlatformAdmin: user.isPlatformAdmin ?? false,
   });
 
   return {

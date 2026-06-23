@@ -8,6 +8,7 @@
 import { userRepository } from "@leadwolf/db";
 import { createEmailVerification, verifyEmailCode } from "./emailVerification.ts";
 import { hashPassword } from "./password.ts";
+import { revokeAllSessionsForUser } from "./session.ts";
 
 export interface RequestPasswordResetInput {
   email: string;
@@ -63,6 +64,11 @@ export async function completePasswordReset(
 
   const passwordHash = await hashPassword(input.newPassword);
   await userRepository.setPassword(user.id, passwordHash);
+
+  // Force-logout everywhere: a password reset must evict every existing session (e.g. an attacker who reset
+  // BECAUSE they were locked out, or a compromised session). Revokes the durable sessions AND deny-lists their
+  // still-live access tokens so the eviction is immediate, not delayed to the ≤15-min token expiry (W5/W6).
+  await revokeAllSessionsForUser(user.id);
 
   // TODO(amit, 2026-06-15): emit password.reset.* audit events when the auth audit sink lands.
   return { ok: true, userId: user.id };

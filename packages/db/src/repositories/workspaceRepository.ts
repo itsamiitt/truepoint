@@ -31,7 +31,11 @@ export const workspaceRepository = {
         .select({ id: workspaces.id, name: workspaces.name, role: workspaceMembers.role })
         .from(workspaceMembers)
         .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
-        .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.status, "active")));
+        .where(and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.status, "active")))
+        // DETERMINISTIC order (creation order, id tiebreak). Without it Postgres returns rows in an
+        // unstable order, so the `[0]` single-workspace auto-select (flow.ts) and the picker default could
+        // change between logins → "logged into the wrong workspace" (Issue 2c).
+        .orderBy(asc(workspaces.createdAt), asc(workspaces.id));
       return rows.map((r) => ({ id: r.id, name: r.name, role: r.role }));
     });
   },
@@ -70,6 +74,23 @@ export const workspaceRepository = {
       .limit(1);
     return rows[0] ? { id: rows[0].id } : null;
   },
+
+  /**
+   * The workspace a user should LAND on in `tenantId`, in priority order (ADR-0019, Issue 2c/2b):
+   *   1. their remembered last workspace in this org, if it is still an active membership;
+   *   2. the org's default workspace, if they are a member of it;
+   *   3. otherwise the first workspace they belong to (deterministic order).
+   * Returns null only when the user is a member of the org but of NO workspace in it. Used by the login flow
+   * (auto-select / fallback) and the org switch, so a multi-workspace user returns where they left off.
+   */
+  async resolveLandingWorkspace(tenantId: string, userId: string): Promise<string | null> {
+    const last = await tenantMemberRepository.getLastWorkspace(tenantId, userId);
+    if (last && (await workspaceRepository.getRoleForUser(tenantId, last, userId))) return last;
+    const def = await workspaceRepository.findDefault(tenantId);
+    if (def && (await workspaceRepository.getRoleForUser(tenantId, def.id, userId))) return def.id;
+    const all = await workspaceRepository.listForUser(tenantId, userId);
+    return all[0]?.id ?? null;
+  },
 };
 
 // ── Tenant membership (a global identity's orgs — read pre-tenant by the auth service, ADR-0019) ────────
@@ -89,7 +110,10 @@ export const tenantMemberRepository = {
       })
       .from(tenantMembers)
       .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
-      .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.status, "active")));
+      .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.status, "active")))
+      // DETERMINISTIC order (join/creation order, id tiebreak) so the single-org `[0]` auto-select and the org
+      // picker default are stable across logins (Issue 2c).
+      .orderBy(asc(tenantMembers.createdAt), asc(tenants.id));
     return rows.map((r) => ({
       tenantId: r.tenantId,
       tenantName: r.tenantName,
@@ -115,6 +139,24 @@ export const tenantMemberRepository = {
         .limit(1);
       return rows[0] ? (rows[0].orgRole as OrgRole) : null;
     });
+  },
+
+  // Read/persist the user's last active workspace in an org (the default selector — Issue 2c). Global client,
+  // like listForUser: this is a pre-tenant read/write the auth service makes about the membership graph.
+  async getLastWorkspace(tenantId: string, userId: string): Promise<string | null> {
+    const rows = await db
+      .select({ lastWorkspaceId: tenantMembers.lastWorkspaceId })
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
+      .limit(1);
+    return rows[0]?.lastWorkspaceId ?? null;
+  },
+
+  async setLastWorkspace(tenantId: string, userId: string, workspaceId: string): Promise<void> {
+    await db
+      .update(tenantMembers)
+      .set({ lastWorkspaceId: workspaceId })
+      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)));
   },
 
   async create(input: {

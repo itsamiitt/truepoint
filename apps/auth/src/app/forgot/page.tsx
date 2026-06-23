@@ -1,6 +1,7 @@
 // page.tsx — the "forgot password" request screen (17 §9). SSR, no-JS friendly: an email Input (prefilled
 // from ?email) posts to the requestReset action, carrying the app's PKCE/return context as hidden fields.
 // Enumeration-safe by design — after sending it renders one neutral confirmation regardless of existence.
+import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import { Alert, Button, Input, Label } from "@leadwolf/ui";
 import { requestReset } from "./actions";
@@ -15,6 +16,7 @@ const ERRORS: Record<string, string> = {
 
 export default async function ForgotPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
+  await redirectIfAuthenticated(sp.app_origin);
   const email = sp.email ?? "";
   const sent = sp.sent === "1";
   const carry = new URLSearchParams({

@@ -1,6 +1,7 @@
 // page.tsx — the "set a new password" screen reached from the emailed reset link (17 §9). SSR, no-JS
 // friendly: a new-password + confirm-password pair posts to the completeReset action; the email + single-use
 // code ride as hidden fields. A bad/expired link or mismatched passwords re-render with a neutral error.
+import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import { Alert, Button, Input, Label } from "@leadwolf/ui";
 import { completeReset } from "./actions";
@@ -14,6 +15,7 @@ const ERRORS: Record<string, string> = {
 
 export default async function ResetPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
+  await redirectIfAuthenticated(sp.app_origin);
   const email = sp.email ?? "";
   const code = sp.code ?? "";
   const appOrigin = sp.app_origin ?? "";

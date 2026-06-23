@@ -4,8 +4,15 @@
 // re-renders /reset with a neutral error. The reset code never appears in logs or the error text.
 "use server";
 
-import { completePasswordReset } from "@leadwolf/auth";
+import { clientIpFromHeaders } from "@/lib/clientIp";
+import {
+  assertCredentialNotLocked,
+  completePasswordReset,
+  recordCredentialFailure,
+  recordCredentialSuccess,
+} from "@leadwolf/auth";
 import { isAllowedOrigin } from "@leadwolf/config";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export async function completeReset(formData: FormData): Promise<void> {
@@ -27,8 +34,22 @@ export async function completeReset(formData: FormData): Promise<void> {
   if (password.length < 8) back("weak");
   if (password !== confirm) back("mismatch");
 
+  // Brute-force lockout on the reset code (W7), keyed separately (reset: namespace). The reset code is a
+  // short-lived secret an attacker could otherwise guess at speed; cap failed guesses per email + per IP.
+  const ip = clientIpFromHeaders(await headers());
+  const resetKey = `reset:${email}`;
+  try {
+    await assertCredentialNotLocked({ ip, identifier: resetKey });
+  } catch {
+    back("1"); // same neutral "invalid or expired" message — never reveal the lockout distinctly
+  }
+
   const result = await completePasswordReset({ email, code, newPassword: password });
-  if (!result.ok) back("1"); // invalid_token → "This reset link is invalid or expired."
+  if (!result.ok) {
+    await recordCredentialFailure({ ip, identifier: resetKey });
+    back("1"); // invalid_token → "This reset link is invalid or expired."
+  }
+  await recordCredentialSuccess(resetKey);
 
   // Only forward an allowlisted return origin to /login — an un-validated app_origin must never propagate
   // into the subsequent sign-in's cross-domain handoff. reset=1 drives the "password updated" notice.

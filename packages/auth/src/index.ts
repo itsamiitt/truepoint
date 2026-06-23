@@ -5,12 +5,15 @@ export {
   createSession,
   rotateSession,
   revokeSession,
+  revokeAllSessionsForUser,
   hashRefreshToken,
   type IssuedSession,
   type SessionContext,
 } from "./session.ts";
+export { markRevoked, markManyRevoked, isRevoked } from "./revocation.ts";
 export { refreshAccessToken, type RefreshResult } from "./refresh.ts";
 export { switchWorkspace, type SwitchWorkspaceResult } from "./switchWorkspace.ts";
+export { switchOrg, type SwitchOrgResult } from "./switchOrg.ts";
 export {
   mintAccessToken,
   verifyAccessToken,
@@ -47,7 +50,13 @@ export {
   type DomainRouting,
 } from "./identifierLookup.ts";
 export { verifyTurnstile } from "./botCheck.ts";
-export { checkIdentifierRate, checkRequestRate } from "./rateLimit.ts";
+export {
+  checkIdentifierRate,
+  checkRequestRate,
+  assertCredentialNotLocked,
+  recordCredentialFailure,
+  recordCredentialSuccess,
+} from "./rateLimit.ts";
 export {
   createEmailVerification,
   verifyEmailCode,

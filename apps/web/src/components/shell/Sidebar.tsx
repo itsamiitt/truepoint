@@ -9,9 +9,10 @@ import { X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "./Logo";
-import { type NavDestination, DESTINATIONS, SETTINGS_DESTINATION, isActive } from "./navConfig";
+import { OrgSwitcher } from "./OrgSwitcher";
 import { TeamSwitcher } from "./TeamSwitcher";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { DESTINATIONS, type NavDestination, SETTINGS_DESTINATION, isActive } from "./navConfig";
 
 function roleLabel(role: string | null): string {
   if (!role) return "Member";
@@ -100,6 +101,7 @@ export function Sidebar({
         <div className="tp-divider" />
         <NavItem dest={SETTINGS_DESTINATION} pathname={pathname} />
         <TeamSwitcher />
+        <OrgSwitcher />
         <WorkspaceSwitcher />
         <UserRow userEmail={userEmail} role={role} />
       </div>

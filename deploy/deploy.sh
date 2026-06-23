@@ -70,6 +70,18 @@ echo "==> [2/4] Starting local infrastructure (redis, typesense, mailhog)…"
 echo "==> [3/4] Running database migrations…"
 timeout 300 "${COMPOSE[@]}" run --rm migrate
 
+# ── 3b. Provision/refresh the platform Bootstrap Admin from .env (ADR-0034) ──────────
+# Re-run EVERY deploy so .env.production is the source of truth for the break-glass super-admin: a changed
+# BOOTSTRAP_ADMIN_PASSWORD is re-hashed, a changed BOOTSTRAP_ADMIN_EMAIL renames the SAME record (the job keys
+# off the is_bootstrap_admin marker, not the email). Idempotent + fail-closed. Skip with a notice if either
+# credential is unset (the job itself errors without both) so an operator who hasn't configured it isn't blocked.
+if grep -qE '^BOOTSTRAP_ADMIN_EMAIL=.+' "$ENV_FILE" && grep -qE '^BOOTSTRAP_ADMIN_PASSWORD=.+' "$ENV_FILE"; then
+  echo "==> [3b/4] Provisioning/refreshing the platform Bootstrap Admin from .env…"
+  "${COMPOSE[@]}" --profile bootstrap run --rm bootstrap-admin
+else
+  echo "==> [3b/4] Skipping Bootstrap Admin — set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD in $ENV_FILE to enable admin.* sign-in."
+fi
+
 # ── 4. App services + edge proxy ──────────────────────────────────────────────────
 # SINGLE-HOST DEPLOY DOWNTIME WINDOW: each service runs as exactly one container, so `up -d` RECREATES it
 # (stop old → start new) with a brief gap where the upstream refuses connections. A true zero-downtime

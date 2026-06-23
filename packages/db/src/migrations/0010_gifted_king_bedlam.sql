@@ -1,0 +1,1 @@
+ALTER TABLE "tenant_members" ADD COLUMN "last_workspace_id" uuid;

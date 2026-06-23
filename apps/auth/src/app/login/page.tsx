@@ -3,6 +3,7 @@
 // whether the identity exists and routes to SSO / password / magic, or to registration (ADR-0020). A
 // Turnstile widget + per-IP/per-identifier rate-limit gate the existence reveal. Carries the app's
 // PKCE/return context through the flow as hidden fields. "Continue with Google" begins social OAuth.
+import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import { SubmitButton } from "@/shared/SubmitButton";
 import { TurnstileWidget } from "@/shared/TurnstileWidget";
@@ -21,6 +22,8 @@ const ERRORS: Record<string, string> = {
 
 export default async function LoginPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
+  // Already signed in? Bounce to the app instead of showing the sign-in form again (the app shell signs them in).
+  await redirectIfAuthenticated(sp.app_origin);
   const appOrigin = sp.app_origin ?? "";
   const codeChallenge = sp.code_challenge ?? "";
   const state = sp.state ?? "";
