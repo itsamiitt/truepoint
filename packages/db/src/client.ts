@@ -46,12 +46,21 @@ export interface TenantScope {
  */
 export async function withTenantTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {
+    // RLS setup, kept to TWO round-trips instead of three (perf root cause #7 — the per-read latency floor
+    // under every authenticated endpoint). `SET LOCAL ROLE` is a utility command that cannot be parameterised
+    // or merged into a SELECT, so it stays its own statement; both `set_config` calls collapse into a SINGLE
+    // parameterised SELECT (one Parse+Bind+Execute) when a workspace is present. The role + GUCs are still set
+    // LOCAL, in this transaction, BEFORE any query runs, with the same NULLIF-fail-closed semantics — so RLS
+    // isolation is byte-for-byte identical to setting them separately. Values stay BOUND (no string concat).
     await tx.execute(sql`SET LOCAL ROLE leadwolf_app`);
-    await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${scope.tenantId}, true)`);
     if (scope.workspaceId) {
       await tx.execute(
-        sql`SELECT set_config('app.current_workspace_id', ${scope.workspaceId}, true)`,
+        sql`SELECT set_config('app.current_tenant_id', ${scope.tenantId}, true),
+                   set_config('app.current_workspace_id', ${scope.workspaceId}, true)`,
       );
+    } else {
+      // No workspace scope: set only the tenant GUC (workspace GUC stays unset, exactly as before).
+      await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${scope.tenantId}, true)`);
     }
     return fn(tx);
   });
