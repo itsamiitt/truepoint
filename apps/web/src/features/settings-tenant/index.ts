@@ -2,3 +2,5 @@
 // app routes render.
 export { OrganizationPanel } from "./components/OrganizationPanel";
 export { SecurityAccessPanel } from "./components/SecurityAccessPanel";
+export { SsoConfigPanel } from "./components/SsoConfigPanel";
+export { IdentityPanel } from "./components/IdentityPanel";

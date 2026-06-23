@@ -20,7 +20,10 @@ import {
 import { type Context, Hono } from "hono";
 import { type ApiVariables, authn } from "../../middleware/authn.ts";
 import { platformAdmin } from "../../middleware/platformAdmin.ts";
+import { auditLogRoutes } from "./auditLog.ts";
+import { impersonationRoutes } from "./impersonation.ts";
 import { providerConfigRoutes } from "./providerConfigs.ts";
+import { staffRoutes } from "./staff.ts";
 
 // Accept any RFC-4122-shaped UUID (incl. the v7 ids this app mints) for path-param validation.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -195,3 +198,7 @@ adminRoutes.get("/feature-flags/evaluate/:tenantId", async (c) => {
 // ── Provider configs (13 §3.6) — enable/disable + monthly budget, super_admin-gated. Own module to keep
 // this file focused; the parent authn + platformAdmin middleware already apply to the mounted sub-routes. ──
 adminRoutes.route("/provider-configs", providerConfigRoutes);
+// Platform audit-log viewer (super_admin|compliance_officer), staff RBAC + impersonation (super_admin/support).
+adminRoutes.route("/audit-log", auditLogRoutes);
+adminRoutes.route("/staff", staffRoutes);
+adminRoutes.route("/impersonation", impersonationRoutes);

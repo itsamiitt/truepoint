@@ -71,7 +71,7 @@ apps/                           # deployable processes (thin transport adapters)
     instrumentation.ts  bootSelfTest.ts  middleware.ts  app/*  lib/{…,authFailure,emails/*}  shared/*
   web/   src/                   # app.truepoint.in (Next 15) — the AppShell over a (shell) route group  [LIVE]
     app/(shell)/{home,prospect,sequences,inbox,reports,settings/*}  app/{page,import,auth/callback}
-    components/shell/  features/{import,prospect,home,sequences,inbox,reports,settings-billing,settings-compliance,settings-shell,settings-user,settings-workspace}/
+    components/{shell/, PageHeader}  features/{import,prospect,home,sequences,inbox,reports,sales-navigator,enrichment-jobs,settings-*}/
     lib/{authClient,pkce,publicConfig}
   workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring · dsar · outreach queues + health/logger  [LIVE]
     index.ts  register.ts  health.ts  logger.ts  queues/{imports,enrichment,scoring,dsar,outreach}.ts

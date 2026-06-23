@@ -18,6 +18,8 @@ import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireOrgRole } from "../../middleware/requireOrgRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { identityRoutes } from "./identityRoutes.ts";
+import { ssoRoutes } from "./ssoRoutes.ts";
 
 export const settingsRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -94,3 +96,8 @@ settingsRoutes.get("/security/auth-audit", requireOrgRole("security_admin", "own
   const events = await auditRepository.listAuthEvents({ tenantId: c.get("tenantId") }, 100);
   return c.json({ events: events.map((e) => ({ ...e, occurredAt: e.occurredAt.toISOString() })) });
 });
+
+// ── Auth Admin sub-routers — SSO config + domains/SCIM. Parent applies authn + tenancy; each child gates
+// with requireOrgRole(security_admin|owner) on its own routes. ──────────────────────────────────────────
+settingsRoutes.route("/security/sso", ssoRoutes);
+settingsRoutes.route("/security/identity", identityRoutes);

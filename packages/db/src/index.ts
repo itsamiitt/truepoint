@@ -217,6 +217,27 @@ export {
   providerConfigRepository,
   type ProviderConfigRow,
 } from "./repositories/providerConfigRepository.ts";
+// Tenant SSO config (17 §7) — the Auth Admin Single sign-on record (tenant-scoped, audited).
+export {
+  ssoConfigRepository,
+  type SsoConfigUpsertValues,
+} from "./repositories/ssoConfigRepository.ts";
+// Domain claiming + SCIM tokens (ADR-0020, enterprise IAM) — tenant-scoped, audited.
+export { domainRepository, type DomainRecord } from "./repositories/domainRepository.ts";
+export { scimTokenRepository, type ScimTokenRecord } from "./repositories/scimTokenRepository.ts";
+// Platform audit-log read surface (ADR-0032) — bounded cross-tenant read, run within withPlatformTx.
+export {
+  platformAuditReadRepository,
+  type PlatformAuditRow,
+} from "./repositories/platformAuditReads.ts";
+// Platform STAFF RBAC writes + impersonation-with-consent (ADR-0011) — owner-connection, audited.
+export { staffRepository, type StaffMemberRow } from "./repositories/staffRepository.ts";
+export {
+  impersonationRepository,
+  IMPERSONATION_TTL_MINUTES,
+  type ImpersonationStartValues,
+  type ImpersonationSessionRow,
+} from "./repositories/impersonationRepository.ts";
 export {
   webhookRepository,
   type WebhookSubscriptionInsert,

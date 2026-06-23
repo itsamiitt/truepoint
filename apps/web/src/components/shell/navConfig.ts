@@ -74,6 +74,8 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         href: "/settings/security-access",
         match: "/settings/security-access",
       },
+      { label: "Single sign-on", href: "/settings/sso", match: "/settings/sso" },
+      { label: "Domains & SCIM", href: "/settings/identity", match: "/settings/identity" },
     ],
   },
   {

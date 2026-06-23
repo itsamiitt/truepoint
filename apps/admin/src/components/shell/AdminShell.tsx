@@ -11,6 +11,7 @@ import { API_BASE } from "@/lib/publicConfig";
 import { ToastProvider } from "@leadwolf/ui";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
+import { ImpersonationBanner } from "../ImpersonationBanner";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { sectionTitleFor } from "./navConfig";
@@ -145,6 +146,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         )}
         <Sidebar userEmail={userEmail} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="tp-main">
+          <ImpersonationBanner />
           <TopBar
             title={sectionTitleFor(pathname)}
             onMenuToggle={() => setSidebarOpen((v) => !v)}

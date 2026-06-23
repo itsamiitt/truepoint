@@ -80,6 +80,8 @@ const GRANTS = `
   -- platform. RLS denies it; REVOKE the blanket grant too. The owner connection (requireStaffRole lookup +
   -- grant/revoke writes) is unaffected.
   REVOKE ALL ON platform_staff FROM leadwolf_app;
+  -- impersonation_sessions (ADR-0011) is platform-owned staff data — deny the customer app role entirely.
+  REVOKE ALL ON impersonation_sessions FROM leadwolf_app;
 `;
 
 async function exists(path: string): Promise<boolean> {

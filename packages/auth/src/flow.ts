@@ -3,7 +3,12 @@
 // the durable session (carrying that scope), and issues the single-use cross-domain code. (ADR-0019/0020.)
 
 import { env } from "@leadwolf/config";
-import { tenantMemberRepository, userRepository, workspaceRepository } from "@leadwolf/db";
+import {
+  authPolicyRepository,
+  tenantMemberRepository,
+  userRepository,
+  workspaceRepository,
+} from "@leadwolf/db";
 import { ForbiddenError } from "@leadwolf/types";
 import { recordAuthEvent } from "./auditEvent.ts";
 import { issueCode } from "./code.ts";
@@ -76,6 +81,21 @@ export async function finalizeLogin(
   // selection here is a cross-tenant breach — the same authorization switchWorkspace enforces. (Phase 0a.)
   const orgs = await tenantMemberRepository.listForUser(txn.userId);
   const tenantId = authorizeTenantSelection(orgs, txn.tenantId);
+
+  // MFA enforcement (ADR-0018): a tenant that MANDATES MFA must not complete login without it — fail closed
+  // at the token gate. Enrolled users are already challenged earlier (resolveNextStep → "mfa", so mfaVerified
+  // is true here); this blocks the un-enrolled case for a required-MFA org. Tenants on the default ("optional"
+  // / "off") policy are unaffected. WIRE: route blocked users to a forced in-login MFA-enrollment step in
+  // apps/auth instead of erroring (better UX once the enrollment screen exists).
+  if (!txn.mfaVerified) {
+    const policy = await authPolicyRepository.getForTenant(tenantId);
+    if (policy.mfaEnforcement === "required") {
+      throw new ForbiddenError(
+        "mfa_required",
+        "Your organization requires multi-factor authentication. Enroll a method to continue.",
+      );
+    }
+  }
 
   let workspaceId = txn.workspaceId;
   if (workspaceId) {

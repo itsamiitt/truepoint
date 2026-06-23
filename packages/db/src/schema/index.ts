@@ -17,3 +17,5 @@ export * from "./enrichmentPolicy.ts";
 export * from "./webhooks.ts";
 export * from "./importMappingTemplates.ts";
 export * from "./featureFlags.ts";
+export * from "./scim.ts";
+export * from "./platformOps.ts";
