@@ -4,7 +4,7 @@ set -euo pipefail
 DOMAIN="${REPLIT_DEV_DOMAIN:-localhost}"
 APP_URL="https://${DOMAIN}"
 
-echo "🚀 LeadWolf startup — domain: ${DOMAIN}"
+echo "🚀 TruePoint startup — domain: ${DOMAIN}"
 
 # ── Write dev .env ────────────────────────────────────────────────────────────
 cat > .env <<EOF

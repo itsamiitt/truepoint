@@ -287,7 +287,7 @@ flowchart TB
 
 ## 13. Outreach Sequencing + Send Engine — *Post-MVP (M9)*
 
-- LeadWolf **enrolls** contacts and **sends** ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)
+- TruePoint **enrolls** contacts and **sends** ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)
   — this **supersedes** the earlier "no email send at MVP / AI-draft-only" stance; **AI drafting now
   feeds the send engine**). `outreach_sequences` → `outreach_steps` (ordered: channel, delay, template);
   `outreach_log` records per-contact enrollment + status (`enrolled/active/replied/completed/`
@@ -333,7 +333,7 @@ resolving the provider open question). Highlights:
   intent signals. Guardrails: only on revealed contacts, content-safety filter, **human review before
   send**. Drafting **feeds the send engine** (§13) — it is no longer export-only
   ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)).
-- **Augmented-human, not autonomous.** LeadWolf's stance is that AI **assists the rep** (draft → human review →
+- **Augmented-human, not autonomous.** TruePoint's stance is that AI **assists the rep** (draft → human review →
   send), positioned as a strength as the autonomous-AI-SDR hype unwinds — while matching autonomous tools on
   research/draft quality so "human-in-the-loop" never reads as "slow" ([15 §3](./15-gap-remediation.md)).
 - **Agentic account research** *(future differentiator):* configurable, reusable agents that research the web

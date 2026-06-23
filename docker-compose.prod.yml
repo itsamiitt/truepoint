@@ -1,4 +1,4 @@
-# docker-compose.prod.yml — single-host PREVIEW deployment of LeadWolf on Ubuntu.
+# docker-compose.prod.yml — single-host PREVIEW deployment of TruePoint on Ubuntu.
 # All four app services share one locally-built image (leadwolf:latest, from deploy/deploy.sh).
 # Caddy fronts them with HTTPS + subdomain routing; Postgres is external (Neon/RDS).
 # This is NOT production-hardened — see DEPLOY.md "Caveats".

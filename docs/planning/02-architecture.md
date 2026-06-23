@@ -1,6 +1,6 @@
 # 02 — Architecture
 
-> How LeadWolf is laid out and how a request becomes data: two repos, a handful of ECS services, and a
+> How TruePoint is laid out and how a request becomes data: two repos, a handful of ECS services, and a
 > **two-layer** data model — a system-owned **global master graph** (Layer 0) beneath hard
 > **per-workspace** overlays (Layer 1). Stack rationale in [ADR-0010](./decisions/ADR-0010-aws-native-self-hosted-stack.md);
 > tenancy in [ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md); the master graph in

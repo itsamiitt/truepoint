@@ -1,5 +1,5 @@
 /**
- * .dependency-cruiser.cjs — LeadWolf import-boundary rules (the mechanical gate for docs/planning 16 §5).
+ * .dependency-cruiser.cjs — TruePoint import-boundary rules (the mechanical gate for docs/planning 16 §5).
  *
  * Installed from .claude/skills/enterprise-architecture/templates/dependency-cruiser.cjs.
  * Run via `bun run lint:boundaries` (depcruise apps packages) in CI so a forbidden import FAILS the build.

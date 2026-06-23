@@ -12,14 +12,14 @@ angriest, best-evidenced buyer complaints about incumbents (ZoomInfo especially)
 technical**: opaque demo-gated pricing, annual lock-in, auto-renewal traps, double-digit renewal hikes, and
 **"data-destroy on churn"** clauses. These were the **highest-ranked, lowest-difficulty** remediation
 (recommendation R1) and the basis for two *hidden* openings: an anti-lock-in brand position (#2) and pricing a
-single seat below the DIY/VA baseline (#6). LeadWolf's **per-workspace data ownership**
+single seat below the DIY/VA baseline (#6). TruePoint's **per-workspace data ownership**
 ([ADR-0006](./ADR-0006-per-workspace-multitenant-model.md)) makes an anti-lock-in stance *structurally* true,
 not just a promise. We need a committed commercial **policy**; the prices themselves remain placeholders
 ([07 §1](../07-billing-credits.md)).
 
 ## Decision
 
-LeadWolf commits to a **transparent, no-lock-in commercial policy**:
+TruePoint commits to a **transparent, no-lock-in commercial policy**:
 
 1. **Transparent, self-serve pricing** — prices and pack sizes are public; no mandatory demo/sales gate to see
    pricing or to buy ([07 §1](../07-billing-credits.md), [§6 GTM](../07-billing-credits.md)).

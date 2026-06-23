@@ -7,7 +7,7 @@
 
 ## Context
 
-LeadWolf must give large customer organizations **department-specific experiences** — Sales, SDR, BDR,
+TruePoint must give large customer organizations **department-specific experiences** — Sales, SDR, BDR,
 Marketing, Customer Success, Support, Operations/RevOps, Compliance, Finance, People/HR, and
 Administration — each with its own tabs, dashboards, workflows, permissions, reporting, and management
 tools, at **thousands of concurrent users per workspace**. The current model

@@ -1,6 +1,6 @@
 # 07 — Billing & Credits
 
-> LeadWolf sells data on a **credit** basis. A user spends credits to **reveal** a contact's verified
+> TruePoint sells data on a **credit** basis. A user spends credits to **reveal** a contact's verified
 > email / phone / full profile. Credits are a **tenant-level counter**
 > ([ADR-0007](./decisions/ADR-0007-per-workspace-reveal-and-credit-counter.md)); reveal is
 > **per-workspace, first-reveal-wins**. The path must be **idempotent** (no double-charge),

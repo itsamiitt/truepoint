@@ -1,4 +1,4 @@
-# ADR-0009 — Outreach engine: LeadWolf enrolls & sends
+# ADR-0009 — Outreach engine: TruePoint enrolls & sends
 
 - **Status:** Accepted
 - **Date:** 2026-05-29
@@ -6,11 +6,11 @@
 
 ## Context
 
-The proposal's `outreach_log` plus the founder decision make LeadWolf an **active outreach actor** — it enrolls contacts into sequences and **sends** messages (email + LinkedIn/Sales-Nav) — not just a mirror of external campaign status. This **overrides** the previously-stated stance that "LeadWolf does not send email at MVP" (it only drafted via AI). It also goes beyond the planned read-only CRM sync.
+The proposal's `outreach_log` plus the founder decision make TruePoint an **active outreach actor** — it enrolls contacts into sequences and **sends** messages (email + LinkedIn/Sales-Nav) — not just a mirror of external campaign status. This **overrides** the previously-stated stance that "TruePoint does not send email at MVP" (it only drafted via AI). It also goes beyond the planned read-only CRM sync.
 
 ## Decision
 
-- LeadWolf provides an **outreach engine**: build multi-step sequences, **enroll** contacts, and **send** across channels (email via a sending provider, LinkedIn/Sales-Nav assisted). `outreach_log` tracks per-contact campaign membership and status (`enrolled/active/replied/completed/unsubscribed/bounced`); `activities` records each send/open/click/reply.
+- TruePoint provides an **outreach engine**: build multi-step sequences, **enroll** contacts, and **send** across channels (email via a sending provider, LinkedIn/Sales-Nav assisted). `outreach_log` tracks per-contact campaign membership and status (`enrolled/active/replied/completed/unsubscribed/bounced`); `activities` records each send/open/click/reply.
 - AI outreach **drafting** ([05 §16](../05-features-modules.md)) now feeds this engine (draft → review → send), rather than being export-only.
 - This **supersedes the "no email send at MVP" stance** in [00 §4/§5](../00-overview.md) and [05 §16](../05-features-modules.md); those docs are updated to reflect an active sending engine.
 
@@ -18,8 +18,8 @@ The proposal's `outreach_log` plus the founder decision make LeadWolf an **activ
 
 | Option | Verdict | Why |
 |---|---|---|
-| Enroll & send (this ADR) | Chosen | Founder decision; makes LeadWolf a full prospecting workflow, not just a database. |
-| Ingest-only mirroring | Rejected | Safer/simpler and preserved the no-send stance, but the founders want LeadWolf to drive outreach. |
+| Enroll & send (this ADR) | Chosen | Founder decision; makes TruePoint a full prospecting workflow, not just a database. |
+| Ingest-only mirroring | Rejected | Safer/simpler and preserved the no-send stance, but the founders want TruePoint to drive outreach. |
 
 ## Consequences
 

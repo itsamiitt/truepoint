@@ -1,4 +1,4 @@
-# Caddy — TLS termination + subdomain routing for the LeadWolf preview.
+# Caddy — TLS termination + subdomain routing for the TruePoint preview.
 # Caddy automatically provisions and renews Let's Encrypt certificates for each site,
 # provided (1) the subdomain's DNS A record points at this server and (2) ports 80+443
 # are reachable from the internet (open them in the EC2 Security Group).

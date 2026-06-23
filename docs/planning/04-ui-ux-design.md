@@ -203,7 +203,7 @@ values** and **abbreviation/synonym expansion** (type `CEO`, match "Chief Execut
 
 ### New: Sequences screens
 
-LeadWolf now **enrolls and sends** outreach
+TruePoint now **enrolls and sends** outreach
 ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)), so the
 **Sequences** area adds three screens to design in a later milestone: a **sequence builder**
 (`outreach_sequences` → `outreach_steps`, multi-channel: email/linkedin), an **enrollment** view

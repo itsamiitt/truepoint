@@ -74,13 +74,8 @@ body {
   font-weight: 700;
 }
 
-/* Brand mark — a small cobalt fill (logo color; never used as text). */
-.tp-brand-mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  background: var(--tp-cobalt);
-}
+/* Brand mark is now the real three-chevron <Brandmark> SVG (Brand Kit v1.0), rendered in Sidebar.tsx —
+   it carries its own size/color, so no square-fill rule lives here. */
 
 /* Shell grid: fixed rail + a fluid main column. */
 .tp-shell {

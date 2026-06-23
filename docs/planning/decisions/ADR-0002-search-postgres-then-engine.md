@@ -9,7 +9,7 @@
 
 ## Context
 
-LeadWolf targets large scale (100M+ rows over time) and needs typo-tolerant, faceted prospect/account search with low latency. Postgres FTS + `pg_trgm` is serviceable at small scale but strains on high-cardinality faceted/typo search at the top end. The team has also chosen an AWS-native, self-hosted posture, so a self-hosted search engine fits the operating model.
+TruePoint targets large scale (100M+ rows over time) and needs typo-tolerant, faceted prospect/account search with low latency. Postgres FTS + `pg_trgm` is serviceable at small scale but strains on high-cardinality faceted/typo search at the top end. The team has also chosen an AWS-native, self-hosted posture, so a self-hosted search engine fits the operating model.
 
 ## Decision
 

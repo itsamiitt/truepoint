@@ -1,6 +1,6 @@
 # 13 — Platform Admin (internal super-admin console)
 
-> Operated by **LeadWolf staff, not customers.** A **separate internal app** (`apps/admin`, e.g.
+> Operated by **TruePoint staff, not customers.** A **separate internal app** (`apps/admin`, e.g.
 > `admin.leadwolf.internal`) with its own staff auth + RBAC and a **privileged, fully-audited**
 > cross-tenant data path — *never* the customer app behind a flag. Governed by
 > [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md); reinforces the modular,

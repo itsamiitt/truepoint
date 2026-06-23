@@ -8,6 +8,7 @@ import { Avatar, DropdownMenu, Icon } from "@leadwolf/ui";
 import { X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Brandmark } from "./Brandmark";
 import { DESTINATIONS, type NavDestination, isActive } from "./navConfig";
 
 function NavItem({ dest, pathname }: { dest: NavDestination; pathname: string }) {
@@ -65,8 +66,11 @@ export function Sidebar({
   return (
     <aside className={`tp-sidebar${isOpen ? " is-open" : ""}`}>
       <div className="tp-brand">
-        <span className="tp-brand-mark" aria-hidden="true" />
-        <span className="tp-brand-name">TruePoint</span>
+        <Brandmark size={20} />
+        <span className="tp-brand-name">
+          <span style={{ fontWeight: 400 }}>True</span>
+          <span style={{ fontWeight: 700 }}>Point</span>
+        </span>
         {onClose ? (
           <button
             type="button"

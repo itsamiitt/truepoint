@@ -6,7 +6,7 @@
 
 ## Context
 
-LeadWolf staff need to operate the platform — manage tenants/billing, support customers (incl.
+TruePoint staff need to operate the platform — manage tenants/billing, support customers (incl.
 **impersonation**), oversee abuse/deliverability, run data-management/quality jobs, and read data
 **across tenants**. This conflicts with the customer app's hard per-workspace RLS isolation
 ([ADR-0006](./ADR-0006-per-workspace-multitenant-model.md)): the app deliberately runs under a

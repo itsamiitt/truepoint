@@ -8,7 +8,7 @@
 
 ## Context
 
-LeadWolf is B2B with **orgs + RBAC** (owner/admin/member/viewer), a shared org credit pool, and shared
+TruePoint is B2B with **orgs + RBAC** (owner/admin/member/viewer), a shared org credit pool, and shared
 lists. But the **contact database itself is the product's core asset** and should be searchable by
 every customer — it is *not* per-tenant data. We need isolation for tenant state (credits, reveals,
 lists, audit, suppression) while keeping the golden contact graph global. We also need this to be safe

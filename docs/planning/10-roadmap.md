@@ -216,7 +216,7 @@ extend the post-MVP surface and don't block the MVP. M-numbers match the modules
   and can filter, automate on, and export by them.
 
 ## M9 — Outreach sequencing + send engine
-**Goal:** LeadWolf **enrolls** contacts and **sends** ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)).
+**Goal:** TruePoint **enrolls** contacts and **sends** ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)).
 - `outreach_sequences` → `outreach_steps` (ordered: channel, delay, template); `outreach_log`
   (enrollment + status); each send/open/click/reply lands in `activities`. `contacts.outreach_status`
   advances (`new`→`in_sequence`→`replied`/`meeting_booked`/`disqualified`/`nurture`/`unsubscribed`).

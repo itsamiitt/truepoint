@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# LeadWolf — ONE image for all four services (web, auth, api, workers).
+# TruePoint — ONE image for all four services (web, auth, api, workers).
 #   • api / workers run TypeScript directly under Bun (no build step).
 #   • web / auth are Next.js apps (next build → next start; not standalone).
 # The compose file overrides CMD per service, so the same image runs everything.

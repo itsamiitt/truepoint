@@ -1,6 +1,6 @@
 # 00 — Product Overview (Phase 1: Application Understanding)
 
-> Part of the **LeadWolf Market Gap Analysis & PMF Audit**. Research date: **2026-06-01**.
+> Part of the **TruePoint Market Gap Analysis & PMF Audit**. Research date: **2026-06-01**.
 > See the [README](README.md) for the index, method, and assumptions. This document is the *evidence
 > base* for everything downstream — it is grounded entirely in the `docs/planning/` corpus, not the market.
 
@@ -10,7 +10,7 @@
 
 | Dimension | Detail |
 |---|---|
-| **Name** | LeadWolf (working repo: *DuskWolf*) |
+| **Name** | TruePoint (working repo: *DuskWolf*) |
 | **Tagline** | "Hunt your best leads." |
 | **Category** | Sales intelligence + prospecting CRM (per-workspace, multi-tenant) — B2B lead-gen / SDR enablement / RevOps |
 | **One-line** | An end-to-end prospecting CRM where each team owns its own contact data, reveals verified email/phone with credits, scores prospects, and runs compliant outreach — in one app. |
@@ -23,7 +23,7 @@
 ## 1. Core purpose — the problem it solves
 
 Sales teams waste time on **stale, incomplete contact data scattered across a stitched-together stack** of
-tools (a data vendor + an enrichment tool + a sequencer + a CRM + a compliance spreadsheet). LeadWolf collapses
+tools (a data vendor + an enrichment tool + a sequencer + a CRM + a compliance spreadsheet). TruePoint collapses
 that stack into a single workspace where a team **imports and enriches** contacts, **reveals** verified
 email/phone on demand, **scores** prospects, and **sequences and sends** outreach — with **compliance built
 into the core** so every reveal and send is gated by suppression/consent.
@@ -112,6 +112,6 @@ Design language: clean light monochrome + one indigo accent, keyboard-first.
 
 ---
 
-*Sources for this document: the LeadWolf planning corpus under `docs/planning/` (overview, brand identity,
+*Sources for this document: the TruePoint planning corpus under `docs/planning/` (overview, brand identity,
 features/modules, information architecture, billing & credits, roadmap, settings, platform admin, and the
 ADR decision log). No external/market sources are used here — those appear from [01 Market Research](01-market-research.md) onward.*

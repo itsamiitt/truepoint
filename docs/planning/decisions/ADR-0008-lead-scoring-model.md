@@ -8,7 +8,7 @@
 
 The multi-tenant proposal adds an intelligence layer with no prior governing decision: versioned `scores` (icp_fit / intent / engagement / composite + `score_breakdown` jsonb) and weighted `intent_signals`, with a trigger syncing `contacts.priority_score` to the latest composite.
 
-A naming hazard must be settled up front: LeadWolf previously used "confidence" for **data correctness** (how sure we are a field is right). The new "score" is **prospect quality** (how good a lead is). These are different concepts and must not collide.
+A naming hazard must be settled up front: TruePoint previously used "confidence" for **data correctness** (how sure we are a field is right). The new "score" is **prospect quality** (how good a lead is). These are different concepts and must not collide.
 
 ## Decision
 

@@ -9,11 +9,11 @@
 Data **accuracy / bounce rate** is the #1 evidenced complaint about every data vendor in the market analysis
 ([market research](../../market-analysis/01-market-research.md) §7), and a specific,
 widely-cited grievance is being **charged a credit when the tool returns nothing or bad data** (Seamless.ai).
-Few vendors offer a credit-back guarantee (UpLead is the praised near-precedent). LeadWolf already **verifies
+Few vendors offer a credit-back guarantee (UpLead is the praised near-precedent). TruePoint already **verifies
 email/phone at reveal** ([06 §9](../06-enrichment-engine.md)), but *whether to charge for non-`valid` results*
 was an **open question** ([07 §12.4](../07-billing-credits.md), [00 §8.1](../00-overview.md#8-open-questions-tracked-resolved-during-doc-review-or-early-milestones),
 flagged in [07 §3](../07-billing-credits.md) as a placeholder). The remediation (recommendation R3, gap 2.1,
-hidden opening #3) resolves it. LeadWolf has **no proprietary dataset** — it cannot win raw accuracy outright,
+hidden opening #3) resolves it. TruePoint has **no proprietary dataset** — it cannot win raw accuracy outright,
 so it competes on **honest billing for third-party data**.
 
 ## Decision

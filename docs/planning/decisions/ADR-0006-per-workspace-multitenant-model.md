@@ -8,7 +8,7 @@
 
 ## Context
 
-LeadWolf is repositioned from a **global data vendor** (one shared, de-duplicated golden contact DB everyone searches) to a **per-workspace prospecting CRM**: each paying customer (**tenant**) has one or more **workspaces** (teams/brands/regions/clients), and each workspace builds and owns its **own** contacts and accounts — imported and enriched from external sources (Apollo, ZoomInfo, LinkedIn, Sales Navigator, CSV, CRM). Different workspaces deliberately keep separate copies of the same company/person because they have different ICPs, notes, scores, and outreach state.
+TruePoint is repositioned from a **global data vendor** (one shared, de-duplicated golden contact DB everyone searches) to a **per-workspace prospecting CRM**: each paying customer (**tenant**) has one or more **workspaces** (teams/brands/regions/clients), and each workspace builds and owns its **own** contacts and accounts — imported and enriched from external sources (Apollo, ZoomInfo, LinkedIn, Sales Navigator, CSV, CRM). Different workspaces deliberately keep separate copies of the same company/person because they have different ICPs, notes, scores, and outreach state.
 
 This requires a tenancy layer the prior ADRs didn't have and reverses two locked decisions.
 

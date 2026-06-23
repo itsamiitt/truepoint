@@ -1,6 +1,6 @@
-# LeadWolf — Planning Workspace
+# TruePoint — Planning Workspace
 
-This folder holds the complete design for **LeadWolf**, a **per-workspace multi-tenant prospecting
+This folder holds the complete design for **TruePoint**, a **per-workspace multi-tenant prospecting
 CRM** that lets sales teams **import, reveal, score, sequence, and send** to their own contacts and
 accounts, on an **AWS-native self-hosted** stack.
 
@@ -45,12 +45,12 @@ accounts, on an **AWS-native self-hosted** stack.
 | 31 | [Bulk Enrichment Pipeline](./31-bulk-enrichment-pipeline.md) | Match-first bulk CSV enrichment at scale: upload → match against our data → enrich/verify → download (runs on the doc-30 job substrate). |
 | — | [Audit-log Action Enum](./audit-log-enum.md) | Living reference for the closed `audit_log.action` vocabulary: as-built values, naming convention, write-path coverage, G-CMP-1 history, and the per-milestone evolution plan. |
 | — | [Department Modules](./departments/) | Per-department specs: Sales, SDR, BDR, Marketing, CS, Support, Ops/RevOps, Compliance, Finance, HR, Admin. |
-| — | [Brand Identity](./brand-identity.md) | Name/meaning, positioning, voice, logo, color, type — the LeadWolf brand system. |
+| — | [Brand Identity](./brand-identity.md) | Name/meaning, positioning, voice, logo, color, type — the TruePoint brand system. |
 | — | [Decisions (ADRs)](./decisions/) | The *why* behind load-bearing choices. |
 
 ## The one-paragraph pitch
 
-Sales teams waste time on stale, incomplete contact data scattered across tools. LeadWolf gives each
+Sales teams waste time on stale, incomplete contact data scattered across tools. TruePoint gives each
 team a **workspace** where they **import** contacts and accounts (CSV/CRM, Sales Navigator) and
 **enrich** them through external providers (Apollo, ZoomInfo, Clearbit). Each workspace curates its own
 **overlay** copies over a shared **global master graph** that everyone searches and reveals from

@@ -1,6 +1,6 @@
 # 08 — Compliance (GDPR + CCPA)
 
-> Selling personal contact data is legally sensitive. LeadWolf treats compliance as **core
+> Selling personal contact data is legally sensitive. TruePoint treats compliance as **core
 > infrastructure**, not a bolt-on. GDPR + CCPA are designed in from day one. Implemented in
 > `packages/compliance`. **This document is a design for engineering controls, not legal advice — a
 > qualified privacy lawyer must review before any production launch with real data.**
@@ -158,7 +158,7 @@ per-workspace model) and audit each correction.
 
 ### 4.4 California DROP (data-broker deletion platform)
 As a registered **data broker** ([§15](#15-trust--certification-program-adr-0014),
-[ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)), LeadWolf must honour deletion requests
+[ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md)), TruePoint must honour deletion requests
 submitted through California's centralized **DROP** platform — a **second deletion intake channel** alongside
 self-serve DSAR and the CCPA "Do Not Sell/Share" opt-out. A scheduled job **polls DROP at least every 45 days**
 (broker processing required from **2026-08-01**), matches each requesting consumer against per-workspace
@@ -207,7 +207,7 @@ penalties (data-side research
 
 ## 6. Sending compliance (CAN-SPAM + GDPR/ePrivacy)
 
-LeadWolf now **enrolls and sends** outreach ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)),
+TruePoint now **enrolls and sends** outreach ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)),
 so the outbound path carries its own first-class compliance surface, distinct from the reveal/data path.
 
 - **Consent / lawful basis (GDPR + ePrivacy):** EU sends generally require a lawful basis for the
@@ -316,7 +316,7 @@ Re-verification keeps data accurate (accuracy principle); suppression + DSAR pro
 
 ## 11. Collection & channel legality (ties to [06 §2](./06-enrichment-engine.md#2-source-channels-how-data-enters-a-workspace))
 
-The proprietary web-**scraper** stays **removed**, but LeadWolf now **builds a global master graph**
+The proprietary web-**scraper** stays **removed**, but TruePoint now **builds a global master graph**
 ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)) from **import + enrichment providers
 (Apollo/ZoomInfo/Clearbit) + public registries + Sales Navigator + CSV/CRM + a future opt-in co-op** — so it
 is squarely a **data broker / vendor** (see [§15](#15-trust--certification-program-adr-0014)), not only a
@@ -402,7 +402,7 @@ is the one place staff cross the per-workspace boundary, so it carries its own c
 
 ## 15. Trust & certification program ([ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md))
 
-Compliance is LeadWolf's flagship differentiator, but pre-launch it is **a promise until it is attested**
+Compliance is TruePoint's flagship differentiator, but pre-launch it is **a promise until it is attested**
 (market-gap analysis [../market-analysis/04-product-market-fit.md](../market-analysis/04-product-market-fit.md)).
 A formal program converts the wedge — *gating the buyer's **own** compliant use end-to-end* (suppression on
 reveal **and** send [§3](#3-suppression--do-not-contact-dnc) + DSAR fan-out [§4](#4-dsar--data-subject-access-requests)

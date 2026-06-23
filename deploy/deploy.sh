@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy/deploy.sh — build + run the LeadWolf preview stack on a single Ubuntu host.
+# deploy/deploy.sh — build + run the TruePoint preview stack on a single Ubuntu host.
 # Idempotent: safe to re-run after editing code or .env.production (it rebuilds + restarts).
 set -euo pipefail
 cd "$(dirname "$0")/.."   # → repo root

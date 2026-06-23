@@ -1,6 +1,6 @@
 # 06 — Enrichment Engine
 
-> How LeadWolf builds and fills the data. Two layers ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)):
+> How TruePoint builds and fills the data. Two layers ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md)):
 > the **global master graph** (the shared, entity-resolved universe — Layer 0) and each workspace's
 > **overlay** copies (Layer 1). Data enters via **import** (CSV/CRM/Sales Navigator), **enrichment providers**
 > (Apollo, ZoomInfo, Clearbit), public registries, and a future opt-in co-op — every record lands as a

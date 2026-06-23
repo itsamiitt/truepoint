@@ -1,7 +1,7 @@
-# Deploying LeadWolf — Ubuntu preview runbook
+# Deploying TruePoint — Ubuntu preview runbook
 
 This deploys the full app as a **Docker Compose stack on a single Ubuntu host**: the four
-LeadWolf services (`web`, `auth`, `api`, `workers`), local Redis/Typesense/MailHog, and a
+TruePoint services (`web`, `auth`, `api`, `workers`), local Redis/Typesense/MailHog, and a
 **Caddy** reverse proxy that terminates HTTPS and routes three subdomains. Postgres is
 **external** (managed — Neon/RDS). It is a **working preview**, not the production AWS target
 described in [ADR-0010](docs/planning/decisions/ADR-0010-aws-native-self-hosted-stack.md) —

@@ -27,7 +27,7 @@ review queue**. What neither ADR specifies is **how a bulk import row matches *i
 universe synchronously**, on the read path, so internal hits never touch a provider.
 
 Industry match rates set the expectation that internal matching carries most of the load (cite as
-*approximate industry figures — Apollo/ZoomInfo-class — not a LeadWolf promise*): roughly **70–85% on email**,
+*approximate industry figures — Apollo/ZoomInfo-class — not a TruePoint promise*): roughly **70–85% on email**,
 **50–65% on phone**, **85–95% on company**. If even a large fraction of rows resolve internally, the bulk job
 finishes fast and cheap, and only the residual misses cost provider money ([ADR-0038](./ADR-0038-bulk-enrichment-billing-forecast-and-quota.md)).
 

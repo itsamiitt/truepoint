@@ -1,6 +1,6 @@
 # 16 — Code Organization
 
-> How LeadWolf's source code is laid out **on disk** and what may import what. This is the operational
+> How TruePoint's source code is laid out **on disk** and what may import what. This is the operational
 > contract a developer (or an AI assistant) follows when writing the first — and every — line of code.
 > It details the structure that [02 §1](./02-architecture.md) only sketches ("feature-sliced,
 > lazy-loaded"), under the locked Turborepo monorepo + per-workspace model
@@ -27,7 +27,7 @@ extend, low-error, and that an AI assistant can hold in context:
 
 These elaborate the modular invariants already stated in [02 §1](./02-architecture.md); the generic,
 stack-agnostic version of the same rules ships as the `scalable-architecture` skill (outside the
-planning corpus) — this doc is the LeadWolf-specific application.
+planning corpus) — this doc is the TruePoint-specific application.
 
 ## 2. The two trees (recap)
 

@@ -1,6 +1,6 @@
 # Audit-log Action Enum — Living Reference
 
-> The single consolidated view of LeadWolf's closed `audit_log.action` vocabulary: what it is **today**
+> The single consolidated view of TruePoint's closed `audit_log.action` vocabulary: what it is **today**
 > (as built in code), the convention every value follows, the G-CMP-1 history, the write-path coverage,
 > and the values future milestones will add. This is a **reference/index doc** — it records and links the
 > decisions already made in [08 §5](./08-compliance.md), [03 §7](./03-database-design.md), and the ADRs;

@@ -1,6 +1,6 @@
 # 26 — Integrations & Data Delivery
 
-> How data **leaves** LeadWolf and connects to the customer's stack: bidirectional CRM sync + native apps,
+> How data **leaves** TruePoint and connects to the customer's stack: bidirectional CRM sync + native apps,
 > public API, webhooks, reverse-ETL, a Chrome extension, SMS, and a governed export center — all under the
 > **no-lock-in** policy ([ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md)).
 > Extends [05 §14/§15](./05-features-modules.md) and the webhook seams in [09 §10](./09-api-design.md).

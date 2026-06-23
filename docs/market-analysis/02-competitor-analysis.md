@@ -1,33 +1,33 @@
 # 02 — Competitor Analysis
 
-> Part of the **LeadWolf Market Gap Analysis & PMF Audit**. Research date: **2026-06-01**.
+> Part of the **TruePoint Market Gap Analysis & PMF Audit**. Research date: **2026-06-01**.
 > See the [Product Overview](00-product-overview.md) for the product baseline and [Market Research](01-market-research.md)
 > for sizing/trends. This doc maps the competitive field; whitespace flows into [Market Gaps](03-market-gaps.md),
 > [Product-Market Fit](04-product-market-fit.md), [Strategic Opportunities](06-strategic-opportunities.md), and the
 > [SWOT](08-swot.md).
 >
-> **Stage caveat (carried through every section):** LeadWolf is **pre-launch with zero code, zero users, and zero
+> **Stage caveat (carried through every section):** TruePoint is **pre-launch with zero code, zero users, and zero
 > revenue**. Its pricing is **placeholder**, and every capability marked below as "has it" is a *planned* design-doc
-> commitment, not a shipped feature. All comparison scores for LeadWolf are therefore **PROJECTED**, not measured.
+> commitment, not a shipped feature. All comparison scores for TruePoint are therefore **PROJECTED**, not measured.
 > Where a capability is MVP it is tagged **(M1–M5)**; where it is later roadmap it is tagged **(M7–M11)**.
 
 ---
 
 ## 1. How we segment the field
 
-LeadWolf's planned loop — **find → reveal verified email/phone → score → sequence → send**, inside a per-workspace,
+TruePoint's planned loop — **find → reveal verified email/phone → score → sequence → send**, inside a per-workspace,
 compliance-gated, multi-tenant CRM — straddles three categories that the market normally buys separately
 (see [Market Research §market structure](01-market-research.md)). We therefore split competitors into:
 
 | Tier | Definition | Clusters covered |
 |---|---|---|
-| **Direct — data / intelligence** | Sell B2B contact/company data + reveal/enrichment; LeadWolf's "find + reveal + verify" core | Apollo, ZoomInfo, Cognism, Lusha & Seamless.ai, RocketReach/UpLead/Lead411, Kaspr/Wiza/Hunter.io |
-| **Direct — outreach / engagement** | Sequence and send outbound; LeadWolf's "sequence + send" module (M9) | Outreach.io & Salesloft (enterprise SEPs); Instantly/Smartlead/Lemlist/Reply.io (cold-email) |
+| **Direct — data / intelligence** | Sell B2B contact/company data + reveal/enrichment; TruePoint's "find + reveal + verify" core | Apollo, ZoomInfo, Cognism, Lusha & Seamless.ai, RocketReach/UpLead/Lead411, Kaspr/Wiza/Hunter.io |
+| **Direct — outreach / engagement** | Sequence and send outbound; TruePoint's "sequence + send" module (M9) | Outreach.io & Salesloft (enterprise SEPs); Instantly/Smartlead/Lemlist/Reply.io (cold-email) |
 | **Indirect** | Adjacent platforms that *absorb* the loop or substitute for it | CRM-native (HubSpot/Salesforce/Pipedrive + Breeze/Clearbit); DIY (Sales Navigator + spreadsheets + VAs); AI-SDR agents (11x/Artisan/AiSDR/Qualified); GTM-orchestration (Clay) |
 
 Apollo is the single most direct analogue (data **and** engagement in one self-serve seat). Cognism is the closest
 **positioning** rival (compliance-first). Clay and the CRM incumbents are the biggest **absorption** threats. The DIY
-stack is the true baseline most early buyers actually compare LeadWolf against.
+stack is the true baseline most early buyers actually compare TruePoint against.
 
 ---
 
@@ -37,7 +37,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 
 - **Overview.** An all-in-one sales-intelligence + engagement platform (database, enrichment, sequences, dialer,
   light CRM, AI) sold self-serve, product-led. ~275M contacts / 60M companies; ~$150M ARR (May 2025), 3M+ users,
-  $1.6B valuation. The closest functional analogue to LeadWolf. [Apollo pricing](https://www.apollo.io/pricing) ·
+  $1.6B valuation. The closest functional analogue to TruePoint. [Apollo pricing](https://www.apollo.io/pricing) ·
   [UpLead overview](https://www.uplead.com/what-is-apollo-io/)
 - **Key features.** 275M+ contacts, 65+ filters, 7-step email verification, multichannel sequences, US/intl dialer
   (gated by tier), AI email writer + AI Assistant + Scores & Signals, lightweight deals/pipeline CRM.
@@ -55,7 +55,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
   Complaints (by volume): missing features, inaccurate data, learning curve, billing/auto-renewal.
   [BigIdeasDB](https://bigideasdb.com/complaints/apollo-complaints)
 - **Positioning.** Classic PLG land-and-expand: cheap/free self-serve entry → seat expansion → "GTM system of record."
-- **Missing vs LeadWolf.** Transparently-verified data + bounce SLA; compliance-grade GDPR/CCPA posture; honest billing
+- **Missing vs TruePoint.** Transparently-verified data + bounce SLA; compliance-grade GDPR/CCPA posture; honest billing
   (no credit expiry, easy cancel); per-workspace isolation; built-in deliverability/warmup; lean UX (vs feature bloat).
 
 ### 2.2 ZoomInfo — the enterprise incumbent
@@ -83,12 +83,12 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 - **Compliance overhang.** **~$29.5M right-of-publicity class-action settlement** (CA/IL/IN/NV; exact
   $29,557,612.50), preliminarily approved June 2024 — *verified.* [Class Action Connect](https://www.classactconnect.com/cases/zoominfo-right-of-publicity-30-million-2024)
 - **Positioning.** Premium "complete GTM platform," analyst-validated, AI-defended.
-- **Missing vs LeadWolf.** Transparent/self-serve/monthly pricing; no-lock-in contracts; SMB/prosumer tier;
+- **Missing vs TruePoint.** Transparent/self-serve/monthly pricing; no-lock-in contracts; SMB/prosumer tier;
   contact-level (not account-only) intent; a trust-forward consent-clean posture.
 
 ### 2.3 Cognism — the compliance-first, EU-strong rival
 
-- **Overview.** London-based; the **compliance-by-design, EU-strong** alternative to ZoomInfo and **LeadWolf's
+- **Overview.** London-based; the **compliance-by-design, EU-strong** alternative to ZoomInfo and **TruePoint's
   closest positioning rival**. ~440M contacts (~200M European), Diamond Data phone-verified mobiles (~98% on the
   ~10M Diamond subset). Annual quote-based, no free plan. New CEO Sept 2025.
   [Cognism compliance](https://www.cognism.com/compliance) · [Diamond Data](https://www.cognism.com/diamond-data)
@@ -110,13 +110,13 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 - **Review sentiment.** G2 4.5–4.6. Praise: EMEA data, Diamond connect rates, GDPR posture, support. Complaints:
   price/upsells, NA/APAC gaps, rigid contracts, slow Diamonds-on-Demand feedback.
 - **Positioning.** "The compliant, EU-first ZoomInfo alternative" — premium, high-touch, annual.
-- **Missing vs LeadWolf — the load-bearing distinction.** Cognism's compliance is about **the lawfulness of its own
-  data sourcing**. LeadWolf's planned compliance **(M5)** is about **governing the customer's USE end-to-end**:
+- **Missing vs TruePoint — the load-bearing distinction.** Cognism's compliance is about **the lawfulness of its own
+  data sourcing**. TruePoint's planned compliance **(M5)** is about **governing the customer's USE end-to-end**:
   in-transaction suppression that gates **both reveal and outbound send**, DSAR access/delete **fan-out across
   per-workspace copies**, append-only audit, CAN-SPAM footer enforcement, bounce/complaint→auto-suppression — none
   of which Cognism offers **because it does not send**. *Caveat: Cognism actually holds the data, certs, and broker
-  registration **today**; LeadWolf has none of this at MVP (US-only, certs are open questions, no proprietary
-  dataset). To beat Cognism on compliance, LeadWolf must first earn the certs/registrations and prove EU residency —
+  registration **today**; TruePoint has none of this at MVP (US-only, certs are open questions, no proprietary
+  dataset). To beat Cognism on compliance, TruePoint must first earn the certs/registrations and prove EU residency —
   see [Risk Assessment](07-risk-assessment.md).*
 
 ### 2.4 Lusha & Seamless.ai — the affordable extension-led tier
@@ -143,7 +143,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
   auto-renewal/cancellation the #1 complaint everywhere.
 - **Positioning.** The affordable, extension-first prospecting tier — Lusha "trustworthy/EU-friendly," Seamless
   "find anyone, build big lists fast."
-- **Missing vs LeadWolf.** Neither is a full GTM/CRM (no native sequencing/dialer); both have an accuracy-vs-marketing
+- **Missing vs TruePoint.** Neither is a full GTM/CRM (no native sequencing/dialer); both have an accuracy-vs-marketing
   credibility gap and no credit-back-on-bad-data guarantee; Seamless has a weak compliance/governance story.
 
 ### 2.5 RocketReach / UpLead / Lead411 — the self-serve mid-tier
@@ -165,12 +165,12 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 - **Review sentiment.** RocketReach G2 ~4.5; UpLead G2 ~4.7 (best in cluster); Lead411 G2 ~4.5. Common complaints:
   stale/incomplete data, credit caps, billing trust, weak non-US coverage.
 - **Positioning.** The affordable, self-serve mid-tier — explicitly "cheaper, simpler than ZoomInfo/Apollo/Cognism."
-- **Missing vs LeadWolf.** No native sequencing/send; not a CRM; no AI orchestration/scoring; thin compliance
+- **Missing vs TruePoint.** No native sequencing/send; not a CRM; no AI orchestration/scoring; thin compliance
   governance; data-freshness lags.
 
 ### 2.6 Kaspr / Wiza / Hunter.io — single-step point tools
 
-- **Overview.** Three lightweight point tools that each attack **one** slice of LeadWolf's loop. **Kaspr** (Cognism-owned)
+- **Overview.** Three lightweight point tools that each attack **one** slice of TruePoint's loop. **Kaspr** (Cognism-owned)
   = LinkedIn/Sales-Nav phone+email reveal, EU-strong. **Wiza** = Sales Navigator list-to-CSV/CRM exporter with live
   SMTP verification. **Hunter.io** = the domain email finder/verifier (6M+ users), **email-only, zero phone**.
   [Kaspr](https://www.kaspr.io/pricing) · [Wiza](https://wiza.co/pricing) · [Hunter](https://hunter.io/pricing)
@@ -188,7 +188,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 - **Review sentiment.** Kaspr G2 4.4 / Trustpilot 1.5; Wiza G2 4.5; Hunter G2 4.4 / Capterra 4.6 (most consistently
   liked).
 - **Positioning.** Single-purpose substitutes for one step of the loop — not the loop.
-- **Missing vs LeadWolf.** No multi-tenant per-workspace ownership; no end-to-end loop (no scoring, no send except
+- **Missing vs TruePoint.** No multi-tenant per-workspace ownership; no end-to-end loop (no scoring, no send except
   Hunter's light campaigns); **no compliance-as-a-feature** (Kaspr's CNIL fine underlines the gap); no tenant credit
   pool; Hunter has no phone, Wiza/Kaspr depend on a LinkedIn license they don't provide.
 
@@ -215,7 +215,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 - **Review sentiment.** Outreach 4.3 (~3,500); Salesloft 4.5 (~4,260 product reviews; far more across all listings).
   *Verification note: "3,400–3,900 reviews each" understates Salesloft's true total.*
 - **Positioning.** Premium top-of-stack execution layer for 15–500+ rep teams; explicitly **not** SMB/startup/agency.
-- **Missing vs LeadWolf.** No built-in data/lead source (need a separate vendor); no cold-send/inbox-rotation/warmup
+- **Missing vs TruePoint.** No built-in data/lead source (need a separate vendor); no cold-send/inbox-rotation/warmup
   infrastructure; weak dialer; no transparent self-serve SMB entry; CRM-dependent.
 
 ### 3.2 Instantly / Smartlead / Lemlist / Reply.io — the cold-email cluster
@@ -224,7 +224,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
   mailboxes, rotate, warm up, sequence, unified reply inbox. Instantly/Smartlead are deliverability-first
   ("infrastructure"); Lemlist/Reply.io are personalization + multichannel. The defining 2024–26 trend: all but
   Smartlead bolted on their own **450–650M B2B databases**, collapsing "buy data then send" into one tool — directly
-  validating LeadWolf's find+send bet. [UnifyGTM](https://www.unifygtm.com/explore/best-cold-email-software-2026)
+  validating TruePoint's find+send bet. [UnifyGTM](https://www.unifygtm.com/explore/best-cold-email-software-2026)
 - **Pricing model.** Cheap working tier $37–100+/mo. Instantly Growth $37 / Hypergrowth $97 / Light Speed $358
   (+ a separate stacking Credits DB subscription) — verified. Smartlead Base $39 → Unlimited Prime $379 — verified.
   Lemlist Email $39 / Multichannel $109 — verified. Reply.io Email Volume from ~$49 / Multichannel ~$89–99 / Jason AI
@@ -242,8 +242,8 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
   Lemlist 4.4–4.6; Reply.io 4.6. Classic G2-positive vs Trustpilot/Reddit-critical split.
 - **Positioning.** Two camps — deliverability/infra (Instantly, Smartlead) vs personalization/multichannel
   (Lemlist, Reply.io); all but Smartlead repositioning as "find + send in one tool."
-- **Missing vs LeadWolf.** No deep multi-tenant prospecting CRM with hard RLS per-workspace ownership; **weak
-  compliance-as-a-feature** (the opposite of LeadWolf's "we are not a spam tool" stance); no reveal-credit model with
+- **Missing vs TruePoint.** No deep multi-tenant prospecting CRM with hard RLS per-workspace ownership; **weak
+  compliance-as-a-feature** (the opposite of TruePoint's "we are not a spam tool" stance); no reveal-credit model with
   per-workspace first-reveal ownership; no distinct versioned lead-scoring layer.
 
 ---
@@ -254,7 +254,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 
 - **Overview.** The three incumbent CRMs, each absorbing prospecting + enrichment + sequencing + AI-SDR as **up-sell
   add-ons**. HubSpot (Breeze AI: Prospecting Agent + Breeze Intelligence/ex-Clearbit), Salesforce (Einstein +
-  **Agentforce** agentic SDRs + Data Cloud), Pipedrive (Pulse + LeadBooster/Prospector). This is LeadWolf's most
+  **Agentforce** agentic SDRs + Data Cloud), Pipedrive (Pulse + LeadBooster/Prospector). This is TruePoint's most
   existential absorption threat: they own the data gravity. [HubSpot](https://www.hubspot.com/pricing/sales) ·
   [Salesforce Agentforce](https://www.salesforce.com/agentforce/pricing/) · [Pipedrive](https://www.pipedrive.com/en/features/lead-generation-software)
 - **Pricing model.** Cheap-looking per-seat CRM core, then expensive gated add-ons + consumption/credit/outcome billing.
@@ -271,7 +271,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 - **Review sentiment.** HubSpot ~4.4–4.5; Salesforce 4.4 (G2 #1 Product 2025, but small SDR teams skew mixed);
   Pipedrive Capterra 4.5 / G2 4.3 (weak support, thin automation/reporting).
 - **Positioning.** "Your CRM already does prospecting + enrichment + AI — natively. Toggle on the AI SDR."
-- **Missing vs LeadWolf.** Best-in-class multi-source/waterfall data; outbound deliverability tooling
+- **Missing vs TruePoint.** Best-in-class multi-source/waterfall data; outbound deliverability tooling
   (rotation/warmup); affordable predictable outbound-first pricing; **CRM-neutral** prospecting that feeds *any* CRM;
   fast time-to-value for a pure prospecting workflow.
 
@@ -293,7 +293,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 - **Review sentiment.** Legacy Clearbit G2 ~4.4; firmographic data rated high (~9.3/10 TrustRadius) but contact-level
   accuracy is the recurring complaint.
 - **Positioning.** "The native enrichment + intelligence layer of HubSpot."
-- **Missing vs LeadWolf.** CRM-agnostic/open-API; verified net-new contact data (emails+dials); person-level
+- **Missing vs TruePoint.** CRM-agnostic/open-API; verified net-new contact data (emails+dials); person-level
   de-anonymization; strong international coverage; transparent non-expiring pricing; the orphaned ex-Clearbit
   free-tool/developer audience.
 
@@ -315,11 +315,11 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
   love it, solo operators churn). [Clay pros/cons](https://www.g2.com/products/clay-com-clay/reviews?qs=pros-and-cons)
 - **Positioning.** The AI-native orchestration layer **on top of** data vendors + execution tools — deliberately
   **not** all-in-one; interoperability is the value.
-- **Missing vs LeadWolf.** Turnkey opinionated find→reveal→score→sequence→send for non-technical reps;
+- **Missing vs TruePoint.** Turnkey opinionated find→reveal→score→sequence→send for non-technical reps;
   **compliance-as-a-feature** (suppression/consent/DSAR/DNC gating reveal *and* send — a surface Clay essentially
   ignores); simple predictable tenant credits; native dialer/CRM-of-record. *Threat to respect: Clay keeps moving
-  down-stack (already added a Sequencer + signals), and its waterfall structurally beats LeadWolf's planned 3-source
-  enrichment on raw coverage — LeadWolf must NOT compete on data breadth.*
+  down-stack (already added a Sequencer + signals), and its waterfall structurally beats TruePoint's planned 3-source
+  enrichment on raw coverage — TruePoint must NOT compete on data breadth.*
 
 ### 4.4 AI-SDR agents (11x / Artisan / AiSDR / Qualified) — the discrediting forward threat
 
@@ -344,14 +344,14 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
   22 points; thin review validation; high oversight burden (15–20 hrs/week) contradicting the "autonomous" pitch.
   *Caveat: churn/deployment figures are trade-press estimates, not audited.*
 - **Positioning.** Originally "AI employees that replace your SDR team"; softening to augmentation by 2026.
-- **Missing vs LeadWolf.** Deliverability/sender-reputation discipline; mandatory human-in-the-loop approval gates;
+- **Missing vs TruePoint.** Deliverability/sender-reputation discipline; mandatory human-in-the-loop approval gates;
   rigorous data verification/hygiene; compliance posture (consent/suppression); honest, auditable metrics (the 11x
-  scandal is a trust wound). This is LeadWolf's clearest "augmented human, not autonomous slop" wedge.
+  scandal is a trust wound). This is TruePoint's clearest "augmented human, not autonomous slop" wedge.
 
 ### 4.5 DIY — Sales Navigator + spreadsheets + VAs + bought lists (the true baseline)
 
 - **Overview.** Not a product but the cluster of do-it-yourself substitutes most early/SMB buyers actually compare
-  LeadWolf against: (1) Sales Navigator + manual copy-paste into Sheets; (2) offshore VAs/freelance list-builders;
+  TruePoint against: (1) Sales Navigator + manual copy-paste into Sheets; (2) offshore VAs/freelance list-builders;
   (3) bought broker lists; (4) stitched free tiers (Apollo/Hunter/LinkedIn free). The "build vs buy / good-enough free"
   objection. [Sales Nav price](https://www.topo.io/blog/linkedin-sales-navigator-price) ·
   [PhantomBuster export](https://phantombuster.com/blog/sales-prospecting/linkedin-sales-navigator-export-leads/)
@@ -367,7 +367,7 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
   liability regardless of broker**; VA quality is a lottery; no verification/enrichment/CRM-sync layer.
   [CAN-SPAM/GDPR](https://instantly.ai/blog/b2b-email-list-compliance-gdpr-canspam/)
 - **Positioning.** The "do-nothing-different" inertia baseline; "good enough until it isn't."
-- **Missing vs LeadWolf.** Verified deliverability-safe data out of the box; one-click export + CRM sync; automatic
+- **Missing vs TruePoint.** Verified deliverability-safe data out of the box; one-click export + CRM sync; automatic
   re-verification; a single search→verify→export→sequence workflow; **compliance guardrails** (suppression/consent)
   that bought lists and VA sheets entirely lack; repeatability + audit trail.
 
@@ -375,12 +375,12 @@ stack is the true baseline most early buyers actually compare LeadWolf against.
 
 ## 5. Comparison tables
 
-### 5.1 Feature matrix — competitors vs LeadWolf
+### 5.1 Feature matrix — competitors vs TruePoint
 
-Legend: ● = strong/native · ◐ = partial / gated / add-on · ○ = absent. **LeadWolf cells are PROJECTED from the plan,
+Legend: ● = strong/native · ◐ = partial / gated / add-on · ○ = absent. **TruePoint cells are PROJECTED from the plan,
 not measured**; MVP capabilities tagged **(M1–M5)**, later roadmap **(M7–M11)**.
 
-| Capability | LeadWolf (projected) | Apollo | ZoomInfo | Cognism | Lusha/Seamless | RocketReach/UpLead/Lead411 | Clay | Outreach/Salesloft | Instantly cluster | HubSpot/SFDC/Pipedrive | AI-SDR agents |
+| Capability | TruePoint (projected) | Apollo | ZoomInfo | Cognism | Lusha/Seamless | RocketReach/UpLead/Lead411 | Clay | Outreach/Salesloft | Instantly cluster | HubSpot/SFDC/Pipedrive | AI-SDR agents |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | **End-to-end loop** (find→reveal→score→sequence→send in one app) | ● *find/reveal/score MVP; send M9* | ● | ◐ (Engage add-on) | ○ (data only) | ○ | ○ | ◐ (orchestrate, bolt-on send) | ◐ (send only, no data) | ◐ (send + DB, no CRM) | ◐ (autonomous, narrow) | 
 | **Verified email/phone on reveal** | ● **(M4)** | ◐ (claim 91% / real ~65–80%) | ◐ (inconsistent non-US) | ● (Diamond phone) | ◐ (accuracy gap) | ◐ (UpLead best) | ◐ (waterfall, no native verify) | ○ | ◐ | ◐ (shallow) | ◐ |
@@ -393,8 +393,8 @@ not measured**; MVP capabilities tagged **(M1–M5)**, later roadmap **(M7–M11
 | **Transparent self-serve pricing** | ● *(planned)* | ● | ○ (opaque) | ○ (quote) | ◐ (Lusha ●, Seamless ○) | ● | ◐ (two-meter) | ○ (demo-gated) | ● | ◐ (gated add-ons) | ○ (quote) |
 
 **Reading the matrix.** No incumbent is strong across **end-to-end loop + verified-on-reveal + compliance/DSAR +
-per-workspace isolation** simultaneously — that intersection is LeadWolf's projected white space. The columns where
-LeadWolf is weakest (built-in send, AI breadth, raw data coverage, public API) are precisely the areas it consciously
+per-workspace isolation** simultaneously — that intersection is TruePoint's projected white space. The columns where
+TruePoint is weakest (built-in send, AI breadth, raw data coverage, public API) are precisely the areas it consciously
 defers to post-MVP or declines to fight on (see [Market Gaps](03-market-gaps.md)).
 
 ### 5.2 Pricing-model comparison
@@ -414,27 +414,27 @@ defers to post-MVP or declines to fight on (see [Market Gaps](03-market-gaps.md)
 | **HubSpot/SFDC/Pipedrive** | Cheap per-seat core + gated add-ons + consumption | $14–175/seat; **real stack $1.5–5K+/mo** | Annual; onboarding fees | $2/conversation backlash; ecosystem lock-in |
 | **AI-SDR agents** | "Digital labor" quote-based / outcome | $900–5,000/mo; Qualified $95–165K/yr | Annual; quarterly billing | Opaque; 90-day kill-curve |
 | **DIY** | Mixed labor/CPM/seats | Sales Nav ~$120/mo; VA ~$900–2,700/mo; lists ~$300–1K/M | None (inertia) | Compliance liability; ~30%/yr decay |
-| **LeadWolf (PLACEHOLDER)** | Per-reveal tenant credits + Free/Pro/Team/Enterprise tiers | **Not final** (signup bonus ~25 credits; packs 100/500/2K/10K) | *Planned transparent/self-serve, no auto-renew trap* | *None by design — pricing is placeholder* |
+| **TruePoint (PLACEHOLDER)** | Per-reveal tenant credits + Free/Pro/Team/Enterprise tiers | **Not final** (signup bonus ~25 credits; packs 100/500/2K/10K) | *Planned transparent/self-serve, no auto-renew trap* | *None by design — pricing is placeholder* |
 
-> **LeadWolf pricing is entirely placeholder.** The competitive *intent* — transparent, self-serve, no auto-renewal
+> **TruePoint pricing is entirely placeholder.** The competitive *intent* — transparent, self-serve, no auto-renewal
 > trap, no data-destroy clause, fair credit economics (no charge on bad data, rollover) — is a design stance, not a
 > committed price sheet. See [Product-Market Fit](04-product-market-fit.md) for the structural price assessment.
 
 ### 5.3 Positioning map
 
-Two axes that matter for LeadWolf: **scope** (single point tool ↔ full end-to-end loop) and **price/access**
+Two axes that matter for TruePoint: **scope** (single point tool ↔ full end-to-end loop) and **price/access**
 (self-serve/affordable ↔ enterprise/opaque).
 
 | | **Self-serve / affordable** | **Enterprise / opaque** |
 |---|---|---|
-| **Full loop (find → … → send)** | **Apollo** · *Instantly/Lemlist cluster (find+send, no CRM)* · **← LeadWolf targets here (projected)** | **ZoomInfo** (data+Engage+Chorus) · **Salesforce** (Agentforce+Data Cloud) |
+| **Full loop (find → … → send)** | **Apollo** · *Instantly/Lemlist cluster (find+send, no CRM)* · **← TruePoint targets here (projected)** | **ZoomInfo** (data+Engage+Chorus) · **Salesforce** (Agentforce+Data Cloud) |
 | **Orchestration / platform** | *(Clay Launch tier)* | **Clay** (GTM engineering) · **HubSpot** (Breeze) |
 | **Single point tool** | Lusha · RocketReach · UpLead · Lead411 · Kaspr · Wiza · Hunter · **DIY/Sales Nav** | **Cognism** (data only, premium) · Outreach/Salesloft (send only) · AI-SDR agents (narrow autonomy) |
 
-**Where LeadWolf plants its flag:** the **self-serve/affordable × full-loop** quadrant, currently owned almost solely
+**Where TruePoint plants its flag:** the **self-serve/affordable × full-loop** quadrant, currently owned almost solely
 by Apollo — but differentiated from Apollo on **compliance-as-a-feature, per-workspace isolation, verified-on-reveal
 data trust, and honest billing**, the four things Apollo is weakest on. Cognism owns "compliant + premium + data-only";
-LeadWolf's bet is "compliant + affordable + full-loop."
+TruePoint's bet is "compliant + affordable + full-loop."
 
 ---
 
@@ -447,12 +447,12 @@ Synthesized from the profiles above; each maps forward into [Market Gaps](03-mar
    sourcing (Cognism) or ignores compliance entirely (Apollo, Clay, the cold-email cluster, AI-SDR agents). **Nobody
    gates BOTH reveal AND send with unbypassable in-transaction suppression, DSAR fan-out across owned copies, and an
    append-only audit log.** With the regulatory wall hardening — California DROP live Jan 2026, GM's $12.75M CCPA fine,
-   ZoomInfo's ~$29.5M settlement, Kaspr's €240K CNIL fine — this is LeadWolf's sharpest **(M5)** wedge. *Caveat:
-   LeadWolf must still earn the certs/registrations Cognism already holds.*
+   ZoomInfo's ~$29.5M settlement, Kaspr's €240K CNIL fine — this is TruePoint's sharpest **(M5)** wedge. *Caveat:
+   TruePoint must still earn the certs/registrations Cognism already holds.*
 
 2. **Data trust / verified-on-reveal with honest economics.** The universal #1 complaint is the accuracy-vs-marketing
    gap (Apollo ~65–80% real vs 91% claimed; Lusha up to ~40% inaccurate; Lead411 ~80%; Seamless charges for bad data).
-   **No incumbent offers a transparent bounce SLA or credit-back-on-bad-data.** LeadWolf's verified-on-reveal **(M4)**
+   **No incumbent offers a transparent bounce SLA or credit-back-on-bad-data.** TruePoint's verified-on-reveal **(M4)**
    plus fair-credit design directly answers this — *provided it does not try to out-database Apollo/Clay on volume.*
 
 3. **Honest, predictable billing.** The most emotionally charged pain in the category is contract abuse: ZoomInfo's
@@ -470,7 +470,7 @@ Synthesized from the profiles above; each maps forward into [Market Gaps](03-mar
    ramp / 70% overwhelmed by tech" pain ([Market Research](01-market-research.md)).
 
 6. **"Augmented human, not autonomous slop."** The AI-SDR wave is actively discrediting itself (50–70% 90-day churn,
-   deliverability collapse, the 11x scandal); 2026 evidence favors hybrid human-in-the-loop pods. LeadWolf's
+   deliverability collapse, the 11x scandal); 2026 evidence favors hybrid human-in-the-loop pods. TruePoint's
    compliance-first, deliverability-disciplined, human-approval stance **(M9)** is a credible wedge against buyers
    burned by an 11x/Artisan deployment — *if* its drafting/scale match the autonomous players so "human-in-the-loop"
    doesn't read as "slow."
@@ -478,16 +478,16 @@ Synthesized from the profiles above; each maps forward into [Market Gaps](03-mar
 7. **The DIY baseline is beatable on every axis.** Sales Nav can't export verified emails; bought lists carry sender
    liability; VAs are a quality lottery; free tiers cap exports. A genuinely usable entry tier that collapses the DIY
    stack into one repeatable, compliant workflow is the real low-end opportunity — most early buyers aren't choosing
-   between LeadWolf and a named competitor, they're choosing between LeadWolf and "Sales Nav + a VA + a spreadsheet."
+   between TruePoint and a named competitor, they're choosing between TruePoint and "Sales Nav + a VA + a spreadsheet."
 
-**What LeadWolf must NOT fight on (incumbent moats to respect):** raw database volume (Apollo 275M, RocketReach 700M,
+**What TruePoint must NOT fight on (incumbent moats to respect):** raw database volume (Apollo 275M, RocketReach 700M,
 ZoomInfo, Clay's 100+-source waterfall), conversation intelligence / enterprise forecasting (Outreach/Salesloft, Gong),
 CRM data gravity and agentic depth (Salesforce Agentforce + Data Cloud), and the certs/proprietary data Cognism holds
-today. LeadWolf's defensibility is the **integrated, compliant, simple, isolated full loop** — not any single feature.
+today. TruePoint's defensibility is the **integrated, compliant, simple, isolated full loop** — not any single feature.
 Carried into the [SWOT](08-swot.md), [Risk Assessment](07-risk-assessment.md), and [Executive Report](09-executive-report.md).
 
 ---
 
-*Sources: the LeadWolf competitor dossier (inline-linked above) and the adversarial verification block. Figures flagged
-"unverified," "estimate," or "contested" in verification are caveated inline. LeadWolf remains **pre-launch with zero
-code/users**; all LeadWolf capability and fit assessments are **projected from `docs/planning/`**, not measured.*
+*Sources: the TruePoint competitor dossier (inline-linked above) and the adversarial verification block. Figures flagged
+"unverified," "estimate," or "contested" in verification are caveated inline. TruePoint remains **pre-launch with zero
+code/users**; all TruePoint capability and fit assessments are **projected from `docs/planning/`**, not measured.*

@@ -6,7 +6,7 @@
 
 ## Context
 
-LeadWolf's flagship differentiator is **compliance as a feature** ([00 §1](../00-overview.md),
+TruePoint's flagship differentiator is **compliance as a feature** ([00 §1](../00-overview.md),
 [08](../08-compliance.md)). The market-gap analysis is blunt that, pre-launch, this is **"a promise, not a
 fact"**: no certifications, US-only, and the wedge is cert-dependent
 ([product-market fit](../../market-analysis/04-product-market-fit.md) §9 — execution
@@ -14,7 +14,7 @@ sub-score 35/100; [risk assessment](../../market-analysis/07-risk-assessment.md)
 Two forces make a formal program non-optional:
 
 1. **Buyers' compliance teams gate purchases** on attestations (SOC 2 / ISO 27001), a DPA, and a sub-processor
-   list — exactly the audience LeadWolf targets.
+   list — exactly the audience TruePoint targets.
 2. **Data-broker registration law.** The California **Delete Act / DROP** is live (2026-01-01) with per-day
    penalties, and ~20 US state privacy laws are in force — a business trading in contact data must **register**
    where required ([market research](../../market-analysis/01-market-research.md) §4,

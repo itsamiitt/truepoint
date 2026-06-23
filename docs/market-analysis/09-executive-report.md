@@ -1,13 +1,13 @@
 # 09 — Executive Report
 
-> **Board-level capstone** of the **LeadWolf Market Gap Analysis & PMF Audit**. Research date: **2026-06-01**.
+> **Board-level capstone** of the **TruePoint Market Gap Analysis & PMF Audit**. Research date: **2026-06-01**.
 > See the [README](README.md) for index, method, and assumptions. This report synthesizes all eight prior docs —
 > [Market Research](01-market-research.md), [Competitor Analysis](02-competitor-analysis.md),
 > [Market Gaps](03-market-gaps.md), [Product-Market Fit](04-product-market-fit.md),
 > [Pain-Point Mapping](05-pain-point-mapping.md), [Strategic Opportunities](06-strategic-opportunities.md),
 > [Risk Assessment](07-risk-assessment.md), and [SWOT](08-swot.md) — into one decision-ready picture.
 >
-> **Stage caveat (load-bearing — read first).** LeadWolf is **pre-launch with ZERO code, ZERO users, and ZERO
+> **Stage caveat (load-bearing — read first).** TruePoint is **pre-launch with ZERO code, ZERO users, and ZERO
 > revenue**. There is no usage, retention, conversion, or NPS data. **All pricing is placeholder** (signup bonus
 > ~25 credits; packs 100/500/2k/10k — none final). Every fit judgement, score, and ranking below is **PROJECTED,
 > design-stage** analysis of the planning corpus — *a verdict on the plan, not on a shipped product*. Capabilities
@@ -18,7 +18,7 @@
 
 ## Executive Summary
 
-LeadWolf is a planning-stage, per-workspace, multi-tenant **sales-intelligence + prospecting CRM** that proposes to
+TruePoint is a planning-stage, per-workspace, multi-tenant **sales-intelligence + prospecting CRM** that proposes to
 collapse the find → reveal → score → sequence → send loop into one app, with **compliance gated inside the database
 transaction** and **per-workspace data ownership** (no shared golden record). It enters a **large, crowded,
 consolidating** market: sales intelligence is ~**$3.3–4.5B today growing ~10–13% to ~$9B by 2030–31**
@@ -28,7 +28,7 @@ consolidating** market: sales intelligence is ~**$3.3–4.5B today growing ~10�
 $7.53B base is a **verified ~2× outlier** — do not anchor on it.)
 
 The strategic finding is encouraging and uncomfortable in equal measure. **The loudest, best-evidenced buyer pains in
-this market are trust, compliance, and consolidation — not raw data volume** — and those are exactly where LeadWolf's
+this market are trust, compliance, and consolidation — not raw data volume** — and those are exactly where TruePoint's
 three differentiators point. The market backdrop is a genuine tailwind: data-broker regulation is hardening
 ([California Delete Act / DROP live Jan 1 2026](https://cppa.ca.gov/data_brokers/)), buyers want self-serve and relevance
 ([Gartner: 67% prefer a rep-free experience](https://www.gartner.com/en/newsroom/press-releases/2026-03-09-gartner-sales-survey-finds-67-percent-of-b2b-buyers-prefer-a-rep-free-experience)),
@@ -36,7 +36,7 @@ three differentiators point. The market backdrop is a genuine tailwind: data-bro
 ([Salesforce State of Sales](https://www.salesforce.com/sales/state-of-sales/sales-statistics/)), and incumbents are
 widely hated for contract traps and bad data.
 
-But LeadWolf's strengths are **promises** and its weaknesses are **facts**. It has no brand, no data asset, no certs, no
+But TruePoint's strengths are **promises** and its weaknesses are **facts**. It has no brand, no data asset, no certs, no
 users, and no code; its single Critical risk — **incumbents absorbing the whole loop as a feature** (Salesforce
 Agentforce, HubSpot Breeze, ZoomInfo GTM Studio) — is the least mitigable by product alone; and the strongest moat
 (compliance gating *both* reveal *and* send) is only half-delivered until **M9**, post-MVP. The
@@ -53,8 +53,8 @@ at the SMB/mid-market end the incumbents under-serve, before the giants close th
 
 1. **The market rewards the right things.** Across all sources, the "spray-and-pray, more-SDRs, scraped-list" era is
    dying and a "verified-data, signal-based, compliant, consolidated" era is forming ([Market Research](01-market-research.md) §3).
-   LeadWolf is designed for the era that is winning, not the one that is dying.
-2. **The four loudest complaints are LeadWolf's exact targets.** "The data is wrong," "the contract trapped me," "the
+   TruePoint is designed for the era that is winning, not the one that is dying.
+2. **The four loudest complaints are TruePoint's exact targets.** "The data is wrong," "the contract trapped me," "the
    pricing is opaque / credits run out," and "I have too many tools" recur across every vendor reviewed
    ([Market Research](01-market-research.md) §7; [Pain-Point Mapping](05-pain-point-mapping.md)). They map directly onto
    end-to-end-in-one-app, compliance-as-a-feature, per-workspace ownership, and a placeholder fair-billing model.
@@ -65,7 +65,7 @@ at the SMB/mid-market end the incumbents under-serve, before the giants close th
 4. **The strongest moat ships late.** Compliance gating *both* reveal and send is only fully realized once the send
    engine lands at **M9** — so at launch the differentiator is half-delivered ([Market Gaps](03-market-gaps.md) §6.3;
    [Product-Market Fit](04-product-market-fit.md) §4).
-5. **No data moat.** LeadWolf owns no proprietary dataset; it is a thin, compliant, well-isolated layer over Apollo /
+5. **No data moat.** TruePoint owns no proprietary dataset; it is a thin, compliant, well-isolated layer over Apollo /
    ZoomInfo / Clearbit. It therefore **cannot win the #1 complaint (data accuracy) outright** — only relieve it via
    verify-on-reveal and credit-back ([SWOT](08-swot.md) W3; [Market Gaps](03-market-gaps.md) §2.1).
 6. **One Critical risk dominates.** The risk register resolves to **1 Critical, 14 High, 8 Medium, 0 Low**
@@ -79,7 +79,7 @@ at the SMB/mid-market end the incumbents under-serve, before the giants close th
 ## Market Opportunities
 
 Drawn from [Strategic Opportunities](06-strategic-opportunities.md) and [Market Gaps](03-market-gaps.md), ordered by the
-combination of attractiveness and how soon LeadWolf can deliver:
+combination of attractiveness and how soon TruePoint can deliver:
 
 - **Honest, no-lock-in billing (M3, MVP).** Direct counter to the most emotionally charged complaint — auto-renewal
   windows, 10–30% renewal hikes, data-destroy lock-in ([viral LinkedIn PSA](https://www.linkedin.com/posts/benjamin-moyer_psa-do-not-purchase-zoominfo-activity-7118103934497415169-ULhY),
@@ -99,7 +99,7 @@ combination of attractiveness and how soon LeadWolf can deliver:
   lists," which is brittle, non-compliant, and labor-heavy ([topo.io](https://www.topo.io/blog/linkedin-sales-navigator-price)).
 - **Compliant send + deliverability (M9, post-MVP — the keystone).** Google/Yahoo bulk-sender rules
   ([Google](https://support.google.com/a/answer/81126), escalated to permanent rejections Nov 2025) structurally reward
-  low-volume, verified, consent-aware sending — the exact behavior LeadWolf's gated send engine is designed around. This
+  low-volume, verified, consent-aware sending — the exact behavior TruePoint's gated send engine is designed around. This
   is the make-or-break medium bet.
 - **CRM-neutral sync + public API (M10, post-MVP — most defensible).** Being the open, CRM-agnostic layer is the most
   durable counter to incumbent absorption.
@@ -109,9 +109,9 @@ combination of attractiveness and how soon LeadWolf can deliver:
 ## Market Gaps
 
 The gap analysis ([Market Gaps](03-market-gaps.md)) catalogues 16 gaps across six categories (functional, operational,
-UX, pricing, technology, service). The decisive cluster for LeadWolf:
+UX, pricing, technology, service). The decisive cluster for TruePoint:
 
-| Gap | Category | LeadWolf coverage | Milestone |
+| Gap | Category | TruePoint coverage | Milestone |
 |---|---|---|---|
 | In-transaction compliance gating reveal **and** send | Technology | Half at MVP (reveal), full at send | 🔶 M5 + **M9** |
 | Auto-renewal / data-destroy / opaque-pricing traps | Pricing | Strong — design wedge | ✅ M3 |
@@ -124,7 +124,7 @@ UX, pricing, technology, service). The decisive cluster for LeadWolf:
 | CRM-agnostic open API / sync | Technology | Deferred | 🔶 M10 |
 | International / non-US coverage | Functional | **Non-fit at launch (US-only)** | ⚪ open |
 
-The pattern: the gaps LeadWolf covers **Strongly are mostly cheap and MVP-deliverable** (pricing, isolation, fair
+The pattern: the gaps TruePoint covers **Strongly are mostly cheap and MVP-deliverable** (pricing, isolation, fair
 billing, DIY-replacement); the gaps it covers **only Partially or not at all are the data moat (structural) and the
 back half of the loop (M9–M10)**. The cheapest, highest-leverage MVP wins are the **pricing/trust gaps plus the
 anti-lock-in + credit-back openings**.
@@ -155,16 +155,16 @@ the low-to-mid 70s. Slipping M9 or being absorbed by an incumbent moves it the o
 
 ## Competitive Positioning
 
-LeadWolf's defensible position is **"the honest, compliant, all-in-one prospecting workspace for SMB/mid-market and
+TruePoint's defensible position is **"the honest, compliant, all-in-one prospecting workspace for SMB/mid-market and
 agencies that the bloated incumbents under-serve."** It must **not** fight on the incumbents' moats (raw data breadth,
 brand, enterprise relationships).
 
-| Competitor class | Their edge | LeadWolf's counter | Watch-out |
+| Competitor class | Their edge | TruePoint's counter | Watch-out |
 |---|---|---|---|
 | **Data/intel** (Apollo, ZoomInfo, Cognism) | Owned datasets, brand, coverage | Honest billing, compliance, isolation, all-in-one | No data moat — relieve, don't out-volume |
 | **CRM-native** (Salesforce/HubSpot/Pipedrive) | Distribution, the system of record | Be the open, CRM-neutral layer (M10); stay narrow | **Critical risk — feature absorption (R4)** |
 | **GTM-orchestration** (Clay) | Data breadth, $3.1B valuation, 10,000+ customers ([TechCrunch](https://techcrunch.com/2025/08/05/clay-confirms-it-closed-100m-round-at-3-1b-valuation/)) | All-in-one + compliance-first; Clay is explicitly neither | Clay moving down-stack |
-| **Outreach SEPs** (Outreach, Salesloft) | Mature send/sequencing | Compliant send fused with sourcing (M9) | LeadWolf's send is post-MVP |
+| **Outreach SEPs** (Outreach, Salesloft) | Mature send/sequencing | Compliant send fused with sourcing (M9) | TruePoint's send is post-MVP |
 | **AI-SDR agents** (11x, Artisan) | "Autonomous" hype — now correcting | Augmented-human stance (the surviving model) | 11x cautionary tale: **~$10M claimed vs ~$3M real ARR** (corrected from the dossier's $14M), 70–80% early churn ([TechCrunch](https://techcrunch.com/2025/03/24/a16z-and-benchmark-backed-11x-has-been-claiming-customers-it-doesnt-have/)) |
 | **DIY baseline** | Free-ish, flexible | Repeatable, compliant, one app | Inertia is real |
 
@@ -178,7 +178,7 @@ From the [Risk Assessment](07-risk-assessment.md) register (**1 Critical · 14 H
   [ZoomInfo GTM Workspace / Studio](https://www.sec.gov/Archives/edgar/data/0001794515/000179451524000132/zi-8kex991x20240805.htm)
   can fold the whole loop into the platforms buyers already own. **Least mitigable by product alone** — countered only by
   positioning discipline (stay narrow, stay compliant, stay CRM-neutral).
-- **High — No proprietary data asset.** In a market whose #1 complaint is data, LeadWolf owns none; it depends on
+- **High — No proprietary data asset.** In a market whose #1 complaint is data, TruePoint owns none; it depends on
   Apollo/ZoomInfo/Clearbit, inheriting their accuracy ceiling and provider-dependency risk.
 - **High — The compliance wedge is real architecture but unproven, US-only, and partly deferred.** No SOC 2 / ISO /
   broker registration yet; full reveal-and-send gating only at M9.
@@ -254,20 +254,20 @@ The rare case where the **highest-attractiveness work is also the soonest-delive
 
 ## Final Verdict
 
-**Is LeadWolf truly solving a meaningful market gap?**
+**Is TruePoint truly solving a meaningful market gap?**
 
-**Qualified yes — on the plan.** LeadWolf aims squarely at the **real, loud, well-evidenced, and monetizable** pains in
+**Qualified yes — on the plan.** TruePoint aims squarely at the **real, loud, well-evidenced, and monetizable** pains in
 this market — *trust, compliance, honest pricing, and consolidation* — rather than at raw data volume, which is where the
 incumbents are unassailable and where buyers are *not* primarily hurting. The market is moving toward exactly the
-verified-data, compliant, consolidated posture LeadWolf is built for, the regulatory backdrop is a structural tailwind,
+verified-data, compliant, consolidated posture TruePoint is built for, the regulatory backdrop is a structural tailwind,
 and the most attractive gaps are also the cheapest and soonest to ship (M1–M5). That alignment is real and rare, and it
 is why the **PROJECTED PMF score is a respectable 62 / 100** for a pre-launch concept.
 
-**The core reasoning, stated plainly:** the gap is meaningful, but LeadWolf's answers to it are **promises, not facts**.
+**The core reasoning, stated plainly:** the gap is meaningful, but TruePoint's answers to it are **promises, not facts**.
 It has zero code, zero users, no data moat, no certifications, and US-only scope; its strongest differentiator
 (compliance gating *both* reveal and send) is only half-delivered until **M9**; and pricing is entirely placeholder. The
 62/100 already prices this in via a 35/100 execution sub-score and a −6 pre-launch discount. **The gap is real; whether
-LeadWolf closes it is unproven.**
+TruePoint closes it is unproven.**
 
 - **Single biggest opportunity:** **own "honest + compliant + all-in-one" for SMB/mid-market and agencies** — the segment
   the bloated, contract-trapping incumbents under-serve — anchored on the MVP-deliverable pricing/compliance/isolation

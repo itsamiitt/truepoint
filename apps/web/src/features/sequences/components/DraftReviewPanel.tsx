@@ -1,4 +1,4 @@
-// DraftReviewPanel.tsx — the AI draft → review → send seam (05 §13/§16) inside the Templates tab. LeadWolf is
+// DraftReviewPanel.tsx — the AI draft → review → send seam (05 §13/§16) inside the Templates tab. TruePoint is
 // augmented-human: a draft is never auto-sent — it is gated on human review. The drafts backend is post-MVP,
 // so when useDrafts reports available=false this renders a first-class "connect …" EmptyState. When drafts
 // DO exist, each shows its review-gated status and copy, but the send button is intentionally disabled with a

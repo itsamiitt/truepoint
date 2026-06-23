@@ -1,6 +1,6 @@
 # 18 — Scalability & Performance
 
-> The quantified performance contract: how LeadWolf serves **millions of users**, **thousands of
+> The quantified performance contract: how TruePoint serves **millions of users**, **thousands of
 > concurrent users per workspace**, **100M+ overlay rows / billions in the master graph**, and
 > **real-time** operations without degradation. The numbers here are the contract `10` schedules,
 > [ADR-0024](./decisions/ADR-0024-performance-slos-and-capacity-model.md) locks, and `19` observes.

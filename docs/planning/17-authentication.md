@@ -1,6 +1,6 @@
 # 17 — Authentication & Identity
 
-> The authentication system runs on a **dedicated origin, `auth.truepoint.in`**, as LeadWolf's internal
+> The authentication system runs on a **dedicated origin, `auth.truepoint.in`**, as TruePoint's internal
 > **identity provider (IdP / BFF)**. It owns login, signup, MFA, SSO, magic links, OAuth callbacks, and
 > account-security settings; the customer app (`app.truepoint.in`) holds no credentials. Login is
 > **progressive (identifier-first)**; after authentication the app domain receives a short-lived,

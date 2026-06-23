@@ -13,7 +13,7 @@
 
 ## Context
 
-LeadWolf's two highest-risk subsystems — **identity resolution** and the **credit ledger** — lean
+TruePoint's two highest-risk subsystems — **identity resolution** and the **credit ledger** — lean
 heavily on advanced PostgreSQL features:
 
 - `pg_trgm` GIN indexes and `citext` for fuzzy matching and case-insensitive emails/domains.

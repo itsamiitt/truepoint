@@ -8,7 +8,7 @@
 
 ## Context
 
-LeadWolf assembles each person/company from **many sources** (CSV import, scrapers, multiple enrichment
+TruePoint assembles each person/company from **many sources** (CSV import, scrapers, multiple enrichment
 providers). We must:
 
 - present one clean **golden record** to the product,

@@ -2,7 +2,7 @@
 
 ## 1. Vision
 
-LeadWolf is a **multi-tenant sales-intelligence prospecting CRM**. Each customer (**tenant**) works in
+TruePoint is a **multi-tenant sales-intelligence prospecting CRM**. Each customer (**tenant**) works in
 one or more **workspaces**; each workspace builds and owns its **own** book of contacts (people) and
 accounts (companies) — imported and enriched from external sources (Apollo, ZoomInfo, LinkedIn/Sales
 Navigator, CSV, CRM) — then scores, reveals, and runs outreach against them on a **credit** basis. The
@@ -15,7 +15,7 @@ product wins on three things:
 3. **Per-workspace control** — separate ICPs, notes, scores, and outreach state per team/brand/client,
    with hard RLS isolation ([ADR-0006](./decisions/ADR-0006-per-workspace-multitenant-model.md)).
 
-> **Repositioning note (2026-05-29):** LeadWolf moved from a *global data-vendor* model (one shared,
+> **Repositioning note (2026-05-29):** TruePoint moved from a *global data-vendor* model (one shared,
 > de-duplicated golden contact DB) to a *per-workspace prospecting CRM*. The shared golden record,
 > field-level provenance, and double-entry credit ledger were consciously traded away — see superseded
 > [ADR-0003](./decisions/ADR-0003-three-layer-data-model.md) / [ADR-0005](./decisions/ADR-0005-multi-tenancy-and-global-contact-db.md)
@@ -25,7 +25,7 @@ product wins on three things:
 > entity-resolved universe of people + companies that every tenant searches and reveals from) now sits
 > *beneath* the per-workspace overlay, a deliberate **two-layer hybrid**
 > ([ADR-0021](./decisions/ADR-0021-global-master-graph-and-overlay.md), reopening ADR-0006 and reviving the
-> spirit of ADR-0003/0005). This makes LeadWolf squarely a **data broker** — see [08 §15](./08-compliance.md).
+> spirit of ADR-0003/0005). This makes TruePoint squarely a **data broker** — see [08 §15](./08-compliance.md).
 
 ## 2. Who it's for (personas)
 
@@ -109,14 +109,14 @@ email/sequencing send engine is now IN scope — see ADR-0009 — reversing the 
 | **Source import** | A record of one import of a contact from a source, storing the raw payload — the provenance under this model (no field-level lineage). |
 | **Reveal** | Unlocking a contact's email/phone; spends **tenant** credits. First reveal in a workspace sets ownership; re-revealing the **same workspace copy** is free (a different workspace pays again). |
 | **Lead score** | Prospect quality (icp_fit/intent/engagement/composite), workspace-private — distinct from `email_status` (field correctness) ([ADR-0008](./decisions/ADR-0008-lead-scoring-model.md)). |
-| **Sequence / outreach** | A multi-step send workflow; LeadWolf enrolls contacts and sends ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)). |
+| **Sequence / outreach** | A multi-step send workflow; TruePoint enrolls contacts and sends ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)). |
 | **Suppression / DNC** | Do-not-contact / do-not-sell list; suppressed subjects are never revealed **or sent to**. |
 | **DSAR** | Data Subject Access Request (GDPR/CCPA): access, deletion, or rectification — fans out across every per-workspace copy. |
 | **Workspace role** | `owner`/`admin`/`member`/`viewer`, per workspace (on `workspace_members`); distinct from the **tenant-level** billing/owner capability. |
 | **Command palette** | Keyboard-driven (`cmdk`) launcher to jump to any record/destination or run any action ([11](./11-information-architecture.md)). |
 | **Sequence / Template** | A multi-step send workflow and its reusable message bodies (merge fields) ([ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md)). |
 | **Inbox / Task** | Unified replies + reminders; the rep's daily driver ([11 §4.4](./11-information-architecture.md)). |
-| **Staff / platform role** | Internal LeadWolf operator identity & role (`super_admin`/`support`/…) — *not* a customer user ([13](./13-platform-admin.md), [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)). |
+| **Staff / platform role** | Internal TruePoint operator identity & role (`super_admin`/`support`/…) — *not* a customer user ([13](./13-platform-admin.md), [ADR-0011](./decisions/ADR-0011-platform-admin-and-privileged-access.md)). |
 | **Impersonation** | Audited, time-boxed, banner-flagged staff "login-as" a tenant user for support. |
 | **Feature flag** | Platform-controlled toggle (global or per-tenant) for gating/rolling out features. |
 | **Data Health** | Customer-facing view of record quality (verification status, staleness, duplicates). |
@@ -172,7 +172,7 @@ Every choice below was confirmed with the user. Rationale for load-bearing ones 
 | Commercial policy | **Transparent pricing; no auto-renew traps; no data-destroy (export-on-exit)** | Trust wedge → [ADR-0012](./decisions/ADR-0012-transparent-no-lock-in-commercial-policy.md), [07 §1A](./07-billing-credits.md) |
 | Charge & credit-back | **Charge only for `valid` data; credit back on bounce** | Honest billing → [ADR-0013](./decisions/ADR-0013-charge-for-verified-data-credit-back.md), [07 §3](./07-billing-credits.md) |
 | Lead scoring | Versioned scores + intent signals (≠ data confidence) | → [ADR-0008](./decisions/ADR-0008-lead-scoring-model.md) |
-| Outreach | **LeadWolf enrolls & sends** (sequences) | → [ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md), [05](./05-features-modules.md) |
+| Outreach | **TruePoint enrolls & sends** (sequences) | → [ADR-0009](./decisions/ADR-0009-outreach-engine-enroll-and-send.md), [05](./05-features-modules.md) |
 | Compliance | GDPR + CCPA; suppression gates reveal **and** send | Regulated buyers → [08](./08-compliance.md) |
 | Trust & certs | **SOC 2 / ISO 27001 + data-broker registration + Trust Center** | Make the compliance wedge verifiable → [ADR-0014](./decisions/ADR-0014-trust-and-certification-program.md), [08 §15](./08-compliance.md) |
 | Residency | US region first, region-tagged | Migration path → [08](./08-compliance.md) |

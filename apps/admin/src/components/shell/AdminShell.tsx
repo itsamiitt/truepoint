@@ -93,7 +93,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <p className="tp-signin-title">Access denied</p>
           <p className="app-muted">
             Your account is signed in but is not a platform staff account. This console is
-            restricted to LeadWolf staff.
+            restricted to TruePoint staff.
           </p>
         </div>
       </div>

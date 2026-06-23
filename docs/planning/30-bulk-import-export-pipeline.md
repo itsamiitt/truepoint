@@ -1,6 +1,6 @@
 # 30 — Bulk Import / Export Pipeline
 
-> The canonical contract for moving **millions of CSV rows** in and out of LeadWolf **accurately, at
+> The canonical contract for moving **millions of CSV rows** in and out of TruePoint **accurately, at
 > scale**: bulk import and export are **first-class async jobs**, never synchronous requests. Bytes go
 > **direct to S3**; the app stays off the byte path; a **durable, addressable job** with cheap status
 > fields drives a Salesforce-Bulk-API-2.0-style state machine (create→upload→close→process→poll→fetch)

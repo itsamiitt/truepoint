@@ -647,7 +647,7 @@ Built so the public API is mostly *exposing* what already exists:
   ([25](./25-departments-teams-workspaces.md)), **AI** ([23](./23-ai-intelligence-layer.md)),
   **automation** ([27](./27-workflow-automation-engine.md)), and **saved-views/segments**
   ([24](./24-advanced-search-exploration-ux.md)).
-- **CRM-neutral by design (strategic).** The public API + CRM sync ([10 M10](./10-roadmap.md)) keep LeadWolf an
+- **CRM-neutral by design (strategic).** The public API + CRM sync ([10 M10](./10-roadmap.md)) keep TruePoint an
   **open, CRM-agnostic layer** — the most defensible counter to incumbent feature-absorption (the market
   analysis' sole Critical risk — [10 risk #13](./10-roadmap.md), recommendation R8) and a low-noise acquisition
   channel for the orphaned ex-Clearbit / API-first audience ([15 §3](./15-gap-remediation.md)).

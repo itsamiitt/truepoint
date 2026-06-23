@@ -1,6 +1,6 @@
 # Department Modules
 
-Per-department specs for LeadWolf's **"teams in one workspace"** model — the framework is
+Per-department specs for TruePoint's **"teams in one workspace"** model — the framework is
 [25 — Departments, Teams & Workspaces](../25-departments-teams-workspaces.md)
 ([ADR-0022](../decisions/ADR-0022-departments-teams-intra-workspace-segmentation.md)). Each department is a
 **team** (`department_type`) inside a workspace, expressed as a **persona** over the shared 6-destination

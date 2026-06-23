@@ -9,7 +9,7 @@
 
 > **Source:** [../market-analysis/03-market-gaps.md](../market-analysis/03-market-gaps.md) (16 gaps + §10 hidden
 > opportunities) and [../market-analysis/09-executive-report.md](../market-analysis/09-executive-report.md)
-> (recommendations + projected PMF 62/100). The analysis grades LeadWolf **pre-launch** — these remediations are
+> (recommendations + projected PMF 62/100). The analysis grades TruePoint **pre-launch** — these remediations are
 > design decisions, not validated outcomes.
 
 ## 1. How to read this

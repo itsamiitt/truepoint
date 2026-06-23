@@ -8,7 +8,7 @@
 
 ## Context
 
-LeadWolf is adding **bulk CSV enrichment** ([31](../31-bulk-enrichment-pipeline.md)): a user uploads a sparse CSV,
+TruePoint is adding **bulk CSV enrichment** ([31](../31-bulk-enrichment-pipeline.md)): a user uploads a sparse CSV,
 the rows are matched against our own universe ([ADR-0037](./ADR-0037-bulk-match-first-resolution-and-candidate-index.md)) and
 enriched/verified, then downloaded — at enterprise scale (a single job can be hundreds of thousands of rows).
 The single-reveal billing path is already decided: charge a **function of the verified result**

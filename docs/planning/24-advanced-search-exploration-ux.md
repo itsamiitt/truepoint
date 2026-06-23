@@ -13,7 +13,7 @@
 > ZoomInfo runs **Apache Solr** and drives its facet drill-downs through Solr's **JSON Facet API**. Lusha is
 > not public; assume the same industry pattern. The common thread: a **Lucene-family search engine** (not the
 > OLTP database) holding a **denormalized read model**, with faceting, autocomplete suggesters, and synonym
-> analysis as first-class features. LeadWolf follows this pattern on **OpenSearch** (Elasticsearch family) +
+> analysis as first-class features. TruePoint follows this pattern on **OpenSearch** (Elasticsearch family) +
 > **ClickHouse** for facet counts. Sources are listed in [§13 References](#13-references).
 
 ## 1. Principles

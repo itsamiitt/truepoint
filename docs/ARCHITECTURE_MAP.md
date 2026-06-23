@@ -1,4 +1,4 @@
-# LeadWolf — Architecture Map
+# TruePoint — Architecture Map
 
 > **Status:** `live` · **Generated from:** [`docs/architecture-map.json`](./architecture-map.json)
 > (run `node .claude/hooks/gen-architecture-map.mjs` — or `bun run arch:map` — to refresh). **Paths come

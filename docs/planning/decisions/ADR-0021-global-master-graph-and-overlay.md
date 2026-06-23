@@ -11,7 +11,7 @@
 
 ## Context
 
-[ADR-0006](./ADR-0006-per-workspace-multitenant-model.md) repositioned LeadWolf from a **global data
+[ADR-0006](./ADR-0006-per-workspace-multitenant-model.md) repositioned TruePoint from a **global data
 vendor** to a **per-workspace prospecting CRM**: each workspace owns isolated copies of contacts/accounts,
 sourced by import + third-party enrichment, with **no shared golden record**. It explicitly *rejected* the
 hybrid (global golden + per-workspace overlay) for complexity, and listed *"the lack of a shared asset
@@ -110,7 +110,7 @@ purge, then cascade to overlays) than enumerating copies.
   [ADR-0036](./ADR-0036-bulk-async-job-and-staging-pipeline.md)) stages a million-row CSV and resolves each
   row before (or as) it materializes the overlay copy.
 - **Negative (consciously accepted):**
-  - **LeadWolf is now squarely a "data broker."** CA **Delete Act / DROP** registration + deletion
+  - **TruePoint is now squarely a "data broker."** CA **Delete Act / DROP** registration + deletion
     processing (from **2026-08-01**) and applicable state broker registries move from a Trust-program line
     item to a **core, GA-gating** obligation ([08 §4](../08-compliance.md#4-dsar--data-subject-access-requests),
     [08 §15](../08-compliance.md#15-trust--certification-program-adr-0014),

@@ -8,7 +8,7 @@
 
 ## Context
 
-LeadWolf can already (a) **reveal/enrich a single contact on demand** — the per-field provider waterfall
+TruePoint can already (a) **reveal/enrich a single contact on demand** — the per-field provider waterfall
 with cache, breaker, and budget ([06 §4](../06-enrichment-engine.md#4-the-enrichment-flow-per-requested-field)),
 charged honestly per verified result ([ADR-0013](./ADR-0013-charge-for-verified-data-credit-back.md)) — and
 (b) **import a raw CSV** into a workspace as overlay copies with `source_imports` provenance ([03 §5](../03-database-design.md#5-data-layer)).
