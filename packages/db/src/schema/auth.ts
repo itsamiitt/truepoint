@@ -159,24 +159,38 @@ export const tenantDomains = pgTable("tenant_domains", {
   createdAt: createdAt(),
 });
 
-export const userSessions = pgTable("user_sessions", {
-  id: varchar("id", { length: 255 }).primaryKey(), // Lucia session id (durable, on auth origin)
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  tenantId: uuid("tenant_id"), // the org this session is active in (chosen at login; ADR-0019)
-  workspaceId: uuid("workspace_id"), // the active workspace (null until selected)
-  deviceId: uuid("device_id"),
-  refreshTokenHash: varchar("refresh_token_hash", { length: 255 }), // rotating, reuse-detected
-  rotatedFrom: varchar("rotated_from", { length: 255 }),
-  appOrigin: varchar("app_origin", { length: 255 }),
-  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
-  revokedAt: timestamp("revoked_at", { withTimezone: true }),
-  ipAddress: text("ip_address"),
-  userAgent: varchar("user_agent", { length: 500 }),
-  createdAt: createdAt(),
-});
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    id: varchar("id", { length: 255 }).primaryKey(), // Lucia session id (durable, on auth origin)
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id"), // the org this session is active in (chosen at login; ADR-0019)
+    workspaceId: uuid("workspace_id"), // the active workspace (null until selected)
+    deviceId: uuid("device_id"),
+    refreshTokenHash: varchar("refresh_token_hash", { length: 255 }), // rotating, reuse-detected
+    rotatedFrom: varchar("rotated_from", { length: 255 }),
+    appOrigin: varchar("app_origin", { length: 255 }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ipAddress: text("ip_address"),
+    userAgent: varchar("user_agent", { length: 500 }),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    // Silent-refresh hot path (userRepository.findByRefreshTokenHash — runs on every cold app load): the
+    // equality lookup on the rotating refresh-token hash. PARTIAL UNIQUE over the LIVE rows only — a hash is
+    // single-use among active sessions (rotation revokes the prior row), so the live set is unique while
+    // revoked/historical rows are excluded from both the index and the uniqueness guarantee. Without this the
+    // append-only, never-pruned table forces a seq scan that worsens over time (perf RC#4). See also
+    // sessionRepository.deleteExpired — prune revoked/expired rows so even the partial index stays small.
+    refreshTokenHashIdx: uniqueIndex("uniq_user_sessions_refresh_token_hash")
+      .on(t.refreshTokenHash)
+      .where(sql`${t.revokedAt} IS NULL`),
+  }),
+);
 
 export const userMfaMethods = pgTable("user_mfa_methods", {
   id: id(),

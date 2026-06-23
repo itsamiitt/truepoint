@@ -191,6 +191,13 @@ export const contacts = pgTable(
     wsAccountIdx: index("idx_contacts_ws_account")
       .on(t.workspaceId, t.accountId)
       .where(sql`${t.accountId} IS NOT NULL`),
+    // Dashboard "hot leads" read (contactRepository.topByPriority: WHERE deleted_at IS NULL AND priority_score
+    // IS NOT NULL ORDER BY priority_score DESC LIMIT 5). Composite with workspace_id so it stays index-backed
+    // under the RLS workspace predicate; PARTIAL on the live, scored rows only so the index is small and the
+    // top-N becomes a backwards index scan instead of a seq-scan + sort (perf RC#9).
+    wsPriorityIdx: index("idx_contacts_ws_priority_score")
+      .on(t.workspaceId, t.priorityScore.desc())
+      .where(sql`${t.deletedAt} IS NULL AND ${t.priorityScore} IS NOT NULL`),
   }),
 );
 
@@ -218,6 +225,13 @@ export const sourceImports = pgTable(
     uniqWsContentHash: uniqueIndex("uniq_source_imports_ws_content")
       .on(t.workspaceId, t.contentHash)
       .where(sql`${t.contentHash} IS NOT NULL`),
+    // Dashboard "recent imports" read (sourceImportRepository: WHERE workspace_id ... ORDER BY imported_at
+    // DESC): composite with workspace_id so the recency feed stays index-backed under the RLS workspace
+    // predicate instead of a seq-scan + sort on this high-volume table (perf RC#9).
+    wsImportedAtIdx: index("idx_source_imports_ws_imported_at").on(
+      t.workspaceId,
+      t.importedAt.desc(),
+    ),
     sourceNameEnum: check(
       "source_imports_source_name_enum",
       sql`${t.sourceName} IN ('apollo','zoominfo','linkedin','sales_navigator','hubspot','salesforce','clearbit','manual')`,
