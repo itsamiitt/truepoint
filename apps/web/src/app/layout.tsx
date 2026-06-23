@@ -4,8 +4,16 @@ import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { API_BASE, AUTH_ORIGIN } from "../lib/publicConfig";
 import "@leadwolf/ui/tokens.css";
 import "./globals.css";
+
+// Warm the cross-origin connections on the sign-in critical path. The first fetch to the auth
+// and API origins (PKCE redirect, token exchange, data load) otherwise pays a fresh DNS lookup +
+// TLS handshake; preconnect kicks that off while the document is still parsing. dns-prefetch is
+// the cheaper fallback for clients that don't honour preconnect. Skipped when the origin is empty
+// (single-domain deployments proxy auth + API through the app origin — same-origin, no handshake).
+const PRECONNECT_ORIGINS: readonly string[] = [...new Set([AUTH_ORIGIN, API_BASE])].filter(Boolean);
 
 export const metadata: Metadata = {
   title: { default: "TruePoint", template: "%s · TruePoint" },
@@ -26,6 +34,14 @@ export const viewport: Viewport = { themeColor: "#2563C9" };
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <head>
+        {PRECONNECT_ORIGINS.map((origin) => (
+          <link key={origin} rel="preconnect" href={origin} crossOrigin="anonymous" />
+        ))}
+        {PRECONNECT_ORIGINS.map((origin) => (
+          <link key={origin} rel="dns-prefetch" href={origin} />
+        ))}
+      </head>
       <body>{children}</body>
     </html>
   );
