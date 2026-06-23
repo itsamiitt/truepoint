@@ -71,10 +71,14 @@ export const providerCallRepository = {
     return Number(rows[0]?.total ?? 0);
   },
 
-  /** The most recent enrichment calls for the Home dashboard, newest first. Workspace-scoped via RLS. */
-  async recentActivity(scope: TenantScope, limit = 5): Promise<EnrichActivityRow[]> {
-    return withTenantTx(scope, (tx) =>
-      tx
+  /**
+   * The most recent enrichment calls for the Home dashboard, newest first. Workspace-scoped via RLS. Pass
+   * `tx` to run on a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it for a
+   * standalone read.
+   */
+  async recentActivity(scope: TenantScope, limit = 5, tx?: Tx): Promise<EnrichActivityRow[]> {
+    const run = (t: Tx): Promise<EnrichActivityRow[]> =>
+      t
         .select({
           providerName: providerCalls.providerName,
           status: providerCalls.status,
@@ -83,7 +87,7 @@ export const providerCallRepository = {
         })
         .from(providerCalls)
         .orderBy(desc(providerCalls.calledAt))
-        .limit(limit),
-    );
+        .limit(limit);
+    return tx ? run(tx) : withTenantTx(scope, run);
   },
 };

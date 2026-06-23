@@ -50,18 +50,24 @@ export const creditRepository = {
     return rows.length > 0 ? Number(rows[0]!.balance) : 0;
   },
 
-  async getBalance(scope: TenantScope): Promise<number> {
-    return withTenantTx(scope, (tx) => creditRepository.currentBalance(tx, scope.tenantId));
+  /**
+   * Read the tenant's balance. RLS-scoped read. Pass `tx` to compose this into a caller's existing scoped
+   * transaction (e.g. the Home summary fan-out, which shares ONE withTenantTx); omit it for a standalone read.
+   */
+  async getBalance(scope: TenantScope, tx?: Tx): Promise<number> {
+    if (tx) return creditRepository.currentBalance(tx, scope.tenantId);
+    return withTenantTx(scope, (t) => creditRepository.currentBalance(t, scope.tenantId));
   },
 
   /**
    * Per-day credit burn over the last `days` days for the Home sparkline (07 §2): SUM(credits_consumed)
    * grouped by the reveal day, ascending. Workspace-scoped via RLS — only this workspace's reveals.
+   * Pass `tx` to run on a caller's existing scoped transaction; omit it for a standalone read.
    */
-  async burnByDay(scope: TenantScope, days = 30): Promise<BurnByDayRow[]> {
+  async burnByDay(scope: TenantScope, days = 30, tx?: Tx): Promise<BurnByDayRow[]> {
     const since = new Date(Date.now() - days * 86_400_000);
-    return withTenantTx(scope, async (tx) => {
-      const rows = await tx
+    const run = async (t: Tx): Promise<BurnByDayRow[]> => {
+      const rows = await t
         .select({
           day: sql<string>`to_char(date_trunc('day', ${contactReveals.revealedAt}), 'YYYY-MM-DD')`,
           credits: sql<number>`coalesce(sum(${contactReveals.creditsConsumed}), 0)::int`,
@@ -71,7 +77,8 @@ export const creditRepository = {
         .groupBy(sql`date_trunc('day', ${contactReveals.revealedAt})`)
         .orderBy(sql`date_trunc('day', ${contactReveals.revealedAt}) asc`);
       return rows.map((r) => ({ day: r.day, credits: Number(r.credits) }));
-    });
+    };
+    return tx ? run(tx) : withTenantTx(scope, run);
   },
 
   /**

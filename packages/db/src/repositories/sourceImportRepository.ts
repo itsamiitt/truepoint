@@ -61,11 +61,13 @@ export const sourceImportRepository = {
   /**
    * The most recent import batches for the Home dashboard: provenance rows grouped by
    * (source_file, source_name, minute) with their contact count, newest first. Workspace-scoped via RLS.
+   * Pass `tx` to run on a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it
+   * for a standalone read.
    */
-  async recentBatches(scope: TenantScope, limit = 5): Promise<ImportBatchRow[]> {
-    return withTenantTx(scope, async (tx) => {
+  async recentBatches(scope: TenantScope, limit = 5, tx?: Tx): Promise<ImportBatchRow[]> {
+    const run = async (t: Tx): Promise<ImportBatchRow[]> => {
       const minute = sql`date_trunc('minute', ${sourceImports.importedAt})`;
-      const rows = await tx
+      const rows = await t
         .select({
           sourceName: sourceImports.sourceName,
           sourceFile: sourceImports.sourceFile,
@@ -84,6 +86,7 @@ export const sourceImportRepository = {
         // (the value arrives as a pg timestamp string; the Home DTO calls .toISOString() on it).
         importedAt: new Date(r.importedAt),
       }));
-    });
+    };
+    return tx ? run(tx) : withTenantTx(scope, run);
   },
 };

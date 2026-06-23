@@ -150,17 +150,18 @@ export const sequenceRepository = {
   /**
    * Aggregate outreach counts for the Home dashboard: active = sequences with status 'active';
    * enrolled = total outreach_log rows; replied = outreach_log rows with status 'replied'.
-   * Workspace-scoped via RLS (all three reads run under the same scoped transaction).
+   * Workspace-scoped via RLS (all three reads run under the same scoped transaction). Pass `tx` to run on
+   * a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it for a standalone read.
    */
-  async performanceSnapshot(scope: TenantScope): Promise<PerformanceSnapshotRow> {
-    return withTenantTx(scope, async (tx) => {
+  async performanceSnapshot(scope: TenantScope, tx?: Tx): Promise<PerformanceSnapshotRow> {
+    const run = async (t: Tx): Promise<PerformanceSnapshotRow> => {
       const count = sql<number>`count(*)::int`;
-      const [active] = await tx
+      const [active] = await t
         .select({ n: count })
         .from(outreachSequences)
         .where(eq(outreachSequences.status, "active"));
-      const [enrolled] = await tx.select({ n: count }).from(outreachLog);
-      const [replied] = await tx
+      const [enrolled] = await t.select({ n: count }).from(outreachLog);
+      const [replied] = await t
         .select({ n: count })
         .from(outreachLog)
         .where(eq(outreachLog.status, "replied"));
@@ -169,6 +170,7 @@ export const sequenceRepository = {
         enrolled: Number(enrolled?.n ?? 0),
         replied: Number(replied?.n ?? 0),
       };
-    });
+    };
+    return tx ? run(tx) : withTenantTx(scope, run);
   },
 };

@@ -90,14 +90,17 @@ export const activityRepository = {
   /**
    * Workspace-wide activity counts by type over the last `sinceDays` days (no contact filter) — feeds the
    * Home sequence snapshot, where the api derives `sent` from the email_sent bucket. Workspace-scoped via RLS.
+   * Pass `tx` to run on a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it for
+   * a standalone read.
    */
   async countByTypeForWorkspace(
     scope: TenantScope,
     sinceDays = 30,
+    tx?: Tx,
   ): Promise<Record<string, number>> {
     const since = new Date(Date.now() - sinceDays * 86_400_000);
-    return withTenantTx(scope, async (tx) => {
-      const rows = await tx
+    const run = async (t: Tx): Promise<Record<string, number>> => {
+      const rows = await t
         .select({ activityType: activities.activityType, n: sql<number>`count(*)::int` })
         .from(activities)
         .where(gte(activities.occurredAt, since))
@@ -105,6 +108,7 @@ export const activityRepository = {
       const byType: Record<string, number> = {};
       for (const r of rows) byType[r.activityType] = Number(r.n);
       return byType;
-    });
+    };
+    return tx ? run(tx) : withTenantTx(scope, run);
   },
 };
