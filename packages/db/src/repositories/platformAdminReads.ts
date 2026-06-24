@@ -4,10 +4,11 @@
 // reach these tables. All lists are bounded by PLATFORM_READ_LIMIT — no unbounded cross-tenant scans
 // (ADR-0032). Read-only: never writes (staff mutations go through their own audited endpoints later).
 
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
+import { listMembers, lists } from "../schema/lists.ts";
 
 /** The cross-tenant read cap — mirrors the bound the api admin routes already enforce (ADR-0032). */
 export const PLATFORM_READ_LIMIT = 500;
@@ -60,6 +61,29 @@ export interface PlatformWorkspaceListRow {
   name: string;
   slug: string;
   tenantId: string;
+}
+
+/**
+ * One list as seen by STAFF — the privacy-first "list container" shape (list-plan/07 §3.1, D2). This is
+ * METADATA + an AGGREGATE member COUNT only: name / owner-id / counts / timestamps describe the container,
+ * NOT its contents. It deliberately carries NO `list_members` rows and NO contact-PII column (no email/phone/
+ * name) — record-level access is reachable ONLY via break-glass impersonation under the workspace GUC (D2).
+ *
+ * The owner is identified by `ownerUserId` only — NOT the owner's EMAIL. The owner is a customer employee and
+ * their email is their PII; the privacy-first staff surface does not leak it. Staff that genuinely need to
+ * resolve the user go through the (separately audited) users directory.
+ *
+ * NOTE: list-plan Phase 0 (`list_kind`/`source`/`archived_at`/`deleted_at`) is NOT yet on this branch; when
+ * it lands, add those metadata fields here and exclude soft-deleted lists in the query (see the WHERE below).
+ */
+export interface PlatformListOverviewRow {
+  id: string;
+  name: string;
+  description: string | null;
+  ownerUserId: string;
+  memberCount: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 const tenantCols = {
@@ -145,6 +169,43 @@ export const platformAdminRepository = {
       .limit(PLATFORM_READ_LIMIT);
 
     return { tenant, workspaces: tenantWorkspaces, members };
+  },
+
+  /**
+   * STAFF lists-overview for ONE tenant (list-plan/07 §3.1, D2) — the privacy-first staff surface over a
+   * customer's lists. Returns per-list METADATA + an AGGREGATE member COUNT only; it NEVER selects a
+   * `list_members` row or a contact-PII column, so no member PII can leave the boundary. The owner is the
+   * `owner_user_id` only — NOT the owner's email (a customer employee's PII). Filtered to `tenantId` and
+   * bounded by PLATFORM_READ_LIMIT — no unbounded "all lists across tenants" scan. Runs inside a
+   * withPlatformTx transaction (owner connection, no workspace GUC), so the read is audited and the
+   * membership tables stay behind FORCE-RLS for any non-aggregate access.
+   *
+   * NOTE: this is intentionally an aggregate `count(list_members.id)`, the same shape the CUSTOMER list view
+   * uses — counting rows is not reading their PII. Member identities remain unreachable without a workspace
+   * scope (customer) or an impersonation session.
+   */
+  async listTenantListsOverview(tx: Tx, tenantId: string): Promise<PlatformListOverviewRow[]> {
+    return (
+      tx
+        .select({
+          id: lists.id,
+          name: lists.name,
+          description: lists.description,
+          ownerUserId: lists.ownerUserId,
+          // count() over the leftJoin returns 0 (never NULL) for an empty list, so no JS-side coalesce is needed.
+          memberCount: sql<number>`count(${listMembers.id})::int`,
+          createdAt: lists.createdAt,
+          updatedAt: lists.updatedAt,
+        })
+        .from(lists)
+        .leftJoin(listMembers, eq(listMembers.listId, lists.id))
+        // Tenant filter is explicit: the owner connection bypasses RLS, so the cross-tenant read is bounded to
+        // the targeted tenant. (When Phase 0 lands, also exclude soft-deleted lists: `lists.deletedAt IS NULL`.)
+        .where(eq(lists.tenantId, tenantId))
+        .groupBy(lists.id)
+        .orderBy(asc(lists.name))
+        .limit(PLATFORM_READ_LIMIT)
+    );
   },
 
   /** Bulk-enrichment job statuses (a bounded sample) — the queue-depth / DLQ proxy for system health

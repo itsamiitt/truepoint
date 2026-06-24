@@ -86,19 +86,25 @@ impersonationRoutes.post("/", async (c) => {
   return c.json({ session: toView(session) });
 });
 
-/** End an impersonation session early. Audited "admin.impersonate.end". 404 on an unknown id. */
+/** End an impersonation session early. Audited "admin.impersonate.end". 404 on an unknown id. The target
+ *  tenant is resolved FIRST (un-audited owner read) so the audit row carries tenant_id — symmetrically with
+ *  "admin.impersonate.start" — and the end therefore surfaces in the customer's staff-access log. A bogus id
+ *  resolves to null → 404 BEFORE the audited tx, so no ".end" trace is written for a session that never
+ *  existed. */
 impersonationRoutes.delete("/:id", async (c) => {
   const id = c.req.param("id");
+  const targetTenantId = await impersonationRepository.getTargetTenant(id);
+  if (!targetTenantId) throw new NotFoundError("Impersonation session not found.");
   await withPlatformTx(
     actorOf(c),
     "admin.impersonate.end",
     async (tx) => {
       const touched = await impersonationRepository.end(tx, id);
-      // Throw INSIDE the tx so a bogus id rolls back the audit row (no "ended" trace for a session that
-      // never existed).
+      // Re-check inside the tx (a concurrent delete between the lookup and here): a no-op end rolls back the
+      // audit row so there is no ".end" trace for a session that was already gone.
       if (touched === 0) throw new NotFoundError("Impersonation session not found.");
     },
-    { targetType: "impersonation_session", targetId: id },
+    { targetType: "impersonation_session", targetId: id, tenantId: targetTenantId },
   );
   return c.json({ ok: true, id });
 });

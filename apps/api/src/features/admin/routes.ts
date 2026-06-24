@@ -11,7 +11,9 @@ import {
   withPlatformTx,
 } from "@leadwolf/db";
 import {
+  LIST_PLATFORM_AUDIT_ACTIONS,
   NotFoundError,
+  type StaffListOverview,
   ValidationError,
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
@@ -20,6 +22,7 @@ import {
 import { type Context, Hono } from "hono";
 import { type ApiVariables, authn } from "../../middleware/authn.ts";
 import { platformAdmin } from "../../middleware/platformAdmin.ts";
+import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
 import { auditLogRoutes } from "./auditLog.ts";
 import { impersonationRoutes } from "./impersonation.ts";
 import { providerConfigRoutes } from "./providerConfigs.ts";
@@ -72,6 +75,43 @@ adminRoutes.get("/tenants/:id", async (c) => {
   if (!detail) throw new NotFoundError("Tenant not found.");
   return c.json(detail);
 });
+
+// ── Staff lists-overview (list-plan/07 §3.1, D2) — the PRIVACY-FIRST staff view of a tenant's lists. ──────
+// Returns per-list METADATA + an AGGREGATE member COUNT only — NO list_members, NO contact PII. This is the
+// legitimate operating surface: a staff tier may see the container (name/owner/count), NONE may read its
+// members here. Record-level access is reachable ONLY through break-glass impersonation (the separate
+// /impersonation surface, which sets the workspace GUC under leadwolf_app).
+//
+// Role gate (capability matrix, list-plan/07 §2): super_admin / support / compliance_officer / read_only may
+// read the full list metadata. `billing_ops` is DELIBERATELY EXCLUDED — the matrix limits billing_ops to
+// "List metadata: counts only", and this surface returns names/descriptions, which exceeds that tier; the
+// billing surface gets aggregate counts elsewhere (the tenants directory / usage analytics). The read runs
+// through the audited withPlatformTx (an admin.list.view_metadata row names the tenant); the tenantId is
+// validated as a UUID BEFORE the tx so a malformed id is a clean 422 with no audit row.
+adminRoutes.get(
+  "/tenants/:tenantId/lists",
+  requireStaffRole("super_admin", "support", "compliance_officer", "read_only"),
+  async (c) => {
+    const tenantId = c.req.param("tenantId");
+    if (!UUID_RE.test(tenantId)) throw new ValidationError("tenantId must be a UUID");
+    const rows = await withPlatformTx(
+      actorOf(c),
+      LIST_PLATFORM_AUDIT_ACTIONS.viewMetadata,
+      (tx) => platformAdminRepository.listTenantListsOverview(tx, tenantId),
+      { targetType: "tenant", targetId: tenantId, tenantId },
+    );
+    const lists: StaffListOverview[] = rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      ownerUserId: r.ownerUserId,
+      memberCount: r.memberCount,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    }));
+    return c.json({ lists });
+  },
+);
 
 // ── System health (13 §9) — service status + the bulk-enrichment job queue tallied by status (the
 // queue-depth / DLQ proxy until the worker metrics surface lands). Bounded read, tallied in JS. ──

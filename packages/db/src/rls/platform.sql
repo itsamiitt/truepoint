@@ -26,6 +26,14 @@ CREATE TABLE IF NOT EXISTS platform_audit_log (
   occurred_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Index the customer-visible-access-log read (list-plan/07 §5): the customer's staff-access view filters
+-- `WHERE tenant_id = $1 ... ORDER BY occurred_at DESC`. Without this, that tenant-admin read is a full scan +
+-- sort over the cross-tenant trail (which grows with EVERY withPlatformTx action). Partial on tenant_id IS
+-- NOT NULL so it stays small (most platform actions are tenant-targeted; tenant-less rows are excluded).
+CREATE INDEX IF NOT EXISTS idx_platform_audit_tenant_time
+  ON platform_audit_log (tenant_id, occurred_at DESC)
+  WHERE tenant_id IS NOT NULL;
+
 -- ENABLE (not FORCE): the owner connection that runs withPlatformTx must keep writing; leadwolf_app is a
 -- non-owner policy-subject, and with NO policy it is denied every row and every write — deny-all.
 ALTER TABLE platform_audit_log ENABLE ROW LEVEL SECURITY;
