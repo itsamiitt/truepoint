@@ -44,18 +44,23 @@ export const sourceImportRepository = {
     return rows[0] ?? null;
   },
 
-  /** Append one provenance row for an imported contact. */
-  async append(tx: Tx, input: SourceImportInput): Promise<void> {
-    await tx.insert(sourceImports).values({
-      tenantId: input.tenantId,
-      workspaceId: input.workspaceId,
-      contactId: input.contactId,
-      importedByUserId: input.importedByUserId ?? null,
-      sourceName: input.sourceName,
-      sourceFile: input.sourceFile ?? null,
-      rawData: input.rawData,
-      contentHash: input.contentHash ?? null,
-    });
+  /** Append one provenance row for an imported contact; returns its id so the import path can link the
+   *  resulting `list_members` row to this exact provenance row (list-plan/03 §2.2, `source_import_id`). */
+  async append(tx: Tx, input: SourceImportInput): Promise<string> {
+    const rows = await tx
+      .insert(sourceImports)
+      .values({
+        tenantId: input.tenantId,
+        workspaceId: input.workspaceId,
+        contactId: input.contactId,
+        importedByUserId: input.importedByUserId ?? null,
+        sourceName: input.sourceName,
+        sourceFile: input.sourceFile ?? null,
+        rawData: input.rawData,
+        contentHash: input.contentHash ?? null,
+      })
+      .returning({ id: sourceImports.id });
+    return rows[0]!.id;
   },
 
   /**

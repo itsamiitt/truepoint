@@ -8,6 +8,14 @@ import type { CanonicalField, ColumnMapping } from "@leadwolf/types";
 export type RawRow = Record<string, string>;
 export type MappedRow = Partial<Record<CanonicalField, string>>;
 
+/** The format-agnostic parse result: the header row + each data row keyed by trimmed header. Produced
+ *  identically by the CSV reader (`parseCsv`) and the XLSX adapter (`parseXlsx`); defined here, the leaf
+ *  row-shape module, so both parsers depend on it without depending on each other (no import cycle). */
+export interface ParsedCsv {
+  headers: string[];
+  rows: RawRow[];
+}
+
 /** Select mapped, non-empty source values keyed by canonical field. */
 export function mapRow(raw: RawRow, mapping: ColumnMapping): MappedRow {
   const out: MappedRow = {};

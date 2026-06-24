@@ -4,7 +4,8 @@
 // them relatively from within the package (incl. co-located tests).
 
 export { runImport, type RunImportInput } from "./import/runImport.ts";
-export { parseImportFile, parseCsv, type ParsedCsv } from "./import/parseFile.ts";
+export { parseImportFile, parseCsv, isXlsxFile, type ParsedCsv } from "./import/parseFile.ts";
+export { parseXlsx } from "./import/parseXlsx.ts";
 export type { RawRow } from "./import/columnMap.ts";
 export {
   saveMappingTemplate,
@@ -299,6 +300,7 @@ export {
   createList,
   listLists,
   listListMembers,
+  assertListInWorkspace,
   updateList,
   deleteList,
   addContactsToList,
@@ -313,6 +315,7 @@ export {
   type ListMembersInput,
   type ListMember,
   type ListMembershipResult,
+  type AssertListInput,
 } from "./prospect/lists.ts";
 // Phase-3 bulk actions over the prospect search results (24): owner assign/reassign (policy-gated), bulk tags
 // (add/remove), bulk status, bulk archive (soft), bulk enroll, bulk enrich (enqueue), role-gated CSV export, and

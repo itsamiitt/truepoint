@@ -116,12 +116,26 @@ export type ConflictPolicy = z.infer<typeof conflictPolicy>;
 export const DEFAULT_CONFLICT_POLICY: ConflictPolicy = "skip";
 
 // ── Import request / result DTOs ───────────────────────────────────────────────────────────────────────
+/**
+ * Optional target of an "import into list" job (list-plan/03 §2.2, Phase 2): every landed row is also added
+ * to this list as a `list_members` row (`added_via='import'`, `source_import_id` set). The `listId` is the
+ * id of a list in the CALLER's workspace — it is validated server-side against the verified token's workspace
+ * before the job runs (the client-supplied id is never trusted; list-plan D4). Absent → a plain import that
+ * lands rows in the workspace overlay with no list linkage (the pre-Phase-2 behaviour, unchanged).
+ */
+export const importTargetSchema = z.object({
+  listId: z.string().uuid(),
+});
+export type ImportTarget = z.infer<typeof importTargetSchema>;
+
 export const importRequestSchema = z.object({
   sourceName: sourceName,
   sourceFile: z.string().max(255).optional(),
   mapping: columnMappingSchema,
   /** How to resolve a match against an existing workspace contact (G-IMP-5). Defaults to `skip` (no overwrite). */
   conflictPolicy: conflictPolicy.default(DEFAULT_CONFLICT_POLICY),
+  /** Optional "import into list" target (list-plan/03 §2.2). Absent = land in the overlay, no list linkage. */
+  target: importTargetSchema.optional(),
 });
 export type ImportRequest = z.infer<typeof importRequestSchema>;
 
@@ -161,6 +175,12 @@ export const importSummarySchema = z.object({
   rejected: z.number().int().nonnegative(),
   /** Rows held back because they matched an existing contact under a `skip` conflict policy. */
   duplicates: z.number().int().nonnegative(),
+  /**
+   * NEW members added to the import's target list (list-plan/03 §2.2): the count of landed contacts that
+   * became a NEW `list_members` row this run (idempotent — a contact already in the list is not recounted).
+   * `0` for a plain import (no `target`). The import receipt surfaces this as "added to <list>".
+   */
+  addedToList: z.number().int().nonnegative().default(0),
   errors: z.array(importRowErrorSchema),
   /** The rejected-rows artifact (G-IMP-1): each reject + reason + raw row, for a downloadable error file. */
   rejectedRows: z.array(rejectedRowSchema),

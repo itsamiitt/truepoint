@@ -94,6 +94,22 @@ export async function listListMembers(
   });
 }
 
+export interface AssertListInput {
+  scope: TenantScope & { workspaceId: string };
+  listId: string;
+}
+
+/**
+ * Assert a list exists in the caller's workspace — the trust-boundary guard for the "import into list" path
+ * (list-plan/03 §2.2). The client-supplied list id is never trusted (list-plan D4): findById is RLS-scoped to
+ * the workspace, so a foreign/absent id throws NotFoundError (→ a clean 404 at the API edge, before an import
+ * is enqueued, rather than a dead-lettered job later). Read-only; same guard `addContactsToList` uses.
+ */
+export async function assertListInWorkspace(input: AssertListInput): Promise<void> {
+  const found = await withTenantTx(input.scope, (tx) => listRepository.findById(tx, input.listId));
+  if (!found) throw new NotFoundError("List not found.");
+}
+
 export interface UpdateListInput extends ListActor {
   id: string;
   name?: string;

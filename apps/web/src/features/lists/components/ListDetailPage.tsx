@@ -30,7 +30,7 @@ import {
   TpCheckbox,
   useToast,
 } from "@leadwolf/ui";
-import { ArrowLeft, ListChecks, Trash2, Users } from "lucide-react";
+import { ArrowLeft, ListChecks, Trash2, Upload, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
@@ -39,6 +39,7 @@ import { useList } from "../hooks/useList";
 import { useListMembers } from "../hooks/useListMembers";
 import styles from "../lists.module.css";
 import { DeleteListDialog } from "./DeleteListDialog";
+import { ImportIntoListDialog } from "./ImportIntoListDialog";
 import { ListFormDialog } from "./ListFormDialog";
 
 const DENSITIES = [
@@ -62,6 +63,7 @@ export function ListDetailPage({ listId }: { listId: string }) {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const bulk = useBulkSelection();
   const shownIds = useMemo(() => members.map((m) => m.id), [members]);
@@ -262,6 +264,15 @@ export function ListDetailPage({ listId }: { listId: string }) {
             onChange={setDensity}
             aria-label="Row density"
           />
+          <TpButton
+            variant="secondary"
+            size="sm"
+            leftIcon={<Upload size={15} />}
+            disabled={!list}
+            onClick={() => setImportOpen(true)}
+          >
+            Import into list
+          </TpButton>
           {list?.isOwner ? (
             <>
               <TpButton variant="secondary" size="sm" onClick={() => setRenameOpen(true)}>
@@ -343,6 +354,16 @@ export function ListDetailPage({ listId }: { listId: string }) {
         list={list}
         onClose={() => setDeleteOpen(false)}
         onDeleted={() => router.push("/lists")}
+      />
+      <ImportIntoListDialog
+        open={importOpen}
+        list={list}
+        onClose={() => setImportOpen(false)}
+        onImported={() => {
+          // A completed import lands new members — reload the table and the header member count.
+          reload();
+          reloadList();
+        }}
       />
     </div>
   );
