@@ -170,12 +170,21 @@ body {
   text-decoration: none;
 }
 
-/* Shell grid: fixed rail + a fluid main column. Height uses dvh for mobile browser chrome handling. */
+/* Shell grid: a collapsible icon rail + a fluid main column. A DEFINITE height (not min-height) clamps the
+ * grid to the viewport so .tp-content scrolls INTERNALLY while the rail + top bar stay put — this fixes the
+ * bug where scrolling the content scrolled the whole page (the rail rode the invisible body scroll). Column 1
+ * is the rail's layout spacer (the rail itself is position:fixed); it widens only when the rail is pinned. */
 .tp-shell {
   display: grid;
-  grid-template-columns: 232px 1fr;
-  min-height: 100dvh;
-  overflow: hidden; /* prevents outer page scrollbar; each zone scrolls independently */
+  grid-template-columns: var(--tp-rail-w) 1fr;
+  height: 100vh; /* fallback for browsers without dvh */
+  height: 100dvh;
+  overflow: hidden; /* outer page never scrolls; .tp-content owns the scroll */
+  transition: grid-template-columns var(--tp-duration-slow) var(--tp-ease);
+}
+/* Pinned: reserve the expanded width so content reflows beside the rail (a push, not an overlay). */
+.tp-shell.is-pinned {
+  grid-template-columns: var(--tp-rail-expanded) 1fr;
 }
 .tp-main {
   display: flex;
@@ -191,8 +200,16 @@ body {
   overflow-y: auto; /* content scrolls; outer shell does not */
 }
 
-/* Sidebar — #f9fafb surface, single hairline right border. Scrolls independently on overflow. */
+/* Sidebar — a fixed, collapsible icon rail on the #f9fafb surface with a single hairline right border.
+ * Collapsed it is var(--tp-rail-w) wide (icons only); it expands to var(--tp-rail-expanded) on hover/focus
+ * (an overlay, with the rail shadow) or when pinned. container-type lets descendant labels reveal via an
+ * @container rule keyed on the rail's OWN width, so one rule covers hover, focus, and pin. On mobile it
+ * becomes the off-canvas overlay (the transform block at the bottom of this file). */
 .tp-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--tp-rail-w);
+  z-index: var(--tp-z-drawer); /* expanded, it overlays the sticky top bar (z 30) */
   display: flex;
   flex-direction: column;
   background: var(--tp-surface-2);
@@ -200,19 +217,44 @@ body {
   padding: 14px 12px;
   overflow-y: auto;
   overflow-x: hidden;
-  /* smooth slide transition drives the mobile overlay (transform overridden in the responsive block). */
-  transition: transform var(--tp-duration-slow) var(--tp-ease-out);
+  container-type: inline-size;
+  container-name: rail;
+  /* width drives expand/collapse; transform drives the mobile overlay slide. */
+  transition: width var(--tp-duration) var(--tp-ease), transform var(--tp-duration-slow)
+    var(--tp-ease-out);
+}
+/* Hover / keyboard-focus peek (desktop only, when NOT pinned): widen as an OVERLAY — the grid column stays
+ * at the rail width so content does not reflow — and lift with the one rail shadow. */
+@media (min-width: 769px) {
+  .tp-shell:not(.is-pinned) .tp-sidebar:hover,
+  .tp-shell:not(.is-pinned) .tp-sidebar:focus-within {
+    width: var(--tp-rail-expanded);
+    box-shadow: var(--tp-shadow-rail);
+  }
+}
+/* Pinned: stay expanded (content already reflowed via .is-pinned); no shadow — it sits in the layout. */
+.tp-shell.is-pinned .tp-sidebar {
+  width: var(--tp-rail-expanded);
 }
 .tp-brand {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 8px 16px;
+  padding: 12px 12px 16px; /* mark aligns over the nav glyphs below */
 }
 .tp-brand .tp-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   border-radius: var(--radius);
   padding: 2px;
   margin: -2px;
+}
+/* Wordmark fades with the rail (revealed by the @container rule); the chevron mark stays in the rail. */
+.tp-brand-word {
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity var(--tp-duration-fast) var(--tp-ease);
 }
 .tp-nav {
   display: flex;
@@ -222,9 +264,9 @@ body {
 .tp-nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 12px; /* puts the glyph centre on the rail centre line so it never shifts on expand */
   border-radius: 7px;
   color: var(--tp-ink-2);
   font-size: 14px;
@@ -240,10 +282,12 @@ body {
   color: var(--tp-ink);
 }
 .tp-nav-glyph {
-  width: 18px;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; /* fixed slot for the 18px icon; centred in the rail and unchanging across states */
+  flex-shrink: 0;
   color: var(--tp-ink-3);
-  font-size: 13px;
 }
 /* Active glyph uses cobalt — a fill/icon color, brand-allowed (never text; 04 §3). */
 .tp-nav-item.is-active .tp-nav-glyph {
@@ -251,6 +295,11 @@ body {
 }
 .tp-nav-label {
   flex: 1;
+  opacity: 0; /* hidden in the collapsed rail; revealed by the @container rule */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity var(--tp-duration-fast) var(--tp-ease);
 }
 
 .tp-sidebar-footer {
@@ -288,6 +337,8 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  opacity: 0; /* fades in with the rail (the @container rule); the avatar stays visible in the rail */
+  transition: opacity var(--tp-duration-fast) var(--tp-ease);
 }
 .tp-user-email {
   font-size: 13px;
@@ -369,7 +420,10 @@ body {
 }
 
 /* Hamburger button — visible only on mobile (display switched in the media query below). */
-.tp-menu-btn {
+/* Top-bar nav toggles: the desktop sidebar pin (.tp-rail-toggle, always visible) and the mobile hamburger
+ * (.tp-menu-btn, shown only ≤768px). Same 36px bordered look; CSS shows the right one per breakpoint. */
+.tp-menu-btn,
+.tp-rail-toggle {
   display: none;
   align-items: center;
   justify-content: center;
@@ -383,12 +437,22 @@ body {
   flex-shrink: 0;
   transition: background var(--tp-duration-fast) var(--tp-ease);
 }
-.tp-menu-btn:hover {
+.tp-menu-btn:hover,
+.tp-rail-toggle:hover {
   background: var(--tp-surface-2);
   color: var(--tp-ink);
 }
-.tp-menu-btn:active {
+.tp-menu-btn:active,
+.tp-rail-toggle:active {
   transform: translateY(0.5px);
+}
+/* The desktop pin toggle is visible by default; pinned-open reads as an active (filled) control. */
+.tp-rail-toggle {
+  display: inline-flex;
+}
+.tp-rail-toggle[aria-pressed="true"] {
+  background: var(--tp-surface-3);
+  color: var(--tp-ink);
 }
 
 /* Sidebar mobile scrim — full-bleed backdrop when the overlay rail is open. */
@@ -979,6 +1043,29 @@ body {
   background: var(--nav-hover-fill);
 }
 
+/* Footer's wide controls (team/org/workspace switchers) — hidden in the collapsed rail, shown when expanded.
+ * Wrapped in .tp-sidebar-switchers in Sidebar.tsx so one selector toggles all three. */
+.tp-sidebar-switchers {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The single reveal rule: when the rail is expanded (hover, focus, or pinned — each widens the element, which
+ * IS the container), labels + wordmark + user meta fade in and the switchers appear. Keyed on the rail's own
+ * width via container-type:inline-size on .tp-sidebar, so one rule covers every expand trigger. */
+@container rail (min-width: 150px) {
+  .tp-nav-label,
+  .tp-brand-word,
+  .tp-user-meta {
+    opacity: 1;
+    transition: opacity var(--tp-duration) var(--tp-ease) 60ms; /* fade in just after the width starts */
+  }
+  .tp-sidebar-switchers {
+    display: flex;
+  }
+}
+
 /* Sidebar dropdown anchors (team switcher, user menu) fill the rail width. */
 .tp-sidebar-footer .tp-ui-anchor {
   display: block;
@@ -1056,13 +1143,18 @@ body {
  * ========================================================================== */
 
 @media (max-width: 768px) {
-  /* Collapse to a single-column layout — sidebar no longer occupies a grid column. */
-  .tp-shell {
+  /* Single-column layout — the rail is an overlay, not a grid column. Also neutralize the desktop pin so a
+   * pinned shell still uses one column on mobile. */
+  .tp-shell,
+  .tp-shell.is-pinned {
     grid-template-columns: 1fr;
   }
 
-  /* Sidebar becomes a fixed overlay, off-screen by default. */
-  .tp-sidebar {
+  /* Sidebar becomes a full off-canvas overlay, off-screen by default — overriding the desktop rail/pinned
+   * width. It slides via transform; the desktop hover/focus expand is scoped to min-width:769px so it never
+   * fires here. */
+  .tp-sidebar,
+  .tp-shell.is-pinned .tp-sidebar {
     position: fixed;
     top: 0;
     left: 0;
@@ -1070,7 +1162,7 @@ body {
     z-index: var(--tp-z-drawer);
     width: 260px;
     transform: translateX(-100%);
-    box-shadow: 4px 0 32px rgba(17, 24, 39, 0.14);
+    box-shadow: var(--tp-shadow-rail);
   }
 
   /* When AppShell sets is-open the sidebar slides into view. */
@@ -1078,9 +1170,12 @@ body {
     transform: translateX(0);
   }
 
-  /* Show the hamburger button and the sidebar close button on mobile. */
+  /* Mobile: show the hamburger + the in-rail close button; hide the desktop pin toggle. */
   .tp-menu-btn {
     display: inline-flex;
+  }
+  .tp-rail-toggle {
+    display: none;
   }
   .tp-sidebar-close {
     display: inline-flex;

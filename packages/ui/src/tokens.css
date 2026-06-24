@@ -77,6 +77,11 @@
   --tp-shadow-drawer: -12px 0 32px rgba(17, 24, 39, 0.1);
   --tp-shadow-dialog: 0 12px 40px rgba(17, 24, 39, 0.14);
   --tp-shadow-bar: 0 -6px 20px rgba(17, 24, 39, 0.08);
+  /* Left rail/sidebar — casts to the RIGHT onto content (the drawer token casts left, for right-side panels). */
+  --tp-shadow-rail: 6px 0 28px rgba(17, 24, 39, 0.1);
+  /* Resting + hover elevation for dashboard cards/tiles (Brand Kit: one whisper-soft shadow, cards float). */
+  --tp-shadow-card: 0 1px 2px rgba(17, 24, 39, 0.04);
+  --tp-shadow-card-hover: 0 4px 12px rgba(17, 24, 39, 0.08);
 
   /* Z-index scale — replaces the scattered magic numbers (sticky bar 30 / slide-over 40 / scrim 50…) so
      overlays always stack predictably: sticky < drawer < overlay/scrim < modal < popover < toast < command. */
@@ -110,6 +115,11 @@
   --tp-radius-sm: 6px;
   /* Card/surface radius — softer than controls, per the Brand Kit asset cards (14–16px). */
   --tp-radius-card: 14px;
+
+  /* Shell rail — the collapsible sidebar's two widths (design skill patterns.md "Sidebar":
+     RAIL_W 68 / DRAWER_W 244). Collapsed = an icon rail; hover/focus/pin expands to the drawer. */
+  --tp-rail-w: 68px;
+  --tp-rail-expanded: 244px;
 }
 
 html {

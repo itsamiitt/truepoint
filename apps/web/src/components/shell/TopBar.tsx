@@ -3,7 +3,7 @@
 "use client";
 
 import { Icon, TpIconButton } from "@leadwolf/ui";
-import { HelpCircle, LayoutGrid, Menu, Rows3 } from "lucide-react";
+import { HelpCircle, LayoutGrid, Menu, PanelLeftClose, PanelLeftOpen, Rows3 } from "lucide-react";
 import { CreditPill } from "./CreditPill";
 import { useDensity } from "./DensityProvider";
 import { GlobalSearch } from "./GlobalSearch";
@@ -13,16 +13,41 @@ function DensityToggle() {
   const { density, toggle } = useDensity();
   const compact = density === "compact";
   return (
-    <TpIconButton label={compact ? "Switch to comfortable density" : "Switch to compact density"} onClick={toggle}>
+    <TpIconButton
+      label={compact ? "Switch to comfortable density" : "Switch to compact density"}
+      onClick={toggle}
+    >
       <Icon icon={compact ? LayoutGrid : Rows3} size={16} />
     </TpIconButton>
   );
 }
 
-export function TopBar({ title, onMenuToggle }: { title: string; onMenuToggle?: () => void }) {
+export function TopBar({
+  title,
+  onMenuToggle,
+  pinned,
+  onTogglePin,
+}: {
+  title: string;
+  onMenuToggle?: () => void;
+  /** Desktop sidebar pin state — drives the rail toggle's icon + pressed state. */
+  pinned?: boolean;
+  onTogglePin?: () => void;
+}) {
   return (
     <header className="tp-topbar">
       <div className="tp-topbar-left">
+        {onTogglePin ? (
+          <button
+            type="button"
+            className="tp-rail-toggle"
+            onClick={onTogglePin}
+            aria-pressed={pinned}
+            aria-label={pinned ? "Collapse sidebar" : "Pin sidebar open"}
+          >
+            <Icon icon={pinned ? PanelLeftClose : PanelLeftOpen} size={18} />
+          </button>
+        ) : null}
         {onMenuToggle ? (
           <button
             type="button"

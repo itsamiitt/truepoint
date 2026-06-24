@@ -8,7 +8,7 @@ import { Avatar, DropdownMenu, Icon } from "@leadwolf/ui";
 import { X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Logo } from "./Logo";
+import { Brandmark, Wordmark } from "./Logo";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { TeamSwitcher } from "./TeamSwitcher";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
@@ -28,7 +28,7 @@ function NavItem({ dest, pathname }: { dest: NavDestination; pathname: string })
       aria-current={active ? "page" : undefined}
     >
       <span className="tp-nav-glyph" aria-hidden="true">
-        <Icon icon={dest.icon} size={16} />
+        <Icon icon={dest.icon} size={18} />
       </span>
       <span className="tp-nav-label">{dest.label}</span>
     </Link>
@@ -77,7 +77,10 @@ export function Sidebar({
     <aside className={`tp-sidebar${isOpen ? " is-open" : ""}`}>
       <div className="tp-brand">
         <Link className="tp-brand-lockup" href="/home" aria-label="TruePoint — Home">
-          <Logo markSize={22} wordSize={16} />
+          <Brandmark size={22} />
+          <span className="tp-brand-word">
+            <Wordmark size={16} />
+          </span>
         </Link>
         {onClose ? (
           <button
@@ -100,9 +103,11 @@ export function Sidebar({
       <div className="tp-sidebar-footer">
         <div className="tp-divider" />
         <NavItem dest={SETTINGS_DESTINATION} pathname={pathname} />
-        <TeamSwitcher />
-        <OrgSwitcher />
-        <WorkspaceSwitcher />
+        <div className="tp-sidebar-switchers">
+          <TeamSwitcher />
+          <OrgSwitcher />
+          <WorkspaceSwitcher />
+        </div>
         <UserRow userEmail={userEmail} role={role} />
       </div>
     </aside>

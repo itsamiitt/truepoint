@@ -71,8 +71,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 816,
-  "fileSetHash": "sha256:a832fc69e17412c3988f4eca2753367d400e1188ecc47b99dc9d0a89dc19ac3a",
+  "fileCount": 817,
+  "fileSetHash": "sha256:95863adc345bd4b5ebb58fb89c054c52853c513ac0d5d82381d225646c82ba89",
   "features": {
     "account-search": {
       "web": [],
@@ -1243,7 +1243,8 @@
       "apps/web/src/components/shell/TopBar.tsx",
       "apps/web/src/components/shell/WorkspaceSwitcher.tsx",
       "apps/web/src/components/shell/navConfig.ts",
-      "apps/web/src/components/shell/useNotifications.ts"
+      "apps/web/src/components/shell/useNotifications.ts",
+      "apps/web/src/components/shell/useSidebarPin.ts"
     ],
     "apps/web/lib": [
       "apps/web/src/lib/authClient.test.ts",

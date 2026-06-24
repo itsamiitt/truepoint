@@ -23,6 +23,7 @@ import { Brandmark, Logo } from "./Logo";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { sectionTitleFor } from "./navConfig";
+import { useSidebarPin } from "./useSidebarPin";
 
 // Interaction-only widgets: nothing on first paint needs them (they wake on a keypress / ⌘K). Loading them
 // dynamically with ssr:false keeps cmdk and the dialog markup out of the synchronous first-paint bundle.
@@ -51,6 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [auth, setAuth] = useState<AuthState>("authenticating");
   const [session, setSession] = useState<Session | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { pinned, togglePinned } = useSidebarPin();
 
   // `live` lets a background probe that resolves after the shell unmounts skip its setState (the probe now
   // runs after first paint, so the component can be gone by the time it returns). Reset on each runGate.
@@ -146,7 +148,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
       <DensityProvider>
-        <div className="tp-shell">
+        <div className={`tp-shell${pinned ? " is-pinned" : ""}`}>
           {/* Mobile scrim — tap anywhere outside sidebar to close */}
           {sidebarOpen && (
             <button
@@ -167,6 +169,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <TopBar
               title={sectionTitleFor(pathname)}
               onMenuToggle={() => setSidebarOpen((v) => !v)}
+              pinned={pinned}
+              onTogglePin={togglePinned}
             />
             <main className="tp-content">{children}</main>
           </div>

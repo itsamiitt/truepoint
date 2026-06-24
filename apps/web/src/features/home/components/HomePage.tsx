@@ -32,7 +32,7 @@ const KPI_CARD: CSSProperties = {
   background: "var(--tp-surface)",
   border: "1px solid var(--tp-hairline-2)",
   borderRadius: "var(--tp-radius-card)",
-  boxShadow: "0 1px 2px rgba(17, 24, 39, 0.04)",
+  boxShadow: "var(--tp-shadow-card)",
 };
 
 export function HomePage() {
