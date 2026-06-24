@@ -22,6 +22,8 @@ export interface RunArgs {
   sourceName: SourceName;
   mapping: ColumnMapping;
   conflictPolicy: ConflictPolicy;
+  /** Optional "import into list" target — landed rows are added to this list (list-plan/03 §2.2). */
+  listId?: string;
 }
 
 /** Poll cadence and ceiling: ~1.5s between polls, giving up after ~2 min so the UI never hangs forever. */

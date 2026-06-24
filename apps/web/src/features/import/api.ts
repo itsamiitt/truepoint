@@ -9,9 +9,9 @@ import type {
   ConflictPolicy,
   ImportJobRef,
   ImportJobStatusResponse,
-  ImportPreview,
   ImportMappingTemplate,
   ImportMappingTemplateList,
+  ImportPreview,
   MaskedContact,
   SourceName,
 } from "@leadwolf/types";
@@ -30,12 +30,16 @@ export async function postImport(args: {
   sourceName: SourceName;
   mapping: ColumnMapping;
   conflictPolicy: ConflictPolicy;
+  /** Optional "import into list" target (list-plan/03 §2.2): landed rows are added to this list. Server-
+   *  validated against the caller's workspace — the id is never trusted client-side. */
+  listId?: string;
 }): Promise<ImportJobRef> {
   const form = new FormData();
   form.set("file", args.file);
   form.set("sourceName", args.sourceName);
   form.set("mapping", JSON.stringify(args.mapping));
   form.set("conflictPolicy", args.conflictPolicy);
+  if (args.listId) form.set("listId", args.listId);
   const res = await fetchWithAuth(`${API_BASE}/api/v1/imports`, { method: "POST", body: form });
   if (!res.ok) throw new Error(await problemMessage(res, "Import failed"));
   return (await res.json()) as ImportJobRef;

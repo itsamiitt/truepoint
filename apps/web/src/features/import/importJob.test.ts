@@ -16,6 +16,7 @@ const summary: ImportSummary = {
   skipped: 0,
   rejected: 0,
   duplicates: 0,
+  addedToList: 0,
   errors: [{ row: 4, message: "bad email" }],
   rejectedRows: [],
 };

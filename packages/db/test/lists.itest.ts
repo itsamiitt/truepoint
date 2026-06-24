@@ -325,3 +325,117 @@ describe("prospect lists — owner scoping + workspace isolation (req #8)", () =
     expect(second.nextCursor).toBeNull();
   });
 });
+
+// ── Phase 2: upload-your-own-data → list (list-plan/03 §2.2) ──────────────────────────────────────────────
+// Importing rows with a target listId lands members with added_via='import' + a non-null source_import_id;
+// dedup/idempotency are respected at the membership layer; and a cross-workspace listId is rejected.
+describe("import into list — Phase 2 (list-plan/03 §2.2)", () => {
+  // Mirrors the import.itest MAPPING/row shape: header → canonical field; one identity (email) per row.
+  const MAPPING = { email: "Email", firstName: "First Name", accountDomain: "Domain" } as const;
+
+  /** Read each list_members row's provenance (added_via + whether a source_imports id is linked). */
+  async function memberProvenance(
+    listId: string,
+  ): Promise<{ contactId: string; addedVia: string; hasSourceImport: boolean }[]> {
+    const rows = await admin`
+      SELECT contact_id, added_via, (source_import_id IS NOT NULL) AS has_source_import
+      FROM list_members WHERE list_id = ${listId} ORDER BY contact_id`;
+    return (rows as { contact_id: string; added_via: string; has_source_import: boolean }[]).map(
+      (r) => ({
+        contactId: r.contact_id,
+        addedVia: r.added_via,
+        hasSourceImport: r.has_source_import,
+      }),
+    );
+  }
+
+  test("imported rows land as members with added_via='import' + a non-null source_import_id", async () => {
+    const list = await core.createList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "import target",
+    });
+    const summary = await core.runImport({
+      scope: scopeA(),
+      importedByUserId: ownerA,
+      sourceName: "manual",
+      sourceFile: "leads.csv",
+      mapping: MAPPING,
+      target: { listId: list.id },
+      rows: [
+        { Email: "ada@northwind.test", "First Name": "Ada", Domain: "northwind.test" },
+        { Email: "bo@northwind.test", "First Name": "Bo", Domain: "northwind.test" },
+      ],
+    });
+    expect(summary.created).toBe(2);
+    expect(summary.addedToList).toBe(2); // both landed rows became NEW members
+
+    const prov = await memberProvenance(list.id);
+    expect(prov).toHaveLength(2);
+    // Every member carries the import provenance: added_via='import' AND a linked source_imports row.
+    for (const p of prov) {
+      expect(p.addedVia).toBe("import");
+      expect(p.hasSourceImport).toBe(true);
+    }
+  });
+
+  test("re-importing the same file adds no new members (idempotent at both contact + membership layers)", async () => {
+    const list = await core.createList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "idempotent import",
+    });
+    const rows = [{ Email: "cy@northwind.test", "First Name": "Cy", Domain: "northwind.test" }];
+    const first = await core.runImport({
+      scope: scopeA(),
+      importedByUserId: ownerA,
+      sourceName: "manual",
+      sourceFile: "again.csv",
+      mapping: MAPPING,
+      target: { listId: list.id },
+      rows,
+    });
+    expect(first.created).toBe(1);
+    expect(first.addedToList).toBe(1);
+
+    // Same payload again: the content-hash short-circuits the contact write (skipped) AND the membership is
+    // ON CONFLICT DO NOTHING — so nothing new is added the second time.
+    const second = await core.runImport({
+      scope: scopeA(),
+      importedByUserId: ownerA,
+      sourceName: "manual",
+      sourceFile: "again.csv",
+      mapping: MAPPING,
+      target: { listId: list.id },
+      rows,
+    });
+    expect(second.skipped).toBe(1);
+    expect(second.addedToList).toBe(0); // the contact was already a member
+    expect(await memberContactIds(list.id)).toHaveLength(1); // still exactly one member
+    // The member still carries import provenance (it was added by the FIRST import).
+    expect((await memberProvenance(list.id))[0]?.addedVia).toBe("import");
+  });
+
+  test("a cross-workspace listId is rejected: an A-workspace import into a B list lands nothing in B", async () => {
+    const bList = await core.createList({
+      scope: scopeB(),
+      callerUserId: ownerB,
+      name: "B-owned list",
+    });
+    // Workspace A tries to import targeting workspace B's list — findById is RLS-scoped to A, so the list is
+    // invisible and the whole import fails fast (the client list id is never trusted; list-plan D4).
+    const err = await caught(() =>
+      core.runImport({
+        scope: scopeA(),
+        importedByUserId: ownerA,
+        sourceName: "manual",
+        mapping: MAPPING,
+        target: { listId: bList.id },
+        rows: [{ Email: "mallory@northwind.test", "First Name": "Mal", Domain: "northwind.test" }],
+      }),
+    );
+    expect(err.code).toBe("not_found"); // NotFoundError — the same guard the manual add path uses
+    // B's list never gained a member, and A never imported the row into B.
+    expect(await memberContactIds(bList.id)).toEqual([]);
+  });
+});

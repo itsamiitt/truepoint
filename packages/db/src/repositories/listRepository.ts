@@ -37,6 +37,14 @@ export interface AddMembersInput {
   listId: string;
   addedByUserId: string | null;
   contactIds: string[];
+  /**
+   * Per-member provenance (list-plan/02, Phase 0 columns). Defaults keep existing callers (the Phase-1
+   * search/manual add path) unchanged — they land `added_via='manual'` with no import link. The import path
+   * (list-plan/03 §2.2) passes `'import'` + the originating `source_imports` id. The same value applies to
+   * EVERY contact in this call — the import path adds one contact per call, so the link is always exact.
+   */
+  addedVia?: "search" | "import" | "manual" | "api";
+  sourceImportId?: string | null;
 }
 
 function toRow(r: typeof lists.$inferSelect, memberCount: number): ListRow {
@@ -252,9 +260,12 @@ export const listRepository = {
   },
 
   /** Add contacts to a list. Idempotent: an existing (list, contact) link is ignored. Returns how many rows
-   *  were ACTUALLY inserted (the affected count the UI confirms). Callers must pass workspace-visible ids. */
+   *  were ACTUALLY inserted (the affected count the UI confirms). Callers must pass workspace-visible ids.
+   *  `addedVia`/`sourceImportId` default to the manual-add provenance so existing callers are unaffected. */
   async addMembers(tx: Tx, input: AddMembersInput): Promise<number> {
     if (input.contactIds.length === 0) return 0;
+    const addedVia = input.addedVia ?? "manual";
+    const sourceImportId = input.sourceImportId ?? null;
     const rows = await tx
       .insert(listMembers)
       .values(
@@ -264,6 +275,8 @@ export const listRepository = {
           listId: input.listId,
           contactId,
           addedByUserId: input.addedByUserId,
+          addedVia,
+          sourceImportId,
         })),
       )
       .onConflictDoNothing({ target: [listMembers.listId, listMembers.contactId] })

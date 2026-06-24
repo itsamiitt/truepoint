@@ -1,10 +1,16 @@
 // parseFile.ts — turn an uploaded file into header-keyed rows for the import pipeline. CSV is parsed here
 // with a dependency-free RFC-4180-style reader (handles quoted fields, embedded commas/newlines, and ""
-// escapes). XLSX is a declared seam for M1 — it throws a clear ImportValidationError until the `xlsx`
-// adapter lands, rather than silently mis-parsing a binary file. Pure + synchronous (16 §1).
+// escapes). XLSX is parsed by the sibling `parseXlsx` adapter (SheetJS) into the SAME { headers, rows }
+// contract, so everything downstream is format-agnostic. CSV flows as text; XLSX flows as bytes (16 §1).
 
 import { ImportValidationError } from "@leadwolf/types";
-import type { RawRow } from "./columnMap.ts";
+import type { ParsedCsv, RawRow } from "./columnMap.ts";
+import { parseXlsx } from "./parseXlsx.ts";
+
+// Re-export the parse-result shape from its leaf home so existing importers (`@leadwolf/core` barrel,
+// apps/api, tests) keep importing `ParsedCsv` from here unchanged — while the type itself lives in columnMap.ts
+// so parseFile and parseXlsx don't form an import cycle.
+export type { ParsedCsv } from "./columnMap.ts";
 
 /** Parse CSV text into a matrix of cells (RFC-4180-ish: quotes, "" escapes, CR/LF, embedded delimiters). */
 function parseMatrix(text: string): string[][] {
@@ -50,11 +56,6 @@ function parseMatrix(text: string): string[][] {
   return rows;
 }
 
-export interface ParsedCsv {
-  headers: string[];
-  rows: RawRow[];
-}
-
 /** Parse CSV text into `{ headers, rows }`; each row is keyed by trimmed header. */
 export function parseCsv(text: string): ParsedCsv {
   const matrix = parseMatrix(text).filter((r) => r.some((c) => c.trim() !== ""));
@@ -70,10 +71,35 @@ export function parseCsv(text: string): ParsedCsv {
   return { headers, rows };
 }
 
-/** Dispatch on file extension. CSV is parsed; XLSX is a declared seam (throws) until the adapter lands. */
-export function parseImportFile(content: string, filename?: string): ParsedCsv {
-  if (filename && /\.xlsx?$/i.test(filename) && !/\.csv$/i.test(filename)) {
-    throw new ImportValidationError("XLSX import is not supported yet — export the sheet as CSV.");
+/** True when the filename names an OOXML workbook (`.xlsx`). Deliberately NOT legacy `.xls` (OLE2/CFB): the
+ *  SheetJS adapter (`parseXlsx`) reads the ZIP/OOXML container only, so routing an `.xls` here would reject it
+ *  as corrupt. `.xls` users are told to save as `.xlsx` or `.csv` — matching the supported set. */
+export function isXlsxFile(filename?: string): boolean {
+  return Boolean(filename && /\.xlsx$/i.test(filename));
+}
+
+/**
+ * Dispatch on file extension to the right parser, returning the SAME `{ headers, rows }` shape regardless of
+ * format (list-plan/03 §2.1). CSV flows as TEXT (`file.text()`); XLSX flows as BYTES (`file.arrayBuffer()`).
+ * The caller passes a string for CSV and a Uint8Array for XLSX — a type mismatch (text for an .xlsx, or a
+ * binary buffer for a .csv) is a clean `ImportValidationError`, never a mis-parse. Everything after the parse
+ * (map → validate → normalize → encrypt → dedup → conflict policy) is format-agnostic.
+ */
+export function parseImportFile(content: string | Uint8Array, filename?: string): ParsedCsv {
+  if (isXlsxFile(filename)) {
+    if (typeof content === "string") {
+      throw new ImportValidationError("An .xlsx file must be read as bytes, not text.");
+    }
+    return parseXlsx(content);
+  }
+  // Legacy binary .xls (OLE2/CFB) is not supported — reject it cleanly rather than mis-read its bytes as CSV.
+  if (filename && /\.xls$/i.test(filename)) {
+    throw new ImportValidationError(
+      "Legacy .xls files aren't supported — save the sheet as .xlsx or .csv.",
+    );
+  }
+  if (typeof content !== "string") {
+    throw new ImportValidationError("A CSV file must be read as text.");
   }
   return parseCsv(content);
 }
