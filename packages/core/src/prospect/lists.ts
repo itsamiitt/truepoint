@@ -7,6 +7,7 @@
 
 import { type ListRow, type TenantScope, listRepository, withTenantTx } from "@leadwolf/db";
 import { type List, NotFoundError } from "@leadwolf/types";
+import { writeAudit } from "../compliance/writeAudit.ts";
 
 /** The workspace-scoped caller context shared by every operation (scope + the verified user id). */
 interface ListActor {
@@ -42,6 +43,15 @@ export async function createList(input: CreateListInput): Promise<List> {
       name: input.name.trim(),
       description: input.description?.trim() ?? null,
     });
+    await writeAudit(tx, {
+      tenantId: input.scope.tenantId,
+      workspaceId: input.scope.workspaceId,
+      actorUserId: input.callerUserId,
+      action: "list.create",
+      entityType: "list",
+      entityId: row.id,
+      metadata: { name: row.name },
+    });
     return toDto(row, input.callerUserId);
   });
 }
@@ -67,6 +77,20 @@ export async function updateList(input: UpdateListInput): Promise<List> {
   return withTenantTx(input.scope, async (tx) => {
     const row = await listRepository.updateOwned(tx, input.id, input.callerUserId, patch);
     if (!row) throw new NotFoundError("List not found.");
+    // Audit only a real change. An empty patch (no name/description) is a no-op — the API's zod refine already
+    // requires a field, so this just guards a direct core caller from a spurious `list.update` row. Mirrors the
+    // `affected > 0` guard on the membership paths. (updateOwned ran first so ownership is still enforced.)
+    if (Object.keys(patch).length > 0) {
+      await writeAudit(tx, {
+        tenantId: input.scope.tenantId,
+        workspaceId: input.scope.workspaceId,
+        actorUserId: input.callerUserId,
+        action: "list.update",
+        entityType: "list",
+        entityId: row.id,
+        metadata: { fields: Object.keys(patch) },
+      });
+    }
     return toDto(row, input.callerUserId);
   });
 }
@@ -80,6 +104,14 @@ export async function deleteList(input: DeleteListInput): Promise<void> {
   return withTenantTx(input.scope, async (tx) => {
     const deleted = await listRepository.deleteOwned(tx, input.id, input.callerUserId);
     if (!deleted) throw new NotFoundError("List not found.");
+    await writeAudit(tx, {
+      tenantId: input.scope.tenantId,
+      workspaceId: input.scope.workspaceId,
+      actorUserId: input.callerUserId,
+      action: "list.delete",
+      entityType: "list",
+      entityId: input.id,
+    });
   });
 }
 
@@ -111,6 +143,17 @@ export async function addContactsToList(input: AddToListInput): Promise<ListMemb
       addedByUserId: input.callerUserId,
       contactIds: visible,
     });
+    if (affected > 0) {
+      await writeAudit(tx, {
+        tenantId: input.scope.tenantId,
+        workspaceId: input.scope.workspaceId,
+        actorUserId: input.callerUserId,
+        action: "member.add",
+        entityType: "list",
+        entityId: input.listId,
+        metadata: { affected },
+      });
+    }
     return { listId: input.listId, affected };
   });
 }
@@ -133,6 +176,15 @@ export async function addContactsToNewList(
       name: input.name.trim(),
       description: input.description?.trim() ?? null,
     });
+    await writeAudit(tx, {
+      tenantId: input.scope.tenantId,
+      workspaceId: input.scope.workspaceId,
+      actorUserId: input.callerUserId,
+      action: "list.create",
+      entityType: "list",
+      entityId: row.id,
+      metadata: { name: row.name },
+    });
     const visible = await listRepository.visibleContactIds(tx, input.contactIds);
     const affected = await listRepository.addMembers(tx, {
       tenantId: input.scope.tenantId,
@@ -141,6 +193,17 @@ export async function addContactsToNewList(
       addedByUserId: input.callerUserId,
       contactIds: visible,
     });
+    if (affected > 0) {
+      await writeAudit(tx, {
+        tenantId: input.scope.tenantId,
+        workspaceId: input.scope.workspaceId,
+        actorUserId: input.callerUserId,
+        action: "member.add",
+        entityType: "list",
+        entityId: row.id,
+        metadata: { affected },
+      });
+    }
     return { list: toDto({ ...row, memberCount: affected }, input.callerUserId), affected };
   });
 }
@@ -158,6 +221,17 @@ export async function removeContactsFromList(
     const found = await listRepository.findById(tx, input.listId);
     if (!found) throw new NotFoundError("List not found.");
     const affected = await listRepository.removeMembers(tx, input.listId, input.contactIds);
+    if (affected > 0) {
+      await writeAudit(tx, {
+        tenantId: input.scope.tenantId,
+        workspaceId: input.scope.workspaceId,
+        actorUserId: input.callerUserId,
+        action: "member.remove",
+        entityType: "list",
+        entityId: input.listId,
+        metadata: { affected },
+      });
+    }
     return { listId: input.listId, affected };
   });
 }

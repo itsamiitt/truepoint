@@ -216,4 +216,39 @@ describe("prospect lists — owner scoping + workspace isolation (req #8)", () =
     expect(res.affected).toBe(1);
     expect(await memberContactIds(list.id)).toEqual([contactA2]); // only A2 remains
   });
+
+  test("Phase-0 schema: new list/member columns default correctly (list-plan/02)", async () => {
+    const list = await core.createList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "phase0 defaults",
+    });
+    // A plain create lands the Phase-0 defaults: a static list, empty tags, no provenance/dynamic link yet.
+    const [meta] = await admin`
+      SELECT list_kind, tags, source, saved_search_id, deleted_at FROM lists WHERE id = ${list.id}`;
+    expect((meta as { list_kind: string }).list_kind).toBe("static");
+    expect((meta as { tags: unknown }).tags).toEqual([]);
+    expect((meta as { source: string | null }).source).toBeNull();
+    expect((meta as { saved_search_id: string | null }).saved_search_id).toBeNull();
+    expect((meta as { deleted_at: string | null }).deleted_at).toBeNull();
+
+    await core.addContactsToList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      listId: list.id,
+      contactIds: [contactA1],
+    });
+    // A member added through the core path carries the default provenance (added_via='manual', no import link).
+    const [mem] = await admin`
+      SELECT added_via, source_import_id FROM list_members
+      WHERE list_id = ${list.id} AND contact_id = ${contactA1}`;
+    expect((mem as { added_via: string }).added_via).toBe("manual");
+    expect((mem as { source_import_id: string | null }).source_import_id).toBeNull();
+
+    // Phase-0 DoD: list mutations write append-only audit rows (list.create + member.add).
+    const auditRows = await admin`SELECT action FROM audit_log WHERE entity_id = ${list.id}`;
+    const actions = (auditRows as { action: string }[]).map((r) => r.action);
+    expect(actions).toContain("list.create");
+    expect(actions).toContain("member.add");
+  });
 });
