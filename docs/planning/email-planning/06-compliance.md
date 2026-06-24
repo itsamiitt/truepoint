@@ -74,7 +74,7 @@ chain for DSAR and audit — the same lineage discipline the list plan applies t
 Under GDPR a data subject has an **unconditional right to object** to direct-marketing processing
 (Art. 21(2)). [3] In TruePoint this is **not** a soft preference — exercising it must:
 
-1. write an **`email_suppression`** row (`reason = unsub`, scope = tenant+workspace, and a
+1. write an **`email_suppression`** row (`reason = unsubscribe`, scope = tenant+workspace, and a
    `global` row where the objection is identity-level — §6), which **gates every future send
    (D4)**; and
 2. set `email_consent.withdrawn_at` so the lawful-basis check can no longer return a positive.
@@ -198,7 +198,7 @@ suppressed **immediately**, not within 48 hours.
 ### 5.1 Suppression gates every send, fail-closed — at enqueue AND dequeue
 
 **D4** is absolute: **suppression gates every send, fail-closed.** The `email_suppression` entity
-(`09-data-model.md`) carries reasons **`{unsub, hard_bounce, complaint, manual, DNC}`**, is
+(`09-data-model.md`) carries reasons **`{unsubscribe, hard_bounce, complaint, manual, dnc, dsar}`**, is
 **tenant + workspace scoped** (with a `global`/identity scope for DSAR/objection — §6, §8), and
 matches by the **same blind-index discipline** the list subsystem uses so the check never decrypts
 PII (`list-plan/08-security-compliance.md §2.2`).
@@ -220,12 +220,12 @@ The gate runs at **two points** (defence in depth against the queue's eventual c
 
 Per D4 and D9, these events write an `email_suppression` row **immediately and synchronously**:
 
-- **Unsubscribe** (one-click §4, in-app, or List-Unsubscribe mailto) → `reason = unsub`.
+- **Unsubscribe** (one-click §4, in-app, or List-Unsubscribe mailto) → `reason = unsubscribe`.
 - **Spam complaint** (FBL / provider webhook, see `04-status-event-tracking.md`) → `reason =
   complaint`. Verify the **webhook signature** before trusting it (security baseline).
 - **Hard bounce** (permanent failure from the provider) → `reason = hard_bounce`. Soft/transient
   bounces do **not** suppress (they retry per `02-sending-infrastructure.md`).
-- **DNC / manual** (staff or tenant-admin action, abuse control) → `reason = DNC` / `manual`.
+- **DNC / manual** (staff or tenant-admin action, abuse control) → `reason = dnc` / `manual`.
 
 A suppression is **never silently removable**; un-suppression (e.g. a recipient re-subscribes) is an
 **audited, explicit, narrowly-permitted action** (`12-roles-permissions.md`), never a side effect.

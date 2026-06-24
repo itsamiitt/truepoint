@@ -43,7 +43,7 @@ reputation, secrets, or data with another's.
 
 ## 2. Core jobs / scope
 
-The email subsystem does seven things. Each is owned in depth by a sibling doc (§9).
+The email subsystem does eight things. Each is owned in depth by a sibling doc (§9).
 
 | # | Core job | What it does | Owned by |
 |---|----------|--------------|----------|

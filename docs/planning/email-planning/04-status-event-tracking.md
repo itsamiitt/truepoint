@@ -39,11 +39,16 @@ as soft signal; treat replies as the conversion event; and pause automation on t
 
 ---
 
-## 2. The event vocabulary — eight canonical event types
+## 2. The event vocabulary — the lifecycle the system tracks
 
-Every tracked occurrence becomes one `email_tracking_event` row (entity owned by `09`), always written
-through the **`email_tracking` BullMQ queue** (D10) with tenant context set per job. The canonical set
-is eight types. They are **not** equally trustworthy, and the system must never pretend they are.
+Every tracked engagement occurrence becomes one `email_tracking_event` row (entity owned by `09`),
+always written through the **`email_tracking` BullMQ queue** (D10) with tenant context set per job.
+Doc `09` owns the canonical enum: **`email_tracking_event.event_type ∈ { delivery, open, click, reply,
+bounce, unsubscribe, complaint }`** — seven values. The table below also lists **`sent`** so the
+lifecycle reads end-to-end, but `sent` is an **`email_send.status`** transition recorded on the send
+path (`02-sending-infrastructure`), **not** an `email_tracking_event`. (The table uses past-tense
+display labels — `delivered` / `opened` / etc. — for the seven stored values plus `sent`.) The states
+are **not** equally trustworthy, and the system must never pretend they are.
 
 ### 2.1 The event-type table (event · source · how detected · reliability caveat)
 

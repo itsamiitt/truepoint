@@ -1,7 +1,7 @@
 # Email — Admin Surface (`/admin`) Plan (11)
 
 > **Status:** Plan (not yet built). **Owner:** Platform + Security. **Last updated:** 2026-06-24.
-> This is the **Phase-2 plan for the internal `/admin` surface** of the email subsystem — the
+> This is the **surface plan for the internal `/admin` console** of the email subsystem — the
 > platform-admin / staff console in **`apps/admin`** (API in **`apps/api/src/features/admin/`**).
 > It is the internal mirror of the customer-facing plan in `10-web-surface.md`: where `10` lays out
 > what a *tenant* sees and does, this doc lays out what **TruePoint platform-admins** see and do
