@@ -92,7 +92,10 @@ export function ListsPage() {
         key: "kind",
         header: "Type",
         width: 96,
-        cell: () => <StatusBadge tone="muted">Static</StatusBadge>,
+        sortValue: (l) => l.kind,
+        cell: (l) => (
+          <StatusBadge tone="muted">{l.kind === "dynamic" ? "Dynamic" : "Static"}</StatusBadge>
+        ),
       },
       {
         key: "members",

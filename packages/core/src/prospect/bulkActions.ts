@@ -40,7 +40,9 @@ import {
   type WorkspaceRole,
 } from "@leadwolf/types";
 import { writeAudit } from "../compliance/writeAudit.ts";
-import { planTitleFilter } from "../search/planTitleFilter.ts";
+// Title-canonical synonym expansion (shared with the dynamic-list resolver) so a `criteria` selection resolves
+// the SAME ids the user saw in the results grid (e.g. "CEO" matches "Chief Executive Officer").
+import { expandTitleFilters } from "../search/expandTitleFilters.ts";
 
 type WorkspaceScope = TenantScope & { workspaceId: string };
 
@@ -58,20 +60,6 @@ interface BulkActor {
   scope: WorkspaceScope;
   callerUserId: string;
   role: WorkspaceRole;
-}
-
-/** Expand title term-filter values through the canonical taxonomy (mirrors searchPortProvider) so a `criteria`
- *  selection resolves the SAME ids the user saw in the results grid (e.g. "CEO" matches "Chief Executive..."). */
-function expandTitleFilters(query: ContactQuery): ContactQuery {
-  let changed = false;
-  const filters = query.filters.map((clause) => {
-    if (clause.kind !== "term" || clause.field !== "title") return clause;
-    const synonyms = planTitleFilter(clause.values).synonyms;
-    if (synonyms.length === 0) return clause;
-    changed = true;
-    return { ...clause, values: Array.from(new Set([...clause.values, ...synonyms])) };
-  });
-  return changed ? { ...query, filters } : query;
 }
 
 /**

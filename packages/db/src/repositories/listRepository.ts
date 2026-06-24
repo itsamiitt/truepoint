@@ -5,30 +5,48 @@
 //   • cross-workspace safety — addMembers only ever links contacts the caller can actually see (RLS),
 //     so a member can never point at another workspace's contact even though FK checks bypass RLS.
 
-import { type MaskedContact, ageDaysSince, computeContactDataQuality } from "@leadwolf/types";
+import {
+  type ListKind,
+  type MaskedContact,
+  ageDaysSince,
+  computeContactDataQuality,
+} from "@leadwolf/types";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
 import { listMembers, lists } from "../schema/lists.ts";
 
-/** A list row with its live membership count — the list/governance view-model. */
+/** A list row with its live membership count — the list/governance view-model. `kind` distinguishes a static
+ *  (explicit `list_members`) list from a dynamic (saved-search-backed) one; `savedSearchId` is the backing
+ *  query for a dynamic list (null for static). For a dynamic list `memberCount` is its query's match total. */
 export interface ListRow {
   id: string;
   name: string;
   description: string | null;
   ownerUserId: string;
+  kind: ListKind;
+  savedSearchId: string | null;
   memberCount: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-/** The values a create needs (workspace + owner come from the verified caller context). */
+/**
+ * The values a create needs (workspace + owner come from the verified caller context). `kind`/`savedSearchId`/
+ * `source` default to the static-list shape so existing callers are unchanged; the Phase-4 dynamic-list path
+ * passes `kind:'dynamic'` + a `savedSearchId` that core has ALREADY validated under the caller's RLS tx (the
+ * FK is not a workspace guard — see schema/lists.ts). The DB coherence check (`lists_kind_query_coherence`)
+ * still backstops `dynamic ⇔ savedSearchId IS NOT NULL`.
+ */
 export interface ListInsert {
   tenantId: string;
   workspaceId: string;
   ownerUserId: string;
   name: string;
   description?: string | null;
+  kind?: ListKind;
+  savedSearchId?: string | null;
+  source?: string | null;
 }
 
 export interface AddMembersInput {
@@ -53,6 +71,8 @@ function toRow(r: typeof lists.$inferSelect, memberCount: number): ListRow {
     name: r.name,
     description: r.description,
     ownerUserId: r.ownerUserId,
+    kind: r.listKind as ListKind,
+    savedSearchId: r.savedSearchId,
     memberCount,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
@@ -168,41 +188,84 @@ function decodeMemberCursor(cursor: string): { addedAt: string; id: string } | n
 }
 
 export const listRepository = {
-  /** Insert a new (empty) list; returns the persisted row. RLS pins it to the active workspace. */
+  /** Insert a new (empty) list; returns the persisted row. RLS pins it to the active workspace. `kind` maps to
+   *  the `list_kind` column; a dynamic list also carries `savedSearchId` (already RLS-validated by core). The
+   *  `lists_kind_query_coherence` DB check rejects an incoherent (dynamic-without-query / static-with-query)
+   *  insert as a last line of defence. */
   async insert(tx: Tx, values: ListInsert): Promise<ListRow> {
-    const rows = await tx.insert(lists).values(values).returning();
+    const rows = await tx
+      .insert(lists)
+      .values({
+        tenantId: values.tenantId,
+        workspaceId: values.workspaceId,
+        ownerUserId: values.ownerUserId,
+        name: values.name,
+        description: values.description ?? null,
+        ...(values.kind !== undefined ? { listKind: values.kind } : {}),
+        ...(values.savedSearchId !== undefined ? { savedSearchId: values.savedSearchId } : {}),
+        ...(values.source !== undefined ? { source: values.source } : {}),
+      })
+      .returning();
     return toRow(rows[0]!, 0);
   },
 
   /** All lists in the workspace, alphabetical, each with its live member count. Workspace-scoped via RLS. */
   async listByWorkspace(scope: TenantScope): Promise<ListRow[]> {
-    return withTenantTx(scope, async (tx) => {
-      const rows = await tx
-        .select({
-          id: lists.id,
-          name: lists.name,
-          description: lists.description,
-          ownerUserId: lists.ownerUserId,
-          createdAt: lists.createdAt,
-          updatedAt: lists.updatedAt,
-          memberCount: sql<number>`count(${listMembers.id})::int`,
-        })
-        .from(lists)
-        .leftJoin(listMembers, eq(listMembers.listId, lists.id))
-        .groupBy(lists.id)
-        .orderBy(asc(lists.name));
-      return rows.map((r) => ({ ...r, memberCount: r.memberCount ?? 0 }));
-    });
+    return withTenantTx(scope, (tx) => listRepository.listByWorkspaceTx(tx));
   },
 
-  /** Find one list by id within the caller's workspace (RLS scopes it); null if absent. */
-  async findById(tx: Tx, id: string): Promise<{ id: string; ownerUserId: string } | null> {
+  /** The tx-aware core of listByWorkspace — runs inside an already-open withTenantTx so core can recompute a
+   *  dynamic list's count (from its saved query) in the SAME tx as this read. */
+  async listByWorkspaceTx(tx: Tx): Promise<ListRow[]> {
     const rows = await tx
-      .select({ id: lists.id, ownerUserId: lists.ownerUserId })
+      .select({
+        id: lists.id,
+        name: lists.name,
+        description: lists.description,
+        ownerUserId: lists.ownerUserId,
+        kind: lists.listKind,
+        savedSearchId: lists.savedSearchId,
+        createdAt: lists.createdAt,
+        updatedAt: lists.updatedAt,
+        memberCount: sql<number>`count(${listMembers.id})::int`,
+      })
+      .from(lists)
+      .leftJoin(listMembers, eq(listMembers.listId, lists.id))
+      .groupBy(lists.id)
+      .orderBy(asc(lists.name));
+    // The join-count is the EXPLICIT `list_members` size — authoritative for static lists. A dynamic list has
+    // no `list_members` rows, so it reads 0 here; core recomputes its count from the saved query (the index
+    // resolves the dynamic subset; see core/listLists). `kind` is the source of that branch.
+    return rows.map((r) => ({
+      ...r,
+      kind: r.kind as ListKind,
+      memberCount: r.memberCount ?? 0,
+    }));
+  },
+
+  /** Find one list by id within the caller's workspace (RLS scopes it); null if absent. Returns the kind +
+   *  backing saved-search id so callers can branch a dynamic (saved-search-resolved) read from a static one. */
+  async findById(
+    tx: Tx,
+    id: string,
+  ): Promise<{
+    id: string;
+    ownerUserId: string;
+    kind: ListKind;
+    savedSearchId: string | null;
+  } | null> {
+    const rows = await tx
+      .select({
+        id: lists.id,
+        ownerUserId: lists.ownerUserId,
+        kind: lists.listKind,
+        savedSearchId: lists.savedSearchId,
+      })
       .from(lists)
       .where(eq(lists.id, id))
       .limit(1);
-    return rows[0] ?? null;
+    const row = rows[0];
+    return row ? { ...row, kind: row.kind as ListKind } : null;
   },
 
   /**

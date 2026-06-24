@@ -257,22 +257,31 @@ function decodeCursor(cursor: string): { k: string | number | null; id: string }
 export const searchRepository = {
   /** Faceted, owner-scoped, keyset-paged contact search. Workspace-isolated via RLS (withTenantTx). */
   async searchContacts(scope: TenantScope, query: ContactQuery): Promise<SearchResultPage> {
-    return withTenantTx(scope, async (tx) => {
-      const where = buildWhere(query);
-      // Sort + keyset: score_desc seeks on (priority_score, id); everything else on (created_at, id).
-      const cursor = query.cursor ? decodeCursor(query.cursor) : null;
-      const rows = await runSearch(tx, where, query.sort, query.limit + 1, cursor);
-      const more = rows.length > query.limit;
-      const page = more ? rows.slice(0, query.limit) : rows;
-      const last = page[page.length - 1];
-      let nextCursor: string | null = null;
-      if (more && last) {
-        const key =
-          query.sort === "score_desc" ? (last.priorityScore ?? -1) : last.createdAt.toISOString();
-        nextCursor = encodeCursor({ k: key, id: last.id });
-      }
-      return { hits: page.map(toMasked), nextCursor };
-    });
+    return withTenantTx(scope, (tx) => searchRepository.searchContactsTx(tx, query));
+  },
+
+  /**
+   * The tx-aware core of searchContacts — runs the same keyset query inside an ALREADY-OPEN withTenantTx so a
+   * caller can compose it with other workspace-scoped reads/writes in ONE transaction (no cross-tx visibility
+   * gap). Used by the Phase-4 dynamic-list members read: it resolves a dynamic list's membership by running the
+   * list's saved ContactQuery here, inside the same tx as the list existence check (RLS is the boundary for
+   * both). `searchContacts` is just this wrapped in its own withTenantTx.
+   */
+  async searchContactsTx(tx: Tx, query: ContactQuery): Promise<SearchResultPage> {
+    const where = buildWhere(query);
+    // Sort + keyset: score_desc seeks on (priority_score, id); everything else on (created_at, id).
+    const cursor = query.cursor ? decodeCursor(query.cursor) : null;
+    const rows = await runSearch(tx, where, query.sort, query.limit + 1, cursor);
+    const more = rows.length > query.limit;
+    const page = more ? rows.slice(0, query.limit) : rows;
+    const last = page[page.length - 1];
+    let nextCursor: string | null = null;
+    if (more && last) {
+      const key =
+        query.sort === "score_desc" ? (last.priorityScore ?? -1) : last.createdAt.toISOString();
+      nextCursor = encodeCursor({ k: key, id: last.id });
+    }
+    return { hits: page.map(toMasked), nextCursor };
   },
 
   /**
@@ -281,15 +290,19 @@ export const searchRepository = {
    * uncapped count: only the per-request bulk MUTATION footprint is capped (the caller slices resolveVisibleIds).
    */
   async countContacts(scope: TenantScope, query: ContactQuery): Promise<number> {
-    return withTenantTx(scope, async (tx) => {
-      const where = buildWhere(query);
-      const rows = await tx
-        .select({ n: sql<number>`count(*)::int` })
-        .from(contacts)
-        .leftJoin(accounts, eq(accounts.id, contacts.accountId))
-        .where(where);
-      return rows[0]?.n ?? 0;
-    });
+    return withTenantTx(scope, (tx) => searchRepository.countContactsTx(tx, query));
+  },
+
+  /** The tx-aware core of countContacts — the exact match total computed inside an already-open withTenantTx
+   *  (so the Phase-4 dynamic-list read derives its member count in the SAME tx as the page it returns). */
+  async countContactsTx(tx: Tx, query: ContactQuery): Promise<number> {
+    const where = buildWhere(query);
+    const rows = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(contacts)
+      .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+      .where(where);
+    return rows[0]?.n ?? 0;
   },
 
   /**

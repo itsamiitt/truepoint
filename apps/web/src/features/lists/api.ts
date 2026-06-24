@@ -57,6 +57,27 @@ export async function createList(name: string, description?: string): Promise<Li
   return (await res.json()) as List;
 }
 
+/**
+ * POST /lists/dynamic — create a dynamic list backed by a saved search. Membership resolves from the saved
+ * query on read (nothing is materialized). The savedSearchId is re-validated to the caller's workspace
+ * server-side (a foreign/absent id 404s). 409 (name taken) surfaces as an ApiError.
+ */
+export async function createDynamicList(
+  name: string,
+  savedSearchId: string,
+  description?: string,
+): Promise<List> {
+  const body: Record<string, string> = { name, savedSearchId };
+  if (description) body.description = description;
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/lists/dynamic`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not create dynamic list");
+  return (await res.json()) as List;
+}
+
 /** PATCH /lists/:id — rename / re-describe a list (owner-only server-side; a non-owned id 404s). */
 export async function updateList(
   id: string,

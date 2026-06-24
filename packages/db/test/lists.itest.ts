@@ -439,3 +439,102 @@ describe("import into list — Phase 2 (list-plan/03 §2.2)", () => {
     expect(await memberContactIds(bList.id)).toEqual([]);
   });
 });
+
+// ── Phase 4: dynamic / saved-search lists (list-plan/04, 09) ─────────────────────────────────────────────
+describe("dynamic lists — Phase 4 (saved-search-backed)", () => {
+  // A broad saved search (no filters) matches every workspace contact, so a dynamic list backed by it
+  // resolves to them on read — with nothing materialized in list_members.
+  const BROAD = { filters: [] } as const;
+
+  test("a dynamic list resolves members from its saved query (workspace-scoped, masked, not materialized)", async () => {
+    const saved = await core.createSavedSearch({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "all A contacts",
+      filters: BROAD,
+      visibility: "private",
+    });
+    const list = await core.createDynamicList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "dynamic — all",
+      savedSearchId: saved.id,
+    });
+    expect(list.kind).toBe("dynamic");
+    expect(list.savedSearchId).toBe(saved.id);
+
+    const page = await core.listListMembers({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      listId: list.id,
+      limit: 100,
+    });
+    const ids = page.members.map((m) => m.id);
+    expect(ids).toContain(contactA1);
+    expect(ids).toContain(contactA2);
+    expect(ids).not.toContain(contactB1); // RLS: B's contact never resolves in A
+
+    // Membership is query-derived — no list_members rows are written for a dynamic list.
+    const [matNone] =
+      await admin`SELECT count(*)::int AS n FROM list_members WHERE list_id = ${list.id}`;
+    expect((matNone as { n: number }).n).toBe(0);
+  });
+
+  test("SECURITY: a cross-workspace savedSearchId is rejected at create (the FK is not a workspace guard)", async () => {
+    const savedA = await core.createSavedSearch({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "A's search",
+      filters: BROAD,
+      visibility: "private",
+    });
+    // B tries to back a dynamic list with A's saved-search id → RLS hides it → NotFoundError (no leak).
+    const err = await caught(() =>
+      core.createDynamicList({
+        scope: scopeB(),
+        callerUserId: ownerB,
+        name: "stolen query",
+        savedSearchId: savedA.id,
+      }),
+    );
+    expect(err.code).toBe("not_found");
+    // No cross-workspace link was ever persisted.
+    const [leak] = await admin`
+      SELECT count(*)::int AS n FROM lists WHERE workspace_id = ${wsB} AND saved_search_id = ${savedA.id}`;
+    expect((leak as { n: number }).n).toBe(0);
+  });
+
+  test("explicit member mutations on a dynamic list are rejected (membership is query-derived)", async () => {
+    const saved = await core.createSavedSearch({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "for guard",
+      filters: BROAD,
+      visibility: "private",
+    });
+    const list = await core.createDynamicList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "no manual members",
+      savedSearchId: saved.id,
+    });
+    const addErr = await caught(() =>
+      core.addContactsToList({
+        scope: scopeA(),
+        callerUserId: ownerA,
+        listId: list.id,
+        contactIds: [contactA1],
+      }),
+    );
+    expect(addErr.code).toBe("validation_error");
+    const removeErr = await caught(() =>
+      core.removeContactsFromList({
+        scope: scopeA(),
+        callerUserId: ownerA,
+        listId: list.id,
+        contactIds: [contactA1],
+      }),
+    );
+    expect(removeErr.code).toBe("validation_error");
+  });
+});

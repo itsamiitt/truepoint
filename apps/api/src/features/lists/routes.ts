@@ -6,6 +6,7 @@
 
 import {
   addContactsToList,
+  createDynamicList,
   createList,
   deleteList,
   listListMembers,
@@ -16,6 +17,7 @@ import {
 import {
   ForbiddenError,
   ValidationError,
+  createDynamicListSchema,
   createListSchema,
   listMembersQuerySchema,
   listMembersSchema,
@@ -56,6 +58,26 @@ listsRoutes.post("/", async (c) => {
     callerUserId: c.get("claims").sub,
     name: parsed.data.name,
     description: parsed.data.description,
+  });
+  return c.json(created, 201);
+});
+
+/**
+ * Create a DYNAMIC list backed by a saved search. Body = { name, savedSearchId, description? }. The
+ * savedSearchId is re-validated under the caller's workspace in core (a foreign/absent id 404s — the FK is
+ * not a workspace guard); membership then resolves on read from the saved query.
+ */
+listsRoutes.post("/dynamic", async (c) => {
+  const workspaceId = requireWorkspace(c);
+  const parsed = createDynamicListSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success)
+    throw new ValidationError("Body must be { name, savedSearchId, description? }.");
+  const created = await createDynamicList({
+    scope: { tenantId: c.get("tenantId"), workspaceId },
+    callerUserId: c.get("claims").sub,
+    name: parsed.data.name,
+    description: parsed.data.description,
+    savedSearchId: parsed.data.savedSearchId,
   });
   return c.json(created, 201);
 });

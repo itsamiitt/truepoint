@@ -299,6 +299,7 @@ export {
 // cross-workspace-safe membership writes returning an affected count.
 export {
   createList,
+  createDynamicList,
   listLists,
   listListMembers,
   assertListInWorkspace,
@@ -308,6 +309,7 @@ export {
   addContactsToNewList,
   removeContactsFromList,
   type CreateListInput,
+  type CreateDynamicListInput,
   type UpdateListInput,
   type DeleteListInput,
   type AddToListInput,

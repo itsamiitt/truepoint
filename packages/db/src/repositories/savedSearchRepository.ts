@@ -51,6 +51,27 @@ export const savedSearchRepository = {
   },
 
   /**
+   * Find ONE saved search the caller may SEE in the active workspace, by id — RLS scopes it to the workspace,
+   * and the owner/visibility predicate keeps a teammate's `private` row invisible (same rule as listVisible).
+   * Returns null for an absent / foreign / not-visible id (no existence leak). This is the trust-boundary
+   * resolver for the Phase-4 dynamic-list create: the client-supplied `savedSearchId` is re-validated here so
+   * a foreign id can never be linked (the FK alone is NOT a workspace guard — see schema/lists.ts).
+   */
+  async findById(tx: Tx, id: string, callerUserId: string): Promise<SavedSearchRow | null> {
+    const rows = await tx
+      .select()
+      .from(savedSearches)
+      .where(
+        and(
+          eq(savedSearches.id, id),
+          or(eq(savedSearches.visibility, "workspace"), eq(savedSearches.ownerUserId, callerUserId)),
+        ),
+      )
+      .limit(1);
+    return rows[0] ? toRow(rows[0]) : null;
+  },
+
+  /**
    * Rows the caller may SEE in the active workspace: every `workspace`-visibility row plus the caller's own
    * `private` rows. Newest-first. RLS already constrains to the workspace; this adds the owner/visibility
    * filter so a teammate's private searches never leak.
