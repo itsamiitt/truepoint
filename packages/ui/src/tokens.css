@@ -118,8 +118,8 @@
 
   /* Shell rail — the collapsible sidebar's two widths (design skill patterns.md "Sidebar":
      RAIL_W 68 / DRAWER_W 244). Collapsed = an icon rail; hover/focus/pin expands to the drawer. */
-  --tp-rail-w: 68px;
-  --tp-rail-expanded: 244px;
+  --tp-rail-w: 60px;
+  --tp-rail-expanded: 232px;
 }
 
 html {

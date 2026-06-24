@@ -31,19 +31,23 @@ fixes + a measured visual refresh** of the shell and Home cockpit.
 
 | State | Width | Trigger | Content |
 |---|---|---|---|
-| Collapsed (default) | 68px (`--tp-rail-w`), icons only | resting | full |
-| Hover / keyboard-focus | 244px (`--tp-rail-expanded`), icons + labels | `:hover` / `:focus-within` | **overlay** (no reflow) + drawer shadow |
-| Pinned | 244px | top-bar toggle | **push** (content reflows) |
+| Collapsed (default) | 60px (`--tp-rail-w`), icons only | resting | full |
+| Hover / keyboard-focus | 232px (`--tp-rail-expanded`), icons + labels | `:hover` / `:focus-within` | **reflows with the rail (push)** |
+| Pinned | 232px | top-bar toggle | **reflows with the rail (push)** |
 
-Mechanism: the `<aside>` is `position: fixed` at the rail width with
-`z-index: var(--tp-z-drawer)`; `.tp-shell` grid column 1 is the layout spacer. Hover/
-focus widen the fixed aside (overlay); `.is-pinned` widens both the aside and the grid
-column (push). Label/wordmark reveal is driven by a **CSS container query** on the rail
-width, so labels appear whenever the rail is expanded (hover, focus, or pin) without a
-giant selector list. The pin toggle is a persistent top-bar control (`aria-pressed`);
-the existing mobile hamburger + overlay are unchanged. Pin state persists to
-`localStorage` (`tp-sidebar-pinned`, SSR-safe, default collapsed) via a `useSidebarPin`
-hook mirroring `DensityProvider`.
+Mechanism: the `<aside>` is an **in-flow grid item** in column 1 of `.tp-shell`
+(`grid-template-columns: var(--tp-rail-w) 1fr`, `grid-template-rows: minmax(0,1fr)`,
+`height:100dvh`) — never `position: fixed` on desktop, so the main column always sits
+beside it. The **rail column itself** expands to `--tp-rail-expanded` on hover/focus
+(`.tp-shell:not(.is-pinned):has(.tp-sidebar:hover, :focus-within)`) or when pinned
+(`.tp-shell.is-pinned`), so the sidebar **and** the main content reflow together — the
+content responds, it is never covered. Label/wordmark/switcher reveal is driven by a
+**CSS container query** on the rail's own width, so it covers hover, focus, and pin with
+one rule. The pin toggle is a persistent top-bar control (`aria-pressed`); pin state
+persists to `localStorage` (`tp-sidebar-pinned`, SSR-safe, default collapsed) via a
+`useSidebarPin` hook mirroring `DensityProvider`. On mobile the rail becomes a
+`position: fixed` off-canvas overlay (hamburger + scrim) — unchanged. Degrades
+gracefully: without `:has()` the rail still shows and the pin toggle still expands it.
 
 ## Visual refresh (measured, on-brand)
 

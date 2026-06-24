@@ -177,10 +177,11 @@ body {
 .tp-shell {
   display: grid;
   grid-template-columns: var(--tp-rail-w) 1fr;
+  grid-template-rows: minmax(0, 1fr); /* one viewport-tall row so .tp-content scrolls inside it */
   height: 100vh; /* fallback for browsers without dvh */
   height: 100dvh;
   overflow: hidden; /* outer page never scrolls; .tp-content owns the scroll */
-  transition: grid-template-columns var(--tp-duration-slow) var(--tp-ease);
+  transition: grid-template-columns var(--tp-duration) var(--tp-ease);
 }
 /* Pinned: reserve the expanded width so content reflows beside the rail (a push, not an overlay). */
 .tp-shell.is-pinned {
@@ -200,47 +201,39 @@ body {
   overflow-y: auto; /* content scrolls; outer shell does not */
 }
 
-/* Sidebar — a fixed, collapsible icon rail on the #f9fafb surface with a single hairline right border.
- * Collapsed it is var(--tp-rail-w) wide (icons only); it expands to var(--tp-rail-expanded) on hover/focus
- * (an overlay, with the rail shadow) or when pinned. container-type lets descendant labels reveal via an
- * @container rule keyed on the rail's OWN width, so one rule covers hover, focus, and pin. On mobile it
- * becomes the off-canvas overlay (the transform block at the bottom of this file). */
+/* Sidebar — a collapsible icon rail in column 1 of the shell grid (in-flow, NOT fixed on desktop, so the main
+ * column always sits beside it — never under it). Collapsed it is var(--tp-rail-w) wide (icons only); the rail
+ * COLUMN — and therefore the sidebar AND the main content together — expands to var(--tp-rail-expanded) on
+ * hover/focus or when pinned, so the content reflows WITH the rail instead of being covered. container-type
+ * lets descendant labels reveal via the @container rule keyed on the rail's own width. On mobile it becomes
+ * the off-canvas overlay (the transform block at the bottom of this file). */
 .tp-sidebar {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: var(--tp-rail-w);
-  z-index: var(--tp-z-drawer); /* expanded, it overlays the sticky top bar (z 30) */
   display: flex;
   flex-direction: column;
+  min-width: 0; /* fills the grid column; overflow-x clips the labels until the column expands */
   background: var(--tp-surface-2);
   border-right: 1px solid var(--tp-hairline-2);
-  padding: 14px 12px;
+  padding: 12px 10px;
   overflow-y: auto;
   overflow-x: hidden;
   container-type: inline-size;
   container-name: rail;
-  /* width drives expand/collapse; transform drives the mobile overlay slide. */
-  transition: width var(--tp-duration) var(--tp-ease), transform var(--tp-duration-slow)
-    var(--tp-ease-out);
+  /* transform drives the mobile overlay slide; the desktop width animates via the grid column (.tp-shell). */
+  transition: transform var(--tp-duration-slow) var(--tp-ease-out);
 }
-/* Hover / keyboard-focus peek (desktop only, when NOT pinned): widen as an OVERLAY — the grid column stays
- * at the rail width so content does not reflow — and lift with the one rail shadow. */
+/* Expand-on-hover / keyboard-focus (desktop, when NOT pinned): widen the rail COLUMN so the sidebar grows and
+ * the main content shifts with it — a push, not an overlay. :has lets the grid react to hovering the rail. */
 @media (min-width: 769px) {
-  .tp-shell:not(.is-pinned) .tp-sidebar:hover,
-  .tp-shell:not(.is-pinned) .tp-sidebar:focus-within {
-    width: var(--tp-rail-expanded);
-    box-shadow: var(--tp-shadow-rail);
+  .tp-shell:not(.is-pinned):has(.tp-sidebar:hover),
+  .tp-shell:not(.is-pinned):has(.tp-sidebar:focus-within) {
+    grid-template-columns: var(--tp-rail-expanded) 1fr;
   }
-}
-/* Pinned: stay expanded (content already reflowed via .is-pinned); no shadow — it sits in the layout. */
-.tp-shell.is-pinned .tp-sidebar {
-  width: var(--tp-rail-expanded);
 }
 .tp-brand {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 12px 12px 16px; /* mark aligns over the nav glyphs below */
+  padding: 12px 10px 14px; /* compact; mark aligns over the nav glyphs below */
 }
 .tp-brand .tp-brand-lockup {
   display: inline-flex;
@@ -266,7 +259,7 @@ body {
   align-items: center;
   gap: 12px;
   height: 36px;
-  padding: 0 12px; /* puts the glyph centre on the rail centre line so it never shifts on expand */
+  padding: 0 10px; /* centres the 18px glyph on the 60px rail centre line (10 + 10 + 10 = 30) */
   border-radius: 7px;
   color: var(--tp-ink-2);
   font-size: 14px;
