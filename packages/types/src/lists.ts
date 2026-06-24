@@ -3,6 +3,7 @@
 // Workspace-scoped; rename/delete are owner-gated in @leadwolf/core. Leaf package (validation only).
 
 import { z } from "zod";
+import { maskedContactSchema } from "./contacts.ts";
 
 /** Create a list. `description` is optional free text. */
 export const createListSchema = z.object({
@@ -31,6 +32,28 @@ export const listMembersSchema = z.object({
   contactIds: z.array(z.string().uuid()).min(1).max(10000),
 });
 export type ListMembersRequest = z.infer<typeof listMembersSchema>;
+
+/**
+ * Query params for the list-members read (GET /lists/:id/members) — masked, keyset-paged. `limit` is bounded
+ * so a single page can never pull the whole membership; `cursor` is the opaque keyset token from the prior
+ * page (base64url of the last row's added_at + id). Both optional → first page at the default size.
+ */
+export const listMembersQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  cursor: z.string().optional(),
+});
+export type ListMembersQuery = z.infer<typeof listMembersQuerySchema>;
+
+/**
+ * One keyset page of a list's members — the MASKED contact rows (no PII; email domain only, phone locked)
+ * plus the opaque cursor for the next page (null at the end). Mirrors the search surface's SearchPage shape
+ * so the members table can reuse the prospect grid + "Load more" verbatim. Reveal is the only de-masking path.
+ */
+export const listMembersPageSchema = z.object({
+  members: z.array(maskedContactSchema),
+  nextCursor: z.string().nullable(),
+});
+export type ListMembersPage = z.infer<typeof listMembersPageSchema>;
 
 /** A list as returned by the API. `memberCount` is the live membership size; `isOwner` drives rename/delete UI. */
 export const list = z.object({

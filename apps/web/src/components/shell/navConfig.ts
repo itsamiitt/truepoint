@@ -2,7 +2,7 @@
 // to live in Sidebar.tsx, AppShell.tsx and CommandPalette.tsx — add a destination in exactly one place and the
 // rail, top-bar title, command palette, and settings scope-nav all pick it up.
 import type { IconComponent } from "@leadwolf/ui";
-import { BarChart2, Home, Inbox, Search, Send, Settings } from "lucide-react";
+import { BarChart2, Home, Inbox, ListChecks, Search, Send, Settings } from "lucide-react";
 
 export interface NavDestination {
   label: string;
@@ -16,6 +16,7 @@ export interface NavDestination {
 export const DESTINATIONS: NavDestination[] = [
   { label: "Home", href: "/home", match: "/home", icon: Home },
   { label: "Prospect", href: "/prospect", match: "/prospect", icon: Search },
+  { label: "Lists", href: "/lists", match: "/lists", icon: ListChecks },
   { label: "Sequences", href: "/sequences", match: "/sequences", icon: Send },
   { label: "Inbox", href: "/inbox", match: "/inbox", icon: Inbox },
   { label: "Reports", href: "/reports", match: "/reports", icon: BarChart2 },
@@ -124,6 +125,12 @@ export const PALETTE_NAVIGATE: PaletteEntry[] = [
 
 export const PALETTE_QUICK: PaletteEntry[] = [
   { id: "act-search", label: "New search", href: "/prospect", keywords: ["prospect", "find"] },
+  {
+    id: "act-lists",
+    label: "View lists",
+    href: "/lists",
+    keywords: ["list", "lists", "collection", "segment"],
+  },
   { id: "act-import", label: "Import contacts", href: "/import", keywords: ["csv", "upload"] },
   {
     id: "act-enrichment-jobs",

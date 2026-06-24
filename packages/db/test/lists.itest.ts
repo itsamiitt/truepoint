@@ -251,4 +251,77 @@ describe("prospect lists — owner scoping + workspace isolation (req #8)", () =
     expect(actions).toContain("list.create");
     expect(actions).toContain("member.add");
   });
+
+  // ── Phase 1: the masked, keyset-paged members read path (GET /lists/:id/members) ───────────────────────
+  test("listListMembers returns the list's MASKED members; a foreign/absent list 404s", async () => {
+    const list = await core.createList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "members read",
+    });
+    await core.addContactsToList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      listId: list.id,
+      contactIds: [contactA1, contactA2],
+    });
+
+    const page = await core.listListMembers({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      listId: list.id,
+      limit: 100,
+    });
+    const ids = page.members.map((m) => m.id).sort();
+    expect(ids).toEqual([contactA1, contactA2].sort());
+    // Masked shape: the read carries non-PII facets only (no encrypted email/phone leaks through).
+    const m = page.members.find((r) => r.id === contactA1);
+    expect(m).toBeDefined();
+    expect(m).not.toHaveProperty("emailEnc");
+    expect(m).not.toHaveProperty("phoneEnc");
+    expect(typeof m?.hasEmail).toBe("boolean");
+    expect(typeof m?.hasPhone).toBe("boolean");
+
+    // Workspace B can never read an A list's members (RLS scopes findById to B → 404, no existence leak).
+    const bRead = await caught(() =>
+      core.listListMembers({ scope: scopeB(), callerUserId: ownerB, listId: list.id, limit: 100 }),
+    );
+    expect(bRead.code).toBe("not_found");
+  });
+
+  test("listListMembers keyset-paginates: limit 1 yields a cursor that walks the remaining members", async () => {
+    const list = await core.createList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      name: "paged members",
+    });
+    await core.addContactsToList({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      listId: list.id,
+      contactIds: [contactA1, contactA2],
+    });
+
+    const first = await core.listListMembers({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      listId: list.id,
+      limit: 1,
+    });
+    expect(first.members).toHaveLength(1);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await core.listListMembers({
+      scope: scopeA(),
+      callerUserId: ownerA,
+      listId: list.id,
+      limit: 1,
+      cursor: first.nextCursor ?? undefined,
+    });
+    expect(second.members).toHaveLength(1);
+    // The two pages cover both members with no overlap, and the keyset terminates (no third page).
+    const seen = [...first.members, ...second.members].map((r) => r.id).sort();
+    expect(seen).toEqual([contactA1, contactA2].sort());
+    expect(second.nextCursor).toBeNull();
+  });
 });

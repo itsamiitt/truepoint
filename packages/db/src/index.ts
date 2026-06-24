@@ -188,6 +188,7 @@ export {
   type ListRow,
   type ListInsert,
   type AddMembersInput,
+  type ListMembersResultPage,
 } from "./repositories/listRepository.ts";
 export {
   searchRepository,

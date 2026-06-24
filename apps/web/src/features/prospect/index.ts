@@ -10,6 +10,15 @@ export { RowActions } from "./components/RowActions";
 export { RecentSearches } from "./components/RecentSearches";
 export { useRecentSearches, type RecentSearch } from "./hooks/useRecentSearches";
 
+// Shared bulk surface + masked-grid helpers (24, Phase-3). Exported so OTHER masked-contact surfaces (e.g. the
+// Lists members grid) can reuse the sticky bulk bar, the selection model, the masked "add to list" picker, and
+// the masking presentation helpers through this PUBLIC barrel — never by deep-importing the slice internals
+// (no-cross-feature-import). The dependency is one-way (lists → prospect): prospect imports nothing from lists.
+export { BulkActionBar, type RowBulkAction } from "./components/BulkActionBar";
+export { AddToListDialog } from "./components/AddToListDialog";
+export { useBulkSelection, type ProspectBulkSelection } from "./hooks/useBulkSelection";
+export { displayName, emailGlyphFor, maskedEmail } from "./types";
+
 // Advanced search/filter (24, ADR-0035): server-driven typeahead filter rail + search hooks/client.
 // Wire <FilterRail onChange={setFilters}/> + useContactSearch() into ProspectPage's left rail + grid.
 export { FilterRail } from "./components/FilterRail";

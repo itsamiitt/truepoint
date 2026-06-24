@@ -5,6 +5,7 @@
 //   • cross-workspace safety — addMembers only ever links contacts the caller can actually see (RLS),
 //     so a member can never point at another workspace's contact even though FK checks bypass RLS.
 
+import type { MaskedContact } from "@leadwolf/types";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
@@ -50,6 +51,83 @@ function toRow(r: typeof lists.$inferSelect, memberCount: number): ListRow {
   };
 }
 
+/** One keyset page of a list's MASKED members + the opaque cursor for the next page (null at the end). */
+export interface ListMembersResultPage {
+  members: MaskedContact[];
+  nextCursor: string | null;
+}
+
+/** The masked (non-PII) contact columns the members read selects — NEVER the encrypted email/phone. Mirrors
+ *  contactRepository's masked projection so the members table reuses the prospect grid verbatim. `addedAt` is
+ *  the join's keyset sort key (when the contact entered the list), distinct from the contact's createdAt. */
+const MASKED_MEMBER = {
+  id: contacts.id,
+  firstName: contacts.firstName,
+  lastName: contacts.lastName,
+  jobTitle: contacts.jobTitle,
+  emailDomain: contacts.emailDomain,
+  emailStatus: contacts.emailStatus,
+  hasEmail: sql<boolean>`${contacts.emailEnc} IS NOT NULL`,
+  hasPhone: sql<boolean>`${contacts.phoneEnc} IS NOT NULL`,
+  seniorityLevel: contacts.seniorityLevel,
+  department: contacts.department,
+  locationCountry: contacts.locationCountry,
+  locationCity: contacts.locationCity,
+  outreachStatus: contacts.outreachStatus,
+  isRevealed: contacts.isRevealed,
+  ownerUserId: sql<string | null>`coalesce(${contacts.ownerUserId}, ${contacts.revealedByUserId})`,
+  createdAt: contacts.createdAt,
+  // The keyset sort key, rendered as Postgres' FULL-PRECISION text (microseconds preserved). The cursor carries
+  // this verbatim and the seek casts it straight back to ::timestamptz — round-tripping through a JS Date would
+  // truncate to milliseconds and silently drop members that share a millisecond (e.g. a bulk add stamps every
+  // member with the SAME transaction now() to the microsecond, so the boundary collision is guaranteed there).
+  addedAtText: sql<string>`${listMembers.addedAt}::text`,
+  memberId: listMembers.id,
+} as const;
+
+function toMaskedMember(r: Record<string, unknown>): MaskedContact {
+  return {
+    id: r.id as string,
+    firstName: r.firstName as string | null,
+    lastName: r.lastName as string | null,
+    jobTitle: r.jobTitle as string | null,
+    emailDomain: r.emailDomain as string | null,
+    emailStatus: r.emailStatus as MaskedContact["emailStatus"],
+    hasEmail: r.hasEmail as boolean,
+    hasPhone: r.hasPhone as boolean,
+    seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
+    department: r.department as string | null,
+    locationCountry: r.locationCountry as string | null,
+    locationCity: r.locationCity as string | null,
+    outreachStatus: r.outreachStatus as MaskedContact["outreachStatus"],
+    isRevealed: r.isRevealed as boolean,
+    ownerUserId: r.ownerUserId as string | null,
+    createdAt: (r.createdAt as Date).toISOString(),
+  };
+}
+
+/** Cursor = base64url JSON of the last member row's keyset (added_at + membership id). Keyset, never offset —
+ *  mirrors searchRepository's cursor so the format is consistent across the masked-grid surfaces. */
+function encodeMemberCursor(payload: { addedAt: string; id: string }): string {
+  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+}
+function decodeMemberCursor(cursor: string): { addedAt: string; id: string } | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof (parsed as { addedAt?: unknown }).addedAt === "string" &&
+      typeof (parsed as { id?: unknown }).id === "string"
+    ) {
+      return parsed as { addedAt: string; id: string };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export const listRepository = {
   /** Insert a new (empty) list; returns the persisted row. RLS pins it to the active workspace. */
   async insert(tx: Tx, values: ListInsert): Promise<ListRow> {
@@ -86,6 +164,47 @@ export const listRepository = {
       .where(eq(lists.id, id))
       .limit(1);
     return rows[0] ?? null;
+  },
+
+  /**
+   * One MASKED, keyset-paged page of a list's members (the contact ⋈ list_members join), newest-added-first.
+   * Workspace-isolated via RLS (the join only sees this workspace's list_members + contacts), so a foreign
+   * list id resolves to an empty page even if it somehow reached here — but callers gate on findById first for
+   * an honest 404. Tombstoned contacts (DSAR) are excluded. Never selects the encrypted email/phone: the page
+   * carries only the non-PII facets (reveal is the only de-masking path). tx-aware so it composes inside the
+   * caller's withTenantTx.
+   */
+  async listMembers(
+    tx: Tx,
+    listId: string,
+    limit: number,
+    cursor: string | null,
+  ): Promise<ListMembersResultPage> {
+    const seek = cursor ? decodeMemberCursor(cursor) : null;
+    // Keyset: order strictly by (added_at, membership id) DESC so the cursor seeks past the last row seen. The
+    // membership id (a uuid v7) is the tiebreaker for members added in the same instant.
+    const where = seek
+      ? and(
+          eq(listMembers.listId, listId),
+          isNull(contacts.deletedAt),
+          sql`(${listMembers.addedAt}, ${listMembers.id}) < (${seek.addedAt}::timestamptz, ${seek.id}::uuid)`,
+        )
+      : and(eq(listMembers.listId, listId), isNull(contacts.deletedAt));
+    const rows = await tx
+      .select(MASKED_MEMBER)
+      .from(listMembers)
+      .innerJoin(contacts, eq(contacts.id, listMembers.contactId))
+      .where(where)
+      .orderBy(sql`${listMembers.addedAt} DESC, ${listMembers.id} DESC`)
+      .limit(limit + 1);
+    const more = rows.length > limit;
+    const page = more ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+    // Carry the DB's full-precision timestamp text straight into the cursor — no JS Date round-trip (which would
+    // truncate to milliseconds and drop members sharing that millisecond on the next page).
+    const nextCursor =
+      more && last ? encodeMemberCursor({ addedAt: last.addedAtText, id: last.memberId }) : null;
+    return { members: page.map(toMaskedMember), nextCursor };
   },
 
   /** Apply a rename / description change to a list OWNED by `ownerUserId`. Null when no owned row matched

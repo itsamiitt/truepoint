@@ -92,6 +92,8 @@ export function BulkActionBar({
   onRequestHandled,
   onRevealed,
   onMutated,
+  hideSelectAllMatching,
+  extraActions,
 }: {
   /** The selection model (explicit ids OR "all N matching"); drives the targeted BulkSelection. */
   selection: ProspectBulkSelection;
@@ -111,6 +113,14 @@ export function BulkActionBar({
   onRevealed: (revealedIds: string[]) => void;
   /** Fired after any non-reveal mutation so the parent can reload the grid + clear the selection. */
   onMutated?: () => void;
+  /**
+   * Hide the "Select all N matching" escalation. Surfaces that aren't backed by the workspace search query
+   * (e.g. a list's members — where `query` is not the membership criteria) pass this so the bar never offers
+   * an escalation that would wrongly resolve to the whole workspace instead of the current set.
+   */
+  hideSelectAllMatching?: boolean;
+  /** Extra surface-specific actions rendered in the bar (e.g. a list's "Remove from list"). Explicit-ids only. */
+  extraActions?: ReactNode;
 }) {
   const toast = useToast();
   const { balance } = useCreditBalance();
@@ -258,7 +268,7 @@ export function BulkActionBar({
         <span className={styles.bulkCount}>
           {count.toLocaleString()} selected{allMatching ? " (all matching)" : ""}
         </span>
-        {!allMatching ? (
+        {!allMatching && !hideSelectAllMatching ? (
           <button
             type="button"
             className={styles.bulkLink}
@@ -312,6 +322,7 @@ export function BulkActionBar({
             side="top"
             items={moreItems}
           />
+          {extraActions}
           <TpButton variant="link" size="sm" onClick={clear}>
             Clear
           </TpButton>

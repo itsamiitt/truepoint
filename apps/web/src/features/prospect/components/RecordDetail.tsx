@@ -27,7 +27,7 @@ import {
 } from "@leadwolf/ui";
 import { Activity, Download, ListPlus, Pencil, Send, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
-import { type RecordTag, addContactsToList, enrollContacts, fetchRecordTags } from "../api";
+import { type RecordTag, enrollContacts, fetchRecordTags } from "../api";
 import { exportMaskedCsv } from "../export";
 import { useActivities } from "../hooks/useActivities";
 import { useCustomFields } from "../hooks/useCustomFields";
@@ -40,6 +40,7 @@ import {
   dataHealthTone,
   displayName,
 } from "../types";
+import { AddToListDialog } from "./AddToListDialog";
 import { RevealDialog } from "./RevealDialog";
 import { StageSelector } from "./StageSelector";
 import { TagPicker } from "./TagPicker";
@@ -359,6 +360,9 @@ export function RecordDetail({
 }) {
   const toast = useToast();
   const [revealType, setRevealType] = useState<RevealType | null>(null);
+  // The "Add to list" picker (the shared lists dialog) — opening it lets the user pick/create a real list, so
+  // adding goes through the working membership path (bulkAddToList) instead of the old hardcoded-id 404 stub.
+  const [addToListOpen, setAddToListOpen] = useState(false);
   // Live override of the contact's outreach_status after a stage assignment rolls it up server-side, so the
   // Identity field reflects the new status without re-fetching the masked list. Keyed to the contact id so it
   // applies ONLY to the contact it was set for — switching records (A→B) ignores A's override with no flash.
@@ -383,17 +387,6 @@ export function RecordDetail({
       title: `${what} isn't available yet`,
       description: "It connects once that backend ships — nothing was changed.",
     });
-
-  const onAddToList = async () => {
-    if (!contact) return;
-    try {
-      const { ok } = await addContactsToList("__default__", [contact.id]);
-      if (ok) toast.success("Added to list");
-      else notWired("Lists");
-    } catch (e) {
-      toast.error("Could not add to list", e instanceof Error ? e.message : undefined);
-    }
-  };
 
   const onEnroll = async () => {
     if (!contact) return;
@@ -431,7 +424,7 @@ export function RecordDetail({
               variant="ghost"
               size="sm"
               leftIcon={<ListPlus size={15} />}
-              onClick={onAddToList}
+              onClick={() => setAddToListOpen(true)}
             >
               Add to list
             </TpButton>
@@ -552,6 +545,12 @@ export function RecordDetail({
             open={revealType !== null}
             onClose={() => setRevealType(null)}
             onRevealed={onRevealed}
+          />
+
+          <AddToListDialog
+            open={addToListOpen}
+            contactIds={[contact.id]}
+            onClose={() => setAddToListOpen(false)}
           />
         </div>
       ) : null}

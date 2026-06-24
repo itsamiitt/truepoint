@@ -5,8 +5,14 @@
 // Every operation composes a single withTenantTx so RLS scopes to the workspace; affected counts are returned
 // so the UI can confirm "N added / N removed".
 
-import { type ListRow, type TenantScope, listRepository, withTenantTx } from "@leadwolf/db";
-import { type List, NotFoundError } from "@leadwolf/types";
+import {
+  type ListMembersResultPage,
+  type ListRow,
+  type TenantScope,
+  listRepository,
+  withTenantTx,
+} from "@leadwolf/db";
+import { type List, type MaskedContact, NotFoundError } from "@leadwolf/types";
 import { writeAudit } from "../compliance/writeAudit.ts";
 
 /** The workspace-scoped caller context shared by every operation (scope + the verified user id). */
@@ -60,6 +66,32 @@ export async function createList(input: CreateListInput): Promise<List> {
 export async function listLists(actor: ListActor): Promise<List[]> {
   const rows = await listRepository.listByWorkspace(actor.scope);
   return rows.map((r) => toDto(r, actor.callerUserId));
+}
+
+export interface ListMembersInput extends ListActor {
+  listId: string;
+  limit: number;
+  cursor?: string;
+}
+
+/** One keyset page of a list's MASKED members (no PII). The masked, paginated read-path member type. */
+export type ListMember = MaskedContact;
+
+/**
+ * Read a list's members — masked (email domain only, phone locked), keyset-paged, newest-added-first. The list
+ * must exist in the caller's workspace (else 404, no existence leak — exactly like updateList/addContactsToList);
+ * the client-supplied list id is never trusted, it is re-scoped to the workspace under RLS. Both the existence
+ * check and the member read run inside ONE withTenantTx so RLS is the hard boundary for both. Reveal stays the
+ * only de-masking path — this read NEVER returns raw PII.
+ */
+export async function listListMembers(
+  input: ListMembersInput,
+): Promise<{ members: ListMember[]; nextCursor: string | null }> {
+  return withTenantTx(input.scope, async (tx): Promise<ListMembersResultPage> => {
+    const found = await listRepository.findById(tx, input.listId);
+    if (!found) throw new NotFoundError("List not found.");
+    return listRepository.listMembers(tx, input.listId, input.limit, input.cursor ?? null);
+  });
 }
 
 export interface UpdateListInput extends ListActor {

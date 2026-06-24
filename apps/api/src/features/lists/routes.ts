@@ -8,6 +8,7 @@ import {
   addContactsToList,
   createList,
   deleteList,
+  listListMembers,
   listLists,
   removeContactsFromList,
   updateList,
@@ -16,6 +17,7 @@ import {
   ForbiddenError,
   ValidationError,
   createListSchema,
+  listMembersQuerySchema,
   listMembersSchema,
   updateListSchema,
 } from "@leadwolf/types";
@@ -82,6 +84,28 @@ listsRoutes.delete("/:id", async (c) => {
     id: c.req.param("id"),
   });
   return c.body(null, 204);
+});
+
+/**
+ * Read a list's members — MASKED (no PII), keyset-paged, newest-added-first. Query = { limit?, cursor? }.
+ * 404 if the list isn't in the caller's workspace (no existence leak). The client-supplied list id is never
+ * trusted — core re-scopes it under RLS. Returns { members, nextCursor }.
+ */
+listsRoutes.get("/:id/members", async (c) => {
+  const workspaceId = requireWorkspace(c);
+  const parsed = listMembersQuerySchema.safeParse({
+    limit: c.req.query("limit"),
+    cursor: c.req.query("cursor"),
+  });
+  if (!parsed.success) throw new ValidationError("Query must be { limit?: 1..200, cursor? }.");
+  const page = await listListMembers({
+    scope: { tenantId: c.get("tenantId"), workspaceId },
+    callerUserId: c.get("claims").sub,
+    listId: c.req.param("id"),
+    limit: parsed.data.limit,
+    cursor: parsed.data.cursor,
+  });
+  return c.json(page);
 });
 
 /** Add contacts to a list (bulk, idempotent). Body = { contactIds }. Returns { listId, affected }. */

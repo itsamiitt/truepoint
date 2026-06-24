@@ -243,25 +243,6 @@ export async function setCustomFields(
 }
 
 /**
- * POST /lists/:id/members — add the selected contacts to a list (09 §3). Lists are a later milestone, so an
- * unbuilt backend (404/501) returns `{ ok:false }` and the caller surfaces an honest "not available yet"
- * toast rather than faking the add. No fabricated mutation.
- */
-export async function addContactsToList(
-  listId: string,
-  contactIds: string[],
-): Promise<{ ok: boolean }> {
-  const res = await fetchWithAuth(`${API_BASE}/api/v1/lists/${listId}/members`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ contactIds }),
-  });
-  if (notBuilt(res.status)) return { ok: false };
-  if (!res.ok) throw await toApiError(res, "Could not add to list");
-  return { ok: true };
-}
-
-/**
  * POST /outreach/enrollments — enroll the selected contacts in a sequence (09 §3.3). The outreach engine
  * gates behind a later milestone, so an unbuilt backend (404/501) returns `{ ok:false }` and the caller is
  * honest about it. Suppression/consent gating runs server-side; the UI never fakes an enroll.

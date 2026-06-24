@@ -298,6 +298,7 @@ export {
 export {
   createList,
   listLists,
+  listListMembers,
   updateList,
   deleteList,
   addContactsToList,
@@ -309,6 +310,8 @@ export {
   type AddToListInput,
   type AddToNewListInput,
   type RemoveFromListInput,
+  type ListMembersInput,
+  type ListMember,
   type ListMembershipResult,
 } from "./prospect/lists.ts";
 // Phase-3 bulk actions over the prospect search results (24): owner assign/reassign (policy-gated), bulk tags
