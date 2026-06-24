@@ -71,8 +71,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 834,
-  "fileSetHash": "sha256:fc0475c31c02c8ef4f14c9d921930bc9141fe39b062f03f25251cb1d1686b7ca",
+  "fileCount": 835,
+  "fileSetHash": "sha256:0701c6f1cbe3b1365d09d1416226dfeb61cf7445d27a22636bbb85e5aa65a2a6",
   "features": {
     "account-search": {
       "web": [],
@@ -766,6 +766,7 @@
         "packages/core/src/search/canonicalizeTitle.ts",
         "packages/core/src/search/expandQuery.test.ts",
         "packages/core/src/search/expandQuery.ts",
+        "packages/core/src/search/expandTitleFilters.ts",
         "packages/core/src/search/normalizeTitle.ts",
         "packages/core/src/search/planTitleFilter.test.ts",
         "packages/core/src/search/planTitleFilter.ts",
