@@ -71,8 +71,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 817,
-  "fileSetHash": "sha256:95863adc345bd4b5ebb58fb89c054c52853c513ac0d5d82381d225646c82ba89",
+  "fileCount": 829,
+  "fileSetHash": "sha256:94c6070a370743ad90168888001d67591e9780b329d0cabc3ace9e9e32adf7b5",
   "features": {
     "account-search": {
       "web": [],
@@ -466,7 +466,17 @@
       "integrations": []
     },
     "lists": {
-      "web": [],
+      "web": [
+        "apps/web/src/features/lists/api.ts",
+        "apps/web/src/features/lists/components/DeleteListDialog.tsx",
+        "apps/web/src/features/lists/components/ListDetailPage.tsx",
+        "apps/web/src/features/lists/components/ListFormDialog.tsx",
+        "apps/web/src/features/lists/components/ListsPage.tsx",
+        "apps/web/src/features/lists/hooks/useList.ts",
+        "apps/web/src/features/lists/hooks/useListMembers.ts",
+        "apps/web/src/features/lists/hooks/useLists.ts",
+        "apps/web/src/features/lists/index.ts"
+      ],
       "admin": [],
       "api": [
         "apps/api/src/features/lists/index.ts",
@@ -538,6 +548,7 @@
         "apps/web/src/features/prospect/components/AccountDetailDrawer.tsx",
         "apps/web/src/features/prospect/components/AccountFilterPanel.tsx",
         "apps/web/src/features/prospect/components/AccountsTable.tsx",
+        "apps/web/src/features/prospect/components/AddToListDialog.tsx",
         "apps/web/src/features/prospect/components/AiSearchBox.tsx",
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
@@ -1202,6 +1213,8 @@
       "apps/web/src/app/(shell)/home/page.tsx",
       "apps/web/src/app/(shell)/inbox/page.tsx",
       "apps/web/src/app/(shell)/layout.tsx",
+      "apps/web/src/app/(shell)/lists/[id]/page.tsx",
+      "apps/web/src/app/(shell)/lists/page.tsx",
       "apps/web/src/app/(shell)/prospect/page.tsx",
       "apps/web/src/app/(shell)/reports/page.tsx",
       "apps/web/src/app/(shell)/sales-navigator/page.tsx",
