@@ -18,6 +18,9 @@ export { BulkActionBar, type RowBulkAction } from "./components/BulkActionBar";
 export { AddToListDialog } from "./components/AddToListDialog";
 export { useBulkSelection, type ProspectBulkSelection } from "./hooks/useBulkSelection";
 export { displayName, emailGlyphFor, maskedEmail } from "./types";
+// The bulk enrich/re-verify + the D5 pre-flight estimate clients — reused by the Lists members surface for its
+// own "Re-verify" affordance (list-plan/06 §3.4, §5) so it drives the SAME contacts-bulk backend, not a fork.
+export { bulkEnrich, bulkEstimate } from "./bulkActionsApi";
 
 // Advanced search/filter (24, ADR-0035): server-driven typeahead filter rail + search hooks/client.
 // Wire <FilterRail onChange={setFilters}/> + useContactSearch() into ProspectPage's left rail + grid.

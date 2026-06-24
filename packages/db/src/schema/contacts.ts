@@ -128,6 +128,11 @@ export const contacts = pgTable(
     isRevealed: boolean("is_revealed").notNull().default(false),
     revealedByUserId: uuid("revealed_by_user_id").references(() => users.id),
     revealedAt: timestamp("revealed_at", { withTimezone: true }),
+    // When the contact's PII fields were last VERIFIED (email/phone correctness — set by verify-on-reveal and
+    // by enrichment; list-plan/06 §3.3 gap). Powers `computeContactDataQuality(ageDaysSinceVerified)`: the
+    // freshness sub-score + the Data Health column's freshness_status badge. NULL = never verified (cold start
+    // → "aging", not punished). Distinct from `updated_at` (any write) and `last_activity_at` (outreach).
+    lastVerifiedAt: timestamp("last_verified_at", { withTimezone: true }),
     jurisdiction: char("jurisdiction", { length: 2 }),
     region: char("region", { length: 2 }).notNull().default("US"),
     lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),

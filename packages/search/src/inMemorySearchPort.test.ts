@@ -17,6 +17,7 @@ function contact(over: Partial<IndexedContact> & { id: string }): IndexedContact
     jobTitle: null,
     emailDomain: "acme.com",
     emailStatus: "unverified",
+    phoneStatus: null,
     hasEmail: true,
     hasPhone: false,
     seniorityLevel: null,
@@ -27,6 +28,7 @@ function contact(over: Partial<IndexedContact> & { id: string }): IndexedContact
     isRevealed: false,
     ownerUserId: null,
     createdAt: "2026-01-01T00:00:00.000Z",
+    lastVerifiedAt: null,
     ...over,
   };
 }

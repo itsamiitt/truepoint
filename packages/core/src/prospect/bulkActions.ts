@@ -12,10 +12,12 @@
 // addContactsToList (no list-membership audit action exists). Bulk enrich enqueues an enrichment_jobs row and
 // is NOT audited (no enrichment audit action in the closed enum) — documented on bulkEnrich.
 
+import { env } from "@leadwolf/config";
 import {
   type TenantScope,
   type Tx,
   contactRepository,
+  creditRepository,
   enrichmentJobRepository,
   outreachLogRepository,
   revealRepository,
@@ -29,6 +31,8 @@ import {
 import {
   BULK_SELECTION_CAP,
   type BulkEnrollResult,
+  type BulkEstimateAction,
+  type BulkSpendEstimate,
   type ContactQuery,
   ForbiddenError,
   NotFoundError,
@@ -425,6 +429,66 @@ export async function searchCount(
 ): Promise<{ total: number }> {
   const total = await searchRepository.countContacts(scope, expandTitleFilters(query));
   return { total };
+}
+
+// ── 10. Credit ESTIMATE before run (D5, list-plan/06 §4.2) ───────────────────────────────────────────────
+export interface BulkEstimateInput extends BulkActor, BulkSelectionInput {
+  action: BulkEstimateAction;
+}
+
+/**
+ * Project the spend a bulk REVEAL or ENRICH/re-verify would cost, BEFORE any credit is spent (list-plan D5 —
+ * "always show cost + estimate before spend"). Resolves the selection to the workspace-VISIBLE ids (the same
+ * cross-workspace-safe path the real mutation uses, so the count is honest), reads the non-PII per-member
+ * signals, then projects:
+ *
+ *  - **reveal** — `billable` = members that are revealable (have an email + not yet revealed in this
+ *    workspace); `projectedMax` = billable × the per-email reveal cost (07 §1). This is the WORST case — the
+ *    actual charge is ≤ this because charge-only-valid (06 §4.1): an `invalid`/`catch_all`/`unknown` verify
+ *    charges 0. Already-revealed members are `matchable` (re-reveal is free, first-wins).
+ *  - **enrich / re-verify** — enrichment fills the overlay and re-verify re-checks owned data: BOTH are a
+ *    SYSTEM cost, never a user credit charge (06 §1/§3.4 — "Re-verify ≠ re-charge"; "users pay only on
+ *    reveal"). So `projectedMax` = 0 and every visible member is `matchable` (resolved internally / owned).
+ *    New paid provider data only ever bills later, through a reveal, gated by this same estimate.
+ *
+ * A RANGE estimate, never a guarantee (06 §4.2). One workspace-scoped tx; reads only — spends nothing.
+ */
+export async function estimateBulkSpend(input: BulkEstimateInput): Promise<BulkSpendEstimate> {
+  return withBulkTx(input.scope, async (tx) => {
+    const ids = await resolveVisibleSelection(tx, input);
+    const balance = await creditRepository.currentBalance(tx, input.scope.tenantId);
+    const selectionCount = ids.length;
+
+    if (input.action === "enrich") {
+      // Enrichment/re-verify is a SYSTEM cost (06 §1/§3.4) — no user credits are charged at run time. Every
+      // visible member resolves internally (it is already in the workspace overlay), so all are `matchable`.
+      return {
+        action: "enrich",
+        selectionCount,
+        matchableCount: selectionCount,
+        billableCount: 0,
+        projectedMaxCredits: 0,
+        balance,
+        balanceAfterMin: balance,
+      };
+    }
+
+    // reveal — project the worst-case per-valid charge over the revealable members.
+    const signals = await contactRepository.enrichSignalsByIds(tx, ids);
+    const revealable = signals.filter((s) => s.hasEmail && !s.isRevealed).length;
+    // Already-revealed members re-reveal for free (per-workspace first-wins, 06 §4.4) → matchable, 0 spend.
+    const alreadyRevealed = signals.filter((s) => s.isRevealed).length;
+    const projectedMaxCredits = revealable * env.REVEAL_COST_EMAIL;
+    return {
+      action: "reveal",
+      selectionCount,
+      matchableCount: alreadyRevealed,
+      billableCount: revealable,
+      projectedMaxCredits,
+      balance,
+      balanceAfterMin: balance - projectedMaxCredits,
+    };
+  });
 }
 
 // ── shared tx helper ─────────────────────────────────────────────────────────────────────────────────────

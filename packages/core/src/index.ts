@@ -135,6 +135,7 @@ export {
   verificationMean,
   freshnessSubScore,
   freshnessStatusFor,
+  ageDaysSince,
   COMPLETENESS_WEIGHTS,
   FRESHNESS_SLA_DAYS,
   COLD_START_FRESHNESS,
@@ -331,6 +332,7 @@ export {
   bulkEnrich,
   bulkExportCsv,
   searchCount,
+  estimateBulkSpend,
   type BulkSelectionInput,
   type BulkAssignOwnerInput,
   type BulkTagsInput,
@@ -338,6 +340,7 @@ export {
   type BulkEnrollInput,
   type BulkEnrichInput,
   type BulkExportInput,
+  type BulkEstimateInput,
 } from "./prospect/bulkActions.ts";
 // Company-level (accounts) search count (24/ADR-0035): the firmographic sibling of searchCount. Thin delegate
 // to the @leadwolf/db accountSearchRepository (no query-semantics layer needed for accounts).

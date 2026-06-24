@@ -150,3 +150,37 @@ export type BulkExportRequest = z.infer<typeof bulkExportSchema>;
  */
 export const searchCountResultSchema = z.object({ total: z.number().int().nonnegative() });
 export type SearchCountResult = z.infer<typeof searchCountResultSchema>;
+
+// ── 10. Credit ESTIMATE before run (D5 — list-plan/06 §4.2) ──────────────────────────────────────────────
+/**
+ * POST /contacts/bulk/estimate. The pre-flight cost projection a bulk REVEAL or ENRICH/re-verify shows BEFORE
+ * any spend (list-plan D5 "always show cost + estimate before spend"; no surprise spend). Body = the selection
+ * envelope + `action`. The server resolves the selection to the workspace-VISIBLE ids, then projects the spend
+ * over the real selection (never a client-computed cost). Match-first → only the residual costs money; reveals
+ * charge per-valid (list-plan/06 §4.1). A range estimate, never a guarantee (actual spend depends on live
+ * verify/provider rates — list-plan/06 §4.2); the post-run charge can only be ≤ the projected MAX.
+ */
+export const bulkEstimateAction = z.enum(["reveal", "enrich"]);
+export type BulkEstimateAction = z.infer<typeof bulkEstimateAction>;
+
+export const bulkEstimateRequestSchema = withSelection({ action: bulkEstimateAction });
+export type BulkEstimateRequest = z.infer<typeof bulkEstimateRequestSchema>;
+
+/**
+ * The projected spend for a bulk reveal/enrich selection. All credit amounts are WHOLE CREDITS (the reveal/
+ * enrich cost model is integer credits, 07 §1), not micros. `matchableCount` = members already resolved
+ * internally / already-owned (free); `billableCount` = members that COULD spend (revealable, or residual that
+ * needs a provider); `projectedMaxCredits` = the worst-case charge (actual ≤ this — charge-only-valid).
+ * `balanceAfterMin` = the lowest balance the run could leave (current balance − projectedMax), so the UI shows
+ * the post-spend floor and can warn on insufficient credits.
+ */
+export const bulkSpendEstimateSchema = z.object({
+  action: bulkEstimateAction,
+  selectionCount: z.number().int().nonnegative(), // total workspace-visible members in the selection
+  matchableCount: z.number().int().nonnegative(), // resolved internally / already-owned → 0 spend
+  billableCount: z.number().int().nonnegative(), // members that COULD spend (the residual)
+  projectedMaxCredits: z.number().int().nonnegative(), // worst-case charge in whole credits
+  balance: z.number().int().nonnegative().nullable(), // current tenant balance (null if unavailable)
+  balanceAfterMin: z.number().int().nullable(), // balance − projectedMax (can go negative → insufficient)
+});
+export type BulkSpendEstimate = z.infer<typeof bulkSpendEstimateSchema>;

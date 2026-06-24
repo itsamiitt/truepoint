@@ -12,25 +12,36 @@
 import {
   BulkActionBar,
   QuickViewDrawer,
+  bulkEnrich,
+  bulkEstimate,
   displayName,
   emailGlyphFor,
   maskedEmail,
   useBulkSelection,
   useTags,
 } from "@/features/prospect";
-import type { ContactHit, ContactQuery, MaskedContact } from "@leadwolf/types";
+import type {
+  BulkSpendEstimate,
+  ContactDataHealth,
+  ContactHit,
+  ContactQuery,
+  MaskedContact,
+} from "@leadwolf/types";
 import {
   type Column,
   DataTable,
+  Dialog,
   EmptyState,
   SegmentedControl,
   StateSwitch,
+  StatusBadge,
+  type StatusTone,
   Tooltip,
   TpButton,
   TpCheckbox,
   useToast,
 } from "@leadwolf/ui";
-import { ArrowLeft, ListChecks, Trash2, Upload, Users } from "lucide-react";
+import { ArrowLeft, ListChecks, RefreshCw, Trash2, Upload, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
@@ -51,6 +62,42 @@ const DENSITIES = [
 // default; we hide its "Select all matching" escalation (which would wrongly resolve to the whole workspace).
 const EMPTY_QUERY: ContactQuery = { filters: [], sort: "relevance", limit: 50 };
 
+// freshness_status (server-derived, list-plan/06 §3.3) → a StatusBadge tone + label. fresh = good, aging/stale
+// = degrading, expired = needs re-verify. Presentational only; the band itself is computed server-side.
+const FRESHNESS_BADGE: Record<
+  ContactDataHealth["freshnessStatus"],
+  { tone: StatusTone; label: string }
+> = {
+  fresh: { tone: "success", label: "Fresh" },
+  aging: { tone: "warning", label: "Aging" },
+  stale: { tone: "warning", label: "Stale" },
+  expired: { tone: "danger", label: "Expired" },
+};
+
+/** The list-detail Data Health cell (list-plan/06 §3.3): the 0–100 score (ScorePill recipe — dot + tabular
+ *  number, design patterns.md) + the freshness band. Read-side, derived, non-PII — the server computes it. */
+function DataHealthCell({ health }: { health: ContactDataHealth | undefined }) {
+  if (!health) return <span className={styles.glyphNone}>—</span>;
+  const tone =
+    health.score >= 80
+      ? "var(--success)"
+      : health.score >= 50
+        ? "var(--warning)"
+        : "var(--tp-ink-4)";
+  const badge = FRESHNESS_BADGE[health.freshnessStatus];
+  return (
+    <span className={styles.healthCell}>
+      <Tooltip label={`Data quality ${health.score}/100 · ${badge.label.toLowerCase()}`}>
+        <span className={styles.scorePill}>
+          <span className={styles.scoreDot} style={{ background: tone }} aria-hidden />
+          {health.score}
+        </span>
+      </Tooltip>
+      <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+    </span>
+  );
+}
+
 export function ListDetailPage({ listId }: { listId: string }) {
   const router = useRouter();
   const toast = useToast();
@@ -64,6 +111,13 @@ export function ListDetailPage({ listId }: { listId: string }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  // The bulk "Re-verify" affordance (list-plan/06 §3.4): the confirm dialog + its pre-flight estimate. The ids
+  // are snapshotted when the dialog opens so the action is unaffected by selection changes behind the modal.
+  const [reVerify, setReVerify] = useState<{
+    ids: string[];
+    estimate: BulkSpendEstimate | null;
+  } | null>(null);
+  const [reVerifyBusy, setReVerifyBusy] = useState(false);
 
   const bulk = useBulkSelection();
   const shownIds = useMemo(() => members.map((m) => m.id), [members]);
@@ -100,6 +154,40 @@ export function ListDetailPage({ listId }: { listId: string }) {
     },
     [listId, toast, reload, reloadList, bulk.clear],
   );
+
+  // Open the bulk Re-verify confirm for the current selection, fetching its D5 estimate (re-verify is a system
+  // cost → projected 0 credits; the estimate confirms that + the members-to-refresh count before the user runs).
+  const openReVerify = useCallback(async () => {
+    const ids = selectedContacts.map((c) => c.id);
+    if (ids.length === 0) return;
+    setReVerify({ ids, estimate: null });
+    try {
+      const estimate = await bulkEstimate({ contactIds: ids }, "enrich");
+      setReVerify((prev) => (prev && prev.ids === ids ? { ids, estimate } : prev));
+    } catch {
+      // The confirm still works without the estimate — leave it null.
+    }
+  }, [selectedContacts]);
+
+  // Run the re-verify: enqueue the chunked enrich/re-verify job over the snapshotted member ids (the same
+  // contacts-bulk endpoint the prospect surface uses). Refreshing owned data is free; nothing is charged here.
+  const runReVerify = useCallback(async () => {
+    if (!reVerify) return;
+    setReVerifyBusy(true);
+    try {
+      const { affected } = await bulkEnrich({ contactIds: reVerify.ids });
+      toast.success(
+        `Re-verification queued — ${affected.toLocaleString()} member${affected === 1 ? "" : "s"}`,
+        "The job runs in the background; nothing is charged.",
+      );
+      setReVerify(null);
+      bulk.clear();
+    } catch (e) {
+      toast.error("Could not start re-verification", e instanceof Error ? e.message : undefined);
+    } finally {
+      setReVerifyBusy(false);
+    }
+  }, [reVerify, toast, bulk.clear]);
 
   const columns: Column<MaskedContact>[] = useMemo(
     () => [
@@ -188,6 +276,15 @@ export function ListDetailPage({ listId }: { listId: string }) {
           ) : (
             <span className={styles.glyphNone}>—</span>
           ),
+      },
+      {
+        // Data Health (list-plan/06 §3.3): the server-derived data-quality score + freshness band, so a seller
+        // can see at a glance which members have stale/decaying data and trigger a re-verify. Non-PII.
+        key: "health",
+        header: "Data health",
+        width: 160,
+        sortValue: (c) => c.dataHealth?.score ?? -1,
+        cell: (c) => <DataHealthCell health={c.dataHealth} />,
       },
       {
         key: "remove",
@@ -326,14 +423,24 @@ export function ListDetailPage({ listId }: { listId: string }) {
           tags={tags}
           hideSelectAllMatching
           extraActions={
-            <TpButton
-              variant="ghost"
-              size="sm"
-              leftIcon={<Trash2 size={15} />}
-              onClick={() => void removeFromList(selectedContacts.map((c) => c.id))}
-            >
-              Remove from list
-            </TpButton>
+            <>
+              <TpButton
+                variant="ghost"
+                size="sm"
+                leftIcon={<RefreshCw size={15} />}
+                onClick={() => void openReVerify()}
+              >
+                Re-verify
+              </TpButton>
+              <TpButton
+                variant="ghost"
+                size="sm"
+                leftIcon={<Trash2 size={15} />}
+                onClick={() => void removeFromList(selectedContacts.map((c) => c.id))}
+              >
+                Remove from list
+              </TpButton>
+            </>
           }
           onRevealed={(ids) => {
             for (const id of ids) markRevealed(id);
@@ -365,6 +472,50 @@ export function ListDetailPage({ listId }: { listId: string }) {
           reloadList();
         }}
       />
+
+      {/* Bulk Re-verify confirm (list-plan/06 §3.4) — re-checks the selected members' field correctness. The
+          D5 estimate is shown before confirm: re-verifying owned data is a system cost, so it charges nothing. */}
+      <Dialog
+        open={reVerify !== null}
+        onClose={() => !reVerifyBusy && setReVerify(null)}
+        title="Re-verify members"
+        footer={
+          <>
+            <TpButton variant="secondary" onClick={() => setReVerify(null)} disabled={reVerifyBusy}>
+              Cancel
+            </TpButton>
+            <TpButton onClick={() => void runReVerify()} loading={reVerifyBusy}>
+              Re-verify {reVerify?.ids.length ?? 0}
+            </TpButton>
+          </>
+        }
+      >
+        <p className={styles.dialogNote}>
+          Queue a re-verification job for the {(reVerify?.ids.length ?? 0).toLocaleString()}{" "}
+          selected member{reVerify?.ids.length === 1 ? "" : "s"}. It re-checks email/phone
+          correctness and refreshes the data-health freshness clock. The job runs in the background.
+        </p>
+        <p className={styles.dialogNote}>
+          {reVerify?.estimate ? (
+            <>
+              Projected cost{" "}
+              <strong>
+                {reVerify.estimate.projectedMaxCredits.toLocaleString()} credit
+                {reVerify.estimate.projectedMaxCredits === 1 ? "" : "s"}
+              </strong>{" "}
+              — re-verifying data you already own is free. Balance{" "}
+              <strong>
+                {reVerify.estimate.balance === null
+                  ? "—"
+                  : reVerify.estimate.balance.toLocaleString()}
+              </strong>{" "}
+              is unaffected.
+            </>
+          ) : (
+            "Estimating cost…"
+          )}
+        </p>
+      </Dialog>
     </div>
   );
 }

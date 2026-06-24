@@ -10,6 +10,7 @@
 
 import type {
   BulkSelection,
+  BulkSpendEstimate,
   ContactQuery,
   MaskedContact,
   OutreachStatus,
@@ -46,6 +47,7 @@ import {
   bulkChangeStatus,
   bulkEnrich,
   bulkEnroll,
+  bulkEstimate,
   bulkExportCsv,
   bulkRemoveTags,
   searchCount,
@@ -131,6 +133,9 @@ export function BulkActionBar({
   // Lazily-loaded option lists for the pickers (fetched on first open of the relevant dialog).
   const [lists, setLists] = useState<{ id: string; name: string }[] | null>(null);
   const [sequences, setSequences] = useState<SequenceOption[] | null>(null);
+  // The pre-flight ESTIMATE shown in the enrich/re-verify confirm (list-plan D5 — no surprise spend). Fetched
+  // server-side when that dialog opens; null while loading / on failure (the confirm still works without it).
+  const [enrichEstimate, setEnrichEstimate] = useState<BulkSpendEstimate | null>(null);
 
   const { count, allMatching, toBulkSelection, clear, selectAllMatching } = selection;
   const revealable = revealableIds.length;
@@ -138,6 +143,30 @@ export function BulkActionBar({
 
   /** The server selection for the current mode, or null when nothing is selected. */
   const sel = useCallback(() => toBulkSelection(query), [toBulkSelection, query]);
+
+  // Fetch the enrich estimate whenever the enrich/re-verify dialog opens (D5 estimate-before-run). Re-verify
+  // /enrich fills the overlay as a SYSTEM cost, so the projected charge is 0 — the estimate confirms that and
+  // shows how many members will be (freshly) re-verified, so the user confirms a known-free action.
+  useEffect(() => {
+    if (dialog !== "enrich") {
+      setEnrichEstimate(null);
+      return;
+    }
+    const selection = sel();
+    if (!selection) return;
+    let live = true;
+    setEnrichEstimate(null);
+    bulkEstimate(selection, "enrich")
+      .then((e) => {
+        if (live) setEnrichEstimate(e);
+      })
+      .catch(() => {
+        if (live) setEnrichEstimate(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [dialog, sel]);
 
   /** Run a bulk mutation: resolve the selection, await it, toast the affected count, then reload + clear. */
   const run = useCallback(
@@ -458,15 +487,38 @@ export function BulkActionBar({
         }
       />
 
-      {/* Re-verify / enrich */}
+      {/* Re-verify / enrich — with the D5 pre-flight estimate (re-verify/enrich is a system cost: 0 credits). */}
       <ConfirmDialog
         open={dialog === "enrich"}
         title="Re-verify / enrich"
         body={
-          <p className={styles.dialogNote}>
-            Queue a re-verify/enrichment job for the {count.toLocaleString()} selected contact
-            {count === 1 ? "" : "s"}. The job runs in the background; nothing is charged at enqueue.
-          </p>
+          <>
+            <p className={styles.dialogNote}>
+              Queue a re-verify/enrichment job for the {count.toLocaleString()} selected contact
+              {count === 1 ? "" : "s"}. The job runs in the background; nothing is charged at
+              enqueue.
+            </p>
+            <p className={styles.revealMeta}>
+              {enrichEstimate ? (
+                <>
+                  Projected cost{" "}
+                  <strong>
+                    {enrichEstimate.projectedMaxCredits.toLocaleString()} credit
+                    {enrichEstimate.projectedMaxCredits === 1 ? "" : "s"}
+                  </strong>{" "}
+                  — re-verifying owned data is free; you only pay later, per valid reveal. Balance{" "}
+                  <strong>
+                    {enrichEstimate.balance === null
+                      ? "—"
+                      : enrichEstimate.balance.toLocaleString()}
+                  </strong>{" "}
+                  is unaffected.
+                </>
+              ) : (
+                "Estimating cost…"
+              )}
+            </p>
+          </>
         }
         actions={
           <>

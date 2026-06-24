@@ -16,6 +16,7 @@ import {
   bulkEnrich,
   bulkExportCsv,
   bulkRemoveTags,
+  estimateBulkSpend,
 } from "@leadwolf/core";
 import {
   ForbiddenError,
@@ -23,6 +24,7 @@ import {
   bulkArchiveSchema,
   bulkAssignOwnerSchema,
   bulkEnrichSchema,
+  bulkEstimateRequestSchema,
   bulkExportSchema,
   bulkStatusSchema,
   bulkTagsSchema,
@@ -126,6 +128,31 @@ contactsBulkRoutes.post("/archive", async (c) => {
     scope: { tenantId: c.get("tenantId"), workspaceId },
     callerUserId: c.get("claims").sub,
     role: c.get("role"),
+    contactIds: parsed.data.contactIds,
+    criteria: parsed.data.criteria,
+  });
+  return c.json(result, 200);
+});
+
+/**
+ * POST /contacts/bulk/estimate — the pre-flight credit projection for a bulk reveal/enrich (list-plan D5,
+ * 06 §4.2). Body = { action: 'reveal'|'enrich' } + one of { contactIds | criteria }. Read-only: resolves the
+ * selection to visible ids server-side and projects the worst-case spend + post-spend balance — NEVER a
+ * client-computed cost, and it spends nothing. The UI shows this before any confirm so there is no surprise
+ * spend. Any active workspace role may estimate (it reveals no PII, only counts + the projected cost).
+ */
+contactsBulkRoutes.post("/estimate", async (c) => {
+  const workspaceId = requireWorkspace(c);
+  const parsed = bulkEstimateRequestSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success)
+    throw new ValidationError(
+      "Body must be { action: 'reveal'|'enrich' } + one of { contactIds | criteria }.",
+    );
+  const result = await estimateBulkSpend({
+    scope: { tenantId: c.get("tenantId"), workspaceId },
+    callerUserId: c.get("claims").sub,
+    role: c.get("role"),
+    action: parsed.data.action,
     contactIds: parsed.data.contactIds,
     criteria: parsed.data.criteria,
   });

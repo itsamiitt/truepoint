@@ -194,6 +194,7 @@ const MASKED = {
   jobTitle: contacts.jobTitle,
   emailDomain: contacts.emailDomain,
   emailStatus: contacts.emailStatus,
+  phoneStatus: contacts.phoneStatus,
   hasEmail: sql<boolean>`${contacts.emailEnc} IS NOT NULL`,
   hasPhone: sql<boolean>`${contacts.phoneEnc} IS NOT NULL`,
   seniorityLevel: contacts.seniorityLevel,
@@ -205,10 +206,17 @@ const MASKED = {
   ownerUserId: sql<string | null>`coalesce(${contacts.ownerUserId}, ${contacts.revealedByUserId})`,
   priorityScore: contacts.priorityScore,
   createdAt: contacts.createdAt,
+  lastVerifiedAt: contacts.lastVerifiedAt,
 };
 
 type MaskedRow = {
-  [K in keyof typeof MASKED]: K extends "createdAt" ? Date : unknown;
+  // createdAt is NOT NULL (keep its non-null guarantee so the `as Date` cast stays sound); only
+  // last_verified_at is nullable (null = never verified).
+  [K in keyof typeof MASKED]: K extends "createdAt"
+    ? Date
+    : K extends "lastVerifiedAt"
+      ? Date | null
+      : unknown;
 };
 
 function toMasked(r: MaskedRow): MaskedContact {
@@ -219,6 +227,7 @@ function toMasked(r: MaskedRow): MaskedContact {
     jobTitle: r.jobTitle as string | null,
     emailDomain: r.emailDomain as string | null,
     emailStatus: r.emailStatus as MaskedContact["emailStatus"],
+    phoneStatus: r.phoneStatus as MaskedContact["phoneStatus"],
     hasEmail: r.hasEmail as boolean,
     hasPhone: r.hasPhone as boolean,
     seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
@@ -229,6 +238,7 @@ function toMasked(r: MaskedRow): MaskedContact {
     isRevealed: r.isRevealed as boolean,
     ownerUserId: r.ownerUserId as string | null,
     createdAt: (r.createdAt as Date).toISOString(),
+    lastVerifiedAt: (r.lastVerifiedAt as Date | null)?.toISOString() ?? null,
   };
 }
 

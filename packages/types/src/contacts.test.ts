@@ -21,6 +21,7 @@ const valid = {
   jobTitle: "VP Sales",
   emailDomain: "acme.com",
   emailStatus: "valid",
+  phoneStatus: null,
   hasEmail: true,
   hasPhone: false,
   seniorityLevel: "vp",
@@ -31,6 +32,7 @@ const valid = {
   isRevealed: false,
   ownerUserId: null,
   createdAt: "2026-06-14T10:00:00.000Z",
+  lastVerifiedAt: null,
 };
 
 describe("maskedContactSchema", () => {
@@ -38,6 +40,23 @@ describe("maskedContactSchema", () => {
     const parsed = maskedContactSchema.parse(valid);
     expect(parsed.createdAt).toBe("2026-06-14T10:00:00.000Z");
     expect(parsed.ownerUserId).toBeNull();
+  });
+
+  it("accepts the Data Health fields (phoneStatus, lastVerifiedAt, derived dataHealth) — list-plan/06 §3.3", () => {
+    const parsed = maskedContactSchema.parse({
+      ...valid,
+      phoneStatus: "mobile",
+      lastVerifiedAt: "2026-05-01T00:00:00.000Z",
+      dataHealth: { score: 87, freshnessStatus: "aging" },
+    });
+    expect(parsed.phoneStatus).toBe("mobile");
+    expect(parsed.lastVerifiedAt).toBe("2026-05-01T00:00:00.000Z");
+    expect(parsed.dataHealth).toEqual({ score: 87, freshnessStatus: "aging" });
+  });
+
+  it("dataHealth is optional (omitted on surfaces that don't render the column)", () => {
+    const parsed = maskedContactSchema.parse(valid);
+    expect(parsed.dataHealth).toBeUndefined();
   });
 
   it("accepts an owned contact carrying the revealing member (ownerUserId set)", () => {

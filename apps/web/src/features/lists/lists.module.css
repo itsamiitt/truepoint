@@ -135,6 +135,30 @@
   color: var(--tp-ink-4);
   display: inline-flex;
 }
+
+/* Data Health cell (list-plan/06 §3.3): the score pill + the freshness badge, side by side. */
+.healthCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+/* ScorePill recipe (design patterns.md): dot + tabular number. */
+.scorePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--tp-ink);
+}
+.scoreDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
 .headCheck,
 .rowCheck {
   display: inline-flex;

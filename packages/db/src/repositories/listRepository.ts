@@ -5,7 +5,7 @@
 //   • cross-workspace safety — addMembers only ever links contacts the caller can actually see (RLS),
 //     so a member can never point at another workspace's contact even though FK checks bypass RLS.
 
-import type { MaskedContact } from "@leadwolf/types";
+import { type MaskedContact, ageDaysSince, computeContactDataQuality } from "@leadwolf/types";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
@@ -75,6 +75,7 @@ const MASKED_MEMBER = {
   jobTitle: contacts.jobTitle,
   emailDomain: contacts.emailDomain,
   emailStatus: contacts.emailStatus,
+  phoneStatus: contacts.phoneStatus,
   hasEmail: sql<boolean>`${contacts.emailEnc} IS NOT NULL`,
   hasPhone: sql<boolean>`${contacts.phoneEnc} IS NOT NULL`,
   seniorityLevel: contacts.seniorityLevel,
@@ -85,6 +86,12 @@ const MASKED_MEMBER = {
   isRevealed: contacts.isRevealed,
   ownerUserId: sql<string | null>`coalesce(${contacts.ownerUserId}, ${contacts.revealedByUserId})`,
   createdAt: contacts.createdAt,
+  lastVerifiedAt: contacts.lastVerifiedAt,
+  // Non-PII present-flags the Data Health composer needs beyond email/phone (list-plan/06 §3.3). Derived in
+  // SQL (boolean presence, never the value) so the masked DTO carries no extra PII — title/company/location/
+  // linkedin completeness drives the 0–100 score. `hasCompany` = an account link OR an email domain facet.
+  hasLinkedin: sql<boolean>`${contacts.linkedinPublicId} IS NOT NULL OR ${contacts.linkedinUrl} IS NOT NULL`,
+  hasCompany: sql<boolean>`${contacts.accountId} IS NOT NULL OR ${contacts.emailDomain} IS NOT NULL`,
   // The keyset sort key, rendered as Postgres' FULL-PRECISION text (microseconds preserved). The cursor carries
   // this verbatim and the seek casts it straight back to ::timestamptz — round-tripping through a JS Date would
   // truncate to milliseconds and silently drop members that share a millisecond (e.g. a bulk add stamps every
@@ -94,15 +101,37 @@ const MASKED_MEMBER = {
 } as const;
 
 function toMaskedMember(r: Record<string, unknown>): MaskedContact {
+  const emailStatus = r.emailStatus as MaskedContact["emailStatus"];
+  const phoneStatus = r.phoneStatus as MaskedContact["phoneStatus"];
+  const hasEmail = r.hasEmail as boolean;
+  const hasPhone = r.hasPhone as boolean;
+  const lastVerifiedAt = (r.lastVerifiedAt as Date | null)?.toISOString() ?? null;
+  // The list-detail Data Health column (list-plan/06 §3.3): the read-side, derived 0–100 score + freshness
+  // band, computed by the canonical `computeContactDataQuality` (single source in @leadwolf/types — never
+  // re-derived). All inputs are non-PII present-flags + statuses + the last-verified age, so this is safe here.
+  const dataHealth = computeContactDataQuality({
+    hasName: (r.firstName as string | null) !== null || (r.lastName as string | null) !== null,
+    hasEmail,
+    hasPhone,
+    hasTitle: (r.jobTitle as string | null) !== null,
+    hasCompany: r.hasCompany as boolean,
+    hasLocation:
+      (r.locationCountry as string | null) !== null || (r.locationCity as string | null) !== null,
+    hasLinkedin: r.hasLinkedin as boolean,
+    emailStatus,
+    phoneStatus,
+    ageDaysSinceVerified: ageDaysSince(lastVerifiedAt),
+  });
   return {
     id: r.id as string,
     firstName: r.firstName as string | null,
     lastName: r.lastName as string | null,
     jobTitle: r.jobTitle as string | null,
     emailDomain: r.emailDomain as string | null,
-    emailStatus: r.emailStatus as MaskedContact["emailStatus"],
-    hasEmail: r.hasEmail as boolean,
-    hasPhone: r.hasPhone as boolean,
+    emailStatus,
+    phoneStatus,
+    hasEmail,
+    hasPhone,
     seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
     department: r.department as string | null,
     locationCountry: r.locationCountry as string | null,
@@ -111,6 +140,8 @@ function toMaskedMember(r: Record<string, unknown>): MaskedContact {
     isRevealed: r.isRevealed as boolean,
     ownerUserId: r.ownerUserId as string | null,
     createdAt: (r.createdAt as Date).toISOString(),
+    lastVerifiedAt,
+    dataHealth,
   };
 }
 

@@ -61,6 +61,7 @@ export {
   type ContactWriteValues,
   type DedupContactRow,
   type DedupKeys,
+  type EnrichEstimateSignal,
   type HotLeadRow,
 } from "./repositories/contactRepository.ts";
 export {
