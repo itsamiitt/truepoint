@@ -155,8 +155,18 @@ export async function enrichContact(input: EnrichContactInput): Promise<EnrichCo
       return { status: "unfilled", provider: null, filled: [], costMicros };
     }
 
-    // 5) Overlay upsert + per-import provenance (06 §4 — the same shape the import pipeline writes).
-    await contactRepository.update(tx, input.contactId, toWriteValues(outcome.result.fields));
+    // 5) Overlay upsert + per-import provenance (06 §4 — the same shape the import pipeline writes). Stamp
+    //    `last_verified_at` ONLY when the verifiable PII (email/phone) was actually (re)sourced — those are the
+    //    fields whose freshness the Data Health column tracks (list-plan/06 §3.3). A jobTitle/company-only fill
+    //    must NOT reset the email freshness clock, or a contact with a 200-day-old email would falsely read
+    //    "fresh". `verifiedPii` is true exactly when the winning payload filled email or phone.
+    const verifiedPii = outcome.result.fields.some(
+      (f) => f.field === "email" || f.field === "phone",
+    );
+    await contactRepository.update(tx, input.contactId, {
+      ...toWriteValues(outcome.result.fields),
+      ...(verifiedPii ? { lastVerifiedAt: new Date() } : {}),
+    });
     const provenanceSource = sourceNameEnum.safeParse(outcome.provider);
     if (provenanceSource.success) {
       await sourceImportRepository.append(tx, {

@@ -1,0 +1,1 @@
+ALTER TABLE "contacts" ADD COLUMN "last_verified_at" timestamp with time zone;

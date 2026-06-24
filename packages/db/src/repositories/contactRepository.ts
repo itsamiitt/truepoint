@@ -4,7 +4,7 @@
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
 import type { MaskedContact } from "@leadwolf/types";
-import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
 
@@ -43,6 +43,7 @@ export interface ContactWriteValues {
   phoneEnc?: Uint8Array | null;
   emailStatus?: string; // verification result (06 §9; NOT NULL column) — set by verify-on-reveal / enrichment
   phoneStatus?: string | null;
+  lastVerifiedAt?: Date | null; // when PII was last verified (list-plan/06 §3.3) — set by verify/enrich
   linkedinUrl?: string | null;
   linkedinPublicId?: string | null;
   salesNavProfileUrl?: string | null;
@@ -54,6 +55,16 @@ export interface ContactWriteValues {
 /** Drop undefined keys so an UPDATE never overwrites an existing value with `undefined`. */
 function definedOnly<T extends object>(v: T): Partial<T> {
   return Object.fromEntries(Object.entries(v).filter(([, val]) => val !== undefined)) as Partial<T>;
+}
+
+/** Non-PII per-contact signals the bulk spend-estimate reads (list-plan/06 §4.2). Presence flags + state
+ *  only — never the encrypted PII. `emailStatus` is the verification grade (drives charge-only-valid). */
+export interface EnrichEstimateSignal {
+  id: string;
+  hasEmail: boolean;
+  hasPhone: boolean;
+  isRevealed: boolean;
+  emailStatus: string;
 }
 
 /** The minimal, non-PII row the dedup worker needs: identity fields for the match key + completeness signals
@@ -184,6 +195,7 @@ export const contactRepository = {
         jobTitle: r.jobTitle,
         emailDomain: r.emailDomain,
         emailStatus: r.emailStatus as MaskedContact["emailStatus"],
+        phoneStatus: r.phoneStatus as MaskedContact["phoneStatus"],
         hasEmail: r.emailEnc != null,
         hasPhone: r.phoneEnc != null,
         seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
@@ -196,6 +208,7 @@ export const contactRepository = {
         // not yet assigned/backfilled. Non-PII user FK.
         ownerUserId: r.ownerUserId ?? r.revealedByUserId,
         createdAt: r.createdAt.toISOString(), // T4b: date dimension (created_at is non-null).
+        lastVerifiedAt: r.lastVerifiedAt?.toISOString() ?? null,
       }));
     });
   },
@@ -212,6 +225,36 @@ export const contactRepository = {
       .from(contacts)
       .where(and(inArray(contacts.id, ids), isNull(contacts.deletedAt)));
     return rows.map((r) => r.id);
+  },
+
+  /**
+   * Non-PII spend-estimate signals for a set of visible ids (list-plan/06 §4.2 estimate-before-run). Returns,
+   * per live contact, the field-presence flags + reveal/verification state the credit projection reads — never
+   * the encrypted email/phone, only their `IS NOT NULL` presence. Used by the bulk reveal/enrich ESTIMATE
+   * (the cost shown before confirm), so the projection runs server-side over the real, RLS-scoped selection.
+   * Callers MUST pass only WORKSPACE-VISIBLE ids (resolve via visibleContactIds / resolveVisibleSelection in
+   * the SAME withTenantTx) — like assignOwner, isolation rides the RLS GUC on that tx, not an explicit
+   * workspace predicate here, so a raw client-id list on a wrong-scope tx would leak cross-workspace signals.
+   */
+  async enrichSignalsByIds(tx: Tx, ids: string[]): Promise<EnrichEstimateSignal[]> {
+    if (ids.length === 0) return [];
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        hasEmail: sql<boolean>`${contacts.emailEnc} IS NOT NULL`,
+        hasPhone: sql<boolean>`${contacts.phoneEnc} IS NOT NULL`,
+        isRevealed: contacts.isRevealed,
+        emailStatus: contacts.emailStatus,
+      })
+      .from(contacts)
+      .where(and(inArray(contacts.id, ids), isNull(contacts.deletedAt)));
+    return rows.map((r) => ({
+      id: r.id,
+      hasEmail: r.hasEmail,
+      hasPhone: r.hasPhone,
+      isRevealed: r.isRevealed,
+      emailStatus: r.emailStatus,
+    }));
   },
 
   /**
@@ -349,6 +392,7 @@ export const contactRepository = {
       jobTitle: r.jobTitle,
       emailDomain: r.emailDomain,
       emailStatus: r.emailStatus as MaskedContact["emailStatus"],
+      phoneStatus: r.phoneStatus as MaskedContact["phoneStatus"],
       hasEmail: r.emailEnc != null,
       hasPhone: r.phoneEnc != null,
       seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
@@ -359,6 +403,7 @@ export const contactRepository = {
       isRevealed: r.isRevealed,
       ownerUserId: r.ownerUserId ?? r.revealedByUserId,
       createdAt: r.createdAt.toISOString(),
+      lastVerifiedAt: r.lastVerifiedAt?.toISOString() ?? null,
     }));
   },
 

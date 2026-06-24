@@ -130,9 +130,12 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
       });
 
       // Persist the verification outcome on the workspace copy (06 §9) whatever the charge turns out to be.
+      // Stamp `last_verified_at` so the Data Health freshness clock resets (list-plan/06 §3.3) — a reveal
+      // verifies the field(s), so the record is now freshly graded.
       await contactRepository.update(tx, contact.id, {
         emailStatus: verified.emailStatus,
         ...(verified.phoneStatus ? { phoneStatus: verified.phoneStatus } : {}),
+        lastVerifiedAt: new Date(),
       });
 
       // 1) idempotent reveal claim (per workspace copy, per reveal_type) — records the charged amount.

@@ -1,11 +1,17 @@
-// routes.ts — HTTP wiring for the import feature (05 §3). POST accepts a multipart upload (the CSV file +
-// a JSON column mapping + the source), parses it on the request thread, then ENQUEUES the parsed rows onto
-// the `imports` queue and returns 202 + a job ref — the heavy per-row dedup/encrypt/DB work runs in the
-// apps/workers consumer (processImport → the SAME packages/core runImport). This file does only transport
-// (parse the request, enqueue, shape the response) and no business logic. The workspace is taken from the
-// VERIFIED token via the tenancy middleware, never the request body (16 §7).
+// routes.ts — HTTP wiring for the import feature (05 §3). POST accepts a multipart upload (the CSV/XLSX file +
+// a JSON column mapping + the source + an optional target listId), parses it on the request thread, then
+// ENQUEUES the parsed rows onto the `imports` queue and returns 202 + a job ref — the heavy per-row dedup/
+// encrypt/DB work runs in the apps/workers consumer (processImport → the SAME packages/core runImport). This
+// file does only transport (parse the request, enqueue, shape the response) and no business logic. The
+// workspace is taken from the VERIFIED token via the tenancy middleware, never the request body (16 §7); the
+// client-supplied listId is validated against that workspace before enqueue (list-plan D4 — never trusted).
 
-import { buildImportPreview, parseImportFile } from "@leadwolf/core";
+import {
+  assertListInWorkspace,
+  buildImportPreview,
+  isXlsxFile,
+  parseImportFile,
+} from "@leadwolf/core";
 import {
   type ColumnMapping,
   DEFAULT_CONFLICT_POLICY,
@@ -21,6 +27,7 @@ import {
   conflictPolicy,
   importProgressSchema,
   importSummarySchema,
+  importTargetSchema,
   sourceName,
 } from "@leadwolf/types";
 import { Hono } from "hono";
@@ -62,7 +69,7 @@ async function parseImportForm(form: FormData): Promise<{
 }> {
   const file = form.get("file");
   if (!(file instanceof File))
-    throw new ImportValidationError("A CSV file is required (field 'file').");
+    throw new ImportValidationError("A CSV or XLSX file is required (field 'file').");
 
   const parsedSource = sourceName.safeParse(form.get("sourceName"));
   if (!parsedSource.success) throw new ImportValidationError("Unknown or missing 'sourceName'.");
@@ -81,6 +88,27 @@ async function parseImportForm(form: FormData): Promise<{
   return { file, sourceName: parsedSource.data, mapping: parsedMapping.data };
 }
 
+/**
+ * Read the upload as the right shape for its format (list-plan/03 §2.1): an .xlsx file flows as BYTES
+ * (`arrayBuffer`), CSV flows as TEXT. `parseImportFile` dispatches on the same filename, so the two always
+ * agree — the parser rejects a binary buffer for a .csv (or text for an .xlsx) cleanly rather than mis-parsing.
+ */
+async function readImportContent(file: File): Promise<string | Uint8Array> {
+  return isXlsxFile(file.name) ? new Uint8Array(await file.arrayBuffer()) : file.text();
+}
+
+/**
+ * The optional "import into list" target (list-plan/03 §2.2). Returns the validated `listId` (uuid) or
+ * undefined when absent. Shape-only here; the caller validates it against the verified workspace before use.
+ */
+function parseListTarget(form: FormData): string | undefined {
+  const raw = form.get("listId");
+  if (raw == null || raw === "") return undefined;
+  const parsed = importTargetSchema.safeParse({ listId: String(raw) });
+  if (!parsed.success) throw new ImportValidationError("'listId' must be a valid list id.");
+  return parsed.data.listId;
+}
+
 // Pre-commit validation PREVIEW (G-IMP-1): parse + validate the upload and return counts (total/valid/
 // rejected/duplicate) + a sample of rejected rows with reasons — WITHOUT enqueuing anything. The wizard
 // shows this and requires the user to confirm before the actual import runs. No DB writes, no job.
@@ -91,7 +119,7 @@ importRoutes.post("/preview", async (c) => {
 
   const form = await c.req.formData();
   const { file, mapping } = await parseImportForm(form);
-  const parsed = parseImportFile(await file.text(), file.name);
+  const parsed = parseImportFile(await readImportContent(file), file.name);
   const preview: ImportPreview = buildImportPreview(parsed.rows, mapping);
   return c.json(preview, 200);
 });
@@ -115,7 +143,13 @@ importRoutes.post("/", async (c) => {
   if (!parsedPolicy.success)
     throw new ImportValidationError("'conflictPolicy' must be one of: overwrite, skip, keep_both.");
 
-  const parsed = parseImportFile(await file.text(), file.name);
+  // Optional "import into list" target (list-plan/03 §2.2). Validate the client-supplied list id against the
+  // VERIFIED token's workspace BEFORE enqueue (list-plan D4 — never trusted): a foreign/absent id 404s here,
+  // a clean error instead of a dead-lettered job. runImport re-validates it under RLS when the worker runs.
+  const listId = parseListTarget(form);
+  if (listId) await assertListInWorkspace({ scope: { tenantId, workspaceId }, listId });
+
+  const parsed = parseImportFile(await readImportContent(file), file.name);
   const jobId = await enqueueImport({
     scope: { tenantId, workspaceId },
     importedByUserId: claims.sub,
@@ -124,6 +158,7 @@ importRoutes.post("/", async (c) => {
     mapping,
     conflictPolicy: parsedPolicy.data,
     rows: parsed.rows,
+    target: listId ? { listId } : undefined,
   });
   const body: ImportJobRef = { jobId, status: "queued" };
   return c.json(body, 202);

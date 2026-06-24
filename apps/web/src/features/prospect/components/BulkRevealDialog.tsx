@@ -5,9 +5,11 @@
 // handles the out-of-credits stop inline (top-up link) so the flow has no dead ends. Toasts the outcome.
 "use client";
 
+import type { BulkSpendEstimate } from "@leadwolf/types";
 import { Dialog, TpButton, useToast } from "@leadwolf/ui";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { bulkEstimate } from "../bulkActionsApi";
 import { useBulkReveal } from "../hooks/useBulkReveal";
 import styles from "../prospect.module.css";
 
@@ -30,11 +32,26 @@ export function BulkRevealDialog({
   const toast = useToast();
   const { progress, summary, busy, run, reset } = useBulkReveal();
   const count = contactIds.length;
+  // The pre-flight credit ESTIMATE (list-plan D5 — show cost + post-spend balance BEFORE confirm). Fetched
+  // server-side over the real selection; null while loading or if the estimate call failed (the flow still
+  // works — we fall back to the "you only pay for valid data" copy + the current balance).
+  const [estimate, setEstimate] = useState<BulkSpendEstimate | null>(null);
+  const [estimating, setEstimating] = useState(false);
 
-  // Reset hook state when the dialog opens so nothing stale shows from a prior run.
+  // Reset hook state when the dialog opens so nothing stale shows from a prior run, then fetch the estimate.
   useEffect(() => {
-    if (open) reset();
-  }, [open, reset]);
+    if (!open) return;
+    reset();
+    setEstimate(null);
+    if (contactIds.length === 0) return;
+    setEstimating(true);
+    bulkEstimate({ contactIds }, "reveal")
+      .then(setEstimate)
+      .catch(() => setEstimate(null))
+      .finally(() => setEstimating(false));
+  }, [open, reset, contactIds]);
+
+  const insufficient = estimate?.balanceAfterMin != null && estimate.balanceAfterMin < 0;
 
   async function onConfirm(): Promise<void> {
     const res = await run(contactIds);
@@ -79,9 +96,46 @@ export function BulkRevealDialog({
             Reveals the email for {count} selected contact{count === 1 ? "" : "s"}. Spends tenant
             credits; you only pay for valid data. Re-revealing in this workspace is free.
           </p>
-          <p className={styles.revealMeta}>
-            Balance: <strong>{balance === null ? "—" : balance.toLocaleString()}</strong> credits
-          </p>
+          {/* The pre-flight estimate (D5): the worst-case cost + the post-spend floor, BEFORE confirming. The
+              actual charge is ≤ this — invalid/catch-all/unknown emails charge 0 (charge-only-valid). */}
+          {estimate ? (
+            <p className={styles.revealMeta}>
+              Costs up to{" "}
+              <strong>
+                {estimate.projectedMaxCredits.toLocaleString()} credit
+                {estimate.projectedMaxCredits === 1 ? "" : "s"}
+              </strong>{" "}
+              ({estimate.billableCount.toLocaleString()} billable
+              {estimate.matchableCount > 0
+                ? `, ${estimate.matchableCount.toLocaleString()} already owned`
+                : ""}
+              ). Balance{" "}
+              <strong>{estimate.balance === null ? "—" : estimate.balance.toLocaleString()}</strong>{" "}
+              → <strong>{estimate.balanceAfterMin?.toLocaleString() ?? "—"}</strong> after.
+            </p>
+          ) : (
+            <p className={styles.revealMeta}>
+              {estimating ? (
+                "Estimating cost…"
+              ) : (
+                <>
+                  Balance: <strong>{balance === null ? "—" : balance.toLocaleString()}</strong>{" "}
+                  credits
+                </>
+              )}
+            </p>
+          )}
+          {insufficient && (
+            <div className={styles.inlineAlert}>
+              <p className={styles.inlineAlertMsg}>
+                Not enough credits to reveal all {estimate?.billableCount.toLocaleString()} — top
+                up, or reveal fewer.
+              </p>
+              <Link className={styles.topupLink} href="/settings/billing">
+                Top up credits →
+              </Link>
+            </div>
+          )}
           {busy && progress && (
             <p className={styles.progress}>
               Revealing… {progress.done} of {progress.total}

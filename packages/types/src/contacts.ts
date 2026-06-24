@@ -3,6 +3,7 @@
 // packages/core. Enums mirror the 03 §5 CHECK constraints exactly. Validation lives here; logic does not.
 
 import { z } from "zod";
+import { freshnessStatus } from "./intel.ts";
 
 // ── Enums (mirror 03 §5 CHECK constraints) ─────────────────────────────────────────────────────────────
 /** Provenance origin of an import — the only source-trust signal under the per-workspace model (ADR-0006). */
@@ -116,12 +117,26 @@ export type ConflictPolicy = z.infer<typeof conflictPolicy>;
 export const DEFAULT_CONFLICT_POLICY: ConflictPolicy = "skip";
 
 // ── Import request / result DTOs ───────────────────────────────────────────────────────────────────────
+/**
+ * Optional target of an "import into list" job (list-plan/03 §2.2, Phase 2): every landed row is also added
+ * to this list as a `list_members` row (`added_via='import'`, `source_import_id` set). The `listId` is the
+ * id of a list in the CALLER's workspace — it is validated server-side against the verified token's workspace
+ * before the job runs (the client-supplied id is never trusted; list-plan D4). Absent → a plain import that
+ * lands rows in the workspace overlay with no list linkage (the pre-Phase-2 behaviour, unchanged).
+ */
+export const importTargetSchema = z.object({
+  listId: z.string().uuid(),
+});
+export type ImportTarget = z.infer<typeof importTargetSchema>;
+
 export const importRequestSchema = z.object({
   sourceName: sourceName,
   sourceFile: z.string().max(255).optional(),
   mapping: columnMappingSchema,
   /** How to resolve a match against an existing workspace contact (G-IMP-5). Defaults to `skip` (no overwrite). */
   conflictPolicy: conflictPolicy.default(DEFAULT_CONFLICT_POLICY),
+  /** Optional "import into list" target (list-plan/03 §2.2). Absent = land in the overlay, no list linkage. */
+  target: importTargetSchema.optional(),
 });
 export type ImportRequest = z.infer<typeof importRequestSchema>;
 
@@ -161,6 +176,12 @@ export const importSummarySchema = z.object({
   rejected: z.number().int().nonnegative(),
   /** Rows held back because they matched an existing contact under a `skip` conflict policy. */
   duplicates: z.number().int().nonnegative(),
+  /**
+   * NEW members added to the import's target list (list-plan/03 §2.2): the count of landed contacts that
+   * became a NEW `list_members` row this run (idempotent — a contact already in the list is not recounted).
+   * `0` for a plain import (no `target`). The import receipt surfaces this as "added to <list>".
+   */
+  addedToList: z.number().int().nonnegative().default(0),
   errors: z.array(importRowErrorSchema),
   /** The rejected-rows artifact (G-IMP-1): each reject + reason + raw row, for a downloadable error file. */
   rejectedRows: z.array(rejectedRowSchema),
@@ -238,6 +259,17 @@ export const importDeadLetterSchema = z.object({
 });
 export type ImportDeadLetter = z.infer<typeof importDeadLetterSchema>;
 
+// ── Data Health (list-plan/06 §3.3) — the derived, non-PII health badge on the masked list-member row ────
+/** The read-side, derived data-health a masked surface (the list-detail Data Health column) renders: the
+ *  0–100 `computeContactDataQuality` score + its freshness_status band. Both are computed from non-PII
+ *  present-flags + the email/phone statuses + the last-verified age, so it is safe on the masked DTO. Optional
+ *  on `MaskedContact`: surfaces that don't need it (or can't cheaply derive `hasName`/`hasLinkedin`) omit it. */
+export const contactDataHealthSchema = z.object({
+  score: z.number().int().min(0).max(100),
+  freshnessStatus: freshnessStatus,
+});
+export type ContactDataHealth = z.infer<typeof contactDataHealthSchema>;
+
 // ── Masked contact view (what search/list returns before reveal — 05 §6/§7) ────────────────────────────
 /** A workspace-scoped contact with PII masked until reveal (M3). `emailDomain` is the non-PII facet. */
 export const maskedContactSchema = z.object({
@@ -247,6 +279,9 @@ export const maskedContactSchema = z.object({
   jobTitle: z.string().nullable(),
   emailDomain: z.string().nullable(),
   emailStatus: emailStatus,
+  // Phone field-correctness verdict (list-plan/06 §3.2) — non-PII (a status label, never the number). Null
+  // until a verification has graded the phone. Feeds the verification sub-score + the Data Health column.
+  phoneStatus: phoneStatus.nullable(),
   hasEmail: z.boolean(),
   hasPhone: z.boolean(),
   seniorityLevel: seniorityLevel.nullable(),
@@ -258,5 +293,11 @@ export const maskedContactSchema = z.object({
   // Non-PII reporting dimensions (T4b): member + funnel/health-date filtering over the masked list.
   ownerUserId: z.string().nullable(), // the member who revealed (= owns) the contact; null until revealed.
   createdAt: z.string().datetime({ offset: true }), // when the workspace row was created (ISO-8601).
+  // When the contact's PII was last verified (list-plan/06 §3.3) — drives staleness. Null = never verified.
+  lastVerifiedAt: z.string().datetime({ offset: true }).nullable(),
+  // The derived Data Health (score + freshness band). Optional — populated only by the surfaces that compute
+  // it (the list-detail members table). Absent on surfaces that don't render the column. Never trusted as
+  // input (read-side only); the server is the single computer of record (list-plan/06 §3.3).
+  dataHealth: contactDataHealthSchema.optional(),
 });
 export type MaskedContact = z.infer<typeof maskedContactSchema>;

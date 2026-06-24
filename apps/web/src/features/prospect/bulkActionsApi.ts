@@ -12,7 +12,9 @@ import { API_BASE } from "@/lib/publicConfig";
 import type {
   BulkAffected,
   BulkEnrollResult,
+  BulkEstimateAction,
   BulkSelection,
+  BulkSpendEstimate,
   ContactQuery,
   OutreachStatus,
   SearchCountResult,
@@ -195,6 +197,25 @@ export async function searchCount(query: ContactQuery): Promise<SearchCountResul
   });
   if (!res.ok) throw await toApiError(res, "Could not count results");
   return (await res.json()) as SearchCountResult;
+}
+
+// ── 10. Credit estimate-before-run (D5) ──────────────────────────────────────────────────────────────────
+/**
+ * POST /contacts/bulk/estimate — the pre-flight cost projection for a bulk reveal/enrich (list-plan D5). The
+ * server resolves the selection to visible ids and projects the worst-case spend + post-spend balance, so the
+ * confirm UI can show "this will cost up to N credits, leaving you M" with no surprise spend. Read-only.
+ */
+export async function bulkEstimate(
+  selection: BulkSelection,
+  action: BulkEstimateAction,
+): Promise<BulkSpendEstimate> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/bulk/estimate`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: body(selection, { action }),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not estimate cost");
+  return (await res.json()) as BulkSpendEstimate;
 }
 
 export { ApiError };

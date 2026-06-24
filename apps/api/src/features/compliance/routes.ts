@@ -10,9 +10,15 @@ import {
   withdrawConsent,
   writeAudit,
 } from "@leadwolf/core";
-import { suppressionRepository, withTenantTx } from "@leadwolf/db";
+import {
+  platformAuditReadRepository,
+  suppressionRepository,
+  withPlatformTx,
+  withTenantTx,
+} from "@leadwolf/db";
 import {
   ForbiddenError,
+  type TenantStaffAccess,
   ValidationError,
   consentCreateSchema,
   dsarIntakeSchema,
@@ -20,6 +26,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { requireOrgRole } from "../../middleware/requireOrgRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 // ── Public DSAR intake (08 §4) — deliberately session-less; throttled by the global /api limiter ───────
@@ -153,3 +160,44 @@ complianceRoutes.post("/consent/:contactId/withdraw", async (c) => {
   );
   return c.json(result, 200);
 });
+
+// ── Customer-visible staff-access log (list-plan/07 §5, D2 — "the customer can see staff looking") ───────
+// A tenant-admin reads the staff record-/data-level accesses to THEIR tenant's data (who, what, which list,
+// when) — the trust-transparency surface promised by the privacy-first staff model. Tenant-admin-gated
+// (compliance_admin / security_admin; owner implies). The tenant id comes from the VERIFIED session
+// (`c.get("tenantId")`), never the request body — a customer can only ever see their OWN tenant's rows.
+//
+// The read goes through withPlatformTx — the DB-OWNER connection, the ONLY path that can read
+// `platform_audit_log` (it is REVOKEd from + RLS-deny-all to leadwolf_app, and we deliberately keep it that
+// way; the customer app role never touches the table). The owner connection is RLS-EXEMPT on every
+// deployment (the table is ENABLE-not-FORCE, owner is the writer), so unlike leadwolf_admin (which is not
+// BYPASSRLS on managed Postgres and would fail CLOSED) this read works on Neon/RDS/local alike. The read is
+// tenant-FILTERED + action-allow-listed in the repository and projects only the transparency fields (no
+// staff ip, no metadata). withPlatformTx additionally writes its own append-only audit row, so the
+// customer's act of reading the staff-access trail is itself recorded (`compliance.read_staff_access`).
+complianceRoutes.get(
+  "/staff-access-log",
+  requireOrgRole("compliance_admin", "security_admin"),
+  async (c) => {
+    const tenantId = c.get("tenantId");
+    const actor = {
+      userId: c.get("claims").sub,
+      ip: c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+    };
+    const rows = await withPlatformTx(
+      actor,
+      "compliance.read_staff_access",
+      (tx) => platformAuditReadRepository.listTenantStaffAccess(tx, tenantId),
+      { targetType: "tenant", targetId: tenantId, tenantId },
+    );
+    const entries: TenantStaffAccess[] = rows.map((r) => ({
+      id: r.id,
+      actorUserId: r.actorUserId,
+      action: r.action,
+      targetType: r.targetType,
+      targetId: r.targetId,
+      occurredAt: r.occurredAt.toISOString(),
+    }));
+    return c.json({ entries });
+  },
+);

@@ -31,7 +31,30 @@ const CONFLICT_OPTIONS: { value: ConflictPolicy; label: string }[] = [
   { value: "keep_both", label: "Keep both — new rows added; existing matches kept as-is" },
 ];
 
+/** True when the picked file is an OOXML workbook (.xlsx) — drives the header reader. Matches the server's
+ *  isXlsxFile dispatch (xlsx only, not legacy .xls); kept local because the web app must not depend on
+ *  @leadwolf/core (which reaches the DB) just to share this one-line predicate. */
+function isXlsx(file: File): boolean {
+  return /\.xlsx$/i.test(file.name);
+}
+
+/** Read just the header row to populate the column mapper. CSV is read inline (first line); XLSX uses SheetJS,
+ *  dynamically imported so the parser is code-split and never loaded on the (common) CSV path. The authoritative
+ *  parse + dedup still runs server-side in packages/core — this only fills the mapper's dropdowns. */
 async function readHeaders(file: File): Promise<string[]> {
+  if (isXlsx(file)) {
+    const XLSX = await import("xlsx");
+    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array", sheetRows: 1 });
+    const sheetName = wb.SheetNames[0];
+    const sheet = sheetName ? wb.Sheets[sheetName] : undefined;
+    if (!sheet) return [];
+    const matrix = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      raw: false,
+      defval: "",
+    }) as unknown[][];
+    return (matrix[0] ?? []).map((h) => String(h ?? "").trim()).filter(Boolean);
+  }
   const firstLine = (await file.text()).split(/\r?\n/)[0] ?? "";
   return firstLine
     .split(",")
@@ -52,7 +75,16 @@ function downloadCsv(csv: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function ImportWizard({ onImported }: { onImported: () => void }) {
+export interface ImportWizardProps {
+  onImported: () => void;
+  /** When set, this import targets a list (list-plan/03 §2.2): the `listId` is sent with the upload and every
+   *  landed row is added to that list. `targetListName` is display-only (the receipt/title); the SERVER trusts
+   *  only the id, validated against the caller's workspace. */
+  targetListId?: string;
+  targetListName?: string;
+}
+
+export function ImportWizard({ onImported, targetListId, targetListName }: ImportWizardProps) {
   const { status, jobId, summary, error, busy, run } = useImport();
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -171,20 +203,22 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
   function onSubmit(): void {
     if (!file || !preview) return;
     notifiedRef.current = false;
-    run({ file, sourceName, mapping: cleanedMapping(), conflictPolicy });
+    run({ file, sourceName, mapping: cleanedMapping(), conflictPolicy, listId: targetListId });
   }
 
   function onDownloadRejected(): void {
     if (!summary || summary.rejectedRows.length === 0) return;
-    const base = (file?.name ?? "import").replace(/\.csv$/i, "");
+    const base = (file?.name ?? "import").replace(/\.(csv|xlsx?)$/i, "");
     downloadCsv(rejectedRowsToCsv(summary.rejectedRows), `${base}-rejected.csv`);
   }
 
   return (
     <section className="tp-card">
-      <h2>Import contacts</h2>
+      <h2>{targetListName ? `Import into “${targetListName}”` : "Import contacts"}</h2>
       <p className="app-muted">
-        Upload a CSV, map its columns, validate, and we&apos;ll dedupe into this workspace.
+        {targetListName
+          ? `Upload a CSV or XLSX, map its columns, validate, and we’ll dedupe and add the rows to “${targetListName}”.`
+          : "Upload a CSV or XLSX, map its columns, validate, and we’ll dedupe into this workspace."}
       </p>
 
       <div className="tp-row">
@@ -205,10 +239,10 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
           </TpSelect>
         </label>
         <label className="tp-field">
-          <span>CSV file</span>
+          <span>CSV or XLSX file</span>
           <TpInput
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             onChange={(e) => void onFile(e.target.files?.[0] ?? null)}
           />
         </label>
@@ -374,6 +408,13 @@ export function ImportWizard({ onImported }: { onImported: () => void }) {
           {summary.duplicates} duplicate{summary.duplicates === 1 ? "" : "s"} · {summary.skipped}{" "}
           skipped
           {summary.rejected > 0 && <> · {summary.rejected} rejected</>}
+          {targetListId && (
+            <p className="app-muted">
+              {summary.addedToList.toLocaleString()} contact
+              {summary.addedToList === 1 ? "" : "s"} added to
+              {targetListName ? ` “${targetListName}”` : " the list"}.
+            </p>
+          )}
           {summary.rejectedRows.length > 0 && (
             <p>
               <TpButton variant="secondary" type="button" onClick={onDownloadRejected}>

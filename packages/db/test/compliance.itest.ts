@@ -119,6 +119,14 @@ beforeAll(async () => {
       recordedByUserId: ownerA,
     },
   );
+  // Add jane to a list in A so the fan-out also has a list_members dependent to sweep (list-plan/08 §5.2 —
+  // person erasure must remove the subject's list memberships, and the verification scan must count them).
+  const [list] = await admin`
+    INSERT INTO lists (tenant_id, workspace_id, owner_user_id, name)
+    VALUES (${tenantA}, ${wsA}, ${ownerA}, 'dsar targets') RETURNING id`;
+  await admin`
+    INSERT INTO list_members (tenant_id, workspace_id, list_id, contact_id, added_by_user_id)
+    VALUES (${tenantA}, ${wsA}, ${(list as { id: string }).id}, ${janeA}, ${ownerA})`;
 }, 180_000);
 
 afterAll(async () => {
@@ -153,8 +161,9 @@ describe("M5 compliance hardening DoD", () => {
     const [deps] = await admin`
       SELECT (SELECT count(*) FROM source_imports WHERE contact_id IN (${janeA}, ${janeB}))::int
            + (SELECT count(*) FROM contact_reveals WHERE contact_id IN (${janeA}, ${janeB}))::int
-           + (SELECT count(*) FROM consent_records WHERE contact_id IN (${janeA}, ${janeB}))::int AS n`;
-    expect((deps as { n: number }).n).toBe(0);
+           + (SELECT count(*) FROM consent_records WHERE contact_id IN (${janeA}, ${janeB}))::int
+           + (SELECT count(*) FROM list_members WHERE contact_id IN (${janeA}, ${janeB}))::int AS n`;
+    expect((deps as { n: number }).n).toBe(0); // incl. list_members — the erased subject's memberships are swept
 
     const [sup] = await admin`
       SELECT count(*)::int AS n FROM suppression_list WHERE scope = 'global' AND reason = ${`dsar:${requestId}`}`;

@@ -100,7 +100,12 @@ export const dsarFanoutRepository = {
     `);
   },
 
-  /** Purge the copy's dependents (08 §4.2): provenance, reveal events, consent rows. */
+  /** Purge the copy's dependents (08 §4.2): provenance, reveal events, consent rows, and LIST MEMBERSHIP.
+   *  list_members is swept here EXPLICITLY (list-plan/08 §5.2 step 3, 07 gap #7): the fan-out TOMBSTONES the
+   *  contact (deleted_at + nulled PII) rather than DELETEing the row, so the `list_members.contact_id` ON
+   *  DELETE CASCADE never fires — without this sweep an erased person's memberships would linger and a list
+   *  would still reference them. Removing the join row drops no PII of its own, so it is a clean removal, not
+   *  a tombstone. */
   async purgeDependents(tx: Tx, contactIds: string[]): Promise<void> {
     if (contactIds.length === 0) return;
     // Pass ids as a Postgres array LITERAL ('{a,b}') — drizzle's sql template does not parameterize JS
@@ -109,6 +114,7 @@ export const dsarFanoutRepository = {
     await tx.execute(sql`DELETE FROM source_imports WHERE contact_id = ANY(${ids}::uuid[])`);
     await tx.execute(sql`DELETE FROM contact_reveals WHERE contact_id = ANY(${ids}::uuid[])`);
     await tx.execute(sql`DELETE FROM consent_records WHERE contact_id = ANY(${ids}::uuid[])`);
+    await tx.execute(sql`DELETE FROM list_members WHERE contact_id = ANY(${ids}::uuid[])`);
   },
 
   /** The verification scan (08 §4.2 step 6): zero residual PII anywhere, or the job must not complete. */
@@ -129,10 +135,13 @@ export const dsarFanoutRepository = {
         AND (email_enc IS NOT NULL OR phone_enc IS NOT NULL OR first_name IS NOT NULL
              OR last_name IS NOT NULL OR linkedin_url IS NOT NULL)
     `)) as unknown as Array<{ n: number }>;
+    // list_members is part of the dependent residual count (list-plan/08 §5.2 step 6): the job must NOT
+    // report `completed` while any erased subject's list membership lingers.
     const [dep] = (await tx.execute(sql`
       SELECT (SELECT count(*) FROM source_imports WHERE contact_id = ANY(${ids}::uuid[]))::int
            + (SELECT count(*) FROM contact_reveals WHERE contact_id = ANY(${ids}::uuid[]))::int
-           + (SELECT count(*) FROM consent_records WHERE contact_id = ANY(${ids}::uuid[]))::int AS n
+           + (SELECT count(*) FROM consent_records WHERE contact_id = ANY(${ids}::uuid[]))::int
+           + (SELECT count(*) FROM list_members WHERE contact_id = ANY(${ids}::uuid[]))::int AS n
     `)) as unknown as Array<{ n: number }>;
     return {
       liveCopies: Number(live?.n ?? 0),

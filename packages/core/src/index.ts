@@ -4,7 +4,8 @@
 // them relatively from within the package (incl. co-located tests).
 
 export { runImport, type RunImportInput } from "./import/runImport.ts";
-export { parseImportFile, parseCsv, type ParsedCsv } from "./import/parseFile.ts";
+export { parseImportFile, parseCsv, isXlsxFile, type ParsedCsv } from "./import/parseFile.ts";
+export { parseXlsx } from "./import/parseXlsx.ts";
 export type { RawRow } from "./import/columnMap.ts";
 export {
   saveMappingTemplate,
@@ -134,6 +135,7 @@ export {
   verificationMean,
   freshnessSubScore,
   freshnessStatusFor,
+  ageDaysSince,
   COMPLETENESS_WEIGHTS,
   FRESHNESS_SLA_DAYS,
   COLD_START_FRESHNESS,
@@ -297,19 +299,26 @@ export {
 // cross-workspace-safe membership writes returning an affected count.
 export {
   createList,
+  createDynamicList,
   listLists,
+  listListMembers,
+  assertListInWorkspace,
   updateList,
   deleteList,
   addContactsToList,
   addContactsToNewList,
   removeContactsFromList,
   type CreateListInput,
+  type CreateDynamicListInput,
   type UpdateListInput,
   type DeleteListInput,
   type AddToListInput,
   type AddToNewListInput,
   type RemoveFromListInput,
+  type ListMembersInput,
+  type ListMember,
   type ListMembershipResult,
+  type AssertListInput,
 } from "./prospect/lists.ts";
 // Phase-3 bulk actions over the prospect search results (24): owner assign/reassign (policy-gated), bulk tags
 // (add/remove), bulk status, bulk archive (soft), bulk enroll, bulk enrich (enqueue), role-gated CSV export, and
@@ -325,6 +334,7 @@ export {
   bulkEnrich,
   bulkExportCsv,
   searchCount,
+  estimateBulkSpend,
   type BulkSelectionInput,
   type BulkAssignOwnerInput,
   type BulkTagsInput,
@@ -332,6 +342,7 @@ export {
   type BulkEnrollInput,
   type BulkEnrichInput,
   type BulkExportInput,
+  type BulkEstimateInput,
 } from "./prospect/bulkActions.ts";
 // Company-level (accounts) search count (24/ADR-0035): the firmographic sibling of searchCount. Thin delegate
 // to the @leadwolf/db accountSearchRepository (no query-semantics layer needed for accounts).

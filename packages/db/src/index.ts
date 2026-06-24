@@ -61,6 +61,7 @@ export {
   type ContactWriteValues,
   type DedupContactRow,
   type DedupKeys,
+  type EnrichEstimateSignal,
   type HotLeadRow,
 } from "./repositories/contactRepository.ts";
 export {
@@ -188,6 +189,7 @@ export {
   type ListRow,
   type ListInsert,
   type AddMembersInput,
+  type ListMembersResultPage,
 } from "./repositories/listRepository.ts";
 export {
   searchRepository,
@@ -208,6 +210,7 @@ export {
   type PlatformTenantDetail,
   type PlatformWorkspaceRow,
   type PlatformWorkspaceListRow,
+  type PlatformListOverviewRow,
   type PlatformMemberRow,
   type PlatformUserRow,
 } from "./repositories/platformAdminReads.ts";
@@ -230,6 +233,7 @@ export { scimTokenRepository, type ScimTokenRecord } from "./repositories/scimTo
 export {
   platformAuditReadRepository,
   type PlatformAuditRow,
+  type TenantStaffAccessRow,
 } from "./repositories/platformAuditReads.ts";
 // Platform STAFF RBAC writes + impersonation-with-consent (ADR-0011) — owner-connection, audited.
 export { staffRepository, type StaffMemberRow } from "./repositories/staffRepository.ts";

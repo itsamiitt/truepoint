@@ -1,0 +1,273 @@
+/* lists.module.css — layout for the Lists surface (the lists index grid + a list's members detail). Color +
+ * controls come from --tp-* tokens + the @leadwolf/ui primitives; this file is layout/structure only and
+ * mirrors the prospect surface's spacing so the two read as one product. */
+
+/* ── Page shell (index + detail share the column scaffold) ─────────────────────────────────────────────── */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 28px 96px;
+  min-width: 0;
+}
+
+/* ── Surface header (title + meta + primary actions) ───────────────────────────────────────────────────── */
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.headMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.subtitle {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+.headActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+/* The back-to-lists breadcrumb on the detail surface. */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  text-decoration: none;
+}
+.back:hover {
+  color: var(--tp-ink);
+}
+
+/* ── Toolbar row (search + sort over the index) ────────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.toolbar > :first-child {
+  flex: 1 1 280px;
+  min-width: 220px;
+}
+.count {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+/* Keyset "Load more" footer under the members grid. */
+.loadMore {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+/* ── DataTable cells (mirror the prospect grid) ────────────────────────────────────────────────────────── */
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.nameMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sub {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--tp-ink-2);
+}
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.glyphOk {
+  color: var(--success);
+}
+.glyphWarn {
+  color: var(--warning);
+}
+.glyphNone {
+  color: var(--tp-ink-4);
+}
+.lock {
+  color: var(--tp-ink-4);
+  display: inline-flex;
+}
+
+/* Data Health cell (list-plan/06 §3.3): the score pill + the freshness badge, side by side. */
+.healthCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+/* ScorePill recipe (design patterns.md): dot + tabular number. */
+.scorePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--tp-ink);
+}
+.scoreDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  flex-shrink: 0;
+}
+.headCheck,
+.rowCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The list-name cell on the index grid (a link into the detail surface). */
+.listLink {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.listLink:hover .name {
+  color: var(--tp-cobalt);
+}
+
+/* Inline metadata pills (member count, list kind badge). */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--tp-ink-2);
+}
+
+/* ── Dialog body scaffolding (create/rename/delete) ────────────────────────────────────────────────────── */
+.dialogStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.dialogNote {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tp-ink-2);
+}
+
+/* ── Member quick-view Drawer body ─────────────────────────────────────────────────────────────────────── */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.identityMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.identityName {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+.identitySub {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sectionTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--tp-ink-3);
+}
+.fieldGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fieldLabel {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.fieldValue {
+  font-size: 13px;
+  color: var(--tp-ink);
+  word-break: break-word;
+}
+.drawerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

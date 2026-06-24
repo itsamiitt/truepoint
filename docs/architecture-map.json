@@ -71,8 +71,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 817,
-  "fileSetHash": "sha256:95863adc345bd4b5ebb58fb89c054c52853c513ac0d5d82381d225646c82ba89",
+  "fileCount": 838,
+  "fileSetHash": "sha256:5b750650a3f06d26ebc6fe721dd15c278de0fa3a1d3c07d469dc86182645dc05",
   "features": {
     "account-search": {
       "web": [],
@@ -416,6 +416,8 @@
         "packages/core/src/import/normalize.ts",
         "packages/core/src/import/parseFile.test.ts",
         "packages/core/src/import/parseFile.ts",
+        "packages/core/src/import/parseXlsx.test.ts",
+        "packages/core/src/import/parseXlsx.ts",
         "packages/core/src/import/preview.test.ts",
         "packages/core/src/import/preview.ts",
         "packages/core/src/import/rejectedRowsCsv.test.ts",
@@ -466,7 +468,18 @@
       "integrations": []
     },
     "lists": {
-      "web": [],
+      "web": [
+        "apps/web/src/features/lists/api.ts",
+        "apps/web/src/features/lists/components/DeleteListDialog.tsx",
+        "apps/web/src/features/lists/components/ImportIntoListDialog.tsx",
+        "apps/web/src/features/lists/components/ListDetailPage.tsx",
+        "apps/web/src/features/lists/components/ListFormDialog.tsx",
+        "apps/web/src/features/lists/components/ListsPage.tsx",
+        "apps/web/src/features/lists/hooks/useList.ts",
+        "apps/web/src/features/lists/hooks/useListMembers.ts",
+        "apps/web/src/features/lists/hooks/useLists.ts",
+        "apps/web/src/features/lists/index.ts"
+      ],
       "admin": [],
       "api": [
         "apps/api/src/features/lists/index.ts",
@@ -538,6 +551,7 @@
         "apps/web/src/features/prospect/components/AccountDetailDrawer.tsx",
         "apps/web/src/features/prospect/components/AccountFilterPanel.tsx",
         "apps/web/src/features/prospect/components/AccountsTable.tsx",
+        "apps/web/src/features/prospect/components/AddToListDialog.tsx",
         "apps/web/src/features/prospect/components/AiSearchBox.tsx",
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
@@ -752,6 +766,7 @@
         "packages/core/src/search/canonicalizeTitle.ts",
         "packages/core/src/search/expandQuery.test.ts",
         "packages/core/src/search/expandQuery.ts",
+        "packages/core/src/search/expandTitleFilters.ts",
         "packages/core/src/search/normalizeTitle.ts",
         "packages/core/src/search/planTitleFilter.test.ts",
         "packages/core/src/search/planTitleFilter.ts",
@@ -1202,6 +1217,8 @@
       "apps/web/src/app/(shell)/home/page.tsx",
       "apps/web/src/app/(shell)/inbox/page.tsx",
       "apps/web/src/app/(shell)/layout.tsx",
+      "apps/web/src/app/(shell)/lists/[id]/page.tsx",
+      "apps/web/src/app/(shell)/lists/page.tsx",
       "apps/web/src/app/(shell)/prospect/page.tsx",
       "apps/web/src/app/(shell)/reports/page.tsx",
       "apps/web/src/app/(shell)/sales-navigator/page.tsx",
@@ -1318,6 +1335,7 @@
     ],
     "packages/db": [
       "packages/db/drizzle.config.ts",
+      "packages/db/drizzle.worktree.config.ts",
       "packages/db/src/applyMigrations.ts",
       "packages/db/src/bootstrapAdmin.ts",
       "packages/db/src/client.ts",
@@ -1361,7 +1379,9 @@
       "packages/db/test/importTemplates.itest.ts",
       "packages/db/test/intel.itest.ts",
       "packages/db/test/itestDb.ts",
+      "packages/db/test/listMembersDsarCascade.itest.ts",
       "packages/db/test/lists.itest.ts",
+      "packages/db/test/listsStaffNoAccess.itest.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/platformAuditLog.itest.ts",
@@ -1405,6 +1425,7 @@
       "packages/types/src/contacts.test.ts",
       "packages/types/src/contacts.ts",
       "packages/types/src/customFields.ts",
+      "packages/types/src/dataHealth.ts",
       "packages/types/src/enrichmentPolicy.ts",
       "packages/types/src/errors.ts",
       "packages/types/src/featureFlags.ts",
@@ -1414,6 +1435,7 @@
       "packages/types/src/importTemplates.ts",
       "packages/types/src/index.ts",
       "packages/types/src/intel.ts",
+      "packages/types/src/listGovernance.ts",
       "packages/types/src/lists.ts",
       "packages/types/src/outreach.ts",
       "packages/types/src/pipelineStages.ts",
