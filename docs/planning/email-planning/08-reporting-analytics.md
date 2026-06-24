@@ -15,10 +15,20 @@
 > sees is bounded by their tenant, and by their role (rep → own; manager → team; admin →
 > workspace), per the role boundaries in `12-roles-permissions.md`.
 >
-> **Source of truth.** All analytics are *derived* from two canonical fact tables owned by
-> `09-data-model.md`: **`email_send`** (one row per dispatched message) and **`email_tracking_event`**
-> (opens, clicks, replies, bounces, complaints, unsubscribes). Analytics never invent counts; they
-> roll up these facts. Tenancy mechanics (RLS, GUCs, indexes) are owned by `07-multitenancy-reputation-isolation.md`.
+> **Source of truth.** All analytics are *derived* from the canonical fact stores owned by
+> `09-data-model.md`: an **outbound send** (the logical role of one dispatched message — an
+> `outreach_log` advance recorded in **`activities`**) and the raw engagement events
+> (opens, clicks, replies, bounces, complaints, unsubscribes), which live in **`activities` / `email_event`**.
+> Analytics never invent counts; they roll up these facts. Tenancy mechanics (RLS, GUCs, indexes) are
+> owned by `07-multitenancy-reputation-isolation.md`.
+>
+> **Mapping to the shipped engine (D11).** Engagement analytics derive from the existing **`activities`**
+> timeline (the `email_sent`/`email_opened`/`email_clicked`/`email_replied` activity types) **plus the
+> high-volume raw `email_event` store** that doc `09-data-model.md` introduces and that **feeds**
+> `activities`. The *outbound-send* and *tracking-event* roles used throughout this doc are the *logical*
+> fact roles owned by `09`; their physical home is the partitioned `email_event` store + the
+> `activities` projection, per **D11 (build on, don't duplicate)** — analytics add **no** parallel event
+> table of their own.
 
 ---
 
@@ -35,7 +45,7 @@
    opens** at ingestion (`04-status-event-tracking.md`) and always renders an **"MPP-inflated —
    informational only"** caveat next to any open metric.
 3. **Every metric is derived from facts, never stored as a guess.** A rate is `numerator /
-   denominator` over `email_send` + `email_tracking_event` rows the viewer is allowed to see. No
+   denominator` over outbound-send and `activities` / `email_event` rows the viewer is allowed to see. No
    "open count" is ever written as a free-floating column that can drift from the events.
 4. **Analytics are tenant-scoped (D2) and owner-scoped (D8) — at the database, not the UI.** A rep
    querying "reply rate" gets a number computed over *only their own sends*. Response shaping
@@ -62,12 +72,15 @@ must use verbatim — a "reply rate" must mean the same thing on every screen.
 
 | Metric | Definition (TruePoint) | 2024–2026 benchmark (sales/cold email) | Caveat / reliability |
 |---|---|---|---|
-| **Reply rate** *(PRIMARY KPI — D6)* | distinct `email_enrollment`/thread with a `reply` `email_tracking_event` ÷ `email_send` delivered | **Avg ≈ 3–9%**; **good ≈ 5–10%** (B2B); **top-quartile ≈ 8–12%**; **best-in-class 15%+** on tight segments ([Instantly](https://instantly.ai/blog/cold-email-reply-rate-benchmarks/), [Built For B2B](https://www.builtforb2b.com/blog/b2b-cold-email-benchmark-2025), [Belkins](https://belkins.io/blog/cold-email-response-rates)) | **Most reliable engagement signal.** Reply requires a human action MPP cannot fake. The KPI of record. Watch for auto-replies/OOO — classify and exclude (`04`). |
+| **Reply rate** *(PRIMARY KPI — D6)* | distinct `outreach_log`/thread with a `reply` activity (an `email_event` row projected to `activities`) ÷ `email_send` delivered | **Avg ≈ 3–9%**; **good ≈ 5–10%** (B2B); **top-quartile ≈ 8–12%**; **best-in-class 15%+** on tight segments ([Instantly](https://instantly.ai/blog/cold-email-reply-rate-benchmarks/), [Built For B2B](https://www.builtforb2b.com/blog/b2b-cold-email-benchmark-2025), [Belkins](https://belkins.io/blog/cold-email-response-rates)) | **Most reliable engagement signal.** Reply requires a human action MPP cannot fake. The KPI of record. Watch for auto-replies/OOO — classify and exclude (`04`). |
 | **Open rate** *(informational only — D6)* | distinct opened `email_send` (an `open` event) ÷ `email_send` delivered | **Reported ≈ 40–60%**; **true human ≈ 15–25%** ([beehiiv](https://www.beehiiv.com/blog/apple-mpp-open-rate), [Paubox](https://www.paubox.com/blog/how-apple-mail-privacy-protection-inflates-email-open-rates)) | **MPP-INFLATED — DO NOT use as KPI.** ~64% of Apple Mail users pre-fetch the pixel; Apple-Mail opens ≈100%. Always shown with the MPP caveat; never ranks reps or gates automation. |
 | **Click rate (CTR)** | distinct `email_send` with a `click` event ÷ `email_send` delivered | **≈ 2–5%** typical for B2B/cold; varies by CTA presence | **More reliable than opens** — MPP does not auto-click links — but tracking-link rewriting can be stripped/blocked; treat as a secondary signal. |
-| **Bounce rate** | `email_send` with a `bounce` event (hard + soft) ÷ `email_send` attempted | **Target < 2%**, **ideal < 1%**; senders under **1.5%** see **10–12% higher inbox placement** ([MailReach](https://www.mailreach.co/blog/email-deliverability-statistics)) | **Highly reliable** (provider-reported). Split **hard vs soft** — hard bounces auto-add to `email_suppression` (D4). A deliverability KPI, not engagement. |
-| **Unsubscribe rate** | `unsubscribe` events (incl. one-click `List-Unsubscribe`) ÷ `email_send` delivered | **B2B ≈ 0.04–0.06%**; **best practice < 0.1%**; **critical > 0.3%**; cold-email avg ≈ **0.17%** ([Validity 2025](https://www.validity.com/wp-content/uploads/2025/03/2025-Benchmark-Report-FINAL.pdf), search corpus) | **Reliable.** Every unsubscribe writes `email_consent`/`email_suppression` and gates future sends (D4, `06-compliance.md`). |
+| **Bounce rate** | `email_send` with a `bounce` event (hard + soft) ÷ `email_send` attempted | **Target < 2%**, **ideal < 1%**; senders under **1.5%** see **10–12% higher inbox placement** ([MailReach](https://www.mailreach.co/blog/email-deliverability-statistics)) | **Highly reliable** (provider-reported). Split **hard vs soft** — hard bounces auto-add to `suppression_list` (D4). A deliverability KPI, not engagement. |
+| **Unsubscribe rate** | `unsubscribe` events (incl. one-click `List-Unsubscribe`) ÷ `email_send` delivered | **B2B ≈ 0.04–0.06%**; **best practice < 0.1%**; **critical > 0.3%**; cold-email avg ≈ **0.17%** ([Validity 2025](https://www.validity.com/wp-content/uploads/2025/03/2025-Benchmark-Report-FINAL.pdf), search corpus) | **Reliable.** Every unsubscribe writes `consent_records`/`suppression_list` and gates future sends (D4, `06-compliance.md`). |
 | **Complaint (spam) rate** | `complaint` events (FBL/ARF) ÷ `email_send` delivered | **Keep < 0.1%** (recommended); **Gmail policy violation > 0.3%**; Google added threshold lines (recommended **0.10%**, violation **>0.30%**); Microsoft tightened in 2025 ([Suped](https://www.suped.com/learn/email-deliverability/how-accurate-is-snds-and-google-postmaster-tools-reputation-data), [data-axle](https://www.data-axle.com/resources/blog/bulk-sender-requirements-how-to-stay-compliant/)) | **The most dangerous metric.** Crossing 0.3% at Gmail tanks placement. Complaint auto-suppresses the recipient (D4) and is the heaviest negative input to the health score (§3). |
+| **Click-to-open rate (CTOR)** *(informational only — D6)* | distinct `email_send` with a `click` event ÷ distinct opened `email_send` | **Reported ≈ 5–15%** for B2B, but the denominator is MPP-poisoned, so the *reported* CTOR runs **artificially low** when opens are inflated | **DOUBLY UNRELIABLE — DO NOT use as KPI.** Both numerator (clicks, can be link-stripped) and denominator (opens, MPP-inflated per D6) are noisy. Surfaced only behind the open caveat (§2.2), never ranks reps or gates automation. |
+| **Consent-coverage rate** *(compliance, from `03`)* | enrolled contacts with a valid `consent_records` row (lawful basis present, not withdrawn, within `valid_until`) ÷ enrolled contacts in scope | **Target 100%** for jurisdictions requiring consent (D9); a falling rate is a compliance regression, not an engagement signal | **Reliable** (computed over `consent_records`, the D9 source). A send blocked for missing lawful basis is logged; this rate makes the gap visible before a regulator does (`03`, `06`). |
+| **Suppression-hit rate** *(compliance, from `03`)* | enroll/send attempts blocked by `assertNotSuppressed` (the D4 gate) ÷ total enroll/send attempts | **Lower better; a spike signals dirty list intake** — there is no "good" band, it is a hygiene indicator | **Reliable** (the gate is unbypassable, D4; runs in-tx in `core/outreach/sendStep` + `enrollContact`). Every hit is audited (`audit_log` action `suppression.*`); a rising rate means a list is being worked that should have been cleaned upstream. |
 
 > **Reading the benchmarks.** Sales-email benchmarks span a wide range by source, ICP, and
 > list quality; we cite ranges, not false-precision points. The values above are the
@@ -84,8 +97,9 @@ must use verbatim — a "reply rate" must mean the same thing on every screen.
   classification (out of scope for v1, noted for later).
 - **Meeting/booking rate** — downstream conversion, ≈ **0.8%** (≈1 in 100) per the cold-email corpus;
   only computable once CRM/calendar signals are wired (not v1).
-- **Click-to-open rate (CTOR)** — *deliberately de-emphasized*: its denominator (opens) is
-  MPP-poisoned, so CTOR is doubly unreliable and is shown only behind the open caveat, if at all.
+- **Click-to-open rate (CTOR)** — *deliberately de-emphasized* (also listed in §2.1 with its caveat):
+  its denominator (opens) is MPP-poisoned, so CTOR is doubly unreliable and is shown only behind the
+  open caveat, if at all.
 
 ---
 
@@ -119,7 +133,7 @@ row, refreshed on a rolling window. The inputs and indicative weights:
 
 | Input | Source | Direction | Weight (indicative) |
 |---|---|---|---|
-| **Complaint rate** (§2) | `email_tracking_event` | lower better; **>0.3% = automatic Low** | heaviest negative |
+| **Complaint rate** (§2) | `email_event` | lower better; **>0.3% = automatic Low** | heaviest negative |
 | **Bounce rate** (§2) | `email_send` + events | lower better; >2% penalised | high |
 | **Reply rate** (§2, D6) | events | higher better (positive engagement) | medium-positive |
 | **Authentication posture** | `sending_domain` (SPF/DKIM/DMARC alignment, PTR, TLS, one-click unsub) | pass/fail gates | gating |
@@ -160,14 +174,14 @@ This is the platform-owned core. The question is **pre-aggregated rollups vs. on
 
 | Strategy | How | Pros | Cons | TruePoint use |
 |---|---|---|---|---|
-| **On-the-fly query** | `COUNT`/`SUM`/`FILTER` over `email_send` + `email_tracking_event` at read time | always exact, no extra storage, simple | scans grow with volume; a multi-million-row tenant makes a dashboard page slow; heavy DB load under fan-out | **drill-downs only** — narrow, bounded (single sequence/template/mailbox, recent window) |
+| **On-the-fly query** | `COUNT`/`SUM`/`FILTER` over outbound-send + `activities` / `email_event` rows at read time | always exact, no extra storage, simple | scans grow with volume; a multi-million-row tenant makes a dashboard page slow; heavy DB load under fan-out | **drill-downs only** — narrow, bounded (single sequence/template/mailbox, recent window) |
 | **Pre-aggregated rollups** | scheduled/triggered jobs write per-bucket counters into rollup tables; dashboards read rollups | fast, cheap reads; predictable load; supports large date ranges | eventual (lag of one job cycle); extra tables; must handle late/out-of-order events and backfills | **default** for all dashboards, leaderboards, health scores |
 
 ### 4.2 Recommended: rollups by default, on-the-fly for narrow drill-downs
 
 - **Time-bucketing.** Roll up counts (sends, delivered, opens, clicks, replies, bounces, unsubs,
   complaints) into **hourly** and **daily** buckets, keyed by the dimensions we slice on:
-  `tenant_id` + `workspace_id` + `owner_user_id` + (`mailbox_integration` | `email_sequence` |
+  `tenant_id` + `workspace_id` + `owner_user_id` + (`mailbox_integration` | `outreach_sequences` |
   `email_template_version` | `sending_domain`). Hourly buckets are rolled up into daily; daily into
   the rolling-window aggregates that feed the health score (§3). A dashboard for "last 30 days by
   rep" reads ~30 daily rows per rep, not millions of fact rows.
@@ -188,6 +202,35 @@ This is the platform-owned core. The question is **pre-aggregated rollups vs. on
   `packages/core/src/email/` and the rollup tables alongside the fact tables in
   `packages/db/src/schema/email.ts` with **`tenant_id`-leading indexes**.
 
+### 4.2a Range-partition the rollup tables (avoid hot rows)
+
+A naïve rollup design keeps **one running counter row per `(tenant, dimension)`** and `UPDATE`s it on
+every event-batch. At sales-engagement volume that row becomes a **hot row**: every late-event reprocess
+and every concurrent rollup worker contends on the same tuple, serialising behind row locks and bloating
+it with dead versions (Postgres MVCC). The fix is to **never share a counter tuple across time buckets**
+and to **partition the rollup tables by time** so writes spread across many physical relations:
+
+- **Bucket is part of the key, not an updated column.** A rollup row is keyed by
+  `(tenant_id, workspace_id, owner_user_id, dimension_key, bucket_start)`. The **hourly** rollup table
+  is **range-partitioned by `bucket_start` per hour-of-day window** (rolling, with old partitions
+  detached and dropped on the retention boundary, `15`); the **daily** rollup table is
+  **range-partitioned by `bucket_start` per day/month**. A given event-batch only ever touches the
+  partition for *its* bucket, so the current hour's writes never lock yesterday's rows.
+- **Per-bucket inserts, not a single hot counter.** Within the trailing reprocess window (§4.2), the
+  job recomputes the affected bucket(s) and **upserts the bucket row** (`INSERT … ON CONFLICT … DO
+  UPDATE`) keyed on the full bucket key — contention is bounded to the *small set of recent buckets*
+  being reprocessed, not one lifetime tuple. Lifetime/"sequence card" counters (§4.2) are then a cheap
+  `SUM` over the small set of daily buckets, not a perpetually-locked single row.
+- **Why range over hash.** Range-by-time matches the read pattern (dashboards ask for *windows* — "last
+  30 days", a 7/30/90-day leaderboard, §7.2), enabling **partition pruning** so a window read scans only
+  the relevant partitions, and makes **retention a partition `DETACH`/`DROP`** (`15`) instead of a
+  delete that bloats the table. `tenant_id` stays the **leading index column inside each partition** so
+  RLS predicates (`07`) still prune to the tenant first.
+- **Tradeoff — partition count.** Hourly partitions accumulate; we keep only a **short hourly retention**
+  (hourly buckets roll up into daily, then the hourly partitions are dropped) and a **longer daily/monthly**
+  retention, so the live partition count stays bounded. The partition-management job is itself
+  leader-locked (§4.2) so partitions are created/detached once.
+
 ### 4.3 Read path & rendering (design constraints)
 
 - Dashboard reads go through `apps/api/src/features/email/{routes.ts,index.ts}` analytics endpoints
@@ -201,6 +244,31 @@ This is the platform-owned core. The question is **pre-aggregated rollups vs. on
 - **Caching.** Rollup reads are cacheable (short TTL keyed by tenant + dimension + window) because
   they already lag by a job cycle; cache keys are **tenant-scoped** so no cross-tenant bleed.
 
+### 4.4 Event-ingestion SLOs (P3 tracking → P5 analytics)
+
+Analytics are only as fresh as the pipeline feeding them: raw provider webhooks (opens, clicks, replies,
+bounces, complaints, unsubs) land in the high-volume **`email_event`** store (`09`), which **feeds
+`activities`** (the engagement timeline) and is then rolled up (§4) into the dashboards (§5–§7). The
+ingestion path is built in **Phase 3 (P3, tracking)** and the analytics that consume it in **Phase 5
+(P5)** per `13-rollout-phases.md`; the SLOs below bound the lag at each hop and are watched on the admin
+**System health** surface (`11-admin-surface.md`, the home for email queue/ingestion SLOs):
+
+| Hop | What it measures | Target SLO | Breach signal |
+|---|---|---|---|
+| **Provider → `email_event` (ingest)** | webhook receipt → row durably written to the partitioned event store | **P50 < 5s, P99 < 60s** | ingest queue depth / lag rising on System health (`11`) |
+| **`email_event` → `activities` (project)** | event row → corresponding `email_*` activity visible on the timeline | **P50 < 30s, P99 < 5min** | projection backlog; timeline shows fewer events than the store |
+| **`activities`/`email_event` → rollups (aggregate)** | event durable → reflected in the hourly rollup that dashboards read | **freshness < 1 job cycle (target ≤ 5min)** | rollup "as of HH:MM" stamp (§7.3) drifting; rollup queue lag |
+| **Late-event correctness** | a tracking event arriving up to 72h late (§4.2) lands in the right bucket | **100% within the trailing reprocess window** | counters that don't reconcile to a fact-table recount |
+
+- **Honest freshness, never implied real-time.** Because analytics lag by a job cycle, every dashboard
+  and leaderboard surfaces an **"as of HH:MM"** stamp (§7.3); the SLOs above are what that stamp is held
+  to, not a promise of live numbers.
+- **Backpressure & DLQ (D10).** Ingest and projection are BullMQ jobs with **backoff + DLQ + backpressure**
+  (§4.2) so an event spike (e.g. a complaint storm) degrades *freshness*, not *correctness* — events queue
+  and catch up, they are never dropped. A DLQ depth above threshold is a System-health alert (`11`).
+- **The send path is never blocked by analytics.** Ingestion/rollup load runs on its own queues; a lagging
+  analytics pipeline must **never** slow or gate `core/outreach/sendStep` (the send tx).
+
 ---
 
 ## 5. Performance breakdowns (mailbox / sequence / template)
@@ -211,7 +279,7 @@ leading with reply rate (D6) and tagging opens with the MPP caveat.
 | Breakdown | Keyed by | Headline metric (D6) | Also shows | Drill-down |
 |---|---|---|---|---|
 | **Per-mailbox** | `mailbox_integration` | reply rate | sends, delivery/bounce, complaint, **health score (§3)**, warmup state | → per-message log (cursor-paginated) for that mailbox |
-| **Per-sequence** | `email_sequence` (+ per-`email_sequence_step`) | reply rate per sequence and **per step** | enrolled/active/completed, sends, bounce, unsub, step drop-off funnel | → which step kills replies; which step bleeds unsubs |
+| **Per-sequence** | `outreach_sequences` (+ per-`outreach_steps`) | reply rate per sequence and **per step** | enrolled/active/completed, sends, bounce, unsub, step drop-off funnel | → which step kills replies; which step bleeds unsubs |
 | **Per-template** | `email_template` / `email_template_version` | reply rate per **version** | click rate, open (caveated), sends; A/B compare of versions | → version-over-version lift; pick the winner |
 
 - **Per-step funnel.** A sequence breakdown shows enrolled → step-1 sent → replied/bounced/unsub at
@@ -292,23 +360,65 @@ opens — precisely because opens are MPP-noise. Activity volume (sends) is show
 
 ---
 
+## 7a. Future extensibility — analytics warehouse export (PII-free)
+
+*Not v1 — a planned seam, owned jointly with `15` (extensibility & future work).* Enterprise tenants
+will eventually want TruePoint's email facts in **their own warehouse** (BigQuery, Snowflake) or a
+**lake** (S3 Parquet) to join against CRM/revenue data. The export is designed now so the rollup schema
+(§4) doesn't have to be reworked later:
+
+- **Export the rollups + the de-identified event store, not raw PII.** The export streams the **aggregated
+  rollup buckets** (§4) and a **PII-free projection** of `email_event` / `activities` — keyed by
+  **opaque surrogate IDs** (`tenant_id`, `workspace_id`, `owner_user_id`, `sequence_id`, `mailbox_id`,
+  `event_type`, `occurred_at`, the metric counts). It carries **no recipient email, name, or message
+  body**: `contacts.email_enc`/`email_blind_index` and any message content are **excluded by
+  construction** (the export view selects only non-PII columns), per the residency/PII rules
+  (security) and the export contract in `15`.
+- **Per-tenant, tenant-isolated (D2).** An export is scoped to one tenant and runs inside the tenant RLS
+  boundary (`07`); a tenant only ever receives **its own** facts. Cross-tenant export is impossible by the
+  same RLS predicate that bounds the dashboards (§6).
+- **Transport reuses the bulk-io seam.** The export rides the existing import/export transport layer
+  (the "bulk-io" effort, ADR-0036) rather than inventing a new pipe — a scheduled/triggered BullMQ job
+  (D10) writes **S3 Parquet** (lake) or pushes to **BigQuery/Snowflake** via a configured sink, with the
+  same backoff + DLQ posture as the rollup jobs (§4.2).
+- **Consent & retention honoured downstream.** Exported rows respect the same retention boundary (`15`)
+  as the source partitions; a tenant's deletion/DSAR (`06`, `compliance.ts` `dsar_requests`) applies to
+  the export sink contract too — the warehouse copy is not a loophole around erasure.
+- **Why this is a future note, not v1.** v1 serves analytics from the in-product dashboards (§5–§7); the
+  warehouse export adds operational surface (sink credentials, schema-contract versioning, backfills) that
+  belongs after the core pipeline is proven. The schema choices above (surrogate-keyed, PII-free,
+  range-partitioned rollups) make it an **additive** later build, not a migration. See `15` for the full
+  extensibility plan and the export-contract ownership.
+
+---
+
 ## 8. Cross-references
 
-- **`04-status-event-tracking.md`** — the source of `email_tracking_event`, including MPP open
-  flagging, reply/auto-reply classification, and bounce/complaint ingestion (the raw material).
+- **`04-status-event-tracking.md`** — the source of the raw tracking events (`email_event`, projected
+  to `activities`), including MPP open flagging, reply/auto-reply classification, and bounce/complaint
+  ingestion (the raw material).
 - **`07-multitenancy-reputation-isolation.md`** — tenancy mechanics (RLS ENABLE+FORCE, fail-closed
   NULLIF, GUCs, `tenant_id`-leading indexes) and per-tenant reputation isolation (D2) that make
   analytics tenant-scoped.
-- **`09-data-model.md`** — owns `email_send`, `email_tracking_event`, the rollup/counter tables, and
-  the versioned `email_template_version` that template analytics attribute to.
+- **`03-*` (consent & suppression)** — the source of the **consent-coverage** and **suppression-hit**
+  compliance metrics added to §2.1 (`consent_records` per D9; `suppression_list` + `assertNotSuppressed`
+  per D4).
+- **`09-data-model.md`** — owns the canonical fact stores **`activities` / `email_event`** (the
+  user-facing engagement timeline plus the raw high-volume partitioned store that feeds it) and the
+  logical *outbound-send* role (an `outreach_log` advance recorded in `activities`), the
+  **range-partitioned** rollup/counter tables (§4.2a), and the versioned `email_template_version` that
+  template analytics attribute to.
 - **`10-web-surface.md`** — the **Analytics tab** in `apps/web/src/features/email/` that renders
   §2–§7 (four states, virtualization, cursor pagination, MPP caveats).
 - **`11-admin-surface.md`** — admin **deliverability monitoring**: the health score (§3) across
   mailboxes/domains, complaint/bounce watch, and abuse signals.
 - **`12-roles-permissions.md`** — the authoritative role boundaries that §6 visibility derives from.
 - **`13-rollout-phases.md`** — analytics dashboards + leaderboards land in **Phase 5 (P5)**
-  alongside deliverability + warmup; the fact tables (`email_send`, `email_tracking_event`) precede
-  them from the send path (P1) and tracking (P3).
+  alongside deliverability + warmup; the event-ingestion pipeline (P3) and its SLOs (§4.4) precede them,
+  and the fact tables precede both from the send path (P1).
+- **`15-*` (extensibility & future work)** — owns the **analytics warehouse export** (§7a: S3/BigQuery,
+  PII-free, surrogate-keyed) export contract and the retention boundary the rollup partitions (§4.2a) and
+  the export sink honour.
 
 ---
 
@@ -319,9 +429,19 @@ opens — precisely because opens are MPP-noise. Activity volume (sends) is show
 - ✅ **Owner-scoped (D8):** rep → own, manager → team, admin → workspace, per `12` (§6); enforced by
   RLS + response shaping; **IDOR → 404**.
 - ✅ **Tenant-scoped (D2):** no number or leaderboard spans tenants; health score per-tenant.
-- ✅ **Derived from `email_send` + `email_tracking_event`** (`09`); aggregation tradeoffs covered —
+- ✅ **Derived from outbound-send + `activities` / `email_event` facts** (`09`); aggregation tradeoffs covered —
   rollups vs on-the-fly, materialized counters, time-bucketing, late-event handling, queue-backed
   (§4).
 - ✅ **Large-data rendering:** cursor pagination (never offset) + virtualization (§4.3, §7.2).
 - ✅ **Benchmark table present** with 2024–2026 numbers and caveats (§2.1); **≥3 live sources** cited
   inline (Instantly, Built For B2B, Belkins, MailReach, Validity, Paubox, beehiiv, Suped, data-axle).
+- ✅ **CTOR + compliance metrics** (consent-coverage, suppression-hit, from `03`) added to the metrics
+  table, each carrying its reliability caveat (§2.1).
+- ✅ **Rollup tables range-partitioned by hour/day** with the bucket as part of the key, to avoid hot
+  rows (§4.2a); retention is a partition `DETACH`/`DROP` (`15`).
+- ✅ **Event-ingestion SLOs (P3 → P5)** bounded at each hop (ingest / project / aggregate / late-event),
+  watched on admin System health (`11`); send path never blocked by analytics (§4.4).
+- ✅ **Warehouse export (S3/BigQuery, PII-free, surrogate-keyed)** noted as a future, additive seam,
+  cross-referenced to `15` (§7a).
+- ✅ **D11 honoured:** analytics derive from `activities` + the raw `email_event` store (`09`); **no**
+  parallel event/sequence/enrollment/suppression/consent table is introduced here (Source-of-truth note).

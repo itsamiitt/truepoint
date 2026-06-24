@@ -1,11 +1,39 @@
 # Email — Sequences & Automation (05)
 
-> Cites the **Shared Vocabulary**, the **Locked Decisions (D1–D10)**, the **Phase Map (P0–P6)** and the
+> **Reconciled to the shipped M9 engine (D11, doc `14`).** This doc was first written against the working
+> names `email_sequence` / `email_sequence_step` / `email_enrollment`. Those are **not** new tables — they
+> are the **already-shipped** `outreach_sequences` / `outreach_steps` / `outreach_log`
+> (`packages/db/src/schema/outreach.ts`). Per **Locked Decision D11** (stated in full in `14 §6`), the
+> sequence engine **EXTENDS** the M9 outreach engine; it must **not** introduce a parallel `email_*` stack.
+> The vocabulary mapping is authoritative in `14 §2`; this doc uses the real names below:
+>
+> | Working name (former) | Real shipped name | Lives in | This doc |
+> |---|---|---|---|
+> | `email_sequence` (cadence definition) | **`outreach_sequences`** (`name`, `status` `active`\|`paused`\|`archived`, `from_address`, `physical_address`, `UNIQUE(workspace_id,name)`) | `packages/db/src/schema/outreach.ts` | REUSE — §1, §2 |
+> | `email_sequence_step` (the touch) | **`outreach_steps`** (`step_order`, **`channel`** `email`\|`linkedin`, `delay_hours`, `subject`, `body`, `UNIQUE(sequence_id,step_order)`) | `outreach.ts` | REUSE — already multi-channel via `channel`; §2 |
+> | `email_enrollment` (one run) | **`outreach_log`** (`status` `enrolled`\|`active`\|`replied`\|`completed`\|`unsubscribed`\|`bounced`, `current_step`, `last_event_at`, **`UNIQUE(sequence_id,contact_id)` = enrollment idempotency**) | `outreach.ts` | REUSE — §6, §8 |
+> | the send transaction | **`core/outreach/sendStep.ts`** (CAN-SPAM-gated, re-runs `assertNotSuppressed` in-tx, auto-appends footer, sends via `EmailSenderPort`, advances `outreach_log`, audits) | `packages/core/src/outreach/` | REUSE — §2, §4, §7 |
+> | enrollment create | **`core/outreach/enrollContact.ts`** (revealed-only + `assertNotSuppressed` in-tx + idempotent + `enroll` audit) | `core/outreach/` | REUSE — §6 |
+> | bounce handling | **`core/outreach/handleBounce.ts`** (marks `bounced`, inserts workspace `suppression_list` row, ADR-0013 credit-back) | `core/outreach/` | REUSE — §5 |
+> | suppression gate (D4) | **`suppression_list`** + **`compliance/assertNotSuppressed.ts`** | `billing.ts` / `core/compliance/` | REUSE — §5, §7 |
+> | consent (D9) | **`consent_records`** | `compliance.ts` | REUSE — §5 |
+> | idempotency (D5) | **`idempotency_keys`** (`UNIQUE(tenant_id,key)`) | `billing.ts` | REUSE — §3, §4, §7 |
+> | engagement timeline | **`activities`** (`email_sent`\|`email_opened`\|`email_clicked`\|`email_replied`) + the new **`email_event`** raw store | `activity.ts` (+ new) | REUSE + NEW — §3, §5 |
+>
+> The tick worker **extends** `apps/workers/src/queues/outreach.ts` (`processOutreach` → `sendStep`); it is
+> not a fresh worker file. **This is milestone M12 (extend M9), not a greenfield build** (`14 §5`). The
+> scale design of the scheduler, the throttle, and the partitioned `email_event` store is owned by `15`
+> (Part A); this doc cross-refs it at §7. **`outreach_steps.channel` already supports `email`\|`linkedin`**
+> — a multi-channel seam (`15 §B.1`); this engine is described to **widen** off that enum, never hard-gated
+> to email-only.
+>
+> Cites the **Shared Vocabulary**, the **Locked Decisions (D1–D11)**, the **Phase Map (P0–P6)** and the
 > **Canonical Entities** fixed in `00-overview.md` — verbatim, not re-litigated. This doc owns the
 > **sequence engine**: how a multi-touch cadence is modelled, ticked, branched, scheduled, auto-paused, and
 > enrolled into without overwhelming a mailbox. It is the customer-facing automation layer; the entities it
-> describes (`email_sequence`, `email_sequence_step`, `email_enrollment`) are **owned by `09-data-model.md`**
-> and this doc proposes their behaviour, not their final DDL. Sibling docs it leans on:
+> describes (`outreach_sequences`, `outreach_steps`, `outreach_log`) are **owned by `09-data-model.md`** and
+> reconciled to the real schema in `14 §2`; this doc proposes their behaviour, not their final DDL. Sibling
+> docs it leans on:
 > `02-sending-infrastructure.md` (per-mailbox limits, throttle, warmup), `04-status-event-tracking.md` (the
 > reply / bounce / OOO events auto-pause consumes), `06-compliance.md` (unsubscribe honoured mid-sequence,
 > D9), `08-reporting-analytics.md` (sequence metrics), `10-web-surface.md` (the Sequences tab),
@@ -26,19 +54,23 @@ repeatable series of touchpoints" built from **steps** (the touch), **timing** (
 Apollo, Reply.io and Lemlist use the identical step/delay/channel decomposition under the name *sequence*
 ([Apollo — Sequences Overview](https://knowledge.apollo.io/hc/en-us/articles/4409237165837-Sequences-Overview)).
 
-TruePoint adopts this model with three canonical entities (owned by `09`, RLS-FORCED, `tenant_id` always,
-`workspace_id` workspace-scoped, `owner_user_id` user-owned per D8):
+TruePoint adopts this model on the **three already-shipped M9 tables** (owned by `09`, reconciled in
+`14 §2`; RLS-FORCED, `tenant_id` always, `workspace_id` workspace-scoped; D8 owner-vs-workspace visibility
+is the app filter on top, §8):
 
-| Entity | Role | Key columns (proposed; `09` finalizes) |
+| Entity (real table) | Role | Real + proposed columns (`09` finalizes any additive ones) |
 |---|---|---|
-| `email_sequence` | The template/definition: name, status (`draft`/`active`/`archived`), default send-window + timezone policy, per-mailbox throttle hints. | `tenant_id`, `workspace_id`, `owner_user_id`, `name`, `status`, `send_window`, `timezone_mode`, `daily_cap`, `created_at`, `deleted_at` |
-| `email_sequence_step` | One ordered touch in the sequence: type, the `email_template` it renders, delay-from-previous, branch rules, A/B variants. | `sequence_id`, `step_order`, `step_type`, `template_id` (FK `email_template`), `delay_*`, `branch_*`, `variant_group` |
-| `email_enrollment` | One prospect's run **through** a sequence: current step, state, next-tick-at, the mailbox it sends from. | `tenant_id`, `workspace_id`, `owner_user_id`, `sequence_id`, `contact_id`, `mailbox_integration_id`, `current_step_order`, `state`, `next_action_at`, `paused_reason`, `enrolled_at`, `finished_at` |
+| **`outreach_sequences`** (was `email_sequence`) | The cadence definition: name, status (`active`/`paused`/`archived`), the CAN-SPAM `from_address` + `physical_address` the send tx enforces; **proposed additive**: default send-window + timezone policy, per-mailbox throttle hints. | (real) `id`, `tenant_id`, `workspace_id`, `name`, `status`, `from_address`, `physical_address`, `created_by_user_id`, `created_at`, `updated_at`, `UNIQUE(workspace_id,name)`; (proposed) `send_window`, `timezone_mode`, `daily_cap` |
+| **`outreach_steps`** (was `email_sequence_step`) | One ordered touch: **`channel`** (already `email`\|`linkedin` — the multi-channel seam, `15 §B.1`), the subject/body it renders (today inline; a versioned `email_template` slots in per `01`), delay-from-previous; **proposed additive**: branch rule, A/B variant group. | (real) `id`, `tenant_id`, `workspace_id`, `sequence_id`, `step_order`, `channel`, `delay_hours`, `subject`, `body`, `created_at`, `UNIQUE(sequence_id,step_order)`; (proposed) `step_type`, `branch_*`, `variant_group` |
+| **`outreach_log`** (was `email_enrollment`) | One prospect's run **through** a sequence: status, current step, last event; **`UNIQUE(sequence_id,contact_id)` is the enrollment idempotency** (the same constraint `enrollContact.ts` is idempotent against). **Proposed additive**: the mailbox it sends from, the parked next-tick instant, pause reason. | (real) `id`, `tenant_id`, `workspace_id`, `sequence_id`, `contact_id`, `status`, `current_step`, `last_event_at`, `created_at`, `UNIQUE(sequence_id,contact_id)`; (proposed) `mailbox_integration_id`, `next_action_at`, `paused_reason`, `finished_at` |
 
-A **send** produced by a step is still an `email_send` row (the same idempotent, suppression-gated, tracked
-send `02`/`04` define) — the sequence engine does **not** invent a second send path. It composes the existing
-one. This matters for D4 (suppression gate fires on *every* send), D5 (every send idempotent), and D10 (the
-send still fans out through the `email_send` queue).
+A **send** produced by a step goes through **`core/outreach/sendStep.ts`** — the one shipped send
+transaction (the same idempotent, CAN-SPAM-gated, suppression-gated, tracked send `02`/`04`/`14 §1.2`
+define). The sequence engine does **not** invent a second send path; it composes the existing one. This
+matters for D4 (suppression gate fires on *every* send via in-tx `assertNotSuppressed`), D5 (every send
+idempotent against `idempotency_keys`), and D10 (the send still fans out through the `email_send` queue).
+**D11 forbids a parallel send/enroll path** precisely so the fail-closed D4 gate and the D5 constraint
+cover every send (`14 §6`).
 
 ---
 
@@ -64,24 +96,33 @@ send still fans out through the `email_send` queue).
 
 ### 2.2 Recommended for TruePoint
 
-Model a sequence as an **ordered list of `email_sequence_step` rows** (`step_order` ascending). Each step
-carries a `step_type` and a **delay from the previous step**, expressed as `delay_days` + optional
-`delay_hours` for same-day/multi-touch; `delay_days = 0` is the "due immediately after previous" multi-touch
-case. The **step-type table** (the contract for what an engine tick does at each step):
+Model a sequence as an **ordered list of `outreach_steps` rows** (`step_order` ascending). The shipped step
+already carries **`channel`** (`email`\|`linkedin`) and **`delay_hours`**; `09` adds an additive `step_type`
+to distinguish auto-send from task steps, and the engine reads `channel` to **route** a due step to the
+channel-appropriate handler (`15 §B.1`) rather than hard-coding email. A `delay_hours = 0` step is the
+"due immediately after previous" multi-touch case. The **step-type table** (the contract for what an engine
+tick does at each step):
 
-| `step_type` | What the engine does on tick | Produces | Notes |
+| `step_type` (additive on `outreach_steps`) | What the engine does on tick | Produces | Notes |
 |---|---|---|---|
-| `email_auto` | Renders the step's `email_template` for the contact's mailbox, runs the **D4 suppression gate**, then enqueues an idempotent `email_send` (D5) via the `email_send` queue (D10). | `email_send` row | The only step type that sends automatically. Subject to send-window, timezone, daily-cap, jitter (§4). |
+| `email_auto` (`channel='email'`) | Renders the step's subject/body (the inline fields today; a versioned `email_template` per `01`) for the contact's mailbox, then hands off to **`core/outreach/sendStep.ts`** — which re-runs the **D4 `assertNotSuppressed` gate in-tx**, auto-appends the CAN-SPAM footer, and sends via `EmailSenderPort` — enqueued idempotently (D5, `idempotency_keys`) onto the `email_send` queue (D10). | an `outreach_log` advance + a tracked send | The only step type that sends automatically. Subject to send-window, timezone, daily-cap, jitter (§4). |
 | `email_manual` | Drafts the email and creates a **task** for `owner_user_id` to review + send (the "personalize" touch). No auto-send. | task | Engine waits on task completion before advancing. |
 | `call_task` | Creates a manual **call task** for the owner; engine pauses the enrollment's auto-advance until the task is marked done/skipped. | task | TruePoint dialer integration is out-of-scope here; this is a to-do. |
 | `linkedin_task` | Creates a manual **LinkedIn task** (connect / message). | task | Manual; no LinkedIn automation (compliance + ToS). |
 | `wait` | Pure delay node — no touch. Used to widen the gap between touches without a separate action. | — | Lets the timing-shape (front-load then widen) be modelled explicitly. |
 
-**Channel scope at launch.** Phase 4 ships the engine with **email steps fully automated** (`email_auto`,
-`email_manual`) and **non-email steps as tasks** (`call_task`, `linkedin_task`, `wait`). This matches the
-"email scales, phone/LinkedIn are human moments" reality and keeps the automated blast radius to the one
-channel TruePoint owns end-to-end (the mailbox). It also means non-email steps never touch the send path,
-the suppression gate, or deliverability — they are pure task rows.
+**Channel scope at launch — and the seam to widen.** `outreach_steps.channel` is **already** an enum with
+`email`\|`linkedin` (`14 §1.1`, `14 §6`, `15 §B.1`): the cadence model is **channel-aware today**; the M9
+engine simply only *handles* `email` so far. Phase 4 ships the engine with **email steps fully automated**
+(`email_auto`, `email_manual`) routed to `sendStep`/`EmailSenderPort`, and **non-email steps as tasks**
+(`call_task`, `linkedin_task`, `wait`). This matches the "email scales, phone/LinkedIn are human moments"
+reality and keeps the **automated** blast radius to the one channel TruePoint owns end-to-end (the mailbox).
+But this is a **routing decision, not a schema gate**: because the engine dispatches by `outreach_steps.channel`,
+adding a `linkedin` (later `sms`/`call`) **send** handler is enum-already-present + one handler in the
+routing layer (`15 §B.1`) — **not** a new sequence/step/enrollment model. Each new channel inherits the D4
+suppression gate (`suppression_list.match_type` already includes `phone`), D5 idempotency, and D8 ownership
+unchanged. The plan must **widen** off `channel`; it must never hard-code an email-only path that would have
+to be unforked later.
 
 ### 2.3 Tradeoffs
 
@@ -89,7 +130,7 @@ the suppression gate, or deliverability — they are pure task rows.
 |---|---|---|
 | Day-delay between steps (not absolute dates) | Sequence definition is reusable across enrollments enrolled on different days. | "Send on March 3" campaigns need a `wait` + send-window; acceptable, those are rare in outbound. |
 | Non-email steps as manual tasks | No ToS/automation risk on LinkedIn; reps keep human judgement on calls. | Sequence can stall on an un-actioned task — surface overdue tasks in `10`; allow auto-skip-after-N-days as a per-step option. |
-| One `email_send` path reused | D4/D5/D10 guarantees inherited for free; one place to audit. | Engine must compose, not bypass, the send queue — slightly more orchestration (§7). |
+| One send path reused (`core/outreach/sendStep.ts`, D11) | D4/D5/D10 guarantees inherited for free; one place to audit; no second, weaker path the gate doesn't cover (`14 §6`). | Engine must compose, not bypass, the send tx + `email_send` queue — slightly more orchestration (§7). |
 
 ---
 
@@ -112,20 +153,23 @@ the suppression gate, or deliverability — they are pure task rows.
 (stop or change touch on reply/bounce) which §5 already covers via auto-pause, not from elaborate positive
 trees. So Phase 4 ships **linear sequences with auto-terminal events** (reply/bounce/unsub end the run) plus
 a **single optional condition per step**: "if `opened`/`clicked` since the previous step → use variant B (or
-skip to step N); else continue." Branch facts come **only** from `email_tracking_event` rows already ingested
-by `04`. The engine never trusts a client-asserted "opened" — it re-reads the event store at tick time.
+skip to step N); else continue." Branch facts come **only** from the **`activities`** engagement timeline
+(`email_opened`/`email_clicked`/`email_replied`, fed by the raw `email_event` store, `04`/`14 §2`) — never a
+client-asserted "opened". The engine re-reads `activities` at tick time.
 
 > **D6 guardrail.** Opens are **informational, not a KPI** (D6). A branch *may* read `opened` to pick a
 > warmer follow-up, but the engine must **not** make `opened` a *gating* signal for whether to send at all
 > (a missed open-pixel must never silently halt a real follow-up). `clicked` and `replied` are reliable;
 > `opened` is best-effort. Document this on each branch in the builder (`10`).
 
-**A/B variants.** Model variants as multiple `email_sequence_step` rows sharing a `variant_group` id with a
-split weight, or a `variants[]` array on one step (`09` picks the shape). At enrollment-creation the engine
-**deterministically assigns** a variant from the enrollment id (stable hash → no flip-flop on retry, D5-safe)
-and records the chosen `template_version_id` on the resulting `email_send` so `08` can attribute
-sends/clicks/replies per variant. Splits default 50/50; a tenant may promote a winner (point both weights at
-the winning variant) without restructuring the sequence.
+**A/B variants.** Model variants as multiple `outreach_steps` rows sharing a `variant_group` id with a split
+**`weight`** (the additive A/B primitive `15 §B.4` names), or a `variants[]` array on one step (`09` picks the
+shape). At enrollment-creation the engine **deterministically assigns** a variant from the `outreach_log`
+enrollment id (stable hash → no flip-flop on retry, D5-safe) and records the chosen variant/`template_version_id`
+on the resulting send (the `activities` row + audit) so `08` can attribute sends/clicks/replies per variant.
+Splits default 50/50; a tenant may promote a winner (point both weights at the winning variant) without
+restructuring the sequence. MVT/bandit allocation is a later extension **on top of** the same `weight` field
+(`15 §B.4`), not a new model.
 
 ### 3.3 Tradeoffs
 
@@ -157,7 +201,8 @@ the winning variant) without restructuring the sequence.
 ### 4.2 Recommended for TruePoint
 
 A `email_auto` step does **not** send the instant its delay elapses. When its delay elapses the engine
-computes the **earliest valid send instant** and parks `email_enrollment.next_action_at` there:
+computes the **earliest valid send instant** and parks the `outreach_log` row's `next_action_at` (additive)
+there:
 
 1. **Send-window + timezone.** Resolve the recipient's timezone (from the contact's data; fall back to a
    tenant default, then mailbox default). Snap `next_action_at` into the sequence's configured `send_window`
@@ -204,17 +249,20 @@ Bounce-spike thresholds: pause a *sender's* cadences when bounce rate exceeds ~3
 
 ### 5.2 Recommended for TruePoint
 
-Auto-pause is **event-driven**, not polled. The `email_tracking` ingestion (`04`, D10) already classifies and
-records `email_tracking_event` rows for reply, bounce (hard/soft), unsubscribe, and OOO. When `04` ingests one
-of these for a contact that has a **live `email_enrollment`**, it transitions the enrollment (this is the one
-place the engine reacts to inbound, not the tick):
+Auto-pause is **event-driven**, not polled. The tracking ingestion (`04`, D10) already classifies inbound
+into the **`activities`** timeline (`email_replied`, bounce, unsubscribe, OOO — fed by the raw `email_event`
+store, `14 §2`). The hard-bounce → suppression → credit-back loop is **already shipped** in
+**`core/outreach/handleBounce.ts`** (marks the `outreach_log` row `bounced`, inserts a workspace
+`suppression_list` row, runs the ADR-0013 credit-back, `14 §1.2`). When `04` ingests one of these for a
+contact that has a **live `outreach_log` enrollment**, it transitions that enrollment (this is the one place
+the engine reacts to inbound, not the tick):
 
-| Inbound event (from `04`) | Enrollment transition | Resume behaviour |
+| Inbound event (from `04`/`activities`) | `outreach_log` transition | Resume behaviour |
 |---|---|---|
-| `replied` (genuine reply) | `active → replied` (terminal) | None — a human takes over. |
-| `bounced` (hard) | `active → bounced` (terminal) | None; contact also gets an `email_suppression` row (D4/`06`) so it can't be re-sent. |
+| `replied` (genuine reply, `email_replied` activity) | `active → replied` (terminal) | None — a human takes over. |
+| `bounced` (hard) | `active → bounced` (terminal) via **`handleBounce.ts`** | None; the same tx inserts a workspace `suppression_list` row (D4/`06`) + ADR-0013 credit-back so it can't be re-sent. |
 | `bounced` (soft) | stay `active`, increment a soft-bounce counter | After N soft bounces or a sender-level spike threshold, escalate to `paused` (reason `soft_bounce_spike`). |
-| `unsubscribed` (or List-Unsubscribe / opt-out) | `active → unsubscribed` (terminal) | None — **D9: unsubscribe is honoured mid-sequence**; an `email_suppression` + `email_consent` revocation is written so no future step or sequence can send. |
+| `unsubscribed` (or List-Unsubscribe / opt-out) | `active → unsubscribed` (terminal) | None — **D9: unsubscribe is honoured mid-sequence**; a `suppression_list` row + a `consent_records` withdrawal (`withdrawn_at`) is written so no future step or sequence can send. |
 | `out_of_office` (OOO auto-reply) | `active → paused` (reason `ooo`), set `resume_at` if a return date is parsed | Auto-resume at `resume_at` if parsed; else stay paused for a default 7–14 day window and re-verify before resuming (per Apollo/ConnectSafely norms). |
 
 Because every step send re-runs the **D4 suppression gate (fail-closed, re-checked before each step)**, even
@@ -255,8 +303,10 @@ each inbox stays safe) ([Smartlead — Email Sending Frequency](https://www.smar
 
 Enrollment is **not** "create N enrollments, send N emails now". Two independent throttles compose:
 
-1. **Enrollment admission (ramp).** Adding contacts creates `email_enrollment` rows in state `active` with
-   their first `next_action_at` **staggered** — not all set to "now". A per-sequence **daily admission cap**
+1. **Enrollment admission (ramp).** Adding contacts goes through **`core/outreach/enrollContact.ts`**
+   (revealed-only, `assertNotSuppressed` in-tx, idempotent against `UNIQUE(sequence_id,contact_id)`, `enroll`
+   audit) — creating `outreach_log` rows in state `active` with their first `next_action_at` **staggered** —
+   not all set to "now". A per-sequence **daily admission cap**
    (default modest, e.g. start 20–50/day per mailbox, tenant-tunable) means a 5,000-contact enrollment drips
    in over many days rather than firing day one. New mailboxes ramp slower (this is the warmup ramp `02`
    owns — accounts <6 months old add ~1/day, older ones ~2/day per the sources). The engine reads the ramp
@@ -286,97 +336,127 @@ throughput scales with mailbox count while each mailbox stays under its `02`-own
 ### 7.1 How enrollments advance
 
 A scheduled/repeatable worker — the **`email_sequence_tick` queue** (the fourth D10 queue, alongside
-`email_send`, `email_tracking`, `email_warmup`) — wakes on an interval, and within a per-tenant job (workers
-set `app.current_tenant_id`/`app.current_workspace_id` GUCs per job, per the tenancy contract) selects
-`email_enrollment` rows where `state='active' AND next_action_at <= now()`, and for each:
+`email_send`, the tracking-ingestion queue, and `email_warmup`) — **extends the shipped
+`apps/workers/src/queues/outreach.ts`** (`processOutreach` → `sendStep`, `14 §1.3`); it is **not** a fresh
+worker. It wakes on a fixed cadence, and within a per-tenant job (workers set
+`app.current_tenant_id`/`app.current_workspace_id` GUCs per job, per the tenancy contract) selects due
+**`outreach_log`** rows where `status='active' AND next_action_at <= now()`, and for each:
 
-1. Loads the current `email_sequence_step`; if a branch condition is set, re-reads `04` events at tick time
-   (§3).
-2. Dispatches by `step_type` (§2.2 table) — `email_auto` computes the send-window/jitter target (§4),
-   re-checks the **D4 suppression gate**, and enqueues an **idempotent (D5)** `email_send`; task types create
-   a task and wait.
-3. Advances `current_step_order` and sets the next `next_action_at` from the next step's delay; if no next
-   step, transitions `active → finished`.
+1. Loads the current **`outreach_steps`** row; if a branch condition is set, re-reads the **`activities`**
+   timeline at tick time (§3).
+2. Dispatches **by `outreach_steps.channel` + `step_type`** (§2.2 table) — `email_auto` computes the
+   send-window/jitter target (§4) and hands off to **`core/outreach/sendStep.ts`**, which re-runs the **D4
+   `assertNotSuppressed` gate in-tx**, appends the CAN-SPAM footer, and sends via `EmailSenderPort`, enqueued
+   **idempotently (D5)** onto the `email_send` queue; task types create a task and wait. (Routing by `channel`
+   is the multi-channel seam — `15 §B.1`.)
+3. Advances `outreach_log.current_step` + `last_event_at` and sets the next `next_action_at` from the next
+   step's `delay_hours`; if no next step, transitions `active → completed`.
 
-The tick worker **never sends directly** — it only enqueues onto the bounded `email_send` queue (D10
-backpressure, §6). Idempotency keys (`email_idempotency_key`, D5) are derived from
-`(enrollment_id, step_order)` so a redelivered tick or a double-selected row cannot double-send the same step.
+The tick worker **never sends directly** — it only claims rows and enqueues onto the bounded `email_send`
+queue (D10 backpressure, §6); the send tx is the single shipped `sendStep`. Idempotency keys
+(**`idempotency_keys`**, D5) are derived from `(sequence_id, contact_id, step_order)` — i.e. the
+`outreach_log` enrollment + step — so a redelivered tick or a double-claimed row cannot double-send the same
+step.
 
-### 7.2 The known gap — CONFIRM LEADER-LOCKED SCHEDULER (directly relevant here)
+### 7.2 The leader-locked scheduler — fully specified (resolves known-gap #5)
 
-The TruePoint constraints digest names an **open gap**: *"CONFIRM LEADER-LOCKED SCHEDULER for sequences"* — a
-scheduled/repeatable job that ticks enrollments **must not double-fire across worker instances**. This is the
-single most important correctness risk in this doc and it is called out per the self-check.
+The TruePoint constraints digest named an **open gap**: *"CONFIRM LEADER-LOCKED SCHEDULER for sequences"* —
+the scheduled job that ticks `outreach_log` enrollments **must not double-fire across worker instances**, or
+a double-fire is a **duplicate email to a real recipient** (`13 §6` known-gap #5, `15 §A.4`). This is the
+single most dangerous worker in the subsystem; the design is **specified here in full**, and the scale-side
+detail is owned by **`15 §A.4`** (which this section mirrors, not re-litigates).
 
-The contract (from the digest's Queues rules): **SCHEDULED/REPEATABLE jobs need a leader lock so a tick
-doesn't double-fire.** Concretely, for `email_sequence_tick`:
+**(1) Single-fire via a leader lock.** Exactly **one** tick instance does the due-scan per cadence. Either
+mechanism is acceptable; the *contract* is single-fire, not the mechanism:
 
-- The repeatable *scheduler* (the thing that enqueues the periodic tick) must run as a **single leader** —
-  BullMQ repeatable/cron jobs already de-duplicate the scheduling, but a multi-instance worker fleet must not
-  each *also* schedule it. Use a leader election (e.g. a Redis lock / BullMQ's built-in repeatable-job
-  dedupe by `jobId`) so exactly one instance owns the schedule.
-- The *processing* of each enrollment must be **idempotent and row-locked**: select eligible enrollments with
-  `FOR UPDATE SKIP LOCKED` (or claim via a status flip in-tx) so two workers processing the same batch can
-  never both advance the same enrollment. Combined with the `(enrollment_id, step_order)` idempotency key
-  (D5), a double-processed row at worst no-ops the send.
-- **Defence in depth:** even if the scheduler *did* double-fire, the per-step idempotency key + the
-  `FOR UPDATE SKIP LOCKED` claim mean the **send** cannot duplicate. The leader lock prevents wasted ticks and
-  thundering-herd; idempotency prevents the user-visible harm.
+- **Redis leader election** — a short-TTL Redis lock the active instance acquires and **renews** on each
+  tick; on its failure another instance takes the lock after TTL expiry, so the fleet always has exactly one
+  active scheduler. Or
+- **BullMQ repeatable job with a stable `jobId`** — the queue itself de-duplicates the schedule by `jobId`,
+  so a multi-instance fleet that all register the repeatable job still yields **one** scheduled instance.
 
-> **Action for `09`/`13`/platform:** before Phase 4 ships, **confirm and document** the leader-lock mechanism
-> (Redis-based election vs. BullMQ repeatable-job `jobId` dedupe) and add an integration test that runs the
-> tick under two simulated workers and asserts no enrollment advances twice and no step double-sends. This is
-> the resolution of the named gap; it is **not** optional polish.
+**(2) Tick frequency.** A bounded cadence — **once per minute** is the baseline: frequent enough that a step
+due "now" fires within the product's promised resolution, infrequent enough that the due-scan stays cheap.
+Tick frequency is a **config, not code** (`15 §A.4`, `§B.2` posture), so it can be tuned per environment.
 
-### 7.3 File map
+**(3) `FOR UPDATE SKIP LOCKED` batch cap.** The due-scan claims a **bounded batch** of due `outreach_log`
+rows with `SELECT … FOR UPDATE SKIP LOCKED LIMIT {cap}` inside the per-tenant GUC context. This does two
+things at once: (a) even if — against the leader lock — two scanners run, they claim **disjoint** rows and
+can **never advance the same enrollment twice**; and (b) a single tick can **never** enqueue an unbounded
+fan-out that starves the `email_send` queue (`15 §A.8` queue isolation). The claimed rows advance
+`current_step` / `last_event_at` on `outreach_log` **in the same transaction** as the claim.
 
-| Concern | Path |
+**(4) Idempotency backstop (defence in depth).** Every enqueued step still carries the
+`(sequence_id, contact_id, step_order)` Idempotency-Key into the send path (D5, `idempotency_keys`), so even
+a pathological double-claim cannot produce a second send. The leader lock prevents wasted ticks and a
+thundering herd; the `FOR UPDATE SKIP LOCKED` claim prevents a double-advance; the idempotency key prevents
+the user-visible duplicate send. **Three independent guards** stand between a fleet race and a duplicate
+email.
+
+**(5) The mandatory two-worker no-double-advance itest (P4 "Done when").** Run **two `email_sequence_tick`
+instances** against the same seeded `outreach_log` enrollments and assert **each due step advances exactly
+once and produces exactly one send**. This is the structural proof behind known-gap #5; it extends the
+cross-tenant isolation itest family (`13 §7`, `15 §A.4`) and runs in CI (Docker / Postgres / Redis). It is a
+**hard gate**: the leader-lock + batch-claim must pass it **before `email.sequences` is enabled for any
+tenant** (`13 §3`).
+
+> **Action for `09`/`13`/`15`/platform:** **confirm and document** the chosen mechanism (Redis election vs.
+> BullMQ `jobId` dedupe), the **once-per-minute** tick config, and the `FOR UPDATE SKIP LOCKED` batch cap on
+> the **`outreach.ts`** worker; land the **two-worker itest** above. This is the resolution of known-gap #5
+> — **not** optional polish, and **blocking for P4** (§10).
+
+### 7.3 File map (real paths — `14 §1`)
+
+| Concern | Path (shipped / extend) |
 |---|---|
-| Sequence engine (tick logic, branch eval, scheduling) | `packages/core/src/email/` (sequence engine) |
-| The tick queue + worker | `apps/workers/src/queues/email*.ts` (the `email_sequence_tick` queue) |
-| Entities + RLS | `packages/db/src/schema/email.ts` + `rls/email.sql` + `repositories/emailRepository.ts` (owned by `09`) |
-| API (`/api/v1` sequence CRUD, enroll, pause/resume) | `apps/api/src/features/email/{routes.ts,index.ts}` |
-| Sequences tab | `apps/web/src/features/email/` (Sequences tab) |
+| Sequence/enroll/send/bounce logic (create, enroll, tick dispatch, branch eval, scheduling) | **`packages/core/src/outreach/`** — `createSequence.ts`, `enrollContact.ts`, **`sendStep.ts`** (the send tx), `handleBounce.ts`, `senderPort.ts` (the `EmailSenderPort` seam) — **extend, don't replace** |
+| The tick queue + worker | **`apps/workers/src/queues/outreach.ts`** (`processOutreach` → `sendStep`; the `email_sequence_tick` repeatable job + `FOR UPDATE SKIP LOCKED` claim extend this file) |
+| Entities + RLS | **`packages/db/src/schema/outreach.ts`** (`outreach_sequences`/`outreach_steps`/`outreach_log`) + `repositories/{outreachLogRepository,suppressionRepository,creditRepository}.ts` (owned by `09`, RLS posture `14 §5`) |
+| API (`/api/v1/outreach` sequence CRUD, enroll, pause/resume) | **`apps/api/src/features/outreach/routes.ts`** (`GET/POST /sequences`, `POST /sequences/:id/steps`, `POST /sequences/:id/enroll` [201/200], `/enroll-bulk`, `GET /sequences/:id/log`, `POST /log/:id/send`, `POST /log/:id/bounce`) |
+| Sequences tab | **`apps/web/src/features/sequences/`** — `SequenceList`, `SequenceBuilder`, `EnrollmentPanel`, `EnrollmentLogTable`, `SendStatusDashboard` (fully built, `14 §1.4`); vanilla React + `fetchWithAuth` + `MaybeList` + `StateSwitch` (`14 §3`), **not** TanStack Query |
 
 ---
 
 ## 8. Enrollment lifecycle — the state machine (D8 owner-scoped)
 
-An `email_enrollment` is a small state machine. States and transitions (prose; `09` mints the enum).
-Best-in-class analogue: Outreach's sequence states are `active`, `paused` (incl. `paused (OOO)`), and the
-terminal `finished`, `bounced`, `opted_out`, `failed`, `disabled`
+An **`outreach_log`** row is a small state machine on its `status` column. The **shipped** enum is
+`enrolled` \| `active` \| `replied` \| `completed` \| `unsubscribed` \| `bounced` (`14 §1.1`); the
+`paused`/`failed` states below are **additive** (`09` extends the enum). Best-in-class analogue: Outreach's
+sequence states are `active`, `paused` (incl. `paused (OOO)`), and the terminal `finished`, `bounced`,
+`opted_out`, `failed`, `disabled`
 ([Outreach — Sequence States Overview](https://support.outreach.io/hc/en-us/articles/211861917-Outreach-Sequence-States-Overview)).
-TruePoint mirrors this:
+TruePoint mirrors this on the real `outreach_log.status` enum (`finished` ≙ the shipped `completed`):
 
-| State | Meaning | Entered from | Exits to |
-|---|---|---|---|
-| `active` | Running; the tick engine advances it. | (admission) | `paused`, `finished`, `replied`, `bounced`, `unsubscribed`, `failed` |
-| `paused` | Temporarily halted — by OOO (`resume_at`), soft-bounce spike, manual pause by owner, or a mailbox circuit breaker. | `active` | `active` (resume / `resume_at`), or terminal if owner ends it |
-| `finished` | All steps completed, no terminal event fired (the "no reply" finish). | `active` | terminal |
-| `replied` | Genuine reply detected (`04`). | `active` | terminal |
-| `bounced` | Hard bounce (`04`); suppression written. | `active` | terminal |
-| `unsubscribed` | Opt-out / List-Unsubscribe (`04`); **D9 — honoured mid-sequence**, suppression + consent revocation written. | `active` | terminal |
-| `failed` | Unrecoverable send error after backoff/DLQ (D10), or a step misconfiguration (e.g. missing template). | `active` | terminal (owner may retry → `active`) |
+| `outreach_log.status` | Shipped? | Meaning | Entered from | Exits to |
+|---|---|---|---|---|
+| `enrolled` | shipped | Admitted by `enrollContact.ts`, not yet ticked. | (admission) | `active` |
+| `active` | shipped | Running; the tick engine advances it. | `enrolled`, `paused` | `paused`, `completed`, `replied`, `bounced`, `unsubscribed`, `failed` |
+| `paused` | **additive** | Temporarily halted — by OOO (`resume_at`), soft-bounce spike, manual pause by owner, or a mailbox circuit breaker. | `active` | `active` (resume / `resume_at`), or terminal if owner ends it |
+| `completed` | shipped | All steps completed, no terminal event fired (the "no reply" finish). | `active` | terminal |
+| `replied` | shipped | Genuine reply detected (`04`/`activities` `email_replied`). | `active` | terminal |
+| `bounced` | shipped | Hard bounce via `handleBounce.ts`; `suppression_list` row written + ADR-0013 credit-back. | `active` | terminal |
+| `unsubscribed` | shipped | Opt-out / List-Unsubscribe (`04`); **D9 — honoured mid-sequence**, `suppression_list` + `consent_records` withdrawal written. | `active` | terminal |
+| `failed` | **additive** | Unrecoverable send error after backoff/DLQ (D10), or a step misconfiguration (e.g. missing template). | `active` | terminal (owner may retry → `active`) |
 
 ```
-                  admission (drip, §6)
+                  admission (enrollContact.ts, drip §6) → enrolled → active
                           │
                           ▼
-   (resume / resume_at)  ┌──────────┐  reply ───────────────► replied  (terminal)
-        ┌───────────────►│  active  │  hard bounce ─────────► bounced  (terminal, + suppression)
+   (resume / resume_at)  ┌──────────┐  reply ───────────────► replied   (terminal)
+        ┌───────────────►│  active  │  hard bounce ─────────► bounced   (terminal, handleBounce + suppression)
         │                └────┬─────┘  unsubscribe (D9) ────► unsubscribed (terminal, + suppression/consent)
-        │   OOO / soft-spike /     │   all steps done ──────► finished (terminal)
-        │   manual / breaker       │   send error (DLQ) ────► failed   (terminal; owner may retry)
+        │   OOO / soft-spike /     │   all steps done ──────► completed (terminal)
+        │   manual / breaker       │   send error (DLQ) ────► failed    (terminal; owner may retry)
         │                          ▼
         └──────────────────────  paused ──── owner ends ───► (terminal)
 ```
 
-**Visibility (D8).** Enrollments are **owner-scoped**: by default an owner sees their own enrollments; the
-list/sequence may be workspace-shared per the sharing model, but enrollment *contents* follow D8 owner-scope.
-RLS keys on `workspace_id` (ENABLE+FORCE, fail-closed `NULLIF`); owner-vs-workspace visibility is the app
-filter on top (the same posture lists use). A foreign or non-owned enrollment id resolves to **404, never a
-leak** (IDOR→404, security rules). The tick worker runs each batch inside the tenant/workspace GUC context so
-RLS scopes its selects too.
+**Visibility (D8).** `outreach_log` enrollments are **owner-scoped**: by default an owner sees their own
+enrollments; the list/sequence may be workspace-shared per the sharing model, but enrollment *contents*
+follow D8 owner-scope. RLS keys on `workspace_id` (ENABLE+FORCE, fail-closed `NULLIF`); owner-vs-workspace
+visibility is the app filter on top (the same posture lists use). A foreign or non-owned `outreach_log` id
+resolves to **404, never a leak** (IDOR→404, security rules). The tick worker runs each batch inside the
+tenant/workspace GUC context so RLS scopes its selects too.
 
 ---
 
@@ -385,41 +465,54 @@ RLS scopes its selects too.
 | Decision | How this doc honours it |
 |---|---|
 | **D4** — suppression gate every send, fail-closed, **re-checked before each step** | §5.2 + §7.1: every `email_auto` step re-runs the suppression gate at send time; an event-driven auto-pause is the fast path, the per-step gate is the guarantee. |
-| **D5** — sends idempotent | §3.2 / §4.2 / §7.1: per-step idempotency key from `(enrollment_id, step_order)`; persisted jitter + deterministic variant assignment so retries don't double-send or flip. |
+| **D5** — sends idempotent | §3.2 / §4.2 / §7.1: per-step idempotency key from `(sequence_id, contact_id, step_order)` against `idempotency_keys`; persisted jitter + deterministic variant assignment so retries don't double-send or flip. |
 | **D6** — opens informational, not a KPI | §3.2: a branch may *read* `opened` for a warmer follow-up but must not *gate* sending on it; `clicked`/`replied` are the reliable signals. |
-| **D8** — owner-scoped visibility | §8: enrollments owner-scoped; IDOR→404; workers tenant-scoped per job. |
-| **D9** — compliance, unsubscribe honoured mid-sequence | §5.2: `unsubscribed` is terminal *and* writes suppression+consent revocation; the per-step D4 gate enforces it even mid-flight. |
-| **D10** — fan-out + ingestion queue-backed; per-tenant + per-mailbox throttling | §6/§7: tick enqueues onto the bounded `email_send` queue; `email_sequence_tick` is the scheduled queue; backpressure + per-mailbox throttle meter the drip. |
-| Tenancy (RLS ENABLE+FORCE, GUCs, `tenant_id`-leading indexes) | §8: all three entities RLS-FORCED, workers set GUCs per job, `tenant_id`-leading indexes (`09`). |
-| Queues (idempotent at-least-once, backoff+DLQ, **leader-locked scheduled jobs**) | §7.2: the named **leader-lock gap** is the must-resolve item; `failed` state captures DLQ exhaustion. |
+| **D8** — owner-scoped visibility | §8: `outreach_log` enrollments owner-scoped; IDOR→404; workers tenant-scoped per job. |
+| **D9** — compliance, unsubscribe honoured mid-sequence | §5.2: `unsubscribed` is terminal *and* writes a `suppression_list` row + `consent_records` withdrawal; the per-step D4 `assertNotSuppressed` gate enforces it even mid-flight. |
+| **D10** — fan-out + ingestion queue-backed; per-tenant + per-mailbox throttling | §6/§7: tick enqueues onto the bounded `email_send` queue; `email_sequence_tick` is the scheduled queue extending `outreach.ts`; throttle is Redis + queue-local (`15 §A.1`), not a hot DB row; backpressure meters the drip. |
+| **D11** — build on M9, don't duplicate | Whole doc: cadences = `outreach_sequences`/`outreach_steps`, enrollment = `outreach_log`, send = `sendStep.ts`, bounce = `handleBounce.ts`, gate = `suppression_list`+`assertNotSuppressed`, idempotency = `idempotency_keys` — **no parallel `email_*` tables** (`14 §6`). |
+| Tenancy (RLS ENABLE+FORCE, GUCs, `tenant_id`-leading indexes) | §8: the three `outreach_*` tables RLS-FORCED, workers set GUCs per job, `tenant_id`-leading indexes (`09`, `14 §5`). |
+| Queues (idempotent at-least-once, backoff+DLQ, **leader-locked scheduled jobs**) | §7.2: the leader-lock is **fully specified** (Redis election / BullMQ `jobId`, once-per-minute tick, `FOR UPDATE SKIP LOCKED` batch cap, two-worker no-double-advance itest — `15 §A.4`); `failed` captures DLQ exhaustion. |
 
 ---
 
 ## 10. Build checklist (the Phase-4 slice this doc owns)
 
 Maps to `13 §P4` ("Sequences + automation: cadences, steps, branching, scheduling, auto-pause-on-reply,
-throttled enrollment; web Sequences tab"). Depends on P1 send path, P2 templates, P3 tracking+inbox.
+throttled enrollment; web Sequences tab"). **This is M12 extending M9 — the entities, send tx, enroll path,
+and bounce loop already ship (`14 §1`); the work below is additive on them, not greenfield.** Depends on P1
+send path, P2 templates, P3 tracking+inbox.
 
-- [ ] **Engine entities** (`09`): `email_sequence`, `email_sequence_step`, `email_enrollment` with the
-      step-type + state enums from §2/§8; RLS ENABLE+FORCE, fail-closed, `tenant_id`-leading indexes.
-- [ ] **Tick worker** (`apps/workers/src/queues/email_sequence_tick`): repeatable scheduled job;
-      `FOR UPDATE SKIP LOCKED` enrollment claim; per-step dispatch (§2.2); send via the `email_send` queue with
-      D5 idempotency key from `(enrollment_id, step_order)`.
-- [ ] **LEADER-LOCK** (§7.2 — the named gap): confirm + document the mechanism; add a two-worker integration
-      test proving no double-tick / no double-send. **Blocking for P4.**
+- [ ] **Engine entities — EXTEND, not create** (`09`): the cadence/step/enrollment tables **already exist** as
+      `outreach_sequences` / `outreach_steps` / `outreach_log` (`packages/db/src/schema/outreach.ts`, `14 §2`).
+      Add only the additive columns from §2/§8 (`step_type`/`branch_*`/`variant_group` on steps;
+      `next_action_at`/`paused_reason`/`mailbox_integration_id` + `paused`/`failed` status values on the log).
+      **No new `email_sequence`/`email_sequence_step`/`email_enrollment` table** (D11). RLS already
+      ENABLE+FORCE, `tenant_id`-leading.
+- [ ] **Tick worker** (extend `apps/workers/src/queues/outreach.ts`, the `email_sequence_tick` repeatable job):
+      `FOR UPDATE SKIP LOCKED LIMIT {cap}` claim on due `outreach_log` rows; per-step dispatch by
+      `outreach_steps.channel`+`step_type` (§2.2); send via `sendStep.ts` → `email_send` queue with the D5
+      idempotency key from `(sequence_id, contact_id, step_order)`.
+- [ ] **LEADER-LOCK — fully specified** (§7.2, `15 §A.4` — resolves known-gap #5): confirm the mechanism
+      (Redis election / BullMQ `jobId`), the **once-per-minute** tick config, the batch cap; add the
+      **two-worker no-double-advance itest** (each due step advances exactly once, exactly one send).
+      **Blocking for P4** and for enabling `email.sequences` for any tenant (`13 §3`).
 - [ ] **Send-window/timezone/cap/jitter scheduler** (§4): recipient-local windows, consume `02`'s per-mailbox
-      daily cap, persisted jitter.
-- [ ] **Auto-pause consumer** (§5): `04` reply/bounce/OOO/unsub events transition enrollments; OOO resume;
-      mailbox circuit breaker; D9 unsubscribe writes suppression+consent.
-- [ ] **Throttled enrollment** (§6): drip admission with per-sequence daily cap + `02` warmup ramp; mailbox
-      rotation; backpressure via the `email_send` queue.
-- [ ] **Branching + A/B** (§3): single condition/step reading `04` events; deterministic variant assignment;
-      per-variant attribution handed to `08`.
-- [ ] **API** (`apps/api/src/features/email/routes.ts`): `/api/v1` sequence CRUD + enroll + pause/resume,
-      cursor pagination, Idempotency-Key on enroll, RFC 9457 envelope, owner-scoped (D8).
+      daily cap (Redis throttle, `15 §A.1`), persisted jitter on `outreach_log.next_action_at`.
+- [ ] **Auto-pause consumer** (§5): `04`/`activities` reply/bounce/OOO/unsub events transition `outreach_log`;
+      hard bounce via the shipped `handleBounce.ts`; OOO resume; mailbox circuit breaker; D9 unsubscribe writes
+      `suppression_list` + `consent_records` withdrawal.
+- [ ] **Throttled enrollment** (§6): drip admission via `enrollContact.ts` with per-sequence daily cap + `02`
+      warmup ramp; mailbox rotation; backpressure via the `email_send` queue (`15 §A.8` isolation).
+- [ ] **Branching + A/B** (§3): single condition/step reading `activities`; deterministic variant assignment
+      keyed on the `outreach_log` id; per-variant attribution (the `weight` field, `15 §B.4`) handed to `08`.
+- [ ] **API** (extend `apps/api/src/features/outreach/routes.ts`, `/api/v1/outreach`): the sequence CRUD +
+      enroll (`201`/`200`) + log endpoints **already ship** (`14 §1.3`); add **pause/resume**, cursor
+      pagination, Idempotency-Key on enroll, RFC 9457 envelope, owner-scoped (D8).
 - [ ] **Verify** against `13 §P4`: build a 3-step cadence → enroll a cohort → it drips within mailbox caps in
       recipient-local windows → a reply auto-pauses (terminal `replied`) → an unsubscribe halts mid-sequence
-      (D9) → no enrollment double-advances under two workers (leader-lock test green).
+      (D9, `suppression_list`+`consent_records`) → **no `outreach_log` enrollment double-advances under two
+      workers** (the §7.2 / `15 §A.4` leader-lock itest green).
 
 ---
 

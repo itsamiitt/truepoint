@@ -2,21 +2,31 @@
 
 > **Status:** Plan (not yet built). **Owner:** Product + Platform. **Last updated:** 2026-06-24.
 > This is the **anchor / spine** document for the `docs/planning/email-planning/` set, mirroring the
-> shipped `docs/planning/list-plan/` set. The **Locked Decisions (D1–D10)**, **Shared Vocabulary**,
+> shipped `docs/planning/list-plan/` set. The **Locked Decisions (D1–D11)**, **Shared Vocabulary**,
 > **Canonical Entities**, and **Phase Map (P0–P6)** below are canonical — every other doc in this folder
 > cites them verbatim and **must not contradict them**. This doc **owns the document index** in §9.
+>
+> **This is milestone M12 — it EXTENDS the shipped M9 outreach engine, it is not a greenfield build**
+> (see **D11**, §5.1). The M9 send transaction, suppression gate, sequence/step/enrollment tables, and
+> the engagement timeline already exist; the email subsystem reuses them verbatim and adds only the
+> genuinely-new sending infrastructure on top.
 
 ---
 
 ## 1. Why we're building this
 
 TruePoint already lets a workspace **find and own a book of prospects** (the Prospect surface, the List
-tab + import/enrichment, and the Sequences hooks the List tab hands off to). What it does **not** yet have
-is the layer that turns an owned, enriched list into **revenue motion**: the ability to actually *reach*
-those people, at scale, from real inboxes, and measure what comes back. **There is no email subsystem
-today.**
+tab + import/enrichment, and the Sequences surface the List tab hands off to). It **also already ships an
+M9 outreach engine** — a suppression-gated, idempotent, CAN-SPAM-blocking send transaction over real
+`outreach_sequences` / `outreach_steps` / `outreach_log` tables, with a fully-built `/sequences` surface
+and a built `/settings/compliance` surface (see §5.1). What it does **not** yet have is the layer that
+turns that engine into **production outbound at scale**: real authenticated sending domains, connected
+customer mailboxes, high-volume tracking, per-tenant reputation isolation, send quotas, and warmup.
+**The send engine exists; the production sending infrastructure on top of it does not.** This plan set is
+**milestone M12 — it extends M9, it does not rebuild it** (**D11**, §5.1).
 
-The email engine is the **natural layer atop Lists + Sequences**. A seller's job does not end at "I have
+The email infrastructure is the **production-grade layer atop the M9 engine, Lists + Sequences**. A
+seller's job does not end at "I have
 200 verified, owned prospects" — it ends at "I emailed them, three replied, and I booked two meetings." A
 sales-intelligence platform that stops at data is a database; a platform that owns the **outbound motion**
 is a sales-engagement platform. **To be a real sales-engagement platform, TruePoint must own outbound** —
@@ -56,10 +66,17 @@ The email subsystem does eight things. Each is owned in depth by a sibling doc (
 | 7 | **Enforce compliance** | Suppression, consent/lawful-basis, one-click List-Unsubscribe (RFC 8058), CAN-SPAM physical address + honest headers, GDPR/DPDP DSAR cascade. | `06` |
 | 8 | **Report** | Reply rate (primary KPI), click rate, deliverability/placement, send reliability, per-mailbox/per-rep leaderboards and analytics. | `08` |
 
-### In scope (this plan set)
+### In scope (this plan set — M12, extending M9)
+
+> Everything here builds on the shipped M9 engine (§5.1). The genuinely-new build is sending domains,
+> mailbox integrations, the high-volume raw tracking-event store, the per-tenant send-quota, warmup, and
+> reputation pools (**D11**). The sequence/step/enrollment tables, the suppression gate, consent records,
+> idempotency keys, the send transaction (`core/outreach/sendStep`), and the engagement timeline already
+> exist and are **reused, not rebuilt**.
 
 - **Mailbox-based 1:1 and automated sending** from connected Google/Microsoft (OAuth) and SMTP identities,
-  with a relay/transactional ESP backbone for platform/system mail (per **D1**).
+  with a relay/transactional ESP backbone for platform/system mail (per **D1**) — wired into the existing
+  `EmailSenderPort` seam so real sending swaps the port without touching the M9 send transaction.
 - **Per-tenant reputation isolation** — own sending domain/subdomain, own mailbox pool, own custom
   tracking domain (**D2**, **D3**; doc `07`).
 - **Templates** (versioned, owner-scoped, shareable, render-safe), **sequences** (cadences with branching,
@@ -81,7 +98,7 @@ The email subsystem does eight things. Each is owned in depth by a sibling doc (
 - **Multi-region residency siloing of email data** — carried as a known gap (constraints digest), not built
   here.
 
-## 3. Locked decisions (D1–D10 — canonical; cite by ID, never contradict)
+## 3. Locked decisions (D1–D11 — canonical; cite by ID, never contradict)
 
 > Confirmed for this set. Each carries a one- to two-sentence rationale. They are **not open for
 > re-litigation** inside the other docs; downstream docs add depth, never reversal. Each will be backed by
@@ -109,7 +126,8 @@ The email subsystem does eight things. Each is owned in depth by a sibling doc (
 - **D5 — Sends are idempotent.** Every send carries an **Idempotency-Key** plus a **unique DB constraint**;
   at-least-once queues never double-send. *Rationale:* BullMQ is at-least-once by design — without an
   idempotency key + unique constraint, a retried job sends the same email twice to a real person (doc
-  `02`, entity `email_idempotency_key`).
+  `02`; reuses the shipped **`idempotency_keys`** table, `UNIQUE(tenant_id, key)` — **D11**, not a new
+  `email_idempotency_key`).
 - **D6 — Opens are informational, not the KPI of record.** **Reply rate is the primary KPI** (with careful
   click rate); opens are shown but **de-emphasized**. *Rationale:* Apple Mail Privacy Protection pre-fetches
   and proxy-prefetch inflate opens — roughly doubling reported open rates — so an opens-based KPI is
@@ -132,48 +150,160 @@ The email subsystem does eight things. Each is owned in depth by a sibling doc (
   per-mailbox throttling** lives in-queue. *Rationale:* sending and event ingestion are bursty and must be
   backpressured, retried, and rate-limited per tenant/mailbox or one big sequence starves everyone (doc
   `02`, `05`; constraints digest — Queues).
+- **D11 — Build on, don't duplicate.** The email subsystem **EXTENDS the M9 outreach engine**. It MUST
+  reuse **`outreach_sequences`** / **`outreach_steps`** / **`outreach_log`** (sequence / step / enrollment),
+  **`activities`** (engagement timeline), **`suppression_list`** + **`assertNotSuppressed`** (the **D4**
+  gate), **`consent_records`** (**D9** consent), **`idempotency_keys`** (**D5**), **`audit_log`**, the
+  `creditRepository` lock pattern (for the new send-quota), and the **`EmailSenderPort`** seam (for real
+  sending). It MUST NOT introduce parallel `email_sequence` / `email_sequence_step` / `email_enrollment` /
+  `email_suppression` / `email_consent` / `email_idempotency_key` tables. The genuinely **NEW** build is:
+  **`sending_domain`** (+ DKIM/SPF/DMARC + per-tenant tracking-CNAME state), **`mailbox_integration`**
+  (encrypted ESP/OAuth credentials + provider), a high-volume **PARTITIONED raw tracking-event store
+  (`email_event`)** that **feeds `activities`**, the **per-tenant send-quota** (built on the
+  `creditRepository` `SELECT … FOR UPDATE` pattern), **warmup**, and **reputation pools**. *Rationale:* a
+  shipped, suppression-gated, idempotent, CAN-SPAM-blocking send transaction already exists in
+  `packages/core/src/outreach/`; rebuilding it as a parallel `email_*` schema would fork the suppression
+  gate and the audit trail — the two things that must never diverge. **This is milestone M12 (extend M9),
+  NOT a greenfield build.** (Reuse map in §5.1; entity ownership in doc `09`; integration in doc `14`.)
 
 ## 4. Shared vocabulary (canonical)
 
-> These exact terms and entity names are used verbatim across all 14 docs. Entities are **owned by doc
-> `09`** (§9); this glossary defines them in plain English.
+> These exact terms and entity names are used verbatim across all 16 docs. Entities are **owned by doc
+> `09`** (§9); this glossary defines them in plain English. **The names below are the REAL, shipped table
+> and code names** — per **D11**, the email subsystem reuses them and does **not** introduce parallel
+> `email_*` equivalents. Only **Sending Domain**, **Mailbox**, and **Send Quota** are genuinely new.
+
+**Reused from the shipped M9 engine (do not duplicate — D11):**
+
+- **Sequence (Cadence)** — an **ordered, multi-step outreach** flow (`status` active / paused / archived;
+  `from_address` + `physical_address` for CAN-SPAM). Entity: **`outreach_sequences`**.
+- **Step** — one ordered step of a sequence (`channel` email / linkedin, `delay_hours`, `subject`, `body`).
+  Entity: **`outreach_steps`** (`UNIQUE(sequence_id, step_order)`).
+- **Enrollment** — a **contact enrolled into a sequence** (`status` enrolled / active / replied /
+  completed / unsubscribed / bounced; `current_step`). Entity: **`outreach_log`**
+  (`UNIQUE(sequence_id, contact_id)` = enrollment idempotency).
+- **Tracking / engagement timeline** — the per-contact event stream of **`email_sent` / `email_opened` /
+  `email_clicked` / `email_replied`** (and other channels). Entity: **`activities`**; high-volume raw
+  open/click/bounce/complaint webhook payloads land first in the **NEW partitioned `email_event` store**
+  (§5.1, **D11**), which **feeds `activities`** — `activities` is never written directly from a raw
+  pixel/webhook hit.
+- **Suppression** — an address / domain / phone / contact **blocked from sends** (unsubscribe, hard-bounce,
+  complaint, manual, DNC); **scope** global / tenant / workspace; matched by `email_blind_index` /
+  `domain` / `phone_blind_index` / `contact_id`. Entity: **`suppression_list`**; the gate is
+  **`assertNotSuppressed`** (runs in the reveal AND send tx — **D4**).
+- **Consent** — a recorded **lawful basis / opt state** per contact + jurisdiction (`lawful_basis`
+  legitimate_interest / consent / contract / public_record; `valid_from` / `valid_until` / `withdrawn_at`).
+  Entity: **`consent_records`** (**D9**).
+- **Idempotency** — the **`Idempotency-Key` + unique constraint** that makes billable creates and sends
+  exactly-once over at-least-once queues (**D5**). Entity: **`idempotency_keys`**
+  (`UNIQUE(tenant_id, key)`).
+- **Send transaction** — the shipped tx that blocks unless `from_address` + `physical_address` are present,
+  re-runs `assertNotSuppressed` in-tx, auto-appends the postal + unsubscribe footer, sends via the
+  injected `EmailSenderPort`, advances `outreach_log`, and audits the send. Code:
+  **`packages/core/src/outreach/sendStep.ts`**.
+- **Bounce handling** — the idempotent path that marks bounced, inserts a workspace suppression row, and
+  does the ADR-0013 credit-back. Code: **`packages/core/src/outreach/handleBounce.ts`**.
+- **Sender** — the seam real sending plugs into. Port: **`EmailSenderPort`**
+  (`packages/core/src/outreach/senderPort.ts`; `consoleSender` today). The M12 SES / mailbox adapter swaps
+  the port **without touching the send tx** (entity: **`mailbox_integration`**, below).
+
+**Genuinely new in M12 (built on top — D11):**
 
 - **Mailbox** — a connected **sending identity** (Google/Microsoft OAuth, or SMTP/ESP), owned by a user
-  within a workspace. Entity: **`mailbox_integration`**.
-- **Sending Domain** — a **tenant-owned domain or subdomain** authenticated for sending (SPF/DKIM/DMARC).
-  Entity: **`sending_domain`**.
-- **Template** — a reusable, **versioned** artifact (subject + body + variables), owner-scoped and
-  shareable. Entities: **`email_template`** / **`email_template_version`**.
-- **Sequence (Cadence)** — an **ordered, multi-step automated outreach** flow. Entities:
-  **`email_sequence`** → **`email_sequence_step`**.
-- **Enrollment** — a **Person enrolled into a Sequence**. Entity: **`email_enrollment`**.
-- **Send** — a **single outbound email record** (references a Person, Template, Mailbox, and optionally a
-  Sequence step). Entity: **`email_send`**.
-- **Tracking Event** — an **open / click / reply / bounce / unsub / complaint / delivery** record tied to a
-  Send. Entity: **`email_tracking_event`**.
-- **Suppression** — an address/Person **blocked from sends** (unsubscribe, hard-bounce, complaint, manual,
-  DNC); **tenant + workspace scoped**. Entity: **`email_suppression`**.
-- **Consent** — a recorded **lawful basis / opt state**. Entity: **`email_consent`**.
+  within a workspace, holding **encrypted credentials** (**D7**) and a provider. Entity:
+  **`mailbox_integration`** (the concrete `EmailSenderPort` adapter).
+- **Sending Domain** — a **tenant-owned domain or subdomain** authenticated for sending (SPF/DKIM/DMARC)
+  with per-tenant tracking-CNAME state (**D2**, **D3**). Entity: **`sending_domain`**.
+- **Send Quota** — the **per-tenant outbound-volume counter** enforced at send time, built on the
+  shipped `creditRepository` `SELECT … FOR UPDATE` lock + no-overdraft CHECK pattern (ADR-0007). New
+  counter; **same lock template, not a new mechanism.**
 - **Reputation Pool** — the **isolation unit for sending reputation**: a per-tenant sending domain +
-  mailbox set (+ optional dedicated IP).
-- **Warmup** — the **gradual volume ramp** of a new mailbox / domain / IP.
+  mailbox set (+ optional dedicated IP) (**D2**, doc `07`).
+- **Warmup** — the **gradual volume ramp** of a new mailbox / domain / IP (doc `03`).
 
 ## 5. What we build on (existing TruePoint infrastructure, reused)
 
-The email subsystem is **new** (there is no email schema, surface, worker, or core module today), but it is
-**not greenfield infrastructure** — it sits on the same platform every other TruePoint subsystem uses, and
-must cite (not re-derive) the **TruePoint constraints digest**:
+The email subsystem is **not new and not greenfield** — a working M9 outreach engine, two built customer
+surfaces, and a fully-built admin console already ship (§5.1, **D11**). M12 extends them and sits on the
+same platform every other TruePoint subsystem uses, and must cite (not re-derive) the **TruePoint
+constraints digest**:
+
+### 5.1 Current state — what already exists (the M9 base for M12)
+
+> **Authoritative reuse map (D11).** Doc `14-current-state-integration` owns the full integration; this is
+> the canonical summary. Every entity / module / surface below already ships and is **reused, not rebuilt**.
+
+**Shipped data model** (`packages/db/src/schema/`):
+
+| Concern | Real table(s) | File | Notes |
+|---|---|---|---|
+| Sequence / step / enrollment | `outreach_sequences`, `outreach_steps`, `outreach_log` | `outreach.ts` | `outreach_log` `UNIQUE(sequence_id, contact_id)` = enrollment idempotency. |
+| Suppression + idempotency + audit | `suppression_list`, `idempotency_keys`, `audit_log` | `billing.ts` | `audit_log.action` is a closed enum incl. `send` / `enroll` / `unsubscribe` / `suppression.add`. |
+| Consent / DSAR | `consent_records`, `dsar_requests` | `compliance.ts` | Lawful basis + jurisdiction per contact. |
+| Engagement timeline | `activities` (`email_sent` / `email_opened` / `email_clicked` / `email_replied`) | `activity.ts` | The NEW `email_event` raw store feeds this. |
+| Contacts / accounts | `contacts` (`outreach_status`, `email_blind_index`, …), `accounts`, `source_imports` | `contacts.ts` | `outreach_status`: new / in_sequence / replied / meeting_booked / disqualified / nurture / unsubscribed. |
+| Tenancy / credits / webhooks | `tenants` (`reveal_credit_balance`), `users`, `tenant_members`, `platform_staff`, `workspaces`, `webhooks` | `auth.ts`, `webhooks.ts` | `webhooks` is reused as the external `email.*` event bus. |
+
+**Shipped core logic** (`packages/core/src/`):
+
+- `outreach/createSequence.ts`, `outreach/enrollContact.ts` (revealed-only + `assertNotSuppressed` in-tx +
+  idempotent + audit), `outreach/sendStep.ts` (**THE send tx** — CAN-SPAM-blocking, suppression-gated,
+  footer-appending, port-driven), `outreach/handleBounce.ts` (idempotent bounce → suppress + ADR-0013
+  credit-back), `outreach/senderPort.ts` (`EmailSenderPort`, `consoleSender` today).
+- `compliance/assertNotSuppressed.ts` (the unbypassable **D4** gate), `compliance/writeAudit.ts`.
+- `billing/creditRepository` (`lockBalance` via `SELECT … FOR UPDATE`; decrement under lock with
+  no-overdraft CHECK; idempotent `grantFromEvent`) — **the template for the new per-tenant send-quota.**
+
+**Shipped API / workers:** `apps/api/src/features/outreach/routes.ts` mounted **`/api/v1/outreach`**
+(`GET/POST /sequences`, `POST /sequences/:id/steps`, `POST /sequences/:id/enroll` [201 new / 200
+already-enrolled], `/enroll-bulk`, `GET /sequences/:id/log`, `POST /log/:id/send` [dev `consoleSender`],
+`POST /log/:id/bounce`); `apps/api/src/features/admin/` (platformAdmin). Workers:
+`apps/workers/src/queues/outreach.ts` (`processOutreach` → `sendStep`), `dsar.ts`. ADRs: **ADR-0009**
+(outreach engine; suppression gates sending; sending domains / DKIM / SPF / DMARC / warmup / bounce as
+consequences), **ADR-0013** (credit-back), **ADR-0004** (credit idempotency), **ADR-0007** (per-workspace
+credit counter).
+
+**Shipped customer surfaces** (`apps/web/src/`):
+
+- **`/sequences` — FULLY BUILT** (`SequenceList`, `SequenceBuilder`, `EnrollmentPanel`,
+  `EnrollmentLogTable`, `SendStatusDashboard`, metrics funnel) with a **Templates panel STUB**
+  (`fetchTemplates` → `MaybeList available:false`; `TemplateSummary{id,name,channel,subject,body,updatedAt}`)
+  and an **AI `DraftReviewPanel` STUB**.
+- **`/inbox` — CONTRACTS DEFINED, backend 404/501** (`InboxThread{channel, messages, assignee, sequenceId}`,
+  `InboxTask`; `fetchThreads` / `sendReply` / `fetchTasks`).
+- **`/reports` — six dashboards**; the **"Sending & deliverability" tab is a PLACEHOLDER** (StatTiles "—",
+  `DeliverabilitySection` EmptyState "Connect sending").
+- **`/settings/compliance` — FULLY BUILT** (`SuppressionForm`, `SuppressionList`, `DsarForm`;
+  `addSuppression` / `listSuppressions` / `removeSuppression` / `submitDsar`).
+- **No `/settings/mailboxes` feature exists** — `navConfig.ts` (the single nav source of truth) has **no
+  Mailboxes entry**; M12 **adds one to the Workspace settings scope** (doc `10`).
+
+**Shipped admin console** (`apps/admin/src/` — FULLY BUILT, not a stub): **Tenants** `/tenants`,
+**Users** `/users` (+ time-boxed, audited impersonation = the existing **break-glass**), **Providers**
+`/provider-configs` (the home for the pluggable ESP `ProviderAdapter` registry), **Feature flags**
+`/feature-flags` (global + per-tenant overrides — the home for `email.*` staged rollout), **Staff**
+`/staff`, **Audit log** `/audit-log`, **System health** `/system-health` (the home for email queue /
+ingestion SLOs). M12 adds email panels to these existing pages — it does **not** build a new console.
+
+**The frontend data pattern is vanilla React, NOT TanStack Query** (ADR-0016): `useState` / `useCallback`,
+`fetchWithAuth` (in-memory access token) in feature `api.ts`, the `MaybeList<T>{items, available}` envelope
+(`available:false` on 404/501 for not-yet-wired backends), `StateSwitch` (loading / error / empty / data)
++ `EmptyState` from `@leadwolf/ui`, mutations reload (no optimistic MVP), per-action pending state.
+Representative: `features/sequences/{api.ts, hooks/useSequences.ts}`. **No `useQuery` / query-keys.**
 
 - **Tenancy / RLS** — `tenant_id` + `workspace_id` on every row; Postgres **RLS ENABLE + FORCE,
   fail-closed `NULLIF`**, transaction-local GUCs (`SET LOCAL`), `tenant_id`-leading composite indexes.
-  Workers set tenant context per job (**D10**). RLS lives at `packages/db/src/rls/email.sql`; the email
-  schema at `packages/db/src/schema/email.ts`; the **sole data-access layer** is
-  `packages/db/src/repositories/emailRepository.ts`.
+  Workers set tenant context per job (**D10**). The reused M9 tables already carry this posture; the
+  **new** M12 entities (`sending_domain`, `mailbox_integration`, `email_event`, send-quota) land in their
+  own schema files (e.g. `packages/db/src/schema/sending.ts`) with matching RLS, **never as parallel
+  `email_*` equivalents of the M9 tables** (**D11**; entity ownership in doc `09`).
 - **API contract** — Hono on Bun under **`/api/v1`**; **Zod schemas in `@leadwolf/types`** as single source
   of truth; **cursor (never offset) pagination** with a server-max limit; **Idempotency-Key on billable
-  creates** (every send — **D5**); **RFC 9457 `application/problem+json`** errors (machine code, no
-  PII/stack); per-user + per-tenant rate limits with `Retry-After`. Routes at
-  `apps/api/src/features/email/{routes.ts,index.ts}`.
+  creates** (every send — **D5**, via the shipped `idempotency_keys` table); **RFC 9457
+  `application/problem+json`** errors (machine code, no PII/stack); per-user + per-tenant rate limits with
+  `Retry-After`. Shipped outreach routes mount at `/api/v1/outreach`; new M12 routes (mailbox/domain
+  connect, deliverability) extend that feature or add `apps/api/src/features/email/` for genuinely-new
+  surfaces (§5.1, doc `14`).
 - **Queues** — **BullMQ/Redis**, named purpose queues (**D10**), idempotent at-least-once, backoff + DLQ,
   backpressure-bounded fan-out, user-visible job states + progress. Workers at
   `apps/workers/src/queues/email*.ts`.
@@ -181,14 +311,18 @@ must cite (not re-derive) the **TruePoint constraints digest**:
   four states via `StateSwitch` (loading/empty/error/data); virtualized large tables + cursor pagination;
   **WCAG 2.2 AA**; i18n; light theme only. Web feature at `apps/web/src/features/email/`.
 - **Ownership model** — owner-scope + explicit sharing + workspace-role (**D8**); **references, not copies**
-  (an `email_send` references the canonical Person/Template, never copies them); dedup/uniqueness
-  constraints.
-- **Audit** — append-only audit storing **IDs + actions, NEVER PII or message bodies** — the same posture
-  the List tab's `platform_audit_log` uses.
-- **DSAR** — the existing DSAR cascade pattern (find all tenant references for a Person, soft+hard delete
-  per retention) extended to suppress + dis-enroll across email entities (**D9**, doc `06`).
-- **Pure domain logic** — render, scheduling, and compliance rules live in `packages/core/src/email/`,
-  framework-free.
+  (`outreach_log` references the canonical contact / sequence, never copies them; the new `email_event`
+  rows reference the enrollment, never duplicate the contact); dedup/uniqueness constraints (e.g.
+  `outreach_log` `UNIQUE(sequence_id, contact_id)`).
+- **Audit** — the shipped append-only `audit_log` storing **IDs + actions, NEVER PII or message bodies**
+  (closed `action` enum incl. `send` / `enroll` / `unsubscribe` / `suppression.add`) — reused, not
+  re-created.
+- **DSAR** — the existing `dsar_requests` cascade pattern (find all tenant references for a contact,
+  soft+hard delete per retention) extended to suppress + dis-enroll across the reused outreach entities
+  (**D9**, doc `06`).
+- **Pure domain logic** — the shipped `packages/core/src/outreach/` (send tx, enroll, bounce, sender port)
+  and `compliance/` (suppression gate, audit) are reused; new render / scheduling / deliverability rules
+  live alongside them, framework-free.
 
 > **Security precedence holds:** on any access, tenant-isolation, secret, PII, or compliance point,
 > **security wins**. Platform owns the tenancy mechanism (RLS), the API contract, and scale; data owns the
@@ -314,12 +448,12 @@ deliverability mechanics in `03`; the isolation guarantee in `07`.
 
 ## 9. Document index (this doc owns the index)
 
-> All 14 docs in `docs/planning/email-planning/`. Cross-reference siblings by these numbers and names.
+> All 16 docs in `docs/planning/email-planning/`. Cross-reference siblings by these numbers and names.
 > Supporting `ADR-NNNN-email-*.md` files live in `docs/planning/decisions/`.
 
 | Doc | Name | Purpose (one line) |
 |-----|------|--------------------|
-| `00` | **overview** (this) | Vision, motivation, scope, Locked Decisions D1–D10, vocabulary, landscape, metrics, phase map, and the document index. |
+| `00` | **overview** (this) | Vision, motivation, M12-extends-M9 framing, scope, Locked Decisions D1–D11, vocabulary, current-state base, landscape, metrics, phase map, and the document index. |
 | `01` | **templating** | Versioned, owner-scoped, shareable templates; variables + fallbacks; render-safety (no untrusted template eval). |
 | `02` | **sending-infrastructure** | The hybrid send path (**D1**): mailbox OAuth/SMTP + ESP relay, idempotency (**D5**), queues (**D10**), secret storage (**D7**). |
 | `03` | **deliverability** | SPF/DKIM/DMARC, sending-domain auth, warmup, blacklist/seed monitoring, Google/Yahoo 2024 sender-rule mechanics. |
@@ -333,6 +467,8 @@ deliverability mechanics in `03`; the isolation guarantee in `07`.
 | `11` | **admin-surface** | The `apps/admin` email console: mailbox/domain mgmt, per-tenant limits/reputation, global suppression, email-volume billing, DSAR. |
 | `12` | **roles-permissions** | Owner-scoped visibility (**D8**), explicit shares, workspace-role, manager/admin override; the email capability matrix. |
 | `13` | **rollout-phases** | The phased roadmap P0–P6 (§8), work units, sequencing, and end-to-end verification recipe — **owns the phase map**. |
+| `14` | **current-state-integration** | The authoritative reuse map (**D11**): the shipped M9 tables / core modules / surfaces and exactly how M12 extends each — owns the "build on, don't duplicate" contract. |
+| `15` | **scalability-extensibility** | How the subsystem scales (partitioned `email_event`, per-tenant send-quota via the `creditRepository` lock, queue/throttle backpressure) and stays extensible (pluggable `EmailSenderPort` / `ProviderAdapter` registry, `email.*` event bus, channel headroom). |
 
 ---
 

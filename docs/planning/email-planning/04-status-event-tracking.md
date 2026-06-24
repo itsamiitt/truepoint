@@ -5,7 +5,7 @@
 > digest** (tenancy, queues, security, design) carried throughout the set. **Scope:** this doc owns
 > the *behaviour* of status & event tracking end to end — what an event is, how each is detected, how
 > reliable it is, how it is ingested safely, and how it surfaces in real time. It does **not** own the
-> `email_tracking_event` schema (that is **09-data-model**), the analytics roll-ups built on these
+> `activities` / `email_event` schema (that is **09-data-model**), the analytics roll-ups built on these
 > events (**08-reporting-analytics**), the unified-inbox / record-detail pixels and panes
 > (**10-web-surface**), or sequence auto-pause logic (**05-sequences-automation**). This doc is the
 > contract those four build against. **No code** — entity, column, queue, endpoint, and header names
@@ -41,12 +41,13 @@ as soft signal; treat replies as the conversion event; and pause automation on t
 
 ## 2. The event vocabulary — the lifecycle the system tracks
 
-Every tracked engagement occurrence becomes one `email_tracking_event` row (entity owned by `09`),
-always written through the **`email_tracking` BullMQ queue** (D10) with tenant context set per job.
-Doc `09` owns the canonical enum: **`email_tracking_event.event_type ∈ { delivery, open, click, reply,
-bounce, unsubscribe, complaint }`** — seven values. The table below also lists **`sent`** so the
-lifecycle reads end-to-end, but `sent` is an **`email_send.status`** transition recorded on the send
-path (`02-sending-infrastructure`), **not** an `email_tracking_event`. (The table uses past-tense
+Every tracked engagement occurrence becomes one `email_event` row that surfaces as an `activities`
+entry (entities owned by `09`), always written through the **`email_tracking` BullMQ queue** (D10)
+with tenant context set per job. Doc `09` owns the canonical enum: **`email_event.event_type ∈ {
+delivery, open, click, reply, bounce, unsubscribe, complaint }`** — seven values. The table below also
+lists **`sent`** so the lifecycle reads end-to-end, but `sent` is a send-record (`email_send`-role)
+status transition recorded on the send path (`02-sending-infrastructure`), **not** an `email_event`.
+(The table uses past-tense
 display labels — `delivered` / `opened` / etc. — for the seven stored values plus `sent`.) The states
 are **not** equally trustworthy, and the system must never pretend they are.
 
@@ -56,11 +57,11 @@ are **not** equally trustworthy, and the system must never pretend they are.
 |---|---|---|---|
 | **sent** | Our send path (`email_send` transition) | We record it ourselves when the ESP/mailbox accepts the message for delivery (`02-sending-infrastructure`) | **High.** This is *accepted by the provider*, not *delivered to the inbox*. Do not conflate with delivered. |
 | **delivered** | ESP / mailbox provider webhook | Provider posts a `delivered` event after the receiving MX accepts the message | **High**, but means "accepted by the recipient's server", not "landed in the inbox". A spam-foldered message can still be `delivered`. |
-| **bounced** | ESP / mailbox provider webhook | Provider posts `bounce` (hard, permanent) or `block`/`deferred` (soft, transient) | **High for hard bounces.** Soft vs hard classification varies per provider; a hard bounce must feed `email_suppression` (D4) and can trigger sequence auto-pause (`05`). |
+| **bounced** | ESP / mailbox provider webhook | Provider posts `bounce` (hard, permanent) or `block`/`deferred` (soft, transient) | **High for hard bounces.** Soft vs hard classification varies per provider; a hard bounce must feed `suppression_list` (D4) and can trigger sequence auto-pause (`05`). |
 | **opened** | Tracking pixel fetch | A 1×1 image at the **per-tenant custom tracking domain (D3)** is requested | **Low — see §4.** MPP and Gmail proxy prefetch fire this without a human. Labelled **informational** per D6; never the KPI. |
 | **clicked** | Tracked-link redirect | Recipient hits a rewritten link on the tracking domain (D3); we 302 to the destination | **Medium–High.** The strongest *machine-readable* intent signal that survives MPP, but security scanners and link-prefetchers (corporate gateways, Outlook SafeLinks) generate false clicks. De-dupe and filter known bot UAs (§4.3). |
 | **replied** | Inbound mailbox (Gmail API / Microsoft Graph push, or IMAP) | Threading match on `In-Reply-To` / `References` against a sent message's `Message-ID` (§5) | **High when matched, but reply *detection* is the hard part.** OOO auto-replies must be classified separately (§5.4) and must **not** count as a human reply. |
-| **unsubscribed** | Our unsubscribe endpoint / List-Unsubscribe | Recipient clicks the unsubscribe link or the one-click `List-Unsubscribe-Post` header action | **High.** Must write `email_suppression` + `email_consent` synchronously and fail-closed (D4, `06-compliance`). |
+| **unsubscribed** | Our unsubscribe endpoint / List-Unsubscribe | Recipient clicks the unsubscribe link or the one-click `List-Unsubscribe-Post` header action | **High.** Must write `suppression_list` + `consent_records` synchronously and fail-closed (D4, `06-compliance`). |
 | **complaint** (spam) | ESP feedback loop (FBL) / provider webhook | Recipient hits "Report Spam"; the mailbox provider FBL relays it to the ESP, which webhooks us | **High and severe.** A complaint must immediately suppress (D4) and is a reputation-isolation signal (`07`). Some providers (notably Gmail) do **not** expose per-message complaints, so complaint volume is partially blind. |
 
 > **Reading the table:** the three rows TruePoint *trusts for decisions* are **delivered/bounced**
@@ -110,6 +111,18 @@ record a **clicked** event and issue a 302 to the original destination. Click is
 machine-readable interest signal that survives MPP** ([beehiiv](https://www.beehiiv.com/blog/apple-mpp-open-rate),
 [datainnovation.io](https://datainnovation.io/en/apple-mpp-email-open-rate-fix/)) — MPP prefetches
 *images*, not link clicks, so clicks reflect a genuine human action far more often than opens.
+
+**The redirect must never fail the recipient.** The click handler's *only* job that the recipient
+depends on is the 302 to the real destination; recording the `click` event is a side effect that
+must never block or break that hop. The handler therefore (1) resolves the destination from the
+rewritten token *first*, (2) enqueues the click event to `email_tracking` (fire-and-forget — never a
+synchronous DB write on the recipient's request path, §3.3), and (3) issues the 302. The
+event-enqueue path is wrapped in a **5-second timeout**: if the enqueue is slow or the queue is
+under backpressure (§6.3), the handler **abandons the event and falls through to the destination
+redirect anyway**. A recipient clicking a link in our email must **never** see a TruePoint error
+page, a spinner, or a delay because our tracking pipeline is degraded — a dropped click event is an
+acceptable analytics loss; a broken link to the customer's own content is not. (The dropped event is
+counted as a tracking-loss metric, §6.3, feeding the operations ingest SLO.)
 
 **Downsides:**
 - **Bot/scanner clicks.** Corporate security gateways, Outlook **SafeLinks**, and link-preview
@@ -197,6 +210,28 @@ generates **one** pixel fetch — under-counting the most engaged
 So opens are inflated by robots *and* deflated by caching simultaneously. There is no correction factor
 that recovers truth from this; the only sound response is the one D6 mandates.
 
+### 4.5 Click-to-open rate (CTOR) — and why even *it* inherits the open caveat
+
+Analytics (`08`) and reps will ask for **CTOR — click-to-open rate**, defined as
+**unique clicks ÷ unique opens** (the share of "openers" who also clicked). CTOR is genuinely
+useful as a *content/copy-quality* signal — of the people the pixel says saw the message, how many
+acted — and it is **less** distorted than raw open rate because the click in the numerator is a
+real human action that survives MPP (§3.2).
+
+**But CTOR is not clean, and the doc must label it as such.** Its denominator is the open count, so
+**every open-inflation pathology in §4.1–§4.4 flows straight into the CTOR denominator**:
+- MPP and proxy prefetch **inflate opens**, which **deflates** CTOR — the "openers" pool is padded
+  with robots that never click, so the ratio reads artificially low.
+- Gmail image caching **suppresses** repeat opens, nudging the denominator the other way.
+- Numerator and denominator are filtered by *different* rules (clicks are bot-filtered per §4.3;
+  opens are machine-tagged per §4.3), so a naïve `clicks ÷ opens` mixes signal qualities.
+
+**TruePoint rule:** CTOR is computed by `08` from the same partitioned `email_event` store (`09`),
+**only over human-classified opens and bot-filtered clicks** (never raw counts), and is rendered
+with the **same "informational" labelling as opens (D6)** — because it inherits the open
+denominator, it is a secondary copy-quality signal, **never** a KPI of record. Reply rate remains
+primary (D6).
+
 ---
 
 ## 5. Reply detection — the highest-value, hardest-to-get-right event
@@ -212,7 +247,7 @@ client sets `In-Reply-To: <our-message-id>` and includes our `Message-ID` in its
 ([EmailEngine](https://learn.emailengine.app/docs/sending/threading/overview), Medium "Threading
 Emails"). **Recommended approach:** store each send's `Message-ID` on `email_send`, and on every inbound
 message parse `In-Reply-To` and `References` and match against stored IDs to bind the reply to its send
-(and thus its `email_enrollment` and contact). This is provider-agnostic and is the documented,
+(and thus its `outreach_log` and contact). This is provider-agnostic and is the documented,
 recommended path even for Microsoft Graph, whose proprietary `Thread-Index`/`conversationId` is *not*
 reliable across external systems
 ([Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/1348031/using-ms-graph-api-how-to-reply-to-an-email-thread)).
@@ -251,8 +286,9 @@ never feeding the D6 KPI.
 
 ### 5.4 What "replied" means downstream
 
-A confirmed **human** reply: (1) writes a `replied` `email_tracking_event`; (2) is the conversion event
-for D6 analytics (`08`); (3) **auto-pauses** the contact's `email_enrollment` so the sequence stops
+A confirmed **human** reply: (1) writes a `replied` `email_event` row surfaced in `activities`; (2) is
+the conversion event for D6 analytics (`08`); (3) **auto-pauses** the contact's `outreach_log` so the
+sequence stops
 mailing someone who answered (`05`); and (4) surfaces in the **Unified Inbox** (`10`). An OOO/auto-reply
 does (1) with an `auto_reply` classification and may **defer** the next step rather than pause — but
 never counts as engagement.
@@ -299,20 +335,87 @@ counted (a spike is an alert / possible spoofing attempt), e.g.:
 { "type": "https://truepoint.in/problems/webhook-signature", "title": "Invalid webhook signature", "status": 401 }
 ```
 
+**Failed-signature logging + rate-limit (anti-abuse).** A signature failure is a security event, so
+it is **logged distinctly** — but with the same PII discipline as §6.4: log the **provider name, the
+source IP, the claimed event type, and a failure reason** only, **never** the raw body or any
+recipient identifier (a spoofed payload may itself carry PII bait). Failure logging emits a metric
+that drives an alert on a spike (a sustained run of invalid signatures is either a rotated/misapplied
+secret or a spoofing probe; operations triages via `15`'s ingest-health view). Because the
+verification endpoint is **public and unauthenticated by design**, it is also **rate-limited per
+source IP** (and per provider where the source set is known/allow-listed), so a flood of forged or
+malformed posts cannot exhaust the edge or the verification CPU — a rate-limited caller gets a `429`
+RFC 9457 problem response and never reaches the queue. Genuine ESPs post from documented IP ranges
+and retry within their own backoff, so the limit is sized to absorb legitimate batch redelivery
+while shedding abusive volume.
+
 ### 6.3 Idempotent ingest (at-least-once, exactly-once effect)
 
 ESPs explicitly **redeliver the same event** on retry, so ingestion must be idempotent
 ([inventivehq SendGrid guide](https://inventivehq.com/blog/sendgrid-webhooks-guide),
 [Hooklistener](https://www.hooklistener.com/guides/sendgrid-webhook-events)). Each provider exposes a
 stable per-event id (SendGrid's `sg_event_id`; Gmail/Graph message+history ids). **Recommended:** persist
-that provider id as the dedup key on `email_tracking_event` (a unique constraint), so a replayed webhook
-is a no-op — the same pattern as TruePoint's `email_idempotency_key` for sends (D5), applied to the
+that provider id as the dedup key on `email_event` (a unique constraint), so a replayed webhook
+is a no-op — the same pattern as TruePoint's `idempotency_keys` for sends (D5), applied to the
 *ingest* side. ESPs also **batch** up to 1,000+ events per POST, so the worker must process the array
 element-by-element, each element independently idempotent — one poison event must not drop the batch
 (BullMQ backoff + DLQ for the genuinely un-processable). This satisfies the queue constraint:
 *idempotent at-least-once, backoff + DLQ, backpressure.*
 
-### 6.4 What ingestion must never do
+### 6.4 Ingestion backpressure (bounded queue, fast 2xx, 503 when full)
+
+The edge must stay fast and bounded **even when the system behind it is saturated** — an ESP's
+event firehose can spike far above steady state (a large send completing, a bounce storm, a
+complaint cascade). The pipeline is therefore explicitly backpressured rather than unbounded:
+- **Bounded enqueue.** The `email_tracking` queue has a **bounded admission depth**; the edge does
+  not buffer events in process memory waiting for the queue, and it does no synchronous write to the
+  durable store on the request path.
+- **Fast 2xx is the success path.** When admission succeeds, the edge returns `2xx` within the ESP's
+  ~10-second window (§6.1) and the worker drains asynchronously into the **partitioned `email_event`
+  store** (§6.6, `09`).
+- **503 to the ESP when full.** When the bounded queue is at capacity, the edge **does not** block,
+  drop silently, or fall over — it returns a **`503` (with `Retry-After`)** RFC 9457 problem
+  response. ESPs treat a `503`/timeout as "retry later" and **redeliver** (the same redelivery §6.3
+  already makes idempotent), so shedding under load is **lossless**: we hand the event back to the
+  provider's durable retry buffer instead of risking our own. This is the deliberate inverse of the
+  recipient-facing redirect rule (§3.2) — there we *never* error the human and drop the event; here
+  we *do* error the (retrying, machine) ESP rather than accept work we cannot durably queue.
+- **Observability.** Admission rejections, queue depth, and the worker→store drain latency are the
+  ingest SLO signals surfaced in `15`'s system-health / ingest view; a sustained `503` rate is a
+  capacity alert, not normal operation.
+
+```json
+{ "type": "https://truepoint.in/problems/ingest-overloaded", "title": "Event ingestion temporarily at capacity", "status": 503 }
+```
+
+### 6.5 Soft-delete before hard-delete (so late replies still thread)
+
+Send and message rows are **soft-deleted before they are ever hard-deleted** — the same `deleted_at`
+tombstone pattern the platform already uses on `contacts` (canon: `contacts.deleted_at`). A reply
+can arrive **days or weeks** after a send, long after a sequence has completed, a contact has been
+archived, or a cleanup job has run. If the originating send row (carrying the stored `Message-ID`,
+§5.1) were hard-deleted, the inbound reply would **fail to thread** — it could not bind to its
+enrollment/contact, would be mis-scored or orphaned, and the highest-value event in the subsystem
+(D6 reply) would be lost. **Rule:** retention/cleanup sets `deleted_at` on send/message rows and
+**threading still resolves against soft-deleted sends**, so a late reply continues to match and
+attribute correctly; only after a defined grace window (governed by `06` retention / `09` data
+model, and respecting DSAR hard-erasure which always wins, §6.4) may a soft-deleted row be hard
+deleted. Hard deletion is the terminal, irreversible state — never the first action.
+
+### 6.6 Where ingested events land — the partitioned store *and* the activity feed
+
+Every event the worker accepts is written into the **high-volume partitioned `email_event` store**
+(the genuinely new tracking store owned by `09`), which is built for ingest volume and is the source
+of truth for analytics roll-ups (`08`) and the per-contact timeline (§7). That same write **feeds
+the `activities` engagement timeline** — the worker emits the corresponding `activities` row
+(`activity_type ∈ { email_sent, email_opened, email_clicked, email_replied }`, `channel = email`,
+`occurred_at` = the provider event timestamp) so the event also appears in the **product FEED /
+record activity stream** alongside calls, LinkedIn touches, and notes. `email_event` is the raw,
+partitioned, high-cardinality store; `activities` is the human-readable, cross-channel feed it feeds
+— neither is a parallel of the other, and a tracking event is not "ingested" until it has landed in
+both (one transaction in the worker). This is the §7 timeline's durable backing and the §8
+post-commit publish source.
+
+### 6.7 What ingestion must never do
 
 Never log the raw body or any recipient PII (security + data constraints) — log the provider event id,
 the event type, and the resolved `email_send` reference only. Never trust a recipient identifier from
@@ -323,7 +426,7 @@ tenant context, so a spoofed/leaked id can never cross a tenant boundary (RLS + 
 
 ## 7. Per-contact event timeline
 
-Every event, once written, is attributable to a contact (via `email_send` → `email_enrollment` →
+Every event, once written, is attributable to a contact (via `email_send` → `outreach_log` →
 contact) and rolls up into a **per-contact email timeline**: an ordered stream of *sent → delivered →
 opened (informational) → clicked → replied / OOO → unsubscribed / complaint* for that person, across all
 their enrollments and one-off sends.
@@ -341,7 +444,7 @@ their enrollments and one-off sends.
   histories, WCAG 2.2 AA, light theme only, `var(--tp-*)` tokens, i18n copy — per the design constraint
   and `10`.
 - **No bodies in the event stream:** reply *content* is shown from the inbox model (`10`), not stored on
-  `email_tracking_event` (§2.2).
+  `email_event` (§2.2).
 
 ---
 
@@ -381,8 +484,8 @@ Per the **Phase Map** (owned by `13-rollout-phases.md`):
 - Tracking therefore **ships across P1→P3**, exactly as the Phase Map states.
 
 **Cross-references:**
-- `09-data-model` — owns `email_tracking_event` (and every entity named here); this doc specifies the
-  *behaviour* its columns must support (dedup key, classification, timestamps).
+- `09-data-model` — owns `activities` / `email_event` (and every entity named here); this doc specifies
+  the *behaviour* their columns must support (dedup key, classification, timestamps).
 - `08-reporting-analytics` — consumes these events; reply rate is its headline (D6), opens are
   informational, clicks are secondary.
 - `05-sequences-automation` — consumes `replied`/`bounced`/`unsubscribed`/OOO to auto-pause or defer
@@ -390,7 +493,7 @@ Per the **Phase Map** (owned by `13-rollout-phases.md`):
 - `10-web-surface` — renders the per-contact timeline and unified inbox, hosts the open/click pixels'
   effects, consumes the SSE stream.
 - `06-compliance` — gates whether tracking (pixel/link-rewrite) is permitted per tenant/region;
-  unsubscribe + complaint feed `email_suppression` / `email_consent`.
+  unsubscribe + complaint feed `suppression_list` / `consent_records`.
 - `07-multitenancy-reputation-isolation` — complaints and bounces are reputation signals; D3 tracking
   domain is per-tenant.
 - `02`/`03` — the send path emits `Message-ID` (for reply matching) and the `sent` event; deliverability
@@ -400,8 +503,9 @@ Per the **Phase Map** (owned by `13-rollout-phases.md`):
 
 ## 10. Acceptance summary (the contract)
 
-1. **Eight canonical event types** (§2), each written as one `email_tracking_event` via the
-   `email_tracking` queue with per-job tenant context (D10); the event-type table (§2.1) is the source
+1. **Eight canonical event types** (§2), each written as one `email_event` row (surfaced in
+   `activities`) via the `email_tracking` queue with per-job tenant context (D10); the event-type table
+   (§2.1) is the source
    of truth for source/detection/reliability.
 2. **Opens are informational, never the KPI (D6).** §4 is the evidence: MPP inflates opens 15–35% and
    Apple Mail is ~58% of opens; Gmail proxy prefetch adds false opens and caching hides real re-opens.

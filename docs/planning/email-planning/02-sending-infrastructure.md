@@ -321,7 +321,7 @@ canonical best-in-class pattern.
 | Stream | Consent basis | Identity | Provider (D1) | Why isolated |
 |---|---|---|---|---|
 | **Transactional / system** | Implicit (user action) | TruePoint platform domain | Postmark / SES | Must always deliver; cannot tolerate reputation drag |
-| **Bulk (permissioned)** | Explicit opt-in (`email_consent`, D9) | Tenant marketing domain | SES (Postmark Broadcast / SendGrid / Mailgun alt) | Higher complaint rate than transactional; opt-out (RFC 8058) mandatory |
+| **Bulk (permissioned)** | Explicit opt-in (`consent_records`, D9) | Tenant marketing domain | SES (Postmark Broadcast / SendGrid / Mailgun alt) | Higher complaint rate than transactional; opt-out (RFC 8058) mandatory |
 | **Cold / 1:1 sales** | Lawful basis per `06` | Tenant cold domains + mailboxes | Google/Microsoft mailbox | Highest complaint risk; must ride the seller's own reputation, isolated per §3.3 caps |
 
 ### 8.2 Recommended for TruePoint
@@ -347,7 +347,7 @@ This section binds the above to the real codebase and the constraints digest. It
 |---|---|---|
 | `mailbox_integration` | One connected Google/MS mailbox (or SMTP creds); carries OAuth tokens **server-side only (D7)**, per-mailbox daily cap, warmup state, health signals, API-vs-SMTP capability flag | `tenant_id` + `workspace_id` + `owner_user_id`; secrets **never on the client**, app-AES-GCM today / **KMS target (D7, known gap)** |
 | `sending_domain` | A tenant domain used for sending; carries DNS-auth status (SPF/DKIM/DMARC — `03`), stream assignment | `tenant_id` (+ `workspace_id`); custom tracking domain per `D3` |
-| `email_send` | One send attempt — records chosen mailbox/provider, stream, status; the idempotency unit (`D5`) | `tenant_id`-scoped; RLS **ENABLE+FORCE**, fail-closed `NULLIF`; tenant_id-leading index; idempotent via `email_idempotency_key` |
+| `email_send` | One send attempt — records chosen mailbox/provider, stream, status; the idempotency unit (`D5`) | `tenant_id`-scoped; RLS **ENABLE+FORCE**, fail-closed `NULLIF`; tenant_id-leading index; idempotent via the existing **`idempotency_keys`** table (`UNIQUE(tenant_id, key)`, `D5`) — **not** a parallel email idempotency table |
 
 All under **RLS ENABLE+FORCE, fail-closed `NULLIF`** with **`SET LOCAL` tenant GUCs**; workers set tenant context
 per job. Files: `packages/db/src/schema/email.ts` + `rls/email.sql` + `repositories/emailRepository.ts`;
@@ -361,7 +361,9 @@ HTTP surface `apps/api/src/features/email/{routes.ts,index.ts}` on `/api/v1`.
   **bounds the fan-out** so a 50k-recipient sequence cannot stampede a provider.
 - **`email_warmup`** — drives the §3.2 ramp per mailbox, raising its effective cap over the warmup window;
   peer-to-peer warmup traffic stays **inside one tenant's pool** (§3.5).
-- **`email_tracking`** and **`email_sequence_tick`** — owned by `04` and `05`; named here only for completeness.
+- **`email_tracking`** and the **sequence-tick worker** (`apps/workers/src/queues/outreach.ts`, the M9
+  `processOutreach → sendStep` driver that advances `outreach_log` along `outreach_steps`) — owned by `04` and
+  `05`; named here only for completeness.
 
 ### 9.3 Throttling — enforced **in-queue**, per-tenant **and** per-mailbox (D10)
 
@@ -376,6 +378,37 @@ inputs are untrusted). For each candidate send the `email_send` worker checks, a
 
 Over-cap sends are **deferred** (rescheduled to the next window), not dropped — the job stays in a user-visible
 state (queue contract: user-visible job states), surfaced in `10`.
+
+#### 9.3.1 Where the per-mailbox counter lives — **Redis, not a hot DB row**
+
+The per-mailbox daily cap is checked on **every** candidate send, so the counter is a **hot path** — the
+single most-read, most-incremented value in the whole `email_send` worker. It must **not** live in a
+`mailbox_integration` column that the worker locks `SELECT … FOR UPDATE` on each send: that turns one row into
+a serialization point for an entire pool's fan-out and reproduces exactly the contention failure `15` (§ scaling
+the send path) warns against. The `creditRepository` `FOR UPDATE` lock pattern is the right template **only** for
+the per-tenant *quota/FinOps* counter (§9.4), where the value is money and the consistency requirement is
+absolute. The per-mailbox throttle has a different shape and gets a different mechanism:
+
+- **Authoritative count → a Redis counter, keyed per mailbox per window.** Key shape
+  `email:cap:{tenant_id}:{mailbox_integration_id}:{yyyymmdd}` (the calendar day matching the provider's rolling
+  window, §7.1), with a TTL that expires the key after the window rolls. The worker does an atomic `INCR` (or a
+  small Lua check-and-increment) and compares against the mailbox's effective cap (§3.3, warmup-scaled by
+  `email_warmup`). This is O(1), lock-free, and survives the fan-out of a 50k-recipient sequence.
+- **Queue-local batch cache → fewer Redis round-trips.** When the `email_send` worker drains a batch for one
+  pool it caps **claims a small budget** for each mailbox up front (e.g. reserve N slots with one decrement),
+  spends them in-process across the batch, and **returns the unspent remainder** at batch end. This keeps the
+  hot loop in process memory rather than hammering Redis per recipient, while the Redis counter stays the single
+  source of truth across all worker replicas. A crashed worker simply lets its reserved-but-unspent slots expire
+  with the key — the cap is a **safety ceiling, not a ledger**, so a small over-reservation on crash is
+  acceptable (unlike the FinOps counter, which is not).
+- **Reconciliation, not reliance.** The durable truth of *what actually sent* is the count of `email_send` rows
+  for that mailbox/day; a low-priority reconcile (the same cadence as `04`'s event reconcile) corrects Redis
+  drift. Redis is the **throttle**, `email_send` rows are the **record** — they are allowed to diverge briefly
+  and never gate correctness, only rate.
+
+This split — **Redis for the rate ceiling, `creditRepository` `FOR UPDATE` only for the money quota** — is the
+load-bearing decision that lets one pool's fan-out scale without a hot row, and `15` owns the broader
+worker-replica scaling contract.
 
 ### 9.4 FinOps — quota + hard cap + per-user limit on metered ESP sends
 
@@ -402,6 +435,103 @@ quota + cap + per-user limit on metered sends):
 
 Sending infrastructure therefore **spans P0 / P1 / P5** (and P6 for governance), exactly as the Phase Map states.
 
+### 9.6 The `ProviderAdapter` interface — config-registered, realized through the existing `EmailSenderPort` seam
+
+The send transaction already has a clean seam: `packages/core/src/outreach/sendStep.ts` sends through an injected
+**`EmailSenderPort`** (`packages/core/src/outreach/senderPort.ts` — `send(OutboundEmail) -> { messageId }`), and
+M9 ships `consoleSender` (dev) + `staticSender` (tests). The doc's whole multi-provider story (§7) lands **behind
+that one seam** — we do **not** add a second send path. Concretely:
+
+- **`EmailSenderPort` stays the contract `sendStep` depends on.** It does not change shape: the send transaction
+  keeps calling `port.send(...)` and never learns which provider answered. This is the M9→M12 swap promised in
+  `senderPort.ts`'s own header (the SES/mailbox adapter "replaces these at M12 **without touching the send
+  transaction**").
+- **A `ProviderAdapter` is the per-provider realization the port resolves to.** Shape (behaviour, not DDL — the
+  envelope contract is owned by `09`):
+
+  > `ProviderAdapter.send(mailbox, recipient, subject, body, headers) -> { providerMessageId, error }`
+
+  where `mailbox` is the chosen **`mailbox_integration`** row (carrying the decrypted-server-side credential, the
+  provider id, and the API-vs-SMTP capability flag, §6.2 / §9.1), `headers` carries the auth/tracking/list-unsub
+  headers (`03`, `D3`), `providerMessageId` is the id the worker persists on the `email_send` row to honour `D5`,
+  and `error` is the **structured** failure (§9.7) the backlog-recovery state machine consumes. The
+  `EmailSenderPort.send(OutboundEmail) -> { messageId }` the M9 transaction sees is the **thin projection** of
+  this richer adapter result (`providerMessageId → messageId`); the extra fields (`error`, provider rate signals)
+  are read by the **worker**, outside the send tx, so the tx contract is unchanged.
+- **Adapters are registered via config, not code — through the existing `apps/admin` Providers surface.** The
+  pluggable registry's *home* is the already-built `apps/admin/src/features/provider-configs/` slice
+  (`/provider-configs`, `ProviderConfigView{ provider, label, enabled, keyHint, rateLimitPerMin,
+  monthlyBudgetCents, monthToDateCents, health }`). Enabling a provider, setting its `rateLimitPerMin` (which
+  feeds §9.7's window), and toggling it on/off is an **admin config edit**, never a code deploy or a new adapter
+  class — exactly the "routing is config, not a rewrite" property §7.2 commits to. The mailbox-world per-tenant
+  credential is **not** an admin-global config row: it lives on the tenant's own **`mailbox_integration`**
+  (server-side secret, `D7`), and the adapter reads it per send. Admin Providers governs the **platform-world**
+  ESP roster + global rate/budget; `mailbox_integration` carries the **mailbox-world** per-tenant credential —
+  the same two-world split as D1.
+- **Selection chain (unchanged seam, new internals):** `packages/core/src/email/` picks the **stream** (§8) →
+  picks the **provider** for that stream from the admin Providers registry (platform world) or routes to the
+  tenant's mailbox (`mailbox_integration`, mailbox world) → resolves the matching `ProviderAdapter` in
+  `packages/integrations/` → hands the `EmailSenderPort` to `sendStep`. The `email_send` row records which
+  `mailbox_integration` / provider answered (§9.1).
+
+`15` owns how the adapter registry stays open for the **next** provider (the extensibility contract); this doc
+only fixes that new providers arrive as **config + one adapter behind the existing port**, never as a fork of the
+send transaction.
+
+### 9.7 Provider hard-rate-limit detection + backlog-recovery state machine
+
+§9.3 throttles **proactively** — we stay under the §3.3/§7.1 ceilings so we rarely hit a provider's hard limit.
+But providers move ceilings without notice (Microsoft's TERRL, §7.1, is the canonical 2025 example), so the
+worker must also handle a **reactive** cap-hit: the provider itself returning 4xx/`Retry-After`. This is a
+small **state machine per `mailbox_integration`**, driven by the structured `error` the `ProviderAdapter`
+(§9.6) returns.
+
+**Detection — parse the provider response, do not guess.** The adapter maps each provider's failure into a
+structured `error` the worker can act on:
+
+| Provider signal | Mapped meaning | Worker action |
+|---|---|---|
+| HTTP `429` + `Retry-After: <seconds/date>` | **Soft rate-limit** (window full) | Honour `Retry-After` exactly; reschedule the job to that instant (never busy-loop) |
+| `429` / `403` with a per-mailbox quota body (Gmail `rateLimitExceeded` / `userRateLimitExceeded`; Graph `MailboxConcurrencyLimit`/`SubmissionQuotaExceeded`; SES `Throttling`/`Max send rate exceeded`) | **Hard per-mailbox cap-hit for the day** | Mark this `mailbox_integration` **capped** for the rest of its window; rotation (§4.3) stops selecting it; remaining recipients route to other under-cap mailboxes in the pool |
+| Sustained `4xx` over the whole window / provider block notice / repeated TERRL rejects | **Multi-day block on the mailbox or sending_domain** | Move the mailbox to **blocked**; pause selection; signal the admin (§11); accumulate a **backlog** |
+| `5xx` / transport | **Transient** | Normal queue backoff + DLQ (D10) — *not* a cap-hit; do not bench the mailbox |
+
+**State machine per `mailbox_integration` (health state, surfaced in `11`):**
+
+1. **`healthy`** — under cap, selectable by rotation.
+2. **`throttled`** — a `Retry-After` is outstanding; the mailbox is selectable again at the `Retry-After` instant.
+   No admin signal (this is normal).
+3. **`capped`** — provider returned a per-mailbox daily cap-hit; **benched until the window rolls** (the §9.3.1
+   Redis key TTL is the natural clock). Auto-recovers; no admin signal unless it recurs daily (a sign the §3.3
+   cap is set too high).
+4. **`blocked`** — sustained rejects / explicit provider block: a **multi-day** condition. The mailbox is
+   benched, an **admin signal is raised** (`audit_log` entry + the `11` Reputation-Pool health surface +
+   `/system-health` queue/SLO surface), and the recipients that could not send accumulate as a **backlog**
+   against the pool. A `blocked` mailbox does **not** auto-unblock on a timer — an admin (or a successful probe
+   send) clears it, because a multi-day block usually means a reputation problem `03` must resolve first.
+
+**Backlog recovery — drain deliberately, never stampede.** When a `blocked`/`capped` condition clears, the
+backlog is **not** flushed at once (a sudden burst after a block is exactly what re-trips the limit and looks
+like a hijacked relay, §3.1). Instead:
+
+- The backlog is just the set of `email_send` jobs in a **deferred** state (§9.3) tagged to the recovering
+  mailbox/pool — there is **no new backlog table**; the queue's own deferred state is the backlog.
+- On recovery the `email_send` worker **re-warms into the cap**: it drains the backlog **under the same §9.3.1
+  Redis throttle and §3.3 ramp** that govern fresh sends — i.e. the backlog competes for the *same* daily slots,
+  it does not get a bypass. If a multi-day block created more backlog than the daily cap can clear, the pool
+  **spreads the drain across days** (and across other healthy mailboxes via rotation, §4.3), which is the correct
+  behaviour — volume scales by mailboxes, not by exceeding a cap (§5.1).
+- The drain is **idempotent**: each backlog job is still keyed by `idempotency_keys` (`D5`) and re-checks
+  `assertNotSuppressed` in-tx (`D4`) before it sends, so a recipient who unsubscribed *during* the block is never
+  mailed on recovery.
+- **Admin signal & visibility.** Entry to `blocked` and completion of a multi-day drain are both audited
+  (`audit_log`) and surfaced to the admin in `11` (Reputation-Pool health) and `/system-health` (queue depth /
+  backlog age as an SLO). The admin can pause the pool, lower the mailbox cap, or trigger a probe send — the
+  governance actions `11`/`12` own.
+
+`15` owns the broader degraded-provider / regional-failover story; this doc fixes only the per-mailbox cap-hit
+detection, the four-state health machine, and the throttled backlog drain.
+
 ---
 
 ## 10. Decisions this doc commits (summary)
@@ -420,6 +550,17 @@ Sending infrastructure therefore **spans P0 / P1 / P5** (and P6 for governance),
 7. **FinOps gates the metered ESP path only:** per-tenant quota + hard cap + per-user limit (wiring is a P5/P6
    deliverable — current known gap).
 8. **All of it under RLS fail-closed, secrets server-side (D7), idempotent sends (D5), suppression-gated (D4).**
+9. **Per-mailbox throttle lives in Redis, not a hot DB row** (§9.3.1): an atomic per-mailbox/day counter +
+   a queue-local batch reservation; the `creditRepository` `FOR UPDATE` lock is used **only** for the per-tenant
+   FinOps money quota (§9.4). `15` owns the worker-replica scaling contract.
+10. **Multi-provider sending lands behind the existing `EmailSenderPort` seam** (§9.6): a config-registered
+    `ProviderAdapter.send(mailbox, recipient, subject, body, headers) -> { providerMessageId, error }`, enabled
+    via the already-built `apps/admin` Providers surface (platform world) and the tenant's own
+    `mailbox_integration` credential (mailbox world) — **no second send path, no rewrite of `sendStep`**.
+11. **A per-`mailbox_integration` cap-hit / backlog-recovery state machine** (§9.7): parse provider
+    4xx/`Retry-After`, drive `healthy → throttled → capped → blocked`, signal the admin on a multi-day
+    `blocked`, and drain the backlog (the queue's deferred state — no new table) **under the same throttle/ramp**,
+    idempotent and suppression-re-checked.
 
 ---
 

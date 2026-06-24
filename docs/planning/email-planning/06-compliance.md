@@ -17,10 +17,11 @@ first, per **D9 — compliance is enforced, not advisory**.
 
 Nothing here is greenfield in posture: it **inherits** TruePoint's existing isolation (RLS),
 suppression-gates-everything discipline, append-only audit, and DSAR fan-out from the prospect /
-list subsystems, and **extends** them to two new canonical entities — **`email_consent`** and
-**`email_suppression`** (both owned by `09-data-model.md`) — and to the send path defined in
-`02-sending-infrastructure.md`. Where a control is new for email, the rule is stated as a **build
-mandate** against the phase that owns it (`13-rollout-phases.md`).
+list subsystems, and **extends** the existing **`consent_records`** and **`suppression_list`**
+tables (both owned by `09-data-model.md`) — the email subsystem adds **no new** consent or
+suppression tables — and reuses the send path defined in `02-sending-infrastructure.md`. Where a
+control is new for email, the rule is stated as a **build mandate** against the phase that owns it
+(`13-rollout-phases.md`).
 
 ---
 
@@ -54,7 +55,7 @@ list data (`list-plan/08-security-compliance.md §3.1`): **legitimate interest +
 balancing test**, not blanket consent.
 
 > **Mechanism.** The basis under which a given recipient may be emailed is recorded as an
-> **`email_consent`** row (`09-data-model.md`) carrying `lawful_basis ∈ {legitimate_interest,
+> **`consent_records`** row (`09-data-model.md`) carrying `lawful_basis ∈ {legitimate_interest,
 > consent, contractual}`, `source`, `obtained_at`, `jurisdiction`, and any `withdrawn_at`. The
 > send-path lawful-basis check (§1, §5) reads this row; **a send with no lawful basis on record
 > for the recipient's jurisdiction is refused, not defaulted.**
@@ -65,7 +66,7 @@ Legitimate interest is only valid if **documented**. We must be able to demonstr
 how the contact data was acquired, the basis (typically legitimate interest), the purpose of the
 outreach and why it is relevant, and how opt-outs and data-subject rights are honoured. [1][2] The
 **LIA / balancing-test snapshot is recorded at the point the basis is asserted** (carried on the
-`email_consent` row's `source` + provenance fields), forming the queryable lawful-basis lineage
+`consent_records` row's `source` + provenance fields), forming the queryable lawful-basis lineage
 chain for DSAR and audit — the same lineage discipline the list plan applies to imports
 (`list-plan/08-security-compliance.md §3.1`).
 
@@ -74,10 +75,10 @@ chain for DSAR and audit — the same lineage discipline the list plan applies t
 Under GDPR a data subject has an **unconditional right to object** to direct-marketing processing
 (Art. 21(2)). [3] In TruePoint this is **not** a soft preference — exercising it must:
 
-1. write an **`email_suppression`** row (`reason = unsubscribe`, scope = tenant+workspace, and a
+1. write an **`suppression_list`** row (`reason = unsubscribe`, scope = tenant+workspace, and a
    `global` row where the objection is identity-level — §6), which **gates every future send
    (D4)**; and
-2. set `email_consent.withdrawn_at` so the lawful-basis check can no longer return a positive.
+2. set `consent_records.withdrawn_at` so the lawful-basis check can no longer return a positive.
 
 The **right to erasure** is handled by the **DSAR cascade** (§8), which deletes the Person from all
 **unsent** enrollments and **suppresses** them (D9) — the email-side extension of the list plan's
@@ -94,7 +95,7 @@ the recipient's **`jurisdiction`**, not a single EU posture.
 > **Mandate (residency siloing — the known gap).** The constraints digest flags that
 > **residency siloing is ABSENT**. EU recipient data is *not yet* physically siloed in an EU
 > region. This is recorded here as a **GDPR/DPDP residency mandate**, not a feature claimed as
-> done: the `email_consent`/`email_suppression` rows already carry `jurisdiction`/`region` so the
+> done: the `consent_records`/`suppression_list` rows already carry `jurisdiction`/`region` so the
 > routing is deterministic when the region is stood up, but **multi-region residency is roadmap,
 > owned outside this doc** (mirrors `list-plan/08-security-compliance.md §8`). Counsel must sign
 > off on processing EU data outside the EU until siloing lands.
@@ -114,7 +115,7 @@ statutory functions, medical emergencies, voluntary disclosure), **none of which
 sales email.** [5][6]
 
 > **Enforcement consequence.** For a recipient whose `jurisdiction = IN`, the lawful-basis check
-> (§5) accepts **only `lawful_basis = consent`** (or `contractual`) on the `email_consent` row.
+> (§5) accepts **only `lawful_basis = consent`** (or `contractual`) on the `consent_records` row.
 > A `legitimate_interest` basis — sufficient for an EU recipient — is **insufficient for an Indian
 > recipient** and the send is refused. This per-jurisdiction asymmetry is exactly why TruePoint
 > records lawful basis per recipient rather than adopting one global posture (§1, §9).
@@ -127,7 +128,7 @@ their rights — available across India's scheduled languages. [4][5] Critically
 consent must be as easy as giving it.** [5][6]
 
 > **Mechanism.** Withdrawal is the **one-click unsubscribe** path (§4) plus an in-app preference
-> control; both write the same `email_suppression` row and set `email_consent.withdrawn_at`. The
+> control; both write the same `suppression_list` row and set `consent_records.withdrawn_at`. The
 > notice text and grievance contact are surfaced from a **workspace/tenant compliance setting**
 > (the same setting that carries the CAN-SPAM physical address — §5.3), so each tenant's notice and
 > redressal route are configured, not hard-coded.
@@ -171,7 +172,7 @@ click. [8][9] This ties directly to the Google/Yahoo bulk-sender rules covered i
 Google and Yahoo require that an unsubscribe request be **processed within 2 days (48 hours)**. [9][10]
 TruePoint exceeds this by processing **synchronously**: the public unsubscribe endpoint
 (`apps/api/src/features/email/routes.ts`, an **unauthenticated** POST on the per-tenant unsubscribe
-domain) writes the **`email_suppression`** row in the request transaction, so the recipient is
+domain) writes the **`suppression_list`** row in the request transaction, so the recipient is
 suppressed **immediately**, not within 48 hours.
 
 > **Security mandates on the endpoint (security has final say).**
@@ -187,9 +188,29 @@ suppressed **immediately**, not within 48 hours.
 >   scanner pre-fetching it) must **not** silently unsubscribe — only the `List-Unsubscribe=One-Click`
 >   POST mutates state. [8]
 
+> **Endpoint hardening — additive build mandates (security has final say).**
+> - **POST-only — GET returns 405.** RFC 8058 one-click is a **POST**. The endpoint route
+>   (`apps/api/src/features/email/routes.ts`, on the per-tenant unsubscribe domain) is registered
+>   for **POST only**; a **GET** (a scanner, a link-preview crawler, a corporate URL-rewriter pre-
+>   fetching the link) receives **`405 Method Not Allowed`** and **mutates nothing**. This is
+>   stricter than the §4.2 "GET is safe" rule above: the method is rejected at the router, not merely
+>   ignored in the handler, so no suppression write is even reachable from a GET. A human-facing
+>   confirmation/preference page may be served from a **separate GET route** that performs no write.
+> - **256-bit random token (not a guessable id).** The unsubscribe token is a **cryptographically
+>   random 256-bit value** (HMAC-bound to recipient × tenant per §4.2), stored only as a one-way
+>   reference and never derived from the contact id or email — so it cannot be enumerated, and a
+>   leaked link suppresses exactly one recipient. A tampered/absent/expired token resolves to nothing
+>   and returns **404** (IDOR → 404, fail-closed).
+> - **Rate-limited (e.g. 100 req/sec/IP).** Because the endpoint is **unauthenticated**, it is
+>   rate-limited per source IP (a starting budget of **~100 req/sec/IP**, tunable per the abuse
+>   baseline) to blunt token-guessing/enumeration and request floods; over-budget requests get
+>   **`429 Too Many Requests`**. Limiting is enforced before the suppression-write transaction so a
+>   flood cannot amplify into write load. Idempotent re-POST (§4.2) still returns success within the
+>   budget so legitimate provider retries are never starved.
+
 > **Phase mandate.** The unsubscribe endpoint + header injection land in **P1** (send path) so the
-> very first marketing-capable send is compliant; the consent/suppression tables they depend on
-> land in **P0** (`13-rollout-phases.md`).
+> very first marketing-capable send is compliant; the `suppression_list` / `consent_records` tables
+> it depends on land in **P0** (`13-rollout-phases.md`).
 
 ---
 
@@ -197,7 +218,7 @@ suppressed **immediately**, not within 48 hours.
 
 ### 5.1 Suppression gates every send, fail-closed — at enqueue AND dequeue
 
-**D4** is absolute: **suppression gates every send, fail-closed.** The `email_suppression` entity
+**D4** is absolute: **suppression gates every send, fail-closed.** The `suppression_list` entity
 (`09-data-model.md`) carries reasons **`{unsubscribe, hard_bounce, complaint, manual, dnc, dsar}`**, is
 **tenant + workspace scoped** (with a `global`/identity scope for DSAR/objection — §6, §8), and
 matches by the **same blind-index discipline** the list subsystem uses so the check never decrypts
@@ -207,7 +228,7 @@ The gate runs at **two points** (defence in depth against the queue's eventual c
 
 | Gate point | Where | Why both |
 |---|---|---|
-| **At enqueue** | `packages/core/src/email/` compliance gate, when an `email_enrollment` is created or a send is scheduled | Cheap early rejection; never enqueue a doomed send |
+| **At enqueue** | `packages/core/src/email/` compliance gate, when an `outreach_log` is created or a send is scheduled | Cheap early rejection; never enqueue a doomed send |
 | **At dequeue** | The send worker (`apps/workers/src/queues/email*.ts`), **inside the transaction that writes the `email_send` row** | A suppression may have arrived *after* enqueue (a Monday unsub for a Wednesday step); the dequeue check is the **authoritative, last-moment** gate |
 
 > **Fail-closed semantics.** The dequeue check is an **in-transaction** read like the list plan's
@@ -218,7 +239,7 @@ The gate runs at **two points** (defence in depth against the queue's eventual c
 
 ### 5.2 What immediately suppresses
 
-Per D4 and D9, these events write an `email_suppression` row **immediately and synchronously**:
+Per D4 and D9, these events write an `suppression_list` row **immediately and synchronously**:
 
 - **Unsubscribe** (one-click §4, in-app, or List-Unsubscribe mailto) → `reason = unsubscribe`.
 - **Spam complaint** (FBL / provider webhook, see `04-status-event-tracking.md`) → `reason =
@@ -233,7 +254,7 @@ A suppression is **never silently removable**; un-suppression (e.g. a recipient 
 ### 5.3 The lawful-basis gate and the CAN-SPAM physical address (US)
 
 Alongside suppression, the **lawful-basis check** (§2.1, §3.1) runs in the same gate: it reads
-`email_consent` for the recipient's `jurisdiction` and refuses a send whose basis is insufficient
+`consent_records` for the recipient's `jurisdiction` and refuses a send whose basis is insufficient
 **for that jurisdiction** (legitimate-interest is fine for EU, **not** for India). For **US**
 recipients the controlling rule is **CAN-SPAM**, which requires: [12]
 
@@ -256,11 +277,43 @@ recipients the controlling rule is **CAN-SPAM**, which requires: [12]
 > - **10 business days** is comfortably met because TruePoint suppresses **synchronously** on opt-out
 >   (§4.2, §5.1) — far inside CAN-SPAM's 10-day window *and* Google/Yahoo's 2-day window.
 
+### 5.4 Periodic suppression-integrity job (dedupe + drift scan)
+
+The synchronous write paths (§4, §5.2) can race — two near-simultaneous unsubscribes, a webhook
+retry, and a manual DNC entry can all target the same recipient — producing **duplicate
+`suppression_list` rows for one identity**. Duplicates never make the gate *less* safe (the
+`assertNotSuppressed` check is a match-exists test, so one match is enough), but they bloat the
+table, slow the blind-index lookups, and make the audit harder to read. A **periodic
+suppression-integrity job** keeps the store clean and verifies the gate's invariants.
+
+> **Mechanism + phase.** An **idempotent, scheduled BullMQ worker**
+> (`apps/workers/src/queues/email*.ts`), run **daily**, does — entirely on internal columns, never
+> decrypting PII:
+> - **Dedupe `(tenant_id, workspace_id, normalized_email)`.** Within each tenant + workspace it
+>   collapses rows that match the **same `email_blind_index`** (the normalized-email match key — the
+>   `domain_blind_index` / `phone_blind_index` for those match types) down to **one canonical row**,
+>   keeping the **earliest `created_at`** (the binding fact) and the **most severe / earliest reason**,
+>   and folding the rest. The blind index *is* the normalized-email key, so dedupe runs without ever
+>   reading plaintext — consistent with the no-PII-in-logs and blind-index discipline (§5.1, §7).
+> - **Drift scan.** It asserts that every `consent_records.withdrawn_at IS NOT NULL` (withdrawn /
+>   objected — §2.3, §3.2) has a matching live `suppression_list` row, and that every `unsubscribe`/
+>   `complaint`/`dsar` suppression has its `consent_records.withdrawn_at` set — re-converging the two
+>   entities (§6) if a half-completed write left them out of step.
+> - **Audit, IDs only.** Each run writes one summary audit row (rows scanned / collapsed / drift
+>   repaired — counts and entity IDs, never an address — §7) and is **idempotent**: a re-run after a
+>   clean pass collapses nothing.
+>
+> The job **never removes a suppression as a side effect** — collapsing duplicates of an *existing*
+> suppression is housekeeping, not un-suppression; true un-suppression remains the audited, narrowly-
+> permitted manual action of §5.2 / `12-roles-permissions.md`. This job lands with the admin /
+> governance surface in **P6** (`13-rollout-phases.md`); the gate (§5.1) is correct without it from
+> **P1** — the job is hygiene, not a load-bearing control.
+
 ---
 
-## 6. Consent tracking (`email_consent`)
+## 6. Consent tracking (`consent_records`)
 
-Every consequential lawful-basis fact about a recipient is a row in **`email_consent`**
+Every consequential lawful-basis fact about a recipient is a row in **`consent_records`**
 (`09-data-model.md`), capturing at minimum:
 
 | Field | Purpose |
@@ -277,7 +330,7 @@ event (§7); it does not erase the prior consent fact. Like every canonical enti
 (D8 owner-scoped visibility), with **RLS ENABLE + FORCE**, the **fail-closed `NULLIF`** predicate,
 and **`tenant_id`-leading indexes** (constraints digest; `09-data-model.md`).
 
-> **Relationship to `email_suppression`.** Consent answers *"may we email this person?"*;
+> **Relationship to `suppression_list`.** Consent answers *"may we email this person?"*;
 > suppression answers *"has this person told us to stop / did delivery fail?"* The send gate (§5)
 > requires **both** a positive lawful basis **and** no suppression. They are separate entities
 > because they have different lifecycles, owners, and retention.
@@ -290,8 +343,8 @@ Per the constraints digest, **audit logs store IDs + actions, NEVER PII or messa
 a TruePoint security non-negotiable, not a regulatory minimum. Every compliance-consequential action
 is recorded append-only:
 
-- consent recorded / withdrawn (`email_consent` change);
-- suppression added / reason / scope (`email_suppression` change);
+- consent recorded / withdrawn (`consent_records` change);
+- suppression added / reason / scope (`suppression_list` change);
 - a send **blocked** by the gate (`send.blocked` with the reason: `suppressed` / `no_basis` /
   `no_physical_address`) — the email analogue of the list plan's `reveal.blocked` audit
   (`list-plan/08-security-compliance.md §6`);
@@ -300,7 +353,7 @@ is recorded append-only:
 
 > **What an audit row may and may not contain.**
 > - **MAY:** actor ID (user/staff/system), action enum, the affected **entity IDs**
->   (`email_send` id, `email_consent` id, recipient **person/contact id** — an internal id, not an
+>   (`email_send` id, `consent_records` id, recipient **person/contact id** — an internal id, not an
 >   address), tenant/workspace id, timestamp, reason enum.
 > - **MUST NOT:** the recipient's email address or phone, the rendered subject/body, or any header
 >   value that embeds PII. **No PII in logs** is a security non-negotiable (final say). The
@@ -321,16 +374,16 @@ under the **one sanctioned privileged cross-workspace path**, never the tenant r
 (`list-plan/08-security-compliance.md §5.2`; ties to the **data-skill DSAR cascade**). The email
 contribution to the cascade, per **D9**, is:
 
-1. **Remove the Person from all *unsent* enrollments.** Every `email_enrollment` for that person
+1. **Remove the Person from all *unsent* enrollments.** Every `outreach_log` for that person
    with steps **not yet sent** is cancelled/removed so no future `email_send` is generated. **Already-
    sent** `email_send` rows are *not* fabricated away — they are an immutable historical fact —
    but their **PII is nulled/tombstoned** the same way the list plan tombstones overlay copies
    (recipient resolved to a tombstoned identity; no plaintext address retained).
-2. **Suppress the Person.** Write a **`global`/identity-scoped `email_suppression`** row so that no
+2. **Suppress the Person.** Write a **`global`/identity-scoped `suppression_list`** row so that no
    re-import, re-enrollment, or future sequence can re-introduce them — the email mirror of the list
    plan's "insert a `global` suppression row so re-import can't re-create the subject."
-3. **Withdraw consent.** Set `email_consent.withdrawn_at` for the person across the tenant.
-4. **Purge tracking PII.** `email_tracking_event` rows tied to the person are swept (IP/UA and any
+3. **Withdraw consent.** Set `consent_records.withdrawn_at` for the person across the tenant.
+4. **Purge tracking PII.** `email_event` rows tied to the person are swept (IP/UA and any
    recipient-identifying payload), consistent with the no-residual-PII verification scan.
 5. **Audit** the cascade (IDs + action only, §7) and do not mark the job `completed` until a
    verification scan confirms **no residual recipient PII** across consent, suppression (the
@@ -348,16 +401,52 @@ contribution to the cascade, per **D9**, is:
 > the enrollment but writes no global suppression and touches no consent. **Person-level erasure**
 > is the privileged fan-out above. Conflating them is a bug.
 
+### 8.1 Retention + the two-stage delete (soft-delete now, hard-delete swept)
+
+Erasure in TruePoint is **two-stage**: the DSAR cascade (§8) **soft-deletes first** — it tombstones
+PII, withdraws `consent_records`, writes the `global` suppression, and stamps a deletion marker
+(`deleted_at`, the same `deleted_at` discipline already on `contacts`) — making the recipient
+**immediately invisible and unmailable**. An **asynchronous daily hard-delete sweep** then follows
+and physically removes the soft-deleted residue. The cascade's *correctness* (no future send, no
+re-introduction) is satisfied at soft-delete time; the sweep is the durable physical-erasure tail.
+
+> **Retention default — 90 days.** High-volume, recipient-identifying rows (notably the raw
+> `email_event` raw store and the soft-deleted residue from §8) are retained
+> for a **default of 90 days**, after which the sweep hard-deletes them. 90 days is the **default**,
+> configurable down per tenant/region where a stricter residency or contractual rule applies (the
+> `jurisdiction` / `region` columns of §2.4 / §6 make the per-region override deterministic); it is
+> a floor for product/deliverability analytics, not a licence to keep PII indefinitely. Aggregates
+> that carry **no recipient PII** (counts feeding §9 metrics / `04-status-event-tracking.md`) may be
+> retained beyond 90 days because there is nothing to erase.
+
+> **The async daily hard-delete sweep.** An **idempotent, scheduled BullMQ worker**
+> (`apps/workers/src/queues/email*.ts`), run **daily** with **backoff + DLQ**, hard-deletes, by
+> internal id / blind index only (never decrypting PII):
+> - rows soft-deleted by a DSAR cascade (§8) whose tombstone is settled — physically purging the
+>   tombstoned `email_send` / enrollment residue and any `email_event` PII the §8 step 4
+>   purge marked; and
+> - `email_event` rows older than the **90-day** retention window (partition
+>   drop where the store is partitioned by day, so a hard-delete is a cheap `DROP PARTITION`, not a
+>   row scan).
+>
+> It **never touches** the `global`/identity `suppression_list` row (which must outlive the data so a
+> re-import can't re-introduce the subject — §8 step 2) or the `consent_records.withdrawn_at` fact
+> (the auditable withdrawal record — §6). Each run writes one IDs-only summary audit row (§7) and a
+> **post-sweep verification scan** asserting **no residual recipient PII** before the swept batch is
+> marked complete — the same no-residual-PII bar the cascade applies. Sweep lands in **P6**
+> (`13-rollout-phases.md`); the soft-delete that makes a recipient unmailable is enforced from the
+> moment the cascade runs.
+
 ---
 
 ## 9. Regulation comparison table
 
 The single most important artefact in this doc: **the consent models disagree, so TruePoint enforces
-per-jurisdiction at the send gate (§5), keyed on `email_consent.jurisdiction`.**
+per-jurisdiction at the send gate (§5), keyed on `consent_records.jurisdiction`.**
 
 | Regulation | Scope (who/where) | Consent model for outbound B2B email | Unsubscribe / opt-out rule | TruePoint enforcement point |
 |---|---|---|---|---|
-| **GDPR + ePrivacy** [1][2][3] | EU/EEA data subjects (incl. business contacts) | **Legitimate interest (Art. 6(1)(f))** acceptable for relevant B2B prospecting *with documented LIA*; **consent** where national ePrivacy requires opt-in | **Unconditional right to object** (Art. 21(2)); must be easy and honoured | Lawful-basis gate accepts `legitimate_interest` for `jurisdiction ∈ EU` **with LIA on the `email_consent` row**; objection → `email_suppression` + `withdrawn_at` (§2, §5) |
+| **GDPR + ePrivacy** [1][2][3] | EU/EEA data subjects (incl. business contacts) | **Legitimate interest (Art. 6(1)(f))** acceptable for relevant B2B prospecting *with documented LIA*; **consent** where national ePrivacy requires opt-in | **Unconditional right to object** (Art. 21(2)); must be easy and honoured | Lawful-basis gate accepts `legitimate_interest` for `jurisdiction ∈ EU` **with LIA on the `consent_records` row**; objection → `suppression_list` + `withdrawn_at` (§2, §5) |
 | **India DPDP Act 2023** [4][5][6] | Indian data principals | **Consent only** — free/specific/informed/unconditional/unambiguous; **no general legitimate-interest basis**; cold B2B email needs consent | **Withdrawal as easy as consent**; six data-principal rights incl. erasure | Gate accepts **only `consent`/`contractual`** for `jurisdiction = IN` (legit-interest **refused**); withdrawal = one-click unsub → suppression + `withdrawn_at` (§3, §5) |
 | **CAN-SPAM (US)** [12] | US commercial email | **No prior consent required** (opt-out regime); but honest headers + identify ads | **Honour opt-out within 10 business days**; opt-out valid ≥30 days; valid **physical postal address** required | Physical address = tenant compliance setting (**send refused if absent**); honest `From`/`Subject` enforced at render/send; **synchronous** suppression beats the 10-day clock (§5.3) |
 | **RFC 8058 + Google/Yahoo bulk rules** (2024+) [8][9][10][11] | Senders to Gmail/Yahoo (≥5k/day) — practical floor for all marketing mail | N/A (deliverability rule, cross-ref `03-deliverability.md`) | **One-click `List-Unsubscribe` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click`**, DKIM-aligned; **process within 2 days (48h)** | Header pair injected on every marketing send (**D9**); unauthenticated signed-token unsubscribe endpoint suppresses **synchronously** (§4) |
@@ -371,12 +460,15 @@ in `packages/db/test` and `packages/core` tests.
 
 | # | Test | Asserts | Phase |
 |---|---|---|---|
-| 1 | **Suppression gates send (fail-closed)** | A matching `email_suppression` (any reason, tenant/workspace/global) blocks the send at **both** enqueue and dequeue; an unreachable/ambiguous suppression store **defers, never sends**; `send.blocked` audited. | P0/P1 |
+| 1 | **Suppression gates send (fail-closed)** | A matching `suppression_list` (any reason, tenant/workspace/global) blocks the send at **both** enqueue and dequeue; an unreachable/ambiguous suppression store **defers, never sends**; `send.blocked` audited. | P0/P1 |
 | 2 | **Lawful-basis gate, per jurisdiction** | `legitimate_interest` allows an EU send but **refuses** an `IN` send; missing basis refuses everywhere; refusal audited as `no_basis`. | P1 |
 | 3 | **One-click unsubscribe (RFC 8058)** | Every marketing send carries `List-Unsubscribe` (HTTPS) + `List-Unsubscribe-Post: List-Unsubscribe=One-Click`, DKIM-covered; a one-click **POST** writes the suppression synchronously; a **GET** does **not** mutate; token tamper → 404; re-POST is idempotent. | P1 |
 | 4 | **CAN-SPAM physical address** | A marketing send for a tenant with **no physical address setting** is refused (`no_physical_address`); honest `From`/`Reply-To` resolves to a verified `sending_domain`. | P1 |
-| 5 | **DSAR cascade** | A person-level erasure cancels all **unsent** enrollments, writes a **global** `email_suppression`, sets `email_consent.withdrawn_at`, purges `email_tracking_event` PII, tombstones sent-row PII; the verification scan finds **no residual recipient PII**; cascade audited (IDs only). | P6 |
+| 5 | **DSAR cascade** | A person-level erasure cancels all **unsent** enrollments, writes a **global** `suppression_list`, sets `consent_records.withdrawn_at`, purges `email_event` PII, tombstones sent-row PII; the verification scan finds **no residual recipient PII**; cascade audited (IDs only). | P6 |
 | 6 | **No PII in audit/logs** | No audit row or log line contains a recipient email/phone, subject, or body; only IDs + action + reason enums; the unsubscribe token resolves PII server-side only. | P1 |
+| 7 | **Unsubscribe endpoint hardening** | A **GET** on the unsubscribe link returns **405** and mutates nothing; only the one-click **POST** suppresses; the token is a **256-bit random** value (not derived from contact id/email) so guessing fails → 404; bursting past the **~100 req/sec/IP** budget returns **429** before any suppression write. | P1 |
+| 8 | **Suppression-integrity job** | Two `suppression_list` rows sharing `(tenant_id, workspace_id, email_blind_index)` collapse to **one canonical row** (earliest `created_at` kept); a `consent_records.withdrawn_at` with no live suppression (and vice-versa) is re-converged; the job removes **no** suppression as a side effect; a re-run is idempotent; summary audited (counts/IDs only). | P6 |
+| 9 | **Retention + two-stage delete** | A DSAR cascade **soft-deletes first** (recipient immediately unmailable); the **daily hard-delete sweep** physically purges soft-deleted residue and `email_event` rows older than the **90-day** default; the sweep **never** deletes the `global` `suppression_list` row or `consent_records.withdrawn_at`; post-sweep scan finds **no residual recipient PII**. | P6 |
 
 **Gate (every phase):** `npx turbo run typecheck`, `bun test`,
 `npx @biomejs/biome check`, `npm run lint:boundaries`, and regenerate `docs/ARCHITECTURE_MAP.md`.
@@ -393,10 +485,10 @@ in `packages/db/test` and `packages/core` tests.
   (0.1% / 0.3%), and authentication that the §4 / §9 unsubscribe rule ties into.
 - `04-status-event-tracking.md` — complaint (FBL) and bounce webhook ingestion, signature
   verification, the events that feed §5.2 suppression.
-- `05-sequences-automation.md` — `email_enrollment` lifecycle the DSAR cascade (§8) cancels.
+- `05-sequences-automation.md` — `outreach_log` lifecycle the DSAR cascade (§8) cancels.
 - `07-multitenancy-reputation-isolation.md` — per-tenant reputation isolation (D2) and the
   per-tenant custom unsubscribe/tracking domain (D3) the unsubscribe endpoint lives on.
-- `09-data-model.md` — **owner of `email_consent` + `email_suppression`** (and all canonical
+- `09-data-model.md` — **owner of `consent_records` + `suppression_list`** (and all canonical
   entities): columns, RLS ENABLE+FORCE + `NULLIF`, `tenant_id`-leading indexes, blind-index match.
 - `11-admin-surface.md` / `12-roles-permissions.md` — the compliance/audit surfaces (P6) and who may
   add/remove suppression, attest lawful basis, or run a DSAR.

@@ -21,7 +21,7 @@
 
 ## 1. The principle (D8): owner-scope by default; cross-rep needs a role
 
-A Rep's email work — their `email_template`s, their `email_sequence`s, the `email_send`s they made,
+A Rep's email work — their templates, their `outreach_sequences`, the `outreach_log` sends they made,
 the analytics over them — is **theirs**. The default answer to "can user X see user Y's email
 object?" is **no**. Visibility widens only by an **explicit share** or by holding a **workspace
 role** (Manager/Admin) that confers team-wide reach. This is **D8**, and it is non-negotiable:
@@ -79,9 +79,10 @@ read across tenants via the audited `withPlatformTx` path); customer routes alwa
 ### 2.1 What each role SEES and DOES (narrative)
 
 **Rep (workspace `member`).** *Sees:* their own templates and the versions they authored
-(`email_template`/`email_template_version`), templates **shared** to them or workspace-published;
-their own sequences and the enrollments they created; the sends they made and the tracking events on
-them; **their own** analytics (`email.analytics.own`). *Does:* create/edit/share/delete their **own**
+(the template store; the `/sequences` Templates panel), templates **shared** to them or
+workspace-published; their own `outreach_sequences` and the `outreach_log` enrollments they created;
+the sends they made and the `activities` tracking events on them; **their own** analytics
+(`email.analytics.own`). *Does:* create/edit/share/delete their **own**
 templates; create sequences and **enroll** prospects they own into them; **send** (subject to D4
 suppression gate + D9 compliance); connect **their own** mailbox (`email.mailbox.connect` for self);
 view suppression as it **affects their sends** (read). *Cannot:* see another Rep's drafts/enrollments
@@ -99,7 +100,8 @@ tenant-wide suppression/consent policy; cross into another workspace; read secre
 
 **Tenant Admin (org `owner`/`security_admin`/`compliance_admin`).** *Sees:* workspace/tenant-wide
 configuration and **workspace analytics** (`email.analytics.workspace`): all mailboxes
-(`mailbox_integration`, **metadata + status, never the secret**), all `sending_domain`s and their
+(`mailbox_integration` [NEW, D11], **metadata + status, never the secret**), all `sending_domain`s
+(NEW, D11) and their
 DNS/auth posture, the tenant's Reputation Pools and Warmup state, the **tenant** and **workspace**
 suppression and consent ledgers. *Does:* connect/disconnect/verify sending domains; create and
 assign Reputation Pools; start/govern Warmup; manage **tenant- and workspace-scoped** suppression
@@ -137,36 +139,44 @@ permission is **necessary, never sufficient** — every permission below is pair
 a **data-scope** check. Permissions are grouped by object.
 
 ### 3.1 Templates
-- `email.template.create` — author a new `email_template` (+ first `email_template_version`).
+- `email.template.create` — author a new template (the template store behind the `/sequences`
+  Templates panel; `TemplateSummary{id,name,channel,subject,body,updatedAt}`).
 - `email.template.edit` — edit a template you own / a shared template you have edit-share on.
 - `email.template.share` — grant another user/workspace access to a template you own (creates an
   explicit share row; references-not-copies).
 - `email.template.delete` — delete/retire a template you own (Manager may delete team templates).
 - `email.template.publish` — publish a template to the **workspace** library (Manager/Admin).
 
-### 3.2 Sequences & enrollment
-- `email.sequence.create` — create an `email_sequence` (+ `email_sequence_step`s).
+### 3.2 Sequences & enrollment (reuse the M9 outreach engine — D11)
+- `email.sequence.create` — create an `outreach_sequences` row (+ `outreach_steps`) via
+  `packages/core/src/outreach/createSequence.ts`.
 - `email.sequence.edit` — edit a sequence you own / are shared on.
-- `email.sequence.enroll` — create an `email_enrollment` (enroll a prospect **you own** into a
-  sequence you may run). Enrollment is owner-checked: you cannot enroll a prospect you cannot see.
+- `email.sequence.enroll` — create an `outreach_log` enrollment via
+  `packages/core/src/outreach/enrollContact.ts` (enroll a prospect **you own** into a sequence you
+  may run; revealed-only + `assertNotSuppressed` in-tx + idempotent via `UNIQUE(sequence_id,contact_id)`).
+  Enrollment is owner-checked: you cannot enroll a prospect you cannot see.
 - `email.sequence.pause` — pause/resume an enrollment or a whole sequence (Rep: own; Manager: team).
 - `email.sequence.stop` — hard-stop / unenroll (same scoping).
 
 ### 3.3 Sending
-- `email.send` — produce an `email_send`. Always passes the **D4 suppression gate** and **D9
-  compliance** in the same transaction; always idempotent (**D5**, via `email_idempotency_key`); the
-  recipient/template/mailbox IDs supplied by the client are **re-resolved server-side and
+- `email.send` — produce a send through the M9 send transaction
+  `packages/core/src/outreach/sendStep.ts` (advances `outreach_log`). Always passes the **D4
+  suppression gate** (`assertNotSuppressed` re-run in-tx) and **D9 compliance** in the same
+  transaction; blocks unless `from_address`+`physical_address` are present (CAN-SPAM) and
+  auto-appends the postal+unsubscribe footer; always idempotent (**D5**, via `idempotency_keys`);
+  the recipient/template/mailbox IDs supplied by the client are **re-resolved server-side and
   ownership-checked**, never trusted (§4).
 
-### 3.4 Mailboxes
-- `email.mailbox.connect` — connect a `mailbox_integration` (Rep: own mailbox; Tenant Admin: any in
-  tenant). The OAuth/credential exchange is server-side; the stored secret is **never** returned (D7).
+### 3.4 Mailboxes (`mailbox_integration` — NEW, D11)
+- `email.mailbox.connect` — connect a `mailbox_integration` (NEW table; the EmailSenderPort adapter
+  behind `sendStep`) (Rep: own mailbox; Tenant Admin: any in tenant). The OAuth/credential exchange
+  is server-side; the stored secret is **never** returned (D7).
 - `email.mailbox.manage` — configure caps/sending windows/disable/disconnect a mailbox; Tenant Admin
   for shared/team mailboxes, Rep for their own.
 
-### 3.5 Sending domains, reputation, warmup
-- `email.domain.manage` — connect/verify/remove a `sending_domain`, manage SPF/DKIM/DMARC posture and
-  the **custom tracking domain** (D3). **Tenant Admin** only.
+### 3.5 Sending domains, reputation, warmup (all NEW — D11)
+- `email.domain.manage` — connect/verify/remove a `sending_domain` (NEW table), manage SPF/DKIM/DMARC
+  posture and the **custom tracking domain** (D3). **Tenant Admin** only.
 - `email.reputation.manage` — create/assign Reputation Pools; govern per-tenant isolation (D2).
   **Tenant Admin** for own tenant; **Platform Admin** across tenants.
 - `email.warmup.manage` — start/pause/configure Warmup. **Tenant Admin** (own) / **Platform Admin**
@@ -175,9 +185,11 @@ a **data-scope** check. Permissions are grouped by object.
 ### 3.6 Suppression & consent
 - `email.suppression.view` — read suppression as it affects scope you can see (Rep: how it gates own
   sends; Tenant Admin: tenant/workspace ledger).
-- `email.suppression.manage` — add/remove `email_suppression` rows at **workspace** or **tenant**
-  scope (Tenant Admin / `compliance_admin`). Suppression gates **every** send (D4).
-- `email.consent.view` / `email.consent.manage` — read / manage the `email_consent` ledger
+- `email.suppression.manage` — add/remove `suppression_list` rows at **workspace** or **tenant**
+  scope (Tenant Admin / `compliance_admin`; the existing `/settings/compliance` SuppressionForm /
+  addSuppression / removeSuppression surface). Suppression gates **every** send (D4) via the
+  unbypassable `packages/core/src/compliance/assertNotSuppressed.ts`.
+- `email.consent.view` / `email.consent.manage` — read / manage the `consent_records` ledger
   (Tenant Admin / `compliance_admin`); consent feeds D9.
 
 ### 3.7 Deliverability & analytics
@@ -253,10 +265,10 @@ the verified session by the `tenancy` middleware into the RLS GUCs; no email end
 the body or query. Reputation isolation (D2) and suppression scope (D4) ride on this — a request
 cannot assert "I am tenant B" to borrow B's pool or escape A's suppression.
 
-**Ownership transfer is privileged and audited.** Reassigning the `owner_user_id` of an
-`email_template`/`email_sequence`/`email_enrollment` (e.g. when a Rep leaves or a Manager rebalances)
+**Ownership transfer is privileged and audited.** Reassigning the owner of a template /
+`outreach_sequences` / `outreach_log` enrollment (e.g. when a Rep leaves or a Manager rebalances)
 is **not** an ordinary edit. It requires a Manager/Tenant-Admin permission, passes both checks, and
-writes an **audit row** (actor, object, old owner, new owner, reason, time). Transfer moves the
+writes an **`audit_log` row** (actor, object, old owner, new owner, reason, time). Transfer moves the
 **reference**, never copies the data; suppression/consent state travels with the object. This mirrors
 the platform-wide "ownership transfer privileged + audited" rule (`CLAUDE.md`, `09-data-model.md`).
 
@@ -281,11 +293,19 @@ default, audited break-glass for contents** (D2, §7). Secrets sit **outside** t
 
 ## 6. Role × capability matrix
 
-Rows = capabilities; columns = the four roles. Cell legend: **✓** = full within scope · **own** =
-owner-scoped only (D8) · **team** = workspace/team scope · **agg** = cross-tenant **aggregate** only
-(no row-level/PII) · **—** = not permitted. (`viewer` = Rep column, read-only, no write/send/enroll.)
+Rows = capabilities; columns = the **real roles** each narrative role maps onto (§2). Cell legend:
+**✓** = full within scope · **own** = owner-scoped only (D8) · **team** = workspace/team scope ·
+**agg** = cross-tenant **aggregate** only (no row-level/PII) · **—** = not permitted.
+(`viewer` = Rep column, read-only, no write/send/enroll.)
 
-| Capability (`email.*`) | Rep | Manager | Tenant Admin | Platform Admin |
+Column → real gate:
+- **Rep** = workspace `member` via `requireRole("member", …)`.
+- **Manager** = workspace `admin`/`owner` via `requireRole("admin")`.
+- **Tenant Admin** = org `owner`/`security_admin`/`compliance_admin` via `requireOrgRole(…)`.
+- **Platform Staff** = platform staff behind `platformAdmin` (`pa` claim) **then**
+  `requireStaffRole(…)` (`super_admin`/`support`/`compliance_officer`/`billing_ops`/`read_only`).
+
+| Capability (`email.*`) | Rep (`requireRole member`) | Manager (`requireRole admin`) | Tenant Admin (`requireOrgRole`) | Platform Staff (`platformAdmin`+`requireStaffRole`) |
 |---|---|---|---|---|
 | Template create / edit (`template.create`/`.edit`) | own | team | team | — (agg view only) |
 | Template share (`template.share`) | own | team | team | — |
@@ -322,11 +342,17 @@ owner-scoped only (D8) · **team** = workspace/team scope · **agg** = cross-ten
 
 ## 7. Break-glass / impersonation by Platform Admin
 
-The **only** path for a Platform Admin to reach one tenant's email **contents** (a recipient list, a
-message body, a specific `email_send`'s detail to reproduce a deliverability bug) is a **time-boxed,
-reason-gated, customer-visible break-glass impersonation** — the same control the list plan defines
-(`../list-plan/07 §4`), reused verbatim for email. The default platform path is **aggregate-only**
+The **only** path for a Platform Staff member to reach one tenant's email **contents** (a recipient
+list, a message body, a specific `outreach_log` send detail to reproduce a deliverability bug) is a
+**time-boxed, reason-gated, customer-visible break-glass impersonation** — **the existing
+`apps/admin` Users impersonation** (`apps/admin/src` → Users `/users`, the role-gated, time-boxed,
+audited impersonation that already ships), **reused, not reinvented, for email**. The same control
+the list plan defines (`../list-plan/07 §4`). The default platform path is **aggregate-only**
 (§1, §6); break-glass is the rare, justified, bounded, observed exception.
+
+> **Build-on, don't duplicate (D11).** There is **no new impersonation subsystem** for email. The
+> email-aware audit vocabulary below is added to the **existing** impersonation/audit machinery; the
+> entry point is the already-built admin Users surface, not a parallel flow.
 
 **Properties (reuse the existing machinery — `impersonationSessions`, `withPlatformTx` audit):**
 - **Role-gated:** only `super_admin` or `support` may start one (`email.admin.impersonate`,
@@ -341,8 +367,9 @@ reason-gated, customer-visible break-glass impersonation** — the same control 
   tenant (sending, enrolling, editing a template, changing a domain) requires an explicit,
   separately-audited **step-up** — never an implicit consequence of "being in" the tenant.
 - **Audited start + end + every action:** start/end and each email action under the session write an
-  **append-only** `platform_audit_log` row (`admin.impersonate.start`/`.end`, plus email-aware
-  actions — see below) in the **same transaction**, naming target tenant/workspace/user + reason.
+  **append-only** `audit_log` row (the existing impersonation audit trail; `admin.impersonate.start`/
+  `.end`, plus email-aware actions — see below) in the **same transaction** (`writeAudit.ts`), naming
+  target tenant/workspace/user + reason.
 - **Customer-visible:** when a session touches email contents, a **customer-visible** access-log row
   is mirrored into the tenant's own activity feed (actor = TruePoint Support, the object, the reason,
   the time), so trust is **verifiable, not promised** (mirrors `../list-plan/07 §5`).

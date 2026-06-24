@@ -167,29 +167,30 @@ in `08-reporting-analytics.md`.
 
 ## 5. Tenant-scoped suppression lists (D4)
 
-A tenant's **`email_suppression`** rows are its own. Per **D4**, suppression **gates every send,
+A tenant's **`suppression_list`** rows are its own. Per **D4**, suppression **gates every send,
 fail-closed, tenant- and workspace-scoped** — and a suppression **never leaks to or from another
 tenant**.
 
-- **Scope.** `email_suppression` carries `tenant_id` always; scope is `tenant` or `workspace` for
+- **Scope.** `suppression_list` carries `tenant_id` always; scope is `tenant` or `workspace` for
   tenant-owned suppressions (a tenant's hard bounces, complaints, unsubscribes). A **`global` scope**
   exists for platform-level regulatory suppression (a DSAR erasure / Do-Not-Contact that must block
   *every* tenant) — this is the **one deliberate exception** and it only ever *adds* a block, never
   reveals one tenant's list to another. (Mirrors the List tab's `{global, tenant, workspace}` model,
   `list-plan/08 §6`.)
-- **Isolation.** `email_suppression` is `ENABLE` + `FORCE` RLS, `NULLIF` fail-closed, `tenant_id`-leading
+- **Isolation.** `suppression_list` is `ENABLE` + `FORCE` RLS, `NULLIF` fail-closed, `tenant_id`-leading
   index. A tenant querying or matching suppressions sees only its own (`tenant`/`workspace`) rows plus
   the `global` set — it can **never enumerate another tenant's suppressions**, and its suppressions are
   **never visible to another tenant**.
 - **Fail-closed gate (D4).** The suppression check runs **inside the send transaction** (not as a
-  bypassable pre-guard): no `email_send` is dispatched without consulting suppression in-tx, and an
+  bypassable pre-guard): no outbound send (an `outreach_log` advance recorded in `activities`) is
+  dispatched without consulting suppression in-tx, and an
   unscoped/missing context fails the check **closed** (blocks the send). Matching is by **blind index**
   (HMAC of normalized email/domain), never plaintext — the same unbypassable pattern as the List tab's
   `assertNotSuppressed` (`list-plan/08 §6`). Compliance semantics (consent, opt-out → suppression) are
   owned by `06-compliance.md`.
 - **A complaint or hard bounce auto-suppresses — within the tenant.** When a tenant's send draws a
   spam complaint (feedback loop) or hard bounce, the address is written to **that tenant's**
-  `email_suppression`. The signal also feeds the per-tenant circuit breaker (§6) — but the suppression
+  `suppression_list`. The signal also feeds the per-tenant circuit breaker (§6) — but the suppression
   row itself stays tenant-scoped.
 
 ---
@@ -321,7 +322,7 @@ The reputation layer is **not a new tenancy model** — it is the existing two-t
   and `mailbox_integration` (`tenant_id` + `workspace_id`, `owner_user_id` for D8) are **per-tenant**.
   Every email entity carries `tenant_id` always, `workspace_id` where workspace-scoped, `owner_user_id`
   where user-owned.
-- **RLS, fail-closed.** Both tables (and `email_suppression`, `email_send`, `email_tracking_event`) are
+- **RLS, fail-closed.** Both tables (and `suppression_list`, `outreach_log`, `activities` / `email_event`) are
   **`ENABLE` + `FORCE` ROW LEVEL SECURITY**, two-tier on the `app.current_tenant_id` /
   `app.current_workspace_id` GUCs set **`LOCAL`** per transaction (`withTenantTx`), with the fail-closed
   **`NULLIF(current_setting(…, true), '')`** idiom so an unset GUC reads/writes **nothing**. Policies
@@ -348,7 +349,7 @@ the List tab's isolation itests, `list-plan/08 §9`; gated per phase in `13-roll
 | # | Test | Asserts | Phase |
 |---|---|---|---|
 | 1 | **Mailbox/domain isolation** | Two tenants × workspaces; reads/writes of `mailbox_integration` and `sending_domain` **never cross** `app.current_tenant_id`/`app.current_workspace_id`; an **unscoped** (GUC unset) read returns **zero rows** (`NULLIF` fail-closed). **0 cross-tenant leaks.** | P1 |
-| 2 | **Suppression isolation + fail-closed gate** | A tenant's `email_suppression` rows are invisible to another tenant; a `global` row blocks **every** tenant; the in-tx suppression gate **blocks a send** when context is unset (fail-closed, D4); matching is by blind index, never plaintext. | P1 |
+| 2 | **Suppression isolation + fail-closed gate** | A tenant's `suppression_list` rows are invisible to another tenant; a `global` row blocks **every** tenant; the in-tx suppression gate **blocks a send** when context is unset (fail-closed, D4); matching is by blind index, never plaintext. | P1 |
 | 3 | **Circuit-breaker containment** | A tenant breaching the **0.3%** complaint ceiling is **auto-paused**; a *co-tenant on the same shared pool keeps sending* (unimpeded); resume is a governed, audited admin action. | P1/P5 |
 | 4 | **Cross-tenant HTTP isolation (per-endpoint)** | Every email endpoint rejects an out-of-tenant `sending_domain`/`mailbox_integration`/suppression id with **404**, never returning another tenant's data. **This per-endpoint cross-tenant HTTP isolation test is a CARRIED GAP (§11) and MUST be added before shipping.** | P1 |
 | 5 | **Quota gate on metered send** | A tenant at its hard cap cannot send; the per-tenant FinOps quota is consulted in the metered path. **Wiring the quota into metered email is a CARRIED GAP (§11).** | P1/P6 |
@@ -385,10 +386,10 @@ work to do before shipping:
   *contract*; `02` states the *mechanics*.
 - **`03-deliverability.md`** — warmup, inbox-placement, the deliverability levers behind the breaker.
 - **`04-status-event-tracking.md`** — complaint/bounce/feedback-loop ingestion feeding suppression + breaker.
-- **`06-compliance.md`** — consent (`email_consent`), opt-out → suppression, the regulatory `global` suppression.
+- **`06-compliance.md`** — consent (`consent_records`), opt-out → suppression, the regulatory `global` suppression.
 - **`08-reporting-analytics.md`** — tenant-scoped metrics the breaker and admin dashboard consume (§7).
-- **`09-data-model.md`** — `sending_domain`, `mailbox_integration`, `email_suppression`, `email_send`,
-  `email_tracking_event` schema + RLS columns; the canonical entity owner.
+- **`09-data-model.md`** — `sending_domain`, `mailbox_integration`, `suppression_list`, `outreach_log`,
+  `activities` / `email_event` schema + RLS columns; the canonical entity owner.
 - **`11-admin-surface.md`** — per-tenant reputation controls, dedicated-IP entitlement, quarantine, resume.
 - **`12-roles-permissions.md`** — who may set thresholds, quarantine, resume; the audited platform-admin role.
 - **`13-rollout-phases.md`** — **P1** (reputation isolation + send path — this doc's core), **P5**

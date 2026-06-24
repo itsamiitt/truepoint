@@ -6,8 +6,8 @@
 > (the send path and ESP/provider strategy), `04-status-event-tracking.md` (open/click events, Apple MPP),
 > `06-compliance.md` (one-click unsubscribe, consent, suppression as a compliance control),
 > `07-multitenancy-reputation-isolation.md` (per-tenant Reputation Pools and warmup),
-> `08-reporting-analytics.md` (deliverability metrics), `09-data-model.md` (the `email_suppression`,
-> `sending_domain`, `email_send`, `email_tracking_event` entities), `10-web-surface.md` (customer
+> `08-reporting-analytics.md` (deliverability metrics), `09-data-model.md` (the `suppression_list`,
+> `sending_domain`, `activities` / `email_event` entities, and the logical `email_send` role), `10-web-surface.md` (customer
 > deliverability dashboard), and `11-admin-surface.md` (staff blacklist/placement monitoring).
 > **This is an engineering-controls design, not legal advice** — privacy/deliverability counsel must review
 > before any production launch with real recipients.
@@ -290,7 +290,7 @@ Reputation Pool on a schedule and on warmup milestones, with results in the deli
 Bounces are the strongest negative reputation signal a sender controls, and the Gmail/Yahoo rules implicitly
 punish them (high bounce rates drive complaints and spam-foldering). TruePoint must **classify** every bounce
 and **automatically suppress** the permanent ones — this is the core automated loop that protects every
-tenant's reputation and is the deliverability source of the `email_suppression` entity (doc 09).
+tenant's reputation and is the deliverability source of the `suppression_list` entity (doc 09).
 
 ### 6.1 Hard vs soft — classification
 
@@ -316,7 +316,7 @@ Two refinements that distinguish a robust implementation [14][15]:
 2. The handler resolves the bounce to its `email_send` (and thus tenant/workspace) and **classifies** it
    (`§6.1`).
 3. A **hard bounce** (or escalated soft bounce) is processed by a **queue-backed, idempotent** worker (D5,
-   D10 — `apps/workers/src/queues/email*.ts`) that **inserts an `email_suppression` row** keyed by the
+   D10 — `apps/workers/src/queues/email*.ts`) that **inserts a `suppression_list` row** keyed by the
    address (recipient), scoped to the appropriate tenant/workspace.
 4. From that moment, **D4 — suppression gates every send, fail-closed** — no future `email_send` to that
    recipient can proceed (`§7` and doc 06 below).
@@ -325,7 +325,7 @@ Idempotency (D5) means a re-delivered webhook does **not** create duplicate supp
 **No PII in logs** — the bounce handler logs the `email_send` id and classification, not the recipient
 address in plaintext.
 
-> **P1 build mandate:** the delivery/bounce webhook + classifier ship in P1. The `email_suppression` write is
+> **P1 build mandate:** the delivery/bounce webhook + classifier ship in P1. The `suppression_list` write is
 > the data-side output (doc 09 owns the columns); the queue is BullMQ/Redis with backoff + DLQ (D10). The
 > bounce-rate metric feeds `08-reporting-analytics.md`. **Total bounce rate should be kept well under 2%**,
 > tracking **hard and soft separately** [15].
@@ -368,11 +368,11 @@ Authoritative specifics, quoted from the providers' own guidance:
 
 The **one-click unsubscribe (RFC 8058)** is owned end-to-end by **doc 06 (compliance)** and **D9** — this
 doc asserts only that it is a **deliverability hard-gate** (its absence on marketing mail directly violates
-Gmail/Yahoo and tanks placement), and that the unsubscribe action **must write an `email_suppression`/
-`email_consent` change that D4 then enforces on every subsequent send.**
+Gmail/Yahoo and tanks placement), and that the unsubscribe action **must write a `suppression_list`/
+`consent_records` change that D4 then enforces on every subsequent send.**
 
 > **Cross-phase mandate:** SPF/DKIM/DMARC + PTR + TLS land at **P0** (`§1`); the bounce/complaint feedback
-> loop and `email_suppression` write at **P1** (`§6`); one-click unsubscribe with the RFC 8058 headers at
+> loop and `suppression_list` write at **P1** (`§6`); one-click unsubscribe with the RFC 8058 headers at
 > **P2/P3** with the send/templating path (enforced by D4, detailed in doc 06); deliverability dashboards +
 > spam-rate/placement monitoring at **P5** (`§4`, `§5`).
 
@@ -380,10 +380,10 @@ Gmail/Yahoo and tanks placement), and that the unsubscribe action **must write a
 
 ## 8. Suppression handling (ties to D4 and doc 06)
 
-Suppression is the **deliverability output that becomes a hard send-gate**. The `email_suppression` entity
+Suppression is the **deliverability output that becomes a hard send-gate**. The `suppression_list` entity
 (doc 09) is populated from several deliverability sources and is then enforced **fail-closed** on every send.
 
-### 8.1 What feeds `email_suppression`
+### 8.1 What feeds `suppression_list`
 
 | Source | Scope | Section |
 |---|---|---|
@@ -410,7 +410,7 @@ tenants. The full suppression compliance contract — consent, CAN-SPAM, GDPR/DP
 subject's suppression/consent rows — lives in **doc 06**; this doc only establishes the deliverability inputs
 and the D4 gate.
 
-> **Phase mapping:** the `email_suppression` write path opens at **P1** (bounce-driven, `§6`); one-click
+> **Phase mapping:** the `suppression_list` write path opens at **P1** (bounce-driven, `§6`); one-click
 > unsubscribe and the full compliance suppression model land with **doc 06** across P2–P3; admin/global
 > suppression management is **P6** (`11-admin-surface.md`).
 
@@ -437,6 +437,31 @@ The metrics themselves are computed and stored per **`08-reporting-analytics.md`
 deliverability metrics; doc 08 owns their aggregation/retention). Per **D6**, **opens are shown as
 informational context, never as a deliverability KPI** (Apple MPP inflation, `§2.3`,
 `04-status-event-tracking.md`).
+
+### 9.1 Compliance-metrics visibility
+
+The Gmail/Yahoo bulk-sender rules (`§7`) are not just controls to *implement* — they are controls TruePoint
+must be able to **prove it is meeting**, continuously, per tenant. The deliverability dashboards therefore
+surface a small set of **compliance-coverage metrics** that turn the `§7` checklist into observable
+percentages and latencies. These are distinct from placement/bounce metrics: they measure **whether the
+mandatory mechanisms are actually present and honored on real traffic**, which is exactly what a provider
+audit (or our own counsel) will ask for.
+
+| Compliance metric | What it measures | Target | Source | Surface |
+|---|---|---|---|---|
+| **List-Unsubscribe header coverage** | % of applicable sends carrying **both** `List-Unsubscribe` **and** `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058) headers | **100%** of marketing/applicable mail (`§7`) | `sendStep` send-tx footer/header injection (D9, doc 06); counted off the engagement `activities` (`email_sent`) + send-log signal | Tenant dashboard (`10`) + admin monitoring (`11`) |
+| **One-click-honor latency** | Time from a one-click unsubscribe POST to the resulting `suppression_list` row being live and gating sends (`§8.2`) | **Well inside the Google/Yahoo 2-day requirement** (`§7`) — alert at p95 approaching the limit | `audit_log` `unsubscribe` → `suppression.add` event pair (D5 idempotent); the unsubscribe→suppression write loop | Tenant dashboard (`10`) + admin monitoring (`11`) as a latency SLO |
+| **Consent-capture rate** | % of recipients (or enrolled `outreach_log` contacts) that have a current, non-withdrawn `consent_records` row with a valid `lawful_basis` for the send jurisdiction | High coverage; **low-consent cohorts flagged** before they become a complaint-rate problem (`§7`) | `consent_records` (D9; `valid_from`/`valid_until`/`withdrawn_at`, `jurisdiction`, `lawful_basis`) joined against the audience | Tenant dashboard (`10`) + admin monitoring (`11`) |
+
+The same precedence applies: **doc 08 owns the aggregation/retention** of these three metrics (they are
+computed and stored there, not invented in the UI), and **design owns how they render** — the dashboard shows
+each as a coverage gauge / latency tile against its threshold, with the **four states** and the
+admin/staff variant rolling them up **cross-tenant** so operations can spot a tenant whose header coverage
+slips below 100% or whose honor latency drifts toward the 2-day line **before** Gmail/Yahoo do. Per the
+privacy-first staff model (`§9`), the admin view is **aggregate/metadata by default** — recipient-level
+consent detail is the audited break-glass path, not casual browsing. One-click unsubscribe and the consent
+model are owned end-to-end by **doc 06 (compliance)** and **D9**; this subsection only asserts that their
+**operational coverage is a first-class, monitored deliverability signal** alongside placement and bounce.
 
 ---
 
@@ -470,11 +495,11 @@ informational context, never as a deliverability KPI** (Apple MPP inflation, `§
 - `02-sending-infrastructure.md` — the send path, ESP/provider strategy (D1 hybrid), TLS/PTR at the transport.
 - `04-status-event-tracking.md` — open/click events, the **Apple MPP** treatment behind D6 (`§2.3`, `§9`).
 - `06-compliance.md` — **RFC 8058 one-click unsubscribe**, consent, CAN-SPAM, GDPR/DPDP, the full
-  `email_suppression`/`email_consent` compliance model and DSAR cascade (D9; `§7`, `§8`).
+  `suppression_list`/`consent_records` compliance model and DSAR cascade (D9; `§7`, `§8`).
 - `07-multitenancy-reputation-isolation.md` — per-tenant **Reputation Pool**, **Warmup**, dedicated-IP
   isolation (D2; `§2`, `§4`, `§5`).
 - `08-reporting-analytics.md` — deliverability metric aggregation/retention (`§9`).
-- `09-data-model.md` — `sending_domain`, `email_send`, `email_tracking_event`, `email_suppression` schema,
+- `09-data-model.md` — `sending_domain`, the logical `email_send` role, `activities` / `email_event`, `suppression_list` schema,
   RLS, tenant-leading indexes.
 - `10-web-surface.md` / `11-admin-surface.md` — tenant and staff deliverability dashboards (`§9`).
 - `docs/planning/list-plan/08-security-compliance.md` — the in-transaction, fail-closed suppression pattern

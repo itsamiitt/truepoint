@@ -190,11 +190,11 @@ Best used **alongside** §2 fallbacks and §5 LLM openers, not instead of them.
 template** — the step is the schedule + channel, the template is the content. This lets one template be reused
 across sequences and lets a sequence be re-targeted by swapping the template a step points at.
 
-**Recommended tech.** A `email_sequence_step` **references an `email_template` by ID** (references-not-copies)
+**Recommended tech.** An `outreach_steps` row **references an `email_template` by ID** (references-not-copies)
 plus a **pinned `email_template_version`** captured at the moment of enrollment/send so editing the template
 later doesn't rewrite in-flight enrollments. This is a hard **intersection with `05-sequences-automation`**:
 templating *owns* the template + version + render; the **sequence engine owns the binding, the schedule, and
-which version is pinned per `email_enrollment`**. The render contract (registry of variables, snippet
+which version is pinned per `outreach_log` enrollment**. The render contract (registry of variables, snippet
 resolution, spintax expansion, LLM-candidate gating) is identical whether a template is rendered ad-hoc or via
 a step — one renderer, two callers.
 
