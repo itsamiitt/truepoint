@@ -71,8 +71,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 829,
-  "fileSetHash": "sha256:94c6070a370743ad90168888001d67591e9780b329d0cabc3ace9e9e32adf7b5",
+  "fileCount": 832,
+  "fileSetHash": "sha256:aa88c5d10bae500fb0e71eef23ac9e2cc67acc08190bb50c20d61bd375fd3afe",
   "features": {
     "account-search": {
       "web": [],
@@ -416,6 +416,8 @@
         "packages/core/src/import/normalize.ts",
         "packages/core/src/import/parseFile.test.ts",
         "packages/core/src/import/parseFile.ts",
+        "packages/core/src/import/parseXlsx.test.ts",
+        "packages/core/src/import/parseXlsx.ts",
         "packages/core/src/import/preview.test.ts",
         "packages/core/src/import/preview.ts",
         "packages/core/src/import/rejectedRowsCsv.test.ts",
@@ -469,6 +471,7 @@
       "web": [
         "apps/web/src/features/lists/api.ts",
         "apps/web/src/features/lists/components/DeleteListDialog.tsx",
+        "apps/web/src/features/lists/components/ImportIntoListDialog.tsx",
         "apps/web/src/features/lists/components/ListDetailPage.tsx",
         "apps/web/src/features/lists/components/ListFormDialog.tsx",
         "apps/web/src/features/lists/components/ListsPage.tsx",
