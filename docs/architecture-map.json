@@ -71,8 +71,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 832,
-  "fileSetHash": "sha256:aa88c5d10bae500fb0e71eef23ac9e2cc67acc08190bb50c20d61bd375fd3afe",
+  "fileCount": 834,
+  "fileSetHash": "sha256:fc0475c31c02c8ef4f14c9d921930bc9141fe39b062f03f25251cb1d1686b7ca",
   "features": {
     "account-search": {
       "web": [],
@@ -1334,6 +1334,7 @@
     ],
     "packages/db": [
       "packages/db/drizzle.config.ts",
+      "packages/db/drizzle.worktree.config.ts",
       "packages/db/src/applyMigrations.ts",
       "packages/db/src/bootstrapAdmin.ts",
       "packages/db/src/client.ts",
@@ -1421,6 +1422,7 @@
       "packages/types/src/contacts.test.ts",
       "packages/types/src/contacts.ts",
       "packages/types/src/customFields.ts",
+      "packages/types/src/dataHealth.ts",
       "packages/types/src/enrichmentPolicy.ts",
       "packages/types/src/errors.ts",
       "packages/types/src/featureFlags.ts",
