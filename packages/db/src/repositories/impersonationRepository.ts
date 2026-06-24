@@ -6,7 +6,7 @@
 // This records the SESSION only — the scoped "login-as" access token is minted elsewhere and WIRE-deferred.
 
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
-import type { Tx } from "../client.ts";
+import { type Tx, db } from "../client.ts";
 import { impersonationSessions } from "../schema/platformOps.ts";
 
 /** Default impersonation time-box. A session auto-expires after this even if never explicitly ended. */
@@ -51,6 +51,21 @@ export const impersonationRepository = {
       })
       .returning();
     return rows[0] as ImpersonationSessionRow;
+  },
+
+  /** The target tenant of a session — resolved on the base OWNER connection (the table denies leadwolf_app),
+   *  the same un-audited internal-lookup pattern as platformStaffRepository.getActiveRole. Used to stamp the
+   *  `.end` audit row with the tenant BEFORE the audited tx runs (withPlatformTx writes its audit row at tx
+   *  start from the target passed in, so the tenant must be resolved first — this makes `admin.impersonate.end`
+   *  tenant-attributed and surface in the customer's staff-access log symmetrically with `.start`). null for an
+   *  unknown id. */
+  async getTargetTenant(id: string): Promise<string | null> {
+    const rows = await db
+      .select({ targetTenantId: impersonationSessions.targetTenantId })
+      .from(impersonationSessions)
+      .where(eq(impersonationSessions.id, id))
+      .limit(1);
+    return rows[0]?.targetTenantId ?? null;
   },
 
   /** End a session early: stamp ended_at = now. Idempotent (re-ending an ended session is a harmless update).
