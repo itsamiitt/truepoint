@@ -39,6 +39,7 @@ export {
   tenantSsoConfigRepository,
   invitationRepository,
   type WorkspaceSummary,
+  type WorkspaceMemberRecord,
   type TenantMembership,
   type DomainResolution,
   type SsoConfigRecord,

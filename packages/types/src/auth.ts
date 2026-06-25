@@ -200,3 +200,49 @@ export const sessionRevokeResultSchema = z.object({
   revoked: z.number().int().nonnegative(),
 });
 export type SessionRevokeResult = z.infer<typeof sessionRevokeResultSchema>;
+
+// ── Workspace members management (P1-03; 12 §3, 17 §5) ───────────────────────────────────────────────
+// A workspace owner|admin lists the members of their workspace and invites / re-roles / removes them. The
+// row `id` is the membership row id for an active member, or the pending-invitation id for an invited one
+// (the panel uses it opaquely as the row key + for the PATCH/DELETE target). Roles are validated against
+// the closed `workspaceRole` enum; `owner` is never assignable here (transfer-of-ownership is its own flow),
+// so the invite/role bodies accept only the non-owner roles.
+
+/** A role that may be ASSIGNED via invite / role-change — every workspaceRole EXCEPT `owner`. */
+export const assignableWorkspaceRole = z.enum(["admin", "member", "viewer"]);
+export type AssignableWorkspaceRole = z.infer<typeof assignableWorkspaceRole>;
+
+/** One row in the Workspace ▸ Members table. `id` is opaque to the client (membership row or invite id). */
+export const workspaceMemberSchema = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  name: z.string().nullable(),
+  role: workspaceRole,
+  status: z.enum(["active", "invited"]),
+  joinedAt: z.string().nullable(), // ISO-8601; null for a pending invite
+});
+export type WorkspaceMember = z.infer<typeof workspaceMemberSchema>;
+
+export const workspaceMemberListSchema = z.object({
+  members: z.array(workspaceMemberSchema),
+});
+export type WorkspaceMemberList = z.infer<typeof workspaceMemberListSchema>;
+
+/** POST /members body — invite an email at an assignable (non-owner) role. */
+export const inviteMemberSchema = z.object({
+  email: z.string().email().max(320),
+  role: assignableWorkspaceRole,
+});
+export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
+
+/** PATCH /members/:id body — change a member's role (never to `owner`). */
+export const changeMemberRoleSchema = z.object({
+  role: assignableWorkspaceRole,
+});
+export type ChangeMemberRoleInput = z.infer<typeof changeMemberRoleSchema>;
+
+/** Path param for the member-scoped routes (PATCH/DELETE) — the opaque row id (membership or invite). */
+export const workspaceMemberIdParamSchema = z.object({
+  memberId: z.string().uuid(),
+});
+export type WorkspaceMemberIdParam = z.infer<typeof workspaceMemberIdParamSchema>;

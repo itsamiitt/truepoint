@@ -41,6 +41,11 @@ const WRITTEN = new Set<string>([
   // password.reset.complete writes audit_log when the identity resolves to a SINGLE tenant (ADR-0031 §2); the
   // 0/>1-tenant case routes to platform_audit_log instead (see platformAuditCoverage.test.ts).
   "password.reset.complete",
+  // Workspace members management (P1-03; packages/core auth/members): invite → member.add; role change →
+  // member.update; remove member / revoke invite → member.remove.
+  "member.add",
+  "member.update",
+  "member.remove",
 ]);
 
 // §5.2 — defined in the closed enum but not yet wired to a writeAudit() call-site.
@@ -49,9 +54,6 @@ const PENDING = new Set<string>([
   "unsubscribe",
   "suppression.remove",
   "dsar.rectify",
-  "member.add",
-  "member.update",
-  "member.remove",
   "apikey.use",
   // record / config mutations (services land at M8 / M16)
   "contact.create",

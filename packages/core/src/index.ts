@@ -41,6 +41,16 @@ export {
   type AdminSessionView,
 } from "./auth/adminSessions.ts";
 
+// Workspace members management (P1-03, 12 §3, 17 §5): list/invite/change-role/remove, admin-gated + audited.
+export {
+  listWorkspaceMembers,
+  inviteMember,
+  changeMemberRole,
+  removeMember,
+  type MemberAdminScope,
+  type InviteMemberInput,
+} from "./auth/members.ts";
+
 export { createDsarRequest } from "./compliance/dsarIntake.ts";
 export { deleteFanout, type DeleteFanoutResult } from "./compliance/deleteFanout.ts";
 export { assembleAccessReport, type AccessReport } from "./compliance/assembleAccessReport.ts";

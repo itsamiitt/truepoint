@@ -29,7 +29,11 @@ import { searchRoutes } from "./features/search/index.ts";
 import { settingsRoutes } from "./features/settings/index.ts";
 import { tagsRoutes } from "./features/tags/index.ts";
 import { webhooksRoutes } from "./features/webhooks/index.ts";
-import { workspaceSecurityRoutes, workspacesRoutes } from "./features/workspaces/index.ts";
+import {
+  workspaceMembersRoutes,
+  workspaceSecurityRoutes,
+  workspacesRoutes,
+} from "./features/workspaces/index.ts";
 import { onError } from "./middleware/error.ts";
 import { rateLimit } from "./middleware/rateLimit.ts";
 
@@ -69,6 +73,9 @@ app.route("/api/v1/workspaces", workspacesRoutes);
 // Workspace-admin session management (G-AUTH-2): /security/sessions + revoke/force-reauth. The /security/*
 // paths don't overlap workspacesRoutes' GET / (same shared-prefix pattern as /api/v1/contacts).
 app.route("/api/v1/workspaces", workspaceSecurityRoutes);
+// Workspace members management (P1-03): /current/members + invite/role/remove. The /current/members* paths
+// don't overlap workspacesRoutes' GET / nor the /security/* router (same shared-prefix pattern).
+app.route("/api/v1/workspaces", workspaceMembersRoutes);
 app.route("/api/v1/home", homeRoutes);
 // Mapping-templates BEFORE the import router: imports has a `GET /:jobId` that would otherwise capture
 // `/imports/mapping-templates` as a job id. The more specific prefix must register first (Hono first-match).

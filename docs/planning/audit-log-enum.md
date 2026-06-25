@@ -180,7 +180,7 @@ the blocked-attempt proof survives.)* Because `packages/auth` cannot import `cor
 (`packages/auth/src/auditEvent.ts`, [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md)): its own
 `withTenantTx`, swallow-on-failure, wired for the **tenant-resolved** events (§5.1).
 
-### 5.1 Written today — verified call-sites (18 of 78)
+### 5.1 Written today — verified call-sites (21 of 78)
 
 | Action | Call-site |
 |---|---|
@@ -202,8 +202,11 @@ the blocked-attempt proof survives.)* Because `packages/auth` cannot import `cor
 | `sso.callback` | `apps/auth/src/lib/completeSso.ts` `completeSso` |
 | `token.issued` | `apps/auth/src/app/token/exchange/route.ts` POST |
 | `code.exchanged` | `apps/auth/src/app/token/exchange/route.ts` POST |
+| `member.add` | `packages/core/src/auth/members.ts` `inviteMember` (P1-03) |
+| `member.update` | `packages/core/src/auth/members.ts` `changeMemberRole` (P1-03) |
+| `member.remove` | `packages/core/src/auth/members.ts` `removeMember` (P1-03) |
 
-### 5.2 Defined but not yet wired — the residual coverage backlog (60 of 78)
+### 5.2 Defined but not yet wired — the residual coverage backlog (57 of 78)
 
 These values exist in the closed enum but have **no writer call-site yet** (`writeAudit` for core,
 `recordAuthEvent` for auth); they land as their owning services / milestones do:
@@ -223,8 +226,8 @@ These values exist in the closed enum but have **no writer call-site yet** (`wri
   (incl. `assign`/`unassign`), `pipeline_stage.*` (incl. `assign`), `saved_search.*`,
   `automation.rule.enable/disable/run`, `ai.config.update`, `ai.draft.approve/reject`. Their owning services
   (M8 / M16 / M14) are unbuilt, so none has a writer yet.
-- **Other (8)** — `export`, `unsubscribe`, `suppression.remove`, `member.add/update/remove`, `apikey.use`,
-  `dsar.rectify`.
+- **Other** — `export`, `unsubscribe`, `suppression.remove`, `apikey.use`, `dsar.rectify`.
+  (`member.add/update/remove` are now WRITTEN — wired by the P1-03 workspace members API, §5.1.)
 
 This §5.2 set is the live backlog for the [02 §6] contract; §8 proposes the CI gate that keeps it shrinking
 rather than silently forgotten.

@@ -6,13 +6,14 @@
 
 import type { OrgRole, WorkspaceRole } from "@leadwolf/types";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
-import { db, withTenantTx } from "../client.ts";
+import { type Tx, db, withTenantTx } from "../client.ts";
 import {
   invitations,
   tenantDomains,
   tenantMembers,
   tenantSsoConfigs,
   tenants,
+  users,
   workspaceMembers,
   workspaces,
 } from "../schema/auth.ts";
@@ -22,6 +23,19 @@ export interface WorkspaceSummary {
   id: string;
   name: string;
   role: string;
+}
+
+/** A row in the Workspace ▸ Members table (P1-03): an ACTIVE membership joined to its user, or a pending
+ * INVITE (no user yet). `id` is the membership row id (active) or the invitation id (invited); the role/
+ * email/name come from the respective source. `joinedAt` is null for a pending invite. */
+export interface WorkspaceMemberRecord {
+  id: string;
+  userId: string | null; // null for a pending invite (no identity yet)
+  email: string;
+  name: string | null;
+  role: string;
+  status: "active" | "invited";
+  joinedAt: Date | null;
 }
 
 export const workspaceRepository = {
@@ -61,6 +75,141 @@ export const workspaceRepository = {
         .limit(1);
       return rows[0] ? (rows[0].role as WorkspaceRole) : null;
     });
+  },
+
+  // ── Workspace members management (P1-03) ───────────────────────────────────────────────────────────
+  // The list shown in Workspace ▸ Members: ACTIVE memberships (joined to their user for email/name) PLUS
+  // pending INVITES (workspace-scoped, not yet accepted — expiry is not filtered; an admin sees a stale invite
+  // so they can revoke/re-invite it). RLS-scoped: both reads run under the
+  // tenant+workspace GUCs, so a foreign workspaceId returns nothing. Active first, then invites, each in a
+  // deterministic order. Bounded — a workspace's member count is small, but the cap is a safety belt.
+
+  /** List the active members + pending invites of `workspaceId` (the members table). RLS-scoped read. */
+  async listMembers(
+    tenantId: string,
+    workspaceId: string,
+    limit = 500,
+  ): Promise<WorkspaceMemberRecord[]> {
+    return withTenantTx({ tenantId, workspaceId }, async (tx) => {
+      const active = await tx
+        .select({
+          id: workspaceMembers.id,
+          userId: workspaceMembers.userId,
+          email: users.email,
+          name: users.fullName,
+          role: workspaceMembers.role,
+          joinedAt: workspaceMembers.joinedAt,
+        })
+        .from(workspaceMembers)
+        .innerJoin(users, eq(users.id, workspaceMembers.userId))
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.status, "active"),
+          ),
+        )
+        .orderBy(asc(workspaceMembers.joinedAt), asc(workspaceMembers.id))
+        .limit(limit);
+
+      const invited = await tx
+        .select({
+          id: invitations.id,
+          email: invitations.email,
+          role: invitations.role,
+          createdAt: invitations.createdAt,
+        })
+        .from(invitations)
+        .where(
+          and(eq(invitations.workspaceId, workspaceId), isNull(invitations.acceptedAt)),
+        )
+        .orderBy(asc(invitations.createdAt), asc(invitations.id))
+        .limit(limit);
+
+      return [
+        ...active.map(
+          (r): WorkspaceMemberRecord => ({
+            id: r.id,
+            userId: r.userId,
+            email: r.email,
+            name: r.name,
+            role: r.role,
+            status: "active",
+            joinedAt: r.joinedAt,
+          }),
+        ),
+        ...invited.map(
+          (r): WorkspaceMemberRecord => ({
+            id: r.id,
+            userId: null,
+            email: r.email,
+            name: null,
+            role: r.role,
+            status: "invited",
+            joinedAt: null,
+          }),
+        ),
+      ];
+    });
+  },
+
+  /** The active membership row for `(workspaceId, memberId)` — the authz target for a role-change/remove.
+   * Returns the owning user + current role, or null when the id is not an active member of THIS workspace
+   * (RLS-scoped read; a foreign id reveals nothing). Run inside a caller tx so the check + mutation + audit
+   * are atomic. */
+  async findActiveMember(
+    tx: Tx,
+    workspaceId: string,
+    memberId: string,
+  ): Promise<{ userId: string; role: string } | null> {
+    const rows = await tx
+      .select({ userId: workspaceMembers.userId, role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.id, memberId),
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.status, "active"),
+        ),
+      )
+      .limit(1);
+    return rows[0] ? { userId: rows[0].userId, role: rows[0].role } : null;
+  },
+
+  /** Update an active member's role inside a caller tx (commits with its audit row). Scoped to the
+   * workspace + the active membership id so it can never touch another workspace's row. */
+  async updateMemberRoleInTx(
+    tx: Tx,
+    workspaceId: string,
+    memberId: string,
+    role: WorkspaceRole,
+  ): Promise<void> {
+    await tx
+      .update(workspaceMembers)
+      .set({ role })
+      .where(
+        and(
+          eq(workspaceMembers.id, memberId),
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.status, "active"),
+        ),
+      );
+  },
+
+  /** Soft-remove an active member (status → removed) inside a caller tx (commits with its audit row).
+   * Scoped to the workspace + the active membership id. Returns the count removed (0 if already gone). */
+  async removeMemberInTx(tx: Tx, workspaceId: string, memberId: string): Promise<number> {
+    const removed = await tx
+      .update(workspaceMembers)
+      .set({ status: "removed" })
+      .where(
+        and(
+          eq(workspaceMembers.id, memberId),
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.status, "active"),
+        ),
+      )
+      .returning({ id: workspaceMembers.id });
+    return removed.length;
   },
 
   // The org's landing workspace for auto-join/invite placement. Read PRE-membership by the auth service
@@ -442,5 +591,118 @@ export const invitationRepository = {
 
   async markAccepted(id: string): Promise<void> {
     await db.update(invitations).set({ acceptedAt: new Date() }).where(eq(invitations.id, id));
+  },
+
+  // ── Workspace-scoped invite management (P1-03) ─────────────────────────────────────────────────────
+  // The members "invite teammates" flow writes/refreshes pending invites idempotently on (workspace, email)
+  // and revokes them by id. These run on the GLOBAL (owner) connection like the rest of invitationRepository:
+  // the `invitations` RLS policy is USING-only (no WITH CHECK), so an INSERT under the leadwolf_app role
+  // (withTenantTx) is denied — invite WRITES are an owner-connection boundary by design (ADR-0020). Every
+  // method still constrains by tenantId + workspaceId in the WHERE, so it can only ever touch the caller's
+  // workspace (the core layer has already verified the caller is an admin OF that workspace).
+
+  /** The pending (unaccepted) invite for `(tenantId, workspaceId, email)`, or null — the idempotency probe. */
+  async findPendingInWorkspaceByEmail(
+    tenantId: string,
+    workspaceId: string,
+    email: string,
+  ): Promise<{ id: string } | null> {
+    const rows = await db
+      .select({ id: invitations.id })
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.tenantId, tenantId),
+          eq(invitations.workspaceId, workspaceId),
+          eq(invitations.email, email),
+          isNull(invitations.acceptedAt),
+        ),
+      )
+      .limit(1);
+    return rows[0] ? { id: rows[0].id } : null;
+  },
+
+  /** Refresh an existing pending invite's token + role + expiry (re-invite — no duplicate row, ADR-0020). */
+  async refreshPending(input: {
+    id: string;
+    role: string;
+    tokenHash: string;
+    invitedByUserId?: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await db
+      .update(invitations)
+      .set({
+        role: input.role,
+        tokenHash: input.tokenHash,
+        invitedByUserId: input.invitedByUserId,
+        expiresAt: input.expiresAt,
+      })
+      .where(and(eq(invitations.id, input.id), isNull(invitations.acceptedAt)));
+  },
+
+  /** A pending invite by id, scoped to `(tenantId, workspaceId)` — the remove/role-change authz target. */
+  async findPendingInWorkspaceById(
+    tenantId: string,
+    workspaceId: string,
+    invitationId: string,
+  ): Promise<{ id: string; email: string; role: string } | null> {
+    const rows = await db
+      .select({ id: invitations.id, email: invitations.email, role: invitations.role })
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.id, invitationId),
+          eq(invitations.tenantId, tenantId),
+          eq(invitations.workspaceId, workspaceId),
+          isNull(invitations.acceptedAt),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  /** Re-role a pending invite by id, scoped to `(tenantId, workspaceId)`. Returns the count updated (0 if the
+   * id is not a pending invite of this workspace). The panel offers the role control on invited rows too, so a
+   * role-change on an invite id refreshes the role the invitee will join at (token/expiry untouched). */
+  async updatePendingRoleInWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    invitationId: string,
+    role: string,
+  ): Promise<number> {
+    const updated = await db
+      .update(invitations)
+      .set({ role })
+      .where(
+        and(
+          eq(invitations.id, invitationId),
+          eq(invitations.tenantId, tenantId),
+          eq(invitations.workspaceId, workspaceId),
+          isNull(invitations.acceptedAt),
+        ),
+      )
+      .returning({ id: invitations.id });
+    return updated.length;
+  },
+
+  /** Revoke (delete) a pending invite by id, scoped to `(tenantId, workspaceId)`. Returns the count removed. */
+  async revokePendingInWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    invitationId: string,
+  ): Promise<number> {
+    const removed = await db
+      .delete(invitations)
+      .where(
+        and(
+          eq(invitations.id, invitationId),
+          eq(invitations.tenantId, tenantId),
+          eq(invitations.workspaceId, workspaceId),
+          isNull(invitations.acceptedAt),
+        ),
+      )
+      .returning({ id: invitations.id });
+    return removed.length;
   },
 };
