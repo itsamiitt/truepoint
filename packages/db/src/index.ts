@@ -296,3 +296,7 @@ export {
   type TemplateRecord,
   type TemplateSummaryRow,
 } from "./repositories/emailTemplateRepository.ts";
+export {
+  schedulerRepository,
+  type ClaimedEnrollment,
+} from "./repositories/schedulerRepository.ts";

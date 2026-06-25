@@ -73,8 +73,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 878,
-  "fileSetHash": "sha256:b7fa5e771090d8e353a854cf3abfe77ba64d7fc21bb349b22b7181fcd12d0602",
+  "fileCount": 883,
+  "fileSetHash": "sha256:a6e2c613ef406e2dfdfb6db4051073e11404f37749754f7501d592978ac60c57",
   "features": {
     "account-search": {
       "web": [],
@@ -295,6 +295,7 @@
         "packages/core/src/email/resolveSendingIdentity.ts",
         "packages/core/src/email/secretStore.ts",
         "packages/core/src/email/sendingDomains.ts",
+        "packages/core/src/email/sequenceScheduler.ts",
         "packages/core/src/email/templates.ts",
         "packages/core/src/email/trackingToken.test.ts",
         "packages/core/src/email/trackingToken.ts"
@@ -1327,6 +1328,7 @@
       "apps/workers/src/health.test.ts",
       "apps/workers/src/health.ts",
       "apps/workers/src/index.ts",
+      "apps/workers/src/leaderLock.ts",
       "apps/workers/src/logger.test.ts",
       "apps/workers/src/logger.ts",
       "apps/workers/src/register.ts",
@@ -1445,6 +1447,7 @@
       "packages/db/test/roleModel.itest.ts",
       "packages/db/test/salesNav.itest.ts",
       "packages/db/test/savedSearches.itest.ts",
+      "packages/db/test/schedulerClaim.itest.ts",
       "packages/db/test/search.itest.ts",
       "packages/db/test/sendGate.itest.ts",
       "packages/db/test/suppressionMgmt.itest.ts",
@@ -1543,6 +1546,7 @@
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/firmographics.ts",
+    "apps/workers/src/queues/sequenceTick.ts",
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/authPolicyRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
@@ -1559,6 +1563,7 @@
     "packages/db/src/repositories/platformStaffRepository.ts",
     "packages/db/src/repositories/providerConfigRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
+    "packages/db/src/repositories/schedulerRepository.ts",
     "packages/db/src/repositories/scimTokenRepository.ts",
     "packages/db/src/repositories/searchRepository.ts",
     "packages/db/src/repositories/sendQuotaRepository.ts",

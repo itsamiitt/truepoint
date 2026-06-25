@@ -256,6 +256,13 @@ export {
   ingestTrackingEvent,
   type TrackingEventInput,
 } from "./email/ingestTrackingEvent.ts";
+// M12 P4 sequence automation (email-planning/13 P4, 15 §A.4): the leader-locked tick body — claims due
+// enrollments (FOR UPDATE SKIP LOCKED, no double-advance) + auto-pause-on-reply (replied rows aren't claimed).
+export {
+  tickSequences,
+  type TickResult,
+  type TickOptions,
+} from "./email/sequenceScheduler.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,

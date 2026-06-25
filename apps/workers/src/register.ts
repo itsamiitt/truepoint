@@ -28,6 +28,11 @@ import {
 } from "./queues/imports.ts";
 import { OUTREACH_QUEUE, type OutreachJobData, processOutreach } from "./queues/outreach.ts";
 import { SCORING_QUEUE, type ScoringJobData, processScoring } from "./queues/scoring.ts";
+import {
+  EMAIL_SEQUENCE_TICK_QUEUE,
+  type SequenceTickJobData,
+  makeProcessSequenceTick,
+} from "./queues/sequenceTick.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -41,6 +46,11 @@ export const dsarQueue = new Queue<DsarJobData>(DSAR_QUEUE, { connection });
 export const outreachQueue = new Queue<OutreachJobData>(OUTREACH_QUEUE, { connection });
 export const dedupQueue = new Queue<DedupJobData>(DEDUP_QUEUE, { connection });
 export const firmographicsQueue = new Queue<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, {
+  connection,
+});
+// M12 P4: the leader-locked sequence scheduler (email_sequence_tick). A single repeatable job (stable
+// jobId → deduped) fires every minute; the processor takes the Redis leader lock and claims due enrollments.
+export const sequenceTickQueue = new Queue<SequenceTickJobData>(EMAIL_SEQUENCE_TICK_QUEUE, {
   connection,
 });
 
@@ -71,6 +81,15 @@ export async function enqueueDsar(data: DsarJobData): Promise<string> {
 export async function enqueueOutreach(data: OutreachJobData, delayMs = 0): Promise<string> {
   const job = await outreachQueue.add("send", data, delayMs > 0 ? { delay: delayMs } : undefined);
   return String(job.id);
+}
+
+/** Register the single repeatable sequence-tick job (M12 P4). Stable jobId → BullMQ keeps exactly one. */
+export async function scheduleSequenceTick(): Promise<void> {
+  await sequenceTickQueue.add(
+    "tick",
+    {},
+    { repeat: { every: 60_000 }, jobId: "email-sequence-tick" },
+  );
 }
 
 /** Submit a per-workspace contact dedup pass (24 Phase-0.5; e.g. after an import or on a schedule). */
@@ -131,7 +150,7 @@ export function startWorkers(): Worker[] {
       }),
     );
   });
-  return [
+  const workers = [
     importsWorker,
     instrument(
       new Worker<EnrichmentJobData>(ENRICHMENT_QUEUE, processEnrichment, { connection }),
@@ -151,5 +170,29 @@ export function startWorkers(): Worker[] {
       new Worker<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, processFirmographics, { connection }),
       FIRMOGRAPHICS_QUEUE,
     ),
+    // M12 P4: the sequence-tick consumer. Leader-locked; claims due enrollments and enqueues each onto the
+    // outreach queue (the existing send path). Best-effort registers the single repeatable job at boot.
+    instrument(
+      new Worker<SequenceTickJobData>(
+        EMAIL_SEQUENCE_TICK_QUEUE,
+        makeProcessSequenceTick(connection, async (e) => {
+          // A per-(enrollment, target-step) jobId dedupes a re-claim across ticks: if a still-pending send for
+          // this exact step is already queued, BullMQ keeps one — so a step is never advanced twice (P4 §A.4).
+          await outreachQueue.add(
+            "send",
+            { tenantId: e.tenantId, workspaceId: e.workspaceId, logId: e.logId },
+            { jobId: `seqstep:${e.logId}:${e.currentStep + 1}` },
+          );
+        }),
+        { connection },
+      ),
+      EMAIL_SEQUENCE_TICK_QUEUE,
+    ),
   ];
+  void scheduleSequenceTick().catch((e) =>
+    log.error("failed to schedule the sequence tick", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  return workers;
 }
