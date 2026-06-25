@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 933,
-  "fileSetHash": "sha256:187ecca8dd844c8c8c9564584a122f1600c6eded534087f17c2acbddfee11d5e",
+  "fileCount": 938,
+  "fileSetHash": "sha256:6f38c0df731692013b29035f1a4a10124eeebcf5346f4c75e2aedd4c45bc603d",
   "features": {
     "account-search": {
       "web": [],
@@ -652,6 +652,9 @@
         "packages/core/src/prospect/bulkActions.ts",
         "packages/core/src/prospect/dedup.test.ts",
         "packages/core/src/prospect/dedup.ts",
+        "packages/core/src/prospect/editContact.ts",
+        "packages/core/src/prospect/fieldProvenance.test.ts",
+        "packages/core/src/prospect/fieldProvenance.ts",
         "packages/core/src/prospect/firmographics.test.ts",
         "packages/core/src/prospect/firmographics.ts",
         "packages/core/src/prospect/lists.ts",
@@ -1480,6 +1483,7 @@
       "packages/db/test/enrichmentJobStatus.itest.ts",
       "packages/db/test/enrichmentPolicy.itest.ts",
       "packages/db/test/featureFlags.itest.ts",
+      "packages/db/test/fieldProvenancePin.itest.ts",
       "packages/db/test/home.itest.ts",
       "packages/db/test/import.itest.ts",
       "packages/db/test/importTemplates.itest.ts",
@@ -1544,6 +1548,7 @@
       "packages/types/src/enrichmentPolicy.ts",
       "packages/types/src/errors.ts",
       "packages/types/src/featureFlags.ts",
+      "packages/types/src/fieldProvenance.ts",
       "packages/types/src/home.test.ts",
       "packages/types/src/home.ts",
       "packages/types/src/identityProvisioning.ts",
