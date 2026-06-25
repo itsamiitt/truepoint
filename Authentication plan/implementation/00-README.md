@@ -20,7 +20,7 @@ verified against a live signature is marked `‹confirm›`.
 
 | Spec | Item | Wave | Status | Notes |
 |------|------|------|--------|-------|
-| [`P0-01`](P0-01-pretenant-auth-audit-events.md) | Pre-tenant auth audit events (`password.reset.*`, +the tenant-less class) | P0 | **Ready** | Unblocks the `passwordReset.ts` TODOs. Prereq: accept ADR-0032. |
+| [`P0-01`](P0-01-pretenant-auth-audit-events.md) | Pre-tenant auth audit events (`password.reset.*`, +the tenant-less class) | P0 | **Code written — run gates** | Implemented across types/db/auth/apps; ADR-0032 accepted; reviewed against source. Run the gates + add the reset-audit itest. |
 | [`P0-02`](P0-02-password-policy-and-breach-screening.md) | Enforced password policy + breached-password screening | P0 | **Ready** | NIST SP 800-63B-4 SHALL. New outbound dep (HIBP range API) → SSRF/k-anonymity rules apply. |
 | [`P1-01`](P1-01-auth-policy-enforcement.md) | Auth-policy **enforcement** on login (MFA-required enrollment, allowed-methods, IP allowlist, session timeout) | P1 | **Ready** | Highest-risk: lockout-capable. Every gate ships behind a per-tenant default-off flag + break-glass. |
 | [`P1-02`](P1-02-account-security-ui.md) | `/account/security` user self-service UI (password, MFA enroll, own sessions, login history) | P1 | **Ready** | Builds the Absent route on the auth origin. WCAG 2.2 AA + i18n are ship gates. |
@@ -40,9 +40,21 @@ gate.
   `apps/auth/src/app/login/page.tsx` (orphaned `Button`/`Separator` imports + `oauthHref` cleaned up). This is a
   pure-UI removal with no tenancy/RLS surface — still run `bun run typecheck` + `biome check` before commit.
 
-## Prerequisite decision that gates P0-01
+## P0-01 status — implemented (gates pending)
 
-**Accept ADR-0032** (`docs/planning/decisions/ADR-0032-platform-audit-action-vocabulary.md`, currently
-`Status: Proposed`). ADR-0031 (the routing split) is already **Accepted**; ADR-0032 defines the
-`platform_audit_action` vocabulary that the tenant-less events need. It is fully designed; accepting it is the
-one decision blocking P0-01. The spec includes the exact status edit + decision-log row.
+**Done in code** (reviewed against source). ADR-0032 is now **Accepted**. The change spans:
+`packages/types/src/platformAudit.ts` (new `platformAuditAction` enum) + `platformAuditCoverage.test.ts`;
+`packages/db` `recordPlatformEvent` sink (`client.ts` + `index.ts`); `packages/auth` `recordPlatformAuthEvent`
+(`auditEvent.ts`) + the `password.reset.*` wiring (`passwordReset.ts`); `apps/auth` threads `ip`
+(`reset/actions.ts`); `auditCoverage.test.ts` moves `password.reset.complete` to WRITTEN.
+
+**Before it ships, run the gates** (no `bun` in the authoring env):
+`bun run typecheck` · `biome check` · `bun run lint:boundaries` ·
+`bun test packages/types/src/auditCoverage.test.ts packages/types/src/platformAuditCoverage.test.ts` ·
+`bun test packages/db/test/platformAuditLog.itest.ts`.
+
+**Follow-ups** (do alongside the gates, non-blocking): add a reset-audit integration test (request emits one
+tenant-less `platform_audit_log` row for a known email and **none** for an unknown one; complete writes
+`audit_log` for a single-tenant user and `platform_audit_log` otherwise; a forced audit failure never breaks
+the reset); flip `password.reset.complete` to WRITTEN in `docs/planning/audit-log-enum.md §5`; add the
+`platform_audit_log.action` DB `CHECK` with the apps/admin track (ADR-0032 §5).

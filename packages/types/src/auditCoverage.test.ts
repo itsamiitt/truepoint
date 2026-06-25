@@ -38,6 +38,9 @@ const WRITTEN = new Set<string>([
   "sso.callback",
   "token.issued",
   "code.exchanged",
+  // password.reset.complete writes audit_log when the identity resolves to a SINGLE tenant (ADR-0031 §2); the
+  // 0/>1-tenant case routes to platform_audit_log instead (see platformAuditCoverage.test.ts).
+  "password.reset.complete",
 ]);
 
 // §5.2 — defined in the closed enum but not yet wired to a writeAudit() call-site.
@@ -95,7 +98,6 @@ const PENDING = new Set<string>([
   "mfa.success",
   "mfa.failure",
   "password.reset.request",
-  "password.reset.complete",
   "token.refresh",
   "token.revoke",
   "device.trusted",

@@ -8,6 +8,7 @@ export * from "./importTemplates.ts";
 export * from "./tags.ts";
 export * from "./bulkEnrichment.ts";
 export * from "./billing.ts";
+export * from "./platformAudit.ts";
 export * from "./intel.ts";
 export * from "./dataHealth.ts";
 export * from "./enrichmentPolicy.ts";

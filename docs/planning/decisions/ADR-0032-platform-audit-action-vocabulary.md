@@ -1,7 +1,11 @@
 # ADR-0032 — Platform-audit action vocabulary (`platform_audit_log`)
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-06-15
+- **Accepted:** 2026-06-25 — wired for the tenant-less `password.reset.*` events (P0-01): the
+  `platformAuditAction` enum (`packages/types/src/platformAudit.ts`) + the `recordPlatformEvent` sink
+  (`packages/db/src/client.ts`) land now; the DB `CHECK` constraint and the remaining staff actions follow with
+  the `apps/admin` track.
 - **Context doc:** [13-platform-admin.md](../13-platform-admin.md), [08-compliance.md](../08-compliance.md), [03-database-design.md](../03-database-design.md), [audit-log-enum.md](../audit-log-enum.md)
 - **Relates to:** [ADR-0011](./ADR-0011-platform-admin-and-privileged-access.md) (`platform_audit_log`), [ADR-0031](./ADR-0031-auth-event-audit-tenancy.md) (routes tenant-less auth events here)
 

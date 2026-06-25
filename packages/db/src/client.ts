@@ -3,6 +3,7 @@
 // transaction pooling resets them per checkout, so they must be set in-tx). 03 §9, architecture-contract §6.
 
 import { env } from "@leadwolf/config";
+import type { PlatformAuditAction } from "@leadwolf/types";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -106,5 +107,34 @@ export async function withPlatformTx<T>(
                   ${target.metadata ? JSON.stringify(target.metadata) : null}::jsonb)`,
     );
     return fn(tx);
+  });
+}
+
+/** One platform_audit_log row for a tenant-less / platform-scoped event (ADR-0031 §3, ADR-0032). Unlike
+ * withPlatformTx (the staff path, which writes the audit row in the SAME tx as a privileged action), this is
+ * a standalone best-effort sink for observational identity events (e.g. password.reset.*): own transaction on
+ * the owner connection (RLS-exempt as the table owner; leadwolf_app stays denied), append-only. `action` is
+ * typed to the closed platformAuditAction vocabulary at compile time. It does NOT swallow — callers wrap it
+ * (recordPlatformAuthEvent) so a failed audit never breaks the auth flow. Never pass codes/tokens/PII. */
+export interface PlatformEventInput {
+  actorUserId: string; // platform_audit_log.actor_user_id is NOT NULL
+  action: PlatformAuditAction;
+  targetType?: string | null;
+  targetId?: string | null;
+  tenantId?: string | null; // a reference (a staff action's target), NOT the RLS scope
+  workspaceId?: string | null;
+  ip?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export async function recordPlatformEvent(entry: PlatformEventInput): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`INSERT INTO platform_audit_log
+            (actor_user_id, action, target_type, target_id, tenant_id, workspace_id, ip, metadata)
+          VALUES (${entry.actorUserId}::uuid, ${entry.action}, ${entry.targetType ?? null},
+                  ${entry.targetId ?? null}, ${entry.tenantId ?? null}::uuid, ${entry.workspaceId ?? null}::uuid,
+                  ${entry.ip ?? null}, ${entry.metadata ? JSON.stringify(entry.metadata) : null}::jsonb)`,
+    );
   });
 }

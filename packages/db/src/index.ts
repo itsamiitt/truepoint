@@ -5,6 +5,8 @@ export {
   withTenantTx,
   withPrivilegedTx,
   withPlatformTx,
+  recordPlatformEvent,
+  type PlatformEventInput,
   closeDb,
   type Db,
   type Tx,

@@ -44,7 +44,7 @@ export async function completeReset(formData: FormData): Promise<void> {
     back("1"); // same neutral "invalid or expired" message — never reveal the lockout distinctly
   }
 
-  const result = await completePasswordReset({ email, code, newPassword: password });
+  const result = await completePasswordReset({ email, code, newPassword: password, ipAddress: ip });
   if (!result.ok) {
     await recordCredentialFailure({ ip, identifier: resetKey });
     back("1"); // invalid_token → "This reset link is invalid or expired."

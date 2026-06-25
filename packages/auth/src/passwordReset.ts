@@ -5,7 +5,8 @@
 // error). completePasswordReset consumes the single-use, short-lived reset token (TTL is the shared
 // email-token window) and replaces the Argon2id digest. Tokens never appear in returned errors.
 
-import { userRepository } from "@leadwolf/db";
+import { tenantMemberRepository, userRepository } from "@leadwolf/db";
+import { recordAuthEvent, recordPlatformAuthEvent } from "./auditEvent.ts";
 import { createEmailVerification, verifyEmailCode } from "./emailVerification.ts";
 import { hashPassword } from "./password.ts";
 import { revokeAllSessionsForUser } from "./session.ts";
@@ -28,8 +29,16 @@ export async function requestPasswordReset(
   const email = input.email.trim().toLowerCase();
   const user = await userRepository.findByEmail(email);
 
-  // TODO(amit, 2026-06-15): emit password.reset.* audit events when the auth audit sink lands.
   if (!user) return { sent: true }; // enumeration-safe: identical shape to the success path
+
+  // Tenant-less identity event (ADR-0031 §3) → platform_audit_log. Emitted ONLY for a known account — there is
+  // no row for an unknown email, which preserves non-enumeration (ADR-0031 §4 / ADR-0020). Best-effort: the
+  // sink swallows its own failures, so a missed audit never blocks the reset email.
+  await recordPlatformAuthEvent({
+    action: "password.reset.request",
+    actorUserId: user.id,
+    ip: input.ipAddress ?? null,
+  });
 
   const { code } = await createEmailVerification({
     email,
@@ -44,6 +53,7 @@ export interface CompletePasswordResetInput {
   email: string;
   code: string;
   newPassword: string;
+  ipAddress?: string;
 }
 
 // Discriminated result mirroring the auth error `code` vocabulary (errors.ts): a bad/expired/replayed
@@ -70,6 +80,27 @@ export async function completePasswordReset(
   // still-live access tokens so the eviction is immediate, not delayed to the ≤15-min token expiry (W5/W6).
   await revokeAllSessionsForUser(user.id);
 
-  // TODO(amit, 2026-06-15): emit password.reset.* audit events when the auth audit sink lands.
+  // Audit the completion (ADR-0031 §2): when the identity resolves to exactly ONE active tenant, write the
+  // tenant-scoped audit_log; with 0 or >1 tenants there is no single tenant to satisfy audit_log's NOT NULL
+  // tenant_id, so route to the tenant-less platform_audit_log. Best-effort — both sinks swallow, so a failed
+  // audit can never undo a completed reset.
+  const tenants = await tenantMemberRepository.listForUser(user.id);
+  if (tenants.length === 1 && tenants[0]) {
+    await recordAuthEvent({
+      tenantId: tenants[0].tenantId,
+      actorUserId: user.id,
+      action: "password.reset.complete",
+      entityType: "user",
+      entityId: user.id,
+      ipAddress: input.ipAddress ?? null,
+    });
+  } else {
+    await recordPlatformAuthEvent({
+      action: "password.reset.complete",
+      actorUserId: user.id,
+      ip: input.ipAddress ?? null,
+    });
+  }
+
   return { ok: true, userId: user.id };
 }
