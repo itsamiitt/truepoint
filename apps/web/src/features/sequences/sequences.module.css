@@ -560,3 +560,44 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ── New-template form (M12 P2) ──────────────────────────────────────────────────────────────────── */
+.templateForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--tp-hairline);
+}
+
+.templateFormRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.templateFormField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.templateFormLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+}
+
+.templateFormActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.templateFormError {
+  font-size: 13px;
+  color: var(--danger);
+}

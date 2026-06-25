@@ -53,17 +53,44 @@ export async function fetchReportsSource(): Promise<ReportsSource> {
   return { balance, reveals, contacts };
 }
 
+/** The deliverability report from GET /api/v1/email/analytics (M12 P5). Reply rate is the headline (D6). */
+export interface DeliverabilityReport {
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  complained: number;
+  unsubscribed: number;
+  replied: number;
+  deliveryRate: number;
+  openRate: number;
+  clickRate: number;
+  replyRate: number;
+  bounceRate: number;
+  complaintRate: number;
+  rangeDays: number;
+}
+
+/** GET /api/v1/email/analytics — null when the endpoint isn't wired yet (404/501) so the panel can fall back. */
+export async function fetchEmailDeliverability(days = 30): Promise<DeliverabilityReport | null> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/email/analytics?days=${days}`);
+  if (res.ok) return (await res.json()) as DeliverabilityReport;
+  if (res.status === 404 || res.status === 501) return null;
+  throw new Error(await problemMessage(res, "Could not load deliverability analytics"));
+}
+
 /** Trigger a client-side CSV download. PII-free rollup rows only — never raw contact data. */
 export function downloadCsv(
   filename: string,
   headers: string[],
   rows: (string | number)[][],
 ): void {
-  const escape = (cell: string | number): string => {
+  const escapeCell = (cell: string | number): string => {
     const s = String(cell);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
-  const body = [headers, ...rows].map((r) => r.map(escape).join(",")).join("\n");
+  const body = [headers, ...rows].map((r) => r.map(escapeCell).join(",")).join("\n");
   const blob = new Blob([body], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

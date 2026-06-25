@@ -119,6 +119,17 @@ export const appEnvSchema = z
     TYPESENSE_API_KEY: z.string().optional(),
     SMTP_URL: z.string().optional(),
 
+    // M12 email subsystem (email-planning/13 P0, D7). The dedicated data key for the mailbox-credential
+    // secret store (core/email/secretStore) — the KMS-envelope target. Server-only, never NEXT_PUBLIC_,
+    // never logged. Absent in dev/test → the store falls back to deriving a key from BLIND_INDEX_KEY (the
+    // same dev-only posture as encryptPii); production MUST inject a dedicated key (rotated, KMS-managed).
+    EMAIL_SECRET_KEY: z.string().min(16).optional(),
+
+    // Signing secret for the inbound ESP delivery/bounce/complaint webhook (email-planning/13 P1, 04 §6).
+    // Server-only; the webhook route fails CLOSED when it is absent (no secret → every event rejected), the
+    // same posture as STRIPE_WEBHOOK_SECRET.
+    EMAIL_WEBHOOK_SECRET: z.string().optional(),
+
     // AI provider (23, ADR-0023). Anthropic Claude behind the AiPort. The API key is a SECRET — read only
     // here, never hardcoded; an absent key makes the adapter fail closed (ai_unavailable), it never throws
     // at construction. The base URL + model id are env-driven so the model is a configurable default

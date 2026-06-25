@@ -201,6 +201,7 @@ export const auditLog = pgTable(
         'saved_search.create','saved_search.update','saved_search.delete',
         'automation.rule.enable','automation.rule.disable','automation.rule.run',
         'ai.config.update','ai.draft.approve','ai.draft.reject',
+        'mailbox.connect','mailbox.disconnect','sending_domain.add','sending_domain.verify',
         'login.success','login.failure','login.locked','mfa.challenge','mfa.success','mfa.failure',
         'password.reset.request','password.reset.complete','sso.initiated','sso.callback',
         'token.issued','token.refresh','token.revoke','device.trusted','device.revoked','session.revoked',

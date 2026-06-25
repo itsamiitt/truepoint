@@ -196,6 +196,101 @@ export {
   type EmailSenderPort,
   type OutboundEmail,
 } from "./outreach/senderPort.ts";
+// M12 email subsystem (email-planning/13 P0) — the net-new primitives + domain fns that EXTEND the M9 engine
+// (D11): the KMS-envelope credential store (D7), the SPF/DKIM/DMARC verifier (DI resolver), and the
+// mailbox-connect / sending-domain-create+verify orchestration over the @leadwolf/db email repositories.
+export { encryptSecret, decryptSecret } from "./email/secretStore.ts";
+export {
+  verifyDomainAuth,
+  nodeDnsResolver,
+  type DnsResolverPort,
+  type DomainAuthInputs,
+  type DomainAuthResult,
+} from "./email/dnsAuth.ts";
+export {
+  connectMailbox,
+  type ConnectMailboxInput,
+  type ConnectMailboxResult,
+} from "./email/connectMailbox.ts";
+export {
+  createSendingDomain,
+  verifySendingDomain,
+  type CreateSendingDomainInput,
+  type VerifySendingDomainInput,
+  type VerifySendingDomainResult,
+} from "./email/sendingDomains.ts";
+// M12 P1 send-gate (email-planning/13 P1, D11): the ProviderAdapter seam, the per-tenant identity gate
+// (D2/D3), the signed delivery/bounce webhook, and the dispatch that wraps the UNCHANGED M9 sendStep with
+// the identity + send-quota gates. The concrete network adapters (SES/Gmail/Graph/SMTP) register in P1b.
+export {
+  registerAdapter,
+  resolveSender,
+  resetAdapters,
+  type SendIdentity,
+  type AdapterFactory,
+} from "./email/providerAdapter.ts";
+export { resolveSendingIdentity } from "./email/resolveSendingIdentity.ts";
+export {
+  verifyEmailWebhookSignature,
+  signEmailWebhookPayload,
+  parseDeliveryEvent,
+  type DeliveryEvent,
+  type DeliveryEventType,
+} from "./email/deliveryWebhook.ts";
+export {
+  dispatchOutreachSend,
+  type DispatchOutreachSendInput,
+} from "./email/dispatchOutreachSend.ts";
+// M12 P2 templates (email-planning/13 P2, 01): the render-safe engine (the injection boundary) + the
+// versioned, owner-scoped (D8) template CRUD that externalises the inline outreach_steps.body.
+export {
+  renderTemplate,
+  extractVariables,
+  type RenderOptions,
+} from "./email/renderTemplate.ts";
+export {
+  createTemplate,
+  updateTemplate,
+  listTemplates,
+  type CreateTemplateInput,
+  type UpdateTemplateInput,
+} from "./email/templates.ts";
+// M12 P3 tracking (email-planning/13 P3, 04): the signed open/click token + the email_event → activities
+// projection that lights up the per-contact timeline (idempotent; opens informational, D6).
+export {
+  signTrackingToken,
+  verifyTrackingToken,
+  type TrackingTokenPayload,
+} from "./email/trackingToken.ts";
+export {
+  ingestTrackingEvent,
+  type TrackingEventInput,
+} from "./email/ingestTrackingEvent.ts";
+// M12 P4 sequence automation (email-planning/13 P4, 15 §A.4): the leader-locked tick body — claims due
+// enrollments (FOR UPDATE SKIP LOCKED, no double-advance) + auto-pause-on-reply (replied rows aren't claimed).
+export {
+  tickSequences,
+  type TickResult,
+  type TickOptions,
+} from "./email/sequenceScheduler.ts";
+// M12 P5 deliverability + analytics + warmup (email-planning/13 P5, 08): the workspace deliverability report
+// (reply rate primary, opens informational — D6) + the pure warmup ramp schedule.
+export {
+  computeDeliverability,
+  type DeliverabilityReport,
+} from "./email/deliverabilityAnalytics.ts";
+export {
+  warmupDailyTarget,
+  isWarmupComplete,
+  type WarmupSchedule,
+} from "./email/warmup.ts";
+// M12 P6 platform governance (email-planning/13 P6, 06/11): global suppression + per-tenant send-quota, both
+// on the audited withPlatformTx path (platform-staff only). Reuse suppression_list / tenants (D11).
+export {
+  addGlobalSuppression,
+  setTenantEmailSendQuota,
+  type AddGlobalSuppressionInput,
+} from "./email/governance.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,
