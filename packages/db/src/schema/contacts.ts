@@ -20,6 +20,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { tenants, users, workspaces } from "./auth.ts";
+import { masterCompanies, masterPersons } from "./masterGraph.ts";
 import { pipelineStages } from "./pipelineStages.ts";
 
 // Shared column idioms (kept local per the self-contained-schema convention in auth.ts).
@@ -44,6 +45,9 @@ export const accounts = pgTable(
     id: id(),
     tenantId: tenantId(),
     workspaceId: workspaceId(),
+    // overlay → Layer-0 golden bridge (ADR-0021); nullable = in-flight ER staging only (PLAN_00 C8). No
+    // onDelete (03 §5.2): the bridge is re-pointable on master merge/split, not cascade-deleted.
+    masterCompanyId: uuid("master_company_id").references(() => masterCompanies.id),
     name: varchar("name", { length: 255 }).notNull(),
     domain: citext("domain"), // non-PII; the per-workspace account dedup key
     linkedinCompanyUrl: varchar("linkedin_company_url", { length: 500 }),
@@ -64,10 +68,17 @@ export const accounts = pgTable(
     // Typed-jsonb custom-field values (ADR-0028, 03 §14): shallow-merged `existing || incoming`; validated
     // against custom_field_definitions at the app edge. GIN-indexed for facet/filter queries.
     customFields: jsonb("custom_fields").notNull().default({}),
+    // Per-field provenance/confidence seam (C6, PLAN_03 §3.3 / PLAN_00 §5.3): which source/run set each
+    // overlay field, for merge precedence + reconciliation against Layer-0. Empty {} until first enrichment.
+    fieldProvenance: jsonb("field_provenance").notNull().default({}),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => ({
+    // Partial bridge index — only the accounts already linked to a Layer-0 master company (overlay → golden).
+    masterIdx: index("idx_accounts_master")
+      .on(t.masterCompanyId)
+      .where(sql`${t.masterCompanyId} IS NOT NULL`),
     // Per-workspace dedup on domain (partial — only rows that carry a domain).
     uniqWsDomain: uniqueIndex("uniq_accounts_ws_domain")
       .on(t.workspaceId, t.domain)
@@ -96,6 +107,9 @@ export const contacts = pgTable(
     tenantId: tenantId(),
     workspaceId: workspaceId(),
     accountId: uuid("account_id").references(() => accounts.id, { onDelete: "set null" }),
+    // overlay → Layer-0 golden bridge (ADR-0021); nullable = in-flight ER staging only (PLAN_00 C8). No
+    // onDelete (03 §5.2): the bridge is re-pointable on master merge/split, not cascade-deleted.
+    masterPersonId: uuid("master_person_id").references(() => masterPersons.id),
     // Soft owner (24, soft-owner model): the assignable owner powering the "My prospects" / by-owner filter
     // and assign/reassign. DISTINCT from the immutable revealedByUserId (first-reveal credit owner). Visibility
     // stays workspace-wide via RLS — owner is a FILTER dimension, never a per-row access wall. SET NULL on user
@@ -148,10 +162,17 @@ export const contacts = pgTable(
     // Typed-jsonb custom-field values (ADR-0028, 03 §14): shallow-merged `existing || incoming` (03 §15.3);
     // validated against custom_field_definitions at the app edge. GIN-indexed for facet/filter queries.
     customFields: jsonb("custom_fields").notNull().default({}),
+    // Per-field provenance/confidence seam (C6, PLAN_03 §3.3 / PLAN_00 §5.3): which source/run set each
+    // overlay field, for merge precedence + reconciliation against Layer-0. Empty {} until first enrichment.
+    fieldProvenance: jsonb("field_provenance").notNull().default({}),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => ({
+    // Partial bridge index — only the contacts already linked to a Layer-0 master person (overlay → golden).
+    masterIdx: index("idx_contacts_master")
+      .on(t.masterPersonId)
+      .where(sql`${t.masterPersonId} IS NOT NULL`),
     // The three per-workspace dedup keys (partial unique — only where the key is present). 03 §5/§11.
     uniqWsEmail: uniqueIndex("uniq_contacts_ws_email")
       .on(t.workspaceId, t.emailBlindIndex)

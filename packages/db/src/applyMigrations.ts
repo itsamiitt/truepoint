@@ -82,6 +82,24 @@ const GRANTS = `
   REVOKE ALL ON platform_staff FROM leadwolf_app;
   -- impersonation_sessions (ADR-0011) is platform-owned staff data — deny the customer app role entirely.
   REVOKE ALL ON impersonation_sessions FROM leadwolf_app;
+  -- Layer-0 master graph (ADR-0021) is SYSTEM-OWNED, isolated by ACCESS PATH not RLS: it has NO workspace_id,
+  -- so NO fail-closed RLS predicate. The blanket GRANT above handed leadwolf_app DML on it — REVOKE it so the
+  -- customer app role can NEVER read the shared universe directly (PLAN_04/PLAN_07 "grant-off is the wall").
+  -- Reads happen only via masked search + the paid-reveal copy + the audited owner/withPlatformTx path. The
+  -- overlay's master_*_id FK still works: referential checks run with the table-OWNER privilege, not leadwolf_app.
+  -- Re-run every migrate (idempotent); a future master_* table MUST be added to this list.
+  REVOKE ALL ON master_persons, master_companies, master_employment, master_emails, master_phones,
+                source_records, match_links FROM leadwolf_app;
+  -- Defense-in-depth belt: dynamically REVOKE from leadwolf_app any table named master_*. A FUTURE Layer-0
+  -- master table is auto-granted by the ALTER DEFAULT PRIVILEGES above at CREATE time, so this convention-based
+  -- catch-all makes it fail closed even before someone adds it to the explicit list. (Tables NOT matching
+  -- master_* — source_records, match_links, and future system-owned Layer-0 tables — still rely on the explicit
+  -- list above; each phase MUST add its system-owned tables there.) Idempotent; re-run every migrate.
+  DO $$ DECLARE t text; BEGIN
+    FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename ~ '^master_' LOOP
+      EXECUTE format('REVOKE ALL ON public.%I FROM leadwolf_app', t);
+    END LOOP;
+  END $$;
 `;
 
 async function exists(path: string): Promise<boolean> {
