@@ -136,6 +136,7 @@ export async function completeSignup(formData: FormData): Promise<void> {
     codeChallenge: txn.codeChallenge,
     state: txn.state,
     clientIp: txn.clientIp,
+    method: "password", // P1-01 Gate B: a new identity registers a password — carry it for the method gate.
   });
   await patchLoginTransaction(loginTxnId, {
     tenantId: provisioned.tenantId,
@@ -156,6 +157,7 @@ export async function completeSignup(formData: FormData): Promise<void> {
   // the branches stay for the invite/auto-join cases that could land in a multi-workspace org.
   const step = await resolveNextStep(loginTxnId, advanced);
   if (step === "mfa") redirect("/mfa");
+  if (step === "mfa_enroll") redirect("/mfa/enroll"); // P1-01 sub-gate A: forced in-login enrollment.
   if (step === "org") redirect("/org");
   if (step === "workspace") redirect("/workspace");
   await finishLogin(loginTxnId, advanced);

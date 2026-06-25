@@ -17,10 +17,11 @@ import { issueCode } from "./code.ts";
 import { isIpAllowed } from "./ipAllowlist.ts";
 import { log } from "./log.ts";
 import { type LoginTransaction, patchLoginTransaction } from "./loginTransaction.ts";
+import { isMethodAllowed } from "./policy.ts";
 import { authorizeTenantSelection } from "./scopeGuard.ts";
 import { createSession } from "./session.ts";
 
-export type LoginStep = "mfa" | "org" | "workspace" | "complete";
+export type LoginStep = "mfa" | "mfa_enroll" | "org" | "workspace" | "complete";
 
 // Same-request read cache: resolveNextStep already fetches the user's org list and (sometimes) the workspace
 // list for the resolved tenant. finalizeLogin would otherwise re-query the identical rows a moment later in
@@ -71,10 +72,14 @@ async function getWorkspaces(txn: LoginTransaction, tenantId: string): Promise<W
 
 export async function resolveNextStep(txnId: string, txn: LoginTransaction): Promise<LoginStep> {
   // MFA: required when the user has a verified method enrolled (user opt-in). Tenant/workspace policy
-  // enforcement layers on top once the policy repos are wired (ADR-0018).
+  // enforcement layers on top once the policy repos are wired (ADR-0018). Read the verified-method state ONCE
+  // here — both the existing "challenge an enrolled user" branch and the P1-01 forced-enrollment branch below
+  // key off it (avoids a second listMfaMethods round-trip in the same request).
+  let hasVerifiedMethod = false;
   if (!txn.mfaVerified) {
     const methods = await userRepository.listMfaMethods(txn.userId);
-    if (methods.some((m) => m.verifiedAt)) return "mfa";
+    hasVerifiedMethod = methods.some((m) => m.verifiedAt);
+    if (hasVerifiedMethod) return "mfa";
   }
 
   // Org: pick when the identity belongs to >1 org; a single membership auto-selects (persisted, no UI step).
@@ -85,6 +90,23 @@ export async function resolveNextStep(txnId: string, txn: LoginTransaction): Pro
     tenantId = orgs[0]?.tenantId;
     if (!tenantId) return "complete"; // no membership (edge) — finalizeLogin surfaces it
     await patchLoginTransaction(txnId, { tenantId });
+  }
+
+  // ── P1-01 sub-gate A — forced in-login MFA enrollment ────────────────────────────────────────────────
+  // LOCKOUT-CAPABLE: enforced ONLY behind the global kill-switch (the literal string "true"). With the flag
+  // OFF this whole block is skipped, so resolveNextStep returns EXACTLY what it does today and an un-enrolled
+  // user under a required-MFA org falls through to finalizeLogin, where the UNCHANGED ForbiddenError
+  // ("mfa_required") throw still fires — the pre-existing fail-closed behavior is byte-for-byte preserved.
+  //
+  // With the flag ON: when the RESOLVED tenant mandates MFA (`required`) and this not-yet-MFA-verified user has
+  // NO verified method, route to the forced-enrollment step (apps/auth /mfa/enroll) instead of erroring. The
+  // tenant is resolved above (auto-selected single org, or carried from the org-selection step) so the policy
+  // is the right per-tenant one; a multi-org user without a selection returned "org" already and re-enters here
+  // once the tenant is pinned. finalizeLogin remains the authoritative token gate (it still refuses to mint for
+  // an un-enrolled required user), so this is a UX route, never the security boundary.
+  if (env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true" && !txn.mfaVerified && !hasVerifiedMethod) {
+    const policy = await authPolicyRepository.getForTenant(tenantId);
+    if (policy.mfaEnforcement === "required") return "mfa_enroll";
   }
 
   // Workspace: a single one auto-selects. With several, land on the user's remembered workspace (where they
@@ -148,10 +170,15 @@ export async function finalizeLogin(
   // MFA enforcement (ADR-0018): a tenant that MANDATES MFA must not complete login without it — fail closed
   // at the token gate. Enrolled users are already challenged earlier (resolveNextStep → "mfa", so mfaVerified
   // is true here); this blocks the un-enrolled case for a required-MFA org. Tenants on the default ("optional"
-  // / "off") policy are unaffected. WIRE (P1-01 sub-gate A, DEFERRED): route blocked users to a forced
-  // in-login MFA-enrollment step in apps/auth instead of erroring (better UX once the enrollment screen
-  // exists). This existing gate is UNCHANGED and is NOT behind AUTH_POLICY_ENFORCEMENT_ENABLED — it is the
-  // pre-existing behavior the new gates must not regress.
+  // / "off") policy are unaffected.
+  //
+  // This throw is UNCHANGED and is the authoritative fail-closed backstop — it is NOT behind
+  // AUTH_POLICY_ENFORCEMENT_ENABLED, so with the flag OFF behavior is byte-for-byte today's (an un-enrolled
+  // required user is errored here). P1-01 sub-gate A added the better-UX path WITHOUT touching this throw:
+  // when the flag is ON, resolveNextStep routes the same un-enrolled-required case to the "mfa_enroll" step
+  // (→ apps/auth /mfa/enroll) BEFORE finalizeLogin runs, so the user enrolls (which sets mfaVerified) and this
+  // block is then satisfied. If finalizeLogin is ever reached un-enrolled under a required policy (flag on or
+  // off), this throw still fires — the token gate never mints for an un-enrolled required user.
   if (!txn.mfaVerified) {
     const policy = await authPolicyRepository.getForTenant(tenantId);
     if (policy.mfaEnforcement === "required") {
@@ -191,10 +218,22 @@ export async function finalizeLogin(
       );
     }
 
-    // Gate B — allowed methods: DEFERRED. isMethodAllowed(policy, method) exists, but the login method is not
-    // yet carried on the LoginTransaction, and threading it would touch all four edge callers of
-    // createLoginTransaction across apps/auth (password / magic / sso / signup). Out of scope for this
-    // increment — see the deferral note in the task report. Do NOT half-wire it here.
+    // Gate B — allowed methods. The method used to open THIS login transaction (server-set at each edge:
+    // password / magic_link / sso / signup→password — never a client value) must be permitted by the resolved
+    // tenant policy. isMethodAllowed also folds in requireSso / disableSocial (strictest-wins, policy.ts).
+    // FAIL-OPEN ON MISSING DATA: an empty allowedMethods imposes no restriction, and a transaction with NO
+    // method (an older Redis row in flight across the deploy that added the field) is NOT blocked — we never
+    // lock a user out over data we do not have. Only a present-and-disallowed method fails closed.
+    if (
+      txn.method !== undefined &&
+      policy.allowedMethods.length > 0 &&
+      !isMethodAllowed(policy, txn.method)
+    ) {
+      throw new ForbiddenError(
+        "method_not_allowed",
+        "Your organization does not permit this sign-in method. Use an approved method to continue.",
+      );
+    }
   }
 
   let workspaceId = txn.workspaceId;

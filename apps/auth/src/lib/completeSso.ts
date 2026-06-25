@@ -73,6 +73,7 @@ export async function completeSso(
     codeChallenge: txn.codeChallenge,
     state: txn.state,
     clientIp: txn.clientIp,
+    method: "sso", // P1-01 Gate B: carry the method for the allowed-methods policy gate at finalize.
   });
   await patchLoginTransaction(loginTxnId, {
     tenantId: txn.tenantId,
@@ -94,6 +95,7 @@ export async function completeSso(
   // the branches remain for an org that requires a workspace choice.
   const step = await resolveNextStep(loginTxnId, advanced);
   if (step === "mfa") redirect("/mfa");
+  if (step === "mfa_enroll") redirect("/mfa/enroll"); // P1-01 sub-gate A: forced in-login enrollment.
   if (step === "org") redirect("/org");
   if (step === "workspace") redirect("/workspace");
   return finishLogin(loginTxnId, advanced);

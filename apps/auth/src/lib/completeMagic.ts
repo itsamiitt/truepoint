@@ -42,6 +42,7 @@ export async function completeMagic(email: string, carry: MagicCarryContext): Pr
     codeChallenge: carry.codeChallenge,
     state: carry.state,
     clientIp: carry.clientIp,
+    method: "magic_link", // P1-01 Gate B: carry the method for the allowed-methods policy gate at finalize.
   });
   // No tenant/workspace pin (magic-link identities aren't org-bound); resolveNextStep selects them — so,
   // unlike completeSso, there is no patchLoginTransaction step here before the next-step resolution.
@@ -58,6 +59,7 @@ export async function completeMagic(email: string, carry: MagicCarryContext): Pr
 
   const step = await resolveNextStep(loginTxnId, loginTxn);
   if (step === "mfa") redirect("/mfa");
+  if (step === "mfa_enroll") redirect("/mfa/enroll"); // P1-01 sub-gate A: forced in-login enrollment.
   if (step === "org") redirect("/org");
   if (step === "workspace") redirect("/workspace");
   return finishLogin(loginTxnId, loginTxn);

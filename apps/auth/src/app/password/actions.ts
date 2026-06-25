@@ -79,6 +79,7 @@ export async function submitPassword(formData: FormData): Promise<void> {
       codeChallenge,
       state,
       clientIp,
+      method: "password", // P1-01 Gate B: carry the method for the allowed-methods policy gate at finalize.
     });
     txnId = created.id;
     txn = created.txn;
@@ -97,6 +98,7 @@ export async function submitPassword(formData: FormData): Promise<void> {
   }
 
   if (step === "mfa") redirect("/mfa");
+  if (step === "mfa_enroll") redirect("/mfa/enroll"); // P1-01 sub-gate A: forced in-login enrollment.
   if (step === "org") redirect("/org");
   if (step === "workspace") redirect("/workspace");
   await finishLogin(txnId, txn);

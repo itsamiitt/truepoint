@@ -5,6 +5,7 @@
 
 import { randomBytes } from "node:crypto";
 import { env } from "@leadwolf/config";
+import type { AuthMethod } from "@leadwolf/types";
 import Redis from "ioredis";
 
 // Lazy: constructing ioredis opens a socket + retry loop. Defer it so importing this module is
@@ -22,6 +23,12 @@ export interface LoginTransaction {
   state: string;
   clientIp: string;
   mfaVerified: boolean;
+  // The primary-auth method this transaction was opened with (P1-01 Gate B). Set by each login edge
+  // (password / magic_link / sso / signup→password) and enforced against the resolved tenant policy's
+  // allowedMethods at finalizeLogin. OPTIONAL by design: a transaction created before this field existed (an
+  // in-flight Redis row across a deploy) parses with `method` undefined, and the gate FAILS OPEN on a missing
+  // method (no lockout) — it never blocks data it does not have.
+  method?: AuthMethod;
   tenantId?: string; // chosen at the org-selection step (ADR-0019)
   workspaceId?: string;
   createdAt: number;
@@ -29,7 +36,7 @@ export interface LoginTransaction {
 
 export type LoginTransactionInput = Pick<
   LoginTransaction,
-  "userId" | "appOrigin" | "codeChallenge" | "state" | "clientIp"
+  "userId" | "appOrigin" | "codeChallenge" | "state" | "clientIp" | "method"
 >;
 
 export async function createLoginTransaction(

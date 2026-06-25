@@ -27,6 +27,10 @@ export async function selectOrg(formData: FormData): Promise<void> {
 
   await patchLoginTransaction(txnId, { tenantId });
   const updated = { ...txn, tenantId };
-  if ((await resolveNextStep(txnId, updated)) === "workspace") redirect("/workspace");
+  // The tenant is only now resolved, so a tenant-scoped step (workspace pick, or — P1-01 sub-gate A, flag-on
+  // only — forced MFA enrollment for a required-MFA org) can first surface HERE. Route both before finalize.
+  const step = await resolveNextStep(txnId, updated);
+  if (step === "mfa_enroll") redirect("/mfa/enroll");
+  if (step === "workspace") redirect("/workspace");
   await finishLogin(txnId, updated);
 }
