@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 924,
-  "fileSetHash": "sha256:63e02753b6c185f0a830ba9f1666c36c812434b70435fd68d6feccf3dd3bfb30",
+  "fileCount": 926,
+  "fileSetHash": "sha256:80e04e339d0b8405e9635c476f5b960d9765a4bc90ffdf7d64ae8d44ffb8cd61",
   "features": {
     "account-search": {
       "web": [],
@@ -1455,6 +1455,7 @@
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
       "packages/db/src/schema/lists.ts",
+      "packages/db/src/schema/masterGraph.ts",
       "packages/db/src/schema/outreach.ts",
       "packages/db/src/schema/pipelineStages.ts",
       "packages/db/src/schema/platformOps.ts",
@@ -1484,6 +1485,7 @@
       "packages/db/test/listMembersDsarCascade.itest.ts",
       "packages/db/test/lists.itest.ts",
       "packages/db/test/listsStaffNoAccess.itest.ts",
+      "packages/db/test/masterGraphIsolation.itest.ts",
       "packages/db/test/members.itest.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
