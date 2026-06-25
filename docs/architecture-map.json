@@ -73,8 +73,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 888,
-  "fileSetHash": "sha256:4ac729c32930c584d5db2094d0733ad56206dfa5e047eded335bb40ea609ddf6",
+  "fileCount": 891,
+  "fileSetHash": "sha256:2265fa1d5e0261d1375be74f65fc2fed6bf33038d62dcc6ac79bd18d52bd0569",
   "features": {
     "account-search": {
       "web": [],
@@ -289,6 +289,7 @@
         "packages/core/src/email/dispatchOutreachSend.ts",
         "packages/core/src/email/dnsAuth.test.ts",
         "packages/core/src/email/dnsAuth.ts",
+        "packages/core/src/email/governance.ts",
         "packages/core/src/email/ingestTrackingEvent.ts",
         "packages/core/src/email/providerAdapter.ts",
         "packages/core/src/email/renderTemplate.test.ts",
@@ -1431,6 +1432,7 @@
       "packages/db/test/compliance.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/emailAnalytics.itest.ts",
+      "packages/db/test/emailGovernance.itest.ts",
       "packages/db/test/emailIsolation.itest.ts",
       "packages/db/test/enrichmentJobStatus.itest.ts",
       "packages/db/test/enrichmentPolicy.itest.ts",
@@ -1550,6 +1552,7 @@
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/firmographics.ts",
+    "apps/workers/src/queues/retentionSweep.ts",
     "apps/workers/src/queues/sequenceTick.ts",
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/authPolicyRepository.ts",

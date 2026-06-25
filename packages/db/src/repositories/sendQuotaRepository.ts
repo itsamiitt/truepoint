@@ -59,6 +59,14 @@ export const sendQuotaRepository = {
   },
 
   /**
+   * Set a tenant's send-quota (null = unlimited) — the platform-admin per-tenant limit (M12 P6). Run inside
+   * the caller's (platform) tx so the change and its audit row commit together.
+   */
+  async setQuota(tx: Tx, tenantId: string, quota: number | null): Promise<void> {
+    await tx.execute(sql`UPDATE tenants SET email_send_quota = ${quota} WHERE id = ${tenantId}`);
+  },
+
+  /**
    * Refund `count` previously-consumed sends — the send-gate releases the unit it pre-consumed when the send
    * itself fails (so a failed send doesn't burn quota). Floored at 0 (GREATEST) so a double-release can never
    * push usage negative. Run inside the tenant tx.

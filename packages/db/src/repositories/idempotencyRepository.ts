@@ -2,8 +2,8 @@
 // server replays the first response for a seen (tenant, Idempotency-Key) so network retries don't re-run
 // the handler; the DB uniques on the money tables remain the real double-charge guard underneath.
 
-import { and, eq } from "drizzle-orm";
-import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
+import { and, eq, sql } from "drizzle-orm";
+import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { idempotencyKeys } from "../schema/billing.ts";
 
 export interface StoredResponse {
@@ -39,5 +39,23 @@ export const idempotencyRepository = {
         })
         .onConflictDoNothing();
     });
+  },
+
+  /**
+   * Retention sweep (M12 P6): delete stored idempotency keys older than `olderThanDays`. SYSTEM path — runs
+   * on the owner connection (cross-tenant), like the Stripe grant; the keys are a replay cache, safe to expire
+   * once no client could still retry. Returns the number of rows reclaimed. Run leader-locked + batched.
+   */
+  async deleteExpired(olderThanDays: number, batchLimit = 5000): Promise<number> {
+    const rows = (await db.execute(sql`
+      DELETE FROM idempotency_keys
+       WHERE id IN (
+         SELECT id FROM idempotency_keys
+          WHERE created_at < now() - (${olderThanDays} * interval '1 day')
+          LIMIT ${batchLimit}
+       )
+      RETURNING id
+    `)) as unknown as Array<{ id: string }>;
+    return rows.length;
   },
 };

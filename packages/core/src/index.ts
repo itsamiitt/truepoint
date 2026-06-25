@@ -274,6 +274,13 @@ export {
   isWarmupComplete,
   type WarmupSchedule,
 } from "./email/warmup.ts";
+// M12 P6 platform governance (email-planning/13 P6, 06/11): global suppression + per-tenant send-quota, both
+// on the audited withPlatformTx path (platform-staff only). Reuse suppression_list / tenants (D11).
+export {
+  addGlobalSuppression,
+  setTenantEmailSendQuota,
+  type AddGlobalSuppressionInput,
+} from "./email/governance.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,

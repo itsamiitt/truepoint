@@ -27,6 +27,11 @@ import {
   processImport,
 } from "./queues/imports.ts";
 import { OUTREACH_QUEUE, type OutreachJobData, processOutreach } from "./queues/outreach.ts";
+import {
+  RETENTION_SWEEP_QUEUE,
+  type RetentionSweepJobData,
+  makeProcessRetentionSweep,
+} from "./queues/retentionSweep.ts";
 import { SCORING_QUEUE, type ScoringJobData, processScoring } from "./queues/scoring.ts";
 import {
   EMAIL_SEQUENCE_TICK_QUEUE,
@@ -51,6 +56,10 @@ export const firmographicsQueue = new Queue<FirmographicsJobData>(FIRMOGRAPHICS_
 // M12 P4: the leader-locked sequence scheduler (email_sequence_tick). A single repeatable job (stable
 // jobId → deduped) fires every minute; the processor takes the Redis leader lock and claims due enrollments.
 export const sequenceTickQueue = new Queue<SequenceTickJobData>(EMAIL_SEQUENCE_TICK_QUEUE, {
+  connection,
+});
+// M12 P6: the daily leader-locked retention sweep (expired idempotency keys; cold partition DROP later).
+export const retentionSweepQueue = new Queue<RetentionSweepJobData>(RETENTION_SWEEP_QUEUE, {
   connection,
 });
 
@@ -89,6 +98,15 @@ export async function scheduleSequenceTick(): Promise<void> {
     "tick",
     {},
     { repeat: { every: 60_000 }, jobId: "email-sequence-tick" },
+  );
+}
+
+/** Register the daily retention sweep (M12 P6). Stable jobId → exactly one repeatable. */
+export async function scheduleRetentionSweep(): Promise<void> {
+  await retentionSweepQueue.add(
+    "sweep",
+    {},
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "email-retention-sweep" },
   );
 }
 
@@ -188,9 +206,23 @@ export function startWorkers(): Worker[] {
       ),
       EMAIL_SEQUENCE_TICK_QUEUE,
     ),
+    // M12 P6: the retention sweep consumer (leader-locked daily).
+    instrument(
+      new Worker<RetentionSweepJobData>(
+        RETENTION_SWEEP_QUEUE,
+        makeProcessRetentionSweep(connection),
+        { connection },
+      ),
+      RETENTION_SWEEP_QUEUE,
+    ),
   ];
   void scheduleSequenceTick().catch((e) =>
     log.error("failed to schedule the sequence tick", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleRetentionSweep().catch((e) =>
+    log.error("failed to schedule the retention sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );
