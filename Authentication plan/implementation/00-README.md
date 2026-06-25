@@ -21,7 +21,7 @@ verified against a live signature is marked `‹confirm›`.
 | Spec | Item | Wave | Status | Notes |
 |------|------|------|--------|-------|
 | [`P0-01`](P0-01-pretenant-auth-audit-events.md) | Pre-tenant auth audit events (`password.reset.*`, +the tenant-less class) | P0 | **Code written — run gates** | Implemented across types/db/auth/apps; ADR-0032 accepted; reviewed against source. Run the gates + add the reset-audit itest. |
-| [`P0-02`](P0-02-password-policy-and-breach-screening.md) | Enforced password policy + breached-password screening | P0 | **Ready** | NIST SP 800-63B-4 SHALL. New outbound dep (HIBP range API) → SSRF/k-anonymity rules apply. |
+| [`P0-02`](P0-02-password-policy-and-breach-screening.md) | Enforced password policy + breached-password screening | P0 | **Code written — run gates** | Server-side gate (12-char floor + HIBP k-anonymity, fail-open) in registration + reset; edges map rejections. Reviewed against source. Follow-up: tighten `signupSchema` to `.min(12).max(128)`; optional `BREACH_CHECK_ENABLED` env flag. |
 | [`P1-01`](P1-01-auth-policy-enforcement.md) | Auth-policy **enforcement** on login (MFA-required enrollment, allowed-methods, IP allowlist, session timeout) | P1 | **Ready** | Highest-risk: lockout-capable. Every gate ships behind a per-tenant default-off flag + break-glass. |
 | [`P1-02`](P1-02-account-security-ui.md) | `/account/security` user self-service UI (password, MFA enroll, own sessions, login history) | P1 | **Ready** | Builds the Absent route on the auth origin. WCAG 2.2 AA + i18n are ship gates. |
 | [`P1-03`](P1-03-workspace-members-api.md) | Workspace **Members** API (invite / role / remove) | P1 | **Ready** | Mirrors the shipped Sessions API; closest to shovel-ready. Wires `member.*` audit. |

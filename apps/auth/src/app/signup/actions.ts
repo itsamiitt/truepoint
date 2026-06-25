@@ -28,7 +28,7 @@ import {
 } from "@leadwolf/auth";
 import { env, isAllowedOrigin } from "@leadwolf/config";
 import { userRepository } from "@leadwolf/db";
-import { ConflictError, signupSchema } from "@leadwolf/types";
+import { ConflictError, signupSchema, ValidationError } from "@leadwolf/types";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -111,6 +111,7 @@ export async function completeSignup(formData: FormData): Promise<void> {
       });
       redirect(`/password?${carry.toString()}`);
     }
+    if (err instanceof ValidationError) redirect("/signup/profile?error=weak"); // weak/breached password
     throw err;
   }
 

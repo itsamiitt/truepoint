@@ -12,6 +12,7 @@ import {
   recordCredentialSuccess,
 } from "@leadwolf/auth";
 import { isAllowedOrigin } from "@leadwolf/config";
+import { ValidationError } from "@leadwolf/types";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -31,7 +32,7 @@ export async function completeReset(formData: FormData): Promise<void> {
   });
   const back = (err: string): never => redirect(`/reset?${carry.toString()}&error=${err}`);
 
-  if (password.length < 8) back("weak");
+  if (password.length < 12) back("weak"); // fast client-side hint; completePasswordReset is the real gate
   if (password !== confirm) back("mismatch");
 
   // Brute-force lockout on the reset code (W7), keyed separately (reset: namespace). The reset code is a
@@ -44,7 +45,13 @@ export async function completeReset(formData: FormData): Promise<void> {
     back("1"); // same neutral "invalid or expired" message — never reveal the lockout distinctly
   }
 
-  const result = await completePasswordReset({ email, code, newPassword: password, ipAddress: ip });
+  let result: Awaited<ReturnType<typeof completePasswordReset>>;
+  try {
+    result = await completePasswordReset({ email, code, newPassword: password, ipAddress: ip });
+  } catch (err) {
+    if (err instanceof ValidationError) back("weak"); // too short/long or breached — same neutral message
+    throw err;
+  }
   if (!result.ok) {
     await recordCredentialFailure({ ip, identifier: resetKey });
     back("1"); // invalid_token → "This reset link is invalid or expired."

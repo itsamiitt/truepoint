@@ -13,9 +13,10 @@ import {
   userRepository,
   workspaceRepository,
 } from "@leadwolf/db";
-import { ConflictError } from "@leadwolf/types";
+import { ConflictError, ValidationError } from "@leadwolf/types";
 import type { DomainResolver } from "./identifierLookup.ts";
 import { hashPassword } from "./password.ts";
+import { checkPasswordAcceptable, passwordRejectionMessage } from "./passwordPolicy.ts";
 
 export type Placement = "auto_join" | "invitation" | "new_org";
 
@@ -58,6 +59,12 @@ export async function provisionIdentity(
   if (await userRepository.findByEmail(email)) {
     throw new ConflictError("email_taken"); // race backstop — the identifier step only routes unknown emails here
   }
+
+  // Server-side password policy (NIST SP 800-63B-4): length floor + breached-corpus screen. The /signup edge
+  // hints length client-side, but this is the boundary — provisionIdentity is the only path that mints the
+  // credential, so a weak/breached password is rejected here regardless of the client.
+  const rejection = await checkPasswordAcceptable(input.password);
+  if (rejection) throw new ValidationError(passwordRejectionMessage(rejection));
 
   const passwordHash = await hashPassword(input.password);
   const userId = await userRepository.create({

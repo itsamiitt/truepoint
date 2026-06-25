@@ -6,9 +6,11 @@
 // email-token window) and replaces the Argon2id digest. Tokens never appear in returned errors.
 
 import { tenantMemberRepository, userRepository } from "@leadwolf/db";
+import { ValidationError } from "@leadwolf/types";
 import { recordAuthEvent, recordPlatformAuthEvent } from "./auditEvent.ts";
 import { createEmailVerification, verifyEmailCode } from "./emailVerification.ts";
 import { hashPassword } from "./password.ts";
+import { checkPasswordAcceptable, passwordRejectionMessage } from "./passwordPolicy.ts";
 import { revokeAllSessionsForUser } from "./session.ts";
 
 export interface RequestPasswordResetInput {
@@ -66,6 +68,12 @@ export async function completePasswordReset(
   input: CompletePasswordResetInput,
 ): Promise<CompletePasswordResetResult> {
   const email = input.email.trim().toLowerCase();
+
+  // Enforce the password policy BEFORE consuming the single-use reset code (NIST SP 800-63B-4): a weak/breached
+  // new password must not burn the code, so the user can correct it and retry the same link.
+  const rejection = await checkPasswordAcceptable(input.newPassword);
+  if (rejection) throw new ValidationError(passwordRejectionMessage(rejection));
+
   const consumed = await verifyEmailCode({ email, code: input.code, purpose: "reset" });
   if (!consumed) return { ok: false, code: "invalid_token" }; // single-use token expired/replayed/wrong
 

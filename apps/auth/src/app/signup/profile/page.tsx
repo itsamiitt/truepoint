@@ -13,7 +13,8 @@ type SearchParams = Promise<Record<string, string | undefined>>;
 
 const ERRORS: Record<string, string> = {
   username: "That username is taken. Try another.",
-  invalid: "Check the form and try again. Passwords need at least 8 characters.",
+  invalid: "Check the form and try again. Passwords need at least 12 characters.",
+  weak: "Choose a stronger password — at least 12 characters, and not one found in a known data breach.",
 };
 
 export default async function ProfilePage({ searchParams }: { searchParams: SearchParams }) {

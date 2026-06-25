@@ -10,7 +10,7 @@ type SearchParams = Promise<Record<string, string | undefined>>;
 
 const ERRORS: Record<string, string> = {
   mismatch: "Those passwords don't match. Try again.",
-  weak: "Use at least 8 characters for your new password.",
+  weak: "Choose a stronger password — at least 12 characters, and not one found in a known data breach.",
 };
 
 export default async function ResetPage({ searchParams }: { searchParams: SearchParams }) {

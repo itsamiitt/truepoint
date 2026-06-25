@@ -108,3 +108,12 @@ export {
   isMethodAllowed,
 } from "./policy.ts";
 export { recordAuthEvent, recordPlatformAuthEvent } from "./auditEvent.ts";
+export {
+  PASSWORD_MIN_LENGTH,
+  PASSWORD_MAX_LENGTH,
+  validatePasswordShape,
+  checkPasswordAcceptable,
+  passwordRejectionMessage,
+  type PasswordRejection,
+} from "./passwordPolicy.ts";
+export { isPasswordBreached } from "./breachCheck.ts";
