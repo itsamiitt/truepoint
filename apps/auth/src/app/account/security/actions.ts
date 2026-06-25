@@ -23,7 +23,6 @@ import {
   markRevoked,
   recordAuthEvent,
   recordPlatformAuthEvent,
-  revokeAllSessionsForUser,
   verifyTotp,
 } from "@leadwolf/auth";
 import { sessionRepository, tenantMemberRepository, userRepository } from "@leadwolf/db";
@@ -63,13 +62,16 @@ export async function changePassword(formData: FormData): Promise<void> {
   const digest = await hashPassword(next);
   await userRepository.setPassword(acct.userId, digest);
 
-  // Evict every OTHER session (keep this one). revokeAllSessionsForUser revokes ALL of the user's sessions and
-  // deny-lists them; we then re-issue nothing here (this browser keeps its still-valid refresh cookie, but its
-  // session row is now revoked too — CONFIRM: to keep THIS device signed in across a password change without a
-  // full re-login, the durable session must be rotated/re-minted here. For correctness-first we revoke ALL +
-  // deny-list (identical to a reset) and let this browser silently re-auth on its next refresh; revoke-OTHERS-
-  // only is the UX follow-up once a re-mint-current helper exists. Security is not weakened either way.)
-  await revokeAllSessionsForUser(acct.userId);
+  // Evict every OTHER session but KEEP this one. A password CHANGE by an actively-authenticated, stepped-up
+  // user is not a reset: they just re-proved the live credential here, so signing THIS device out and forcing
+  // a re-login is needless friction. revokeOtherSessionsForUser revokes all of the user's sessions EXCEPT the
+  // current one and returns their ids; markManyRevoked then deny-lists those still-live access tokens so the
+  // eviction is immediate (not delayed to the ≤15-min token expiry) — identical security to the reset path for
+  // every other device, minus the one the user is sitting at. This mirrors revokeAllOtherSessions below.
+  // CONFIRM: revokeOtherSessionsForUser lives on `sessionRepository` (the task brief said `userRepository`); the
+  // userRepository has no session methods — sessions are part of the session aggregate (see userRepository.ts).
+  const otherIds = await sessionRepository.revokeOtherSessionsForUser(acct.userId, acct.sessionId);
+  if (otherIds.length > 0) await markManyRevoked(otherIds);
 
   // Audit (declared action, dual-sink like completePasswordReset). Best-effort; never blocks the change.
   const tenants = await tenantMemberRepository.listForUser(acct.userId);

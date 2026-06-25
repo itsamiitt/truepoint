@@ -12,11 +12,21 @@
 //  • last_used_at is bumped on every authenticated call (wires the WIRE-deferred column) so the management
 //    surface shows last-use and an idle-then-active (possibly stolen) token is detectable. The bump is
 //    best-effort: a failed bump must NOT 401 a valid caller (it is a monitoring signal, not an auth gate).
+//  • Per-token rate-limit: the /scim/* surface is outside the /api/* limiter, so it is throttled HERE, keyed by
+//    the resolved token id (`scim:<tokenId>`) — one IdP's bursts can't starve another tenant's provisioning, and
+//    a leaked token can't be used to hammer the surface. On trip → SCIM 429 (scimType `tooMany`). The limiter
+//    FAILS OPEN on a Redis outage (rateLimit.ts), so a cache blip can never brick provisioning.
 
 import { createHash } from "node:crypto";
+import { checkRequestRate } from "@leadwolf/auth";
 import { scimTokenRepository } from "@leadwolf/db";
+import { RateLimitedError } from "@leadwolf/types";
 import type { Context, Next } from "hono";
-import { scimUnauthorized } from "./scimError.ts";
+import { scimTooMany, scimUnauthorized } from "./scimError.ts";
+
+// Reuse the resource API's coarse 120/min subject limiter (checkRequestRate) — a sane cap for an IdP's steady
+// provisioning sync while still bounding abuse. Keyed per token id so the budget is per IdP connection.
+const scimRateKey = (tokenId: string): string => `scim:${tokenId}`;
 
 /** Context variables the SCIM routes read: the resolved tenant + the authenticating token id (for audit/log). */
 export type ScimVariables = { tenantId: string; scimTokenId: string };
@@ -34,6 +44,16 @@ export async function scimAuth(c: Context<{ Variables: ScimVariables }>, next: N
 
   c.set("tenantId", auth.tenantId);
   c.set("scimTokenId", auth.id);
+
+  // Throttle per resolved token (after the 401 gate, so an unknown/revoked token spends no limiter budget).
+  // checkRequestRate throws ONLY RateLimitedError on a trip and fails open on a Redis outage; translate the trip
+  // into a SCIM 429 so the IdP gets a well-formed SCIM error envelope (not a Problem-Details body it can't read).
+  try {
+    await checkRequestRate(scimRateKey(auth.id));
+  } catch (e) {
+    if (e instanceof RateLimitedError) throw scimTooMany();
+    throw e; // any non-rate-limit error is unexpected — let the SCIM onError handler render a generic 500.
+  }
 
   // Best-effort last-use bump (monitoring, 09). Never let a bump failure reject an otherwise-valid call; the
   // bump runs before next() so a successful request reflects the use, but its error is swallowed.

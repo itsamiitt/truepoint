@@ -33,16 +33,28 @@ const TYPE_LABELS: Record<string, string> = {
 
 export function MfaSection({
   methods,
+  hasPassword,
   recoveryCodesRemaining,
   status,
 }: {
   methods: MfaMethodView[];
+  /** Whether the user has a password to step up with. False for SSO/passkey-only users, who step up with a
+   * current authenticator (TOTP) code instead — the step-up field then asks for the code, not a password. */
+  hasPassword: boolean;
   recoveryCodesRemaining: number;
   status?: string;
 }) {
   const verified = methods.filter((m) => m.verifiedAt);
   const hasTotp = verified.some((m) => m.type === "totp");
   const msg = mfaStatusMessage(status);
+
+  // Step-up credential the forms below collect: a password when the user has one, else a current TOTP code
+  // (verifyStepUp accepts EITHER). The field name stays `current_password` — that is just the FormData key the
+  // server action reads; the visible label/placeholder/autocomplete switch so the prompt matches what's asked.
+  const stepUpLabel = hasPassword ? "Current password" : "Authenticator code";
+  const stepUpAutoComplete = hasPassword ? "current-password" : "one-time-code";
+  const stepUpType = hasPassword ? "password" : "text";
+  const stepUpInputMode = hasPassword ? undefined : "numeric";
 
   return (
     <AccountSectionCard
@@ -83,14 +95,15 @@ export function MfaSection({
                 <form action={disableMfaMethod} className="flex items-center gap-2">
                   <input type="hidden" name="method_id" value={m.id} />
                   <Label htmlFor={`disable_pw_${m.id}`} className="sr-only">
-                    Current password to remove this method
+                    {stepUpLabel} to remove this method
                   </Label>
                   <Input
                     id={`disable_pw_${m.id}`}
                     name="current_password"
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="Current password"
+                    type={stepUpType}
+                    inputMode={stepUpInputMode}
+                    autoComplete={stepUpAutoComplete}
+                    placeholder={stepUpLabel}
                     required
                     className="h-9 w-[160px]"
                   />
@@ -113,12 +126,13 @@ export function MfaSection({
           </div>
           <div className="flex items-end gap-2">
             <div className="flex-1 max-w-[220px]">
-              <Label htmlFor="enroll_current_password">Current password</Label>
+              <Label htmlFor="enroll_current_password">{stepUpLabel}</Label>
               <Input
                 id="enroll_current_password"
                 name="current_password"
-                type="password"
-                autoComplete="current-password"
+                type={stepUpType}
+                inputMode={stepUpInputMode}
+                autoComplete={stepUpAutoComplete}
                 required
               />
             </div>
@@ -139,12 +153,13 @@ export function MfaSection({
           </p>
           <form action={regenerateRecoveryCodes} noValidate className="flex items-end gap-2">
             <div className="flex-1 max-w-[220px]">
-              <Label htmlFor="regen_current_password">Current password</Label>
+              <Label htmlFor="regen_current_password">{stepUpLabel}</Label>
               <Input
                 id="regen_current_password"
                 name="current_password"
-                type="password"
-                autoComplete="current-password"
+                type={stepUpType}
+                inputMode={stepUpInputMode}
+                autoComplete={stepUpAutoComplete}
                 required
               />
             </div>

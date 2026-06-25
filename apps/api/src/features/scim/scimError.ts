@@ -41,6 +41,10 @@ export const scimInvalidFilter = (detail = "Unsupported filter."): ScimHttpError
   new ScimHttpError(400, detail, "invalidFilter");
 export const scimBadSyntax = (detail = "Request is not valid SCIM."): ScimHttpError =>
   new ScimHttpError(400, detail, "invalidSyntax");
+// 429 for a per-token rate-limit trip (scimAuth). `tooMany` is the RFC 7644 §3.12 scimType for "too many
+// results / requests"; an IdP backs off on the 429 rather than hammering the provisioning surface.
+export const scimTooMany = (detail = "Too many SCIM requests. Slow down."): ScimHttpError =>
+  new ScimHttpError(429, detail, "tooMany");
 
 /** Render any thrown value as a SCIM error response. Wired as the SCIM router's onError so an IdP always gets
  * a well-formed SCIM error envelope (never an HTML 500 or a Problem-Details body it can't parse). An unexpected

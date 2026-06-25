@@ -41,6 +41,7 @@ export default async function AccountSecurityPage({
       <PasswordSection hasPassword={data.hasPassword} status={sp.password} />
       <MfaSection
         methods={data.mfaMethods}
+        hasPassword={data.hasPassword}
         recoveryCodesRemaining={data.recoveryCodesRemaining}
         status={sp.mfa}
       />
