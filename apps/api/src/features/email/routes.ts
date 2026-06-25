@@ -5,7 +5,12 @@
 // carry a credential (D7). Connecting a mailbox or managing a sending domain is a workspace owner/admin
 // action (the P6 admin surface refines sending-domain management to the tenant-admin org role).
 
-import { connectMailbox, createSendingDomain, verifySendingDomain } from "@leadwolf/core";
+import {
+  computeDeliverability,
+  connectMailbox,
+  createSendingDomain,
+  verifySendingDomain,
+} from "@leadwolf/core";
 import { mailboxRepository, sendQuotaRepository, sendingDomainRepository } from "@leadwolf/db";
 import {
   ForbiddenError,
@@ -89,4 +94,17 @@ emailRoutes.post("/sending-domains/:id/verify", requireRole("owner", "admin"), a
 emailRoutes.get("/send-quota", async (c) => {
   const quota = await sendQuotaRepository.snapshot({ tenantId: c.get("tenantId") });
   return c.json(quota);
+});
+
+// ── Deliverability + engagement analytics (M12 P5) — workspace-scoped; reply rate is the headline (D6) ──
+emailRoutes.get("/analytics", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace to view analytics.");
+  const rangeDays = Math.min(365, Math.max(1, Number(c.req.query("days") ?? 30) || 30));
+  const report = await computeDeliverability(
+    { tenantId: c.get("tenantId"), workspaceId },
+    rangeDays,
+  );
+  return c.json(report);
 });

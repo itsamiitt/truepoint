@@ -263,6 +263,17 @@ export {
   type TickResult,
   type TickOptions,
 } from "./email/sequenceScheduler.ts";
+// M12 P5 deliverability + analytics + warmup (email-planning/13 P5, 08): the workspace deliverability report
+// (reply rate primary, opens informational — D6) + the pure warmup ramp schedule.
+export {
+  computeDeliverability,
+  type DeliverabilityReport,
+} from "./email/deliverabilityAnalytics.ts";
+export {
+  warmupDailyTarget,
+  isWarmupComplete,
+  type WarmupSchedule,
+} from "./email/warmup.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,

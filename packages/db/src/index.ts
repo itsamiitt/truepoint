@@ -300,3 +300,7 @@ export {
   schedulerRepository,
   type ClaimedEnrollment,
 } from "./repositories/schedulerRepository.ts";
+export {
+  emailAnalyticsRepository,
+  type EmailMetricCounts,
+} from "./repositories/emailAnalyticsRepository.ts";

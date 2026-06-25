@@ -73,8 +73,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 883,
-  "fileSetHash": "sha256:a6e2c613ef406e2dfdfb6db4051073e11404f37749754f7501d592978ac60c57",
+  "fileCount": 888,
+  "fileSetHash": "sha256:4ac729c32930c584d5db2094d0733ad56206dfa5e047eded335bb40ea609ddf6",
   "features": {
     "account-search": {
       "web": [],
@@ -283,6 +283,7 @@
       ],
       "core": [
         "packages/core/src/email/connectMailbox.ts",
+        "packages/core/src/email/deliverabilityAnalytics.ts",
         "packages/core/src/email/deliveryWebhook.test.ts",
         "packages/core/src/email/deliveryWebhook.ts",
         "packages/core/src/email/dispatchOutreachSend.ts",
@@ -298,7 +299,9 @@
         "packages/core/src/email/sequenceScheduler.ts",
         "packages/core/src/email/templates.ts",
         "packages/core/src/email/trackingToken.test.ts",
-        "packages/core/src/email/trackingToken.ts"
+        "packages/core/src/email/trackingToken.ts",
+        "packages/core/src/email/warmup.test.ts",
+        "packages/core/src/email/warmup.ts"
       ],
       "db": [],
       "workers": [],
@@ -1427,6 +1430,7 @@
       "packages/db/test/bootstrapAdmin.itest.ts",
       "packages/db/test/compliance.itest.ts",
       "packages/db/test/customFields.itest.ts",
+      "packages/db/test/emailAnalytics.itest.ts",
       "packages/db/test/emailIsolation.itest.ts",
       "packages/db/test/enrichmentJobStatus.itest.ts",
       "packages/db/test/enrichmentPolicy.itest.ts",
@@ -1551,6 +1555,7 @@
     "packages/db/src/repositories/authPolicyRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/domainRepository.ts",
+    "packages/db/src/repositories/emailAnalyticsRepository.ts",
     "packages/db/src/repositories/emailEventRepository.ts",
     "packages/db/src/repositories/emailTemplateRepository.ts",
     "packages/db/src/repositories/enrichmentJobRepository.ts",
