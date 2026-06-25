@@ -231,7 +231,9 @@ export const masterEmails = pgTable(
     masterPersonId: uuid("master_person_id")
       .notNull()
       .references(() => masterPersons.id, { onDelete: "cascade" }),
-    emailEnc: bytea("email_enc").notNull(), // AES-GCM ciphertext; revealed only via the paid-reveal path
+    // nullable — a co-op-safe MATCH-AGAINST mint stores the blind-index dedup key with NO revealable value;
+    // only a paid provider/opt-in co-op source contributes email_enc (ADR-0021 CONTRIBUTE-TO off by default).
+    emailEnc: bytea("email_enc"), // AES-GCM ciphertext; revealed only via the paid-reveal path
     emailBlindIndex: bytea("email_blind_index").notNull(), // HMAC; GLOBAL dedup + DSAR/suppression key (UNIQUE)
     emailDomain: citext("email_domain"),
     emailStatus: varchar("email_status", { length: 20 }).notNull().default("unverified"),
@@ -260,7 +262,9 @@ export const masterPhones = pgTable(
     masterPersonId: uuid("master_person_id")
       .notNull()
       .references(() => masterPersons.id, { onDelete: "cascade" }),
-    phoneEnc: bytea("phone_enc").notNull(), // AES-GCM ciphertext
+    // nullable — a co-op-safe MATCH-AGAINST mint stores the blind-index dedup key with NO revealable value;
+    // only a paid provider/opt-in co-op source contributes phone_enc (ADR-0021 CONTRIBUTE-TO off by default).
+    phoneEnc: bytea("phone_enc"), // AES-GCM ciphertext
     phoneBlindIndex: bytea("phone_blind_index").notNull(), // HMAC over E.164 (libphonenumber-normalized) (UNIQUE)
     lineType: varchar("line_type", { length: 20 }), // direct|mobile|hq|unknown
     phoneStatus: varchar("phone_status", { length: 50 }),

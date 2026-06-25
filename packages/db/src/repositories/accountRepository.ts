@@ -19,6 +19,9 @@ export interface AccountUpsertInput {
   workspaceId: string;
   name: string;
   domain: string; // required — accounts are deduped on (workspace_id, domain); callers skip domainless rows
+  // overlay → Layer-0 golden bridge (ADR-0021); set by import MATCH-AGAINST resolution. Nullable; only written
+  // when resolution returns a company so a later unresolved upsert never clobbers an existing bridge with null.
+  masterCompanyId?: string | null;
 }
 
 export const accountRepository = {
@@ -31,11 +34,18 @@ export const accountRepository = {
         workspaceId: input.workspaceId,
         name: input.name,
         domain: input.domain,
+        masterCompanyId: input.masterCompanyId ?? null,
       })
       .onConflictDoUpdate({
         target: [accounts.workspaceId, accounts.domain],
         targetWhere: sql`${accounts.domain} IS NOT NULL`,
-        set: { name: input.name, updatedAt: new Date() },
+        // Only stamp the bridge when resolution actually produced a company — never overwrite an existing
+        // master_company_id with null (an unresolved re-import keeps the prior link; ADR-0021 staging).
+        set: {
+          name: input.name,
+          updatedAt: new Date(),
+          ...(input.masterCompanyId != null ? { masterCompanyId: input.masterCompanyId } : {}),
+        },
       })
       .returning({ id: accounts.id });
     return rows[0]!.id;

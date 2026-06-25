@@ -13,7 +13,9 @@ import {
   accountRepository,
   contactRepository,
   listRepository,
+  masterGraphRepository,
   sourceImportRepository,
+  withErTx,
   withTenantTx,
 } from "@leadwolf/db";
 import type {
@@ -28,6 +30,7 @@ import type {
 } from "@leadwolf/types";
 import { DEFAULT_CONFLICT_POLICY } from "@leadwolf/types";
 import { writeAudit } from "../compliance/writeAudit.ts";
+import { companyDomainKey } from "../enrichment/freemailDomains.ts";
 import { assertListInWorkspace } from "../prospect/lists.ts";
 import { blindIndex } from "./blindIndex.ts";
 import { type MappedRow, type RawRow, mapRow } from "./columnMap.ts";
@@ -174,6 +177,49 @@ async function addLandedToList(
   return inserted > 0;
 }
 
+/** The Layer-0 golden ids a landing row resolves to. Both null when resolution was skipped or failed. */
+interface ResolvedMaster {
+  masterPersonId: string | null;
+  masterCompanyId: string | null;
+}
+
+const NO_MASTER: ResolvedMaster = { masterPersonId: null, masterCompanyId: null };
+
+/**
+ * Co-op-safe MATCH-AGAINST resolution for a LANDING row (PLAN_02 §1.4, ADR-0021): LINK the contact's identity
+ * to an existing Layer-0 master person/company or co-op-safely MINT one, returning the bridge ids the overlay
+ * write stamps onto `contacts.master_person_id` / `accounts.master_company_id`. Runs in its OWN transaction
+ * under the least-privilege `leadwolf_er` role (`withErTx`) — a different role/connection than the per-row
+ * `withTenantTx` overlay tx, because `leadwolf_app` has NO grant on the master_* tables (isolation by access
+ * path, PLAN_02 RLS). The resolver input is identity + blind-index dedup keys ONLY — never a revealable PII
+ * value. The company key is gated through `companyDomainKey` so a freemail/role domain (gmail.com) yields no
+ * company key → no company mint (F4); it prefers the explicit account domain, falling back to the email's
+ * domain. Resolution is NON-FATAL: the bridges are nullable in-flight-staging columns (PLAN_00 C4, ADR-0021),
+ * so on any error we log and return both null, leaving the row to land with null bridges (backfilled later) —
+ * a resolution failure must NEVER fail the row's landing.
+ */
+async function resolveMasterForLanding(prepared: PreparedContact): Promise<ResolvedMaster> {
+  try {
+    const registrableDomain =
+      companyDomainKey(prepared.accountDomain) ?? companyDomainKey(prepared.values.emailDomain);
+    const input = {
+      linkedinPublicId: prepared.values.linkedinPublicId ?? undefined,
+      emailBlindIndex: prepared.values.emailBlindIndex ?? undefined,
+      emailDomain: prepared.values.emailDomain ?? undefined,
+      registrableDomain,
+      companyName: prepared.accountName,
+    };
+    const { masterPersonId, masterCompanyId } = await withErTx((tx2) =>
+      masterGraphRepository.resolveForImport(tx2, input),
+    );
+    return { masterPersonId, masterCompanyId };
+  } catch (err) {
+    // In-flight staging: never fail the landing on a resolution error — land with null bridges (ADR-0021).
+    console.error("[import] master resolution failed; landing with null bridges", err);
+    return NO_MASTER;
+  }
+}
+
 async function importOneRow(
   tx: Tx,
   input: RunImportInput,
@@ -201,6 +247,32 @@ async function importOneRow(
     };
   }
 
+  // ALWAYS look up the match first — even for keep_both. The overlay enforces ONE contact per identity key
+  // per workspace via the partial unique indexes (workspace_id, email_blind_index) /
+  // (workspace_id, linkedin_public_id) / (workspace_id, sales_nav_lead_id) — 03 §5/§11. A blind insert on an
+  // existing identity would just throw a unique-constraint violation, so we resolve the conflict in app code.
+  // Computed BEFORE the account upsert + master resolution so a held-back duplicate touches NEITHER (a row
+  // that does not land never mints a master node nor stamps an account — resolve only on landing rows).
+  const match = await contactRepository.findByDedupKeys(tx, workspaceId, prepared.dedupKeys);
+
+  // G-IMP-5 conflict policy held-back DUPLICATE (skip/keep_both): keep the existing contact untouched; count
+  // it as a duplicate (no provenance row appended), but still add it to the target list (the point of an
+  // "import into list" is membership). This path does NOT land → no master resolution, no account upsert.
+  //   - `keep_both` → a truly SEPARATE record can't exist in the overlay (one-per-identity-key), and
+  //                   separate-record survivorship is ER's domain (30 §5, ADR-0021); until that lands,
+  //                   keep_both holds the match back as a duplicate (NOT a silent overwrite) rather than
+  //                   throwing a unique-constraint error on an insert that can never succeed.
+  if (match && (policy === "skip" || policy === "keep_both")) {
+    const addedToList = listId ? await addLandedToList(tx, input, listId, match.id, null) : false;
+    return { outcome: "duplicate", contactId: match.id, sourceImportId: null, addedToList };
+  }
+
+  // ── LANDING ROW (created, or overwrite→matched) ──────────────────────────────────────────────────────────
+  // Co-op-safe MATCH-AGAINST resolution runs BEFORE the overlay write, in its OWN `withErTx` tx (leadwolf_er) —
+  // OUTSIDE this per-row `withTenantTx` (leadwolf_app has no master_* grant; PLAN_02 §1.4, ADR-0021). The
+  // bridge ids are nullable in-flight staging, so a resolution failure leaves them null and the row still lands.
+  const { masterPersonId, masterCompanyId } = await resolveMasterForLanding(prepared);
+
   let accountId: string | undefined;
   if (prepared.accountDomain) {
     accountId = await accountRepository.upsertByDomain(tx, {
@@ -208,6 +280,8 @@ async function importOneRow(
       workspaceId,
       name: prepared.accountName ?? prepared.accountDomain,
       domain: prepared.accountDomain,
+      // Overlay → Layer-0 bridge (contacts.ts:50): set the account's golden company when ER resolved one.
+      masterCompanyId: masterCompanyId ?? undefined,
     });
   }
 
@@ -216,29 +290,15 @@ async function importOneRow(
     tenantId,
     workspaceId,
     accountId: accountId ?? null,
+    // Overlay → Layer-0 bridge (contacts.ts:112): only the uuid is added to the leadwolf_app write — the FK
+    // referential check runs at owner privilege, so no master_* grant is needed. Nullable when unresolved.
+    masterPersonId: masterPersonId ?? undefined,
   };
-  // ALWAYS look up the match first — even for keep_both. The overlay enforces ONE contact per identity key
-  // per workspace via the partial unique indexes (workspace_id, email_blind_index) /
-  // (workspace_id, linkedin_public_id) / (workspace_id, sales_nav_lead_id) — 03 §5/§11. A blind insert on an
-  // existing identity would just throw a unique-constraint violation, so we resolve the conflict in app code.
-  const match = await contactRepository.findByDedupKeys(tx, workspaceId, prepared.dedupKeys);
 
   let contactId: string;
   let outcome: RowLandingOutcome;
   if (match) {
-    // G-IMP-5 conflict policy (explicit, no longer silent last-writer-wins):
-    //   - `skip`      → keep the existing contact untouched; count as a duplicate (no provenance row appended).
-    //   - `keep_both` → a truly SEPARATE record can't exist in the overlay (one-per-identity-key), and
-    //                   separate-record survivorship is ER's domain (30 §5, ADR-0021); until that lands,
-    //                   keep_both holds the match back as a duplicate (NOT a silent overwrite) rather than
-    //                   throwing a unique-constraint error on an insert that can never succeed.
-    //   - `overwrite` → update the existing contact with the incoming values (the legacy last-writer-wins).
-    if (policy === "skip" || policy === "keep_both") {
-      // Held back as a duplicate (the contact already exists, untouched) — but still add it to the target list,
-      // because the point of an "import into list" is membership. No new provenance row (the row didn't land).
-      const addedToList = listId ? await addLandedToList(tx, input, listId, match.id, null) : false;
-      return { outcome: "duplicate", contactId: match.id, sourceImportId: null, addedToList };
-    }
+    // `overwrite` → update the existing contact with the incoming values (the legacy last-writer-wins).
     await contactRepository.update(tx, match.id, values);
     contactId = match.id;
     outcome = "matched";

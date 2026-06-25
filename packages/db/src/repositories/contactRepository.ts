@@ -32,6 +32,10 @@ export interface ContactWriteValues {
   tenantId: string;
   workspaceId: string;
   accountId?: string | null;
+  // overlay → Layer-0 golden bridge (ADR-0021); set by import MATCH-AGAINST resolution. Nullable = in-flight ER
+  // staging only (PLAN_00 C8); the FK referential check runs with table-owner privilege, so leadwolf_app can
+  // link to a master_persons row it cannot itself read (the grant-off wall).
+  masterPersonId?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   emailEnc?: Uint8Array | null;
