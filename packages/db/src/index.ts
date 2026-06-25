@@ -289,3 +289,10 @@ export {
   type QuotaSnapshot,
   type QuotaReadout,
 } from "./repositories/sendQuotaRepository.ts";
+export {
+  emailTemplateRepository,
+  type TemplateInsert,
+  type VersionInsert,
+  type TemplateRecord,
+  type TemplateSummaryRow,
+} from "./repositories/emailTemplateRepository.ts";

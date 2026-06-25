@@ -35,4 +35,24 @@ CREATE POLICY email_event_workspace_isolation ON email_event
   USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
   WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
 
+-- email_template — WORKSPACE-scoped (owner-scope is an app filter on top, D8)
+ALTER TABLE email_template ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_template FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS email_template_workspace_isolation ON email_template;
+CREATE POLICY email_template_workspace_isolation ON email_template
+  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
+  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+DROP TRIGGER IF EXISTS email_template_set_updated_at ON email_template;
+CREATE TRIGGER email_template_set_updated_at BEFORE UPDATE ON email_template
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- email_template_version — WORKSPACE-scoped, append-only (no updated_at trigger)
+ALTER TABLE email_template_version ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_template_version FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS email_template_version_workspace_isolation ON email_template_version;
+CREATE POLICY email_template_version_workspace_isolation ON email_template_version
+  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
+  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON sending_domain, mailbox_integration, email_event TO leadwolf_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON email_template, email_template_version TO leadwolf_app;

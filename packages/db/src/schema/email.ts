@@ -14,8 +14,10 @@ import {
   check,
   customType,
   index,
+  integer,
   jsonb,
   pgTable,
+  text,
   timestamp,
   uniqueIndex,
   uuid,
@@ -162,5 +164,53 @@ export const emailEvent = pgTable(
       "email_event_type_enum",
       sql`${t.eventType} IN ('delivery','open','click','bounce','complaint','unsubscribe')`,
     ),
+  }),
+);
+
+// ── email_template — reusable, versioned, render-safe templates (M12 P2, 01, 09; email-planning/13 P2) ───
+// Genuinely-new (D11): externalises what is today inline in outreach_steps.subject/body. Workspace-scoped +
+// OWNER-scoped (D8): visible to its owner + (when `shared`) the workspace. The current_version_id points at
+// the latest email_template_version; versions are immutable + append-only so a sent step can pin one.
+export const emailTemplate = pgTable(
+  "email_template",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    workspaceId: workspaceId(),
+    ownerUserId: uuid("owner_user_id").references(() => users.id, { onDelete: "set null" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    channel: varchar("channel", { length: 20 }).notNull().default("email"),
+    status: varchar("status", { length: 20 }).notNull().default("active"),
+    shared: boolean("shared").notNull().default(false), // false = owner-only (D8); true = workspace-shared
+    currentVersionId: uuid("current_version_id"), // cache pointer to the latest version (app-maintained, no FK)
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => ({
+    uniqWsName: uniqueIndex("uniq_email_template_ws_name").on(t.workspaceId, t.name),
+    wsOwnerIdx: index("idx_email_template_ws_owner").on(t.workspaceId, t.ownerUserId),
+    channelEnum: check("email_template_channel_enum", sql`${t.channel} IN ('email','linkedin')`),
+    statusEnum: check("email_template_status_enum", sql`${t.status} IN ('active','archived')`),
+  }),
+);
+
+// ── email_template_version — the immutable, append-only content of a template at a point in time ─────────
+export const emailTemplateVersion = pgTable(
+  "email_template_version",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    workspaceId: workspaceId(),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => emailTemplate.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    subject: varchar("subject", { length: 255 }),
+    body: text("body").notNull(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    uniqTemplateVersion: uniqueIndex("uniq_email_template_version").on(t.templateId, t.version),
   }),
 );

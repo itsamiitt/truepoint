@@ -14,7 +14,7 @@ import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
 import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
-import { emailRoutes, emailWebhookRoutes } from "./features/email/index.ts";
+import { emailRoutes, emailWebhookRoutes, templateRoutes } from "./features/email/index.ts";
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
@@ -91,6 +91,8 @@ app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/custom-fields", customFieldsRoutes); // ADR-0028: field definitions + typed-jsonb values
 app.route("/api/v1/tags", tagsRoutes); // ADR-0028/G-REV-6: workspace tags + record assignments + filter
 app.route("/api/v1/outreach", outreachRoutes);
+// M12 P2: email templates — the path the Sequences ▸ Templates panel already targets (lights up the stub).
+app.route("/api/v1/templates", templateRoutes);
 // Public, SIGNATURE-verified ESP delivery/bounce webhook (P1) must register BEFORE the authed email router,
 // whose `*` authn would otherwise 401 the session-less ESP call (mirrors dsar-before-compliance).
 app.route("/api/v1/email/webhooks", emailWebhookRoutes);

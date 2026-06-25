@@ -231,6 +231,20 @@ export {
   dispatchOutreachSend,
   type DispatchOutreachSendInput,
 } from "./email/dispatchOutreachSend.ts";
+// M12 P2 templates (email-planning/13 P2, 01): the render-safe engine (the injection boundary) + the
+// versioned, owner-scoped (D8) template CRUD that externalises the inline outreach_steps.body.
+export {
+  renderTemplate,
+  extractVariables,
+  type RenderOptions,
+} from "./email/renderTemplate.ts";
+export {
+  createTemplate,
+  updateTemplate,
+  listTemplates,
+  type CreateTemplateInput,
+  type UpdateTemplateInput,
+} from "./email/templates.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,

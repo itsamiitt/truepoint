@@ -91,3 +91,39 @@ export const sendQuotaViewSchema = z.object({
   periodStart: z.coerce.date(),
 });
 export type SendQuotaView = z.infer<typeof sendQuotaViewSchema>;
+
+// ── Templates (M12 P2, 01) ──────────────────────────────────────────────────────────────────────────────
+export const emailTemplateChannel = z.enum(["email", "linkedin"]);
+export type EmailTemplateChannel = z.infer<typeof emailTemplateChannel>;
+
+export const createTemplateSchema = z.object({
+  name: z.string().min(1).max(255),
+  channel: emailTemplateChannel.default("email"),
+  subject: z.string().max(255).nullish(),
+  body: z.string().min(1).max(50_000),
+  shared: z.boolean().optional(),
+});
+export type CreateTemplateRequest = z.infer<typeof createTemplateSchema>;
+
+/** A content change (subject+body) appends a new version; name/shared/status are metadata. All optional. */
+export const updateTemplateSchema = z
+  .object({
+    subject: z.string().max(255).nullish(),
+    body: z.string().min(1).max(50_000).optional(),
+    name: z.string().min(1).max(255).optional(),
+    shared: z.boolean().optional(),
+    status: z.enum(["active", "archived"]).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "At least one field must be provided." });
+export type UpdateTemplateRequest = z.infer<typeof updateTemplateSchema>;
+
+/** GET /templates list row — the shape the Sequences ▸ Templates panel renders. */
+export const templateSummarySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  channel: emailTemplateChannel,
+  subject: z.string().nullable(),
+  body: z.string(),
+  updatedAt: z.string(),
+});
+export type TemplateSummaryDto = z.infer<typeof templateSummarySchema>;
