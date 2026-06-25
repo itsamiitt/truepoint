@@ -2,12 +2,14 @@
 // posts to a server action), keyboard-first, WCAG AA. Accepts an email OR a username; the action resolves
 // whether the identity exists and routes to SSO / password / magic, or to registration (ADR-0020). A
 // Turnstile widget + per-IP/per-identifier rate-limit gate the existence reveal. Carries the app's
-// PKCE/return context through the flow as hidden fields. "Continue with Google" begins social OAuth.
+// PKCE/return context through the flow as hidden fields. Social OAuth ("Continue with Google") is NOT shown
+// yet: the /oauth/* login flow is unbuilt (the route 404s), so the button is omitted until that flow lands
+// rather than presenting a broken control (Authentication plan AUTH-015 — hide now, build in roadmap P3).
 import { redirectIfAuthenticated } from "@/lib/sessionGuard";
 import { AuthShell } from "@/shared/AuthShell";
 import { SubmitButton } from "@/shared/SubmitButton";
 import { TurnstileWidget } from "@/shared/TurnstileWidget";
-import { Alert, Button, Input, Label, Separator } from "@leadwolf/ui";
+import { Alert, Input, Label } from "@leadwolf/ui";
 import { submitIdentifier } from "./actions";
 
 type SearchParams = Promise<Record<string, string | undefined>>;
@@ -31,7 +33,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
   // signup/forgot/sso screens all carry ?email — so the person never has to retype it (bug 1). Matches the
   // signup/forgot/magic prefill; the field stays editable so "change" still lets them switch accounts.
   const prefill = sp.email ?? "";
-  const oauthHref = `/oauth/google?${new URLSearchParams({ app_origin: appOrigin, code_challenge: codeChallenge, state })}`;
   const errorMessage = sp.error
     ? (ERRORS[sp.error] ?? "Enter your email or username to continue.")
     : null;
@@ -49,12 +50,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
           {notice}
         </Alert>
       ) : null}
-      <Button asChild variant="outline" size="full">
-        <a href={oauthHref}>Continue with Google</a>
-      </Button>
-
-      <Separator label="or" />
-
       <form action={submitIdentifier} noValidate>
         <input type="hidden" name="app_origin" value={appOrigin} />
         <input type="hidden" name="code_challenge" value={codeChallenge} />
