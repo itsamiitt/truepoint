@@ -186,6 +186,29 @@ export {
   type EmailSenderPort,
   type OutboundEmail,
 } from "./outreach/senderPort.ts";
+// M12 email subsystem (email-planning/13 P0) — the net-new primitives + domain fns that EXTEND the M9 engine
+// (D11): the KMS-envelope credential store (D7), the SPF/DKIM/DMARC verifier (DI resolver), and the
+// mailbox-connect / sending-domain-create+verify orchestration over the @leadwolf/db email repositories.
+export { encryptSecret, decryptSecret } from "./email/secretStore.ts";
+export {
+  verifyDomainAuth,
+  nodeDnsResolver,
+  type DnsResolverPort,
+  type DomainAuthInputs,
+  type DomainAuthResult,
+} from "./email/dnsAuth.ts";
+export {
+  connectMailbox,
+  type ConnectMailboxInput,
+  type ConnectMailboxResult,
+} from "./email/connectMailbox.ts";
+export {
+  createSendingDomain,
+  verifySendingDomain,
+  type CreateSendingDomainInput,
+  type VerifySendingDomainInput,
+  type VerifySendingDomainResult,
+} from "./email/sendingDomains.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,

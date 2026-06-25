@@ -287,4 +287,5 @@ export {
   sendQuotaRepository,
   SendQuotaExceededError,
   type QuotaSnapshot,
+  type QuotaReadout,
 } from "./repositories/sendQuotaRepository.ts";

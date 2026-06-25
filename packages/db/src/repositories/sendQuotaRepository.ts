@@ -7,11 +7,16 @@
 // stays the single authority, the adapter is the only new code there.
 
 import { sql } from "drizzle-orm";
-import type { Tx } from "../client.ts";
+import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 
 export interface QuotaSnapshot {
   quota: number | null; // null = unlimited
   used: number;
+}
+
+/** The send-quota snapshot plus the period anchor — the GET /send-quota read DTO. */
+export interface QuotaReadout extends QuotaSnapshot {
+  periodStart: Date;
 }
 
 /** Thrown when a tenant has consumed its send-quota for the period. Core maps it to a 429-style problem. */
@@ -51,6 +56,24 @@ export const sendQuotaRepository = {
     await tx.execute(
       sql`UPDATE tenants SET email_send_used = email_send_used + ${count} WHERE id = ${tenantId}`,
     );
+  },
+
+  /** Non-locking read of the tenant's send-quota for the GET /send-quota surface. RLS-scoped. */
+  async snapshot(scope: TenantScope): Promise<QuotaReadout> {
+    return withTenantTx(scope, async (tx) => {
+      const rows = (await tx.execute(
+        sql`SELECT email_send_quota AS quota, email_send_used AS used,
+                   email_send_period_start AS period_start
+            FROM tenants WHERE id = ${scope.tenantId}`,
+      )) as unknown as Array<{ quota: number | null; used: number; period_start: Date }>;
+      if (rows.length === 0) throw new Error("tenant row not visible in scoped transaction");
+      const r = rows[0]!;
+      return {
+        quota: r.quota === null ? null : Number(r.quota),
+        used: Number(r.used),
+        periodStart: new Date(r.period_start),
+      };
+    });
   },
 
   /**
