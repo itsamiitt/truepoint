@@ -7,9 +7,11 @@ export {
   revokeSession,
   revokeAllSessionsForUser,
   hashRefreshToken,
+  cappedSessionExpiry,
   type IssuedSession,
   type SessionContext,
 } from "./session.ts";
+export { ipInCidr, isIpAllowed } from "./ipAllowlist.ts";
 export { markRevoked, markManyRevoked, isRevoked } from "./revocation.ts";
 export { refreshAccessToken, type RefreshResult } from "./refresh.ts";
 export { switchWorkspace, type SwitchWorkspaceResult } from "./switchWorkspace.ts";

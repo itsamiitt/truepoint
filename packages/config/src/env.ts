@@ -106,6 +106,15 @@ export const appEnvSchema = z
     // Cloudflare Turnstile secret for the identifier step (ADR-0020). Optional: absent → dev passes, prod fails.
     TURNSTILE_SECRET: z.string().optional(),
 
+    // GLOBAL kill-switch for tenant auth-policy enforcement on login (P1-01: IP allowlist + session timeout
+    // gates in packages/auth). LOCKOUT-CAPABLE: a mis-set tenant policy (e.g. an IP allowlist that excludes a
+    // real user, or a too-short session timeout) can lock a user — or a whole org — out. So the gates are a
+    // strict no-op unless this is the literal string "true": unset/any-other-value = OFF = today's exact
+    // behavior (the merge-safety guarantee). String, not z.coerce.boolean(), so ONLY "true" enables it —
+    // "false"/"0"/"" can never be coerced truthy. The per-tenant feature-flag refinement (enable per verified
+    // tenant, with a break-glass disable path) is the follow-up; this single global flag is the first increment.
+    AUTH_POLICY_ENFORCEMENT_ENABLED: z.string().optional(),
+
     TYPESENSE_URL: z.string().url().optional(),
     TYPESENSE_API_KEY: z.string().optional(),
     SMTP_URL: z.string().optional(),

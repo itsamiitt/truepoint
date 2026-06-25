@@ -14,6 +14,7 @@ import {
 import { ForbiddenError } from "@leadwolf/types";
 import { recordAuthEvent } from "./auditEvent.ts";
 import { issueCode } from "./code.ts";
+import { isIpAllowed } from "./ipAllowlist.ts";
 import { log } from "./log.ts";
 import { type LoginTransaction, patchLoginTransaction } from "./loginTransaction.ts";
 import { authorizeTenantSelection } from "./scopeGuard.ts";
@@ -147,8 +148,10 @@ export async function finalizeLogin(
   // MFA enforcement (ADR-0018): a tenant that MANDATES MFA must not complete login without it — fail closed
   // at the token gate. Enrolled users are already challenged earlier (resolveNextStep → "mfa", so mfaVerified
   // is true here); this blocks the un-enrolled case for a required-MFA org. Tenants on the default ("optional"
-  // / "off") policy are unaffected. WIRE: route blocked users to a forced in-login MFA-enrollment step in
-  // apps/auth instead of erroring (better UX once the enrollment screen exists).
+  // / "off") policy are unaffected. WIRE (P1-01 sub-gate A, DEFERRED): route blocked users to a forced
+  // in-login MFA-enrollment step in apps/auth instead of erroring (better UX once the enrollment screen
+  // exists). This existing gate is UNCHANGED and is NOT behind AUTH_POLICY_ENFORCEMENT_ENABLED — it is the
+  // pre-existing behavior the new gates must not regress.
   if (!txn.mfaVerified) {
     const policy = await authPolicyRepository.getForTenant(tenantId);
     if (policy.mfaEnforcement === "required") {
@@ -157,6 +160,41 @@ export async function finalizeLogin(
         "Your organization requires multi-factor authentication. Enroll a method to continue.",
       );
     }
+  }
+
+  // ── P1-01 tenant auth-policy enforcement (ADR-0018) ──────────────────────────────────────────────────
+  // LOCKOUT-CAPABLE gates: enforced ONLY when the global kill-switch is the literal string "true". Unset/any
+  // other value = OFF = today's exact behavior (the merge-safety guarantee — every new gate below is wrapped
+  // in this single check, so with the flag off NONE of them can fire). Security ACs → ../../Authentication
+  // plan/09-threat-model.md: the gate runs SERVER-SIDE here at finalizeLogin (the authoritative token gate),
+  // over the RESOLVED tenant policy (never client input), after the tenant membership is authorized above.
+  //
+  // Gate D — session timeout: the resolved cap (if any) is captured here and applied at createSession below
+  // (the new session's absolute lifetime is min(default, cap)); the refresh path enforces the same absolute
+  // cap to force re-auth. Stays undefined when the flag is off → unchanged default session lifetime.
+  let sessionMaxLifetimeSeconds: number | undefined;
+  if (env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true") {
+    const policy = await authPolicyRepository.getForTenant(tenantId);
+    if (policy.sessionTimeoutSeconds != null && policy.sessionTimeoutSeconds > 0) {
+      sessionMaxLifetimeSeconds = policy.sessionTimeoutSeconds;
+    }
+
+    // Gate C — IP allowlist. When the resolved tenant policy pins an allowlist, the client IP captured at the
+    // start of THIS login transaction (txn.clientIp, server-observed, not client-supplied) must fall inside
+    // at least one CIDR. Match by CIDR NETWORK, never string equality; a malformed entry fails closed for
+    // that entry only (isIpAllowed skips it) — it never opens the gate. Empty allowlist = no restriction.
+    const allowlist = policy.ipAllowlist ?? [];
+    if (allowlist.length > 0 && !isIpAllowed(txn.clientIp, allowlist)) {
+      throw new ForbiddenError(
+        "ip_not_allowed",
+        "Your organization restricts sign-in to approved networks. You are connecting from an address that is not on the allowlist.",
+      );
+    }
+
+    // Gate B — allowed methods: DEFERRED. isMethodAllowed(policy, method) exists, but the login method is not
+    // yet carried on the LoginTransaction, and threading it would touch all four edge callers of
+    // createLoginTransaction across apps/auth (password / magic / sso / signup). Out of scope for this
+    // increment — see the deferral note in the task report. Do NOT half-wire it here.
   }
 
   let workspaceId = txn.workspaceId;
@@ -191,6 +229,8 @@ export async function finalizeLogin(
       appOrigin: txn.appOrigin,
       ipAddress: txn.clientIp,
       userAgent: ctx.userAgent,
+      // P1-01 Gate D: undefined unless AUTH_POLICY_ENFORCEMENT_ENABLED === "true" AND the tenant set a timeout.
+      maxLifetimeSeconds: sessionMaxLifetimeSeconds,
     }),
     userRepository.findById(txn.userId),
   ]);

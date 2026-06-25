@@ -3,7 +3,7 @@
 // the route handler stays thin. Throws InvalidTokenError on any failure (unknown / expired / revoked).
 
 import { env } from "@leadwolf/config";
-import { userRepository } from "@leadwolf/db";
+import { authPolicyRepository, userRepository } from "@leadwolf/db";
 import { InvalidTokenError } from "@leadwolf/types";
 import { findActiveSessionOrDetectReuse, rotateSession } from "./session.ts";
 import { mintAccessToken } from "./token.ts";
@@ -27,12 +27,34 @@ export async function refreshAccessToken(args: {
   if (!user || user.status !== "active") throw new InvalidTokenError();
 
   if (!session.tenantId) throw new InvalidTokenError();
+
+  // ── P1-01 Gate D — session-timeout cap on refresh (ADR-0018) ─────────────────────────────────────────
+  // LOCKOUT-CAPABLE: enforced ONLY when the global kill-switch is the literal string "true" — unset/any other
+  // value = OFF = today's exact behavior (the rotated session keeps the full default TTL). When ON and the
+  // session's tenant policy sets an ABSOLUTE timeout, the rotation must not extend the session past it: cap
+  // the rotated lifetime AND clamp it to the pre-rotation deadline (notLaterThan) so the original cap is
+  // "sticky" across the ~14-min refresh rotations. Once now passes that deadline, findActiveSessionOrDetectReuse
+  // already rejects on expiresAt < now (session.ts) → force re-auth. The IDLE boundary (lastSeenAt) is a
+  // DEFERRED follow-up: lastSeenAt is not surfaced on this read path. The cap is resolved from the RESOLVED
+  // tenant policy (server-side), never client input.
+  let maxLifetimeSeconds: number | undefined;
+  let notLaterThan: Date | undefined;
+  if (env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true") {
+    const policy = await authPolicyRepository.getForTenant(session.tenantId);
+    if (policy.sessionTimeoutSeconds != null && policy.sessionTimeoutSeconds > 0) {
+      maxLifetimeSeconds = policy.sessionTimeoutSeconds;
+      notLaterThan = session.expiresAt; // absolute deadline carried by the pre-rotation session
+    }
+  }
+
   const issued = await rotateSession(session.id, {
     userId: user.id,
     tenantId: session.tenantId,
     workspaceId: session.workspaceId ?? undefined,
     appOrigin: args.audience,
     deviceId: session.deviceId ?? undefined,
+    maxLifetimeSeconds,
+    notLaterThan,
   });
 
   const { token, expiresIn } = await mintAccessToken({

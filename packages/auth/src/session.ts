@@ -10,7 +10,20 @@ import { markManyRevoked, markRevoked } from "./revocation.ts";
 
 const newId = () => randomBytes(24).toString("base64url");
 export const hashRefreshToken = (t: string): string => createHash("sha256").update(t).digest("hex");
-const refreshExpiry = () => new Date(Date.now() + env.REFRESH_TOKEN_TTL_SECONDS * 1000);
+
+// ── P1-01 Gate D — session-timeout cap (ADR-0018) ──────────────────────────────────────────────────────
+// A tenant policy's sessionTimeoutSeconds is an ABSOLUTE cap on session lifetime: the session expires at the
+// EARLIER of the platform default (REFRESH_TOKEN_TTL_SECONDS) and now + sessionTimeoutSeconds. This is the
+// absolute boundary; an IDLE boundary (expire after N seconds of inactivity, tracked via lastSeenAt) is a
+// DEFERRED follow-up — lastSeenAt is not surfaced on the refresh read path yet (see refresh.ts). Pure +
+// db-free so the cap math is unit-testable. The caller (finalizeLogin) only supplies maxLifetimeSeconds when
+// AUTH_POLICY_ENFORCEMENT_ENABLED === "true", so with the flag OFF this returns the unchanged default expiry.
+export function cappedSessionExpiry(maxLifetimeSeconds?: number, now: number = Date.now()): Date {
+  const defaultExpiryMs = now + env.REFRESH_TOKEN_TTL_SECONDS * 1000;
+  if (maxLifetimeSeconds == null || maxLifetimeSeconds <= 0) return new Date(defaultExpiryMs);
+  const policyExpiryMs = now + maxLifetimeSeconds * 1000;
+  return new Date(Math.min(defaultExpiryMs, policyExpiryMs));
+}
 
 export interface IssuedSession {
   sessionId: string;
@@ -26,12 +39,22 @@ export interface SessionContext {
   deviceId?: string;
   ipAddress?: string;
   userAgent?: string;
+  // P1-01 Gate D: ABSOLUTE cap (seconds) on this session's lifetime from the resolved tenant policy. Only
+  // supplied by finalizeLogin when AUTH_POLICY_ENFORCEMENT_ENABLED === "true"; undefined → unchanged default
+  // expiry. Capped via cappedSessionExpiry(min(default, now + cap)).
+  maxLifetimeSeconds?: number;
+  // P1-01 Gate D (rotation): an existing absolute deadline the rotated session must NOT be extended beyond.
+  // refresh.ts passes the pre-rotation session's expiresAt here when enforcement is on, so the original capped
+  // deadline stays "sticky" across the ~14-min refresh rotations instead of resetting to a fresh full TTL —
+  // making the existing `expiresAt < now` reject in findActiveSessionOrDetectReuse the absolute-cap force-
+  // re-auth point. Undefined → unchanged rotation lifetime.
+  notLaterThan?: Date;
 }
 
 export async function createSession(ctx: SessionContext): Promise<IssuedSession> {
   const sessionId = newId();
   const refreshToken = randomBytes(32).toString("base64url");
-  const expiresAt = refreshExpiry();
+  const expiresAt = cappedSessionExpiry(ctx.maxLifetimeSeconds);
   await sessionRepository.create({
     id: sessionId,
     userId: ctx.userId,
@@ -54,7 +77,14 @@ export async function rotateSession(
 ): Promise<IssuedSession> {
   const sessionId = newId();
   const refreshToken = randomBytes(32).toString("base64url");
-  const expiresAt = refreshExpiry();
+  // P1-01 Gate D: the rotated session is capped to min(default | policy cap, the pre-rotation deadline). With
+  // the flag off both maxLifetimeSeconds and notLaterThan are undefined, so this is exactly the default TTL
+  // (cappedSessionExpiry(undefined) === now + REFRESH_TOKEN_TTL_SECONDS), unchanged from before.
+  const capped = cappedSessionExpiry(ctx.maxLifetimeSeconds);
+  const expiresAt =
+    ctx.notLaterThan != null && ctx.notLaterThan.getTime() < capped.getTime()
+      ? ctx.notLaterThan
+      : capped;
   await sessionRepository.rotate({
     oldId: oldSessionId,
     next: {

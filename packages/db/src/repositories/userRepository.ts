@@ -147,6 +147,12 @@ export interface SessionRecord {
   appOrigin: string | null;
   expiresAt: Date;
   revokedAt: Date | null;
+  // Session creation time. Additive and OPTIONAL to the P1-01 Gate D enforcement: the absolute session-timeout
+  // cap is currently anchored on the session's own `expiresAt` (set to min(default, now+cap) at login and held
+  // "sticky" across refresh rotations via notLaterThan), so the refresh path does NOT read createdAt today. It
+  // is surfaced here for the DEFERRED idle/absolute follow-up (and for admin/observability). Existing consumers
+  // ignore it; it never changes the OFF-by-default behavior.
+  createdAt: Date;
 }
 
 export interface CreateSessionInput {
@@ -172,6 +178,7 @@ const toSession = (r: SessionRow): SessionRecord => ({
   appOrigin: r.appOrigin,
   expiresAt: r.expiresAt,
   revokedAt: r.revokedAt,
+  createdAt: r.createdAt,
 });
 
 export const sessionRepository = {
