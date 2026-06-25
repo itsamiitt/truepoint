@@ -263,3 +263,44 @@ export {
   type TenantFeatureFlagRecord,
   type FeatureFlagUpsertValues,
 } from "./repositories/featureFlagRepository.ts";
+// M12 email subsystem (email-planning/13 P0) — the net-new persistence that EXTENDS the M9 outreach engine
+// (D11): per-tenant sending identity, connected mailboxes (encrypted creds), the raw tracking firehose, and
+// the per-tenant send-quota (the creditRepository lock discipline).
+export {
+  sendingDomainRepository,
+  type SendingDomainInsert,
+  type SendingDomainRecord,
+  type DomainAuthState,
+} from "./repositories/sendingDomainRepository.ts";
+export {
+  mailboxRepository,
+  type MailboxInsert,
+  type MailboxRecord,
+} from "./repositories/mailboxRepository.ts";
+export {
+  emailEventRepository,
+  type EmailEventType,
+  type EmailEventInsert,
+  type EmailEventRow,
+} from "./repositories/emailEventRepository.ts";
+export {
+  sendQuotaRepository,
+  SendQuotaExceededError,
+  type QuotaSnapshot,
+  type QuotaReadout,
+} from "./repositories/sendQuotaRepository.ts";
+export {
+  emailTemplateRepository,
+  type TemplateInsert,
+  type VersionInsert,
+  type TemplateRecord,
+  type TemplateSummaryRow,
+} from "./repositories/emailTemplateRepository.ts";
+export {
+  schedulerRepository,
+  type ClaimedEnrollment,
+} from "./repositories/schedulerRepository.ts";
+export {
+  emailAnalyticsRepository,
+  type EmailMetricCounts,
+} from "./repositories/emailAnalyticsRepository.ts";

@@ -110,6 +110,12 @@ export const auditAction = z.enum([
   "ai.config.update",
   "ai.draft.approve",
   "ai.draft.reject",
+  // M12 email subsystem (email-planning/13 P0) — connecting a mailbox stores a LIVE credential and verifying
+  // a sending domain changes send-eligibility; both are security-sensitive and audited (IDs + actions only).
+  "mailbox.connect",
+  "mailbox.disconnect",
+  "sending_domain.add",
+  "sending_domain.verify",
   // auth events (17 §9)
   "login.success",
   "login.failure",

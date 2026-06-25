@@ -86,10 +86,7 @@ export async function createSequence(input: NewSequenceInput): Promise<string> {
 }
 
 /** PATCH /outreach/sequences/:id — flip a sequence's status (pause ⇄ resume). */
-export async function setSequenceStatus(
-  sequenceId: string,
-  status: SequenceStatus,
-): Promise<void> {
+export async function setSequenceStatus(sequenceId: string, status: SequenceStatus): Promise<void> {
   const res = await fetchWithAuth(`${OUTREACH_BASE}/sequences/${sequenceId}`, {
     method: "PATCH",
     headers: { "content-type": "application/json" },
@@ -159,6 +156,22 @@ export async function fetchTemplates(): Promise<MaybeList<TemplateSummary>> {
   }
   if (isUnavailable(res.status)) return { items: [], available: false };
   throw await toApiError(res, "Could not load templates");
+}
+
+/** Create a reusable, versioned template (M12 P2). The created template is owner-scoped (D8). */
+export async function createTemplate(input: {
+  name: string;
+  subject?: string | null;
+  body: string;
+  channel?: "email" | "linkedin";
+}): Promise<{ id: string }> {
+  const res = await fetchWithAuth(TEMPLATES_BASE, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not create the template");
+  return (await res.json()) as { id: string };
 }
 
 /**

@@ -5,6 +5,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   customType,
   integer,
   jsonb,
@@ -25,20 +26,38 @@ const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull(
 const updatedAt = () => timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
 
 // ── Tenancy ──────────────────────────────────────────────────────────────────────────────────────────
-export const tenants = pgTable("tenants", {
-  id: id(),
-  name: varchar("name", { length: 255 }).notNull(),
-  slug: citext("slug").notNull().unique(),
-  plan: varchar("plan", { length: 50 }).notNull().default("free"),
-  seatLimit: integer("seat_limit").notNull().default(1),
-  workspaceLimit: integer("workspace_limit"),
-  revealCreditBalance: integer("reveal_credit_balance").notNull().default(0),
-  features: jsonb("features").notNull().default({}),
-  status: varchar("status", { length: 50 }).notNull().default("active"),
-  regionDefault: varchar("region_default", { length: 2 }).notNull().default("US"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const tenants = pgTable(
+  "tenants",
+  {
+    id: id(),
+    name: varchar("name", { length: 255 }).notNull(),
+    slug: citext("slug").notNull().unique(),
+    plan: varchar("plan", { length: 50 }).notNull().default("free"),
+    seatLimit: integer("seat_limit").notNull().default(1),
+    workspaceLimit: integer("workspace_limit"),
+    revealCreditBalance: integer("reveal_credit_balance").notNull().default(0),
+    // Per-tenant email send-quota (M12 — email-planning/13 P0, 15 §A.6): the metered-spend / abuse cap,
+    // mirroring revealCreditBalance. `email_send_quota` null = unlimited. The no-overdraft CHECK below + a
+    // SELECT…FOR UPDATE in sendQuotaRepository make an over-quota send impossible (the creditRepository
+    // discipline, D11). Wired into the send path at P1, before email.send is enabled.
+    emailSendQuota: integer("email_send_quota"),
+    emailSendUsed: integer("email_send_used").notNull().default(0),
+    emailSendPeriodStart: timestamp("email_send_period_start", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    features: jsonb("features").notNull().default({}),
+    status: varchar("status", { length: 50 }).notNull().default("active"),
+    regionDefault: varchar("region_default", { length: 2 }).notNull().default("US"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => ({
+    emailSendQuotaCheck: check(
+      "tenants_email_send_quota_nonneg",
+      sql`${t.emailSendUsed} >= 0 AND (${t.emailSendQuota} IS NULL OR ${t.emailSendUsed} <= ${t.emailSendQuota})`,
+    ),
+  }),
+);
 
 // users is the GLOBAL identity — one row per person (ADR-0019). Org membership lives in tenant_members.
 export const users = pgTable("users", {

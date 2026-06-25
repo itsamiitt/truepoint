@@ -62,6 +62,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
       { label: "Auto-enrich", href: "/settings/auto-enrich", match: "/settings/auto-enrich" },
       { label: "Sessions", href: "/settings/sessions", match: "/settings/sessions" },
       { label: "Custom fields", href: "/settings/custom-fields", match: "/settings/custom-fields" },
+      { label: "Email & mailboxes", href: "/settings/mailboxes", match: "/settings/mailboxes" },
       { label: "Suppression & DSAR", href: "/settings/compliance", match: "/settings/compliance" },
     ],
   },
