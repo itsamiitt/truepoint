@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 926,
-  "fileSetHash": "sha256:80e04e339d0b8405e9635c476f5b960d9765a4bc90ffdf7d64ae8d44ffb8cd61",
+  "fileCount": 930,
+  "fileSetHash": "sha256:cb86bcfada5c4a1c241d288634a69ff34bd7c53808ccbe62398d02e92acb2674",
   "features": {
     "account-search": {
       "web": [],
@@ -325,6 +325,8 @@
         "packages/core/src/enrichment/bulk/overlayMatcher.test.ts",
         "packages/core/src/enrichment/bulk/overlayMatcher.ts",
         "packages/core/src/enrichment/enrichContact.ts",
+        "packages/core/src/enrichment/freemailDomains.test.ts",
+        "packages/core/src/enrichment/freemailDomains.ts",
         "packages/core/src/enrichment/jobStatus.test.ts",
         "packages/core/src/enrichment/jobStatus.ts",
         "packages/core/src/enrichment/matchKeys.test.ts",
@@ -1486,6 +1488,7 @@
       "packages/db/test/lists.itest.ts",
       "packages/db/test/listsStaffNoAccess.itest.ts",
       "packages/db/test/masterGraphIsolation.itest.ts",
+      "packages/db/test/masterGraphResolve.itest.ts",
       "packages/db/test/members.itest.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
@@ -1613,6 +1616,7 @@
     "packages/db/src/repositories/impersonationRepository.ts",
     "packages/db/src/repositories/importMappingTemplateRepository.ts",
     "packages/db/src/repositories/mailboxRepository.ts",
+    "packages/db/src/repositories/masterGraphRepository.ts",
     "packages/db/src/repositories/pipelineStageRepository.ts",
     "packages/db/src/repositories/platformStaffRepository.ts",
     "packages/db/src/repositories/providerConfigRepository.ts",
