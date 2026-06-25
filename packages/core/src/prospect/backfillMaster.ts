@@ -34,6 +34,10 @@ export interface MasterBackfillResult {
   scanned: number;
   /** Of those, the rows that got a master_person_id stamped this run. */
   resolved: number;
+  /** Rows whose resolve OR stamp THREW (a transient/unexpected error) — distinct from a cleanly-unresolvable
+   *  keyless row (which is left NULL with no error). The worker re-runs the job while errored > 0 so transient
+   *  failures self-heal; keyless rows never increment this, so it can never loop forever. */
+  errored: number;
 }
 
 /** One resolved row ready to be stamped under the overlay tx. */
@@ -63,6 +67,7 @@ export async function runMasterBackfill(
   let cursor: string | null = null;
   let scanned = 0;
   let resolved = 0;
+  let errored = 0;
 
   for (;;) {
     // 1) Read one keyset-paged batch of unresolved contacts under the workspace-scoped overlay role.
@@ -97,7 +102,9 @@ export async function runMasterBackfill(
             masterCompanyId,
           });
         } catch (err) {
-          // Never fail the batch on one row — leave it NULL for the next pass (ADR-0021 staging).
+          // Never fail the batch on one row — leave it NULL for the next pass (ADR-0021 staging). Count it as
+          // errored (NOT keyless) so the worker re-runs the job and retries this row on a fresh pass.
+          errored += 1;
           console.error("[master-backfill] resolve failed; leaving row unresolved", row.id, err);
         }
       }
@@ -122,6 +129,7 @@ export async function runMasterBackfill(
             await accountRepository.setMasterCompanyId(tx, r.accountId, r.masterCompanyId);
           }
         } catch (err) {
+          errored += 1;
           console.error("[master-backfill] stamp failed; leaving row unresolved", r.contactId, err);
         }
       }
@@ -132,5 +140,5 @@ export async function runMasterBackfill(
     if (batch.length < limit) break;
   }
 
-  return { scanned, resolved };
+  return { scanned, resolved, errored };
 }

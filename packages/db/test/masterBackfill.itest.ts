@@ -189,8 +189,9 @@ describe("master-link backfill (runMasterBackfill; PLAN_00 §11.5, Phase-2′ re
 
     const result = await runMasterBackfill({ tenantId: tenantA, workspaceId: wsA });
 
-    // At least c1, c2, c3 resolve (c4 is keyless — it may or may not resolve, but never reduces the count).
+    // c1, c2, c3 resolve (c4 is keyless → left unresolved cleanly, which is NOT an error); no row threw.
     expect(result.resolved).toBeGreaterThanOrEqual(3);
+    expect(result.errored).toBe(0);
 
     // c1, c2, c3 now carry a non-null master_person_id.
     const [p1, p2, p3] = await Promise.all([

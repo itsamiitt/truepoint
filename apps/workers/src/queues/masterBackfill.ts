@@ -20,5 +20,15 @@ export async function processMasterBackfill(
   job: Job<MasterBackfillJobData>,
 ): Promise<MasterBackfillResult> {
   const { scope, batchSize } = job.data;
-  return runMasterBackfill(scope, { batchSize });
+  const result = await runMasterBackfill(scope, { batchSize });
+  // Self-heal transient failures: a row that THREW during resolve/stamp was left NULL (in-flight staging), so
+  // THROW to make BullMQ retry the job (attempts/backoff in register.ts). The re-run re-scans from the start
+  // and re-attempts the still-NULL rows. Cleanly-unresolvable KEYLESS rows do NOT count as errored, so a job
+  // whose only leftovers are keyless succeeds and never loops.
+  if (result.errored > 0) {
+    throw new Error(
+      `master-backfill: ${result.errored} row(s) errored (resolved ${result.resolved}/${result.scanned}); retrying`,
+    );
+  }
+  return result;
 }

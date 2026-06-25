@@ -137,10 +137,14 @@ export async function enqueueMasterBackfill(
   scope: { tenantId: string; workspaceId: string },
   opts?: { batchSize?: number },
 ): Promise<string> {
-  const job = await masterBackfillQueue.add("master-backfill", {
-    scope,
-    batchSize: opts?.batchSize,
-  });
+  const job = await masterBackfillQueue.add(
+    "master-backfill",
+    { scope, batchSize: opts?.batchSize },
+    // Self-heal: if the processor throws (a row errored — see processMasterBackfill) BullMQ retries from a fresh
+    // scan with exponential backoff. The job is idempotent (only still-NULL rows are re-resolved), so a retry
+    // never double-mints; a keyless-only leftover succeeds (no throw) and never burns the retry budget.
+    { attempts: 4, backoff: { type: "exponential", delay: 30_000 } },
+  );
   return String(job.id);
 }
 
