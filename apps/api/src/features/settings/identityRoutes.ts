@@ -13,8 +13,9 @@
 // SECURITY: the SCIM token plaintext is generated + SHA-256-hashed HERE and returned exactly once; only the
 // hash is persisted (the repo never sees the plaintext). The list never returns the value or the hash.
 //
-// WIRE: the SCIM 2.0 provisioning PROTOCOL endpoints (/scim/v2/Users, /scim/v2/Groups, …) that an IdP calls
-// with these bearer tokens are a separate service surface and are deferred — this file manages the tokens only.
+// The SCIM 2.0 provisioning PROTOCOL endpoints (/scim/v2/Users) that an IdP calls with these bearer tokens are
+// a SEPARATE service surface — they live in apps/api/src/features/scim (mounted at /scim/v2, with their own
+// scimAuth bearer middleware). This file manages the TOKENS only (mint/list/revoke). (/scim/v2/Groups: TODO.)
 
 import { createHash, randomBytes } from "node:crypto";
 import { domainRepository, scimTokenRepository } from "@leadwolf/db";

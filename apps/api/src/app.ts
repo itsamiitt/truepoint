@@ -24,6 +24,7 @@ import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
 import { salesNavRoutes } from "./features/sales-navigator/index.ts";
 import { savedSearchesRoutes } from "./features/saved-searches/index.ts";
+import { scimUserRoutes } from "./features/scim/index.ts";
 import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
 import { settingsRoutes } from "./features/settings/index.ts";
@@ -110,3 +111,9 @@ app.route("/api/v1/webhooks", webhooksRoutes);
 // would otherwise 401 the session-less form (08 §4).
 app.route("/api/v1/compliance/dsar", dsarPublicRoutes);
 app.route("/api/v1/compliance", complianceRoutes);
+// SCIM 2.0 provisioning/deprovisioning (enterprise IAM, 17 / ADR-0018; 09 "SCIM deprovisioning race & token
+// abuse"). Mounted DISJOINT from /api/v1: an org's IdP calls /scim/v2/Users with a `scim_tokens` bearer token,
+// NOT a user access JWT — so this router carries its OWN auth (scimAuth) + the SCIM error envelope, and is not
+// behind the /api/* user authn / rate-limit chain above. Tenant isolation: the token resolves to exactly one
+// tenant and scopes every operation (RLS) to its members.
+app.route("/scim/v2", scimUserRoutes);

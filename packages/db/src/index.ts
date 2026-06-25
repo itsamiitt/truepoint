@@ -43,6 +43,7 @@ export {
   type WorkspaceSummary,
   type WorkspaceMemberRecord,
   type TenantMembership,
+  type ScimMemberRow,
   type DomainResolution,
   type SsoConfigRecord,
   type PendingInvitation,
@@ -233,7 +234,11 @@ export {
 } from "./repositories/ssoConfigRepository.ts";
 // Domain claiming + SCIM tokens (ADR-0020, enterprise IAM) — tenant-scoped, audited.
 export { domainRepository, type DomainRecord } from "./repositories/domainRepository.ts";
-export { scimTokenRepository, type ScimTokenRecord } from "./repositories/scimTokenRepository.ts";
+export {
+  scimTokenRepository,
+  type ScimTokenRecord,
+  type ScimTokenAuth,
+} from "./repositories/scimTokenRepository.ts";
 // Platform audit-log read surface (ADR-0032) — bounded cross-tenant read, run within withPlatformTx.
 export {
   platformAuditReadRepository,

@@ -27,5 +27,6 @@ export * from "./webhooks.ts";
 export * from "./providerConfigs.ts";
 export * from "./sso.ts";
 export * from "./identityProvisioning.ts";
+export * from "./scim.ts";
 export * from "./staffAdmin.ts";
 export * from "./listGovernance.ts";

@@ -97,6 +97,16 @@ export const userRepository = {
     return row!.id;
   },
 
+  // Mirror the IdP's own user id onto the global identity (SCIM externalId → users.scim_external_id). Set on
+  // SCIM provision when the IdP supplies an externalId, so the SCIM /Users resource can echo it back and an
+  // operator can correlate the row with the IdP. Idempotent; never clears an existing id with a null.
+  async setScimExternalId(id: string, externalId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ scimExternalId: externalId, updatedAt: new Date() })
+      .where(eq(users.id, id));
+  },
+
   async markEmailVerified(id: string): Promise<void> {
     await db
       .update(users)

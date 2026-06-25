@@ -5,7 +5,7 @@
 // All co-located here because they form one cohesive aggregate that maps to the `workspaces` domain.
 
 import type { OrgRole, WorkspaceRole } from "@leadwolf/types";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull } from "drizzle-orm";
 import { type Tx, db, withTenantTx } from "../client.ts";
 import {
   invitations,
@@ -249,6 +249,21 @@ export interface TenantMembership {
   isTenantOwner: boolean;
 }
 
+/** A tenant member projected for the SCIM /Users surface: the global identity joined to its tenant membership.
+ * `active` is whether the `tenant_members` row is active (deprovision flips it to deactivated). `externalId`
+ * is the IdP's own id mirrored onto users.scim_external_id. The SCIM resource id is the userId. */
+export interface ScimMemberRow {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  externalId: string | null;
+  active: boolean;
+  createdAt: Date;
+  // The tenant-membership status string verbatim (active | invited | removed | deactivated) so the SCIM layer
+  // can map it to the boolean `active` and decide whether a deprovision is a no-op.
+  status: string;
+}
+
 export const tenantMemberRepository = {
   async listForUser(userId: string): Promise<TenantMembership[]> {
     const rows = await db
@@ -361,6 +376,175 @@ export const tenantMemberRepository = {
           .onConflictDoNothing();
       }
     });
+  },
+
+  // ── SCIM 2.0 /Users surface (enterprise IAM, 17 / ADR-0018, 09 "SCIM deprovisioning") ──────────────────
+  // A "SCIM user in tenant T" is a global `users` identity that holds a `tenant_members(T)` row. These reads
+  // run under withTenantTx (leadwolf_app, RLS): the tenant_members policy is USING tenant_id = GUC, so a token
+  // scoped to tenant T can ONLY ever see / touch T's membership rows — a userId from another tenant matches no
+  // row and 404s. The SCIM tenant is the one the bearer token resolved to (never a body/path value), so this is
+  // the load-bearing tenant isolation. Provisioning (the membership/identity WRITE) reuses joinOrg above on the
+  // owner connection (tenant_members is ENABLE, owner-exempt); the deactivate/reactivate UPDATEs run under the
+  // app role (USING-only policy permits the in-tenant UPDATE) inside the caller's audited tx.
+
+  /** Count this tenant's SCIM-visible members (all tenant_members rows), for the ListResponse totalResults. */
+  async countScimMembers(tenantId: string): Promise<number> {
+    return withTenantTx({ tenantId }, async (tx) => {
+      const [row] = await tx
+        .select({ value: count() })
+        .from(tenantMembers)
+        .where(eq(tenantMembers.tenantId, tenantId));
+      return row?.value ?? 0;
+    });
+  },
+
+  /** A page of this tenant's members as SCIM rows (identity joined to membership), oldest first (stable). */
+  async listScimMembers(
+    tenantId: string,
+    opts: { offset: number; limit: number },
+  ): Promise<ScimMemberRow[]> {
+    return withTenantTx({ tenantId }, async (tx) => {
+      const rows = await tx
+        .select({
+          userId: tenantMembers.userId,
+          email: users.email,
+          fullName: users.fullName,
+          externalId: users.scimExternalId,
+          status: tenantMembers.status,
+          createdAt: tenantMembers.createdAt,
+        })
+        .from(tenantMembers)
+        .innerJoin(users, eq(users.id, tenantMembers.userId))
+        .where(eq(tenantMembers.tenantId, tenantId))
+        .orderBy(asc(tenantMembers.createdAt), asc(tenantMembers.userId))
+        .limit(opts.limit)
+        .offset(opts.offset);
+      return rows.map((r) => ({
+        userId: r.userId,
+        email: r.email,
+        fullName: r.fullName,
+        externalId: r.externalId,
+        active: r.status === "active",
+        createdAt: r.createdAt,
+        status: r.status,
+      }));
+    });
+  },
+
+  /** One SCIM member of this tenant by user id (the resource id), or null when not a member here (→ 404). */
+  async findScimMemberByUserId(tenantId: string, userId: string): Promise<ScimMemberRow | null> {
+    return withTenantTx({ tenantId }, async (tx) => {
+      const rows = await tx
+        .select({
+          userId: tenantMembers.userId,
+          email: users.email,
+          fullName: users.fullName,
+          externalId: users.scimExternalId,
+          status: tenantMembers.status,
+          createdAt: tenantMembers.createdAt,
+        })
+        .from(tenantMembers)
+        .innerJoin(users, eq(users.id, tenantMembers.userId))
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
+        .limit(1);
+      const r = rows[0];
+      return r
+        ? {
+            userId: r.userId,
+            email: r.email,
+            fullName: r.fullName,
+            externalId: r.externalId,
+            active: r.status === "active",
+            createdAt: r.createdAt,
+            status: r.status,
+          }
+        : null;
+    });
+  },
+
+  /** The SCIM member of this tenant whose identity has IdP `externalId` (the externalId filter probe), or null.
+   * Tenant-scoped exactly like the by-email/by-id reads: the `tenant_members` join runs under withTenantTx (RLS),
+   * so an externalId belonging to another tenant's user matches no row here (→ an empty ListResponse, never a
+   * cross-tenant leak). `users.scim_external_id` is global, but the membership join restricts to THIS tenant. */
+  async findScimMemberByExternalId(
+    tenantId: string,
+    externalId: string,
+  ): Promise<ScimMemberRow | null> {
+    return withTenantTx({ tenantId }, async (tx) => {
+      const rows = await tx
+        .select({
+          userId: tenantMembers.userId,
+          email: users.email,
+          fullName: users.fullName,
+          externalId: users.scimExternalId,
+          status: tenantMembers.status,
+          createdAt: tenantMembers.createdAt,
+        })
+        .from(tenantMembers)
+        .innerJoin(users, eq(users.id, tenantMembers.userId))
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(users.scimExternalId, externalId)))
+        .limit(1);
+      const r = rows[0];
+      return r
+        ? {
+            userId: r.userId,
+            email: r.email,
+            fullName: r.fullName,
+            externalId: r.externalId,
+            active: r.status === "active",
+            createdAt: r.createdAt,
+            status: r.status,
+          }
+        : null;
+    });
+  },
+
+  /** The SCIM member of this tenant whose identity has `email` (the provisioning idempotency probe), or null. */
+  async findScimMemberByEmail(tenantId: string, email: string): Promise<ScimMemberRow | null> {
+    return withTenantTx({ tenantId }, async (tx) => {
+      const rows = await tx
+        .select({
+          userId: tenantMembers.userId,
+          email: users.email,
+          fullName: users.fullName,
+          externalId: users.scimExternalId,
+          status: tenantMembers.status,
+          createdAt: tenantMembers.createdAt,
+        })
+        .from(tenantMembers)
+        .innerJoin(users, eq(users.id, tenantMembers.userId))
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(users.email, email)))
+        .limit(1);
+      const r = rows[0];
+      return r
+        ? {
+            userId: r.userId,
+            email: r.email,
+            fullName: r.fullName,
+            externalId: r.externalId,
+            active: r.status === "active",
+            createdAt: r.createdAt,
+            status: r.status,
+          }
+        : null;
+    });
+  },
+
+  /** Set a member's tenant-membership status inside a caller tx (so it commits with its audit row). Scoped to
+   * (tenantId, userId); a foreign userId matches no row (RLS + the WHERE). Returns the count updated. Used for
+   * deprovision (status → 'deactivated') and re-provision (status → 'active'). */
+  async setMembershipStatusInTx(
+    tx: Tx,
+    tenantId: string,
+    userId: string,
+    status: "active" | "deactivated",
+  ): Promise<number> {
+    const updated = await tx
+      .update(tenantMembers)
+      .set({ status })
+      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
+      .returning({ userId: tenantMembers.userId });
+    return updated.length;
   },
 };
 
