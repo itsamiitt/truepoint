@@ -103,7 +103,14 @@ export {
   type SsoTransaction,
   type SsoTransactionInput,
 } from "./ssoTransaction.ts";
-export { verifyTotp, matchRecoveryCode } from "./mfa.ts";
+export {
+  verifyTotp,
+  matchRecoveryCode,
+  generateTotpSecret,
+  totpKeyUri,
+  generateRecoveryCodes,
+  hashRecoveryCode,
+} from "./mfa.ts";
 export {
   resolveEffectivePolicy,
   strictestMfa,

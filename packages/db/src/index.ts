@@ -27,8 +27,10 @@ export {
   type UserRecord,
   type SessionRecord,
   type AdminSessionRecord,
+  type OwnSessionRecord,
   type CreateSessionInput,
   type MfaMethodRecord,
+  type DetailedMfaMethodRecord,
   type CreateEmailTokenInput,
 } from "./repositories/userRepository.ts";
 export {

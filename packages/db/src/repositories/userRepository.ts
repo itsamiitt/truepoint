@@ -3,7 +3,7 @@
 // one domain → auth). Returns typed domain records, never raw rows; the raw refresh token never touches
 // the DB (only its hash). findByEmail is the pre-tenant identifier lookup under the auth-service role (17 §1).
 
-import { and, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import {
   authEmailTokens,
@@ -119,6 +119,10 @@ export const userRepository = {
   },
 
   async listMfaMethods(userId: string): Promise<MfaMethodRecord[]> {
+    // Exclude `recovery_code` rows (P1-02): recovery codes are a single-use FALLBACK, not a challengeable
+    // factor. The login state machine (resolveNextStep) treats any verified row as "MFA enrolled → challenge",
+    // and verifyMfaCode only matches `type === 'totp'`; if recovery rows leaked in here, a user whose only real
+    // factor was later disabled (recovery rows still verifiedAt) would be routed to an unanswerable /mfa step.
     const rows = await db
       .select({
         type: userMfaMethods.type,
@@ -126,8 +130,115 @@ export const userRepository = {
         verifiedAt: userMfaMethods.verifiedAt,
       })
       .from(userMfaMethods)
-      .where(eq(userMfaMethods.userId, userId));
+      .where(
+        and(eq(userMfaMethods.userId, userId), sql`${userMfaMethods.type} <> 'recovery_code'`),
+      );
     return rows.map((r) => ({ type: r.type, secretEnc: r.secretEnc, verifiedAt: r.verifiedAt }));
+  },
+
+  // ── P1-02 account-security: MFA-method CRUD for the /account/security surface ──────────────────────────
+  // The login path keeps the sparse `listMfaMethods` above (verify-only). The self-service UI needs the row
+  // id (to disable a specific method) + display metadata, so these return the richer DetailedMfaMethodRecord.
+  // EVERY method here scopes its WHERE by `userId` — the caller passes the authenticated session's userId
+  // (never a request value), so a user can only ever read/mutate their OWN methods (09 mass-assignment AC).
+  // `recovery_code` rows are excluded from the displayed factor list: each code is its own row (so a single
+  // code is consumable independently) and is summarised separately via countRecoveryCodes, not shown as a
+  // "method". The login verifyMfaCode path only matches `type === "totp"`, so recovery rows never interfere.
+
+  /** Enrolled non-recovery factors for display (id + label + verified/last-used), newest first. */
+  async listMfaMethodsDetailed(userId: string): Promise<DetailedMfaMethodRecord[]> {
+    const rows = await db
+      .select({
+        id: userMfaMethods.id,
+        type: userMfaMethods.type,
+        label: userMfaMethods.label,
+        verifiedAt: userMfaMethods.verifiedAt,
+        lastUsedAt: userMfaMethods.lastUsedAt,
+        createdAt: userMfaMethods.createdAt,
+      })
+      .from(userMfaMethods)
+      .where(
+        and(eq(userMfaMethods.userId, userId), sql`${userMfaMethods.type} <> 'recovery_code'`),
+      )
+      .orderBy(desc(userMfaMethods.createdAt));
+    return rows;
+  },
+
+  /**
+   * Insert a new MFA method bound to `userId` and return its id. The secret is already encrypted by the auth
+   * layer (secrets.ts) — this only persists the ciphertext. Pass `verified: true` to set `verifiedAt` at insert
+   * (the enroll flow verifies the first code BEFORE persisting, so the row is born verified and no orphan
+   * pending row is ever left behind). The userId is the authenticated session's, never a body value (09
+   * MFA-integrity AC: the new secret binds to THIS user).
+   */
+  async createMfaMethod(input: {
+    userId: string;
+    type: string;
+    secretEnc: Uint8Array;
+    label?: string | null;
+    verified?: boolean;
+  }): Promise<string> {
+    const [row] = await db
+      .insert(userMfaMethods)
+      .values({
+        userId: input.userId,
+        type: input.type,
+        secretEnc: input.secretEnc,
+        label: input.label ?? null,
+        verifiedAt: input.verified ? new Date() : null,
+      })
+      .returning({ id: userMfaMethods.id });
+    return row!.id;
+  },
+
+  /** Delete a method by (id, userId). Returns how many rows were removed (0 = not theirs / already gone). */
+  async deleteMfaMethod(userId: string, methodId: string): Promise<number> {
+    const rows = await db
+      .delete(userMfaMethods)
+      .where(and(eq(userMfaMethods.id, methodId), eq(userMfaMethods.userId, userId)))
+      .returning({ id: userMfaMethods.id });
+    return rows.length;
+  },
+
+  // ── Recovery codes (stored as user_mfa_methods rows of type 'recovery_code') ───────────────────────────
+  // One row per code: `secret_enc` holds the SHA-256 HASH of the code as bytea (never the plaintext, never
+  // encrypted-reversible — a one-way hash, like a password digest). `verified_at` is set at creation (a
+  // recovery code is active immediately); `last_used_at` is stamped on consumption (single-use). Shown to the
+  // user exactly ONCE at generation (09 secrets AC). Reusing the existing table avoids a new migration the
+  // sandbox cannot generate, and matches how the app SecurityPanel already models `recovery_codes` as a factor.
+
+  /** Atomically replace ALL of a user's recovery codes with a fresh hashed set (regenerate). */
+  async replaceRecoveryCodes(userId: string, codeHashes: Uint8Array[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(userMfaMethods)
+        .where(and(eq(userMfaMethods.userId, userId), eq(userMfaMethods.type, "recovery_code")));
+      if (codeHashes.length > 0) {
+        await tx.insert(userMfaMethods).values(
+          codeHashes.map((h) => ({
+            userId,
+            type: "recovery_code",
+            secretEnc: h,
+            verifiedAt: new Date(),
+          })),
+        );
+      }
+    });
+  },
+
+  /** Count the user's UNUSED recovery codes (for the "N of M remaining" status line). */
+  async countRecoveryCodes(userId: string): Promise<number> {
+    const rows = await db
+      .select({ id: userMfaMethods.id })
+      .from(userMfaMethods)
+      .where(
+        and(
+          eq(userMfaMethods.userId, userId),
+          eq(userMfaMethods.type, "recovery_code"),
+          isNull(userMfaMethods.lastUsedAt),
+        ),
+      );
+    return rows.length;
   },
 };
 
@@ -135,6 +246,16 @@ export interface MfaMethodRecord {
   type: string;
   secretEnc: Uint8Array | null;
   verifiedAt: Date | null;
+}
+
+/** A richer MFA-method view for the /account/security surface — carries the row id + display metadata. */
+export interface DetailedMfaMethodRecord {
+  id: string;
+  type: string;
+  label: string | null;
+  verifiedAt: Date | null;
+  lastUsedAt: Date | null;
+  createdAt: Date;
 }
 
 // ── Sessions (part of the user aggregate) ────────────────────────────────────────────────────────────
@@ -166,6 +287,17 @@ export interface CreateSessionInput {
   deviceId?: string;
   ipAddress?: string;
   userAgent?: string;
+}
+
+/** A user's OWN session enriched with device/IP/last-seen for the /account/security sessions + history views. */
+export interface OwnSessionRecord {
+  id: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: Date;
+  lastSeenAt: Date | null;
+  expiresAt: Date;
+  revokedAt: Date | null;
 }
 
 type SessionRow = typeof userSessions.$inferSelect;
@@ -235,6 +367,28 @@ export const sessionRepository = {
       .where(eq(userSessions.userId, userId))
       .orderBy(desc(userSessions.createdAt));
     return rows.map(toSession);
+  },
+
+  // P1-02 self-service "my sessions / login history" read: the user's OWN sessions enriched with the device
+  // (User-Agent), IP, and last-seen the SessionRecord shape omits — for the /account/security sessions table.
+  // Scoped to `userId` (the authenticated session's). Returns active AND historical rows (the caller filters);
+  // `revokedAt` distinguishes them for the login-history vs active-sessions split. Newest first.
+  async listOwnSessionsDetailed(userId: string, limit = 50): Promise<OwnSessionRecord[]> {
+    const rows = await db
+      .select({
+        id: userSessions.id,
+        ipAddress: userSessions.ipAddress,
+        userAgent: userSessions.userAgent,
+        createdAt: userSessions.createdAt,
+        lastSeenAt: userSessions.lastSeenAt,
+        expiresAt: userSessions.expiresAt,
+        revokedAt: userSessions.revokedAt,
+      })
+      .from(userSessions)
+      .where(eq(userSessions.userId, userId))
+      .orderBy(desc(userSessions.createdAt))
+      .limit(limit);
+    return rows;
   },
 
   // ── Workspace-admin session management (G-AUTH-2, 17 §5/§10) ───────────────────────────────────────
@@ -360,6 +514,44 @@ export const sessionRepository = {
       .update(userSessions)
       .set({ revokedAt: new Date() })
       .where(and(eq(userSessions.userId, userId), isNull(userSessions.revokedAt)))
+      .returning({ id: userSessions.id });
+    return revoked.map((r) => r.id);
+  },
+
+  // ── P1-02 self-service "manage my own sessions" ───────────────────────────────────────────────────────
+  // The user-scoped analogue of the workspace-admin revokes. EVERY method is keyed by `userId` (the
+  // authenticated session's), so a user can only ever revoke a session that is genuinely THEIRS — a foreign
+  // session id supplied in the request body matches nothing and is a no-op (09 access / IDOR AC). Returns the
+  // revoked id(s) so the caller can deny-list the still-live access token(s) for immediate effect.
+
+  /** Revoke a SINGLE session, but only if it belongs to `userId` and is still active. Returns the id or null. */
+  async revokeOwnSession(userId: string, sessionId: string): Promise<string | null> {
+    const revoked = await db
+      .update(userSessions)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(userSessions.id, sessionId),
+          eq(userSessions.userId, userId), // ownership: never trust the id alone
+          isNull(userSessions.revokedAt),
+        ),
+      )
+      .returning({ id: userSessions.id });
+    return revoked[0]?.id ?? null;
+  },
+
+  /** Revoke ALL of the user's active sessions EXCEPT `exceptSessionId` (sign out everywhere else). */
+  async revokeOtherSessionsForUser(userId: string, exceptSessionId: string): Promise<string[]> {
+    const revoked = await db
+      .update(userSessions)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(userSessions.userId, userId),
+          isNull(userSessions.revokedAt),
+          sql`${userSessions.id} <> ${exceptSessionId}`,
+        ),
+      )
       .returning({ id: userSessions.id });
     return revoked.map((r) => r.id);
   },

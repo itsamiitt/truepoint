@@ -1,8 +1,14 @@
 // SecurityPanel.tsx — Settings ▸ User ▸ Security (12 §2). IMPORTANT: password, MFA, sessions, devices, and
 // login history are all served on the auth origin (auth.truepoint.in/account/security, 17 §10). This panel is
 // therefore a read-only map of those surfaces with "Manage on the sign-in site" deep links — it NEVER fakes a
-// mutation. No app-API seam exists for these yet, so we render the documented structure as muted status, not
-// invented live state (the enrolled flags are placeholders until the auth origin exposes a status read).
+// mutation. The auth-origin surface is now LIVE (P1-02): each deep link resolves to a real section
+// (#password / #mfa / #sessions / #history) where the user manages the setting.
+//
+// Live enrollment state: the auth origin holds the source of truth (user_mfa_methods) but exposes NO app-API
+// read of it to apps/web yet — a cross-origin auth→app-API MFA-status endpoint is a separate, security-reviewed
+// item (it must not leak factor presence cross-tenant). Until that lands, the factor list stays a muted
+// catalogue (enrolled: false) and the real On/Off state is shown on the auth origin itself. CONFIRM: wiring a
+// `GET enrolled-methods` read here is the tracked follow-up the P1-02 spec flags ("once the methods GET lands").
 "use client";
 
 import { FormSection, Icon, StatusBadge } from "@leadwolf/ui";
