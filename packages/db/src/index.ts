@@ -77,6 +77,7 @@ export {
   type DedupKeys,
   type EnrichEstimateSignal,
   type HotLeadRow,
+  type UnresolvedContactRow,
 } from "./repositories/contactRepository.ts";
 export {
   sourceImportRepository,

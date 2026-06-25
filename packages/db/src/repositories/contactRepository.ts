@@ -4,9 +4,9 @@
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
 import type { MaskedContact } from "@leadwolf/types";
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
-import { contacts } from "../schema/contacts.ts";
+import { accounts, contacts } from "../schema/contacts.ts";
 
 /** A top-priority lead for the Home dashboard — FACETS ONLY (no encrypted email/phone). Mirrors HotLead. */
 export interface HotLeadRow {
@@ -88,7 +88,70 @@ export interface DedupContactRow {
   createdAt: Date;
 }
 
+/**
+ * The minimal, NON-PII row the master-link backfill needs to re-resolve an EXISTING overlay contact through the
+ * Phase-2′ resolver: the contact's own resolver keys (email blind index → linkedin) plus its account's
+ * domain/name (the company resolver keys). The account fields are null when the contact has no `account_id`
+ * (LEFT JOIN miss). `emailBlindIndex` is the raw bytea (HMAC of the normalized email), never the plaintext.
+ */
+export interface UnresolvedContactRow {
+  id: string;
+  emailBlindIndex: Uint8Array | null;
+  emailDomain: string | null;
+  linkedinPublicId: string | null;
+  accountId: string | null;
+  accountDomain: string | null;
+  accountName: string | null;
+}
+
 export const contactRepository = {
+  /**
+   * A keyset-paged batch of EXISTING overlay contacts that still need master resolution: master_person_id IS
+   * NULL and the row is live (deleted_at IS NULL). Selects the contact's own resolver keys plus its account's
+   * domain/name via a LEFT JOIN to `accounts` (the account fields are null when the contact has no account_id).
+   * Ordered by id ASC and keyset-paged on `cursor` (id > cursor; null = first page) so the backfill walks the
+   * workspace in stable, bounded batches without OFFSET. RLS scopes this to ONE workspace via the caller's
+   * withTenantTx GUC — there is no explicit workspace predicate here, isolation rides the tx (like assignOwner).
+   * The bytea blind index is returned raw (Uint8Array), consistent with the email-key handling in
+   * findByDedupKeys; never the plaintext email/phone.
+   */
+  async findUnresolvedForBackfill(
+    tx: Tx,
+    cursor: string | null,
+    limit: number,
+  ): Promise<UnresolvedContactRow[]> {
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        emailBlindIndex: contacts.emailBlindIndex,
+        emailDomain: contacts.emailDomain,
+        linkedinPublicId: contacts.linkedinPublicId,
+        accountId: contacts.accountId,
+        accountDomain: accounts.domain,
+        accountName: accounts.name,
+      })
+      .from(contacts)
+      .leftJoin(accounts, eq(contacts.accountId, accounts.id))
+      .where(
+        and(
+          isNull(contacts.masterPersonId),
+          isNull(contacts.deletedAt),
+          cursor === null ? undefined : gt(contacts.id, cursor),
+        ),
+      )
+      .orderBy(asc(contacts.id))
+      .limit(limit);
+    return rows.map((r) => ({
+      id: r.id,
+      emailBlindIndex: r.emailBlindIndex ?? null,
+      emailDomain: r.emailDomain,
+      linkedinPublicId: r.linkedinPublicId,
+      accountId: r.accountId,
+      accountDomain: r.accountDomain,
+      accountName: r.accountName,
+    }));
+  },
+
   /** Find an existing contact in the workspace by the first dedup key that hits (email → linkedin → sales-nav). */
   async findByDedupKeys(
     tx: Tx,

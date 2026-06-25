@@ -452,6 +452,13 @@ export {
 // Company-level (accounts) search count (24/ADR-0035): the firmographic sibling of searchCount. Thin delegate
 // to the @leadwolf/db accountSearchRepository (no query-semantics layer needed for accounts).
 export { searchAccountsCount } from "./prospect/accountSearch.ts";
+// Master-link backfill (PLAN_00 §11.5 / PLAN_07 Stage B): the existing-data complement to the Phase-2′ import
+// resolution — re-resolves overlay contacts with NULL master_* bridges through the ONE resolver (ADR-0037),
+// per-workspace, batched + idempotent. Run by the master-backfill queue worker.
+export {
+  runMasterBackfill,
+  type MasterBackfillResult,
+} from "./prospect/backfillMaster.ts";
 // Contact dedup pass (24 Phase-0.5): flags likely-duplicate contacts (name+domain key) by writing
 // duplicate_of_contact_id → the canonical, powering the duplicate search facet. Soft (pointer only), per-
 // workspace (RLS), idempotent — run by the dedup queue worker.

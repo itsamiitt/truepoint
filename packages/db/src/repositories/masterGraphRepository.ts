@@ -40,9 +40,11 @@ export interface ResolveForImportInput {
   companyName?: string; // display name for a freshly minted company (falls back to the domain)
 }
 
-/** A LINK to / MINT of the golden pair. masterCompanyId is null for a company-less / domainless person. */
+/** A LINK to / MINT of the golden pair. masterCompanyId is null for a company-less / domainless person;
+ *  masterPersonId is null when the row carries NO person key (no linkedin, no email) — we do NOT mint an
+ *  anonymous, un-dedupable identity (pure graph noise); the overlay stays unresolved (in-flight staging). */
 export interface ResolveForImportResult {
-  masterPersonId: string;
+  masterPersonId: string | null;
   masterCompanyId: string | null;
 }
 
@@ -99,6 +101,15 @@ export const masterGraphRepository = {
     // 1) Company — LINK-or-MINT by registrable domain (null = company-less person). Resolved first so a fresh
     //    person mint can point current_company_id at it and open the bare employment edge.
     const masterCompanyId = await resolveCompany(tx, input);
+
+    // 1b) No person key at all (no linkedin_public_id AND no email_blind_index) → there is nothing to dedup on,
+    //     so do NOT mint an anonymous master_persons: it could never be matched or merged by later ER, so every
+    //     keyless row would mint its own permanent junk identity. Resolve the company (if any) and leave the
+    //     person UNRESOLVED (the overlay master_person_id stays NULL — in-flight staging, ADR-0021). A
+    //     sales-nav-only / name-only contact thus resolves its company but not (yet) its golden person.
+    if (!input.linkedinPublicId && !input.emailBlindIndex) {
+      return { masterPersonId: null, masterCompanyId };
+    }
 
     // 2) Person — LINK if a deterministic key hits (mutate NOTHING), else MINT a co-op-safe golden node.
     const existingPersonId = await findPerson(tx, input);

@@ -26,6 +26,11 @@ import {
   deadLetterFailedImport,
   processImport,
 } from "./queues/imports.ts";
+import {
+  MASTER_BACKFILL_QUEUE,
+  type MasterBackfillJobData,
+  processMasterBackfill,
+} from "./queues/masterBackfill.ts";
 import { OUTREACH_QUEUE, type OutreachJobData, processOutreach } from "./queues/outreach.ts";
 import {
   RETENTION_SWEEP_QUEUE,
@@ -51,6 +56,11 @@ export const dsarQueue = new Queue<DsarJobData>(DSAR_QUEUE, { connection });
 export const outreachQueue = new Queue<OutreachJobData>(OUTREACH_QUEUE, { connection });
 export const dedupQueue = new Queue<DedupJobData>(DEDUP_QUEUE, { connection });
 export const firmographicsQueue = new Queue<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, {
+  connection,
+});
+// Master-link backfill: re-resolves overlay contacts with NULL master_* bridges through the Phase-2′ resolver,
+// per-workspace, batched + idempotent (PLAN_00 §11.5 / PLAN_07 Stage B).
+export const masterBackfillQueue = new Queue<MasterBackfillJobData>(MASTER_BACKFILL_QUEUE, {
   connection,
 });
 // M12 P4: the leader-locked sequence scheduler (email_sequence_tick). A single repeatable job (stable
@@ -122,6 +132,18 @@ export async function enqueueFirmographics(data: FirmographicsJobData): Promise<
   return String(job.id);
 }
 
+/** Submit a per-workspace master-link backfill (PLAN_00 §11.5; e.g. one-off attach or on a schedule). */
+export async function enqueueMasterBackfill(
+  scope: { tenantId: string; workspaceId: string },
+  opts?: { batchSize?: number },
+): Promise<string> {
+  const job = await masterBackfillQueue.add("master-backfill", {
+    scope,
+    batchSize: opts?.batchSize,
+  });
+  return String(job.id);
+}
+
 /** Attach structured completed/failed logging to a worker (per-queue observability). Never logs payloads. */
 function instrument<T = unknown>(worker: Worker<T>, queue: string): Worker<T> {
   worker.on("completed", (job) => log.info("job completed", { queue, jobId: job.id }));
@@ -187,6 +209,13 @@ export function startWorkers(): Worker[] {
     instrument(
       new Worker<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, processFirmographics, { connection }),
       FIRMOGRAPHICS_QUEUE,
+    ),
+    // Master-link backfill consumer: per-workspace, idempotent re-resolution of NULL master_* bridges.
+    instrument(
+      new Worker<MasterBackfillJobData>(MASTER_BACKFILL_QUEUE, processMasterBackfill, {
+        connection,
+      }),
+      MASTER_BACKFILL_QUEUE,
     ),
     // M12 P4: the sequence-tick consumer. Leader-locked; claims due enrollments and enqueues each onto the
     // outreach queue (the existing send path). Best-effort registers the single repeatable job at boot.

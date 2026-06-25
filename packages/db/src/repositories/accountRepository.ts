@@ -70,4 +70,18 @@ export const accountRepository = {
     if (Object.keys(set).length === 0) return;
     await tx.update(accounts).set(set).where(eq(accounts.id, accountId));
   },
+
+  /**
+   * Stamp the overlay → Layer-0 company bridge on an existing account during the master-link backfill. Only
+   * writes when master_company_id is currently NULL (the `IS NULL` guard) so a backfill NEVER clobbers an
+   * already-resolved bridge — once linked, stays linked (re-pointing on master merge/split is a separate path).
+   * updated_at is intentionally NOT bumped: this is a derived backfill, not a user edit (mirrors
+   * updateFirmographics). Caller passes an account id already visible in its workspace; RLS is the backstop.
+   */
+  async setMasterCompanyId(tx: Tx, accountId: string, masterCompanyId: string): Promise<void> {
+    await tx
+      .update(accounts)
+      .set({ masterCompanyId })
+      .where(sql`${accounts.id} = ${accountId} AND ${accounts.masterCompanyId} IS NULL`);
+  },
 };
