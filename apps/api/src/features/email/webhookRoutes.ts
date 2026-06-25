@@ -1,29 +1,51 @@
-// webhookRoutes.ts — the PUBLIC inbound ESP delivery/bounce/complaint webhook (email-planning/13 P1, 04 §6,
-// 08 §6). Session-less like the Stripe webhook: there is no user, the HMAC SIGNATURE is the trust boundary
-// (verifyEmailWebhookSignature against EMAIL_WEBHOOK_SECRET — fail closed when the secret is unset). A
-// verified bounce/complaint drives the UNCHANGED M9 handleBounce (→ suppression row + ADR-0013 credit-back),
-// which is replay-idempotent and RLS-scoped to the workspace the signed event names — so a forged tenant id
-// cannot reach another tenant's data. Mounted BEFORE the authed email router (its `*` authn would otherwise
-// 401 this session-less call), mirroring dsarPublicRoutes.
+// webhookRoutes.ts — the PUBLIC email tracking surface (email-planning/13 P1/P3, 04). Session-less; the trust
+// boundary is a SIGNATURE: the inbound ESP webhook is HMAC-verified (EMAIL_WEBHOOK_SECRET, fail closed), and
+// the open-pixel / click-redirect carry an HMAC-signed token (verifyTrackingToken) so a recipient cannot forge
+// a tracking hit. Verified bounce/complaint drive the UNCHANGED M9 handleBounce (suppression + credit-back);
+// every event is recorded idempotently in email_event and open/click project into the activities timeline
+// (ingestTrackingEvent). RLS scopes every write to the workspace the signed token/event names. Mounted BEFORE
+// the authed email router (its `*` authn would 401 these session-less calls), mirroring dsarPublicRoutes.
 
+import { createHash } from "node:crypto";
 import { env } from "@leadwolf/config";
-import { handleBounce, parseDeliveryEvent, verifyEmailWebhookSignature } from "@leadwolf/core";
+import {
+  handleBounce,
+  ingestTrackingEvent,
+  parseDeliveryEvent,
+  verifyEmailWebhookSignature,
+  verifyTrackingToken,
+} from "@leadwolf/core";
 import { Hono } from "hono";
 
 export const emailWebhookRoutes = new Hono();
 
 const SIGNATURE_HEADER = "x-tp-email-signature";
+// 1×1 transparent GIF — the open pixel body, as a standalone ArrayBuffer (what Hono's c.body accepts).
+const PIXEL_BYTES = Buffer.from(
+  "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+  "base64",
+);
+const PIXEL = PIXEL_BYTES.buffer.slice(
+  PIXEL_BYTES.byteOffset,
+  PIXEL_BYTES.byteOffset + PIXEL_BYTES.byteLength,
+);
 
+/** Apple MPP / proxy prefetch heuristic (D6): a proxied open has no real UA or a known image-proxy UA. */
+function looksProxied(ua: string | undefined): boolean {
+  if (!ua) return true;
+  return /GoogleImageProxy|YahooMailProxy|Apple-?Mail|ImageProxy/i.test(ua);
+}
+
+// ── Inbound ESP webhook: delivery / bounce / complaint (HMAC-signed) ────────────────────────────────────
 emailWebhookRoutes.post("/delivery", async (c) => {
-  // Read the RAW body for signature verification (must hash exactly what the ESP signed).
-  const raw = await c.req.text();
-  const ok = verifyEmailWebhookSignature(
-    raw,
-    c.req.header(SIGNATURE_HEADER),
-    env.EMAIL_WEBHOOK_SECRET ?? "",
-  );
-  if (!ok) {
-    // Fail closed: unsigned/forged/replayed (or no secret configured) → reject. No PII logged.
+  const raw = await c.req.text(); // RAW body — hash exactly what the ESP signed
+  if (
+    !verifyEmailWebhookSignature(
+      raw,
+      c.req.header(SIGNATURE_HEADER),
+      env.EMAIL_WEBHOOK_SECRET ?? "",
+    )
+  ) {
     return c.json({ error: "invalid_signature" }, 400);
   }
 
@@ -33,18 +55,66 @@ emailWebhookRoutes.post("/delivery", async (c) => {
   } catch {
     return c.json({ error: "invalid_payload" }, 400);
   }
-
   const event = parseDeliveryEvent(parsedJson);
-  // Unknown/benign event shape → 200 so the ESP does not retry it forever.
-  if (!event) return c.json({ ok: true });
+  if (!event) return c.json({ ok: true }); // unknown/benign → 200 (no ESP retry storm)
 
-  // A bounce/complaint with an enrollment drives the M9 handleBounce (idempotent on already-bounced).
+  const scope = { tenantId: event.tenantId, workspaceId: event.workspaceId };
+  // Bounce/complaint → the M9 handleBounce (suppression + ADR-0013 credit-back), idempotent.
   if ((event.type === "bounce" || event.type === "complaint") && event.outreachLogId) {
-    await handleBounce({
-      scope: { tenantId: event.tenantId, workspaceId: event.workspaceId },
-      logId: event.outreachLogId,
-    });
+    await handleBounce({ scope, logId: event.outreachLogId });
   }
-  // (delivery events feed the email_event tracking store at P3; acknowledged here.)
+  // Record every event in the tracking store (idempotent on the provider event id).
+  await ingestTrackingEvent(scope, {
+    type: event.type,
+    contactId: null,
+    outreachLogId: event.outreachLogId,
+    messageId: event.messageId,
+    providerEventId: event.providerEventId,
+  });
   return c.json({ ok: true });
+});
+
+// ── Open pixel (signed token) — first-open-only, idempotent; always returns the gif ─────────────────────
+emailWebhookRoutes.get("/open/:token", async (c) => {
+  const payload = verifyTrackingToken(c.req.param("token"), env.EMAIL_WEBHOOK_SECRET ?? "");
+  if (payload) {
+    // Best-effort: a tracking failure must never break the pixel render.
+    await ingestTrackingEvent(
+      { tenantId: payload.tenantId, workspaceId: payload.workspaceId },
+      {
+        type: "open",
+        contactId: payload.contactId,
+        outreachLogId: payload.outreachLogId,
+        messageId: payload.messageId ?? null,
+        providerEventId: `open:${payload.outreachLogId}`, // deterministic → first-open-only (D6)
+        isMppSuspected: looksProxied(c.req.header("user-agent")),
+      },
+    ).catch(() => {});
+  }
+  c.header("content-type", "image/gif");
+  c.header("cache-control", "no-store, no-cache, must-revalidate, private");
+  return c.body(PIXEL);
+});
+
+// ── Click redirect (signed token) — records the click, then 302s to a validated http(s) destination ─────
+emailWebhookRoutes.get("/click/:token", async (c) => {
+  const url = c.req.query("u");
+  const payload = verifyTrackingToken(c.req.param("token"), env.EMAIL_WEBHOOK_SECRET ?? "");
+  if (payload && url) {
+    const urlHash = createHash("sha256").update(url).digest("hex").slice(0, 16);
+    await ingestTrackingEvent(
+      { tenantId: payload.tenantId, workspaceId: payload.workspaceId },
+      {
+        type: "click",
+        contactId: payload.contactId,
+        outreachLogId: payload.outreachLogId,
+        messageId: payload.messageId ?? null,
+        providerEventId: `click:${payload.outreachLogId}:${urlHash}`,
+        metadata: { url },
+      },
+    ).catch(() => {});
+  }
+  // Open-redirect guard: only ever 302 to an http(s) URL.
+  if (url && /^https?:\/\//i.test(url)) return c.redirect(url, 302);
+  return c.json({ error: "invalid_link" }, 400);
 });

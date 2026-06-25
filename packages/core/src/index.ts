@@ -245,6 +245,17 @@ export {
   type CreateTemplateInput,
   type UpdateTemplateInput,
 } from "./email/templates.ts";
+// M12 P3 tracking (email-planning/13 P3, 04): the signed open/click token + the email_event → activities
+// projection that lights up the per-contact timeline (idempotent; opens informational, D6).
+export {
+  signTrackingToken,
+  verifyTrackingToken,
+  type TrackingTokenPayload,
+} from "./email/trackingToken.ts";
+export {
+  ingestTrackingEvent,
+  type TrackingEventInput,
+} from "./email/ingestTrackingEvent.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,

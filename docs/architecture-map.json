@@ -73,8 +73,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 874,
-  "fileSetHash": "sha256:8aeeeaaabdfc7bc767524803fcd5ffaedbbe6705e9fcbd56f5ae7bbf599e8925",
+  "fileCount": 878,
+  "fileSetHash": "sha256:b7fa5e771090d8e353a854cf3abfe77ba64d7fc21bb349b22b7181fcd12d0602",
   "features": {
     "account-search": {
       "web": [],
@@ -288,13 +288,16 @@
         "packages/core/src/email/dispatchOutreachSend.ts",
         "packages/core/src/email/dnsAuth.test.ts",
         "packages/core/src/email/dnsAuth.ts",
+        "packages/core/src/email/ingestTrackingEvent.ts",
         "packages/core/src/email/providerAdapter.ts",
         "packages/core/src/email/renderTemplate.test.ts",
         "packages/core/src/email/renderTemplate.ts",
         "packages/core/src/email/resolveSendingIdentity.ts",
         "packages/core/src/email/secretStore.ts",
         "packages/core/src/email/sendingDomains.ts",
-        "packages/core/src/email/templates.ts"
+        "packages/core/src/email/templates.ts",
+        "packages/core/src/email/trackingToken.test.ts",
+        "packages/core/src/email/trackingToken.ts"
       ],
       "db": [],
       "workers": [],
@@ -1446,6 +1449,7 @@
       "packages/db/test/sendGate.itest.ts",
       "packages/db/test/suppressionMgmt.itest.ts",
       "packages/db/test/tags.itest.ts",
+      "packages/db/test/trackingIngest.itest.ts",
       "packages/db/test/webhooks.itest.ts",
       "packages/db/test/workspaceSwitch.itest.ts"
     ],
