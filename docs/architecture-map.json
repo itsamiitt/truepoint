@@ -73,8 +73,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 862,
-  "fileSetHash": "sha256:56ef0551888a9298410ad46a430802bcd2d89f47cc5f8e236ab1da3d9b79348d",
+  "fileCount": 869,
+  "fileSetHash": "sha256:fe57cae2fdadf59ce5dde2ed54ad61728e27cba24cd05df95ac884f4bc5201c3",
   "features": {
     "account-search": {
       "web": [],
@@ -277,12 +277,18 @@
       "admin": [],
       "api": [
         "apps/api/src/features/email/index.ts",
-        "apps/api/src/features/email/routes.ts"
+        "apps/api/src/features/email/routes.ts",
+        "apps/api/src/features/email/webhookRoutes.ts"
       ],
       "core": [
         "packages/core/src/email/connectMailbox.ts",
+        "packages/core/src/email/deliveryWebhook.test.ts",
+        "packages/core/src/email/deliveryWebhook.ts",
+        "packages/core/src/email/dispatchOutreachSend.ts",
         "packages/core/src/email/dnsAuth.test.ts",
         "packages/core/src/email/dnsAuth.ts",
+        "packages/core/src/email/providerAdapter.ts",
+        "packages/core/src/email/resolveSendingIdentity.ts",
         "packages/core/src/email/secretStore.ts",
         "packages/core/src/email/sendingDomains.ts"
       ],
@@ -1433,6 +1439,7 @@
       "packages/db/test/salesNav.itest.ts",
       "packages/db/test/savedSearches.itest.ts",
       "packages/db/test/search.itest.ts",
+      "packages/db/test/sendGate.itest.ts",
       "packages/db/test/suppressionMgmt.itest.ts",
       "packages/db/test/tags.itest.ts",
       "packages/db/test/webhooks.itest.ts",

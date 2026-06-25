@@ -209,6 +209,28 @@ export {
   type VerifySendingDomainInput,
   type VerifySendingDomainResult,
 } from "./email/sendingDomains.ts";
+// M12 P1 send-gate (email-planning/13 P1, D11): the ProviderAdapter seam, the per-tenant identity gate
+// (D2/D3), the signed delivery/bounce webhook, and the dispatch that wraps the UNCHANGED M9 sendStep with
+// the identity + send-quota gates. The concrete network adapters (SES/Gmail/Graph/SMTP) register in P1b.
+export {
+  registerAdapter,
+  resolveSender,
+  resetAdapters,
+  type SendIdentity,
+  type AdapterFactory,
+} from "./email/providerAdapter.ts";
+export { resolveSendingIdentity } from "./email/resolveSendingIdentity.ts";
+export {
+  verifyEmailWebhookSignature,
+  signEmailWebhookPayload,
+  parseDeliveryEvent,
+  type DeliveryEvent,
+  type DeliveryEventType,
+} from "./email/deliveryWebhook.ts";
+export {
+  dispatchOutreachSend,
+  type DispatchOutreachSendInput,
+} from "./email/dispatchOutreachSend.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
 export {
   verifyStripeSignature,

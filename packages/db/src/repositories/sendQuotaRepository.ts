@@ -58,6 +58,18 @@ export const sendQuotaRepository = {
     );
   },
 
+  /**
+   * Refund `count` previously-consumed sends — the send-gate releases the unit it pre-consumed when the send
+   * itself fails (so a failed send doesn't burn quota). Floored at 0 (GREATEST) so a double-release can never
+   * push usage negative. Run inside the tenant tx.
+   */
+  async release(tx: Tx, tenantId: string, count = 1): Promise<void> {
+    await tx.execute(
+      sql`UPDATE tenants SET email_send_used = GREATEST(0, email_send_used - ${count})
+          WHERE id = ${tenantId}`,
+    );
+  },
+
   /** Non-locking read of the tenant's send-quota for the GET /send-quota surface. RLS-scoped. */
   async snapshot(scope: TenantScope): Promise<QuotaReadout> {
     return withTenantTx(scope, async (tx) => {

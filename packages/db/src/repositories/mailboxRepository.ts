@@ -4,7 +4,7 @@
 // a DTO here — only the send adapter decrypts them, server-side (D7). The list/getById selects deliberately
 // OMIT the *_enc columns so a credential can never leak through the API. Mirrors outreachLogRepository.
 
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { mailboxIntegration } from "../schema/email.ts";
 
@@ -102,5 +102,29 @@ export const mailboxRepository = {
       .update(mailboxIntegration)
       .set({ status: "error", lastError: message.slice(0, 500) })
       .where(eq(mailboxIntegration.id, mailboxId));
+  },
+
+  /**
+   * Resolve the CONNECTED mailbox a send goes through, by its from-address (P1 send-gate identity resolution).
+   * Workspace-scoped; only a 'connected' mailbox is returned. Null when there is no connected mailbox for the
+   * address — the send is then refused (a tenant sends only from its own connected identity, D2). No credential.
+   */
+  async findConnectedByAddress(
+    tx: Tx,
+    workspaceId: string,
+    address: string,
+  ): Promise<MailboxRecord | null> {
+    const rows = await tx
+      .select(safeColumns)
+      .from(mailboxIntegration)
+      .where(
+        and(
+          eq(mailboxIntegration.workspaceId, workspaceId),
+          eq(mailboxIntegration.address, address),
+          eq(mailboxIntegration.status, "connected"),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
   },
 };
