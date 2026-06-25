@@ -3,7 +3,7 @@
 // self-contained masked list the API/search surfaces read. PII (email/phone) is stored encrypted; this
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
-import type { MaskedContact } from "@leadwolf/types";
+import type { FieldProvenanceMap, MaskedContact } from "@leadwolf/types";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
@@ -54,6 +54,9 @@ export interface ContactWriteValues {
   salesNavLeadId?: string | null;
   locationCountry?: string | null;
   locationCity?: string | null;
+  // Per-field provenance descriptor map (PLAN_03 §3.1); written by the enrichment/edit paths. Drizzle maps
+  // this camelCase key → the `field_provenance` jsonb column. Empty {} default lives on the column.
+  fieldProvenance?: FieldProvenanceMap;
 }
 
 /** Drop undefined keys so an UPDATE never overwrites an existing value with `undefined`. */
@@ -243,6 +246,21 @@ export const contactRepository = {
           hasEmail: r.emailEnc != null,
         }
       : null;
+  },
+
+  /**
+   * The per-field provenance descriptor map for a contact (PLAN_03 §3.1) — the pin/source state the
+   * enrichment + user-edit write paths read before deciding what may be overwritten. RLS-scoped via the
+   * caller's tx (isolation rides the GUC, like getScoringInputs — no explicit workspace predicate). A
+   * foreign/absent id (no visible row) → `{}`, as does a row whose `field_provenance` is null.
+   */
+  async getFieldProvenance(tx: Tx, contactId: string): Promise<FieldProvenanceMap> {
+    const rows = await tx
+      .select({ fieldProvenance: contacts.fieldProvenance })
+      .from(contacts)
+      .where(eq(contacts.id, contactId))
+      .limit(1);
+    return (rows[0]?.fieldProvenance as FieldProvenanceMap | null | undefined) ?? {};
   },
 
   /** Masked, workspace-scoped list for the search/results + post-import surfaces. Never returns PII. */

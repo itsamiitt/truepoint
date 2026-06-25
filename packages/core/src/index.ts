@@ -377,6 +377,12 @@ export {
   type UpdateTagInput,
   type AssignTagInput,
 } from "./prospect/tags.ts";
+// Field-provenance pin SETTER (PLAN_03 §1.4): a user hand-edit always wins and pins the edited scalar fields
+// so future enrichment won't overwrite them (the enrichment write side is pin-aware in enrichContact).
+export {
+  editContactFields,
+  type ContactFieldEdits,
+} from "./prospect/editContact.ts";
 
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";

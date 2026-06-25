@@ -4,6 +4,7 @@ export * from "./auth.ts";
 export * from "./contacts.ts";
 export * from "./pipelineStages.ts";
 export * from "./customFields.ts";
+export * from "./fieldProvenance.ts";
 export * from "./importTemplates.ts";
 export * from "./tags.ts";
 export * from "./bulkEnrichment.ts";
