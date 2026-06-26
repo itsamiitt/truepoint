@@ -14,6 +14,7 @@ import {
   withTenantTx,
 } from "@leadwolf/db";
 import {
+  CONTACT_PROVENANCE_FIELDS,
   type EnrichField,
   type EnrichTrigger,
   NotFoundError,
@@ -22,6 +23,7 @@ import {
 } from "@leadwolf/types";
 import { blindIndex } from "../import/blindIndex.ts";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
+import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import { type AutoEnrichDenyReason, enforceAutoEnrichPolicy } from "./policy.ts";
 import type { EnrichRequest, EnrichmentProvider, ProviderFieldResult } from "./providerPort.ts";
 import { requestHash } from "./requestHash.ts";
@@ -163,8 +165,32 @@ export async function enrichContact(input: EnrichContactInput): Promise<EnrichCo
     const verifiedPii = outcome.result.fields.some(
       (f) => f.field === "email" || f.field === "phone",
     );
+
+    // Field-provenance pin (PLAN_03 §1.4/§3.1) — SCALAR fields only. A user-pinned scalar (jobTitle/
+    // seniorityLevel/department) must NOT be overwritten by the provider. We read the existing provenance,
+    // plan the write against the provider's scalar fields, then drop any scalar key the plan refused (pinned)
+    // from the overlay write — leaving the user's value AND its descriptor untouched. email/phone are NOT
+    // pin-gated in this slice (their encrypted columns are always written, as before).
+    const existing = await contactRepository.getFieldProvenance(tx, input.contactId);
+    const scalarFieldNames = outcome.result.fields
+      .filter((f) => (CONTACT_PROVENANCE_FIELDS as readonly string[]).includes(f.field))
+      .map((f) => f.field);
+    const { writableFields, provenance } = planFieldWrite(existing, scalarFieldNames, {
+      src: `provider:${outcome.provider}`,
+      ver: new Date().toISOString(),
+    });
+
+    const writeValues = toWriteValues(outcome.result.fields);
+    // Drop any pinned scalar key from the write (the provider value must not overwrite the user's).
+    for (const f of scalarFieldNames) {
+      if (!writableFields.has(f)) {
+        delete (writeValues as Record<string, unknown>)[f];
+      }
+    }
+
     await contactRepository.update(tx, input.contactId, {
-      ...toWriteValues(outcome.result.fields),
+      ...writeValues,
+      fieldProvenance: provenance,
       ...(verifiedPii ? { lastVerifiedAt: new Date() } : {}),
     });
     const provenanceSource = sourceNameEnum.safeParse(outcome.provider);

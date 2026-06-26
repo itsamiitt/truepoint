@@ -3,9 +3,14 @@
 // scope comes from the verified token (never the body), the Idempotency-Key replay sits in middleware, and
 // masking + RLS + the credit invariants live in the core/db layers.
 
-import { revealContact } from "@leadwolf/core";
+import { editContactFields, revealContact } from "@leadwolf/core";
 import { contactRepository } from "@leadwolf/db";
-import { ForbiddenError, ValidationError, revealRequestSchema } from "@leadwolf/types";
+import {
+  ForbiddenError,
+  ValidationError,
+  contactFieldEditSchema,
+  revealRequestSchema,
+} from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { idempotency } from "../../middleware/idempotency.ts";
@@ -47,4 +52,28 @@ revealRoutes.post("/:id/reveal", idempotency, async (c) => {
     userAgent: c.req.header("user-agent") ?? null,
   });
   return c.json(result, 200);
+});
+
+// Hand-edit a contact's scalar profile fields, PINNING each against future enrichment overwrite (PLAN_03 §1.4).
+// Transport only: scope comes from the verified token (never the body), and the pin + RLS-scoped, idempotent
+// write live in core/db (editContactFields). A foreign/absent id updates no row — a safe no-op, the same trust
+// posture as the reveal route which never trusts the body for scope.
+revealRoutes.patch("/:id", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace to edit contacts.");
+
+  const parsed = contactFieldEditSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success)
+    throw new ValidationError(
+      "Provide at least one of firstName/lastName/jobTitle/seniorityLevel/department/locationCountry/locationCity.",
+    );
+
+  await editContactFields(
+    { tenantId: c.get("tenantId"), workspaceId },
+    c.req.param("id"),
+    parsed.data,
+    c.get("claims").sub,
+  );
+  return c.json({ ok: true }, 200);
 });

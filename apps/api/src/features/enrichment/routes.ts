@@ -60,7 +60,7 @@ enrichmentRoutes.get(
   },
 );
 
-enrichmentRoutes.post("/:entity/:id", async (c) => {
+enrichmentRoutes.post("/:entity/:id", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before enriching.");

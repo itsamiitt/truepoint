@@ -34,6 +34,22 @@ export async function withPrivilegedTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T
   });
 }
 
+/**
+ * Run `fn` under the least-privilege Layer-0 resolution role `leadwolf_er` (ADR-0021 MATCH-AGAINST;
+ * prospect-company-data PLAN_01 §4) — the deterministic-resolution path that READS the master graph and
+ * performs co-op-safe MINTS (masterGraphRepository.resolveForImport). The role is NON-BYPASSRLS and has NO
+ * overlay grant: it can only reach the system-owned Layer-0 tables (master_*, source_records, match_links),
+ * never a tenant-scoped one. There are NO GUCs to set — the master tables carry no workspace_id and are not
+ * RLS-scoped (isolation is structural, by access path; PLAN_01 §5). `SET LOCAL ROLE` is transaction-local
+ * (RDS-Proxy/PgBouncer-safe), exactly like withTenantTx/withPrivilegedTx.
+ */
+export async function withErTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE leadwolf_er`);
+    return fn(tx);
+  });
+}
+
 export interface TenantScope {
   tenantId: string;
   workspaceId?: string;

@@ -4,6 +4,7 @@ export {
   db,
   withTenantTx,
   withPrivilegedTx,
+  withErTx,
   withPlatformTx,
   recordPlatformEvent,
   type PlatformEventInput,
@@ -55,6 +56,13 @@ export {
   type AccountFirmographicsPatch,
   type AccountUpsertInput,
 } from "./repositories/accountRepository.ts";
+// Layer-0 master graph (ADR-0021; prospect-company-data PLAN_01 §4) — deterministic MATCH-AGAINST resolve-for-
+// import. Reads/co-op-safe-mints the system-owned golden graph; always run within withErTx (the leadwolf_er role).
+export {
+  masterGraphRepository,
+  type ResolveForImportInput,
+  type ResolveForImportResult,
+} from "./repositories/masterGraphRepository.ts";
 export {
   customFieldRepository,
   type CustomFieldValue,
@@ -69,6 +77,7 @@ export {
   type DedupKeys,
   type EnrichEstimateSignal,
   type HotLeadRow,
+  type UnresolvedContactRow,
 } from "./repositories/contactRepository.ts";
 export {
   sourceImportRepository,

@@ -7,6 +7,7 @@ import { describe, expect, it } from "bun:test";
 import {
   DEFAULT_CONFLICT_POLICY,
   conflictPolicy,
+  contactFieldEditSchema,
   importPreviewSchema,
   importRequestSchema,
   importSummarySchema,
@@ -155,5 +156,44 @@ describe("importPreviewSchema", () => {
     });
     expect(parsed.valid).toBe(3);
     expect(parsed.sampleRejectedRows).toHaveLength(1);
+  });
+});
+
+describe("contactFieldEditSchema (PATCH /contacts/:id — the human-correction pin setter, PLAN_03 §1.4)", () => {
+  it("rejects an empty body (the refine: at least one field is required)", () => {
+    expect(contactFieldEditSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("accepts a single scalar edit", () => {
+    const parsed = contactFieldEditSchema.parse({ jobTitle: "Head of Sales" });
+    expect(parsed.jobTitle).toBe("Head of Sales");
+  });
+
+  it("accepts null to CLEAR a field (distinct from omitting it)", () => {
+    const parsed = contactFieldEditSchema.parse({ department: null });
+    expect(parsed.department).toBeNull();
+  });
+
+  it("accepts multiple scalar fields incl. a valid seniority enum", () => {
+    const parsed = contactFieldEditSchema.parse({
+      firstName: "Jane",
+      seniorityLevel: "vp",
+      locationCity: "Austin",
+    });
+    expect(parsed.seniorityLevel).toBe("vp");
+  });
+
+  it("rejects an over-long string (max mirrors canonicalContactRowSchema)", () => {
+    expect(contactFieldEditSchema.safeParse({ firstName: "x".repeat(101) }).success).toBe(false);
+    expect(contactFieldEditSchema.safeParse({ jobTitle: "x".repeat(256) }).success).toBe(false);
+  });
+
+  it("rejects an invalid seniority level", () => {
+    expect(contactFieldEditSchema.safeParse({ seniorityLevel: "wizard" }).success).toBe(false);
+  });
+
+  it("strips unknown keys so a caller cannot edit a non-scalar field (e.g. email) through this route", () => {
+    const parsed = contactFieldEditSchema.parse({ jobTitle: "VP", email: "jane@acme.com" });
+    expect("email" in parsed).toBe(false);
   });
 });

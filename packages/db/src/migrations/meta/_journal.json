@@ -124,8 +124,29 @@
     {
       "idx": 17,
       "version": "7",
+      "when": 1782423540267,
+      "tag": "0017_silly_marauders",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782426590174,
+      "tag": "0018_tidy_goblin_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1782507523308,
+      "tag": "0019_thin_johnny_blaze",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
       "when": 1782509481035,
-      "tag": "0017_late_auth_enforcement",
+      "tag": "0020_late_auth_enforcement",
       "breakpoints": true
     }
   ]

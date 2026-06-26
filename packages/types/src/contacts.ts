@@ -98,6 +98,27 @@ export const canonicalContactRowSchema = z.object({
 });
 export type CanonicalContactRow = z.infer<typeof canonicalContactRowSchema>;
 
+// ── Hand-edit overlay (PLAN_03 §1.4) — the user pin setter's request shape ──────────────────────────────
+/**
+ * The SEVEN scalar overlay profile fields a user may hand-edit via `PATCH /contacts/:id` (PLAN_03 §3.1
+ * CONTACT_PROVENANCE_FIELDS). Every field is optional (edit a subset) and nullable (`null` = clear/blank the
+ * field); an omitted key is left as-is. Max-lengths mirror `canonicalContactRowSchema` exactly. The `.refine`
+ * makes an empty `{}` body a 400 — at least one field must be provided. Validation only; the pin + RLS write
+ * live in core (`editContactFields`).
+ */
+export const contactFieldEditSchema = z
+  .object({
+    firstName: z.string().max(100).nullable().optional(),
+    lastName: z.string().max(100).nullable().optional(),
+    jobTitle: z.string().max(255).nullable().optional(),
+    seniorityLevel: seniorityLevel.nullable().optional(),
+    department: z.string().max(100).nullable().optional(),
+    locationCountry: z.string().max(100).nullable().optional(),
+    locationCity: z.string().max(100).nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, "Provide at least one field to edit.");
+export type ContactFieldEdit = z.infer<typeof contactFieldEditSchema>;
+
 // ── Conflict policy (G-IMP-5) ────────────────────────────────────────────────────────────────────────
 /**
  * What the import does when an incoming row matches an existing workspace contact by a dedup key (30 §3/§7,

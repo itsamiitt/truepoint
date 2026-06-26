@@ -26,6 +26,16 @@ import {
   deadLetterFailedImport,
   processImport,
 } from "./queues/imports.ts";
+import {
+  MASTER_BACKFILL_QUEUE,
+  type MasterBackfillJobData,
+  processMasterBackfill,
+} from "./queues/masterBackfill.ts";
+import {
+  MASTER_BACKFILL_SWEEP_QUEUE,
+  type MasterBackfillSweepJobData,
+  makeProcessMasterBackfillSweep,
+} from "./queues/masterBackfillSweep.ts";
 import { OUTREACH_QUEUE, type OutreachJobData, processOutreach } from "./queues/outreach.ts";
 import {
   RETENTION_SWEEP_QUEUE,
@@ -53,6 +63,17 @@ export const dedupQueue = new Queue<DedupJobData>(DEDUP_QUEUE, { connection });
 export const firmographicsQueue = new Queue<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, {
   connection,
 });
+// Master-link backfill: re-resolves overlay contacts with NULL master_* bridges through the Phase-2′ resolver,
+// per-workspace, batched + idempotent (PLAN_00 §11.5 / PLAN_07 Stage B).
+export const masterBackfillQueue = new Queue<MasterBackfillJobData>(MASTER_BACKFILL_QUEUE, {
+  connection,
+});
+// The scheduled fleet sweep that DRIVES the per-workspace backfill (PLAN_07 Stage B): one repeatable daily job
+// enumerates workspaces with unresolved contacts and enqueues a per-workspace backfill for each.
+export const masterBackfillSweepQueue = new Queue<MasterBackfillSweepJobData>(
+  MASTER_BACKFILL_SWEEP_QUEUE,
+  { connection },
+);
 // M12 P4: the leader-locked sequence scheduler (email_sequence_tick). A single repeatable job (stable
 // jobId → deduped) fires every minute; the processor takes the Redis leader lock and claims due enrollments.
 export const sequenceTickQueue = new Queue<SequenceTickJobData>(EMAIL_SEQUENCE_TICK_QUEUE, {
@@ -110,6 +131,15 @@ export async function scheduleRetentionSweep(): Promise<void> {
   );
 }
 
+/** Register the daily master-backfill sweep (PLAN_07 Stage B). Stable jobId → exactly one repeatable. */
+export async function scheduleMasterBackfillSweep(): Promise<void> {
+  await masterBackfillSweepQueue.add(
+    "sweep",
+    {},
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "master-backfill-sweep" },
+  );
+}
+
 /** Submit a per-workspace contact dedup pass (24 Phase-0.5; e.g. after an import or on a schedule). */
 export async function enqueueDedup(data: DedupJobData): Promise<string> {
   const job = await dedupQueue.add("dedup", data);
@@ -119,6 +149,22 @@ export async function enqueueDedup(data: DedupJobData): Promise<string> {
 /** Submit a per-workspace firmographics rollup (24 Phase-0.5; surfaces intent_signals onto account facets). */
 export async function enqueueFirmographics(data: FirmographicsJobData): Promise<string> {
   const job = await firmographicsQueue.add("firmographics", data);
+  return String(job.id);
+}
+
+/** Submit a per-workspace master-link backfill (PLAN_00 §11.5; e.g. one-off attach or on a schedule). */
+export async function enqueueMasterBackfill(
+  scope: { tenantId: string; workspaceId: string },
+  opts?: { batchSize?: number },
+): Promise<string> {
+  const job = await masterBackfillQueue.add(
+    "master-backfill",
+    { scope, batchSize: opts?.batchSize },
+    // Self-heal: if the processor throws (a row errored — see processMasterBackfill) BullMQ retries from a fresh
+    // scan with exponential backoff. The job is idempotent (only still-NULL rows are re-resolved), so a retry
+    // never double-mints; a keyless-only leftover succeeds (no throw) and never burns the retry budget.
+    { attempts: 4, backoff: { type: "exponential", delay: 30_000 } },
+  );
   return String(job.id);
 }
 
@@ -167,6 +213,14 @@ export function startWorkers(): Worker[] {
         error: e instanceof Error ? e.message : String(e),
       }),
     );
+    // A completed import may have left rows with NULL master bridges (a resolution that failed non-fatally =
+    // in-flight staging). Kick the idempotent per-workspace backfill so they resolve promptly rather than
+    // waiting for the daily sweep. Best-effort — a failed enqueue never fails the import.
+    void enqueueMasterBackfill(data).catch((e) =>
+      log.error("imports: master-backfill enqueue failed", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   });
   const workers = [
     importsWorker,
@@ -187,6 +241,23 @@ export function startWorkers(): Worker[] {
     instrument(
       new Worker<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, processFirmographics, { connection }),
       FIRMOGRAPHICS_QUEUE,
+    ),
+    // Master-link backfill consumer: per-workspace, idempotent re-resolution of NULL master_* bridges.
+    instrument(
+      new Worker<MasterBackfillJobData>(MASTER_BACKFILL_QUEUE, processMasterBackfill, {
+        connection,
+      }),
+      MASTER_BACKFILL_QUEUE,
+    ),
+    // Master-link backfill SWEEP consumer (PLAN_07 Stage B): the leader-locked daily fan-out that enqueues a
+    // per-workspace backfill for every workspace with unresolved contacts. enqueueMasterBackfill is injected.
+    instrument(
+      new Worker<MasterBackfillSweepJobData>(
+        MASTER_BACKFILL_SWEEP_QUEUE,
+        makeProcessMasterBackfillSweep(connection, enqueueMasterBackfill),
+        { connection },
+      ),
+      MASTER_BACKFILL_SWEEP_QUEUE,
     ),
     // M12 P4: the sequence-tick consumer. Leader-locked; claims due enrollments and enqueues each onto the
     // outreach queue (the existing send path). Best-effort registers the single repeatable job at boot.
@@ -223,6 +294,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleRetentionSweep().catch((e) =>
     log.error("failed to schedule the retention sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleMasterBackfillSweep().catch((e) =>
+    log.error("failed to schedule the master-backfill sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );

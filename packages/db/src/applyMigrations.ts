@@ -50,13 +50,21 @@ const bootstrap = (appPwd: string): string => `
     IF (SELECT rolsuper FROM pg_roles WHERE rolname = CURRENT_USER) THEN
       ALTER ROLE leadwolf_admin BYPASSRLS;
     END IF;
+    -- The least-privilege Layer-0 resolution role (ADR-0021 MATCH-AGAINST; prospect-company-data PLAN_01 §4):
+    -- NOLOGIN, NON-BYPASSRLS — it reads the master graph and writes only co-op-safe mints (no overlay grant,
+    -- never BYPASSRLS). Reached only via withErTx (SET LOCAL ROLE). Created idempotently like leadwolf_admin.
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_er') THEN
+      CREATE ROLE leadwolf_er NOLOGIN;
+    END IF;
   END $$;
   GRANT USAGE ON SCHEMA public TO leadwolf_app;
   GRANT USAGE ON SCHEMA public TO leadwolf_admin;
-  -- Let the connecting base/owner role SET LOCAL ROLE into both app roles (no-op for superusers; required
+  GRANT USAGE ON SCHEMA public TO leadwolf_er;
+  -- Let the connecting base/owner role SET LOCAL ROLE into all three app roles (no-op for superusers; required
   -- for a non-superuser owner in production).
   GRANT leadwolf_app TO CURRENT_USER;
   GRANT leadwolf_admin TO CURRENT_USER;
+  GRANT leadwolf_er TO CURRENT_USER;
 `;
 
 // Table/sequence privileges for the app role, applied AFTER tables exist (RLS still gates which rows it sees).
@@ -82,6 +90,33 @@ const GRANTS = `
   REVOKE ALL ON platform_staff FROM leadwolf_app;
   -- impersonation_sessions (ADR-0011) is platform-owned staff data — deny the customer app role entirely.
   REVOKE ALL ON impersonation_sessions FROM leadwolf_app;
+  -- Layer-0 master graph (ADR-0021) is SYSTEM-OWNED, isolated by ACCESS PATH not RLS: it has NO workspace_id,
+  -- so NO fail-closed RLS predicate. The blanket GRANT above handed leadwolf_app DML on it — REVOKE it so the
+  -- customer app role can NEVER read the shared universe directly (PLAN_04/PLAN_07 "grant-off is the wall").
+  -- Reads happen only via masked search + the paid-reveal copy + the audited owner/withPlatformTx path. The
+  -- overlay's master_*_id FK still works: referential checks run with the table-OWNER privilege, not leadwolf_app.
+  -- Re-run every migrate (idempotent); a future master_* table MUST be added to this list.
+  REVOKE ALL ON master_persons, master_companies, master_employment, master_emails, master_phones,
+                source_records, match_links FROM leadwolf_app;
+  -- Defense-in-depth belt: dynamically REVOKE from leadwolf_app any table named master_*. A FUTURE Layer-0
+  -- master table is auto-granted by the ALTER DEFAULT PRIVILEGES above at CREATE time, so this convention-based
+  -- catch-all makes it fail closed even before someone adds it to the explicit list. (Tables NOT matching
+  -- master_* — source_records, match_links, and future system-owned Layer-0 tables — still rely on the explicit
+  -- list above; each phase MUST add its system-owned tables there.) Idempotent; re-run every migrate.
+  DO $$ DECLARE t text; BEGIN
+    FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename ~ '^master_' LOOP
+      EXECUTE format('REVOKE ALL ON public.%I FROM leadwolf_app', t);
+    END LOOP;
+  END $$;
+  -- leadwolf_er is the least-privilege Layer-0 resolution role (ADR-0021 MATCH-AGAINST; PLAN_01 §4): it READS the
+  -- master graph and performs co-op-safe MINTS (the deterministic resolve-for-import path). It gets explicit
+  -- SELECT/INSERT/UPDATE on the Layer-0 tables ONLY — NO DELETE (deletion is the audited DSAR fan-out on the
+  -- owner/withPrivilegedTx path), NO overlay grant (it must never touch contacts/accounts), and it is NOT
+  -- BYPASSRLS (it has no business reading any RLS-scoped table). It needs sequence USAGE to default the v7 PKs.
+  -- Idempotent; re-run every migrate. A future Layer-0 table that the resolver writes MUST be added here.
+  GRANT SELECT, INSERT, UPDATE ON master_persons, master_companies, master_employment, master_emails,
+                                   master_phones, source_records, match_links TO leadwolf_er;
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_er;
 `;
 
 async function exists(path: string): Promise<boolean> {

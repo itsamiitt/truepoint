@@ -3,10 +3,10 @@
 // self-contained masked list the API/search surfaces read. PII (email/phone) is stored encrypted; this
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
-import type { MaskedContact } from "@leadwolf/types";
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
-import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
-import { contacts } from "../schema/contacts.ts";
+import type { FieldProvenanceMap, MaskedContact } from "@leadwolf/types";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
+import { accounts, contacts } from "../schema/contacts.ts";
 
 /** A top-priority lead for the Home dashboard — FACETS ONLY (no encrypted email/phone). Mirrors HotLead. */
 export interface HotLeadRow {
@@ -32,6 +32,10 @@ export interface ContactWriteValues {
   tenantId: string;
   workspaceId: string;
   accountId?: string | null;
+  // overlay → Layer-0 golden bridge (ADR-0021); set by import MATCH-AGAINST resolution. Nullable = in-flight ER
+  // staging only (PLAN_00 C8); the FK referential check runs with table-owner privilege, so leadwolf_app can
+  // link to a master_persons row it cannot itself read (the grant-off wall).
+  masterPersonId?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   emailEnc?: Uint8Array | null;
@@ -50,6 +54,9 @@ export interface ContactWriteValues {
   salesNavLeadId?: string | null;
   locationCountry?: string | null;
   locationCity?: string | null;
+  // Per-field provenance descriptor map (PLAN_03 §3.1); written by the enrichment/edit paths. Drizzle maps
+  // this camelCase key → the `field_provenance` jsonb column. Empty {} default lives on the column.
+  fieldProvenance?: FieldProvenanceMap;
 }
 
 /** Drop undefined keys so an UPDATE never overwrites an existing value with `undefined`. */
@@ -84,7 +91,89 @@ export interface DedupContactRow {
   createdAt: Date;
 }
 
+/**
+ * The minimal, NON-PII row the master-link backfill needs to re-resolve an EXISTING overlay contact through the
+ * Phase-2′ resolver: the contact's own resolver keys (email blind index → linkedin) plus its account's
+ * domain/name (the company resolver keys). The account fields are null when the contact has no `account_id`
+ * (LEFT JOIN miss). `emailBlindIndex` is the raw bytea (HMAC of the normalized email), never the plaintext.
+ */
+export interface UnresolvedContactRow {
+  id: string;
+  emailBlindIndex: Uint8Array | null;
+  emailDomain: string | null;
+  linkedinPublicId: string | null;
+  accountId: string | null;
+  accountDomain: string | null;
+  accountName: string | null;
+}
+
 export const contactRepository = {
+  /**
+   * A keyset-paged batch of EXISTING overlay contacts that still need master resolution: master_person_id IS
+   * NULL and the row is live (deleted_at IS NULL). Selects the contact's own resolver keys plus its account's
+   * domain/name via a LEFT JOIN to `accounts` (the account fields are null when the contact has no account_id).
+   * Ordered by id ASC and keyset-paged on `cursor` (id > cursor; null = first page) so the backfill walks the
+   * workspace in stable, bounded batches without OFFSET. RLS scopes this to ONE workspace via the caller's
+   * withTenantTx GUC — there is no explicit workspace predicate here, isolation rides the tx (like assignOwner).
+   * The bytea blind index is returned raw (Uint8Array), consistent with the email-key handling in
+   * findByDedupKeys; never the plaintext email/phone.
+   */
+  async findUnresolvedForBackfill(
+    tx: Tx,
+    cursor: string | null,
+    limit: number,
+  ): Promise<UnresolvedContactRow[]> {
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        emailBlindIndex: contacts.emailBlindIndex,
+        emailDomain: contacts.emailDomain,
+        linkedinPublicId: contacts.linkedinPublicId,
+        accountId: contacts.accountId,
+        accountDomain: accounts.domain,
+        accountName: accounts.name,
+      })
+      .from(contacts)
+      .leftJoin(accounts, eq(contacts.accountId, accounts.id))
+      .where(
+        and(
+          isNull(contacts.masterPersonId),
+          isNull(contacts.deletedAt),
+          cursor === null ? undefined : gt(contacts.id, cursor),
+        ),
+      )
+      .orderBy(asc(contacts.id))
+      .limit(limit);
+    return rows.map((r) => ({
+      id: r.id,
+      emailBlindIndex: r.emailBlindIndex ?? null,
+      emailDomain: r.emailDomain,
+      linkedinPublicId: r.linkedinPublicId,
+      accountId: r.accountId,
+      accountDomain: r.accountDomain,
+      accountName: r.accountName,
+    }));
+  },
+
+  /**
+   * SYSTEM-LEVEL enumeration for the scheduled master-backfill sweep (PLAN_07 Stage B). Returns the
+   * (tenantId, workspaceId) of every workspace that still holds unresolved (NULL master_person_id, live)
+   * contacts, so the sweep can enqueue a per-workspace backfill. Runs on the OWNER connection (NO leadwolf_app
+   * role drop → it must see EVERY workspace) because the set is intentionally cross-workspace; it returns ONLY
+   * non-PII ids (never a contact value). NOT reachable from a tenant request — only the leader-locked sweep
+   * worker calls it. Backed by idx_contacts_unresolved; `limit`-capped so one sweep can't fan out unbounded.
+   */
+  async listWorkspacesWithUnresolvedContacts(
+    limit = 1000,
+  ): Promise<Array<{ tenantId: string; workspaceId: string }>> {
+    const rows = (await db.execute(
+      sql`SELECT DISTINCT tenant_id, workspace_id FROM contacts
+          WHERE master_person_id IS NULL AND deleted_at IS NULL
+          LIMIT ${limit}`,
+    )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
+    return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
+  },
+
   /** Find an existing contact in the workspace by the first dedup key that hits (email → linkedin → sales-nav). */
   async findByDedupKeys(
     tx: Tx,
@@ -176,6 +265,21 @@ export const contactRepository = {
           hasEmail: r.emailEnc != null,
         }
       : null;
+  },
+
+  /**
+   * The per-field provenance descriptor map for a contact (PLAN_03 §3.1) — the pin/source state the
+   * enrichment + user-edit write paths read before deciding what may be overwritten. RLS-scoped via the
+   * caller's tx (isolation rides the GUC, like getScoringInputs — no explicit workspace predicate). A
+   * foreign/absent id (no visible row) → `{}`, as does a row whose `field_provenance` is null.
+   */
+  async getFieldProvenance(tx: Tx, contactId: string): Promise<FieldProvenanceMap> {
+    const rows = await tx
+      .select({ fieldProvenance: contacts.fieldProvenance })
+      .from(contacts)
+      .where(eq(contacts.id, contactId))
+      .limit(1);
+    return (rows[0]?.fieldProvenance as FieldProvenanceMap | null | undefined) ?? {};
   },
 
   /** Masked, workspace-scoped list for the search/results + post-import surfaces. Never returns PII. */
