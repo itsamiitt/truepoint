@@ -7,10 +7,21 @@
 
 import { eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
-import { tenants } from "../schema/auth.ts";
+import { tenants, users } from "../schema/auth.ts";
 
 /** A tenant's lifecycle status the staff console can set (13 §3.1). */
 export type TenantLifecycleStatus = "active" | "suspended";
+
+/** A user's account status the staff console can set (13 §3.2). 'suspended' = deactivated. */
+export type UserAccountStatus = "active" | "suspended";
+
+/** The outcome of a user status change, so the caller can map it to the right HTTP result INSIDE the tx
+ *  (rolling the audit row back on a refusal): unknown user → 404, a protected platform-staff target → 422,
+ *  else applied. */
+export interface UserStatusOutcome {
+  found: boolean;
+  blockedPlatformAdmin: boolean;
+}
 
 /** The outcome of a credit adjustment, so the caller can map it to the right HTTP result INSIDE the tx
  *  (and thus roll the audit row back on a no-op): unknown tenant → 404, would-overdraw → 422, else the new
@@ -57,5 +68,31 @@ export const platformAdminWriteRepository = {
       sql`UPDATE tenants SET reveal_credit_balance = ${next}, updated_at = now() WHERE id = ${tenantId}::uuid`,
     );
     return { found: true, wouldOverdraw: false, balanceAfter: next };
+  },
+
+  /**
+   * Set a global user's account status (active|suspended) — the deactivate/reactivate mutation (13 §3.2).
+   * When `blockPlatformAdmin` is set (the deactivate path), a target that is a platform-staff account is
+   * refused (`blockedPlatformAdmin`) rather than updated — so staff can't lock another operator (or, with the
+   * caller's own self-check, themselves) out of the console; the staff role must be revoked first. An unknown
+   * id → `found:false`. `updated_at` is bumped explicitly (no app-wide updated_at trigger on users).
+   */
+  async setUserStatus(
+    tx: Tx,
+    userId: string,
+    status: UserAccountStatus,
+    opts: { blockPlatformAdmin: boolean },
+  ): Promise<UserStatusOutcome> {
+    const [row] = await tx
+      .select({ isPlatformAdmin: users.isPlatformAdmin })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!row) return { found: false, blockedPlatformAdmin: false };
+    if (opts.blockPlatformAdmin && row.isPlatformAdmin)
+      return { found: true, blockedPlatformAdmin: true };
+
+    await tx.update(users).set({ status, updatedAt: new Date() }).where(eq(users.id, userId));
+    return { found: true, blockedPlatformAdmin: false };
   },
 };

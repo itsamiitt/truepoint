@@ -32,4 +32,5 @@ export * from "./identityProvisioning.ts";
 export * from "./scim.ts";
 export * from "./staffAdmin.ts";
 export * from "./tenantAdmin.ts";
+export * from "./userAdmin.ts";
 export * from "./listGovernance.ts";

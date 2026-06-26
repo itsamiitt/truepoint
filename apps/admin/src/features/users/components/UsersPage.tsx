@@ -1,16 +1,63 @@
-// UsersPage.tsx — the global (cross-tenant) Users directory (13 §3), read from the api `/admin/users` surface.
-// Read-only in this phase (staff mutations come later via audited endpoints). Renders every async state
-// through the shared State Kit. Mirrors the Tenants directory structure.
+// UsersPage.tsx — the global (cross-tenant) Users directory (13 §3.2), read from the api `/admin/users`
+// surface, with a per-row deactivate / reactivate action behind a reason dialog (13a Area 2). All mutations go
+// to the audited, super_admin|support-gated endpoints; a 403/422 from the api (e.g. a protected staff target
+// or self-deactivation) is surfaced as a clear toast. Renders every async state through the shared State Kit.
 "use client";
 
-import { type Column, DataTable, EmptyState, StateSwitch, StatusBadge } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  Dialog,
+  EmptyState,
+  StateSwitch,
+  StatusBadge,
+  TpButton,
+  TpTextarea,
+  useToast,
+} from "@leadwolf/ui";
 import { Users } from "lucide-react";
+import { useState } from "react";
+import { deactivateUser, reactivateUser } from "../api";
 import { statusTone } from "../format";
 import { useUsers } from "../hooks/useUsers";
 import type { PlatformUser } from "../types";
 
+const MIN_REASON = 5;
+type PendingAction = { user: PlatformUser; kind: "deactivate" | "reactivate" };
+
 export function UsersPage() {
   const { users, loading, error, reload } = useUsers();
+  const toast = useToast();
+
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function openAction(action: PendingAction) {
+    setReason("");
+    setPending(action);
+  }
+
+  async function onConfirm() {
+    if (!pending) return;
+    const r = reason.trim();
+    if (r.length < MIN_REASON) {
+      toast.error(`Enter a reason (min ${MIN_REASON} characters).`);
+      return;
+    }
+    setBusy(true);
+    try {
+      if (pending.kind === "deactivate") await deactivateUser(pending.user.id, r);
+      else await reactivateUser(pending.user.id, r);
+      toast.success(pending.kind === "deactivate" ? "User deactivated." : "User reactivated.");
+      setPending(null);
+      await reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Action failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const columns: Column<PlatformUser>[] = [
     {
@@ -37,6 +84,33 @@ export function UsersPage() {
       sortValue: (u) => (u.isPlatformAdmin ? 1 : 0),
       cell: (u) =>
         u.isPlatformAdmin ? <StatusBadge tone="warning">Staff</StatusBadge> : <span>—</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      // Suspended → reactivate. Active & non-staff → deactivate. Active staff accounts are protected here
+      // (the api refuses to deactivate them); reactivating a suspended account is always offered.
+      cell: (u) =>
+        u.status === "suspended" ? (
+          <TpButton
+            variant="ghost"
+            size="sm"
+            onClick={() => openAction({ user: u, kind: "reactivate" })}
+          >
+            Reactivate
+          </TpButton>
+        ) : u.isPlatformAdmin ? (
+          <span className="app-muted">—</span>
+        ) : (
+          <TpButton
+            variant="ghost"
+            size="sm"
+            onClick={() => openAction({ user: u, kind: "deactivate" })}
+          >
+            Deactivate
+          </TpButton>
+        ),
     },
   ];
 
@@ -66,6 +140,48 @@ export function UsersPage() {
       >
         <DataTable columns={columns} rows={users ?? []} rowKey={(u) => u.id} />
       </StateSwitch>
+
+      <Dialog
+        open={!!pending}
+        onClose={() => (busy ? undefined : setPending(null))}
+        title={pending?.kind === "deactivate" ? "Deactivate user" : "Reactivate user"}
+        description={
+          pending
+            ? pending.kind === "deactivate"
+              ? `Deactivate ${pending.user.email}. They lose access across all orgs until reactivated. This is audited.`
+              : `Restore access for ${pending.user.email}. This is audited.`
+            : undefined
+        }
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="secondary" onClick={() => setPending(null)} disabled={busy}>
+              Cancel
+            </TpButton>
+            <TpButton
+              variant={pending?.kind === "deactivate" ? "danger" : "primary"}
+              onClick={() => void onConfirm()}
+              disabled={busy}
+            >
+              {busy ? "Working…" : pending?.kind === "deactivate" ? "Deactivate" : "Reactivate"}
+            </TpButton>
+          </div>
+        }
+      >
+        <label
+          htmlFor="user-action-reason"
+          style={{ display: "flex", flexDirection: "column", gap: 4 }}
+        >
+          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (audited)</span>
+          <TpTextarea
+            id="user-action-reason"
+            value={reason}
+            rows={3}
+            placeholder="Why is this account being deactivated / reactivated?"
+            disabled={busy}
+            onChange={(e) => setReason(e.currentTarget.value)}
+          />
+        </label>
+      </Dialog>
     </div>
   );
 }

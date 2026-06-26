@@ -18,3 +18,29 @@ export async function fetchUsers(): Promise<PlatformUser[]> {
   const body = (await res.json()) as { users: PlatformUser[] };
   return body.users;
 }
+
+/** POST /admin/users/:id/deactivate — suspend a user (super_admin|support). Reason is audited. */
+export async function deactivateUser(id: string, reason: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/users/${encodeURIComponent(id)}/deactivate`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not deactivate the user"));
+}
+
+/** POST /admin/users/:id/reactivate — restore a suspended user (super_admin|support). Reason is audited. */
+export async function reactivateUser(id: string, reason: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/users/${encodeURIComponent(id)}/reactivate`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not reactivate the user"));
+}

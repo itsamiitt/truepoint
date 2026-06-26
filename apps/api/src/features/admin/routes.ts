@@ -23,6 +23,7 @@ import {
   featureFlagUpsertSchema,
   setAuthEnforcementSchema,
   tenantStatusChangeSchema,
+  userStatusChangeSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import { type ApiVariables, authn } from "../../middleware/authn.ts";
@@ -58,6 +59,59 @@ adminRoutes.get("/users", async (c) => {
     platformAdminRepository.listUsers(tx),
   );
   return c.json({ users });
+});
+
+// ── Global user management (13a Area 2, 13 §3.2) ───────────────────────────────────────────────────────
+// Deactivate / reactivate a global user across tenants. super_admin or support. Same audited-write discipline
+// as the tenant lifecycle ops: withPlatformTx (in-tx platform_audit_log), UUID-validated before the tx, a
+// mandatory reason. Two lockout rails on deactivate: the caller cannot deactivate THEMSELVES (a clean 422
+// before the tx), and a platform-staff target is refused in-tx (revoke the staff role first) — both roll the
+// audit row back. (reset-MFA / force-reset / revoke-sessions reuse the packages/auth primitives in a later slice.)
+
+/** Deactivate a global user (status → suspended). super_admin|support. Audited "user.deactivate". */
+adminRoutes.post("/users/:id/deactivate", requireStaffRole("super_admin", "support"), async (c) => {
+  const userId = c.req.param("id");
+  if (!UUID_RE.test(userId)) throw new ValidationError("id must be a UUID");
+  if (userId === c.get("claims").sub)
+    throw new ValidationError("You cannot deactivate your own account.");
+  const parsed = userStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "user.deactivate",
+    async (tx) => {
+      const res = await platformAdminWriteRepository.setUserStatus(tx, userId, "suspended", {
+        blockPlatformAdmin: true,
+      });
+      if (!res.found) throw new NotFoundError("User not found.");
+      if (res.blockedPlatformAdmin)
+        throw new ValidationError(
+          "Cannot deactivate a platform-staff account; revoke the staff role first.",
+        );
+    },
+    { targetType: "user", targetId: userId, metadata: { reason: parsed.data.reason } },
+  );
+  return c.json({ ok: true, userId, status: "suspended" });
+});
+
+/** Reactivate a suspended user (status → active). super_admin|support. Audited "user.reactivate". */
+adminRoutes.post("/users/:id/reactivate", requireStaffRole("super_admin", "support"), async (c) => {
+  const userId = c.req.param("id");
+  if (!UUID_RE.test(userId)) throw new ValidationError("id must be a UUID");
+  const parsed = userStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "user.reactivate",
+    async (tx) => {
+      const res = await platformAdminWriteRepository.setUserStatus(tx, userId, "active", {
+        blockPlatformAdmin: false,
+      });
+      if (!res.found) throw new NotFoundError("User not found.");
+    },
+    { targetType: "user", targetId: userId, metadata: { reason: parsed.data.reason } },
+  );
+  return c.json({ ok: true, userId, status: "active" });
 });
 
 // ── Tenants directory (13 §3.1) — plan / status / seats / credits per org, bounded cross-tenant read. ──
