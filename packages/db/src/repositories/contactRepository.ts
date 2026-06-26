@@ -5,7 +5,7 @@
 
 import type { FieldProvenanceMap, MaskedContact } from "@leadwolf/types";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
-import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
+import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
 
 /** A top-priority lead for the Home dashboard — FACETS ONLY (no encrypted email/phone). Mirrors HotLead. */
@@ -153,6 +153,25 @@ export const contactRepository = {
       accountDomain: r.accountDomain,
       accountName: r.accountName,
     }));
+  },
+
+  /**
+   * SYSTEM-LEVEL enumeration for the scheduled master-backfill sweep (PLAN_07 Stage B). Returns the
+   * (tenantId, workspaceId) of every workspace that still holds unresolved (NULL master_person_id, live)
+   * contacts, so the sweep can enqueue a per-workspace backfill. Runs on the OWNER connection (NO leadwolf_app
+   * role drop → it must see EVERY workspace) because the set is intentionally cross-workspace; it returns ONLY
+   * non-PII ids (never a contact value). NOT reachable from a tenant request — only the leader-locked sweep
+   * worker calls it. Backed by idx_contacts_unresolved; `limit`-capped so one sweep can't fan out unbounded.
+   */
+  async listWorkspacesWithUnresolvedContacts(
+    limit = 1000,
+  ): Promise<Array<{ tenantId: string; workspaceId: string }>> {
+    const rows = (await db.execute(
+      sql`SELECT DISTINCT tenant_id, workspace_id FROM contacts
+          WHERE master_person_id IS NULL AND deleted_at IS NULL
+          LIMIT ${limit}`,
+    )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
+    return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
   },
 
   /** Find an existing contact in the workspace by the first dedup key that hits (email → linkedin → sales-nav). */

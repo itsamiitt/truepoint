@@ -173,6 +173,12 @@ export const contacts = pgTable(
     masterIdx: index("idx_contacts_master")
       .on(t.masterPersonId)
       .where(sql`${t.masterPersonId} IS NOT NULL`),
+    // Backfill scan/enumeration index (PLAN_07 Stage B) — the INVERSE of masterIdx: the still-unresolved, live
+    // contacts the master-link backfill walks (keyset by id, per workspace) and the scheduled sweep enumerates
+    // by workspace. Partial, so it stays tiny once the backlog is resolved (only NULL-bridge rows are indexed).
+    unresolvedIdx: index("idx_contacts_unresolved")
+      .on(t.workspaceId, t.id)
+      .where(sql`${t.masterPersonId} IS NULL AND ${t.deletedAt} IS NULL`),
     // The three per-workspace dedup keys (partial unique — only where the key is present). 03 §5/§11.
     uniqWsEmail: uniqueIndex("uniq_contacts_ws_email")
       .on(t.workspaceId, t.emailBlindIndex)
