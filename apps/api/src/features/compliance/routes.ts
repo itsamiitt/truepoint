@@ -45,7 +45,7 @@ export const complianceRoutes = new Hono<{ Variables: TenancyVariables }>();
 complianceRoutes.use("*", authn);
 complianceRoutes.use("*", tenancy);
 
-complianceRoutes.post("/suppression", async (c) => {
+complianceRoutes.post("/suppression", requireRole("owner", "admin"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace");
   const parsed = suppressionCreateSchema.safeParse(await c.req.json().catch(() => null));
@@ -110,7 +110,7 @@ complianceRoutes.get("/suppression", async (c) => {
 
 // Remove one suppression entry. RLS limits removal to the caller's own scope, so a foreign/global id is a
 // no-op (not an error). Every removal is audited in the same transaction (suppression.remove).
-complianceRoutes.delete("/suppression/:id", async (c) => {
+complianceRoutes.delete("/suppression/:id", requireRole("owner", "admin"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace");
   const id = c.req.param("id");
@@ -132,7 +132,7 @@ complianceRoutes.delete("/suppression/:id", async (c) => {
   return c.body(null, 204);
 });
 
-complianceRoutes.post("/consent", async (c) => {
+complianceRoutes.post("/consent", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace");
   const parsed = consentCreateSchema.safeParse(await c.req.json().catch(() => null));
@@ -150,7 +150,9 @@ complianceRoutes.post("/consent", async (c) => {
   return c.json({ id }, 201);
 });
 
-complianceRoutes.post("/consent/:contactId/withdraw", async (c) => {
+// owner/admin only: a withdrawal auto-inserts a GLOBAL suppression row (consent.ts → addGlobalSuppression),
+// so it must not be looser than the direct owner/admin suppression writes it effectively triggers.
+complianceRoutes.post("/consent/:contactId/withdraw", requireRole("owner", "admin"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace");
   const result = await withdrawConsent(

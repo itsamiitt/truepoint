@@ -9,6 +9,7 @@ import { creditRepository, revealRepository } from "@leadwolf/db";
 import { ForbiddenError, ValidationError } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 // ── /api/v1/billing — the webhook (unauthenticated; signature is the trust boundary) ───────────────────
@@ -44,12 +45,12 @@ export const creditsRoutes = new Hono<{ Variables: TenancyVariables }>();
 creditsRoutes.use("*", authn);
 creditsRoutes.use("*", tenancy);
 
-creditsRoutes.get("/balance", async (c) => {
+creditsRoutes.get("/balance", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const balance = await creditRepository.getBalance({ tenantId: c.get("tenantId") });
   return c.json({ balance });
 });
 
-creditsRoutes.get("/usage", async (c) => {
+creditsRoutes.get("/usage", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to view usage.");
   const limit = Math.min(Number(c.req.query("limit") ?? 100) || 100, 500);
