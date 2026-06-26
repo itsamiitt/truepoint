@@ -27,6 +27,7 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireOrgRole } from "../../middleware/requireOrgRole.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 // ── Public DSAR intake (08 §4) — deliberately session-less; throttled by the global /api limiter ───────
