@@ -5,20 +5,24 @@
 import { describe, expect, it } from "bun:test";
 import { platformAuditAction } from "./platformAudit.ts";
 
-// Wired via recordPlatformAuthEvent (packages/auth, ADR-0031 §3 / P0-01).
+// WRITTEN = has a verified call-site today. Identity events are wired via recordPlatformAuthEvent
+// (packages/auth, ADR-0031 §3 / P0-01); the tenant/credit staff actions are wired via withPlatformTx in
+// apps/api/src/features/admin/routes.ts (13a Area 1 — the tenant-lifecycle + manual-credit endpoints).
 const WRITTEN = new Set<string>([
   "password.reset.request",
   // password.reset.complete reaches platform_audit_log on the 0/>1-tenant branch; the single-tenant branch
   // writes audit_log (see auditCoverage.test.ts). Either way it has a verified call-site.
   "password.reset.complete",
-]);
-
-// Defined in the closed enum but not yet wired: staff/admin actions land with the apps/admin track; the
-// remaining tenant-less identity events land as their flows are built.
-const PENDING = new Set<string>([
+  // 13a Area 1 — staff tenant-management mutations (POST /admin/tenants/:id/{suspend,reactivate,credits}).
   "tenant.suspend",
   "tenant.reactivate",
   "credit.grant",
+  "credit.adjust",
+]);
+
+// Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;
+// the remaining tenant-less identity events land as their flows are built.
+const PENDING = new Set<string>([
   "plan.override",
   "impersonation.start",
   "impersonation.end",

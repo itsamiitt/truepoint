@@ -9,6 +9,7 @@ import {
   authPolicyRepository,
   featureFlagRepository,
   platformAdminRepository,
+  platformAdminWriteRepository,
   withPlatformTx,
 } from "@leadwolf/db";
 import {
@@ -16,10 +17,12 @@ import {
   NotFoundError,
   type StaffListOverview,
   ValidationError,
+  creditAdjustSchema,
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
   setAuthEnforcementSchema,
+  tenantStatusChangeSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import { type ApiVariables, authn } from "../../middleware/authn.ts";
@@ -77,6 +80,90 @@ adminRoutes.get("/tenants/:id", async (c) => {
   if (!detail) throw new NotFoundError("Tenant not found.");
   return c.json(detail);
 });
+
+// ── Tenant lifecycle + manual credit ops (13a Area 1, 13 §3.1) ─────────────────────────────────────────
+// These are the first cross-tenant WRITES on the admin surface. Each runs through withPlatformTx (owner
+// visibility + an in-tx platform_audit_log row), is gated by the doc-13 capability matrix, validates the id
+// as a UUID BEFORE the tx (a malformed id is a clean 422 with no audit row), and records a mandatory reason.
+// A no-op write (unknown id / would-overdraw) throws INSIDE the tx so the audit row rolls back — no trace for
+// an action that did not happen (the feature_flag-404 discipline). JIT elevation (13a F1) layers on later.
+
+/** Suspend an org. super_admin only (the action gates the whole tenant). Audited "tenant.suspend". */
+adminRoutes.post("/tenants/:id/suspend", requireStaffRole("super_admin"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = tenantStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "tenant.suspend",
+    async (tx) => {
+      const touched = await platformAdminWriteRepository.setTenantStatus(tx, tenantId, "suspended");
+      if (touched === 0) throw new NotFoundError("Tenant not found.");
+    },
+    {
+      targetType: "tenant",
+      targetId: tenantId,
+      tenantId,
+      metadata: { reason: parsed.data.reason },
+    },
+  );
+  return c.json({ ok: true, tenantId, status: "suspended" });
+});
+
+/** Reactivate a suspended org. super_admin only. Audited "tenant.reactivate". */
+adminRoutes.post("/tenants/:id/reactivate", requireStaffRole("super_admin"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = tenantStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "tenant.reactivate",
+    async (tx) => {
+      const touched = await platformAdminWriteRepository.setTenantStatus(tx, tenantId, "active");
+      if (touched === 0) throw new NotFoundError("Tenant not found.");
+    },
+    {
+      targetType: "tenant",
+      targetId: tenantId,
+      tenantId,
+      metadata: { reason: parsed.data.reason },
+    },
+  );
+  return c.json({ ok: true, tenantId, status: "active" });
+});
+
+/** Manual credit grant / adjustment (07 §7). super_admin or billing_ops. A positive delta is a "credit.grant",
+ *  a negative one a "credit.adjust" — the immutable trail names the actual operation, not a generic "grant".
+ *  The repo's FOR UPDATE + the DB CHECK(>=0) are the overdraft guards; a would-overdraw debit is a clean 422. */
+adminRoutes.post(
+  "/tenants/:id/credits",
+  requireStaffRole("super_admin", "billing_ops"),
+  async (c) => {
+    const tenantId = c.req.param("id");
+    if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+    const parsed = creditAdjustSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+    const { delta, reason } = parsed.data;
+    const balanceAfter = await withPlatformTx(
+      actorOf(c),
+      delta > 0 ? "credit.grant" : "credit.adjust",
+      async (tx) => {
+        const res = await platformAdminWriteRepository.adjustCredits(tx, tenantId, delta);
+        if (!res.found) throw new NotFoundError("Tenant not found.");
+        if (res.wouldOverdraw)
+          throw new ValidationError(
+            `This adjustment would overdraw the balance (current ${res.balanceAfter}).`,
+            { balance: res.balanceAfter },
+          );
+        return res.balanceAfter;
+      },
+      { targetType: "tenant", targetId: tenantId, tenantId, metadata: { delta, reason } },
+    );
+    return c.json({ tenantId, delta, balanceAfter });
+  },
+);
 
 // ── Staff lists-overview (list-plan/07 §3.1, D2) — the PRIVACY-FIRST staff view of a tenant's lists. ──────
 // Returns per-list METADATA + an AGGREGATE member COUNT only — NO list_members, NO contact PII. This is the

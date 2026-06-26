@@ -229,6 +229,12 @@ export {
   type PlatformMemberRow,
   type PlatformUserRow,
 } from "./repositories/platformAdminReads.ts";
+// Platform super-admin WRITE surface (13a Area 1) — audited cross-tenant mutations, run within withPlatformTx.
+export {
+  platformAdminWriteRepository,
+  type TenantLifecycleStatus,
+  type CreditAdjustOutcome,
+} from "./repositories/platformAdminWrites.ts";
 // Platform STAFF role lookup (ADR-0011) — owner-connection read for requireStaffRole authz.
 export { platformStaffRepository } from "./repositories/platformStaffRepository.ts";
 // Provider configs (13 §3.6) — platform-global enable/budget + cross-tenant month-to-date spend.

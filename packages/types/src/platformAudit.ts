@@ -9,6 +9,7 @@ export const platformAuditAction = z.enum([
   "tenant.suspend",
   "tenant.reactivate",
   "credit.grant",
+  "credit.adjust",
   "plan.override",
   "impersonation.start",
   "impersonation.end",
