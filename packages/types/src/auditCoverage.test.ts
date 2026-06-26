@@ -46,6 +46,10 @@ const WRITTEN = new Set<string>([
   "member.add",
   "member.update",
   "member.remove",
+  // MFA enrollment (P1-01): forced in-login TOTP enroll (apps/auth /mfa/enroll) and self-service enroll
+  // (/account/security) both recordAuthEvent("mfa.enroll") once the method is persisted; tenant is resolved
+  // at that point, so it lands in audit_log (not the platform sink).
+  "mfa.enroll",
 ]);
 
 // §5.2 — defined in the closed enum but not yet wired to a writeAudit() call-site.

@@ -120,6 +120,13 @@
       "when": 1782352354718,
       "tag": "0016_romantic_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782509481035,
+      "tag": "0017_late_auth_enforcement",
+      "breakpoints": true
     }
   ]
 }

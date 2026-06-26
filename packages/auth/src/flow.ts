@@ -93,20 +93,21 @@ export async function resolveNextStep(txnId: string, txn: LoginTransaction): Pro
   }
 
   // ── P1-01 sub-gate A — forced in-login MFA enrollment ────────────────────────────────────────────────
-  // LOCKOUT-CAPABLE: enforced ONLY behind the global kill-switch (the literal string "true"). With the flag
-  // OFF this whole block is skipped, so resolveNextStep returns EXACTLY what it does today and an un-enrolled
-  // user under a required-MFA org falls through to finalizeLogin, where the UNCHANGED ForbiddenError
-  // ("mfa_required") throw still fires — the pre-existing fail-closed behavior is byte-for-byte preserved.
+  // LOCKOUT-CAPABLE: enforced only when BOTH (a) the global env master-arm is the literal string "true" AND
+  // (b) the resolved tenant's per-tenant enforcement switch is ON. With either off this block is skipped, so
+  // resolveNextStep returns EXACTLY what it does today and an un-enrolled user under a required-MFA org falls
+  // through to finalizeLogin, where the UNCHANGED ForbiddenError ("mfa_required") throw still fires — the
+  // pre-existing fail-closed behavior is byte-for-byte preserved. The env check stays the OUTER guard so a
+  // globally-disarmed deployment does NO policy read at all (today's behavior, zero extra round-trip).
   //
-  // With the flag ON: when the RESOLVED tenant mandates MFA (`required`) and this not-yet-MFA-verified user has
-  // NO verified method, route to the forced-enrollment step (apps/auth /mfa/enroll) instead of erroring. The
-  // tenant is resolved above (auto-selected single org, or carried from the org-selection step) so the policy
-  // is the right per-tenant one; a multi-org user without a selection returned "org" already and re-enters here
-  // once the tenant is pinned. finalizeLogin remains the authoritative token gate (it still refuses to mint for
-  // an un-enrolled required user), so this is a UX route, never the security boundary.
+  // When both arms are on: when the RESOLVED tenant mandates MFA (`required`) and this not-yet-MFA-verified
+  // user has NO verified method, route to the forced-enrollment step (apps/auth /mfa/enroll) instead of
+  // erroring. The tenant is resolved above (auto-selected single org, or carried from the org-selection step)
+  // so the policy is the right per-tenant one. finalizeLogin remains the authoritative token gate (it still
+  // refuses to mint for an un-enrolled required user), so this is a UX route, never the security boundary.
   if (env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true" && !txn.mfaVerified && !hasVerifiedMethod) {
-    const policy = await authPolicyRepository.getForTenant(tenantId);
-    if (policy.mfaEnforcement === "required") return "mfa_enroll";
+    const { policy, enforcementEnabled } = await authPolicyRepository.getForEnforcement(tenantId);
+    if (enforcementEnabled && policy.mfaEnforcement === "required") return "mfa_enroll";
   }
 
   // Workspace: a single one auto-selects. With several, land on the user's remembered workspace (where they
@@ -190,49 +191,56 @@ export async function finalizeLogin(
   }
 
   // ── P1-01 tenant auth-policy enforcement (ADR-0018) ──────────────────────────────────────────────────
-  // LOCKOUT-CAPABLE gates: enforced ONLY when the global kill-switch is the literal string "true". Unset/any
-  // other value = OFF = today's exact behavior (the merge-safety guarantee — every new gate below is wrapped
-  // in this single check, so with the flag off NONE of them can fire). Security ACs → ../../Authentication
-  // plan/09-threat-model.md: the gate runs SERVER-SIDE here at finalizeLogin (the authoritative token gate),
-  // over the RESOLVED tenant policy (never client input), after the tenant membership is authorized above.
+  // LOCKOUT-CAPABLE gates: enforced ONLY when BOTH the global env master-arm is the literal string "true" AND
+  // the resolved tenant's per-tenant enforcement switch is ON. Either off = OFF = today's exact behavior (the
+  // merge-safety guarantee — every gate below is inside the `enforcementEnabled` block, so with the flag off
+  // NONE can fire). The env check stays the OUTER guard so a globally-disarmed deployment does no policy read.
+  // The per-tenant switch is STAFF-set (default OFF), so after this change no tenant is enforced until a
+  // platform super_admin explicitly enables it — strictly safer than the old global-only gate. Security ACs →
+  // ../../Authentication plan/09-threat-model.md: the gate runs SERVER-SIDE here at finalizeLogin (the
+  // authoritative token gate), over the RESOLVED tenant policy (never client input), after the tenant
+  // membership is authorized above.
   //
   // Gate D — session timeout: the resolved cap (if any) is captured here and applied at createSession below
   // (the new session's absolute lifetime is min(default, cap)); the refresh path enforces the same absolute
-  // cap to force re-auth. Stays undefined when the flag is off → unchanged default session lifetime.
+  // cap to force re-auth. Stays undefined when enforcement is off → unchanged default session lifetime.
   let sessionMaxLifetimeSeconds: number | undefined;
   if (env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true") {
-    const policy = await authPolicyRepository.getForTenant(tenantId);
-    if (policy.sessionTimeoutSeconds != null && policy.sessionTimeoutSeconds > 0) {
-      sessionMaxLifetimeSeconds = policy.sessionTimeoutSeconds;
-    }
+    const { policy, enforcementEnabled } = await authPolicyRepository.getForEnforcement(tenantId);
+    if (enforcementEnabled) {
+      if (policy.sessionTimeoutSeconds != null && policy.sessionTimeoutSeconds > 0) {
+        sessionMaxLifetimeSeconds = policy.sessionTimeoutSeconds;
+      }
 
-    // Gate C — IP allowlist. When the resolved tenant policy pins an allowlist, the client IP captured at the
-    // start of THIS login transaction (txn.clientIp, server-observed, not client-supplied) must fall inside
-    // at least one CIDR. Match by CIDR NETWORK, never string equality; a malformed entry fails closed for
-    // that entry only (isIpAllowed skips it) — it never opens the gate. Empty allowlist = no restriction.
-    const allowlist = policy.ipAllowlist ?? [];
-    if (allowlist.length > 0 && !isIpAllowed(txn.clientIp, allowlist)) {
-      throw new ForbiddenError(
-        "ip_not_allowed",
-        "Your organization restricts sign-in to approved networks. You are connecting from an address that is not on the allowlist.",
-      );
-    }
+      // Gate C — IP allowlist. When the resolved tenant policy pins an allowlist, the client IP captured at
+      // the start of THIS login transaction (txn.clientIp, server-observed, not client-supplied) must fall
+      // inside at least one CIDR. Match by CIDR NETWORK, never string equality; a malformed entry fails closed
+      // for that entry only (isIpAllowed skips it) — it never opens the gate. Empty allowlist = no restriction.
+      const allowlist = policy.ipAllowlist ?? [];
+      if (allowlist.length > 0 && !isIpAllowed(txn.clientIp, allowlist)) {
+        throw new ForbiddenError(
+          "ip_not_allowed",
+          "Your organization restricts sign-in to approved networks. You are connecting from an address that is not on the allowlist.",
+        );
+      }
 
-    // Gate B — allowed methods. The method used to open THIS login transaction (server-set at each edge:
-    // password / magic_link / sso / signup→password — never a client value) must be permitted by the resolved
-    // tenant policy. isMethodAllowed also folds in requireSso / disableSocial (strictest-wins, policy.ts).
-    // FAIL-OPEN ON MISSING DATA: an empty allowedMethods imposes no restriction, and a transaction with NO
-    // method (an older Redis row in flight across the deploy that added the field) is NOT blocked — we never
-    // lock a user out over data we do not have. Only a present-and-disallowed method fails closed.
-    if (
-      txn.method !== undefined &&
-      policy.allowedMethods.length > 0 &&
-      !isMethodAllowed(policy, txn.method)
-    ) {
-      throw new ForbiddenError(
-        "method_not_allowed",
-        "Your organization does not permit this sign-in method. Use an approved method to continue.",
-      );
+      // Gate B — allowed methods. The method used to open THIS login transaction (server-set at each edge:
+      // password / magic_link / sso / signup→password — never a client value) must be permitted by the
+      // resolved tenant policy. isMethodAllowed also folds in requireSso / disableSocial (strictest-wins,
+      // policy.ts). FAIL-OPEN ON MISSING DATA: an empty allowedMethods imposes no restriction, and a
+      // transaction with NO method (an older Redis row in flight across the deploy that added the field) is
+      // NOT blocked — we never lock a user out over data we do not have. Only a present-and-disallowed method
+      // fails closed.
+      if (
+        txn.method !== undefined &&
+        policy.allowedMethods.length > 0 &&
+        !isMethodAllowed(policy, txn.method)
+      ) {
+        throw new ForbiddenError(
+          "method_not_allowed",
+          "Your organization does not permit this sign-in method. Use an approved method to continue.",
+        );
+      }
     }
   }
 

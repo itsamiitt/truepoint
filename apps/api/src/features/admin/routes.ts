@@ -6,6 +6,7 @@
 import { evaluateFlagsForTenant } from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
+  authPolicyRepository,
   featureFlagRepository,
   platformAdminRepository,
   withPlatformTx,
@@ -18,6 +19,7 @@ import {
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
+  setAuthEnforcementSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import { type ApiVariables, authn } from "../../middleware/authn.ts";
@@ -110,6 +112,33 @@ adminRoutes.get(
       updatedAt: r.updatedAt.toISOString(),
     }));
     return c.json({ lists });
+  },
+);
+
+// ── Auth-policy enforcement master switch (P1-01) — STAFF-ONLY per-tenant enable + break-glass disable. ──
+// The lockout-capable login gates (IP allowlist / allowed methods / session + idle timeout / forced-MFA
+// enrollment, packages/auth) fire only when BOTH the global env master-arm AND this per-tenant switch are on.
+// A super_admin enables enforcement for a VERIFIED tenant; the `enabled:false` direction IS the break-glass —
+// it re-opens password/all-method login within the ≤15-min token window WITHOUT a deploy. The write is
+// audited (admin.set_auth_enforcement) in the SAME withPlatformTx tx; the tenantId is validated as a UUID
+// BEFORE the tx so a malformed id is a clean 422 with no audit row. Tenant security_admins can never reach
+// this switch (it is absent from the tenant-editable authPolicySchema), so an org cannot self-lock-out.
+adminRoutes.post(
+  "/tenants/:tenantId/auth-enforcement",
+  requireStaffRole("super_admin"),
+  async (c) => {
+    const tenantId = c.req.param("tenantId");
+    if (!UUID_RE.test(tenantId)) throw new ValidationError("tenantId must be a UUID");
+    const parsed = setAuthEnforcementSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+    const { enabled } = parsed.data;
+    await withPlatformTx(
+      actorOf(c),
+      "admin.set_auth_enforcement",
+      (tx) => authPolicyRepository.setEnforcement(tx, tenantId, enabled),
+      { targetType: "tenant", targetId: tenantId, tenantId, metadata: { enabled } },
+    );
+    return c.json({ ok: true, tenantId, enforcementEnabled: enabled });
   },
 );
 

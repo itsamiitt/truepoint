@@ -44,6 +44,8 @@ export function resolveEffectivePolicy(
       tenant.sessionTimeoutSeconds,
       workspace?.sessionTimeoutSeconds,
     ),
+    // Idle window is a timeout like the absolute cap: the strictest (shortest) of the two scopes wins.
+    idleTimeoutSeconds: minDefined(tenant.idleTimeoutSeconds, workspace?.idleTimeoutSeconds),
   };
 }
 

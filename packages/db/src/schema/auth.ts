@@ -273,7 +273,16 @@ export const tenantAuthPolicies = pgTable("tenant_auth_policies", {
   disableSocial: boolean("disable_social").notNull().default(false),
   requireSso: boolean("require_sso").notNull().default(false),
   ipAllowlist: text("ip_allowlist").array(),
+  // ABSOLUTE session-lifetime cap (P1-01 Gate D). Tenant-editable; enforced at login + refresh.
   sessionTimeoutSeconds: integer("session_timeout_seconds"),
+  // IDLE-window cap (seconds since last refresh/activity). Tenant-editable; enforced on refresh — the second,
+  // independent boundary alongside the absolute cap above. NULL = no idle limit.
+  idleTimeoutSeconds: integer("idle_timeout_seconds"),
+  // Per-tenant master switch for P1-01 policy enforcement (the IP/method/timeout/forced-MFA gates).
+  // STAFF-ONLY: set only by a platform super_admin via the audited withPlatformTx path (default OFF so no
+  // tenant is enforced until explicitly verified + enabled). NOT part of the tenant-editable authPolicySchema,
+  // so the org's own policy PUT can never flip it. Effective enforcement = this AND the global env master-arm.
+  enforcementEnabled: boolean("enforcement_enabled").notNull().default(false),
   updatedAt: updatedAt(),
 });
 

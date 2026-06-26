@@ -123,6 +123,7 @@ export const auditAction = z.enum([
   "mfa.challenge",
   "mfa.success",
   "mfa.failure",
+  "mfa.enroll",
   "password.reset.request",
   "password.reset.complete",
   "sso.initiated",

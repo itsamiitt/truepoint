@@ -25,6 +25,24 @@ export function cappedSessionExpiry(maxLifetimeSeconds?: number, now: number = D
   return new Date(Math.min(defaultExpiryMs, policyExpiryMs));
 }
 
+// ── P1-01 Gate D — IDLE boundary (ADR-0018) ────────────────────────────────────────────────────────────
+// True when a session has been idle longer than the tenant policy's idle window — the SECOND, independent
+// timeout boundary alongside the absolute cap above. The anchor is the session's lastSeenAt, stamped `now` at
+// create and on every refresh rotation (so it tracks the last refresh); the refresh path consults this and,
+// when expired, ends the session and forces re-auth. Idle RESETS on each refresh; the absolute cap never
+// does. Pure + db-free so the boundary is unit-testable. Fails SAFE (never idle-expired) when: the window is
+// unset / non-positive (no idle limit configured), or lastSeenAt is null (a pre-column row — no idle data, so
+// we never lock a user out over data we do not have). The caller only invokes this when enforcement is active.
+export function isIdleExpired(
+  lastSeenAt: Date | null,
+  idleTimeoutSeconds?: number,
+  now: number = Date.now(),
+): boolean {
+  if (idleTimeoutSeconds == null || idleTimeoutSeconds <= 0) return false;
+  if (lastSeenAt == null) return false;
+  return now - lastSeenAt.getTime() > idleTimeoutSeconds * 1000;
+}
+
 export interface IssuedSession {
   sessionId: string;
   refreshToken: string;

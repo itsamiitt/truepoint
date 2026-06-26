@@ -5,7 +5,12 @@
 import { env } from "@leadwolf/config";
 import { authPolicyRepository, userRepository } from "@leadwolf/db";
 import { InvalidTokenError } from "@leadwolf/types";
-import { findActiveSessionOrDetectReuse, rotateSession } from "./session.ts";
+import {
+  findActiveSessionOrDetectReuse,
+  isIdleExpired,
+  revokeSession,
+  rotateSession,
+} from "./session.ts";
 import { mintAccessToken } from "./token.ts";
 
 export interface RefreshResult {
@@ -28,22 +33,38 @@ export async function refreshAccessToken(args: {
 
   if (!session.tenantId) throw new InvalidTokenError();
 
-  // ── P1-01 Gate D — session-timeout cap on refresh (ADR-0018) ─────────────────────────────────────────
-  // LOCKOUT-CAPABLE: enforced ONLY when the global kill-switch is the literal string "true" — unset/any other
-  // value = OFF = today's exact behavior (the rotated session keeps the full default TTL). When ON and the
-  // session's tenant policy sets an ABSOLUTE timeout, the rotation must not extend the session past it: cap
-  // the rotated lifetime AND clamp it to the pre-rotation deadline (notLaterThan) so the original cap is
-  // "sticky" across the ~14-min refresh rotations. Once now passes that deadline, findActiveSessionOrDetectReuse
-  // already rejects on expiresAt < now (session.ts) → force re-auth. The IDLE boundary (lastSeenAt) is a
-  // DEFERRED follow-up: lastSeenAt is not surfaced on this read path. The cap is resolved from the RESOLVED
-  // tenant policy (server-side), never client input.
+  // ── P1-01 Gate D — session-timeout enforcement on refresh (ADR-0018) ─────────────────────────────────
+  // LOCKOUT-CAPABLE: enforced ONLY when BOTH the global env master-arm is the literal string "true" AND the
+  // session's tenant has its per-tenant enforcement switch ON — either off = OFF = today's exact behavior (the
+  // rotated session keeps the full default TTL, no idle check). The env check stays the OUTER guard so a
+  // globally-disarmed deployment does no policy read.
+  //
+  // ABSOLUTE boundary: when the tenant policy sets sessionTimeoutSeconds, the rotation must not extend the
+  // session past it — cap the rotated lifetime AND clamp it to the pre-rotation deadline (notLaterThan) so the
+  // original cap is "sticky" across the ~14-min rotations. Once now passes that deadline,
+  // findActiveSessionOrDetectReuse already rejects on expiresAt < now (session.ts) → force re-auth.
+  //
+  // IDLE boundary: when the tenant policy sets idleTimeoutSeconds, a refresh whose gap since the session's
+  // lastSeenAt (stamped at create + every rotation, i.e. the last refresh) exceeds the idle window is rejected
+  // and the session ended — independent of the absolute cap (idle resets on each refresh; absolute never
+  // does). lastSeenAt null (a pre-column row) is treated as "no idle data" and never rejects. All timeouts
+  // come from the RESOLVED tenant policy (server-side), never client input.
   let maxLifetimeSeconds: number | undefined;
   let notLaterThan: Date | undefined;
   if (env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true") {
-    const policy = await authPolicyRepository.getForTenant(session.tenantId);
-    if (policy.sessionTimeoutSeconds != null && policy.sessionTimeoutSeconds > 0) {
-      maxLifetimeSeconds = policy.sessionTimeoutSeconds;
-      notLaterThan = session.expiresAt; // absolute deadline carried by the pre-rotation session
+    const { policy, enforcementEnabled } = await authPolicyRepository.getForEnforcement(
+      session.tenantId,
+    );
+    if (enforcementEnabled) {
+      if (policy.sessionTimeoutSeconds != null && policy.sessionTimeoutSeconds > 0) {
+        maxLifetimeSeconds = policy.sessionTimeoutSeconds;
+        notLaterThan = session.expiresAt; // absolute deadline carried by the pre-rotation session
+      }
+      if (isIdleExpired(session.lastSeenAt, policy.idleTimeoutSeconds)) {
+        // Idle past the window: end the session (revoke + deny-list its access token) and force re-auth.
+        await revokeSession(session.id);
+        throw new InvalidTokenError();
+      }
     }
   }
 
