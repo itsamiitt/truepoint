@@ -28,9 +28,10 @@ import type {
   RejectedRow,
   SourceName,
 } from "@leadwolf/types";
-import { DEFAULT_CONFLICT_POLICY } from "@leadwolf/types";
+import { CONTACT_PROVENANCE_FIELDS, DEFAULT_CONFLICT_POLICY } from "@leadwolf/types";
 import { writeAudit } from "../compliance/writeAudit.ts";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
+import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import { assertListInWorkspace } from "../prospect/lists.ts";
 import { blindIndex } from "./blindIndex.ts";
 import { type MappedRow, type RawRow, mapRow } from "./columnMap.ts";
@@ -295,14 +296,37 @@ async function importOneRow(
     masterPersonId: masterPersonId ?? undefined,
   };
 
+  // PLAN_03 §1.4 — the import-overwrite path respects the field-provenance pin (Phase 3 overlay), exactly like
+  // enrichment: a user-pinned SCALAR profile field (jobTitle/department/…) must NOT be clobbered by a blind
+  // last-writer-wins import. The SCALAR fields are the pin-protected subset of this row's write
+  // (CONTACT_PROVENANCE_FIELDS); the non-scalar fields (email/phone/linkedin/sales-nav/master/account) are NOT
+  // pin-gated and are written as before. Every scalar the import does write is stamped `{src:'import:<source>'}`.
+  const scalarFields = Object.keys(prepared.values).filter((f) =>
+    (CONTACT_PROVENANCE_FIELDS as readonly string[]).includes(f),
+  );
+
   let contactId: string;
   let outcome: RowLandingOutcome;
   if (match) {
-    // `overwrite` → update the existing contact with the incoming values (the legacy last-writer-wins).
+    // `overwrite` → update the existing contact, but plan the SCALAR write against its current provenance so a
+    // pinned (user-corrected) scalar survives: drop every pinned scalar key from `values` (the import value must
+    // not overwrite the user's correction), then stamp `import:<source>` provenance on the scalars we DO write.
+    const existingProv = await contactRepository.getFieldProvenance(tx, match.id);
+    const { writableFields, provenance } = planFieldWrite(existingProv, scalarFields, {
+      src: `import:${input.sourceName}`,
+    });
+    for (const f of scalarFields) {
+      if (!writableFields.has(f)) delete (values as unknown as Record<string, unknown>)[f];
+    }
+    values.fieldProvenance = provenance;
     await contactRepository.update(tx, match.id, values);
     contactId = match.id;
     outcome = "matched";
   } else {
+    // A NEW contact has no pin to respect, but record a provenance baseline for the scalars it writes so a later
+    // enrichment knows these came from this import (and may overwrite them — they are unpinned, `pin:false`).
+    const { provenance } = planFieldWrite({}, scalarFields, { src: `import:${input.sourceName}` });
+    values.fieldProvenance = provenance;
     contactId = await contactRepository.insert(tx, values);
     outcome = "created";
   }
