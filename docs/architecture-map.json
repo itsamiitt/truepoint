@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 944,
-  "fileSetHash": "sha256:7a659a0c877ef672e97ef3896c2d29e6b6286bc74d5143becfbc002f335ea956",
+  "fileCount": 948,
+  "fileSetHash": "sha256:f7b6839d1ba25d79c73b2a218e687faa4e8e975fb1dea71fdead6e52f3bc664a",
   "features": {
     "account-search": {
       "web": [],
@@ -1105,6 +1105,7 @@
       "web": [],
       "admin": [
         "apps/admin/src/features/tenants/api.ts",
+        "apps/admin/src/features/tenants/components/TenantActions.tsx",
         "apps/admin/src/features/tenants/components/TenantDetailPage.tsx",
         "apps/admin/src/features/tenants/components/TenantsPage.tsx",
         "apps/admin/src/features/tenants/format.test.ts",
@@ -1447,6 +1448,7 @@
       "packages/db/src/index.ts",
       "packages/db/src/migrate.ts",
       "packages/db/src/repositories/platformAdminReads.ts",
+      "packages/db/src/repositories/platformAdminWrites.ts",
       "packages/db/src/repositories/platformAuditReads.ts",
       "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/auth.ts",
@@ -1573,6 +1575,8 @@
       "packages/types/src/sso.ts",
       "packages/types/src/staffAdmin.ts",
       "packages/types/src/tags.ts",
+      "packages/types/src/tenantAdmin.ts",
+      "packages/types/src/userAdmin.ts",
       "packages/types/src/webhooks.ts"
     ],
     "packages/ui": [
