@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 939,
-  "fileSetHash": "sha256:aa94994fa046ac8d427c030b14649c2a23eeb89dd0d3fa0aa14af558e94ae5eb",
+  "fileCount": 941,
+  "fileSetHash": "sha256:cc48dbfe296f6c4dbc56be8d45e73b6bb513fc73e876a0b5686de5b2613018fb",
   "features": {
     "account-search": {
       "web": [],
@@ -1200,6 +1200,7 @@
       "apps/admin/src/lib/publicConfig.ts"
     ],
     "apps/api": [
+      "apps/api/src/app.authz.test.ts",
       "apps/api/src/app.ts",
       "apps/api/src/instrumentation.ts",
       "apps/api/src/server.ts"
@@ -1440,6 +1441,7 @@
     ],
     "packages/db": [
       "packages/db/drizzle.config.ts",
+      "packages/db/drizzle.worktree.config.ts",
       "packages/db/src/applyMigrations.ts",
       "packages/db/src/bootstrapAdmin.ts",
       "packages/db/src/client.ts",
