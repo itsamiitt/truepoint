@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 939,
-  "fileSetHash": "sha256:aa94994fa046ac8d427c030b14649c2a23eeb89dd0d3fa0aa14af558e94ae5eb",
+  "fileCount": 942,
+  "fileSetHash": "sha256:3025398c7cf24b870f41ef3b26e589cfec7834cfa1bfa9bfdaff5f090e481782",
   "features": {
     "account-search": {
       "web": [],
@@ -1494,6 +1494,7 @@
       "packages/db/test/lists.itest.ts",
       "packages/db/test/listsStaffNoAccess.itest.ts",
       "packages/db/test/masterBackfill.itest.ts",
+      "packages/db/test/masterBackfillSweep.itest.ts",
       "packages/db/test/masterGraphIsolation.itest.ts",
       "packages/db/test/masterGraphResolve.itest.ts",
       "packages/db/test/members.itest.ts",
@@ -1609,7 +1610,9 @@
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/firmographics.ts",
+    "apps/workers/src/queues/masterBackfill.test.ts",
     "apps/workers/src/queues/masterBackfill.ts",
+    "apps/workers/src/queues/masterBackfillSweep.ts",
     "apps/workers/src/queues/retentionSweep.ts",
     "apps/workers/src/queues/sequenceTick.ts",
     "packages/db/src/repositories/accountSearchRepository.ts",
