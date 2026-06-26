@@ -31,6 +31,11 @@ import {
   type MasterBackfillJobData,
   processMasterBackfill,
 } from "./queues/masterBackfill.ts";
+import {
+  MASTER_BACKFILL_SWEEP_QUEUE,
+  type MasterBackfillSweepJobData,
+  makeProcessMasterBackfillSweep,
+} from "./queues/masterBackfillSweep.ts";
 import { OUTREACH_QUEUE, type OutreachJobData, processOutreach } from "./queues/outreach.ts";
 import {
   RETENTION_SWEEP_QUEUE,
@@ -63,6 +68,12 @@ export const firmographicsQueue = new Queue<FirmographicsJobData>(FIRMOGRAPHICS_
 export const masterBackfillQueue = new Queue<MasterBackfillJobData>(MASTER_BACKFILL_QUEUE, {
   connection,
 });
+// The scheduled fleet sweep that DRIVES the per-workspace backfill (PLAN_07 Stage B): one repeatable daily job
+// enumerates workspaces with unresolved contacts and enqueues a per-workspace backfill for each.
+export const masterBackfillSweepQueue = new Queue<MasterBackfillSweepJobData>(
+  MASTER_BACKFILL_SWEEP_QUEUE,
+  { connection },
+);
 // M12 P4: the leader-locked sequence scheduler (email_sequence_tick). A single repeatable job (stable
 // jobId → deduped) fires every minute; the processor takes the Redis leader lock and claims due enrollments.
 export const sequenceTickQueue = new Queue<SequenceTickJobData>(EMAIL_SEQUENCE_TICK_QUEUE, {
@@ -117,6 +128,15 @@ export async function scheduleRetentionSweep(): Promise<void> {
     "sweep",
     {},
     { repeat: { every: 24 * 60 * 60_000 }, jobId: "email-retention-sweep" },
+  );
+}
+
+/** Register the daily master-backfill sweep (PLAN_07 Stage B). Stable jobId → exactly one repeatable. */
+export async function scheduleMasterBackfillSweep(): Promise<void> {
+  await masterBackfillSweepQueue.add(
+    "sweep",
+    {},
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "master-backfill-sweep" },
   );
 }
 
@@ -193,6 +213,14 @@ export function startWorkers(): Worker[] {
         error: e instanceof Error ? e.message : String(e),
       }),
     );
+    // A completed import may have left rows with NULL master bridges (a resolution that failed non-fatally =
+    // in-flight staging). Kick the idempotent per-workspace backfill so they resolve promptly rather than
+    // waiting for the daily sweep. Best-effort — a failed enqueue never fails the import.
+    void enqueueMasterBackfill(data).catch((e) =>
+      log.error("imports: master-backfill enqueue failed", {
+        error: e instanceof Error ? e.message : String(e),
+      }),
+    );
   });
   const workers = [
     importsWorker,
@@ -220,6 +248,16 @@ export function startWorkers(): Worker[] {
         connection,
       }),
       MASTER_BACKFILL_QUEUE,
+    ),
+    // Master-link backfill SWEEP consumer (PLAN_07 Stage B): the leader-locked daily fan-out that enqueues a
+    // per-workspace backfill for every workspace with unresolved contacts. enqueueMasterBackfill is injected.
+    instrument(
+      new Worker<MasterBackfillSweepJobData>(
+        MASTER_BACKFILL_SWEEP_QUEUE,
+        makeProcessMasterBackfillSweep(connection, enqueueMasterBackfill),
+        { connection },
+      ),
+      MASTER_BACKFILL_SWEEP_QUEUE,
     ),
     // M12 P4: the sequence-tick consumer. Leader-locked; claims due enrollments and enqueues each onto the
     // outreach queue (the existing send path). Best-effort registers the single repeatable job at boot.
@@ -256,6 +294,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleRetentionSweep().catch((e) =>
     log.error("failed to schedule the retention sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleMasterBackfillSweep().catch((e) =>
+    log.error("failed to schedule the master-backfill sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );

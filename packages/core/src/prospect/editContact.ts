@@ -1,9 +1,10 @@
 // editContact.ts — PLAN_03 §1.4 the overlay pin: a hand-edit blocks future enrichment overwrite of that
 // field; this is the SETTER. A user edit ALWAYS wins (it's the human asserting the truth) and sets the pin,
 // so a subsequent provider enrichment leaves the edited scalar untouched (planFieldWrite skips pinned fields).
-// We read the existing provenance, plan the edit (which stamps {src:'user:<id>', pin:true} on each edited
-// field), and write the edited columns + the new provenance map in ONE workspace-scoped tx (RLS).
-// (No API endpoint in this slice — that's a thin follow-up.)
+// We read the existing provenance, plan the edit (which stamps {src:'user_edit', pin:true, by:<id>} on each
+// edited field), and write the edited columns + the new provenance map in ONE workspace-scoped tx (RLS).
+// The HTTP transport is PATCH /contacts/:id (apps/api reveal routes; contactFieldEditSchema-validated, scope
+// from the verified token), which delegates here.
 
 import { contactRepository, withTenantTx } from "@leadwolf/db";
 import { planUserEdit } from "./fieldProvenance.ts";

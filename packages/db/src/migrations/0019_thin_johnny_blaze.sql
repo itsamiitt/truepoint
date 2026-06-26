@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "idx_contacts_unresolved" ON "contacts" USING btree ("workspace_id","id") WHERE "contacts"."master_person_id" IS NULL AND "contacts"."deleted_at" IS NULL;
