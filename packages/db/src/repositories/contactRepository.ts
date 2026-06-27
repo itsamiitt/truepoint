@@ -3,7 +3,12 @@
 // self-contained masked list the API/search surfaces read. PII (email/phone) is stored encrypted; this
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
-import type { FieldProvenanceMap, MaskedContact } from "@leadwolf/types";
+import {
+  ageDaysSince,
+  computeContactDataQuality,
+  type FieldProvenanceMap,
+  type MaskedContact,
+} from "@leadwolf/types";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
@@ -119,6 +124,58 @@ export interface StaleRevealedRow {
   phoneEnc: Uint8Array | null;
   emailStatus: string;
   phoneStatus: string | null;
+}
+
+/** The full `contacts` select row — the input the masked projection maps from. */
+type ContactRow = typeof contacts.$inferSelect;
+
+/**
+ * Map a full `contacts` row → the masked, non-PII DTO the search/results + export surfaces read, INCLUDING the
+ * derived Data Health badge (list-plan/06 §3.3): the 0–100 `computeContactDataQuality` score + freshness band
+ * from the canonical single source in @leadwolf/types (the SAME composition as listRepository.toMaskedMember —
+ * never re-derived). All inputs are non-PII present-flags + statuses + the last-verified age, so it is safe here.
+ */
+function toMaskedContact(r: ContactRow): MaskedContact {
+  const emailStatus = r.emailStatus as MaskedContact["emailStatus"];
+  const phoneStatus = r.phoneStatus as MaskedContact["phoneStatus"];
+  const hasEmail = r.emailEnc != null;
+  const hasPhone = r.phoneEnc != null;
+  const lastVerifiedAt = r.lastVerifiedAt?.toISOString() ?? null;
+  const dataHealth = computeContactDataQuality({
+    hasName: r.firstName !== null || r.lastName !== null,
+    hasEmail,
+    hasPhone,
+    hasTitle: r.jobTitle !== null,
+    hasCompany: r.accountId !== null || r.emailDomain !== null,
+    hasLocation: r.locationCountry !== null || r.locationCity !== null,
+    hasLinkedin: r.linkedinPublicId !== null || r.linkedinUrl !== null,
+    emailStatus,
+    phoneStatus,
+    ageDaysSinceVerified: ageDaysSince(lastVerifiedAt),
+  });
+  return {
+    id: r.id,
+    firstName: r.firstName,
+    lastName: r.lastName,
+    jobTitle: r.jobTitle,
+    emailDomain: r.emailDomain,
+    emailStatus,
+    phoneStatus,
+    hasEmail,
+    hasPhone,
+    seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
+    department: r.department,
+    locationCountry: r.locationCountry,
+    locationCity: r.locationCity,
+    outreachStatus: r.outreachStatus as MaskedContact["outreachStatus"],
+    isRevealed: r.isRevealed,
+    // Soft owner (the assignable "My prospects" dimension); falls back to the first-reveal owner for rows
+    // not yet assigned/backfilled. Non-PII user FK.
+    ownerUserId: r.ownerUserId ?? r.revealedByUserId,
+    createdAt: r.createdAt.toISOString(),
+    lastVerifiedAt,
+    dataHealth,
+  };
 }
 
 export const contactRepository = {
@@ -368,28 +425,7 @@ export const contactRepository = {
         .where(isNull(contacts.deletedAt))
         .orderBy(desc(contacts.createdAt))
         .limit(limit);
-      return rows.map((r) => ({
-        id: r.id,
-        firstName: r.firstName,
-        lastName: r.lastName,
-        jobTitle: r.jobTitle,
-        emailDomain: r.emailDomain,
-        emailStatus: r.emailStatus as MaskedContact["emailStatus"],
-        phoneStatus: r.phoneStatus as MaskedContact["phoneStatus"],
-        hasEmail: r.emailEnc != null,
-        hasPhone: r.phoneEnc != null,
-        seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
-        department: r.department,
-        locationCountry: r.locationCountry,
-        locationCity: r.locationCity,
-        outreachStatus: r.outreachStatus as MaskedContact["outreachStatus"],
-        isRevealed: r.isRevealed,
-        // Soft owner (the assignable "My prospects" dimension); falls back to the first-reveal owner for rows
-        // not yet assigned/backfilled. Non-PII user FK.
-        ownerUserId: r.ownerUserId ?? r.revealedByUserId,
-        createdAt: r.createdAt.toISOString(), // T4b: date dimension (created_at is non-null).
-        lastVerifiedAt: r.lastVerifiedAt?.toISOString() ?? null,
-      }));
+      return rows.map(toMaskedContact);
     });
   },
 
@@ -565,26 +601,7 @@ export const contactRepository = {
       .from(contacts)
       .where(and(inArray(contacts.id, ids), isNull(contacts.deletedAt)))
       .orderBy(desc(contacts.createdAt), desc(contacts.id));
-    return rows.map((r) => ({
-      id: r.id,
-      firstName: r.firstName,
-      lastName: r.lastName,
-      jobTitle: r.jobTitle,
-      emailDomain: r.emailDomain,
-      emailStatus: r.emailStatus as MaskedContact["emailStatus"],
-      phoneStatus: r.phoneStatus as MaskedContact["phoneStatus"],
-      hasEmail: r.emailEnc != null,
-      hasPhone: r.phoneEnc != null,
-      seniorityLevel: r.seniorityLevel as MaskedContact["seniorityLevel"],
-      department: r.department,
-      locationCountry: r.locationCountry,
-      locationCity: r.locationCity,
-      outreachStatus: r.outreachStatus as MaskedContact["outreachStatus"],
-      isRevealed: r.isRevealed,
-      ownerUserId: r.ownerUserId ?? r.revealedByUserId,
-      createdAt: r.createdAt.toISOString(),
-      lastVerifiedAt: r.lastVerifiedAt?.toISOString() ?? null,
-    }));
+    return rows.map(toMaskedContact);
   },
 
   /**

@@ -113,7 +113,7 @@ Ordered by the dependency chain + leverage. Each item is **designed**; this is t
 | 2 | **Bulk COPY-staging pipeline** (million-row import/export) | ADR-0036 / `08 §5` | MVP |
 | 3 | **Freshness / re-enrichment loop** (per-field cadence) | ADR-0025 / `09 §5` | MVP — **in progress** (`runReverification` + the `reverification` queue + leader-locked daily sweep landed, keyed on `last_verified_at` + the in-use revealed gate; **rollout-gated by the `data_health.reverification` per-tenant flag**; the `verification_jobs` ledger + a line-type re-check are follow-ups) |
 | 4 | **Teams/visibility + RBAC `org_role`** (+ app-layer `scopeFor`) | ADR-0022/0030; `10`/`11` | MVP (M11) |
-| 5 | **Quality metric dashboard** (fill/bounce/conflict/freshness) | `10 §5` (`22`/`11`) | MVP |
+| 5 | **Quality metric dashboard** (fill/bounce/conflict/freshness) | `10 §5` (`22`/`11`) | MVP — **per-contact Data Health badge now surfaces on the main contact list + search** (`contactRepository.listByWorkspace`/`listMaskedByIds` reuse the canonical `computeContactDataQuality`, mirroring the list-member projection); the per-workspace aggregate snapshot (fill/bounce/conflict/freshness rollup) is the remaining net-new |
 | 6 | **Per-data-class retention engine** | ADR-0025 / `11 §5` | MVP |
 | 7 | **CRM sync + activity write-back + erasure propagation** | `07`/`12 §5`; `26 §2` | MVP (per-tenant) |
 | 8 | **Per-workspace ICP tuning / model registry** | ADR-0008 *Revisit if*; `12 §5` | MVP |
