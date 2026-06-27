@@ -78,8 +78,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1044,
-  "fileSetHash": "sha256:c44034935c158b92e2e1b2b3e05526fcf3503b8c3076bdd6d85d3e7239caf28e",
+  "fileCount": 1047,
+  "fileSetHash": "sha256:bfad46023f09b79c29510b2468cefdf5d279c8e2170f261c9bf47f1da231f73c",
   "features": {
     "account-search": {
       "web": [],
@@ -229,6 +229,7 @@
       "admin": [
         "apps/admin/src/features/compliance/api.ts",
         "apps/admin/src/features/compliance/components/CompliancePage.tsx",
+        "apps/admin/src/features/compliance/components/RetentionPolicies.tsx",
         "apps/admin/src/features/compliance/hooks/useCompliance.ts",
         "apps/admin/src/features/compliance/index.ts",
         "apps/admin/src/features/compliance/types.ts"
@@ -1699,6 +1700,7 @@
       "packages/types/src/platformAuditCoverage.test.ts",
       "packages/types/src/pricingAdmin.ts",
       "packages/types/src/providerConfigs.ts",
+      "packages/types/src/retentionAdmin.ts",
       "packages/types/src/savedSearch.test.ts",
       "packages/types/src/savedSearch.ts",
       "packages/types/src/scim.ts",
@@ -1780,6 +1782,7 @@
     "packages/db/src/repositories/planTemplateRepository.ts",
     "packages/db/src/repositories/platformStaffRepository.ts",
     "packages/db/src/repositories/providerConfigRepository.ts",
+    "packages/db/src/repositories/retentionPolicyRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
     "packages/db/src/repositories/schedulerRepository.ts",
     "packages/db/src/repositories/scimTokenRepository.ts",
