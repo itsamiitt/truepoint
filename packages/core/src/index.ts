@@ -148,6 +148,7 @@ export { validatePhone } from "./data-health/validatePhone.ts";
 // verifier, per workspace, off the request thread. Run by the reverification queue + sweep worker.
 export {
   runReverification,
+  REVERIFICATION_FLAG_KEY,
   type ReverificationResult,
 } from "./data-health/reverifyContacts.ts";
 // Data quality & freshness keystone (22 §2–§3, ADR-0025): the 0–100 data_quality_score composite + cold-start

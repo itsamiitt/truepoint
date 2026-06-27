@@ -19,10 +19,16 @@ import {
   type PhoneStatus,
   reverifyCutoff,
 } from "@leadwolf/types";
+import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
 import { decryptPii } from "../import/encryptPii.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "./emailVerifier.ts";
 import { defaultEmailVerifier } from "./reacherVerifier.ts";
 import { validatePhone } from "./validatePhone.ts";
+
+/** The per-tenant feature flag (ADR-0011) that gates re-verification rollout — the plans mandate per-tenant
+ *  flags + shadow-before-cutover. Unknown/undefined → OFF (fail-closed, opt-in): the loop ships dark and is
+ *  enabled per tenant (or globally) by a platform admin once REACHER is also configured. */
+export const REVERIFICATION_FLAG_KEY = "data_health.reverification";
 
 export interface ReverificationResult {
   /** Rows scanned (revealed + past-SLA) across every batch this run. */
@@ -56,6 +62,14 @@ export async function runReverification(
   if (verifier.name === passThroughVerifier.name) {
     return { scanned: 0, reverified: 0, errored: 0 };
   }
+
+  // Per-tenant rollout gate (ADR-0011): re-verification runs only when the data_health.reverification flag is
+  // enabled for this tenant (unknown flag → off, opt-in). Read under a tenant-scoped tx, like every other gate.
+  const enabled = await withTenantTx(
+    { tenantId: scope.tenantId, workspaceId: scope.workspaceId },
+    (tx) => isFlagEnabledForTenant(tx, scope.tenantId, REVERIFICATION_FLAG_KEY),
+  );
+  if (!enabled) return { scanned: 0, reverified: 0, errored: 0 };
 
   const limit = opts?.batchSize ?? 500;
   const now = opts?.now ?? new Date();
