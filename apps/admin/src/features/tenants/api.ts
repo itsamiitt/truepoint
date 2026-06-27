@@ -6,6 +6,7 @@ import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   AccountHold,
+  PlanTemplateOption,
   Purchase,
   SupportNote,
   TenantDetail,
@@ -65,6 +66,27 @@ export async function reactivateTenant(id: string, reason: string): Promise<void
     },
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not reactivate the tenant"));
+}
+
+/** GET /admin/pricing/plan-templates — the active plan templates, for the plan-override picker. */
+export async function fetchActivePlanTemplates(): Promise<PlanTemplateOption[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/pricing/plan-templates`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load plan templates"));
+  const body = (await res.json()) as { templates: PlanTemplateOption[] };
+  return body.templates.filter((t) => t.active);
+}
+
+/** POST /admin/tenants/:id/plan — apply a plan template's entitlements to a tenant (tenants:plan). */
+export async function applyTenantPlan(id: string, templateKey: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/plan`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ templateKey }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not apply the plan"));
 }
 
 /** GET /admin/tenants/:id/purchases — the tenant's credit-pack purchases (billing:read). */

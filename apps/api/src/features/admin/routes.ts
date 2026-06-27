@@ -10,6 +10,7 @@ import {
   authPolicyRepository,
   featureFlagRepository,
   jitElevationRepository,
+  planTemplateRepository,
   platformAdminRepository,
   platformAdminWriteRepository,
   platformBillingReadRepository,
@@ -32,6 +33,7 @@ import {
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
   placeAccountHoldSchema,
+  planOverrideSchema,
   platformListQuerySchema,
   setAuthEnforcementSchema,
   tenantStatusChangeSchema,
@@ -293,6 +295,39 @@ adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), a
     { targetType: "tenant", targetId: tenantId, tenantId, metadata: { delta, reason } },
   );
   return c.json({ tenantId, delta, balanceAfter });
+});
+
+// ── Plan override (13a Area 1, 13 §3.1, 07 §5) — apply a plan TEMPLATE's entitlements (plan id / seat &
+// workspace caps / feature flags) to a tenant. A sensitive entitlement change → super_admin-only via the
+// tenants:plan capability; withPlatformTx-audited "plan.override". The template is read + applied in one tx
+// (an unknown template rolls the audit row back). Does not grant credits — the monthly grant is the job's. ──
+adminRoutes.post("/tenants/:id/plan", requireCapability("tenants:plan"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = planOverrideSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "plan.override",
+    async (tx) => {
+      const template = await planTemplateRepository.getByKey(tx, parsed.data.templateKey);
+      if (!template) throw new NotFoundError(`Unknown plan template '${parsed.data.templateKey}'.`);
+      const touched = await platformAdminWriteRepository.applyPlan(tx, tenantId, {
+        plan: template.key,
+        seatLimit: template.seatLimit,
+        workspaceLimit: template.workspaceLimit,
+        features: template.features,
+      });
+      if (touched === 0) throw new NotFoundError("Tenant not found.");
+    },
+    {
+      targetType: "tenant",
+      targetId: tenantId,
+      tenantId,
+      metadata: { templateKey: parsed.data.templateKey },
+    },
+  );
+  return c.json({ ok: true, tenantId, plan: parsed.data.templateKey });
 });
 
 // ── Support notes (13a Area 3, 13 §3.3) — internal staff notes about a tenant, with an optional ticket link.

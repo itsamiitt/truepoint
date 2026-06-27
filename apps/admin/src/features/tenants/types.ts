@@ -56,6 +56,16 @@ export interface TenantOverview {
   activeHolds: number;
 }
 
+/** A plan template option for the plan-override picker (13a Area 1). A thin projection of the pricing
+ *  catalog's plan_templates (`/admin/pricing/plan-templates`). */
+export interface PlanTemplateOption {
+  key: string;
+  name: string;
+  seatLimit: number;
+  workspaceLimit: number | null;
+  active: boolean;
+}
+
 /** A credit-pack purchase by a tenant (13a Area 4). Mirrors `/admin/tenants/:id/purchases`. */
 export interface Purchase {
   id: string;

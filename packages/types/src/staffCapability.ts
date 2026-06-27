@@ -13,6 +13,7 @@ import { z } from "zod";
 export const staffCapability = z.enum([
   "tenants:suspend", // suspend / reactivate an org
   "tenants:credits", // manual credit grant / adjustment
+  "tenants:plan", // apply a plan template (plan / limits / entitlements override)
   "tenants:hold", // place / lift an account (abuse) hold
   "tenants:notes:write", // add a support note
   "users:deactivate", // deactivate / reactivate a global user

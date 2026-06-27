@@ -16,6 +16,8 @@ const WRITTEN = new Set<string>([
   // 13a Area 1 — staff tenant-management mutations (POST /admin/tenants/:id/{suspend,reactivate,credits}).
   "tenant.suspend",
   "tenant.reactivate",
+  // 13a Area 1 — apply a plan template to a tenant (POST /admin/tenants/:id/plan).
+  "plan.override",
   "credit.grant",
   "credit.adjust",
   // 13a Area 2 — staff global-user mutations (POST /admin/users/:id/{deactivate,reactivate}).
@@ -46,7 +48,6 @@ const WRITTEN = new Set<string>([
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;
 // the remaining tenant-less identity events land as their flows are built.
 const PENDING = new Set<string>([
-  "plan.override",
   "impersonation.start",
   "impersonation.end",
   "feature_flag.set",

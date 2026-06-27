@@ -136,4 +136,33 @@ export const platformAdminWriteRepository = {
     await tx.execute(sql`UPDATE purchases SET status = 'refunded' WHERE id = ${purchaseId}::uuid`);
     return { found: true, alreadyRefunded: false, reversed, balanceAfter };
   },
+
+  /**
+   * Apply a plan template's entitlements to a tenant (13a Area 1 plan-override, 07 §5): set the plan id, seat
+   * & workspace caps, and feature flags. Does NOT grant credits (a plan's monthly grant is applied by the
+   * recurring billing job, not by this override). Returns rows touched (0 = unknown tenant → caller raises 404).
+   */
+  async applyPlan(
+    tx: Tx,
+    tenantId: string,
+    plan: {
+      plan: string;
+      seatLimit: number;
+      workspaceLimit: number | null;
+      features: Record<string, boolean>;
+    },
+  ): Promise<number> {
+    const updated = await tx
+      .update(tenants)
+      .set({
+        plan: plan.plan,
+        seatLimit: plan.seatLimit,
+        workspaceLimit: plan.workspaceLimit,
+        features: plan.features,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId))
+      .returning({ id: tenants.id });
+    return updated.length;
+  },
 };

@@ -84,6 +84,16 @@ export const planTemplateRepository = {
     return row as PlanTemplateRow;
   },
 
+  /** Fetch one template by its natural key, or null (13a Area 1 plan-override reads it before applying). */
+  async getByKey(tx: Tx, key: string): Promise<PlanTemplateRow | null> {
+    const [row] = await tx
+      .select(TEMPLATE_COLS)
+      .from(planTemplates)
+      .where(eq(planTemplates.key, key))
+      .limit(1);
+    return (row as PlanTemplateRow) ?? null;
+  },
+
   /** Toggle a template's availability. Returns rows touched (0 = unknown key → caller raises 404). */
   async setActive(tx: Tx, key: string, active: boolean): Promise<number> {
     const updated = await tx

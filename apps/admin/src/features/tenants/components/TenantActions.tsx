@@ -6,10 +6,17 @@
 "use client";
 
 import { useStaffMe } from "@/lib/staffMe";
-import { Dialog, TpButton, TpInput, TpTextarea, useToast } from "@leadwolf/ui";
+import { Dialog, TpButton, TpInput, TpSelect, TpTextarea, useToast } from "@leadwolf/ui";
 import { useState } from "react";
-import { adjustTenantCredits, reactivateTenant, requestElevation, suspendTenant } from "../api";
-import type { TenantRow } from "../types";
+import {
+  adjustTenantCredits,
+  applyTenantPlan,
+  fetchActivePlanTemplates,
+  reactivateTenant,
+  requestElevation,
+  suspendTenant,
+} from "../api";
+import type { PlanTemplateOption, TenantRow } from "../types";
 
 const MIN_REASON = 5;
 
@@ -26,8 +33,11 @@ export function TenantActions({
 
   const [statusOpen, setStatusOpen] = useState(false);
   const [creditOpen, setCreditOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [delta, setDelta] = useState("");
+  const [templates, setTemplates] = useState<PlanTemplateOption[] | null>(null);
+  const [planKey, setPlanKey] = useState("");
   const [busy, setBusy] = useState(false);
 
   function openStatus() {
@@ -38,6 +48,36 @@ export function TenantActions({
     setReason("");
     setDelta("");
     setCreditOpen(true);
+  }
+  async function openPlan() {
+    setPlanKey("");
+    setTemplates(null);
+    setPlanOpen(true);
+    try {
+      const list = await fetchActivePlanTemplates();
+      setTemplates(list);
+      if (list[0]) setPlanKey(list[0].key);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load plan templates");
+    }
+  }
+
+  async function onApplyPlan() {
+    if (!planKey) {
+      toast.error("Pick a plan template.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await applyTenantPlan(tenant.id, planKey);
+      toast.success(`Plan applied — ${planKey}.`);
+      setPlanOpen(false);
+      await onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not apply the plan");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onToggleStatus() {
@@ -99,6 +139,11 @@ export function TenantActions({
         {canMaybe("tenants:credits") ? (
           <TpButton variant="secondary" onClick={openCredit}>
             Adjust credits
+          </TpButton>
+        ) : null}
+        {canMaybe("tenants:plan") ? (
+          <TpButton variant="secondary" onClick={() => void openPlan()}>
+            Apply plan
           </TpButton>
         ) : null}
         {canMaybe("tenants:suspend") ? (
@@ -198,6 +243,49 @@ export function TenantActions({
             />
           </label>
         </div>
+      </Dialog>
+
+      {/* Plan override — apply a plan template's entitlements (plan / limits / features). Audited. */}
+      <Dialog
+        open={planOpen}
+        onClose={() => (busy ? undefined : setPlanOpen(false))}
+        title="Apply plan"
+        description={`Apply a plan template to ${tenant.name} — sets the plan, seat & workspace limits, and feature entitlements. Current plan ${tenant.plan}. This is audited.`}
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="secondary" onClick={() => setPlanOpen(false)} disabled={busy}>
+              Cancel
+            </TpButton>
+            <TpButton onClick={() => void onApplyPlan()} disabled={busy || !planKey}>
+              {busy ? "Applying…" : "Apply plan"}
+            </TpButton>
+          </div>
+        }
+      >
+        <label
+          htmlFor="tenant-plan-key"
+          style={{ display: "flex", flexDirection: "column", gap: 4 }}
+        >
+          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Plan template</span>
+          {templates === null ? (
+            <span className="app-muted">Loading templates…</span>
+          ) : templates.length === 0 ? (
+            <span className="app-muted">No active plan templates — create one under Plans.</span>
+          ) : (
+            <TpSelect
+              id="tenant-plan-key"
+              value={planKey}
+              disabled={busy}
+              onChange={(e) => setPlanKey(e.currentTarget.value)}
+            >
+              {templates.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.name} ({t.key}) — {t.seatLimit} seats
+                </option>
+              ))}
+            </TpSelect>
+          )}
+        </label>
       </Dialog>
     </>
   );

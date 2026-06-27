@@ -15,6 +15,13 @@ export const tenantStatusChangeSchema = z.object({
 });
 export type TenantStatusChangeInput = z.infer<typeof tenantStatusChangeSchema>;
 
+/** Apply a plan TEMPLATE to a tenant — overrides the tenant's plan / seat & workspace caps / feature
+ *  entitlements from the named template (13a Area 1 plan-override, 07 §5). */
+export const planOverrideSchema = z.object({
+  templateKey: z.string().trim().min(1).max(50),
+});
+export type PlanOverrideInput = z.infer<typeof planOverrideSchema>;
+
 // ── Manual credit grant / adjustment (07 §7) ───────────────────────────────────────────────────────────
 
 /** A signed credit delta against the tenant counter, with a mandatory reason (07 §7: "corrections are direct
