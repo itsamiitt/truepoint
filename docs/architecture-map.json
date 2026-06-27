@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 954,
-  "fileSetHash": "sha256:a8012ecc4a5661095a8416f59d3cfb3695a2f1b68f4657be4027c0bc7cf47e05",
+  "fileCount": 956,
+  "fileSetHash": "sha256:d61eeec0d465d1b74f2c036189b342baea6abe92cb94b2fed8d6fb4ee013b5b9",
   "features": {
     "account-search": {
       "web": [],
@@ -268,6 +268,8 @@
         "packages/core/src/data-health/dataQualityScore.test.ts",
         "packages/core/src/data-health/dataQualityScore.ts",
         "packages/core/src/data-health/dataQualitySummary.ts",
+        "packages/core/src/data-health/emailPrescreen.test.ts",
+        "packages/core/src/data-health/emailPrescreen.ts",
         "packages/core/src/data-health/emailVerifier.ts",
         "packages/core/src/data-health/phoneVerifier.ts",
         "packages/core/src/data-health/reacherVerifier.test.ts",

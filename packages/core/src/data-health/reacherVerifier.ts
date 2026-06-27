@@ -10,6 +10,7 @@
 
 import { env } from "@leadwolf/config";
 import type { EmailStatus } from "@leadwolf/types";
+import { localPrescreenVerifier } from "./emailPrescreen.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "./emailVerifier.ts";
 
 /** Injectable POST→JSON (mirrors integrations/httpProvider FetchJson) so the adapter is testable offline. */
@@ -97,5 +98,10 @@ export function reacherVerifier(opts: ReacherVerifierOptions): EmailVerifierPort
 export function defaultEmailVerifier(fetchJson?: VerifierFetch): EmailVerifierPort {
   const backendUrl = env.REACHER_BACKEND_URL;
   if (!backendUrl) return passThroughVerifier;
-  return reacherVerifier({ backendUrl, apiToken: env.REACHER_API_TOKEN, fetchJson });
+  // Wrap Reacher with the zero-network local pre-screen (role/disposable short-circuit) so the paid SMTP probe
+  // is skipped for the obvious cases — grade-equivalent, just cheaper. Only when a real backend is configured;
+  // the pass-through path stays bare so the reverify no-op guard (name === passThrough) still detects "no vendor".
+  return localPrescreenVerifier(
+    reacherVerifier({ backendUrl, apiToken: env.REACHER_API_TOKEN, fetchJson }),
+  );
 }

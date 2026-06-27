@@ -142,6 +142,14 @@ export {
   type ReacherVerifierOptions,
   type VerifierFetch,
 } from "./data-health/reacherVerifier.ts";
+// Local email pre-screen (06 §9): role/disposable short-circuit wrapped around the verifier to save paid probes.
+export {
+  localPrescreenVerifier,
+  isRoleAccount,
+  isDisposableDomain,
+  ROLE_LOCAL_PARTS,
+  DISPOSABLE_DOMAINS,
+} from "./data-health/emailPrescreen.ts";
 export { chargeFor, type ChargeInput } from "./data-health/chargeFor.ts";
 export { validatePhone } from "./data-health/validatePhone.ts";
 // Phone-verification subsystem (06 §9, 01 §5.3): the port + format-only default + the Twilio Lookup adapter +
