@@ -7,11 +7,12 @@ import { platformBillingReadRepository, withPlatformTx } from "@leadwolf/db";
 import { type EconomicsSummary, ValidationError, economicsQuerySchema } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
-import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
+import { requireCapability } from "../../middleware/requireCapability.ts";
 
 export const billingRoutes = new Hono<{ Variables: ApiVariables }>();
 
-billingRoutes.use("*", requireStaffRole("super_admin", "billing_ops"));
+// billing:read = super_admin + billing_ops (13a F3 — capability gate, not a hard-coded role list).
+billingRoutes.use("*", requireCapability("billing:read"));
 
 const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   userId: c.get("claims").sub,

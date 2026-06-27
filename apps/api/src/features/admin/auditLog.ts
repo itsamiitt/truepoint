@@ -9,13 +9,13 @@ import { type PlatformAuditRow, platformAuditReadRepository, withPlatformTx } fr
 import { ValidationError, platformAuditQuerySchema } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
-import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
+import { requireCapability } from "../../middleware/requireCapability.ts";
 
 export const auditLogRoutes = new Hono<{ Variables: ApiVariables }>();
 
-// Reading the platform audit log is restricted to the roles accountable for it — super_admin (all caps) and
-// the compliance officer (whose job is reviewing this trail). Above the coarse `pa` gate.
-auditLogRoutes.use("*", requireStaffRole("super_admin", "compliance_officer"));
+// Reading the platform audit log is restricted to the roles accountable for it — audit:read = super_admin +
+// compliance_officer (13a F3 capability gate). Above the coarse `pa` gate.
+auditLogRoutes.use("*", requireCapability("audit:read"));
 
 const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   userId: c.get("claims").sub,

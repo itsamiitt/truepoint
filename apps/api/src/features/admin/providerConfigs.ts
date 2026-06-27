@@ -15,7 +15,7 @@ import {
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
-import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
+import { requireCapability } from "../../middleware/requireCapability.ts";
 
 // The fixed set of enrichment providers the platform supports (13 §3.6). Admins toggle / budget these; they
 // cannot add providers from the console, so this list — not user input — is the source of valid provider ids.
@@ -28,8 +28,9 @@ const LABEL = new Map(KNOWN_PROVIDERS.map((p) => [p.provider, p.label]));
 
 export const providerConfigRoutes = new Hono<{ Variables: ApiVariables }>();
 
-// Provider config moves spend + data-source posture → super_admin only (above the coarse `pa` gate).
-providerConfigRoutes.use("*", requireStaffRole("super_admin"));
+// Provider config moves spend + data-source posture → providers:manage = super_admin only (13a F3 capability
+// gate, above the coarse `pa` gate).
+providerConfigRoutes.use("*", requireCapability("providers:manage"));
 
 const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   userId: c.get("claims").sub,

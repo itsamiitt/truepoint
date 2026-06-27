@@ -9,13 +9,13 @@ import { JIT_ELEVATION_TTL_SECONDS, jitElevationRepository, withPlatformTx } fro
 import { type ElevationView, ValidationError, requestElevationSchema } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
-import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
+import { requireCapability } from "../../middleware/requireCapability.ts";
 
 export const elevationRoutes = new Hono<{ Variables: ApiVariables }>();
 
-// Only roles that can perform a JIT-gated action may mint an elevation (super_admin: suspend + credit;
-// billing_ops: credit). The action endpoint still enforces the precise per-action role.
-elevationRoutes.use("*", requireStaffRole("super_admin", "billing_ops"));
+// Only roles that can perform a JIT-gated action may mint an elevation. elevation:request = super_admin +
+// billing_ops (13a F3). The action endpoint still enforces the precise per-action capability + consumes it.
+elevationRoutes.use("*", requireCapability("elevation:request"));
 
 const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   userId: c.get("claims").sub,
