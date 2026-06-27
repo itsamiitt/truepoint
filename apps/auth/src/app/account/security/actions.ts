@@ -165,11 +165,23 @@ export async function verifyTotpEnroll(formData: FormData): Promise<void> {
     maxAge: ENROLL_RESULT_MAX_AGE,
   });
 
-  // CONFIRM (audit PENDING): there is no declared `mfa.enroll` action in either the tenant `auditAction` or the
-  // tenant-less `platformAuditAction` closed Zod enums (packages/types). recordPlatformEvent rejects any value
-  // outside the enum at the type boundary, so emitting an enrollment audit here would not type-check. Per the
-  // task brief, MFA-change audit stays PENDING until the enum carries `mfa.enroll` / `mfa.method.added` — DO NOT
-  // half-wire an invalid action. (The threat-model "enrollment audited" AC is tracked as that follow-up.)
+  // Audit the enrollment (09 MFA-integrity AC) — `mfa.enroll` is now a declared tenant `auditAction`. This
+  // surface runs on a durable session, so the active tenant is acct.tenantId; emit to audit_log when it
+  // resolves (NOT NULL tenant_id), else skip (a tenant-less session → PENDING, same convention as
+  // auditSessionRevoke below). Best-effort; recordAuthEvent swallows its own failures and never blocks enroll.
+  if (acct.tenantId) {
+    await recordAuthEvent({
+      tenantId: acct.tenantId,
+      workspaceId: acct.workspaceId,
+      actorUserId: acct.userId,
+      action: "mfa.enroll",
+      entityType: "user",
+      entityId: acct.userId,
+      metadata: { method: "totp", context: "account_security" },
+      ipAddress: clientIpFromHeaders(await headers()),
+    });
+  }
+
   redirect("/account/security/enroll?done=1");
 }
 

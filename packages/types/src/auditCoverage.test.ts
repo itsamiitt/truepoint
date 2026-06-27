@@ -46,6 +46,15 @@ const WRITTEN = new Set<string>([
   "member.add",
   "member.update",
   "member.remove",
+  // MFA enrollment (P1-01): forced in-login TOTP enroll (apps/auth /mfa/enroll) and self-service enroll
+  // (/account/security) both recordAuthEvent("mfa.enroll") once the method is persisted; tenant is resolved
+  // at that point, so it lands in audit_log (not the platform sink).
+  "mfa.enroll",
+  // Email M12 P0 (packages/core email): connect a workspace mailbox → mailbox.connect (connectMailbox.ts);
+  // create + DNS-verify a per-tenant sending domain → sending_domain.add / sending_domain.verify (sendingDomains.ts).
+  "mailbox.connect",
+  "sending_domain.add",
+  "sending_domain.verify",
 ]);
 
 // §5.2 — defined in the closed enum but not yet wired to a writeAudit() call-site.
@@ -55,6 +64,9 @@ const PENDING = new Set<string>([
   "suppression.remove",
   "dsar.rectify",
   "apikey.use",
+  // Email M12 (packages/core email): disconnecting a mailbox has no service path yet (the connect/verify
+  // writers landed in P0; mailbox.disconnect lands with the mailbox-management surface).
+  "mailbox.disconnect",
   // record / config mutations (services land at M8 / M16)
   "contact.create",
   "account.create",

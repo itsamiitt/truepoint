@@ -221,6 +221,7 @@ export {
 export {
   platformAdminRepository,
   PLATFORM_READ_LIMIT,
+  type PlatformPage,
   type PlatformTenantRow,
   type PlatformTenantDetail,
   type PlatformWorkspaceRow,
@@ -229,8 +230,45 @@ export {
   type PlatformMemberRow,
   type PlatformUserRow,
 } from "./repositories/platformAdminReads.ts";
+// Platform super-admin WRITE surface (13a Area 1) — audited cross-tenant mutations, run within withPlatformTx.
+export {
+  platformAdminWriteRepository,
+  type TenantLifecycleStatus,
+  type CreditAdjustOutcome,
+  type UserAccountStatus,
+  type UserStatusOutcome,
+} from "./repositories/platformAdminWrites.ts";
 // Platform STAFF role lookup (ADR-0011) — owner-connection read for requireStaffRole authz.
 export { platformStaffRepository } from "./repositories/platformStaffRepository.ts";
+// Staff support notes (13a Area 3) — owner-connection, audited writes; deny-all to the customer app role.
+export {
+  supportNoteRepository,
+  type SupportNoteRow,
+} from "./repositories/supportNoteRepository.ts";
+// Platform billing/economics reads (13a Area 4) — cross-tenant aggregates, run within withPlatformTx.
+export {
+  platformBillingReadRepository,
+  type EconomicsAggregate,
+} from "./repositories/platformBillingReads.ts";
+// Credit-pack pricing catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
+export {
+  creditPackRepository,
+  type CreditPackRow,
+  type UpsertCreditPackInput,
+} from "./repositories/creditPackRepository.ts";
+// Plan/entitlement template catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
+export {
+  planTemplateRepository,
+  type PlanTemplateRow,
+  type UpsertPlanTemplateInput,
+} from "./repositories/planTemplateRepository.ts";
+// JIT elevation grants (13a F1) — audited, time-boxed, tenant-scoped step-up for sensitive admin actions.
+export {
+  jitElevationRepository,
+  JIT_ELEVATION_TTL_SECONDS,
+  type GrantElevationInput,
+  type JitElevationRow,
+} from "./repositories/jitElevationRepository.ts";
 // Provider configs (13 §3.6) — platform-global enable/budget + cross-tenant month-to-date spend.
 export {
   providerConfigRepository,
@@ -251,6 +289,7 @@ export {
 // Platform audit-log read surface (ADR-0032) — bounded cross-tenant read, run within withPlatformTx.
 export {
   platformAuditReadRepository,
+  AUDIT_EXPORT_CAP,
   type PlatformAuditRow,
   type TenantStaffAccessRow,
 } from "./repositories/platformAuditReads.ts";

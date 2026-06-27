@@ -11,10 +11,44 @@ async function problemMessage(res: Response, fallback: string): Promise<string> 
   return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
 }
 
-/** GET /admin/users — the cross-tenant user directory (bounded by the api). */
-export async function fetchUsers(): Promise<PlatformUser[]> {
-  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/users`);
+export interface UsersPage {
+  users: PlatformUser[];
+  nextCursor: string | null;
+}
+
+/** GET /admin/users — one keyset page of the directory, optionally filtered by an email/name search (13a F5). */
+export async function fetchUsers(search?: string, cursor?: string): Promise<UsersPage> {
+  const p = new URLSearchParams();
+  if (search) p.set("search", search);
+  if (cursor) p.set("cursor", cursor);
+  const qs = p.toString();
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/users${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load users"));
-  const body = (await res.json()) as { users: PlatformUser[] };
-  return body.users;
+  return (await res.json()) as UsersPage;
+}
+
+/** POST /admin/users/:id/deactivate — suspend a user (super_admin|support). Reason is audited. */
+export async function deactivateUser(id: string, reason: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/users/${encodeURIComponent(id)}/deactivate`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not deactivate the user"));
+}
+
+/** POST /admin/users/:id/reactivate — restore a suspended user (super_admin|support). Reason is audited. */
+export async function reactivateUser(id: string, reason: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/users/${encodeURIComponent(id)}/reactivate`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not reactivate the user"));
 }

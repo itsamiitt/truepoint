@@ -1,5 +1,5 @@
 {
-  "id": "863293ab-2ef6-4848-a573-68d334249d0a",
+  "id": "b354c41c-d881-4a4d-86fb-b2be416e6c4d",
   "prevId": "d230e523-87c7-4cfb-8859-8678afa2e4ab",
   "version": "7",
   "dialect": "postgresql",
@@ -335,6 +335,19 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": false
+        },
+        "idle_timeout_seconds": {
+          "name": "idle_timeout_seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enforcement_enabled": {
+          "name": "enforcement_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -7028,37 +7041,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "oauth_expires_at": {
-          "name": "oauth_expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "oauth_scopes": {
-          "name": "oauth_scopes",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "provider_account_id": {
-          "name": "provider_account_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reauth_required": {
-          "name": "reauth_required",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "reauth_reason": {
-          "name": "reauth_reason",
-          "type": "varchar(120)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "last_error": {
           "name": "last_error",
           "type": "varchar(500)",
@@ -7195,169 +7177,6 @@
         "mailbox_integration_status_enum": {
           "name": "mailbox_integration_status_enum",
           "value": "\"mailbox_integration\".\"status\" IN ('pending','connected','error','disconnected')"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.oauth_connect_state": {
-      "name": "oauth_connect_state",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "uuid_generate_v7()"
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "provider": {
-          "name": "provider",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "state_token": {
-          "name": "state_token",
-          "type": "varchar(80)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "pkce_verifier_enc": {
-          "name": "pkce_verifier_enc",
-          "type": "bytea",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "redirect_after": {
-          "name": "redirect_after",
-          "type": "varchar(500)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "consumed_at": {
-          "name": "consumed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "uniq_oauth_connect_state_token": {
-          "name": "uniq_oauth_connect_state_token",
-          "columns": [
-            {
-              "expression": "state_token",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_oauth_connect_state_tenant": {
-          "name": "idx_oauth_connect_state_tenant",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "oauth_connect_state_tenant_id_tenants_id_fk": {
-          "name": "oauth_connect_state_tenant_id_tenants_id_fk",
-          "tableFrom": "oauth_connect_state",
-          "tableTo": "tenants",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "oauth_connect_state_workspace_id_workspaces_id_fk": {
-          "name": "oauth_connect_state_workspace_id_workspaces_id_fk",
-          "tableFrom": "oauth_connect_state",
-          "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "oauth_connect_state_user_id_users_id_fk": {
-          "name": "oauth_connect_state_user_id_users_id_fk",
-          "tableFrom": "oauth_connect_state",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "oauth_connect_state_provider_enum": {
-          "name": "oauth_connect_state_provider_enum",
-          "value": "\"oauth_connect_state\".\"provider\" IN ('google','microsoft')"
         }
       },
       "isRLSEnabled": false

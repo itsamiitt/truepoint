@@ -147,15 +147,27 @@ export const authAuditEntrySchema = z.object({
 export type AuthAuditEntry = z.infer<typeof authAuditEntrySchema>;
 
 // ── Auth policy (ADR-0018; strictest-wins resolution lives in packages/auth) ─────────────────────────
+// The TENANT-EDITABLE policy contract (the org's security_admin PUTs this). The per-tenant enforcement
+// master switch (enforcement_enabled) is deliberately NOT here — it is staff-only (set via the platform
+// admin endpoint), so a tenant can never self-enable the lockout-capable gates through its own policy PUT.
 export const authPolicySchema = z.object({
   mfaEnforcement: mfaEnforcement,
   allowedMethods: z.array(authMethod),
   disableSocial: z.boolean().default(false),
   requireSso: z.boolean().default(false),
   ipAllowlist: z.array(z.string()).default([]), // CIDR strings; empty = no restriction
-  sessionTimeoutSeconds: z.number().int().positive().optional(),
+  sessionTimeoutSeconds: z.number().int().positive().optional(), // ABSOLUTE session-lifetime cap (P1-01 Gate D)
+  idleTimeoutSeconds: z.number().int().positive().optional(), // IDLE-window cap, enforced on refresh (Gate D)
 });
 export type AuthPolicy = z.infer<typeof authPolicySchema>;
+
+// ── Platform-staff auth-enforcement toggle (P1-01) — set/clear a tenant's per-tenant enforcement master
+// switch. STAFF-ONLY (super_admin); the disable direction IS the break-glass that re-opens login without a
+// deploy. Carried as its own minimal schema so it never rides the tenant-editable authPolicySchema. ──────
+export const setAuthEnforcementSchema = z.object({
+  enabled: z.boolean(),
+});
+export type SetAuthEnforcementInput = z.infer<typeof setAuthEnforcementSchema>;
 
 // ── Admin session management (G-AUTH-2, 17 §5/§10) ───────────────────────────────────────────────────
 // Workspace admins (owner|admin) can list the active sessions of the members of their workspace and revoke

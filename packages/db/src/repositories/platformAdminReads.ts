@@ -4,7 +4,8 @@
 // reach these tables. All lists are bounded by PLATFORM_READ_LIMIT — no unbounded cross-tenant scans
 // (ADR-0032). Read-only: never writes (staff mutations go through their own audited endpoints later).
 
-import { and, asc, eq, sql } from "drizzle-orm";
+import type { PlatformListQuery } from "@leadwolf/types";
+import { type SQL, and, asc, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
@@ -12,6 +13,33 @@ import { listMembers, lists } from "../schema/lists.ts";
 
 /** The cross-tenant read cap — mirrors the bound the api admin routes already enforce (ADR-0032). */
 export const PLATFORM_READ_LIMIT = 500;
+
+/** A keyset directory page: the rows plus the cursor for the next page (null at the end). */
+export interface PlatformPage<T> {
+  rows: T[];
+  nextCursor: string | null;
+}
+
+// Opaque keyset cursor over the time-ordered v7 `id` (uuid_generate_v7 sorts by creation time, so `id DESC`
+// is newest-first and `id < cursor` is the next older page). base64url, never an offset.
+function encodeIdCursor(id: string): string {
+  return Buffer.from(id, "utf8").toString("base64url");
+}
+function decodeIdCursor(cursor: string): string | null {
+  try {
+    return Buffer.from(cursor, "base64url").toString("utf8") || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Slice the limit+1 probe into a page + the next cursor (built from the last row's id). */
+function toPage<T extends { id: string }>(rows: T[], limit: number): PlatformPage<T> {
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  return { rows: page, nextCursor: hasMore && last ? encodeIdCursor(last.id) : null };
+}
 
 export interface PlatformTenantRow {
   id: string;
@@ -113,9 +141,23 @@ export const platformAdminRepository = {
       .limit(PLATFORM_READ_LIMIT);
   },
 
-  /** All users (cross-tenant), bounded. */
-  async listUsers(tx: Tx): Promise<PlatformUserRow[]> {
-    return tx
+  /** The users directory (cross-tenant) — searchable (email / name) + keyset-paginated (13a F5). */
+  async listUsers(
+    tx: Tx,
+    q: PlatformListQuery = { limit: 50 },
+  ): Promise<PlatformPage<PlatformUserRow>> {
+    const limit = Math.min(q.limit, PLATFORM_READ_LIMIT);
+    const conds: SQL[] = [];
+    if (q.search) {
+      const like = `%${q.search}%`;
+      const pred = or(ilike(users.email, like), ilike(users.fullName, like));
+      if (pred) conds.push(pred);
+    }
+    if (q.cursor) {
+      const id = decodeIdCursor(q.cursor);
+      if (id) conds.push(lt(users.id, id));
+    }
+    const rows = await tx
       .select({
         id: users.id,
         email: users.email,
@@ -124,12 +166,36 @@ export const platformAdminRepository = {
         isPlatformAdmin: users.isPlatformAdmin,
       })
       .from(users)
-      .limit(PLATFORM_READ_LIMIT);
+      .where(conds.length > 0 ? and(...conds) : undefined)
+      .orderBy(desc(users.id))
+      .limit(limit + 1);
+    return toPage(rows, limit);
   },
 
-  /** The tenants directory — plan/status/seats/credits per org (13 §3.1), bounded. */
-  async listTenants(tx: Tx): Promise<PlatformTenantRow[]> {
-    return tx.select(tenantCols).from(tenants).limit(PLATFORM_READ_LIMIT);
+  /** The tenants directory — plan/status/seats/credits per org (13 §3.1), searchable (name / slug) +
+   *  keyset-paginated (13a F5). */
+  async listTenants(
+    tx: Tx,
+    q: PlatformListQuery = { limit: 50 },
+  ): Promise<PlatformPage<PlatformTenantRow>> {
+    const limit = Math.min(q.limit, PLATFORM_READ_LIMIT);
+    const conds: SQL[] = [];
+    if (q.search) {
+      const like = `%${q.search}%`;
+      const pred = or(ilike(tenants.name, like), ilike(tenants.slug, like));
+      if (pred) conds.push(pred);
+    }
+    if (q.cursor) {
+      const id = decodeIdCursor(q.cursor);
+      if (id) conds.push(lt(tenants.id, id));
+    }
+    const rows = await tx
+      .select(tenantCols)
+      .from(tenants)
+      .where(conds.length > 0 ? and(...conds) : undefined)
+      .orderBy(desc(tenants.id))
+      .limit(limit + 1);
+    return toPage(rows, limit);
   },
 
   /** A tenant plus its workspaces and members (13 §3.1). Returns null if the id is unknown. */

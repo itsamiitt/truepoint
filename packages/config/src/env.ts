@@ -106,13 +106,15 @@ export const appEnvSchema = z
     // Cloudflare Turnstile secret for the identifier step (ADR-0020). Optional: absent → dev passes, prod fails.
     TURNSTILE_SECRET: z.string().optional(),
 
-    // GLOBAL kill-switch for tenant auth-policy enforcement on login (P1-01: IP allowlist + session timeout
-    // gates in packages/auth). LOCKOUT-CAPABLE: a mis-set tenant policy (e.g. an IP allowlist that excludes a
-    // real user, or a too-short session timeout) can lock a user — or a whole org — out. So the gates are a
-    // strict no-op unless this is the literal string "true": unset/any-other-value = OFF = today's exact
-    // behavior (the merge-safety guarantee). String, not z.coerce.boolean(), so ONLY "true" enables it —
-    // "false"/"0"/"" can never be coerced truthy. The per-tenant feature-flag refinement (enable per verified
-    // tenant, with a break-glass disable path) is the follow-up; this single global flag is the first increment.
+    // SYSTEM-WIDE MASTER-ARM for tenant auth-policy enforcement on login (P1-01: IP allowlist / allowed methods
+    // / session + idle timeout / forced-MFA-enrollment gates in packages/auth). LOCKOUT-CAPABLE, so enforcement
+    // requires BOTH this arm AND a per-tenant switch: effective = (this === "true") AND
+    // tenant_auth_policies.enforcement_enabled. This arm is the global incident kill-switch — flipping it off
+    // disarms every tenant at once; the per-tenant switch (staff-set, default OFF, with a break-glass disable —
+    // POST /api/v1/admin/tenants/:id/auth-enforcement) is how an individual VERIFIED tenant is enabled. With
+    // this arm off the gates are a strict no-op and do NO policy read (today's exact behavior, the merge-safety
+    // guarantee). String, not z.coerce.boolean(), so ONLY "true" enables it — "false"/"0"/"" can never be
+    // coerced truthy.
     AUTH_POLICY_ENFORCEMENT_ENABLED: z.string().optional(),
 
     TYPESENSE_URL: z.string().url().optional(),

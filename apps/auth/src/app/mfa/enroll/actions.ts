@@ -19,6 +19,7 @@
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { finishLogin } from "@/lib/finishLogin";
+import { env } from "@leadwolf/config";
 import {
   assertCredentialNotLocked,
   encryptSecret,
@@ -27,6 +28,7 @@ import {
   getLoginTransaction,
   hashRecoveryCode,
   patchLoginTransaction,
+  recordAuthEvent,
   recordCredentialFailure,
   recordCredentialSuccess,
   verifyTotp,
@@ -38,12 +40,17 @@ import { MFA_ENROLL_COOKIE, MFA_ENROLL_MAX_AGE, readMfaEnrollResult } from "./en
 
 // Resolve the pending login transaction or bounce to /login. The userId used for every write below comes ONLY
 // from this transaction (server-side state keyed by the HttpOnly login-txn cookie) — never a form field.
-async function requireLoginTxn(): Promise<{ txnId: string; userId: string }> {
+async function requireLoginTxn(): Promise<{
+  txnId: string;
+  userId: string;
+  tenantId?: string;
+  workspaceId?: string;
+}> {
   const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;
   if (!txnId) redirect("/login");
   const txn = await getLoginTransaction(txnId);
   if (!txn) redirect("/login");
-  return { txnId, userId: txn.userId };
+  return { txnId, userId: txn.userId, tenantId: txn.tenantId, workspaceId: txn.workspaceId };
 }
 
 // ── Start: generate the secret (shown once on the enroll screen) ─────────────────────────────────────────
@@ -69,7 +76,7 @@ export async function startMfaEnroll(): Promise<void> {
 // method already-verified (secret encrypted at insert, bound to txn.userId from the transaction), generate
 // one-time recovery codes (shown once), and store ONLY their hashes. A wrong code persists nothing.
 export async function verifyMfaEnroll(formData: FormData): Promise<void> {
-  const { userId } = await requireLoginTxn();
+  const { userId, tenantId, workspaceId } = await requireLoginTxn();
   const code = String(formData.get("code") ?? "").trim();
   const ip = clientIpFromHeaders(await headers());
   const limiterKey = `mfa-enroll:${userId}`;
@@ -115,10 +122,25 @@ export async function verifyMfaEnroll(formData: FormData): Promise<void> {
     maxAge: MFA_ENROLL_MAX_AGE,
   });
 
-  // CONFIRM (audit PENDING): identical to the P1-02 enroll path — there is no declared `mfa.enroll` /
-  // `mfa.method.added` action in the closed tenant/platform audit enums (packages/types), so emitting an
-  // enrollment audit here would not type-check. The threat-model "enrollment audited" AC stays a follow-up
-  // tied to that enum addition; do NOT half-wire an undeclared action.
+  // Audit the enrollment (09 MFA-integrity AC). The tenant is RESOLVED before resolveNextStep routes here
+  // (flow.ts), so this is a tenant-known event → audit_log via recordAuthEvent (best-effort, swallow-on-
+  // failure — an audit miss must never block enrollment). Bound to txn.userId, never a request value; no
+  // secret/code in metadata. Skipped only in the defensive case where the txn somehow carries no tenant.
+  if (tenantId) {
+    await recordAuthEvent({
+      tenantId,
+      workspaceId: workspaceId ?? null,
+      actorUserId: userId,
+      action: "mfa.enroll",
+      entityType: "user",
+      entityId: userId,
+      metadata: { method: "totp", context: "forced_in_login" },
+      ipAddress: ip,
+      userAgent: (await headers()).get("user-agent"),
+      originDomain: new URL(env.AUTH_ORIGIN).host,
+    });
+  }
+
   redirect("/mfa/enroll?done=1");
 }
 

@@ -10,7 +10,16 @@
 // its banner/justification metadata; the scoped, time-boxed impersonation access token is WIRE-deferred.
 
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 const id = () => uuid("id").primaryKey().default(sql`uuid_generate_v7()`);
 
@@ -28,4 +37,87 @@ export const impersonationSessions = pgTable("impersonation_sessions", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   endedAt: timestamp("ended_at", { withTimezone: true }), // set on explicit end (null = still active/expired)
   ip: text("ip"), // staff actor's request IP at start (audit context)
+});
+
+// jit_elevations — just-in-time elevation grants (ADR-0011 / 13 §2, 13a F1). A staff member mints a
+// short-lived, reason-bearing, tenant-scoped grant for a sensitive `action` CLASS; the gated action (credit
+// move, org suspend) CONSUMES it in the SAME tx as the action + its audit row, so a rejected action releases
+// the grant. status flows active → consumed (expiry is derived from expires_at, never a stored 'expired').
+// approved_by_user_id is null in the self-service v1 and is the seam for peer-approval (13a open decision #2).
+// PLATFORM-owned staff data: written ONLY by the owner connection (withPlatformTx), deny-all to leadwolf_app
+// (rls/platformOps.sql + the applyMigrations REVOKE). MUTABLE (status flips), so — like impersonation_sessions
+// — there is no append-only trigger; the separate `elevation.grant` platform_audit_log row is the trail.
+export const jitElevations = pgTable(
+  "jit_elevations",
+  {
+    id: id(),
+    staffUserId: uuid("staff_user_id").notNull(), // the staff member the elevation is granted to
+    action: text("action").notNull(), // the sensitive action CLASS (the closed jitAction vocabulary)
+    reason: text("reason").notNull(), // justification captured at request (audited)
+    targetTenantId: uuid("target_tenant_id"), // the org the elevation is scoped to (null = unscoped, future)
+    status: text("status").notNull().default("active"), // active | consumed
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), // hard time-box
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }), // set when spent on an action (null = unspent)
+    approvedByUserId: uuid("approved_by_user_id"), // future peer-approval (null = self-service)
+    ip: text("ip"), // staff actor's request IP at grant (audit context)
+  },
+  // The consume path matches on (staff, action, target, status) and orders by expires_at — index it.
+  (t) => ({
+    lookup: index("jit_elevations_staff_action_status_idx").on(t.staffUserId, t.action, t.status),
+  }),
+);
+
+// support_notes — internal staff notes against a tenant kept during support (13a Area 3, 13 §3.3), with an
+// optional ticket link. PLATFORM-owned staff data: written by the owner connection (withPlatformTx), deny-all
+// to leadwolf_app (rls/platformOps.sql + the applyMigrations REVOKE) — a customer never sees staff notes about
+// their org. Append-in-practice (notes aren't edited in v1), but no append-only trigger is enforced (this is
+// operational scratch, not the compliance audit-of-record). Indexed by (tenant_id, id) for the per-tenant feed.
+export const supportNotes = pgTable(
+  "support_notes",
+  {
+    id: id(),
+    tenantId: uuid("tenant_id").notNull(), // the org the note is about
+    staffUserId: uuid("staff_user_id").notNull(), // the staff author
+    body: text("body").notNull(),
+    ticketUrl: text("ticket_url"), // optional link to the support ticket
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byTenant: index("support_notes_tenant_idx").on(t.tenantId, t.id) }),
+);
+
+// credit_packs — the credit-pack pricing catalog staff author (13a Area 5, 13 §3.5, 07 §1/§1A). PLATFORM
+// config, not tenant data: written only by the owner connection (withPlatformTx), deny-all to leadwolf_app
+// (rls/platformOps.sql + the applyMigrations REVOKE). `key` is the stable identity (upsert target). A retired
+// pack is kept (active=false) for history. Surfacing the active catalog to customers (the public, transparent
+// pricing page — ADR-0012) is a SEPARATE read surface and is not wired here.
+export const creditPacks = pgTable("credit_packs", {
+  id: id(),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  credits: integer("credits").notNull(),
+  priceCents: integer("price_cents").notNull(),
+  active: boolean("active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// plan_templates — the plan/entitlement-template catalog staff author (13a Area 5, 13 §3.5, 07 §5): the
+// seat/workspace caps, an optional monthly credit grant, and the `features` entitlement flags each plan
+// grants. Same PLATFORM-config posture as credit_packs: owner-written, deny-all to leadwolf_app. `key` is the
+// stable identity (upsert target); a retired plan is kept (active=false). Applying a template to a tenant (the
+// plan-override path) is a separate surface.
+export const planTemplates = pgTable("plan_templates", {
+  id: id(),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  seatLimit: integer("seat_limit").notNull(),
+  workspaceLimit: integer("workspace_limit"), // null = unlimited
+  monthlyCreditGrant: integer("monthly_credit_grant"), // null = none
+  features: jsonb("features").notNull().default({}),
+  active: boolean("active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -43,8 +43,28 @@ CREATE TABLE IF NOT EXISTS "email_thread" (
 	CONSTRAINT "email_thread_status_enum" CHECK ("email_thread"."status" IN ('open','snoozed','done'))
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "oauth_connect_state" (
+	"id" uuid PRIMARY KEY DEFAULT uuid_generate_v7() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"workspace_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"provider" varchar(20) NOT NULL,
+	"state_token" varchar(80) NOT NULL,
+	"pkce_verifier_enc" "bytea" NOT NULL,
+	"redirect_after" varchar(500),
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"consumed_at" timestamp with time zone,
+	CONSTRAINT "oauth_connect_state_provider_enum" CHECK ("oauth_connect_state"."provider" IN ('google','microsoft'))
+);
+--> statement-breakpoint
 ALTER TABLE "email_event" DROP CONSTRAINT "email_event_type_enum";--> statement-breakpoint
 ALTER TABLE "outreach_log" ADD COLUMN "last_reply_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "mailbox_integration" ADD COLUMN "oauth_expires_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "mailbox_integration" ADD COLUMN "oauth_scopes" text[];--> statement-breakpoint
+ALTER TABLE "mailbox_integration" ADD COLUMN "provider_account_id" varchar(255);--> statement-breakpoint
+ALTER TABLE "mailbox_integration" ADD COLUMN "reauth_required" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "mailbox_integration" ADD COLUMN "reauth_reason" varchar(120);--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "email_message" ADD CONSTRAINT "email_message_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
@@ -123,6 +143,24 @@ EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 --> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "oauth_connect_state" ADD CONSTRAINT "oauth_connect_state_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "oauth_connect_state" ADD CONSTRAINT "oauth_connect_state_workspace_id_workspaces_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "oauth_connect_state" ADD CONSTRAINT "oauth_connect_state_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_email_message_thread" ON "email_message" USING btree ("thread_id","occurred_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_email_message_ws_occurred" ON "email_message" USING btree ("workspace_id","occurred_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_email_message_rfc822" ON "email_message" USING btree ("workspace_id","rfc822_message_id") WHERE "email_message"."rfc822_message_id" IS NOT NULL;--> statement-breakpoint
@@ -130,4 +168,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "uniq_email_message_provider" ON "email_messag
 CREATE INDEX IF NOT EXISTS "idx_email_thread_ws_last_message" ON "email_thread" USING btree ("workspace_id","last_message_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_email_thread_ws_owner" ON "email_thread" USING btree ("workspace_id","owner_user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "uniq_email_thread_provider" ON "email_thread" USING btree ("mailbox_integration_id","provider_thread_id") WHERE "email_thread"."provider_thread_id" IS NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "uniq_oauth_connect_state_token" ON "oauth_connect_state" USING btree ("state_token");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "idx_oauth_connect_state_tenant" ON "oauth_connect_state" USING btree ("tenant_id","created_at");--> statement-breakpoint
 ALTER TABLE "email_event" ADD CONSTRAINT "email_event_type_enum" CHECK ("email_event"."event_type" IN ('delivery','open','click','bounce','complaint','unsubscribe','reply','auto_reply'));

@@ -5,26 +5,42 @@
 import { describe, expect, it } from "bun:test";
 import { platformAuditAction } from "./platformAudit.ts";
 
-// Wired via recordPlatformAuthEvent (packages/auth, ADR-0031 §3 / P0-01).
+// WRITTEN = has a verified call-site today. Identity events are wired via recordPlatformAuthEvent
+// (packages/auth, ADR-0031 §3 / P0-01); the tenant/credit staff actions are wired via withPlatformTx in
+// apps/api/src/features/admin/routes.ts (13a Area 1 — the tenant-lifecycle + manual-credit endpoints).
 const WRITTEN = new Set<string>([
   "password.reset.request",
   // password.reset.complete reaches platform_audit_log on the 0/>1-tenant branch; the single-tenant branch
   // writes audit_log (see auditCoverage.test.ts). Either way it has a verified call-site.
   "password.reset.complete",
-]);
-
-// Defined in the closed enum but not yet wired: staff/admin actions land with the apps/admin track; the
-// remaining tenant-less identity events land as their flows are built.
-const PENDING = new Set<string>([
+  // 13a Area 1 — staff tenant-management mutations (POST /admin/tenants/:id/{suspend,reactivate,credits}).
   "tenant.suspend",
   "tenant.reactivate",
   "credit.grant",
+  "credit.adjust",
+  // 13a Area 2 — staff global-user mutations (POST /admin/users/:id/{deactivate,reactivate}).
+  "user.deactivate",
+  "user.reactivate",
+  // 13a F1 — JIT elevation grant (POST /admin/elevations), consumed by the credit/suspend mutations.
+  "elevation.grant",
+  // 13a F4 — audit-log CSV export (GET /admin/audit-log/export) writes its own audited row.
+  "audit.export",
+  // 13a Area 3 — staff support note added to a tenant (POST /admin/tenants/:id/notes).
+  "support_note.add",
+  // 13a Area 5 — credit-pack (pricing) catalog upsert / toggle (PUT/POST /admin/pricing/credit-packs).
+  "credit_pack.set",
+  // 13a Area 5 — plan-template catalog upsert / toggle (PUT/POST /admin/pricing/plan-templates).
+  "plan_template.set",
+]);
+
+// Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;
+// the remaining tenant-less identity events land as their flows are built.
+const PENDING = new Set<string>([
   "plan.override",
   "impersonation.start",
   "impersonation.end",
   "feature_flag.set",
   "provider_config.update",
-  "audit.export",
   "staff.login",
   "staff.login.failure",
   "login.failure",

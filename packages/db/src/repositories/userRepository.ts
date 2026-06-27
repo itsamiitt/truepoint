@@ -284,6 +284,11 @@ export interface SessionRecord {
   // is surfaced here for the DEFERRED idle/absolute follow-up (and for admin/observability). Existing consumers
   // ignore it; it never changes the OFF-by-default behavior.
   createdAt: Date;
+  // Time of last activity — stamped `now` at create and on every refresh rotation (so it tracks the last
+  // refresh). The IDLE-window boundary (P1-01 Gate D) reads this on the refresh path: a refresh past
+  // idleTimeoutSeconds since lastSeenAt is rejected. Null only for pre-existing rows written before the
+  // column existed; the idle gate treats null as "no idle data" and does not reject on it.
+  lastSeenAt: Date | null;
 }
 
 export interface CreateSessionInput {
@@ -321,6 +326,7 @@ const toSession = (r: SessionRow): SessionRecord => ({
   expiresAt: r.expiresAt,
   revokedAt: r.revokedAt,
   createdAt: r.createdAt,
+  lastSeenAt: r.lastSeenAt,
 });
 
 export const sessionRepository = {

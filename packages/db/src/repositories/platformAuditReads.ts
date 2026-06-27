@@ -8,10 +8,13 @@
 // deliberately OMITTED from the projection: it can carry arbitrary per-action detail, so the staff list view
 // surfaces only the structured envelope (who/what/where/when), never the free-form payload.
 
-import { TENANT_VISIBLE_STAFF_ACTIONS } from "@leadwolf/types";
-import { sql } from "drizzle-orm";
+import { type PlatformAuditQuery, TENANT_VISIBLE_STAFF_ACTIONS } from "@leadwolf/types";
+import { type SQL, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { PLATFORM_READ_LIMIT } from "./platformAdminReads.ts";
+
+/** Hard cap on a single CSV export — bounded like every cross-tenant read (ADR-0032); a wider range is paged. */
+export const AUDIT_EXPORT_CAP = 5000;
 
 export interface PlatformAuditRow {
   id: string;
@@ -64,29 +67,108 @@ interface RawTenantStaffAccessRow {
   occurred_at: Date;
 }
 
+/** Map the raw snake_case row to the camelCase envelope. */
+function mapRow(r: RawAuditRow): PlatformAuditRow {
+  return {
+    id: r.id,
+    actorUserId: r.actor_user_id,
+    action: r.action,
+    targetType: r.target_type,
+    targetId: r.target_id,
+    tenantId: r.tenant_id,
+    workspaceId: r.workspace_id,
+    ip: r.ip,
+    occurredAt: r.occurred_at instanceof Date ? r.occurred_at : new Date(r.occurred_at),
+  };
+}
+
+/** Build the AND-combined filter predicates for the viewer/export (no cursor). All inputs are bound. */
+function filterConds(
+  q: Pick<PlatformAuditQuery, "action" | "tenantId" | "actorUserId" | "since" | "until">,
+): SQL[] {
+  const conds: SQL[] = [];
+  if (q.action) conds.push(sql`action = ${q.action}`);
+  if (q.tenantId) conds.push(sql`tenant_id = ${q.tenantId}::uuid`);
+  if (q.actorUserId) conds.push(sql`actor_user_id = ${q.actorUserId}::uuid`);
+  if (q.since) conds.push(sql`occurred_at >= ${q.since}::timestamptz`);
+  if (q.until) conds.push(sql`occurred_at < ${q.until}::timestamptz`);
+  return conds;
+}
+
+/** Opaque keyset cursor over (occurred_at, id) — base64url, never an offset. */
+function encodeCursor(row: PlatformAuditRow): string {
+  return Buffer.from(`${row.occurredAt.toISOString()}|${row.id}`, "utf8").toString("base64url");
+}
+function decodeCursor(cursor: string): { occurredAt: string; id: string } | null {
+  try {
+    const [occurredAt, id] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
+    return occurredAt && id ? { occurredAt, id } : null;
+  } catch {
+    return null;
+  }
+}
+
 export const platformAuditReadRepository = {
   /** The most recent platform audit entries, newest first, bounded (ADR-0032). `metadata` is not selected —
    *  the list view never exposes the free-form jsonb payload. Must run inside a withPlatformTx transaction. */
   async listRecent(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformAuditRow[]> {
-    // Raw SELECT (platform_audit_log is not in the Drizzle schema). postgres.js via tx.execute returns the
-    // rows directly as an array — mirrors the dsarRepository raw-read pattern in this package.
     const rows = (await tx.execute(sql`
       SELECT id, actor_user_id, action, target_type, target_id, tenant_id, workspace_id, ip, occurred_at
       FROM platform_audit_log
       ORDER BY occurred_at DESC
       LIMIT ${limit}
     `)) as unknown as RawAuditRow[];
-    return rows.map((r) => ({
-      id: r.id,
-      actorUserId: r.actor_user_id,
-      action: r.action,
-      targetType: r.target_type,
-      targetId: r.target_id,
-      tenantId: r.tenant_id,
-      workspaceId: r.workspace_id,
-      ip: r.ip,
-      occurredAt: r.occurred_at instanceof Date ? r.occurred_at : new Date(r.occurred_at),
-    }));
+    return rows.map(mapRow);
+  },
+
+  /**
+   * A filtered, keyset-paginated page of audit entries (13a F4): AND-combined optional filters
+   * (action/tenant/actor/since/until) ordered (occurred_at DESC, id DESC). Fetches limit+1 to detect a next
+   * page and returns an opaque `nextCursor`. Must run inside a withPlatformTx transaction (owner read).
+   */
+  async listPage(
+    tx: Tx,
+    q: PlatformAuditQuery,
+  ): Promise<{ rows: PlatformAuditRow[]; nextCursor: string | null }> {
+    const conds = filterConds(q);
+    if (q.cursor) {
+      const c = decodeCursor(q.cursor);
+      // Row-value comparison continues the DESC keyset: strictly "older than" the cursor's (time, id).
+      if (c) conds.push(sql`(occurred_at, id) < (${c.occurredAt}::timestamptz, ${c.id}::uuid)`);
+    }
+    const where = conds.length > 0 ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
+    const limit = Math.min(q.limit, PLATFORM_READ_LIMIT);
+    const raw = (await tx.execute(sql`
+      SELECT id, actor_user_id, action, target_type, target_id, tenant_id, workspace_id, ip, occurred_at
+      FROM platform_audit_log
+      ${where}
+      ORDER BY occurred_at DESC, id DESC
+      LIMIT ${limit + 1}
+    `)) as unknown as RawAuditRow[];
+    const mapped = raw.map(mapRow);
+    const hasMore = mapped.length > limit;
+    const rows = hasMore ? mapped.slice(0, limit) : mapped;
+    const last = rows[rows.length - 1];
+    return { rows, nextCursor: hasMore && last ? encodeCursor(last) : null };
+  },
+
+  /** The filtered rows for a CSV export (13a F4 / audit.export) — same filters as the viewer, no cursor,
+   *  bounded by AUDIT_EXPORT_CAP. Must run inside a withPlatformTx transaction. */
+  async exportRows(
+    tx: Tx,
+    q: Pick<PlatformAuditQuery, "action" | "tenantId" | "actorUserId" | "since" | "until">,
+    cap = AUDIT_EXPORT_CAP,
+  ): Promise<PlatformAuditRow[]> {
+    const conds = filterConds(q);
+    const where = conds.length > 0 ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
+    const raw = (await tx.execute(sql`
+      SELECT id, actor_user_id, action, target_type, target_id, tenant_id, workspace_id, ip, occurred_at
+      FROM platform_audit_log
+      ${where}
+      ORDER BY occurred_at DESC, id DESC
+      LIMIT ${cap}
+    `)) as unknown as RawAuditRow[];
+    return raw.map(mapRow);
   },
 
   /**

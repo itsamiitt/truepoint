@@ -6,25 +6,43 @@
 import { evaluateFlagsForTenant } from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
+  authPolicyRepository,
   featureFlagRepository,
+  jitElevationRepository,
   platformAdminRepository,
+  platformAdminWriteRepository,
+  platformStaffRepository,
+  supportNoteRepository,
   withPlatformTx,
 } from "@leadwolf/db";
 import {
+  ElevationRequiredError,
   LIST_PLATFORM_AUDIT_ACTIONS,
   NotFoundError,
   type StaffListOverview,
+  type SupportNoteView,
   ValidationError,
+  capabilitiesForRole,
+  createSupportNoteSchema,
+  creditAdjustSchema,
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
+  platformListQuerySchema,
+  setAuthEnforcementSchema,
+  tenantStatusChangeSchema,
+  userStatusChangeSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import { type ApiVariables, authn } from "../../middleware/authn.ts";
 import { platformAdmin } from "../../middleware/platformAdmin.ts";
+import { requireCapability } from "../../middleware/requireCapability.ts";
 import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
 import { auditLogRoutes } from "./auditLog.ts";
+import { billingRoutes } from "./billing.ts";
+import { elevationRoutes } from "./elevations.ts";
 import { impersonationRoutes } from "./impersonation.ts";
+import { pricingRoutes } from "./pricing.ts";
 import { providerConfigRoutes } from "./providerConfigs.ts";
 import { staffRoutes } from "./staff.ts";
 
@@ -41,6 +59,15 @@ const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   ip: c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
 });
 
+// ── Who am I (13a F3) — the caller's active staff role + the capabilities it grants. The console fetches this
+// once to hide actions the operator can't perform (defence-in-depth; every endpoint still enforces its own
+// gate). A plain role lookup, not a cross-tenant data read, so it is unaudited (the caller reading their own
+// access). Returns role=null + no capabilities for a `pa` holder without an active platform_staff row. ──
+adminRoutes.get("/me", async (c) => {
+  const role = await platformStaffRepository.getActiveRole(c.get("claims").sub);
+  return c.json({ staffRole: role ?? null, capabilities: role ? capabilitiesForRole(role) : [] });
+});
+
 adminRoutes.get("/workspaces", async (c) => {
   const workspaces = await withPlatformTx(actorOf(c), "admin.list_workspaces", (tx) =>
     platformAdminRepository.listWorkspaces(tx),
@@ -49,18 +76,83 @@ adminRoutes.get("/workspaces", async (c) => {
 });
 
 adminRoutes.get("/users", async (c) => {
-  const users = await withPlatformTx(actorOf(c), "admin.list_users", (tx) =>
-    platformAdminRepository.listUsers(tx),
+  const parsed = platformListQuerySchema.safeParse({
+    search: c.req.query("search"),
+    cursor: c.req.query("cursor"),
+    limit: c.req.query("limit"),
+  });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { rows, nextCursor } = await withPlatformTx(actorOf(c), "admin.list_users", (tx) =>
+    platformAdminRepository.listUsers(tx, parsed.data),
   );
-  return c.json({ users });
+  return c.json({ users: rows, nextCursor });
 });
 
-// ── Tenants directory (13 §3.1) — plan / status / seats / credits per org, bounded cross-tenant read. ──
-adminRoutes.get("/tenants", async (c) => {
-  const tenants = await withPlatformTx(actorOf(c), "admin.list_tenants", (tx) =>
-    platformAdminRepository.listTenants(tx),
+// ── Global user management (13a Area 2, 13 §3.2) ───────────────────────────────────────────────────────
+// Deactivate / reactivate a global user across tenants. super_admin or support. Same audited-write discipline
+// as the tenant lifecycle ops: withPlatformTx (in-tx platform_audit_log), UUID-validated before the tx, a
+// mandatory reason. Two lockout rails on deactivate: the caller cannot deactivate THEMSELVES (a clean 422
+// before the tx), and a platform-staff target is refused in-tx (revoke the staff role first) — both roll the
+// audit row back. (reset-MFA / force-reset / revoke-sessions reuse the packages/auth primitives in a later slice.)
+
+/** Deactivate a global user (status → suspended). Needs users:deactivate. Audited "user.deactivate". */
+adminRoutes.post("/users/:id/deactivate", requireCapability("users:deactivate"), async (c) => {
+  const userId = c.req.param("id");
+  if (!UUID_RE.test(userId)) throw new ValidationError("id must be a UUID");
+  if (userId === c.get("claims").sub)
+    throw new ValidationError("You cannot deactivate your own account.");
+  const parsed = userStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "user.deactivate",
+    async (tx) => {
+      const res = await platformAdminWriteRepository.setUserStatus(tx, userId, "suspended", {
+        blockPlatformAdmin: true,
+      });
+      if (!res.found) throw new NotFoundError("User not found.");
+      if (res.blockedPlatformAdmin)
+        throw new ValidationError(
+          "Cannot deactivate a platform-staff account; revoke the staff role first.",
+        );
+    },
+    { targetType: "user", targetId: userId, metadata: { reason: parsed.data.reason } },
   );
-  return c.json({ tenants });
+  return c.json({ ok: true, userId, status: "suspended" });
+});
+
+/** Reactivate a suspended user (status → active). Needs users:deactivate. Audited "user.reactivate". */
+adminRoutes.post("/users/:id/reactivate", requireCapability("users:deactivate"), async (c) => {
+  const userId = c.req.param("id");
+  if (!UUID_RE.test(userId)) throw new ValidationError("id must be a UUID");
+  const parsed = userStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "user.reactivate",
+    async (tx) => {
+      const res = await platformAdminWriteRepository.setUserStatus(tx, userId, "active", {
+        blockPlatformAdmin: false,
+      });
+      if (!res.found) throw new NotFoundError("User not found.");
+    },
+    { targetType: "user", targetId: userId, metadata: { reason: parsed.data.reason } },
+  );
+  return c.json({ ok: true, userId, status: "active" });
+});
+
+// ── Tenants directory (13 §3.1) — plan / status / seats / credits per org; searchable + keyset-paged (F5). ──
+adminRoutes.get("/tenants", async (c) => {
+  const parsed = platformListQuerySchema.safeParse({
+    search: c.req.query("search"),
+    cursor: c.req.query("cursor"),
+    limit: c.req.query("limit"),
+  });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { rows, nextCursor } = await withPlatformTx(actorOf(c), "admin.list_tenants", (tx) =>
+    platformAdminRepository.listTenants(tx, parsed.data),
+  );
+  return c.json({ tenants: rows, nextCursor });
 });
 
 // ── Tenant detail (13 §3.1) — the org plus its workspaces + members. Each list is bounded. ──
@@ -74,6 +166,161 @@ adminRoutes.get("/tenants/:id", async (c) => {
   );
   if (!detail) throw new NotFoundError("Tenant not found.");
   return c.json(detail);
+});
+
+// ── Tenant lifecycle + manual credit ops (13a Area 1, 13 §3.1) ─────────────────────────────────────────
+// These are the first cross-tenant WRITES on the admin surface. Each runs through withPlatformTx (owner
+// visibility + an in-tx platform_audit_log row), is gated by the doc-13 capability matrix, validates the id
+// as a UUID BEFORE the tx (a malformed id is a clean 422 with no audit row), and records a mandatory reason.
+// A no-op write (unknown id / would-overdraw) throws INSIDE the tx so the audit row rolls back — no trace for
+// an action that did not happen (the feature_flag-404 discipline). JIT elevation (13a F1) layers on later.
+
+/** Suspend an org. super_admin only (the action gates the whole tenant). JIT-gated (13a F1): consumes a live
+ *  "tenant.suspend" elevation for this tenant in-tx; without one → 403 elevation_required. Audited "tenant.suspend". */
+adminRoutes.post("/tenants/:id/suspend", requireCapability("tenants:suspend"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = tenantStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
+  await withPlatformTx(
+    actor,
+    "tenant.suspend",
+    async (tx) => {
+      const elevated = await jitElevationRepository.consume(tx, {
+        staffUserId: actor.userId,
+        action: "tenant.suspend",
+        targetTenantId: tenantId,
+      });
+      if (!elevated) throw new ElevationRequiredError("tenant.suspend");
+      const touched = await platformAdminWriteRepository.setTenantStatus(tx, tenantId, "suspended");
+      if (touched === 0) throw new NotFoundError("Tenant not found.");
+    },
+    {
+      targetType: "tenant",
+      targetId: tenantId,
+      tenantId,
+      metadata: { reason: parsed.data.reason },
+    },
+  );
+  return c.json({ ok: true, tenantId, status: "suspended" });
+});
+
+/** Reactivate a suspended org. super_admin only. Audited "tenant.reactivate". */
+adminRoutes.post("/tenants/:id/reactivate", requireCapability("tenants:suspend"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = tenantStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "tenant.reactivate",
+    async (tx) => {
+      const touched = await platformAdminWriteRepository.setTenantStatus(tx, tenantId, "active");
+      if (touched === 0) throw new NotFoundError("Tenant not found.");
+    },
+    {
+      targetType: "tenant",
+      targetId: tenantId,
+      tenantId,
+      metadata: { reason: parsed.data.reason },
+    },
+  );
+  return c.json({ ok: true, tenantId, status: "active" });
+});
+
+/** Manual credit grant / adjustment (07 §7). super_admin or billing_ops. A positive delta is a "credit.grant",
+ *  a negative one a "credit.adjust" — the immutable trail names the actual operation, not a generic "grant".
+ *  JIT-gated (13a F1): consumes a live "credit.adjust" elevation for this tenant in-tx; without one → 403
+ *  elevation_required. The repo's FOR UPDATE + the DB CHECK(>=0) are the overdraft guards; a would-overdraw
+ *  debit is a clean 422 (and rolls the consumed elevation back, so the operator can retry). */
+adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = creditAdjustSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { delta, reason } = parsed.data;
+  const actor = actorOf(c);
+  const balanceAfter = await withPlatformTx(
+    actor,
+    delta > 0 ? "credit.grant" : "credit.adjust",
+    async (tx) => {
+      const elevated = await jitElevationRepository.consume(tx, {
+        staffUserId: actor.userId,
+        action: "credit.adjust",
+        targetTenantId: tenantId,
+      });
+      if (!elevated) throw new ElevationRequiredError("credit.adjust");
+      const res = await platformAdminWriteRepository.adjustCredits(tx, tenantId, delta);
+      if (!res.found) throw new NotFoundError("Tenant not found.");
+      if (res.wouldOverdraw)
+        throw new ValidationError(
+          `This adjustment would overdraw the balance (current ${res.balanceAfter}).`,
+          { balance: res.balanceAfter },
+        );
+      return res.balanceAfter;
+    },
+    { targetType: "tenant", targetId: tenantId, tenantId, metadata: { delta, reason } },
+  );
+  return c.json({ tenantId, delta, balanceAfter });
+});
+
+// ── Support notes (13a Area 3, 13 §3.3) — internal staff notes about a tenant, with an optional ticket link.
+// Read by the support-facing roles; written by super_admin|support (audited "support_note.add"). Staff-only
+// data — never surfaced to the customer (deny-all RLS + REVOKE). ──
+function toNoteView(r: {
+  id: string;
+  tenantId: string;
+  staffUserId: string;
+  body: string;
+  ticketUrl: string | null;
+  createdAt: Date;
+}): SupportNoteView {
+  return {
+    id: r.id,
+    tenantId: r.tenantId,
+    staffUserId: r.staffUserId,
+    body: r.body,
+    ticketUrl: r.ticketUrl,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+adminRoutes.get(
+  "/tenants/:id/notes",
+  requireStaffRole("super_admin", "support", "compliance_officer", "read_only"),
+  async (c) => {
+    const tenantId = c.req.param("id");
+    if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+    const notes = await withPlatformTx(
+      actorOf(c),
+      "admin.list_support_notes",
+      async (tx) => (await supportNoteRepository.listForTenant(tx, tenantId)).map(toNoteView),
+      { targetType: "tenant", targetId: tenantId, tenantId },
+    );
+    return c.json({ notes });
+  },
+);
+
+adminRoutes.post("/tenants/:id/notes", requireCapability("tenants:notes:write"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = createSupportNoteSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
+  const note = await withPlatformTx(
+    actor,
+    "support_note.add",
+    (tx) =>
+      supportNoteRepository.add(tx, {
+        tenantId,
+        staffUserId: actor.userId,
+        body: parsed.data.body,
+        ticketUrl: parsed.data.ticketUrl ?? null,
+      }),
+    { targetType: "tenant", targetId: tenantId, tenantId },
+  );
+  return c.json({ note: toNoteView(note) });
 });
 
 // ── Staff lists-overview (list-plan/07 §3.1, D2) — the PRIVACY-FIRST staff view of a tenant's lists. ──────
@@ -110,6 +357,33 @@ adminRoutes.get(
       updatedAt: r.updatedAt.toISOString(),
     }));
     return c.json({ lists });
+  },
+);
+
+// ── Auth-policy enforcement master switch (P1-01) — STAFF-ONLY per-tenant enable + break-glass disable. ──
+// The lockout-capable login gates (IP allowlist / allowed methods / session + idle timeout / forced-MFA
+// enrollment, packages/auth) fire only when BOTH the global env master-arm AND this per-tenant switch are on.
+// A super_admin enables enforcement for a VERIFIED tenant; the `enabled:false` direction IS the break-glass —
+// it re-opens password/all-method login within the ≤15-min token window WITHOUT a deploy. The write is
+// audited (admin.set_auth_enforcement) in the SAME withPlatformTx tx; the tenantId is validated as a UUID
+// BEFORE the tx so a malformed id is a clean 422 with no audit row. Tenant security_admins can never reach
+// this switch (it is absent from the tenant-editable authPolicySchema), so an org cannot self-lock-out.
+adminRoutes.post(
+  "/tenants/:tenantId/auth-enforcement",
+  requireStaffRole("super_admin"),
+  async (c) => {
+    const tenantId = c.req.param("tenantId");
+    if (!UUID_RE.test(tenantId)) throw new ValidationError("tenantId must be a UUID");
+    const parsed = setAuthEnforcementSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+    const { enabled } = parsed.data;
+    await withPlatformTx(
+      actorOf(c),
+      "admin.set_auth_enforcement",
+      (tx) => authPolicyRepository.setEnforcement(tx, tenantId, enabled),
+      { targetType: "tenant", targetId: tenantId, tenantId, metadata: { enabled } },
+    );
+    return c.json({ ok: true, tenantId, enforcementEnabled: enabled });
   },
 );
 
@@ -250,3 +524,9 @@ adminRoutes.route("/provider-configs", providerConfigRoutes);
 adminRoutes.route("/audit-log", auditLogRoutes);
 adminRoutes.route("/staff", staffRoutes);
 adminRoutes.route("/impersonation", impersonationRoutes);
+// JIT elevation request/list (13a F1, super_admin|billing_ops) — minted here, consumed by the gated actions above.
+adminRoutes.route("/elevations", elevationRoutes);
+// Billing / revenue-ops economics (13a Area 4, super_admin|billing_ops).
+adminRoutes.route("/billing", billingRoutes);
+// Credit-pack pricing catalog (13a Area 5, pricing:manage).
+adminRoutes.route("/pricing", pricingRoutes);
