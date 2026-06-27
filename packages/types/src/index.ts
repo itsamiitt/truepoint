@@ -34,4 +34,5 @@ export * from "./staffAdmin.ts";
 export * from "./tenantAdmin.ts";
 export * from "./userAdmin.ts";
 export * from "./jitElevation.ts";
+export * from "./platformAdmin.ts";
 export * from "./listGovernance.ts";

@@ -221,6 +221,7 @@ export {
 export {
   platformAdminRepository,
   PLATFORM_READ_LIMIT,
+  type PlatformPage,
   type PlatformTenantRow,
   type PlatformTenantDetail,
   type PlatformWorkspaceRow,

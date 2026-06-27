@@ -11,12 +11,20 @@ async function problemMessage(res: Response, fallback: string): Promise<string> 
   return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
 }
 
-/** GET /admin/tenants — the cross-tenant directory (bounded by the api). */
-export async function fetchTenants(): Promise<TenantRow[]> {
-  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/tenants`);
+export interface TenantsPage {
+  tenants: TenantRow[];
+  nextCursor: string | null;
+}
+
+/** GET /admin/tenants — one keyset page of the directory, optionally filtered by a name/slug search (13a F5). */
+export async function fetchTenants(search?: string, cursor?: string): Promise<TenantsPage> {
+  const p = new URLSearchParams();
+  if (search) p.set("search", search);
+  if (cursor) p.set("cursor", cursor);
+  const qs = p.toString();
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/tenants${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load tenants"));
-  const body = (await res.json()) as { tenants: TenantRow[] };
-  return body.tenants;
+  return (await res.json()) as TenantsPage;
 }
 
 /** GET /admin/tenants/:id — one org plus its workspaces + members. */

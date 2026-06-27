@@ -12,10 +12,11 @@ import {
   StateSwitch,
   StatusBadge,
   TpButton,
+  TpInput,
   TpTextarea,
   useToast,
 } from "@leadwolf/ui";
-import { Users } from "lucide-react";
+import { Search, Users } from "lucide-react";
 import { useState } from "react";
 import { deactivateUser, reactivateUser } from "../api";
 import { statusTone } from "../format";
@@ -26,9 +27,11 @@ const MIN_REASON = 5;
 type PendingAction = { user: PlatformUser; kind: "deactivate" | "reactivate" };
 
 export function UsersPage() {
-  const { users, loading, error, reload } = useUsers();
+  const { users, nextCursor, loading, loadingMore, error, applySearch, loadMore, reload } =
+    useUsers();
   const toast = useToast();
 
+  const [query, setQuery] = useState("");
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -125,6 +128,25 @@ export function UsersPage() {
         </div>
       </div>
 
+      {/* Server-side search over email / name; Enter or the button applies it. */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          applySearch(query.trim());
+        }}
+        style={{ display: "flex", gap: 8, marginBottom: 16, maxWidth: 420 }}
+      >
+        <TpInput
+          value={query}
+          placeholder="Search by email or name…"
+          aria-label="Search users"
+          onChange={(e) => setQuery(e.currentTarget.value)}
+        />
+        <TpButton type="submit" variant="secondary">
+          <Search size={14} /> Search
+        </TpButton>
+      </form>
+
       <StateSwitch
         loading={loading}
         error={error}
@@ -134,11 +156,18 @@ export function UsersPage() {
           <EmptyState
             icon={<Users size={20} />}
             title="No users"
-            description="No users have been provisioned yet."
+            description="No users match the current search."
           />
         }
       >
         <DataTable columns={columns} rows={users ?? []} rowKey={(u) => u.id} />
+        {nextCursor ? (
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
+            <TpButton variant="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
+              {loadingMore ? "Loading…" : "Load more"}
+            </TpButton>
+          </div>
+        ) : null}
       </StateSwitch>
 
       <Dialog

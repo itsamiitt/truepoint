@@ -23,6 +23,7 @@ import {
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
+  platformListQuerySchema,
   setAuthEnforcementSchema,
   tenantStatusChangeSchema,
   userStatusChangeSchema,
@@ -58,10 +59,16 @@ adminRoutes.get("/workspaces", async (c) => {
 });
 
 adminRoutes.get("/users", async (c) => {
-  const users = await withPlatformTx(actorOf(c), "admin.list_users", (tx) =>
-    platformAdminRepository.listUsers(tx),
+  const parsed = platformListQuerySchema.safeParse({
+    search: c.req.query("search"),
+    cursor: c.req.query("cursor"),
+    limit: c.req.query("limit"),
+  });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { rows, nextCursor } = await withPlatformTx(actorOf(c), "admin.list_users", (tx) =>
+    platformAdminRepository.listUsers(tx, parsed.data),
   );
-  return c.json({ users });
+  return c.json({ users: rows, nextCursor });
 });
 
 // ── Global user management (13a Area 2, 13 §3.2) ───────────────────────────────────────────────────────
@@ -117,12 +124,18 @@ adminRoutes.post("/users/:id/reactivate", requireStaffRole("super_admin", "suppo
   return c.json({ ok: true, userId, status: "active" });
 });
 
-// ── Tenants directory (13 §3.1) — plan / status / seats / credits per org, bounded cross-tenant read. ──
+// ── Tenants directory (13 §3.1) — plan / status / seats / credits per org; searchable + keyset-paged (F5). ──
 adminRoutes.get("/tenants", async (c) => {
-  const tenants = await withPlatformTx(actorOf(c), "admin.list_tenants", (tx) =>
-    platformAdminRepository.listTenants(tx),
+  const parsed = platformListQuerySchema.safeParse({
+    search: c.req.query("search"),
+    cursor: c.req.query("cursor"),
+    limit: c.req.query("limit"),
+  });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { rows, nextCursor } = await withPlatformTx(actorOf(c), "admin.list_tenants", (tx) =>
+    platformAdminRepository.listTenants(tx, parsed.data),
   );
-  return c.json({ tenants });
+  return c.json({ tenants: rows, nextCursor });
 });
 
 // ── Tenant detail (13 §3.1) — the org plus its workspaces + members. Each list is bounded. ──
