@@ -4,6 +4,7 @@
 // or self-deactivation) is surfaced as a clear toast. Renders every async state through the shared State Kit.
 "use client";
 
+import { useStaffMe } from "@/lib/staffMe";
 import {
   type Column,
   DataTable,
@@ -30,6 +31,8 @@ export function UsersPage() {
   const { users, nextCursor, loading, loadingMore, error, applySearch, loadMore, reload } =
     useUsers();
   const toast = useToast();
+  const { canMaybe } = useStaffMe();
+  const canManage = canMaybe("users:deactivate");
 
   const [query, setQuery] = useState("");
   const [pending, setPending] = useState<PendingAction | null>(null);
@@ -93,9 +96,12 @@ export function UsersPage() {
       header: "",
       align: "right",
       // Suspended → reactivate. Active & non-staff → deactivate. Active staff accounts are protected here
-      // (the api refuses to deactivate them); reactivating a suspended account is always offered.
+      // (the api refuses to deactivate them); reactivating a suspended account is always offered. The action is
+      // hidden entirely when the caller's role lacks users:deactivate (the api still enforces it).
       cell: (u) =>
-        u.status === "suspended" ? (
+        !canManage ? (
+          <span className="app-muted">—</span>
+        ) : u.status === "suspended" ? (
           <TpButton
             variant="ghost"
             size="sm"

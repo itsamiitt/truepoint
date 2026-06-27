@@ -5,6 +5,7 @@
 // the status badge + credit balance reflect the change. Mirrors the StaffPage grant/revoke pattern.
 "use client";
 
+import { useStaffMe } from "@/lib/staffMe";
 import { Dialog, TpButton, TpInput, TpTextarea, useToast } from "@leadwolf/ui";
 import { useState } from "react";
 import { adjustTenantCredits, reactivateTenant, requestElevation, suspendTenant } from "../api";
@@ -20,6 +21,7 @@ export function TenantActions({
   onChanged: () => Promise<void> | void;
 }) {
   const toast = useToast();
+  const { canMaybe } = useStaffMe();
   const suspended = tenant.status === "suspended";
 
   const [statusOpen, setStatusOpen] = useState(false);
@@ -92,13 +94,18 @@ export function TenantActions({
 
   return (
     <>
+      {/* Buttons are hidden when the caller's role lacks the capability (the api still enforces it). */}
       <div style={{ display: "flex", gap: 8 }}>
-        <TpButton variant="secondary" onClick={openCredit}>
-          Adjust credits
-        </TpButton>
-        <TpButton variant={suspended ? "primary" : "danger"} onClick={openStatus}>
-          {suspended ? "Reactivate" : "Suspend"}
-        </TpButton>
+        {canMaybe("tenants:credits") ? (
+          <TpButton variant="secondary" onClick={openCredit}>
+            Adjust credits
+          </TpButton>
+        ) : null}
+        {canMaybe("tenants:suspend") ? (
+          <TpButton variant={suspended ? "primary" : "danger"} onClick={openStatus}>
+            {suspended ? "Reactivate" : "Suspend"}
+          </TpButton>
+        ) : null}
       </div>
 
       {/* Suspend / reactivate — reason is recorded in the immutable platform audit log. */}

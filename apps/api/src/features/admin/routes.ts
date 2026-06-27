@@ -11,6 +11,7 @@ import {
   jitElevationRepository,
   platformAdminRepository,
   platformAdminWriteRepository,
+  platformStaffRepository,
   supportNoteRepository,
   withPlatformTx,
 } from "@leadwolf/db";
@@ -21,6 +22,7 @@ import {
   type StaffListOverview,
   type SupportNoteView,
   ValidationError,
+  capabilitiesForRole,
   createSupportNoteSchema,
   creditAdjustSchema,
   featureFlagGlobalToggleSchema,
@@ -34,6 +36,7 @@ import {
 import { type Context, Hono } from "hono";
 import { type ApiVariables, authn } from "../../middleware/authn.ts";
 import { platformAdmin } from "../../middleware/platformAdmin.ts";
+import { requireCapability } from "../../middleware/requireCapability.ts";
 import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
 import { auditLogRoutes } from "./auditLog.ts";
 import { billingRoutes } from "./billing.ts";
@@ -53,6 +56,15 @@ adminRoutes.use("*", platformAdmin);
 const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   userId: c.get("claims").sub,
   ip: c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+});
+
+// ── Who am I (13a F3) — the caller's active staff role + the capabilities it grants. The console fetches this
+// once to hide actions the operator can't perform (defence-in-depth; every endpoint still enforces its own
+// gate). A plain role lookup, not a cross-tenant data read, so it is unaudited (the caller reading their own
+// access). Returns role=null + no capabilities for a `pa` holder without an active platform_staff row. ──
+adminRoutes.get("/me", async (c) => {
+  const role = await platformStaffRepository.getActiveRole(c.get("claims").sub);
+  return c.json({ staffRole: role ?? null, capabilities: role ? capabilitiesForRole(role) : [] });
 });
 
 adminRoutes.get("/workspaces", async (c) => {
@@ -82,8 +94,8 @@ adminRoutes.get("/users", async (c) => {
 // before the tx), and a platform-staff target is refused in-tx (revoke the staff role first) — both roll the
 // audit row back. (reset-MFA / force-reset / revoke-sessions reuse the packages/auth primitives in a later slice.)
 
-/** Deactivate a global user (status → suspended). super_admin|support. Audited "user.deactivate". */
-adminRoutes.post("/users/:id/deactivate", requireStaffRole("super_admin", "support"), async (c) => {
+/** Deactivate a global user (status → suspended). Needs users:deactivate. Audited "user.deactivate". */
+adminRoutes.post("/users/:id/deactivate", requireCapability("users:deactivate"), async (c) => {
   const userId = c.req.param("id");
   if (!UUID_RE.test(userId)) throw new ValidationError("id must be a UUID");
   if (userId === c.get("claims").sub)
@@ -108,8 +120,8 @@ adminRoutes.post("/users/:id/deactivate", requireStaffRole("super_admin", "suppo
   return c.json({ ok: true, userId, status: "suspended" });
 });
 
-/** Reactivate a suspended user (status → active). super_admin|support. Audited "user.reactivate". */
-adminRoutes.post("/users/:id/reactivate", requireStaffRole("super_admin", "support"), async (c) => {
+/** Reactivate a suspended user (status → active). Needs users:deactivate. Audited "user.reactivate". */
+adminRoutes.post("/users/:id/reactivate", requireCapability("users:deactivate"), async (c) => {
   const userId = c.req.param("id");
   if (!UUID_RE.test(userId)) throw new ValidationError("id must be a UUID");
   const parsed = userStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
@@ -164,7 +176,7 @@ adminRoutes.get("/tenants/:id", async (c) => {
 
 /** Suspend an org. super_admin only (the action gates the whole tenant). JIT-gated (13a F1): consumes a live
  *  "tenant.suspend" elevation for this tenant in-tx; without one → 403 elevation_required. Audited "tenant.suspend". */
-adminRoutes.post("/tenants/:id/suspend", requireStaffRole("super_admin"), async (c) => {
+adminRoutes.post("/tenants/:id/suspend", requireCapability("tenants:suspend"), async (c) => {
   const tenantId = c.req.param("id");
   if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
   const parsed = tenantStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
@@ -194,7 +206,7 @@ adminRoutes.post("/tenants/:id/suspend", requireStaffRole("super_admin"), async 
 });
 
 /** Reactivate a suspended org. super_admin only. Audited "tenant.reactivate". */
-adminRoutes.post("/tenants/:id/reactivate", requireStaffRole("super_admin"), async (c) => {
+adminRoutes.post("/tenants/:id/reactivate", requireCapability("tenants:suspend"), async (c) => {
   const tenantId = c.req.param("id");
   if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
   const parsed = tenantStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
@@ -221,40 +233,36 @@ adminRoutes.post("/tenants/:id/reactivate", requireStaffRole("super_admin"), asy
  *  JIT-gated (13a F1): consumes a live "credit.adjust" elevation for this tenant in-tx; without one → 403
  *  elevation_required. The repo's FOR UPDATE + the DB CHECK(>=0) are the overdraft guards; a would-overdraw
  *  debit is a clean 422 (and rolls the consumed elevation back, so the operator can retry). */
-adminRoutes.post(
-  "/tenants/:id/credits",
-  requireStaffRole("super_admin", "billing_ops"),
-  async (c) => {
-    const tenantId = c.req.param("id");
-    if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
-    const parsed = creditAdjustSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
-    const { delta, reason } = parsed.data;
-    const actor = actorOf(c);
-    const balanceAfter = await withPlatformTx(
-      actor,
-      delta > 0 ? "credit.grant" : "credit.adjust",
-      async (tx) => {
-        const elevated = await jitElevationRepository.consume(tx, {
-          staffUserId: actor.userId,
-          action: "credit.adjust",
-          targetTenantId: tenantId,
-        });
-        if (!elevated) throw new ElevationRequiredError("credit.adjust");
-        const res = await platformAdminWriteRepository.adjustCredits(tx, tenantId, delta);
-        if (!res.found) throw new NotFoundError("Tenant not found.");
-        if (res.wouldOverdraw)
-          throw new ValidationError(
-            `This adjustment would overdraw the balance (current ${res.balanceAfter}).`,
-            { balance: res.balanceAfter },
-          );
-        return res.balanceAfter;
-      },
-      { targetType: "tenant", targetId: tenantId, tenantId, metadata: { delta, reason } },
-    );
-    return c.json({ tenantId, delta, balanceAfter });
-  },
-);
+adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = creditAdjustSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { delta, reason } = parsed.data;
+  const actor = actorOf(c);
+  const balanceAfter = await withPlatformTx(
+    actor,
+    delta > 0 ? "credit.grant" : "credit.adjust",
+    async (tx) => {
+      const elevated = await jitElevationRepository.consume(tx, {
+        staffUserId: actor.userId,
+        action: "credit.adjust",
+        targetTenantId: tenantId,
+      });
+      if (!elevated) throw new ElevationRequiredError("credit.adjust");
+      const res = await platformAdminWriteRepository.adjustCredits(tx, tenantId, delta);
+      if (!res.found) throw new NotFoundError("Tenant not found.");
+      if (res.wouldOverdraw)
+        throw new ValidationError(
+          `This adjustment would overdraw the balance (current ${res.balanceAfter}).`,
+          { balance: res.balanceAfter },
+        );
+      return res.balanceAfter;
+    },
+    { targetType: "tenant", targetId: tenantId, tenantId, metadata: { delta, reason } },
+  );
+  return c.json({ tenantId, delta, balanceAfter });
+});
 
 // ── Support notes (13a Area 3, 13 §3.3) — internal staff notes about a tenant, with an optional ticket link.
 // Read by the support-facing roles; written by super_admin|support (audited "support_note.add"). Staff-only
@@ -293,7 +301,7 @@ adminRoutes.get(
   },
 );
 
-adminRoutes.post("/tenants/:id/notes", requireStaffRole("super_admin", "support"), async (c) => {
+adminRoutes.post("/tenants/:id/notes", requireCapability("tenants:notes:write"), async (c) => {
   const tenantId = c.req.param("id");
   if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
   const parsed = createSupportNoteSchema.safeParse(await c.req.json().catch(() => null));
