@@ -69,6 +69,22 @@ CREATE TABLE IF NOT EXISTS support_notes (
 
 ALTER TABLE support_notes ENABLE ROW LEVEL SECURITY;
 
+-- account_holds (13a Area 7) — staff abuse/fraud holds on a tenant. Same PLATFORM-owned posture: owner-written
+-- (withPlatformTx), deny-all to leadwolf_app (this file + the applyMigrations REVOKE). Defensive CREATE mirrors
+-- the migration's column set; idempotent.
+CREATE TABLE IF NOT EXISTS account_holds (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id uuid NOT NULL,
+  kind text NOT NULL,
+  reason text NOT NULL,
+  placed_by_user_id uuid NOT NULL,
+  placed_at timestamptz NOT NULL DEFAULT now(),
+  lifted_at timestamptz,
+  lifted_by_user_id uuid
+);
+
+ALTER TABLE account_holds ENABLE ROW LEVEL SECURITY;
+
 -- credit_packs (13a Area 5) — staff-authored pricing config. Same PLATFORM-owned posture: written only by the
 -- owner connection (withPlatformTx), deny-all to leadwolf_app for now (rls/platformOps.sql + applyMigrations
 -- REVOKE). NOTE: the public, transparent pricing page (ADR-0012) is a SEPARATE customer read surface — when it

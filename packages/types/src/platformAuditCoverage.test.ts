@@ -31,6 +31,9 @@ const WRITTEN = new Set<string>([
   "credit_pack.set",
   // 13a Area 5 — plan-template catalog upsert / toggle (PUT/POST /admin/pricing/plan-templates).
   "plan_template.set",
+  // 13a Area 7 — place / lift an account hold (POST /admin/tenants/:id/holds[/:holdId/lift]).
+  "account.hold",
+  "account.hold.lift",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;

@@ -46,3 +46,15 @@ export interface SupportNote {
   ticketUrl: string | null;
   createdAt: string;
 }
+
+/** An abuse / fraud hold on a tenant (13a Area 7). Mirrors the api `/admin/tenants/:id/holds` shape. */
+export interface AccountHold {
+  id: string;
+  tenantId: string;
+  kind: string;
+  reason: string;
+  placedByUserId: string;
+  placedAt: string;
+  liftedAt: string | null;
+  liftedByUserId: string | null;
+}

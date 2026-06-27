@@ -13,6 +13,7 @@ import { z } from "zod";
 export const staffCapability = z.enum([
   "tenants:suspend", // suspend / reactivate an org
   "tenants:credits", // manual credit grant / adjustment
+  "tenants:hold", // place / lift an account (abuse) hold
   "tenants:notes:write", // add a support note
   "users:deactivate", // deactivate / reactivate a global user
   "billing:read", // view billing / revenue economics
@@ -30,7 +31,7 @@ const ALL_CAPABILITIES: StaffCapability[] = staffCapability.options;
 // Per-role capability bundles (13 §2 capability matrix). super_admin is handled separately (implies ALL), so
 // it is intentionally absent here. Keep this in sync with the per-endpoint requireCapability gates.
 const ROLE_CAPABILITIES: Record<Exclude<StaffRole, "super_admin">, StaffCapability[]> = {
-  support: ["users:deactivate", "tenants:notes:write", "impersonate:start"],
+  support: ["users:deactivate", "tenants:notes:write", "tenants:hold", "impersonate:start"],
   billing_ops: ["tenants:credits", "billing:read", "elevation:request"],
   compliance_officer: ["audit:read"],
   read_only: [],

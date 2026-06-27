@@ -86,6 +86,25 @@ export const supportNotes = pgTable(
   (t) => ({ byTenant: index("support_notes_tenant_idx").on(t.tenantId, t.id) }),
 );
 
+// account_holds — staff abuse / fraud / payment holds on a tenant (13a Area 7, 13 §3.7). A hold is the
+// abuse-review flag (distinct from the lifecycle suspend, Area 1): a tenant is "on hold" while it has a row
+// with lifted_at IS NULL. PLATFORM-owned staff data: owner-written (withPlatformTx), deny-all to leadwolf_app
+// (rls/platformOps.sql + the applyMigrations REVOKE). Indexed by (tenant_id, id) for the per-tenant feed.
+export const accountHolds = pgTable(
+  "account_holds",
+  {
+    id: id(),
+    tenantId: uuid("tenant_id").notNull(),
+    kind: text("kind").notNull(), // the closed accountHoldKind vocabulary
+    reason: text("reason").notNull(),
+    placedByUserId: uuid("placed_by_user_id").notNull(),
+    placedAt: timestamp("placed_at", { withTimezone: true }).notNull().defaultNow(),
+    liftedAt: timestamp("lifted_at", { withTimezone: true }), // null = still active
+    liftedByUserId: uuid("lifted_by_user_id"),
+  },
+  (t) => ({ byTenant: index("account_holds_tenant_idx").on(t.tenantId, t.id) }),
+);
+
 // credit_packs — the credit-pack pricing catalog staff author (13a Area 5, 13 §3.5, 07 §1/§1A). PLATFORM
 // config, not tenant data: written only by the owner connection (withPlatformTx), deny-all to leadwolf_app
 // (rls/platformOps.sql + the applyMigrations REVOKE). `key` is the stable identity (upsert target). A retired

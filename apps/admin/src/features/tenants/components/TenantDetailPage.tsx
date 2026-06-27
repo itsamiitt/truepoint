@@ -12,6 +12,7 @@ import { useTenantDetail } from "../hooks/useTenantDetail";
 import type { TenantMember, TenantWorkspace } from "../types";
 import { SupportNotes } from "./SupportNotes";
 import { TenantActions } from "./TenantActions";
+import { TenantHolds } from "./TenantHolds";
 
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
@@ -144,6 +145,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               }
             />
 
+            <TenantHolds tenantId={tenantId} />
             <SupportNotes tenantId={tenantId} />
           </>
         ) : null}

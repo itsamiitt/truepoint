@@ -40,4 +40,5 @@ export * from "./billingAdmin.ts";
 export * from "./staffCapability.ts";
 export * from "./pricingAdmin.ts";
 export * from "./planTemplateAdmin.ts";
+export * from "./accountHold.ts";
 export * from "./listGovernance.ts";

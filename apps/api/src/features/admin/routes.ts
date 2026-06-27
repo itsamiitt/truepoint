@@ -6,6 +6,7 @@
 import { evaluateFlagsForTenant } from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
+  accountHoldRepository,
   authPolicyRepository,
   featureFlagRepository,
   jitElevationRepository,
@@ -16,6 +17,7 @@ import {
   withPlatformTx,
 } from "@leadwolf/db";
 import {
+  type AccountHoldView,
   ElevationRequiredError,
   LIST_PLATFORM_AUDIT_ACTIONS,
   NotFoundError,
@@ -28,6 +30,7 @@ import {
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
+  placeAccountHoldSchema,
   platformListQuerySchema,
   setAuthEnforcementSchema,
   tenantStatusChangeSchema,
@@ -322,6 +325,90 @@ adminRoutes.post("/tenants/:id/notes", requireCapability("tenants:notes:write"),
   );
   return c.json({ note: toNoteView(note) });
 });
+
+// ── Account holds (13a Area 7, 13 §3.7) — abuse / fraud / payment holds on a tenant. The abuse-review flag,
+// distinct from suspend (Area 1). Read by the support-facing roles; placed / lifted by tenants:hold
+// (super_admin|support), audited ("account.hold" / "account.hold.lift"). Staff-only (deny-all RLS). ──
+function toHoldView(r: {
+  id: string;
+  tenantId: string;
+  kind: string;
+  reason: string;
+  placedByUserId: string;
+  placedAt: Date;
+  liftedAt: Date | null;
+  liftedByUserId: string | null;
+}): AccountHoldView {
+  return {
+    id: r.id,
+    tenantId: r.tenantId,
+    kind: r.kind as AccountHoldView["kind"],
+    reason: r.reason,
+    placedByUserId: r.placedByUserId,
+    placedAt: r.placedAt.toISOString(),
+    liftedAt: r.liftedAt ? r.liftedAt.toISOString() : null,
+    liftedByUserId: r.liftedByUserId,
+  };
+}
+
+adminRoutes.get(
+  "/tenants/:id/holds",
+  requireStaffRole("super_admin", "support", "compliance_officer", "read_only"),
+  async (c) => {
+    const tenantId = c.req.param("id");
+    if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+    const holds = await withPlatformTx(
+      actorOf(c),
+      "admin.list_holds",
+      async (tx) => (await accountHoldRepository.listForTenant(tx, tenantId)).map(toHoldView),
+      { targetType: "tenant", targetId: tenantId, tenantId },
+    );
+    return c.json({ holds });
+  },
+);
+
+adminRoutes.post("/tenants/:id/holds", requireCapability("tenants:hold"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = placeAccountHoldSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
+  const hold = await withPlatformTx(
+    actor,
+    "account.hold",
+    (tx) =>
+      accountHoldRepository.place(tx, {
+        tenantId,
+        kind: parsed.data.kind,
+        reason: parsed.data.reason,
+        placedByUserId: actor.userId,
+      }),
+    { targetType: "tenant", targetId: tenantId, tenantId, metadata: { kind: parsed.data.kind } },
+  );
+  return c.json({ hold: toHoldView(hold) });
+});
+
+adminRoutes.post(
+  "/tenants/:id/holds/:holdId/lift",
+  requireCapability("tenants:hold"),
+  async (c) => {
+    const tenantId = c.req.param("id");
+    const holdId = c.req.param("holdId");
+    if (!UUID_RE.test(tenantId) || !UUID_RE.test(holdId))
+      throw new ValidationError("id must be a UUID");
+    const actor = actorOf(c);
+    await withPlatformTx(
+      actor,
+      "account.hold.lift",
+      async (tx) => {
+        const touched = await accountHoldRepository.lift(tx, tenantId, holdId, actor.userId);
+        if (touched === 0) throw new NotFoundError("Active hold not found.");
+      },
+      { targetType: "tenant", targetId: tenantId, tenantId, metadata: { holdId } },
+    );
+    return c.json({ ok: true, holdId });
+  },
+);
 
 // ── Staff lists-overview (list-plan/07 §3.1, D2) — the PRIVACY-FIRST staff view of a tenant's lists. ──────
 // Returns per-list METADATA + an AGGREGATE member COUNT only — NO list_members, NO contact PII. This is the

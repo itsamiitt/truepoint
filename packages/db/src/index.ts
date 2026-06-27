@@ -245,6 +245,11 @@ export {
   supportNoteRepository,
   type SupportNoteRow,
 } from "./repositories/supportNoteRepository.ts";
+// Account holds (13a Area 7) — staff abuse/fraud holds; owner-connection, audited writes; deny-all to app role.
+export {
+  accountHoldRepository,
+  type AccountHoldRow,
+} from "./repositories/accountHoldRepository.ts";
 // Platform billing/economics reads (13a Area 4) — cross-tenant aggregates, run within withPlatformTx.
 export {
   platformBillingReadRepository,
