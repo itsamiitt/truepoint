@@ -4,7 +4,12 @@
 // mocked (bun module mocks are process-global) so the test drives the REAL route through app.request().
 
 import { describe, expect, it, mock } from "bun:test";
-import type { DataQualityTrendPoint, HomeSummary, WorkspaceDataQuality } from "@leadwolf/types";
+import type {
+  DataQualityTrendPoint,
+  HomeSummary,
+  ReverificationRun,
+  WorkspaceDataQuality,
+} from "@leadwolf/types";
 
 // A minimal but schema-valid summary (the route parses it against homeSummarySchema before sending).
 const summary: HomeSummary = {
@@ -49,6 +54,18 @@ const trend: DataQualityTrendPoint[] = [
   { capturedAt: "2026-06-01T00:00:00.000Z", metrics: dataQuality },
 ];
 
+const reverificationRuns: ReverificationRun[] = [
+  {
+    id: "00000000-0000-4000-8000-000000000001",
+    startedAt: "2026-06-01T00:00:00.000Z",
+    finishedAt: "2026-06-01T00:00:01.000Z",
+    scanned: 10,
+    reverified: 7,
+    errored: 1,
+    createdAt: "2026-06-01T00:00:01.000Z",
+  },
+];
+
 // authn/tenancy: pass through and stash a tenant + workspace so requireRole + the handler proceed.
 mock.module("../../middleware/authn.ts", () => ({
   authn: async (c: { set: (k: string, v: unknown) => void }, next: () => Promise<void>) => {
@@ -76,6 +93,7 @@ mock.module("@leadwolf/core", () => ({
   buildHomeSummary: async () => summary,
   buildDataQualitySummary: async () => dataQuality,
   recentDataQualityTrend: async () => trend,
+  recentReverificationRuns: async () => reverificationRuns,
 }));
 
 const { homeRoutes } = await import("./routes.ts");
@@ -95,6 +113,15 @@ describe("GET /home/data-quality/history", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("private, max-age=300");
     expect((await res.json()) as DataQualityTrendPoint[]).toEqual(trend);
+  });
+});
+
+describe("GET /home/data-quality/reverification-runs", () => {
+  it("returns the workspace re-verification run history", async () => {
+    const res = await homeRoutes.request("/data-quality/reverification-runs");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, max-age=60");
+    expect((await res.json()) as ReverificationRun[]).toEqual(reverificationRuns);
   });
 });
 

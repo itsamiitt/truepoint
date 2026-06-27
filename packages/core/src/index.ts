@@ -172,6 +172,7 @@ export {
 // verifier, per workspace, off the request thread. Run by the reverification queue + sweep worker.
 export {
   runReverification,
+  recentReverificationRuns,
   REVERIFICATION_FLAG_KEY,
   type ReverificationResult,
 } from "./data-health/reverifyContacts.ts";

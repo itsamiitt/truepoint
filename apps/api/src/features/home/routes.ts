@@ -12,11 +12,17 @@
 // per-workspace memo of the computed summary is a sensible follow-up, but that response-cache layer does not
 // exist yet (caching.md implementation status), so it is intentionally out of scope here.
 
-import { buildDataQualitySummary, buildHomeSummary, recentDataQualityTrend } from "@leadwolf/core";
+import {
+  buildDataQualitySummary,
+  buildHomeSummary,
+  recentDataQualityTrend,
+  recentReverificationRuns,
+} from "@leadwolf/core";
 import {
   dataQualityTrendSchema,
   ForbiddenError,
   homeSummarySchema,
+  reverificationRunsSchema,
   workspaceDataQualitySchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
@@ -89,5 +95,23 @@ homeRoutes.get(
     const trend = await recentDataQualityTrend({ tenantId: c.get("tenantId"), workspaceId });
     c.header("Cache-Control", "private, max-age=300");
     return c.json(dataQualityTrendSchema.parse(trend));
+  },
+);
+
+/**
+ * GET /data-quality/reverification-runs — the per-workspace freshness re-verification activity (PLAN_06): recent
+ * runs (scanned/reverified/errored + window) from the verification_jobs ledger. Same authn + tenancy + any-role
+ * gate; short private cache. Reads via recentReverificationRuns.
+ */
+homeRoutes.get(
+  "/data-quality/reverification-runs",
+  requireRole("owner", "admin", "member", "viewer"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+
+    const runs = await recentReverificationRuns({ tenantId: c.get("tenantId"), workspaceId });
+    c.header("Cache-Control", "private, max-age=60");
+    return c.json(reverificationRunsSchema.parse(runs));
   },
 );

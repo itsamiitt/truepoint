@@ -335,6 +335,21 @@ export const dataQualityTrendPointSchema = z.object({
 export type DataQualityTrendPoint = z.infer<typeof dataQualityTrendPointSchema>;
 export const dataQualityTrendSchema = z.array(dataQualityTrendPointSchema);
 
+/** One freshness re-verification run — a completed runReverification pass's tally + window (PLAN_06, from
+ *  verification_jobs). Non-PII (counts + timestamps). The Data Health "re-verification activity" read returns a
+ *  newest-first series. */
+export const reverificationRunSchema = z.object({
+  id: z.string().uuid(),
+  startedAt: z.string().datetime({ offset: true }),
+  finishedAt: z.string().datetime({ offset: true }),
+  scanned: z.number().int().min(0),
+  reverified: z.number().int().min(0),
+  errored: z.number().int().min(0),
+  createdAt: z.string().datetime({ offset: true }),
+});
+export type ReverificationRun = z.infer<typeof reverificationRunSchema>;
+export const reverificationRunsSchema = z.array(reverificationRunSchema);
+
 // ── Masked contact view (what search/list returns before reveal — 05 §6/§7) ────────────────────────────
 /** A workspace-scoped contact with PII masked until reveal (M3). `emailDomain` is the non-PII facet. */
 export const maskedContactSchema = z.object({

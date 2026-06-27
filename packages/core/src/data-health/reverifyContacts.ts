@@ -23,6 +23,7 @@ import {
   FRESHNESS_SLA_DAYS,
   type PhoneLineType,
   type PhoneStatus,
+  type ReverificationRun,
   reverifyCutoff,
 } from "@leadwolf/types";
 import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
@@ -172,4 +173,22 @@ export async function runReverification(
   }
 
   return { scanned, reverified, errored };
+}
+
+/** Recent re-verification runs for a workspace, newest first (the Data Health "re-verification activity" read).
+ *  Reads the verification_jobs ledger written by runReverification (PLAN_06). */
+export async function recentReverificationRuns(
+  scope: { tenantId: string; workspaceId: string },
+  limit = 50,
+): Promise<ReverificationRun[]> {
+  const rows = await withTenantTx(scope, (tx) => verificationJobRepository.listRecent(tx, limit));
+  return rows.map((r) => ({
+    id: r.id,
+    startedAt: r.startedAt.toISOString(),
+    finishedAt: r.finishedAt.toISOString(),
+    scanned: r.scanned,
+    reverified: r.reverified,
+    errored: r.errored,
+    createdAt: r.createdAt.toISOString(),
+  }));
 }
