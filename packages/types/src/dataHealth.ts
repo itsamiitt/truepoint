@@ -46,6 +46,13 @@ export function freshnessSubScore(ageDays: number, slaDays: number): number {
   return clamp01(1 - ratio / 1.5);
 }
 
+/** The re-verify cutoff timestamp (22 §3/§4, ADR-0025): a record whose `last_verified_at` is older than this
+ *  (or null) has reached its freshness SLA and is due for re-verification. Defaults to the email SLA — the
+ *  dominant, most-decaying field the record-level freshness proxy uses (see `computeContactDataQuality`). Pure. */
+export function reverifyCutoff(now: Date = new Date(), slaDays: number = FRESHNESS_SLA_DAYS.email): Date {
+  return new Date(now.getTime() - slaDays * 86_400_000);
+}
+
 // ── Verification (§2.3) ──────────────────────────────────────────────────────────────────────────────────
 /** Verification sub-score for one field status (handles BOTH the email_status and phone_status closed sets,
  *  since both feed the mean): a confirmed-good verdict = 1 (email `valid`; phone `valid`/`direct`/`mobile`/`hq`

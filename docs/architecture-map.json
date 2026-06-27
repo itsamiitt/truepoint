@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 946,
-  "fileSetHash": "sha256:3676a502f860297a6bb048c9099e842b6faab097487acd1100649806e9107b62",
+  "fileCount": 950,
+  "fileSetHash": "sha256:483798ba7655b5480219a5db3b2ca47a1866ee16a3dd8a8c625efc69575f8105",
   "features": {
     "account-search": {
       "web": [],
@@ -270,10 +270,14 @@
         "packages/core/src/data-health/emailVerifier.ts",
         "packages/core/src/data-health/reacherVerifier.test.ts",
         "packages/core/src/data-health/reacherVerifier.ts",
+        "packages/core/src/data-health/reverifyContacts.ts",
         "packages/core/src/data-health/validatePhone.ts"
       ],
       "db": [],
-      "workers": [],
+      "workers": [
+        "apps/workers/src/queues/reverification.ts",
+        "apps/workers/src/queues/reverificationSweep.ts"
+      ],
       "integrations": []
     },
     "email": {
@@ -1549,6 +1553,7 @@
       "packages/types/src/contacts.test.ts",
       "packages/types/src/contacts.ts",
       "packages/types/src/customFields.ts",
+      "packages/types/src/dataHealth.test.ts",
       "packages/types/src/dataHealth.ts",
       "packages/types/src/email.ts",
       "packages/types/src/enrichmentPolicy.ts",

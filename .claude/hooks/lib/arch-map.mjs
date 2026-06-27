@@ -66,6 +66,8 @@ export const QUEUE_DOMAIN = {
   "search-sync": "search",
   webhook: "api-public",
   dsar: "compliance",
+  reverification: "data-health",
+  reverificationSweep: "data-health",
 };
 export const REPO_DOMAIN = {
   contact: "reveal",

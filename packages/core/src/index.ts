@@ -144,6 +144,12 @@ export {
 } from "./data-health/reacherVerifier.ts";
 export { chargeFor, type ChargeInput } from "./data-health/chargeFor.ts";
 export { validatePhone } from "./data-health/validatePhone.ts";
+// Freshness re-verification loop (ADR-0025, 22 §3/§4): re-grades revealed, past-SLA contacts via the configured
+// verifier, per workspace, off the request thread. Run by the reverification queue + sweep worker.
+export {
+  runReverification,
+  type ReverificationResult,
+} from "./data-health/reverifyContacts.ts";
 // Data quality & freshness keystone (22 §2–§3, ADR-0025): the 0–100 data_quality_score composite + cold-start
 // re-weighting + completeness weights + verification sub-score + freshness SLAs/bands/decay. Pure + set-reusable;
 // import-commit, the freshness sweep, and the masked DTO badge all wire it.

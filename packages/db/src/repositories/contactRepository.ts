@@ -4,7 +4,7 @@
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
 import type { FieldProvenanceMap, MaskedContact } from "@leadwolf/types";
-import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
 
@@ -107,6 +107,19 @@ export interface UnresolvedContactRow {
   accountName: string | null;
 }
 
+/**
+ * The minimal row the freshness re-verification loop needs to re-grade a REVEALED contact's channels: its id +
+ * the ENCRYPTED email/phone (the worker decrypts to call the verifier — plaintext never leaves this layer) + the
+ * current statuses. Only revealed, live, past-SLA rows are returned (the in-use freshness gate).
+ */
+export interface StaleRevealedRow {
+  id: string;
+  emailEnc: Uint8Array | null;
+  phoneEnc: Uint8Array | null;
+  emailStatus: string;
+  phoneStatus: string | null;
+}
+
 export const contactRepository = {
   /**
    * A keyset-paged batch of EXISTING overlay contacts that still need master resolution: master_person_id IS
@@ -169,6 +182,68 @@ export const contactRepository = {
     const rows = (await db.execute(
       sql`SELECT DISTINCT tenant_id, workspace_id FROM contacts
           WHERE master_person_id IS NULL AND deleted_at IS NULL
+          LIMIT ${limit}`,
+    )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
+    return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
+  },
+
+  /**
+   * A keyset-paged batch of REVEALED, live contacts whose last_verified_at is past the freshness `cutoff` (or
+   * never set) — the freshness re-verification loop's in-use selection (22 §3/§4, ADR-0025). Returns the
+   * ENCRYPTED email/phone (the worker decrypts to call the verifier; plaintext never leaves this layer) plus the
+   * current statuses. RLS scopes this to ONE workspace via the caller's withTenantTx GUC (no explicit workspace
+   * predicate — isolation rides the tx, like findUnresolvedForBackfill). Ordered by id ASC and keyset-paged on
+   * `cursor` (id > cursor; null = first page) so a sweep walks the workspace in stable, bounded batches.
+   */
+  async findStaleRevealedForReverify(
+    tx: Tx,
+    cutoff: Date,
+    cursor: string | null,
+    limit: number,
+  ): Promise<StaleRevealedRow[]> {
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        emailEnc: contacts.emailEnc,
+        phoneEnc: contacts.phoneEnc,
+        emailStatus: contacts.emailStatus,
+        phoneStatus: contacts.phoneStatus,
+      })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.isRevealed, true),
+          isNull(contacts.deletedAt),
+          or(isNull(contacts.lastVerifiedAt), lt(contacts.lastVerifiedAt, cutoff)),
+          cursor === null ? undefined : gt(contacts.id, cursor),
+        ),
+      )
+      .orderBy(asc(contacts.id))
+      .limit(limit);
+    return rows.map((r) => ({
+      id: r.id,
+      emailEnc: r.emailEnc ?? null,
+      phoneEnc: r.phoneEnc ?? null,
+      emailStatus: r.emailStatus,
+      phoneStatus: r.phoneStatus,
+    }));
+  },
+
+  /**
+   * SYSTEM-LEVEL enumeration for the scheduled re-verification sweep (ADR-0025): the (tenantId, workspaceId) of
+   * every workspace holding REVEALED, live contacts past the freshness `cutoff`, so the sweep can enqueue a
+   * per-workspace re-verification. Runs on the OWNER connection (no leadwolf_app drop → sees EVERY workspace);
+   * returns ONLY non-PII ids. NOT reachable from a tenant request — only the leader-locked sweep calls it.
+   * `limit`-capped so one sweep can't fan out unbounded. Mirrors listWorkspacesWithUnresolvedContacts.
+   */
+  async listWorkspacesWithStaleRevealed(
+    cutoff: Date,
+    limit = 1000,
+  ): Promise<Array<{ tenantId: string; workspaceId: string }>> {
+    const rows = (await db.execute(
+      sql`SELECT DISTINCT tenant_id, workspace_id FROM contacts
+          WHERE is_revealed = true AND deleted_at IS NULL
+            AND (last_verified_at IS NULL OR last_verified_at < ${cutoff})
           LIMIT ${limit}`,
     )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
     return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));

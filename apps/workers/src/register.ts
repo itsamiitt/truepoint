@@ -48,6 +48,16 @@ import {
   type SequenceTickJobData,
   makeProcessSequenceTick,
 } from "./queues/sequenceTick.ts";
+import {
+  REVERIFICATION_QUEUE,
+  type ReverificationJobData,
+  processReverification,
+} from "./queues/reverification.ts";
+import {
+  REVERIFICATION_SWEEP_QUEUE,
+  type ReverificationSweepJobData,
+  makeProcessReverificationSweep,
+} from "./queues/reverificationSweep.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -83,6 +93,14 @@ export const sequenceTickQueue = new Queue<SequenceTickJobData>(EMAIL_SEQUENCE_T
 export const retentionSweepQueue = new Queue<RetentionSweepJobData>(RETENTION_SWEEP_QUEUE, {
   connection,
 });
+// Freshness re-verification (ADR-0025): a per-workspace queue + the leader-locked daily sweep that fans out to it.
+export const reverificationQueue = new Queue<ReverificationJobData>(REVERIFICATION_QUEUE, {
+  connection,
+});
+export const reverificationSweepQueue = new Queue<ReverificationSweepJobData>(
+  REVERIFICATION_SWEEP_QUEUE,
+  { connection },
+);
 
 /** Submit a parsed import for background processing (the async alternative to the inline api path). */
 export async function enqueueImport(data: ImportJobData): Promise<void> {
@@ -137,6 +155,29 @@ export async function scheduleMasterBackfillSweep(): Promise<void> {
     "sweep",
     {},
     { repeat: { every: 24 * 60 * 60_000 }, jobId: "master-backfill-sweep" },
+  );
+}
+
+/** Submit a per-workspace freshness re-verification (ADR-0025; from the sweep or on demand). Idempotent —
+ *  only still-stale rows are touched — so a couple of backoff retries cover a transient verifier outage. */
+export async function enqueueReverification(
+  scope: { tenantId: string; workspaceId: string },
+  opts?: { batchSize?: number },
+): Promise<string> {
+  const job = await reverificationQueue.add(
+    "reverify",
+    { scope, batchSize: opts?.batchSize },
+    { attempts: 3, backoff: { type: "exponential", delay: 60_000 } },
+  );
+  return String(job.id);
+}
+
+/** Register the daily reverification sweep (ADR-0025). Stable jobId → exactly one repeatable. */
+export async function scheduleReverificationSweep(): Promise<void> {
+  await reverificationSweepQueue.add(
+    "sweep",
+    {},
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "reverification-sweep" },
   );
 }
 
@@ -286,6 +327,21 @@ export function startWorkers(): Worker[] {
       ),
       RETENTION_SWEEP_QUEUE,
     ),
+    // Freshness re-verification per-workspace consumer (ADR-0025): re-grades stale revealed contacts.
+    instrument(
+      new Worker<ReverificationJobData>(REVERIFICATION_QUEUE, processReverification, { connection }),
+      REVERIFICATION_QUEUE,
+    ),
+    // Freshness re-verification SWEEP consumer: leader-locked daily fan-out enqueuing a per-workspace
+    // re-verification for every workspace with stale revealed contacts. enqueueReverification is injected.
+    instrument(
+      new Worker<ReverificationSweepJobData>(
+        REVERIFICATION_SWEEP_QUEUE,
+        makeProcessReverificationSweep(connection, enqueueReverification),
+        { connection },
+      ),
+      REVERIFICATION_SWEEP_QUEUE,
+    ),
   ];
   void scheduleSequenceTick().catch((e) =>
     log.error("failed to schedule the sequence tick", {
@@ -299,6 +355,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleMasterBackfillSweep().catch((e) =>
     log.error("failed to schedule the master-backfill sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleReverificationSweep().catch((e) =>
+    log.error("failed to schedule the reverification sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );

@@ -110,11 +110,14 @@ apps/                           # deployable processes (thin transport adapters)
 - **web:** `features/enrichment-jobs/` — `EnrichmentJobsPage` + `JobDetailDrawer` over `useEnrichmentJobs`/`useEnrichmentJobDetail`;
   GET-only surface (read the per-job ledger; the surface never mutates). Routed at `(shell)/enrichment/jobs`.
 
-#### data-health — *M4 verification + data-quality score* ([06 §9](./planning/06-enrichment-engine.md), ADR-0013/0025)
+#### data-health — *M4 verification + data-quality score + freshness re-verification* ([06 §9](./planning/06-enrichment-engine.md), ADR-0013/0025)
 - **core:** `data-health/` — `emailVerifier.ts` (verifier port; passthrough + fixture + `hybridVerifier`),
   `reacherVerifier.ts` (Reacher adapter + `defaultEmailVerifier` config-gated factory; injectable fetch),
+  `reverifyContacts.ts` (`runReverification` — re-grade revealed, past-SLA contacts via the configured verifier),
   `validatePhone.ts` (E.164), `chargeFor.ts` (ADR-0013 charge-by-verified-result), `dataQualityScore.ts`
   (the 0.4·completeness + 0.3·verification + 0.3·freshness formula; cold-start rules for imports)
+- **workers:** `reverification.ts` (per-workspace re-verification job), `reverificationSweep.ts` (leader-locked
+  daily fan-out enqueuing a per-workspace re-verification for every workspace with stale revealed contacts)
 
 #### reveal — *M1 masked reads + M3 money loop* ([07 §3](./planning/07-billing-credits.md), ADR-0007)
 - **core:** `reveal/revealContact.ts` — the monetized tx: in-tx suppression gate → idempotent claim (unique
