@@ -43,6 +43,7 @@
     "outreach",
     "pipeline-stages",
     "pipelineStages",
+    "pricing",
     "prospect",
     "provider-configs",
     "reports",
@@ -74,8 +75,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 967,
-  "fileSetHash": "sha256:01bf3f5824e806b131b446ba10e796bdc03725ed2065a043bfe9175c48da369b",
+  "fileCount": 976,
+  "fileSetHash": "sha256:bd8286fa92205597605c3256f3ede4f6465fe6e3dd1710ed2664c197e4832e77",
   "features": {
     "account-search": {
       "web": [],
@@ -114,6 +115,7 @@
         "apps/api/src/features/admin/elevations.ts",
         "apps/api/src/features/admin/impersonation.ts",
         "apps/api/src/features/admin/index.ts",
+        "apps/api/src/features/admin/pricing.ts",
         "apps/api/src/features/admin/providerConfigs.ts",
         "apps/api/src/features/admin/routes.ts",
         "apps/api/src/features/admin/staff.ts"
@@ -584,6 +586,21 @@
       "core": [
         "packages/core/src/pipelineStages/manageStages.ts"
       ],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "pricing": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/pricing/api.ts",
+        "apps/admin/src/features/pricing/components/PricingPage.tsx",
+        "apps/admin/src/features/pricing/hooks/usePricing.ts",
+        "apps/admin/src/features/pricing/index.ts",
+        "apps/admin/src/features/pricing/types.ts"
+      ],
+      "api": [],
+      "core": [],
       "db": [],
       "workers": [],
       "integrations": []
@@ -1186,6 +1203,7 @@
       "apps/admin/src/app/(shell)/billing/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
       "apps/admin/src/app/(shell)/layout.tsx",
+      "apps/admin/src/app/(shell)/pricing/page.tsx",
       "apps/admin/src/app/(shell)/provider-configs/page.tsx",
       "apps/admin/src/app/(shell)/staff/page.tsx",
       "apps/admin/src/app/(shell)/system-health/page.tsx",
@@ -1583,6 +1601,7 @@
       "packages/types/src/platformAdmin.ts",
       "packages/types/src/platformAudit.ts",
       "packages/types/src/platformAuditCoverage.test.ts",
+      "packages/types/src/pricingAdmin.ts",
       "packages/types/src/providerConfigs.ts",
       "packages/types/src/savedSearch.test.ts",
       "packages/types/src/savedSearch.ts",
@@ -1641,6 +1660,7 @@
     "apps/workers/src/queues/sequenceTick.ts",
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/authPolicyRepository.ts",
+    "packages/db/src/repositories/creditPackRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/domainRepository.ts",
     "packages/db/src/repositories/emailAnalyticsRepository.ts",
@@ -1683,6 +1703,7 @@
     "undeclared domain 'import-mapping-templates' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pipeline-stages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pipelineStages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'pricing' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'provider-configs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'saved-searches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'savedSearches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
