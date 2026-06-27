@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { DsarRequest } from "./types";
+import type { DsarRequest, RetentionPolicy } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -18,4 +18,55 @@ export async function fetchDsars(status?: string): Promise<DsarRequest[]> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load DSAR requests"));
   const body = (await res.json()) as { dsars: DsarRequest[] };
   return body.dsars;
+}
+
+export interface RetentionPolicyInput {
+  entity: string;
+  field: string | null;
+  retentionDays: number;
+  reason: string | null;
+}
+
+/** GET /admin/compliance/retention — the retention-policy list. */
+export async function fetchRetention(): Promise<RetentionPolicy[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/compliance/retention`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load retention policies"));
+  const body = (await res.json()) as { policies: RetentionPolicy[] };
+  return body.policies;
+}
+
+/** POST /admin/compliance/retention — create a retention policy (compliance:manage). */
+export async function createRetention(input: RetentionPolicyInput): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/compliance/retention`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not save the policy"));
+}
+
+/** PUT /admin/compliance/retention/:id — update a retention policy (compliance:manage). */
+export async function updateRetention(id: string, input: RetentionPolicyInput): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/compliance/retention/${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not update the policy"));
+}
+
+/** POST /admin/compliance/retention/:id/active — enable/retire a policy (compliance:manage). */
+export async function setRetentionActive(id: string, active: boolean): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/compliance/retention/${encodeURIComponent(id)}/active`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ active }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not update the policy"));
 }

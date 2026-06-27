@@ -197,6 +197,13 @@
       "when": 1782536930020,
       "tag": "0027_fixed_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1782538112130,
+      "tag": "0028_outstanding_venom",
+      "breakpoints": true
     }
   ]
 }

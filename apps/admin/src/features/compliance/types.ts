@@ -10,3 +10,14 @@ export interface DsarRequest {
   verifiedAt: string | null;
   completedAt: string | null;
 }
+
+/** A staff-authored retention policy (13a Area 8). Mirrors `/admin/compliance/retention`. */
+export interface RetentionPolicy {
+  id: string;
+  entity: string;
+  field: string | null;
+  retentionDays: number;
+  reason: string | null;
+  active: boolean;
+  updatedAt: string;
+}

@@ -269,6 +269,12 @@ export {
   platformComplianceReadRepository,
   type PlatformDsarRow,
 } from "./repositories/platformComplianceReads.ts";
+// Retention policies (13a Area 8) — staff-authored retention SLAs; owner-connection, audited writes.
+export {
+  retentionPolicyRepository,
+  type RetentionPolicyRow,
+  type RetentionPolicyWrite,
+} from "./repositories/retentionPolicyRepository.ts";
 // Credit-pack pricing catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
 export {
   creditPackRepository,

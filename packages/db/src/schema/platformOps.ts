@@ -129,6 +129,26 @@ export const announcements = pgTable(
   (t) => ({ activeIdx: index("announcements_active_idx").on(t.active, t.id) }),
 );
 
+// retention_policies — staff-authored data-retention SLAs (13a Area 8, 13 §3.8): how long an entity (optionally
+// a specific field) is retained, the input to the retention sweep (a separate worker). PLATFORM config, owner-
+// written (withPlatformTx), deny-all to leadwolf_app (rls/platformOps.sql + the applyMigrations REVOKE). field
+// null = the whole entity.
+export const retentionPolicies = pgTable(
+  "retention_policies",
+  {
+    id: id(),
+    entity: text("entity").notNull(),
+    field: text("field"), // null = whole entity
+    retentionDays: integer("retention_days").notNull(),
+    reason: text("reason"),
+    active: boolean("active").notNull().default(true),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ entityIdx: index("retention_policies_entity_idx").on(t.entity, t.id) }),
+);
+
 // credit_packs — the credit-pack pricing catalog staff author (13a Area 5, 13 §3.5, 07 §1/§1A). PLATFORM
 // config, not tenant data: written only by the owner connection (withPlatformTx), deny-all to leadwolf_app
 // (rls/platformOps.sql + the applyMigrations REVOKE). `key` is the stable identity (upsert target). A retired
