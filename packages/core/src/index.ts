@@ -237,10 +237,101 @@ export {
   type DeliveryEvent,
   type DeliveryEventType,
 } from "./email/deliveryWebhook.ts";
+// P0 (email-sec-001): per-tenant derivation of the webhook/tracking signing keys from the root secret — a
+// holder of one tenant's derived key cannot forge a signed event for another tenant.
+export {
+  deriveEmailSigningKey,
+  type EmailSigningPurpose,
+} from "./email/signingKeys.ts";
+// M12 P1 mailbox OAuth (email-planning/13 P1, D1): the provider-agnostic connect seam + PKCE + the Google
+// (Gmail) provider. authorize/exchange/refresh/revoke behind an injectable HTTP port; client secrets stay
+// server-side. The connect-flow API resolves a provider from the registry; tokens are encrypted by secretStore.
+export {
+  generatePkce,
+  pkceChallenge,
+  randomState,
+  type Pkce,
+} from "./email/pkce.ts";
+export {
+  registerOAuthProvider,
+  resolveOAuthProvider,
+  resetOAuthProviders,
+  fetchHttpPort,
+  OAuthError,
+  type MailboxOAuthProvider,
+  type OAuthTokenBundle,
+  type OAuthHttpPort,
+  type OAuthIdentity,
+  type AuthorizeParams,
+} from "./email/oauthProvider.ts";
+export {
+  createGoogleOAuthProvider,
+  GOOGLE_MAILBOX_SCOPES,
+  type GoogleOAuthConfig,
+} from "./email/googleOAuth.ts";
+export {
+  startMailboxConnect,
+  completeMailboxConnect,
+  type MailboxOAuthProviderId,
+  type StartConnectInput,
+  type StartConnectResult,
+  type CompleteConnectOutcome,
+} from "./email/mailboxConnectFlow.ts";
+// M12 P1 Gmail send adapter (email-planning/13 P1, D1/D11): the RFC 5322 builder (stable Message-ID threading
+// key + header-injection guard) and the gmail.messages.send adapter realizing the unchanged EmailSenderPort.
+export {
+  buildRfc822,
+  generateMessageId,
+  toGmailRaw,
+  type Rfc822Input,
+} from "./email/mimeMessage.ts";
+export {
+  createGmailSender,
+  fetchGmailHttpPort,
+  GmailSendError,
+  type GmailHttpPort,
+  type GmailSenderConfig,
+} from "./email/gmailSend.ts";
+export {
+  getMailboxAccessToken,
+  MailboxTokenError,
+  type MailboxTokenScope,
+} from "./email/mailboxTokenProvider.ts";
+// Startup wiring (called by apps/api + apps/workers): registers the OAuth provider (connect+refresh) + the
+// Gmail send adapter onto the M12 seams.
+export { registerEmailProviders } from "./email/registerProviders.ts";
 export {
   dispatchOutreachSend,
   type DispatchOutreachSendInput,
 } from "./email/dispatchOutreachSend.ts";
+// M12 P1 outbound persistence (email-planning/13 P1, D11): record the sent message into the conversation store
+// (find-or-create thread + outbound email_message w/ the rfc822 Message-ID) — best-effort, after sendStep.
+export {
+  recordOutboundMessage,
+  normalizeSubject,
+  type RecordOutboundInput,
+  type RecordOutboundResult,
+} from "./email/recordOutboundMessage.ts";
+// M12 P1 per-mailbox send-rate throttle (WARM-001): the pure token-bucket + the injectable port (default
+// allow-all; apps/workers injects the Redis adapter). A throttled send is deferred (re-enqueued), never dropped.
+export {
+  consumeToken,
+  type BucketState,
+  type BucketConfig,
+  type BucketResult,
+} from "./email/tokenBucket.ts";
+export {
+  allowAllThrottle,
+  MailboxThrottledError,
+  type MailboxThrottlePort,
+  type ThrottleResult,
+} from "./email/mailboxThrottle.ts";
+// M12 P1 proactive token refresh (leader-locked sweep): refresh mailboxes nearing OAuth expiry off the send path.
+export {
+  refreshDueMailboxTokens,
+  type RefreshSweepResult,
+  type RefreshSweepDeps,
+} from "./email/refreshDueMailboxTokens.ts";
 // M12 P2 templates (email-planning/13 P2, 01): the render-safe engine (the injection boundary) + the
 // versioned, owner-scoped (D8) template CRUD that externalises the inline outreach_steps.body.
 export {
@@ -252,14 +343,26 @@ export {
   createTemplate,
   updateTemplate,
   listTemplates,
+  getTemplate,
+  listTemplateVersions,
+  previewTemplate,
+  restoreVersion,
+  TEMPLATE_MERGE_FIELDS,
   type CreateTemplateInput,
   type UpdateTemplateInput,
+  type TemplateSummary,
+  type TemplateDetail,
+  type TemplateVersion,
+  type PreviewTemplateInput,
+  type RestoreVersionInput,
 } from "./email/templates.ts";
 // M12 P3 tracking (email-planning/13 P3, 04): the signed open/click token + the email_event → activities
 // projection that lights up the per-contact timeline (idempotent; opens informational, D6).
 export {
   signTrackingToken,
   verifyTrackingToken,
+  signTrackingTokenScoped,
+  verifyTrackingTokenScoped,
   type TrackingTokenPayload,
 } from "./email/trackingToken.ts";
 export {

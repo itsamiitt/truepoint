@@ -295,7 +295,23 @@ export {
   mailboxRepository,
   type MailboxInsert,
   type MailboxRecord,
+  type MailboxDueRow,
 } from "./repositories/mailboxRepository.ts";
+export {
+  oauthConnectStateRepository,
+  type ConnectStateInsert,
+  type ConnectStateRecord,
+} from "./repositories/oauthConnectStateRepository.ts";
+// M12 P1 outbound persistence / P3 inbox — the conversation + per-message store (rfc822 Message-ID threading
+// key). Net-new, additive to outreach_log/sendStep (D11). Bodies encrypted (D7), never projected to the API.
+export {
+  emailThreadRepository,
+  type ThreadInsert,
+} from "./repositories/emailThreadRepository.ts";
+export {
+  emailMessageRepository,
+  type MessageInsert,
+} from "./repositories/emailMessageRepository.ts";
 export {
   emailEventRepository,
   type EmailEventType,
@@ -314,6 +330,10 @@ export {
   type VersionInsert,
   type TemplateRecord,
   type TemplateSummaryRow,
+  type TemplateDetailRow,
+  type TemplateVersionRow,
+  type TemplateListCursor,
+  type TemplateListRow,
 } from "./repositories/emailTemplateRepository.ts";
 export {
   schedulerRepository,

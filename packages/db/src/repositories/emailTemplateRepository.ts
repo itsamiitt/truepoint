@@ -45,6 +45,39 @@ export interface TemplateRecord {
   currentVersionId: string | null;
 }
 
+/** The full editor view of one template — metadata + current-version content + version number. */
+export interface TemplateDetailRow {
+  id: string;
+  ownerUserId: string | null;
+  name: string;
+  channel: string;
+  status: string;
+  shared: boolean;
+  subject: string | null;
+  body: string | null;
+  currentVersion: number | null;
+  updatedAt: Date;
+}
+
+/** One immutable row of a template's history (newest first). */
+export interface TemplateVersionRow {
+  version: number;
+  subject: string | null;
+  body: string;
+  createdByUserId: string | null;
+  createdAt: Date;
+}
+
+/** Opaque keyset cursor for the template library list (newest-updated first). */
+export interface TemplateListCursor {
+  /** PG-native full-precision `updated_at::text` (micros preserved) — exact keyset, no JS-Date ms-truncation loss. */
+  updatedAtText: string;
+  id: string;
+}
+
+/** A library list row plus its exact keyset key — the caller encodes `cursorKey`+`id` into the opaque cursor. */
+export type TemplateListRow = TemplateSummaryRow & { cursorKey: string };
+
 export const emailTemplateRepository = {
   async insertTemplate(tx: Tx, row: TemplateInsert): Promise<string> {
     const inserted = await tx.insert(emailTemplate).values(row).returning({ id: emailTemplate.id });
@@ -107,6 +140,63 @@ export const emailTemplateRepository = {
     return rows[0] ?? null;
   },
 
+  /** The full editor view: metadata + current-version content + version number (LEFT join so a template with
+   * no current version still returns). ownerUserId is returned for the caller's D8 visibility/edit decision. */
+  async getDetail(tx: Tx, templateId: string): Promise<TemplateDetailRow | null> {
+    const rows = await tx
+      .select({
+        id: emailTemplate.id,
+        ownerUserId: emailTemplate.ownerUserId,
+        name: emailTemplate.name,
+        channel: emailTemplate.channel,
+        status: emailTemplate.status,
+        shared: emailTemplate.shared,
+        subject: emailTemplateVersion.subject,
+        body: emailTemplateVersion.body,
+        currentVersion: emailTemplateVersion.version,
+        updatedAt: emailTemplate.updatedAt,
+      })
+      .from(emailTemplate)
+      .leftJoin(emailTemplateVersion, eq(emailTemplateVersion.id, emailTemplate.currentVersionId))
+      .where(eq(emailTemplate.id, templateId))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  /** A template's immutable version history (newest first). Caller has already RLS+D8-scoped the template id. */
+  async listVersions(tx: Tx, templateId: string): Promise<TemplateVersionRow[]> {
+    return tx
+      .select({
+        version: emailTemplateVersion.version,
+        subject: emailTemplateVersion.subject,
+        body: emailTemplateVersion.body,
+        createdByUserId: emailTemplateVersion.createdByUserId,
+        createdAt: emailTemplateVersion.createdAt,
+      })
+      .from(emailTemplateVersion)
+      .where(eq(emailTemplateVersion.templateId, templateId))
+      .orderBy(desc(emailTemplateVersion.version));
+  },
+
+  /** Resolve the content of one specific historical version — the source for a restore (clone → new version). */
+  async getVersionContent(
+    tx: Tx,
+    templateId: string,
+    version: number,
+  ): Promise<{ subject: string | null; body: string } | null> {
+    const rows = await tx
+      .select({ subject: emailTemplateVersion.subject, body: emailTemplateVersion.body })
+      .from(emailTemplateVersion)
+      .where(
+        and(
+          eq(emailTemplateVersion.templateId, templateId),
+          eq(emailTemplateVersion.version, version),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
   async updateMeta(
     tx: Tx,
     templateId: string,
@@ -120,9 +210,15 @@ export const emailTemplateRepository = {
 
   /**
    * The owner-scoped template library (D8): the viewer's own templates + workspace-shared ones, active only,
-   * joined with their current version so the row carries subject/body. Newest-updated first. RLS-scoped.
+   * joined with their current version so the row carries subject/body. Newest-updated first, KEYSET-paginated
+   * on (updated_at, id) so the read is bounded at any table size (the API list contract). RLS-scoped. Returns
+   * up to `limit` rows — the caller asks for limit+1 to detect a next page.
    */
-  async listForViewer(scope: TenantScope, viewerUserId: string): Promise<TemplateSummaryRow[]> {
+  async listForViewer(
+    scope: TenantScope,
+    viewerUserId: string,
+    opts: { limit: number; cursor?: TemplateListCursor; status?: "active" | "archived" },
+  ): Promise<TemplateListRow[]> {
     return withTenantTx(scope, (tx) =>
       tx
         .select({
@@ -132,6 +228,8 @@ export const emailTemplateRepository = {
           subject: emailTemplateVersion.subject,
           body: emailTemplateVersion.body,
           updatedAt: emailTemplate.updatedAt,
+          // Exact keyset key: full-precision text of updated_at (the JS Date the driver returns is ms-truncated).
+          cursorKey: sql<string>`${emailTemplate.updatedAt}::text`,
         })
         .from(emailTemplate)
         .innerJoin(
@@ -140,12 +238,20 @@ export const emailTemplateRepository = {
         )
         .where(
           and(
-            eq(emailTemplate.status, "active"),
+            eq(emailTemplate.status, opts.status ?? "active"),
             isNotNull(emailTemplate.currentVersionId),
             or(eq(emailTemplate.ownerUserId, viewerUserId), eq(emailTemplate.shared, true)),
+            // Keyset: rows strictly "older" than the cursor in (updated_at DESC, id DESC) order. The cursor's
+            // updated_at is bound as full-precision text→timestamptz so it compares exactly to the raw column.
+            opts.cursor
+              ? sql`(${emailTemplate.updatedAt} < ${opts.cursor.updatedAtText}::timestamptz
+                    OR (${emailTemplate.updatedAt} = ${opts.cursor.updatedAtText}::timestamptz
+                        AND ${emailTemplate.id} < ${opts.cursor.id}))`
+              : undefined,
           ),
         )
-        .orderBy(desc(emailTemplate.updatedAt)),
+        .orderBy(desc(emailTemplate.updatedAt), desc(emailTemplate.id))
+        .limit(opts.limit),
     );
   },
 };

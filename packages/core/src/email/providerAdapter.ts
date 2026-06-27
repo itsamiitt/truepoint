@@ -17,6 +17,10 @@ export interface SendIdentity {
   /** The tenant's DNS-verified sending domain (D2/D3). */
   sendingDomain: string;
   mailboxId: string;
+  /** The owning scope — a credential-bearing adapter (Gmail/Graph) re-opens an RLS-scoped tx to load its
+   *  per-mailbox token at send time (D7); carried here so the factory closure has it. */
+  tenantId: string;
+  workspaceId: string;
 }
 
 export type AdapterFactory = (identity: SendIdentity) => EmailSenderPort;

@@ -3,7 +3,13 @@
 // (fail closed) — the forgery boundary for tracking hits.
 
 import { describe, expect, test } from "bun:test";
-import { signTrackingToken, verifyTrackingToken } from "./trackingToken.ts";
+import { deriveEmailSigningKey } from "./signingKeys.ts";
+import {
+  signTrackingToken,
+  signTrackingTokenScoped,
+  verifyTrackingToken,
+  verifyTrackingTokenScoped,
+} from "./trackingToken.ts";
 
 const SECRET = "whsec_email_test_0123456789";
 const payload = {
@@ -43,5 +49,37 @@ describe("tracking token", () => {
       SECRET,
     );
     expect(decoded?.messageId).toBe("msg_9");
+  });
+});
+
+describe("tracking token — per-tenant scoped (P0 email-sec-001)", () => {
+  const ROOT = "root_secret_for_tracking_000";
+
+  test("a scoped token round-trips under the same root", () => {
+    const decoded = verifyTrackingTokenScoped(signTrackingTokenScoped(payload, ROOT), ROOT);
+    expect(decoded).toEqual({ ...payload, messageId: undefined });
+  });
+
+  test("a different root is rejected (fails closed)", () => {
+    expect(
+      verifyTrackingTokenScoped(signTrackingTokenScoped(payload, ROOT), "a_different_root"),
+    ).toBeNull();
+  });
+
+  test("a holder of tenant A's derived key cannot forge a token for tenant B", () => {
+    // The attacker knows ONLY tenant A's derived key (never the root). They craft a token CLAIMING tenant B
+    // and sign it with the one key they have (A's). Scoped verify derives tenant B's key from the root and
+    // rejects it — the cross-tenant forgery the single global secret allowed is now closed.
+    const keyA = deriveEmailSigningKey("tracking", payload.tenantId, ROOT);
+    const claimingB = { ...payload, tenantId: "99999999-9999-9999-9999-999999999999" };
+    const forged = signTrackingToken(claimingB, keyA); // signed with A's key, body claims B
+    expect(verifyTrackingTokenScoped(forged, ROOT)).toBeNull();
+    // Sanity: a legitimately-scoped token for A still verifies.
+    expect(verifyTrackingTokenScoped(signTrackingTokenScoped(payload, ROOT), ROOT)).not.toBeNull();
+  });
+
+  test("an unset root or null token fails closed", () => {
+    expect(verifyTrackingTokenScoped(signTrackingTokenScoped(payload, ROOT), "")).toBeNull();
+    expect(verifyTrackingTokenScoped(null, ROOT)).toBeNull();
   });
 });

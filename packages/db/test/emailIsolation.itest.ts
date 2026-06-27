@@ -3,8 +3,8 @@
 // or an external server via ITEST_DATABASE_URL — see itestDb.ts). Run in its OWN process (the db client is a
 // module singleton): `bun test ./packages/db/test/emailIsolation.itest.ts`.
 //
-// Proves, for the three NET-NEW email tables (sending_domain — tenant-scoped; mailbox_integration and
-// email_event — workspace-scoped):
+// Proves, for the net-new email tables — sending_domain + oauth_connect_state (tenant-scoped); and
+// mailbox_integration + email_event + email_thread + email_message (workspace-scoped) — that:
 //   (1) the non-BYPASSRLS leadwolf_app role with the WRONG tenant/workspace GUC sees ZERO of the other
 //       tenant's rows (RLS USING, fail-closed via NULLIF), and the RIGHT GUC sees its own;
 //   (2) that role cannot INSERT a row into another tenant/workspace (RLS WITH CHECK blocks it);
@@ -12,6 +12,9 @@
 //       proof of withTenantTx + RLS together — and the mailbox read NEVER carries the encrypted credential;
 //   (4) the per-tenant send-quota no-overdraft CHECK + the sendQuotaRepository FOR UPDATE lock make an
 //       over-quota send impossible (15 §A.6, known-gap #3).
+// NOTE: oauth_connect_state is RLS ENABLE (not FORCE) so the session-less OAuth callback can read it on the
+// owner connection (rls/email.sql §oauth_connect_state) — but leadwolf_app is NOT the table owner, so the
+// isolation proof below still holds for the app role exactly like a FORCE table.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
@@ -35,6 +38,11 @@ let wsB = "";
 let ownerB = "";
 let domainB = "";
 let mailboxB = "";
+
+// M12 P1/P3 net-new: the OAuth handshake store + the conversation/message store.
+let connectStateA = "";
+let threadA = "";
+let threadB = "";
 
 interface Seeded {
   tenantId: string;
@@ -98,6 +106,42 @@ beforeAll(async () => {
   await admin`
     INSERT INTO email_event (tenant_id, workspace_id, event_type, occurred_at)
     VALUES (${tenantB}, ${wsB}, 'open', now())`;
+
+  // oauth_connect_state — tenant-scoped (P1 OAuth handshake store). The pkce_verifier_enc is the encrypted
+  // canary; a cross-tenant read must surface NONE of it.
+  const [csa] = await admin`
+    INSERT INTO oauth_connect_state
+      (tenant_id, workspace_id, user_id, provider, state_token, pkce_verifier_enc, expires_at)
+    VALUES (${tenantA}, ${wsA}, ${ownerA}, 'google', 'state-token-acme',
+            '\\xc0ffee'::bytea, now() + interval '10 minutes')
+    RETURNING id`;
+  connectStateA = (csa as { id: string }).id;
+  await admin`
+    INSERT INTO oauth_connect_state
+      (tenant_id, workspace_id, user_id, provider, state_token, pkce_verifier_enc, expires_at)
+    VALUES (${tenantB}, ${wsB}, ${ownerB}, 'google', 'state-token-globex',
+            '\\xc0ffee'::bytea, now() + interval '10 minutes')`;
+
+  // email_thread — workspace-scoped (P3 inbox): one conversation per workspace.
+  const [tha] = await admin`
+    INSERT INTO email_thread (tenant_id, workspace_id, owner_user_id, mailbox_integration_id, status)
+    VALUES (${tenantA}, ${wsA}, ${ownerA}, ${mailboxA}, 'open') RETURNING id`;
+  threadA = (tha as { id: string }).id;
+  const [thb] = await admin`
+    INSERT INTO email_thread (tenant_id, workspace_id, owner_user_id, mailbox_integration_id, status)
+    VALUES (${tenantB}, ${wsB}, ${ownerB}, ${mailboxB}, 'open') RETURNING id`;
+  threadB = (thb as { id: string }).id;
+
+  // email_message — workspace-scoped: an outbound message in each thread. body_enc is the PII canary (D7) the
+  // cross-workspace isolation must never surface.
+  await admin`
+    INSERT INTO email_message
+      (tenant_id, workspace_id, thread_id, mailbox_integration_id, direction, from_addr, body_enc, occurred_at)
+    VALUES (${tenantA}, ${wsA}, ${threadA}, ${mailboxA}, 'outbound', 'sdr@acme.com', '\\xbadc0de'::bytea, now())`;
+  await admin`
+    INSERT INTO email_message
+      (tenant_id, workspace_id, thread_id, mailbox_integration_id, direction, from_addr, occurred_at)
+    VALUES (${tenantB}, ${wsB}, ${threadB}, ${mailboxB}, 'outbound', 'sdr@globex.com', now())`;
 }, 180_000);
 
 afterAll(async () => {
@@ -166,6 +210,93 @@ describe("M12 email cross-tenant isolation (P0)", () => {
       return (r as { n: number }).n;
     });
     expect(wrong).toBe(0);
+  });
+
+  test("oauth_connect_state (tenant-scoped): wrong tenant GUC sees zero; right sees its own", async () => {
+    const wrong = await app.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_tenant_id', ${tenantB}, true)`;
+      const [r] =
+        await tx`SELECT count(*)::int AS n FROM oauth_connect_state WHERE id = ${connectStateA}`;
+      return (r as { n: number }).n;
+    });
+    expect(wrong).toBe(0);
+
+    const right = await app.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_tenant_id', ${tenantA}, true)`;
+      const [r] =
+        await tx`SELECT count(*)::int AS n FROM oauth_connect_state WHERE id = ${connectStateA}`;
+      return (r as { n: number }).n;
+    });
+    expect(right).toBe(1);
+  });
+
+  test("oauth_connect_state: tenant B cannot mint a handshake row for tenant A (RLS WITH CHECK)", async () => {
+    let blocked = false;
+    try {
+      await app.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_tenant_id', ${tenantB}, true)`;
+        await tx`
+          INSERT INTO oauth_connect_state
+            (tenant_id, workspace_id, user_id, provider, state_token, pkce_verifier_enc, expires_at)
+          VALUES (${tenantA}, ${wsA}, ${ownerA}, 'google', 'evil-cross-state',
+                  '\\xc0ffee'::bytea, now() + interval '10 minutes')`;
+      });
+    } catch {
+      blocked = true;
+    }
+    expect(blocked).toBe(true);
+    const [r] =
+      await admin`SELECT count(*)::int AS n FROM oauth_connect_state WHERE state_token = 'evil-cross-state'`;
+    expect((r as { n: number }).n).toBe(0);
+  });
+
+  test("email_thread (workspace-scoped): wrong workspace GUC sees zero of the other workspace's threads; right sees its own", async () => {
+    const wrong = await app.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_workspace_id', ${wsB}, true)`;
+      const [r] = await tx`SELECT count(*)::int AS n FROM email_thread WHERE id = ${threadA}`;
+      return (r as { n: number }).n;
+    });
+    expect(wrong).toBe(0);
+
+    const right = await app.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_workspace_id', ${wsA}, true)`;
+      const [r] = await tx`SELECT count(*)::int AS n FROM email_thread WHERE id = ${threadA}`;
+      return (r as { n: number }).n;
+    });
+    expect(right).toBe(1);
+  });
+
+  test("email_message (workspace-scoped): wrong workspace GUC surfaces ZERO of the other workspace's messages — the encrypted body never leaks cross-tenant (D7)", async () => {
+    const leaked = await app.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_workspace_id', ${wsB}, true)`;
+      const rows = await tx`SELECT body_enc FROM email_message WHERE tenant_id = ${tenantA}`;
+      return rows.length;
+    });
+    expect(leaked).toBe(0);
+
+    const own = await app.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_workspace_id', ${wsA}, true)`;
+      const [r] =
+        await tx`SELECT count(*)::int AS n FROM email_message WHERE thread_id = ${threadA}`;
+      return (r as { n: number }).n;
+    });
+    expect(own).toBe(1);
+  });
+
+  test("email_message: a workspace cannot INSERT a message into another workspace (RLS WITH CHECK)", async () => {
+    let blocked = false;
+    try {
+      await app.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_workspace_id', ${wsB}, true)`;
+        await tx`
+          INSERT INTO email_message
+            (tenant_id, workspace_id, thread_id, direction, from_addr, occurred_at)
+          VALUES (${tenantA}, ${wsA}, ${threadA}, 'outbound', 'attacker@globex.com', now())`;
+      });
+    } catch {
+      blocked = true;
+    }
+    expect(blocked).toBe(true);
   });
 
   test("repositories run under withTenantTx and return only the caller's own rows", async () => {
