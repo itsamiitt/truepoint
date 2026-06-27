@@ -22,8 +22,9 @@ import {
 import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
 import { decryptPii } from "../import/encryptPii.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "./emailVerifier.ts";
+import { type PhoneVerifierPort, formatOnlyPhoneVerifier } from "./phoneVerifier.ts";
 import { defaultEmailVerifier } from "./reacherVerifier.ts";
-import { validatePhone } from "./validatePhone.ts";
+import { defaultPhoneVerifier } from "./twilioPhoneVerifier.ts";
 
 /** The per-tenant feature flag (ADR-0011) that gates re-verification rollout — the plans mandate per-tenant
  *  flags + shadow-before-cutover. Unknown/undefined → OFF (fail-closed, opt-in): the loop ships dark and is
@@ -54,12 +55,21 @@ interface ReverifiedRow {
  */
 export async function runReverification(
   scope: { tenantId: string; workspaceId: string },
-  opts?: { batchSize?: number; verifier?: EmailVerifierPort; now?: Date },
+  opts?: {
+    batchSize?: number;
+    verifier?: EmailVerifierPort;
+    phoneVerifier?: PhoneVerifierPort;
+    now?: Date;
+  },
 ): Promise<ReverificationResult> {
   const verifier = opts?.verifier ?? defaultEmailVerifier();
-  // No real verifier wired → re-grading nothing; do NOT reset any freshness clock (that would falsely mark
-  // records fresh). The sweep also guards on this; this is the defensive second line.
-  if (verifier.name === passThroughVerifier.name) {
+  const phoneVerifier = opts?.phoneVerifier ?? defaultPhoneVerifier();
+  // No real verifier wired (email pass-through AND phone format-only) → re-grading nothing; do NOT reset any
+  // freshness clock (that would falsely mark records fresh). The sweep also guards on this; defensive 2nd line.
+  if (
+    verifier.name === passThroughVerifier.name &&
+    phoneVerifier.name === formatOnlyPhoneVerifier.name
+  ) {
     return { scanned: 0, reverified: 0, errored: 0 };
   }
 
@@ -99,7 +109,9 @@ export async function runReverification(
         const emailStatus = email
           ? await verifier.verify(email, row.emailStatus as EmailStatus)
           : (row.emailStatus as EmailStatus);
-        const phoneStatus = phone ? validatePhone(phone) : (row.phoneStatus as PhoneStatus | null);
+        const phoneStatus = phone
+          ? await phoneVerifier.verify(phone, row.phoneStatus as PhoneStatus | null)
+          : (row.phoneStatus as PhoneStatus | null);
         graded.push({ contactId: row.id, emailStatus, phoneStatus });
       } catch (err) {
         errored += 1;

@@ -144,6 +144,20 @@ export {
 } from "./data-health/reacherVerifier.ts";
 export { chargeFor, type ChargeInput } from "./data-health/chargeFor.ts";
 export { validatePhone } from "./data-health/validatePhone.ts";
+// Phone-verification subsystem (06 §9, 01 §5.3): the port + format-only default + the Twilio Lookup adapter +
+// the config-gated factory the reveal/reverify paths wire. Absent TWILIO_* → the E.164 format check (today).
+export {
+  formatOnlyPhoneVerifier,
+  staticPhoneVerifier,
+  type PhoneVerifierPort,
+} from "./data-health/phoneVerifier.ts";
+export {
+  twilioLookupVerifier,
+  defaultPhoneVerifier,
+  twilioStatusFrom,
+  type TwilioPhoneVerifierOptions,
+  type PhoneLookupFetch,
+} from "./data-health/twilioPhoneVerifier.ts";
 // Freshness re-verification loop (ADR-0025, 22 §3/§4): re-grades revealed, past-SLA contacts via the configured
 // verifier, per workspace, off the request thread. Run by the reverification queue + sweep worker.
 export {

@@ -114,7 +114,9 @@ apps/                           # deployable processes (thin transport adapters)
 - **core:** `data-health/` — `emailVerifier.ts` (verifier port; passthrough + fixture + `hybridVerifier`),
   `reacherVerifier.ts` (Reacher adapter + `defaultEmailVerifier` config-gated factory; injectable fetch),
   `reverifyContacts.ts` (`runReverification` — re-grade revealed, past-SLA contacts via the configured verifier),
-  `validatePhone.ts` (E.164), `chargeFor.ts` (ADR-0013 charge-by-verified-result), `dataQualityScore.ts`
+  `validatePhone.ts` (E.164), `phoneVerifier.ts` (phone verifier port + format-only default),
+  `twilioPhoneVerifier.ts` (Twilio Lookup adapter + `defaultPhoneVerifier` config-gated factory; carrier-confirmed valid/invalid),
+  `chargeFor.ts` (ADR-0013 charge-by-verified-result), `dataQualityScore.ts`
   (the 0.4·completeness + 0.3·verification + 0.3·freshness formula; cold-start rules for imports)
 - **workers:** `reverification.ts` (per-workspace re-verification job), `reverificationSweep.ts` (leader-locked
   daily fan-out enqueuing a per-workspace re-verification for every workspace with stale revealed contacts)

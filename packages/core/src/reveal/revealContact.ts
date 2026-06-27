@@ -27,7 +27,8 @@ import { assertNotSuppressed } from "../compliance/assertNotSuppressed.ts";
 import { writeAudit } from "../compliance/writeAudit.ts";
 import { chargeFor } from "../data-health/chargeFor.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "../data-health/emailVerifier.ts";
-import { validatePhone } from "../data-health/validatePhone.ts";
+import type { PhoneVerifierPort } from "../data-health/phoneVerifier.ts";
+import { defaultPhoneVerifier } from "../data-health/twilioPhoneVerifier.ts";
 import { decryptPii } from "../import/encryptPii.ts";
 
 export interface RevealInput {
@@ -39,6 +40,8 @@ export interface RevealInput {
   userAgent?: string | null;
   /** The dedicated, provider-independent verifier (06 §9). Default keeps the stored status (no vendor yet). */
   verifier?: EmailVerifierPort;
+  /** The phone verifier (06 §9). Default = config-gated Twilio Lookup, else the E.164 format check. */
+  phoneVerifier?: PhoneVerifierPort;
 }
 
 /** Per-type credit cost — read from config so pricing is never hardcoded in a code path (07 §1). */
@@ -75,18 +78,20 @@ async function verifyForReveal(
   contact: ContactForReveal,
   revealType: RevealType,
   verifier: EmailVerifierPort,
+  phoneVerifier: PhoneVerifierPort,
 ): Promise<VerifiedState> {
   const email = wantsEmail(revealType) && contact.emailEnc ? decryptPii(contact.emailEnc) : null;
   const phone = wantsPhone(revealType) && contact.phoneEnc ? decryptPii(contact.phoneEnc) : null;
   const emailStatus = email
     ? await verifier.verify(email, contact.emailStatus as EmailStatus)
     : (contact.emailStatus as EmailStatus);
-  const phoneStatus = phone ? validatePhone(phone) : null;
+  const phoneStatus = phone ? await phoneVerifier.verify(phone, null) : null;
   return { email, phone, emailStatus, phoneStatus };
 }
 
 export async function revealContact(input: RevealInput): Promise<RevealResponse> {
   const verifier = input.verifier ?? passThroughVerifier;
+  const phoneVerifier = input.phoneVerifier ?? defaultPhoneVerifier();
   const baseCost = revealCostFor(input.revealType);
 
   // Pre-read the contact (fast scoped tx), then verify with no transaction open.
@@ -94,7 +99,7 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
     revealRepository.getContactForReveal(tx, input.contactId),
   );
   if (!contact) throw new NotFoundError("Contact not found in this workspace.");
-  const verified = await verifyForReveal(contact, input.revealType, verifier);
+  const verified = await verifyForReveal(contact, input.revealType, verifier, phoneVerifier);
 
   // ADR-0013: the verified result sets the charge; an unusable result still returns (cost 0).
   const cost = chargeFor({

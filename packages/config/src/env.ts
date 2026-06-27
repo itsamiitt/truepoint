@@ -110,6 +110,13 @@ export const appEnvSchema = z
     REACHER_BACKEND_URL: z.string().url().optional(),
     REACHER_API_TOKEN: z.string().optional(),
 
+    // Phone validation via Twilio Lookup (06 §9, 01 §5.3): when BOTH are set, the reveal/reverify paths upgrade
+    // the E.164 format check to a CARRIER-CONFIRMED valid/invalid. Absent → the E.164 format check only (today's
+    // behaviour). The Auth Token is a SECRET (env/KMS), never client-exposed. Carrier line-type (TCPA mobile vs
+    // landline) is a migration-gated follow-up (needs a phone_line_type column + Twilio's line_type_intelligence).
+    TWILIO_ACCOUNT_SID: z.string().optional(),
+    TWILIO_AUTH_TOKEN: z.string().optional(),
+
     // Cloudflare Turnstile secret for the identifier step (ADR-0020). Optional: absent → dev passes, prod fails.
     TURNSTILE_SECRET: z.string().optional(),
 
