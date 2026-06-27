@@ -13,6 +13,7 @@ export const platformAuditAction = z.enum([
   "plan.override",
   "user.deactivate",
   "user.reactivate",
+  "elevation.grant",
   "impersonation.start",
   "impersonation.end",
   "feature_flag.set",

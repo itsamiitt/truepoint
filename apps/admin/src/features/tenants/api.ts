@@ -52,6 +52,21 @@ export async function reactivateTenant(id: string, reason: string): Promise<void
   if (!res.ok) throw new Error(await problemMessage(res, "Could not reactivate the tenant"));
 }
 
+/** POST /admin/elevations — mint a time-boxed JIT elevation (13a F1) the gated action then consumes. The
+ *  console requests this immediately before a suspend / credit action, passing the same reason. */
+export async function requestElevation(
+  action: "credit.adjust" | "tenant.suspend",
+  reason: string,
+  targetTenantId: string,
+): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/elevations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action, reason, targetTenantId }),
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not obtain elevation"));
+}
+
 /** POST /admin/tenants/:id/credits — manual signed credit adjustment (super_admin|billing_ops). Returns the
  *  new authoritative balance. A positive delta grants, a negative one debits; both are audited with a reason. */
 export async function adjustTenantCredits(

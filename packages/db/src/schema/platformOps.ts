@@ -10,7 +10,7 @@
 // its banner/justification metadata; the scoped, time-boxed impersonation access token is WIRE-deferred.
 
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const id = () => uuid("id").primaryKey().default(sql`uuid_generate_v7()`);
 
@@ -29,3 +29,32 @@ export const impersonationSessions = pgTable("impersonation_sessions", {
   endedAt: timestamp("ended_at", { withTimezone: true }), // set on explicit end (null = still active/expired)
   ip: text("ip"), // staff actor's request IP at start (audit context)
 });
+
+// jit_elevations — just-in-time elevation grants (ADR-0011 / 13 §2, 13a F1). A staff member mints a
+// short-lived, reason-bearing, tenant-scoped grant for a sensitive `action` CLASS; the gated action (credit
+// move, org suspend) CONSUMES it in the SAME tx as the action + its audit row, so a rejected action releases
+// the grant. status flows active → consumed (expiry is derived from expires_at, never a stored 'expired').
+// approved_by_user_id is null in the self-service v1 and is the seam for peer-approval (13a open decision #2).
+// PLATFORM-owned staff data: written ONLY by the owner connection (withPlatformTx), deny-all to leadwolf_app
+// (rls/platformOps.sql + the applyMigrations REVOKE). MUTABLE (status flips), so — like impersonation_sessions
+// — there is no append-only trigger; the separate `elevation.grant` platform_audit_log row is the trail.
+export const jitElevations = pgTable(
+  "jit_elevations",
+  {
+    id: id(),
+    staffUserId: uuid("staff_user_id").notNull(), // the staff member the elevation is granted to
+    action: text("action").notNull(), // the sensitive action CLASS (the closed jitAction vocabulary)
+    reason: text("reason").notNull(), // justification captured at request (audited)
+    targetTenantId: uuid("target_tenant_id"), // the org the elevation is scoped to (null = unscoped, future)
+    status: text("status").notNull().default("active"), // active | consumed
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), // hard time-box
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }), // set when spent on an action (null = unspent)
+    approvedByUserId: uuid("approved_by_user_id"), // future peer-approval (null = self-service)
+    ip: text("ip"), // staff actor's request IP at grant (audit context)
+  },
+  // The consume path matches on (staff, action, target, status) and orders by expires_at — index it.
+  (t) => ({
+    lookup: index("jit_elevations_staff_action_status_idx").on(t.staffUserId, t.action, t.status),
+  }),
+);

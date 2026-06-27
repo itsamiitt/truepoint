@@ -7,7 +7,7 @@
 
 import { Dialog, TpButton, TpInput, TpTextarea, useToast } from "@leadwolf/ui";
 import { useState } from "react";
-import { adjustTenantCredits, reactivateTenant, suspendTenant } from "../api";
+import { adjustTenantCredits, reactivateTenant, requestElevation, suspendTenant } from "../api";
 import type { TenantRow } from "../types";
 
 const MIN_REASON = 5;
@@ -46,8 +46,14 @@ export function TenantActions({
     }
     setBusy(true);
     try {
-      if (suspended) await reactivateTenant(tenant.id, r);
-      else await suspendTenant(tenant.id, r);
+      if (suspended) {
+        // Reactivation is restorative — not JIT-gated.
+        await reactivateTenant(tenant.id, r);
+      } else {
+        // Suspend is JIT-gated (13a F1): mint the elevation, then perform the action that consumes it.
+        await requestElevation("tenant.suspend", r, tenant.id);
+        await suspendTenant(tenant.id, r);
+      }
       toast.success(suspended ? "Tenant reactivated." : "Tenant suspended.");
       setStatusOpen(false);
       await onChanged();
@@ -71,6 +77,8 @@ export function TenantActions({
     }
     setBusy(true);
     try {
+      // Credit moves are JIT-gated (13a F1): mint the elevation, then perform the action that consumes it.
+      await requestElevation("credit.adjust", r, tenant.id);
       const { balanceAfter } = await adjustTenantCredits(tenant.id, n, r);
       toast.success(`Credits ${n > 0 ? "granted" : "debited"} — new balance ${balanceAfter}.`);
       setCreditOpen(false);

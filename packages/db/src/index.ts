@@ -239,6 +239,13 @@ export {
 } from "./repositories/platformAdminWrites.ts";
 // Platform STAFF role lookup (ADR-0011) — owner-connection read for requireStaffRole authz.
 export { platformStaffRepository } from "./repositories/platformStaffRepository.ts";
+// JIT elevation grants (13a F1) — audited, time-boxed, tenant-scoped step-up for sensitive admin actions.
+export {
+  jitElevationRepository,
+  JIT_ELEVATION_TTL_SECONDS,
+  type GrantElevationInput,
+  type JitElevationRow,
+} from "./repositories/jitElevationRepository.ts";
 // Provider configs (13 §3.6) — platform-global enable/budget + cross-tenant month-to-date spend.
 export {
   providerConfigRepository,

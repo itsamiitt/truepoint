@@ -8,11 +8,13 @@ import {
   PLATFORM_READ_LIMIT,
   authPolicyRepository,
   featureFlagRepository,
+  jitElevationRepository,
   platformAdminRepository,
   platformAdminWriteRepository,
   withPlatformTx,
 } from "@leadwolf/db";
 import {
+  ElevationRequiredError,
   LIST_PLATFORM_AUDIT_ACTIONS,
   NotFoundError,
   type StaffListOverview,
@@ -30,6 +32,7 @@ import { type ApiVariables, authn } from "../../middleware/authn.ts";
 import { platformAdmin } from "../../middleware/platformAdmin.ts";
 import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
 import { auditLogRoutes } from "./auditLog.ts";
+import { elevationRoutes } from "./elevations.ts";
 import { impersonationRoutes } from "./impersonation.ts";
 import { providerConfigRoutes } from "./providerConfigs.ts";
 import { staffRoutes } from "./staff.ts";
@@ -142,16 +145,24 @@ adminRoutes.get("/tenants/:id", async (c) => {
 // A no-op write (unknown id / would-overdraw) throws INSIDE the tx so the audit row rolls back — no trace for
 // an action that did not happen (the feature_flag-404 discipline). JIT elevation (13a F1) layers on later.
 
-/** Suspend an org. super_admin only (the action gates the whole tenant). Audited "tenant.suspend". */
+/** Suspend an org. super_admin only (the action gates the whole tenant). JIT-gated (13a F1): consumes a live
+ *  "tenant.suspend" elevation for this tenant in-tx; without one → 403 elevation_required. Audited "tenant.suspend". */
 adminRoutes.post("/tenants/:id/suspend", requireStaffRole("super_admin"), async (c) => {
   const tenantId = c.req.param("id");
   if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
   const parsed = tenantStatusChangeSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
   await withPlatformTx(
-    actorOf(c),
+    actor,
     "tenant.suspend",
     async (tx) => {
+      const elevated = await jitElevationRepository.consume(tx, {
+        staffUserId: actor.userId,
+        action: "tenant.suspend",
+        targetTenantId: tenantId,
+      });
+      if (!elevated) throw new ElevationRequiredError("tenant.suspend");
       const touched = await platformAdminWriteRepository.setTenantStatus(tx, tenantId, "suspended");
       if (touched === 0) throw new NotFoundError("Tenant not found.");
     },
@@ -190,7 +201,9 @@ adminRoutes.post("/tenants/:id/reactivate", requireStaffRole("super_admin"), asy
 
 /** Manual credit grant / adjustment (07 §7). super_admin or billing_ops. A positive delta is a "credit.grant",
  *  a negative one a "credit.adjust" — the immutable trail names the actual operation, not a generic "grant".
- *  The repo's FOR UPDATE + the DB CHECK(>=0) are the overdraft guards; a would-overdraw debit is a clean 422. */
+ *  JIT-gated (13a F1): consumes a live "credit.adjust" elevation for this tenant in-tx; without one → 403
+ *  elevation_required. The repo's FOR UPDATE + the DB CHECK(>=0) are the overdraft guards; a would-overdraw
+ *  debit is a clean 422 (and rolls the consumed elevation back, so the operator can retry). */
 adminRoutes.post(
   "/tenants/:id/credits",
   requireStaffRole("super_admin", "billing_ops"),
@@ -200,10 +213,17 @@ adminRoutes.post(
     const parsed = creditAdjustSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
     const { delta, reason } = parsed.data;
+    const actor = actorOf(c);
     const balanceAfter = await withPlatformTx(
-      actorOf(c),
+      actor,
       delta > 0 ? "credit.grant" : "credit.adjust",
       async (tx) => {
+        const elevated = await jitElevationRepository.consume(tx, {
+          staffUserId: actor.userId,
+          action: "credit.adjust",
+          targetTenantId: tenantId,
+        });
+        if (!elevated) throw new ElevationRequiredError("credit.adjust");
         const res = await platformAdminWriteRepository.adjustCredits(tx, tenantId, delta);
         if (!res.found) throw new NotFoundError("Tenant not found.");
         if (res.wouldOverdraw)
@@ -420,3 +440,5 @@ adminRoutes.route("/provider-configs", providerConfigRoutes);
 adminRoutes.route("/audit-log", auditLogRoutes);
 adminRoutes.route("/staff", staffRoutes);
 adminRoutes.route("/impersonation", impersonationRoutes);
+// JIT elevation request/list (13a F1, super_admin|billing_ops) — minted here, consumed by the gated actions above.
+adminRoutes.route("/elevations", elevationRoutes);

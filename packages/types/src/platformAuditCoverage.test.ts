@@ -21,6 +21,8 @@ const WRITTEN = new Set<string>([
   // 13a Area 2 — staff global-user mutations (POST /admin/users/:id/{deactivate,reactivate}).
   "user.deactivate",
   "user.reactivate",
+  // 13a F1 — JIT elevation grant (POST /admin/elevations), consumed by the credit/suspend mutations.
+  "elevation.grant",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;

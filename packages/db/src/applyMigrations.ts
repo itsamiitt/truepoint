@@ -90,6 +90,9 @@ const GRANTS = `
   REVOKE ALL ON platform_staff FROM leadwolf_app;
   -- impersonation_sessions (ADR-0011) is platform-owned staff data — deny the customer app role entirely.
   REVOKE ALL ON impersonation_sessions FROM leadwolf_app;
+  -- jit_elevations (ADR-0011 / 13a F1) is platform-owned staff data too — the app role must never see who is
+  -- elevated for what. RLS denies it; REVOKE the blanket grant (defence-in-depth). withPlatformTx (owner) is unaffected.
+  REVOKE ALL ON jit_elevations FROM leadwolf_app;
   -- Layer-0 master graph (ADR-0021) is SYSTEM-OWNED, isolated by ACCESS PATH not RLS: it has NO workspace_id,
   -- so NO fail-closed RLS predicate. The blanket GRANT above handed leadwolf_app DML on it — REVOKE it so the
   -- customer app role can NEVER read the shared universe directly (PLAN_04/PLAN_07 "grant-off is the wall").

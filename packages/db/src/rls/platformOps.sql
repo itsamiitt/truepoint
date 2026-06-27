@@ -31,3 +31,25 @@ CREATE TABLE IF NOT EXISTS impersonation_sessions (
 -- ENABLE (not FORCE): the owner connection that runs withPlatformTx must keep writing; leadwolf_app is a
 -- non-owner policy-subject, and with NO policy it is denied every row and every write — deny-all.
 ALTER TABLE impersonation_sessions ENABLE ROW LEVEL SECURITY;
+
+-- jit_elevations (ADR-0011, 13a F1) — just-in-time elevation grants, the same PLATFORM-owned staff posture as
+-- impersonation_sessions above. Written ONLY by the owner connection (withPlatformTx); leadwolf_app must never
+-- read who is elevated for what. ENABLE (not FORCE) keeps the owner writer exempt while the policy-subject app
+-- role sees zero rows; the blanket grant is additionally REVOKED in applyMigrations (defence-in-depth). MUTABLE
+-- (status active → consumed), so no append-only trigger. Defensive CREATE mirrors the migration's column set so
+-- this file is safe to run standalone; idempotent.
+CREATE TABLE IF NOT EXISTS jit_elevations (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  staff_user_id uuid NOT NULL,
+  action text NOT NULL,
+  reason text NOT NULL,
+  target_tenant_id uuid,
+  status text NOT NULL DEFAULT 'active',
+  expires_at timestamptz NOT NULL,
+  granted_at timestamptz NOT NULL DEFAULT now(),
+  consumed_at timestamptz,
+  approved_by_user_id uuid,
+  ip text
+);
+
+ALTER TABLE jit_elevations ENABLE ROW LEVEL SECURITY;
