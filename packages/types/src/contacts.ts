@@ -326,6 +326,15 @@ export const workspaceDataQualitySchema = z.object({
 });
 export type WorkspaceDataQuality = z.infer<typeof workspaceDataQualitySchema>;
 
+/** One Data Health trend point — a workspace's WorkspaceDataQuality rollup at a capture time (10 §5). The
+ *  dashboard's history read returns a newest-first series of these (from data_quality_snapshots). */
+export const dataQualityTrendPointSchema = z.object({
+  capturedAt: z.string().datetime({ offset: true }),
+  metrics: workspaceDataQualitySchema,
+});
+export type DataQualityTrendPoint = z.infer<typeof dataQualityTrendPointSchema>;
+export const dataQualityTrendSchema = z.array(dataQualityTrendPointSchema);
+
 // ── Masked contact view (what search/list returns before reveal — 05 §6/§7) ────────────────────────────
 /** A workspace-scoped contact with PII masked until reveal (M3). `emailDomain` is the non-PII facet. */
 export const maskedContactSchema = z.object({

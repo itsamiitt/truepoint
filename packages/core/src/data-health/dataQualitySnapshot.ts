@@ -4,6 +4,7 @@
 // Workspace-scoped throughout (RLS). Kept in core so the worker depends on @leadwolf/core, not the db repo wiring.
 
 import { contactRepository, dataQualitySnapshotRepository, withTenantTx } from "@leadwolf/db";
+import type { DataQualityTrendPoint, WorkspaceDataQuality } from "@leadwolf/types";
 
 export async function captureDataQualitySnapshot(scope: {
   tenantId: string;
@@ -17,4 +18,18 @@ export async function captureDataQualitySnapshot(scope: {
       metrics,
     }),
   );
+}
+
+/** The recent Data Health trend series for a workspace, newest first (the dashboard history read). */
+export async function recentDataQualityTrend(
+  scope: { tenantId: string; workspaceId: string },
+  limit = 90,
+): Promise<DataQualityTrendPoint[]> {
+  const rows = await withTenantTx(scope, (tx) =>
+    dataQualitySnapshotRepository.listRecent(tx, limit),
+  );
+  return rows.map((r) => ({
+    capturedAt: r.createdAt.toISOString(),
+    metrics: r.metrics as WorkspaceDataQuality,
+  }));
 }

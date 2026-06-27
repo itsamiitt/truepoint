@@ -12,8 +12,13 @@
 // per-workspace memo of the computed summary is a sensible follow-up, but that response-cache layer does not
 // exist yet (caching.md implementation status), so it is intentionally out of scope here.
 
-import { buildDataQualitySummary, buildHomeSummary } from "@leadwolf/core";
-import { ForbiddenError, homeSummarySchema, workspaceDataQualitySchema } from "@leadwolf/types";
+import { buildDataQualitySummary, buildHomeSummary, recentDataQualityTrend } from "@leadwolf/core";
+import {
+  dataQualityTrendSchema,
+  ForbiddenError,
+  homeSummarySchema,
+  workspaceDataQualitySchema,
+} from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
@@ -68,3 +73,21 @@ homeRoutes.get("/data-quality", requireRole("owner", "admin", "member", "viewer"
   c.header("Cache-Control", "private, max-age=30");
   return c.json(workspaceDataQualitySchema.parse(summary));
 });
+
+/**
+ * GET /data-quality/history — the per-workspace Data Health TREND series (10 §5): newest-first daily snapshots
+ * for charting fill/verification/freshness/line-type over time. Same authn + tenancy + any-role gate; a longer
+ * private cache (the series only changes once daily). Reads data_quality_snapshots via recentDataQualityTrend.
+ */
+homeRoutes.get(
+  "/data-quality/history",
+  requireRole("owner", "admin", "member", "viewer"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+
+    const trend = await recentDataQualityTrend({ tenantId: c.get("tenantId"), workspaceId });
+    c.header("Cache-Control", "private, max-age=300");
+    return c.json(dataQualityTrendSchema.parse(trend));
+  },
+);
