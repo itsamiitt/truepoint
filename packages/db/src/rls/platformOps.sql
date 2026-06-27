@@ -87,3 +87,22 @@ CREATE TABLE IF NOT EXISTS credit_packs (
 );
 
 ALTER TABLE credit_packs ENABLE ROW LEVEL SECURITY;
+
+-- plan_templates (13a Area 5) — staff-authored plan/entitlement config. Same PLATFORM-owned posture: written
+-- only by the owner connection (withPlatformTx), deny-all to leadwolf_app (this file + the applyMigrations
+-- REVOKE). Defensive CREATE mirrors the migration's column set; idempotent.
+CREATE TABLE IF NOT EXISTS plan_templates (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  key text NOT NULL UNIQUE,
+  name text NOT NULL,
+  seat_limit integer NOT NULL,
+  workspace_limit integer,
+  monthly_credit_grant integer,
+  features jsonb NOT NULL DEFAULT '{}'::jsonb,
+  active boolean NOT NULL DEFAULT true,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE plan_templates ENABLE ROW LEVEL SECURITY;

@@ -29,6 +29,8 @@ const WRITTEN = new Set<string>([
   "support_note.add",
   // 13a Area 5 — credit-pack (pricing) catalog upsert / toggle (PUT/POST /admin/pricing/credit-packs).
   "credit_pack.set",
+  // 13a Area 5 — plan-template catalog upsert / toggle (PUT/POST /admin/pricing/plan-templates).
+  "plan_template.set",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;

@@ -169,6 +169,13 @@
       "when": 1782531193124,
       "tag": "0023_steep_ultragirl",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1782532098910,
+      "tag": "0024_silent_quasimodo",
+      "breakpoints": true
     }
   ]
 }

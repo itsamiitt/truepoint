@@ -99,6 +99,9 @@ const GRANTS = `
   -- credit_packs (13a Area 5) is staff-authored pricing config — for now platform-owned (deny-all to the app
   -- role); the public pricing surface is separate. REVOKE the blanket grant. withPlatformTx (owner) unaffected.
   REVOKE ALL ON credit_packs FROM leadwolf_app;
+  -- plan_templates (13a Area 5) is staff-authored plan config — platform-owned, deny-all to the app role.
+  -- REVOKE the blanket grant. withPlatformTx (owner) unaffected.
+  REVOKE ALL ON plan_templates FROM leadwolf_app;
   -- Layer-0 master graph (ADR-0021) is SYSTEM-OWNED, isolated by ACCESS PATH not RLS: it has NO workspace_id,
   -- so NO fail-closed RLS predicate. The blanket GRANT above handed leadwolf_app DML on it — REVOKE it so the
   -- customer app role can NEVER read the shared universe directly (PLAN_04/PLAN_07 "grant-off is the wall").

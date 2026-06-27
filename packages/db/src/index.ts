@@ -256,6 +256,12 @@ export {
   type CreditPackRow,
   type UpsertCreditPackInput,
 } from "./repositories/creditPackRepository.ts";
+// Plan/entitlement template catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
+export {
+  planTemplateRepository,
+  type PlanTemplateRow,
+  type UpsertPlanTemplateInput,
+} from "./repositories/planTemplateRepository.ts";
 // JIT elevation grants (13a F1) — audited, time-boxed, tenant-scoped step-up for sensitive admin actions.
 export {
   jitElevationRepository,

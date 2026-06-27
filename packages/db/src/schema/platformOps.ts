@@ -10,7 +10,16 @@
 // its banner/justification metadata; the scoped, time-boxed impersonation access token is WIRE-deferred.
 
 import { sql } from "drizzle-orm";
-import { boolean, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 const id = () => uuid("id").primaryKey().default(sql`uuid_generate_v7()`);
 
@@ -88,6 +97,25 @@ export const creditPacks = pgTable("credit_packs", {
   name: text("name").notNull(),
   credits: integer("credits").notNull(),
   priceCents: integer("price_cents").notNull(),
+  active: boolean("active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// plan_templates — the plan/entitlement-template catalog staff author (13a Area 5, 13 §3.5, 07 §5): the
+// seat/workspace caps, an optional monthly credit grant, and the `features` entitlement flags each plan
+// grants. Same PLATFORM-config posture as credit_packs: owner-written, deny-all to leadwolf_app. `key` is the
+// stable identity (upsert target); a retired plan is kept (active=false). Applying a template to a tenant (the
+// plan-override path) is a separate surface.
+export const planTemplates = pgTable("plan_templates", {
+  id: id(),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  seatLimit: integer("seat_limit").notNull(),
+  workspaceLimit: integer("workspace_limit"), // null = unlimited
+  monthlyCreditGrant: integer("monthly_credit_grant"), // null = none
+  features: jsonb("features").notNull().default({}),
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
