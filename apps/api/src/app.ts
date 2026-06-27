@@ -9,6 +9,7 @@ import { accountSearchRoutes } from "./features/account-search/index.ts";
 import { activityRoutes } from "./features/activity/index.ts";
 import { adminRoutes } from "./features/admin/index.ts";
 import { aiSearchRoutes } from "./features/ai/index.ts";
+import { announcementsRoutes } from "./features/announcements/index.ts";
 import { authRoutes } from "./features/auth/index.ts";
 import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
@@ -76,6 +77,7 @@ app.use("/api/*", rateLimit);
 app.route("/api/v1/auth", authRoutes);
 // Platform super-admin (ADR-0032): pa-gated, cross-tenant, audited — NOT workspace-scoped. Highest privilege.
 app.route("/api/v1/admin", adminRoutes);
+app.route("/api/v1/announcements", announcementsRoutes); // 13a Area 10 — customer banner read
 app.route("/api/v1/workspaces", workspacesRoutes);
 // Workspace-admin session management (G-AUTH-2): /security/sessions + revoke/force-reauth. The /security/*
 // paths don't overlap workspacesRoutes' GET / (same shared-prefix pattern as /api/v1/contacts).

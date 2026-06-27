@@ -105,6 +105,30 @@ export const accountHolds = pgTable(
   (t) => ({ byTenant: index("account_holds_tenant_idx").on(t.tenantId, t.id) }),
 );
 
+// announcements — staff-authored in-app announcements / banners (13a Area 10, 13 §3.10). PLATFORM config,
+// owner-written (withPlatformTx), deny-all to leadwolf_app (rls/platformOps.sql + the applyMigrations REVOKE).
+// Customers see the ACTIVE applicable ones through a dedicated, server-scoped api read (the owner connection
+// filtered to the caller's tenant), NEVER by reading this table directly. audience = all | tenant; a 'tenant'
+// row carries tenant_target. starts_at/ends_at bound the display window (null = open-ended).
+export const announcements = pgTable(
+  "announcements",
+  {
+    id: id(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    level: text("level").notNull().default("info"), // info | warning | critical
+    audience: text("audience").notNull().default("all"), // all | tenant
+    tenantTarget: uuid("tenant_target"), // set iff audience = 'tenant'
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    active: boolean("active").notNull().default(true),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ activeIdx: index("announcements_active_idx").on(t.active, t.id) }),
+);
+
 // credit_packs — the credit-pack pricing catalog staff author (13a Area 5, 13 §3.5, 07 §1/§1A). PLATFORM
 // config, not tenant data: written only by the owner connection (withPlatformTx), deny-all to leadwolf_app
 // (rls/platformOps.sql + the applyMigrations REVOKE). `key` is the stable identity (upsert target). A retired

@@ -41,6 +41,7 @@ import { type ApiVariables, authn } from "../../middleware/authn.ts";
 import { platformAdmin } from "../../middleware/platformAdmin.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
 import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
+import { announcementRoutes } from "./announcements.ts";
 import { auditLogRoutes } from "./auditLog.ts";
 import { billingRoutes } from "./billing.ts";
 import { complianceRoutes } from "./compliance.ts";
@@ -644,3 +645,5 @@ adminRoutes.route("/billing", billingRoutes);
 adminRoutes.route("/pricing", pricingRoutes);
 // Compliance ops — cross-tenant DSAR oversight (13a Area 8, compliance:read).
 adminRoutes.route("/compliance", complianceRoutes);
+// Announcements authoring (13a Area 10, content:manage).
+adminRoutes.route("/announcements", announcementRoutes);

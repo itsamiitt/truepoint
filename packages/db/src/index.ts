@@ -251,6 +251,14 @@ export {
   accountHoldRepository,
   type AccountHoldRow,
 } from "./repositories/accountHoldRepository.ts";
+// Announcements (13a Area 10) — staff-authored banners; admin writes via withPlatformTx, customer read is an
+// owner-connection, server-scoped projection.
+export {
+  announcementRepository,
+  type AnnouncementRow,
+  type ActiveAnnouncementRow,
+  type AnnouncementWrite,
+} from "./repositories/announcementRepository.ts";
 // Platform billing/economics reads (13a Area 4) — cross-tenant aggregates, run within withPlatformTx.
 export {
   platformBillingReadRepository,

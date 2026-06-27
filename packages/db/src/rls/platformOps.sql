@@ -85,6 +85,27 @@ CREATE TABLE IF NOT EXISTS account_holds (
 
 ALTER TABLE account_holds ENABLE ROW LEVEL SECURITY;
 
+-- announcements (13a Area 10) — staff-authored banners. Owner-written (withPlatformTx), deny-all to
+-- leadwolf_app (this file + the applyMigrations REVOKE). Customers read the active applicable ones through a
+-- dedicated server-scoped api endpoint (owner connection, filtered to the caller's tenant), never this table.
+-- Defensive CREATE mirrors the migration's column set; idempotent.
+CREATE TABLE IF NOT EXISTS announcements (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  title text NOT NULL,
+  body text NOT NULL,
+  level text NOT NULL DEFAULT 'info',
+  audience text NOT NULL DEFAULT 'all',
+  tenant_target uuid,
+  starts_at timestamptz,
+  ends_at timestamptz,
+  active boolean NOT NULL DEFAULT true,
+  created_by_user_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+
 -- credit_packs (13a Area 5) — staff-authored pricing config. Same PLATFORM-owned posture: written only by the
 -- owner connection (withPlatformTx), deny-all to leadwolf_app for now (rls/platformOps.sql + applyMigrations
 -- REVOKE). NOTE: the public, transparent pricing page (ADR-0012) is a SEPARATE customer read surface — when it

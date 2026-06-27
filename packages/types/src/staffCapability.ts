@@ -24,6 +24,7 @@ export const staffCapability = z.enum([
   "staff:manage", // grant / revoke staff roles
   "providers:manage", // toggle / budget enrichment providers
   "pricing:manage", // author the credit-pack pricing catalog
+  "content:manage", // author announcements / in-app banners
 ]);
 export type StaffCapability = z.infer<typeof staffCapability>;
 
@@ -32,7 +33,13 @@ const ALL_CAPABILITIES: StaffCapability[] = staffCapability.options;
 // Per-role capability bundles (13 §2 capability matrix). super_admin is handled separately (implies ALL), so
 // it is intentionally absent here. Keep this in sync with the per-endpoint requireCapability gates.
 const ROLE_CAPABILITIES: Record<Exclude<StaffRole, "super_admin">, StaffCapability[]> = {
-  support: ["users:deactivate", "tenants:notes:write", "tenants:hold", "impersonate:start"],
+  support: [
+    "users:deactivate",
+    "tenants:notes:write",
+    "tenants:hold",
+    "impersonate:start",
+    "content:manage",
+  ],
   billing_ops: ["tenants:credits", "billing:read", "elevation:request"],
   compliance_officer: ["audit:read", "compliance:read"],
   read_only: [],

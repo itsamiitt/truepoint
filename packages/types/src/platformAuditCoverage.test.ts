@@ -34,6 +34,8 @@ const WRITTEN = new Set<string>([
   // 13a Area 7 — place / lift an account hold (POST /admin/tenants/:id/holds[/:holdId/lift]).
   "account.hold",
   "account.hold.lift",
+  // 13a Area 10 — publish / update / toggle an announcement (POST/PUT /admin/announcements).
+  "announcement.publish",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;

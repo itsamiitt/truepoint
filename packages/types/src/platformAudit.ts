@@ -19,6 +19,7 @@ export const platformAuditAction = z.enum([
   "plan_template.set",
   "account.hold",
   "account.hold.lift",
+  "announcement.publish",
   "impersonation.start",
   "impersonation.end",
   "feature_flag.set",

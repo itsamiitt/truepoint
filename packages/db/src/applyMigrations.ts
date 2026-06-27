@@ -98,6 +98,9 @@ const GRANTS = `
   REVOKE ALL ON support_notes FROM leadwolf_app;
   -- account_holds (13a Area 7) is platform-owned staff abuse data — deny-all to the customer app role.
   REVOKE ALL ON account_holds FROM leadwolf_app;
+  -- announcements (13a Area 10) is platform-owned authoring data — deny-all to the customer app role; the
+  -- customer banner read goes through a dedicated server-scoped api endpoint (owner connection), not this table.
+  REVOKE ALL ON announcements FROM leadwolf_app;
   -- credit_packs (13a Area 5) is staff-authored pricing config — for now platform-owned (deny-all to the app
   -- role); the public pricing surface is separate. REVOKE the blanket grant. withPlatformTx (owner) unaffected.
   REVOKE ALL ON credit_packs FROM leadwolf_app;

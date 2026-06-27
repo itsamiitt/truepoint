@@ -42,4 +42,5 @@ export * from "./pricingAdmin.ts";
 export * from "./planTemplateAdmin.ts";
 export * from "./accountHold.ts";
 export * from "./complianceAdmin.ts";
+export * from "./announcementAdmin.ts";
 export * from "./listGovernance.ts";
