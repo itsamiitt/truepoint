@@ -58,6 +58,11 @@ import {
   type ReverificationSweepJobData,
   makeProcessReverificationSweep,
 } from "./queues/reverificationSweep.ts";
+import {
+  DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
+  type DataQualitySnapshotSweepJobData,
+  makeProcessDataQualitySnapshotSweep,
+} from "./queues/dataQualitySnapshotSweep.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -99,6 +104,11 @@ export const reverificationQueue = new Queue<ReverificationJobData>(REVERIFICATI
 });
 export const reverificationSweepQueue = new Queue<ReverificationSweepJobData>(
   REVERIFICATION_SWEEP_QUEUE,
+  { connection },
+);
+// Data Health snapshot (10 §5): the leader-locked daily sweep that captures a per-workspace trend point.
+export const dataQualitySnapshotSweepQueue = new Queue<DataQualitySnapshotSweepJobData>(
+  DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
   { connection },
 );
 
@@ -178,6 +188,15 @@ export async function scheduleReverificationSweep(): Promise<void> {
     "sweep",
     {},
     { repeat: { every: 24 * 60 * 60_000 }, jobId: "reverification-sweep" },
+  );
+}
+
+/** Register the daily Data Health snapshot sweep (10 §5). Stable jobId → exactly one repeatable. */
+export async function scheduleDataQualitySnapshotSweep(): Promise<void> {
+  await dataQualitySnapshotSweepQueue.add(
+    "sweep",
+    {},
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "data-quality-snapshot-sweep" },
   );
 }
 
@@ -342,6 +361,15 @@ export function startWorkers(): Worker[] {
       ),
       REVERIFICATION_SWEEP_QUEUE,
     ),
+    // Data Health snapshot SWEEP consumer: leader-locked daily capture of a per-workspace trend point.
+    instrument(
+      new Worker<DataQualitySnapshotSweepJobData>(
+        DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
+        makeProcessDataQualitySnapshotSweep(connection),
+        { connection },
+      ),
+      DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
+    ),
   ];
   void scheduleSequenceTick().catch((e) =>
     log.error("failed to schedule the sequence tick", {
@@ -360,6 +388,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleReverificationSweep().catch((e) =>
     log.error("failed to schedule the reverification sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleDataQualitySnapshotSweep().catch((e) =>
+    log.error("failed to schedule the data-quality snapshot sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );

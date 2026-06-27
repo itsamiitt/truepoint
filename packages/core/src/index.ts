@@ -177,6 +177,7 @@ export {
 } from "./data-health/reverifyContacts.ts";
 // Per-workspace Data Health dashboard rollup (10 §5 / 22): the live fill/verification/freshness count aggregate.
 export { buildDataQualitySummary } from "./data-health/dataQualitySummary.ts";
+export { captureDataQualitySnapshot } from "./data-health/dataQualitySnapshot.ts";
 // Data quality & freshness keystone (22 §2–§3, ADR-0025): the 0–100 data_quality_score composite + cold-start
 // re-weighting + completeness weights + verification sub-score + freshness SLAs/bands/decay. Pure + set-reusable;
 // import-commit, the freshness sweep, and the masked DTO badge all wire it.

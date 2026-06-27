@@ -311,6 +311,17 @@ export const contactRepository = {
     return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
   },
 
+  /** Every workspace holding at least one live contact (system-level, non-PII, owner connection) — the Data
+   *  Health snapshot sweep's fan-out enumeration. DISTINCT over the live rows; capped by `limit`. */
+  async listWorkspacesWithContacts(
+    limit = 1000,
+  ): Promise<Array<{ tenantId: string; workspaceId: string }>> {
+    const rows = (await db.execute(
+      sql`SELECT DISTINCT tenant_id, workspace_id FROM contacts WHERE deleted_at IS NULL LIMIT ${limit}`,
+    )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
+    return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
+  },
+
   /** Find an existing contact in the workspace by the first dedup key that hits (email → linkedin → sales-nav). */
   async findByDedupKeys(
     tx: Tx,

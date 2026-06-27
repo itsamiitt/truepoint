@@ -85,6 +85,10 @@ export {
   type VerificationJobRow,
 } from "./repositories/verificationJobRepository.ts";
 export {
+  dataQualitySnapshotRepository,
+  type DataQualitySnapshotRow,
+} from "./repositories/dataQualitySnapshotRepository.ts";
+export {
   sourceImportRepository,
   type SourceImportInput,
   type ImportBatchRow,

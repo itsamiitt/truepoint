@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 959,
-  "fileSetHash": "sha256:4510947158dc7e480b0d8d82d6f0bc5f3e32764c8c194db2d2dbfc1565f1d1a0",
+  "fileCount": 964,
+  "fileSetHash": "sha256:fed76878f07b0f302acb0e287acfd67407964f501c6c27238a9fdc7884ae8e70",
   "features": {
     "account-search": {
       "web": [],
@@ -267,6 +267,7 @@
         "packages/core/src/data-health/chargeFor.ts",
         "packages/core/src/data-health/dataQualityScore.test.ts",
         "packages/core/src/data-health/dataQualityScore.ts",
+        "packages/core/src/data-health/dataQualitySnapshot.ts",
         "packages/core/src/data-health/dataQualitySummary.ts",
         "packages/core/src/data-health/emailPrescreen.test.ts",
         "packages/core/src/data-health/emailPrescreen.ts",
@@ -280,9 +281,11 @@
         "packages/core/src/data-health/validatePhone.ts"
       ],
       "db": [
+        "packages/db/src/repositories/dataQualitySnapshotRepository.ts",
         "packages/db/src/repositories/verificationJobRepository.ts"
       ],
       "workers": [
+        "apps/workers/src/queues/dataQualitySnapshotSweep.ts",
         "apps/workers/src/queues/reverification.ts",
         "apps/workers/src/queues/reverificationSweep.ts"
       ],
@@ -1468,6 +1471,7 @@
       "packages/db/src/schema/compliance.ts",
       "packages/db/src/schema/contacts.ts",
       "packages/db/src/schema/customFields.ts",
+      "packages/db/src/schema/dataQualitySnapshots.ts",
       "packages/db/src/schema/email.ts",
       "packages/db/src/schema/enrichmentJobs.ts",
       "packages/db/src/schema/enrichmentPolicy.ts",
@@ -1494,6 +1498,7 @@
       "packages/db/test/bootstrapAdmin.itest.ts",
       "packages/db/test/compliance.itest.ts",
       "packages/db/test/customFields.itest.ts",
+      "packages/db/test/dataQualitySnapshots.itest.ts",
       "packages/db/test/emailAnalytics.itest.ts",
       "packages/db/test/emailGovernance.itest.ts",
       "packages/db/test/emailIsolation.itest.ts",

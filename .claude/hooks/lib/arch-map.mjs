@@ -68,6 +68,7 @@ export const QUEUE_DOMAIN = {
   dsar: "compliance",
   reverification: "data-health",
   reverificationSweep: "data-health",
+  dataQualitySnapshotSweep: "data-health",
 };
 export const REPO_DOMAIN = {
   contact: "reveal",
@@ -101,6 +102,7 @@ export const REPO_DOMAIN = {
   consent: "compliance",
   dsar: "compliance",
   verificationJob: "data-health",
+  dataQualitySnapshot: "data-health",
 };
 export const PROVIDER_DOMAIN = {
   salesforce: "crm-sync",
