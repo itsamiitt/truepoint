@@ -23,6 +23,15 @@ export interface UserStatusOutcome {
   blockedPlatformAdmin: boolean;
 }
 
+/** The outcome of a purchase refund (13a Area 4): unknown id → 404, already refunded → 422, else the credits
+ *  reversed (clamped to the available balance — the bare counter can't go negative) and the new balance. */
+export interface RefundOutcome {
+  found: boolean;
+  alreadyRefunded: boolean;
+  reversed: number;
+  balanceAfter: number;
+}
+
 /** The outcome of a credit adjustment, so the caller can map it to the right HTTP result INSIDE the tx
  *  (and thus roll the audit row back on a no-op): unknown tenant → 404, would-overdraw → 422, else the new
  *  authoritative balance. */
@@ -94,5 +103,37 @@ export const platformAdminWriteRepository = {
 
     await tx.update(users).set({ status, updatedAt: new Date() }).where(eq(users.id, userId));
     return { found: true, blockedPlatformAdmin: false };
+  },
+
+  /**
+   * Refund a credit-pack purchase (13a Area 4, 07 §6/§7): mark it `refunded` and reverse its credits from the
+   * tenant counter. Both the purchase and the tenant row are taken FOR UPDATE. The reversal is CLAMPED to the
+   * available balance — a bare counter cannot go negative (the CHECK), so a refund of already-spent credits
+   * reverses only what's left; the unrecoverable remainder is the M11 ledger's reconciliation job (07 §2). An
+   * unknown purchase → `found:false`; an already-refunded one → `alreadyRefunded:true` (no double reversal).
+   */
+  async refundPurchase(tx: Tx, tenantId: string, purchaseId: string): Promise<RefundOutcome> {
+    const prows = (await tx.execute(
+      sql`SELECT credits, status FROM purchases
+          WHERE id = ${purchaseId}::uuid AND tenant_id = ${tenantId}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ credits: number; status: string }>;
+    if (prows.length === 0)
+      return { found: false, alreadyRefunded: false, reversed: 0, balanceAfter: 0 };
+    if (prows[0]!.status === "refunded")
+      return { found: true, alreadyRefunded: true, reversed: 0, balanceAfter: 0 };
+
+    const credits = Number(prows[0]!.credits);
+    const brows = (await tx.execute(
+      sql`SELECT reveal_credit_balance AS balance FROM tenants WHERE id = ${tenantId}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ balance: number }>;
+    const balance = Number(brows[0]?.balance ?? 0);
+    const reversed = Math.min(credits, balance);
+    const balanceAfter = balance - reversed;
+
+    await tx.execute(
+      sql`UPDATE tenants SET reveal_credit_balance = ${balanceAfter}, updated_at = now() WHERE id = ${tenantId}::uuid`,
+    );
+    await tx.execute(sql`UPDATE purchases SET status = 'refunded' WHERE id = ${purchaseId}::uuid`);
+    return { found: true, alreadyRefunded: false, reversed, balanceAfter };
   },
 };

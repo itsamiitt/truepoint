@@ -238,6 +238,7 @@ export {
   type CreditAdjustOutcome,
   type UserAccountStatus,
   type UserStatusOutcome,
+  type RefundOutcome,
 } from "./repositories/platformAdminWrites.ts";
 // Platform STAFF role lookup (ADR-0011) — owner-connection read for requireStaffRole authz.
 export { platformStaffRepository } from "./repositories/platformStaffRepository.ts";
@@ -263,6 +264,7 @@ export {
 export {
   platformBillingReadRepository,
   type EconomicsAggregate,
+  type PlatformPurchaseRow,
 } from "./repositories/platformBillingReads.ts";
 // Platform compliance-ops reads (13a Area 8) — global DSAR queue (PII-free), run within withPlatformTx.
 export {

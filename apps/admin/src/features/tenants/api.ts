@@ -4,7 +4,14 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { AccountHold, SupportNote, TenantDetail, TenantOverview, TenantRow } from "./types";
+import type {
+  AccountHold,
+  Purchase,
+  SupportNote,
+  TenantDetail,
+  TenantOverview,
+  TenantRow,
+} from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -58,6 +65,30 @@ export async function reactivateTenant(id: string, reason: string): Promise<void
     },
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not reactivate the tenant"));
+}
+
+/** GET /admin/tenants/:id/purchases — the tenant's credit-pack purchases (billing:read). */
+export async function fetchTenantPurchases(id: string): Promise<Purchase[]> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/purchases`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load purchases"));
+  const body = (await res.json()) as { purchases: Purchase[] };
+  return body.purchases;
+}
+
+/** POST /admin/tenants/:id/purchases/:purchaseId/refund — reverse a purchase (tenants:credits). */
+export async function refundPurchase(
+  id: string,
+  purchaseId: string,
+): Promise<{ reversed: number; balanceAfter: number }> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/purchases/${encodeURIComponent(purchaseId)}/refund`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not refund the purchase"));
+  const body = (await res.json()) as { reversed: number; balanceAfter: number };
+  return { reversed: body.reversed, balanceAfter: body.balanceAfter };
 }
 
 /** GET /admin/tenants/:id/overview — the customer-360 usage/health aggregate for a tenant. */

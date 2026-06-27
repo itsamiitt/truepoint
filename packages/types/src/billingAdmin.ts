@@ -13,6 +13,25 @@ export const economicsQuerySchema = z.object({
 });
 export type EconomicsQuery = z.infer<typeof economicsQuerySchema>;
 
+/** A tenant's credit-pack purchase as shown in the console (no Stripe ids — those are internal). */
+export const purchaseViewSchema = z.object({
+  id: z.string().uuid(),
+  credits: z.number().int(),
+  amountCents: z.number().int().nullable(),
+  status: z.string(), // completed | refunded
+  createdAt: z.string(), // ISO-8601
+});
+export type PurchaseView = z.infer<typeof purchaseViewSchema>;
+
+/** The result of a refund — the credits actually reversed (clamped to the available balance, since the bare
+ *  counter cannot go negative; the full reconciliation is the M11 ledger's job) and the new balance. */
+export const refundResultSchema = z.object({
+  purchaseId: z.string().uuid(),
+  reversed: z.number().int(),
+  balanceAfter: z.number().int(),
+});
+export type RefundResult = z.infer<typeof refundResultSchema>;
+
 /** The economics summary for the window (07 §9 "internal reporting"). */
 export const economicsSummarySchema = z.object({
   sinceDays: z.number().int(),

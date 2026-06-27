@@ -4,8 +4,9 @@
 // each filtered to the window — SUM/COUNT only, no row dump. Cost is stored in micro-dollars; the api converts
 // to cents (cost_micros / 10_000), matching providerConfigRepository.
 
-import { sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
+import { purchases } from "../schema/billing.ts";
 
 /** Raw aggregates over the window — the api derives the cents/margin/cost-per-reveal view from these. */
 export interface EconomicsAggregate {
@@ -16,6 +17,15 @@ export interface EconomicsAggregate {
   reveals: number;
   chargedReveals: number;
   providerSpendMicros: number;
+}
+
+/** One credit-pack purchase row (no Stripe ids). */
+export interface PlatformPurchaseRow {
+  id: string;
+  credits: number;
+  amountCents: number | null;
+  status: string;
+  createdAt: Date;
 }
 
 export const platformBillingReadRepository = {
@@ -61,5 +71,21 @@ export const platformBillingReadRepository = {
       chargedReveals: Number(r?.charged_reveals ?? 0),
       providerSpendMicros: Number(s?.provider_spend_micros ?? 0),
     };
+  },
+
+  /** One tenant's credit-pack purchases, newest first, bounded (13a Area 4). Stripe ids are not projected. */
+  async listPurchases(tx: Tx, tenantId: string): Promise<PlatformPurchaseRow[]> {
+    return tx
+      .select({
+        id: purchases.id,
+        credits: purchases.credits,
+        amountCents: purchases.amountCents,
+        status: purchases.status,
+        createdAt: purchases.createdAt,
+      })
+      .from(purchases)
+      .where(eq(purchases.tenantId, tenantId))
+      .orderBy(desc(purchases.id))
+      .limit(100);
   },
 };

@@ -56,6 +56,15 @@ export interface TenantOverview {
   activeHolds: number;
 }
 
+/** A credit-pack purchase by a tenant (13a Area 4). Mirrors `/admin/tenants/:id/purchases`. */
+export interface Purchase {
+  id: string;
+  credits: number;
+  amountCents: number | null;
+  status: string;
+  createdAt: string;
+}
+
 /** An abuse / fraud hold on a tenant (13a Area 7). Mirrors the api `/admin/tenants/:id/holds` shape. */
 export interface AccountHold {
   id: string;

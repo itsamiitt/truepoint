@@ -12,6 +12,7 @@ import {
   jitElevationRepository,
   platformAdminRepository,
   platformAdminWriteRepository,
+  platformBillingReadRepository,
   platformStaffRepository,
   supportNoteRepository,
   withPlatformTx,
@@ -433,6 +434,56 @@ adminRoutes.post(
       { targetType: "tenant", targetId: tenantId, tenantId, metadata: { holdId } },
     );
     return c.json({ ok: true, holdId });
+  },
+);
+
+// ── Purchases + refunds (13a Area 4, 13 §3.4, 07 §6/§7) — a tenant's credit-pack purchases and an audited
+// refund (reverse the credits + mark refunded). Read = billing:read; refund = tenants:credits (a credit move).
+// The refund clamps to the available balance (the bare counter can't go negative). ──
+adminRoutes.get("/tenants/:id/purchases", requireCapability("billing:read"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const purchases = await withPlatformTx(
+    actorOf(c),
+    "admin.list_purchases",
+    async (tx) =>
+      (await platformBillingReadRepository.listPurchases(tx, tenantId)).map((p) => ({
+        id: p.id,
+        credits: p.credits,
+        amountCents: p.amountCents,
+        status: p.status,
+        createdAt: p.createdAt.toISOString(),
+      })),
+    { targetType: "tenant", targetId: tenantId, tenantId },
+  );
+  return c.json({ purchases });
+});
+
+adminRoutes.post(
+  "/tenants/:id/purchases/:purchaseId/refund",
+  requireCapability("tenants:credits"),
+  async (c) => {
+    const tenantId = c.req.param("id");
+    const purchaseId = c.req.param("purchaseId");
+    if (!UUID_RE.test(tenantId) || !UUID_RE.test(purchaseId))
+      throw new ValidationError("id must be a UUID");
+    const result = await withPlatformTx(
+      actorOf(c),
+      "credit.adjust",
+      async (tx) => {
+        const r = await platformAdminWriteRepository.refundPurchase(tx, tenantId, purchaseId);
+        if (!r.found) throw new NotFoundError("Purchase not found.");
+        if (r.alreadyRefunded) throw new ValidationError("Purchase is already refunded.");
+        return { reversed: r.reversed, balanceAfter: r.balanceAfter };
+      },
+      {
+        targetType: "tenant",
+        targetId: tenantId,
+        tenantId,
+        metadata: { purchaseId, action: "refund" },
+      },
+    );
+    return c.json({ purchaseId, reversed: result.reversed, balanceAfter: result.balanceAfter });
   },
 );
 
