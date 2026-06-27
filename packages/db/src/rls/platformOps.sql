@@ -68,3 +68,22 @@ CREATE TABLE IF NOT EXISTS support_notes (
 );
 
 ALTER TABLE support_notes ENABLE ROW LEVEL SECURITY;
+
+-- credit_packs (13a Area 5) — staff-authored pricing config. Same PLATFORM-owned posture: written only by the
+-- owner connection (withPlatformTx), deny-all to leadwolf_app for now (rls/platformOps.sql + applyMigrations
+-- REVOKE). NOTE: the public, transparent pricing page (ADR-0012) is a SEPARATE customer read surface — when it
+-- lands, add a SELECT policy for the active catalog and keep (not revoke) the leadwolf_app SELECT grant.
+-- Defensive CREATE mirrors the migration's column set; idempotent.
+CREATE TABLE IF NOT EXISTS credit_packs (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  key text NOT NULL UNIQUE,
+  name text NOT NULL,
+  credits integer NOT NULL,
+  price_cents integer NOT NULL,
+  active boolean NOT NULL DEFAULT true,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE credit_packs ENABLE ROW LEVEL SECURITY;

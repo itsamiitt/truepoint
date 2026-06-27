@@ -27,6 +27,8 @@ const WRITTEN = new Set<string>([
   "audit.export",
   // 13a Area 3 — staff support note added to a tenant (POST /admin/tenants/:id/notes).
   "support_note.add",
+  // 13a Area 5 — credit-pack (pricing) catalog upsert / toggle (PUT/POST /admin/pricing/credit-packs).
+  "credit_pack.set",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;

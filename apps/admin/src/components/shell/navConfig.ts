@@ -10,6 +10,7 @@ import {
   Plug,
   ScrollText,
   ShieldCheck,
+  Tag,
   Users,
   Wallet,
 } from "lucide-react";
@@ -27,6 +28,7 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Tenants", href: "/tenants", match: "/tenants", icon: Building2 },
   { label: "Users", href: "/users", match: "/users", icon: Users },
   { label: "Billing", href: "/billing", match: "/billing", icon: Wallet },
+  { label: "Pricing", href: "/pricing", match: "/pricing", icon: Tag },
   { label: "Providers", href: "/provider-configs", match: "/provider-configs", icon: Plug },
   { label: "Feature flags", href: "/feature-flags", match: "/feature-flags", icon: Flag },
   { label: "Staff", href: "/staff", match: "/staff", icon: ShieldCheck },

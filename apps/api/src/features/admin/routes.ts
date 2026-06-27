@@ -42,6 +42,7 @@ import { auditLogRoutes } from "./auditLog.ts";
 import { billingRoutes } from "./billing.ts";
 import { elevationRoutes } from "./elevations.ts";
 import { impersonationRoutes } from "./impersonation.ts";
+import { pricingRoutes } from "./pricing.ts";
 import { providerConfigRoutes } from "./providerConfigs.ts";
 import { staffRoutes } from "./staff.ts";
 
@@ -527,3 +528,5 @@ adminRoutes.route("/impersonation", impersonationRoutes);
 adminRoutes.route("/elevations", elevationRoutes);
 // Billing / revenue-ops economics (13a Area 4, super_admin|billing_ops).
 adminRoutes.route("/billing", billingRoutes);
+// Credit-pack pricing catalog (13a Area 5, pricing:manage).
+adminRoutes.route("/pricing", pricingRoutes);

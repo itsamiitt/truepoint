@@ -21,6 +21,7 @@ export const staffCapability = z.enum([
   "impersonate:start", // start an impersonation session
   "staff:manage", // grant / revoke staff roles
   "providers:manage", // toggle / budget enrichment providers
+  "pricing:manage", // author the credit-pack pricing catalog
 ]);
 export type StaffCapability = z.infer<typeof staffCapability>;
 

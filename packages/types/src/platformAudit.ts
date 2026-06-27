@@ -15,6 +15,7 @@ export const platformAuditAction = z.enum([
   "user.reactivate",
   "elevation.grant",
   "support_note.add",
+  "credit_pack.set",
   "impersonation.start",
   "impersonation.end",
   "feature_flag.set",

@@ -162,6 +162,13 @@
       "when": 1782528241616,
       "tag": "0022_organic_earthquake",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1782531193124,
+      "tag": "0023_steep_ultragirl",
+      "breakpoints": true
     }
   ]
 }

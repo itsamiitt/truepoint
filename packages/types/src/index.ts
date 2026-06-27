@@ -38,4 +38,5 @@ export * from "./platformAdmin.ts";
 export * from "./supportNote.ts";
 export * from "./billingAdmin.ts";
 export * from "./staffCapability.ts";
+export * from "./pricingAdmin.ts";
 export * from "./listGovernance.ts";

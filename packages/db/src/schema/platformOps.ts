@@ -10,7 +10,7 @@
 // its banner/justification metadata; the scoped, time-boxed impersonation access token is WIRE-deferred.
 
 import { sql } from "drizzle-orm";
-import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const id = () => uuid("id").primaryKey().default(sql`uuid_generate_v7()`);
 
@@ -76,3 +76,20 @@ export const supportNotes = pgTable(
   },
   (t) => ({ byTenant: index("support_notes_tenant_idx").on(t.tenantId, t.id) }),
 );
+
+// credit_packs — the credit-pack pricing catalog staff author (13a Area 5, 13 §3.5, 07 §1/§1A). PLATFORM
+// config, not tenant data: written only by the owner connection (withPlatformTx), deny-all to leadwolf_app
+// (rls/platformOps.sql + the applyMigrations REVOKE). `key` is the stable identity (upsert target). A retired
+// pack is kept (active=false) for history. Surfacing the active catalog to customers (the public, transparent
+// pricing page — ADR-0012) is a SEPARATE read surface and is not wired here.
+export const creditPacks = pgTable("credit_packs", {
+  id: id(),
+  key: text("key").notNull().unique(),
+  name: text("name").notNull(),
+  credits: integer("credits").notNull(),
+  priceCents: integer("price_cents").notNull(),
+  active: boolean("active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
