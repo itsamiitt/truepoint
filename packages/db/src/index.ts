@@ -266,6 +266,7 @@ export {
 // Platform audit-log read surface (ADR-0032) — bounded cross-tenant read, run within withPlatformTx.
 export {
   platformAuditReadRepository,
+  AUDIT_EXPORT_CAP,
   type PlatformAuditRow,
   type TenantStaffAccessRow,
 } from "./repositories/platformAuditReads.ts";

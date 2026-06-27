@@ -32,3 +32,38 @@ export const platformAuditAction = z.enum([
 ]);
 
 export type PlatformAuditAction = z.infer<typeof platformAuditAction>;
+
+// ── Audit-log viewer query (13a F4 / Area 11) ──────────────────────────────────────────────────────────
+// Keyset pagination + optional filters for GET /admin/audit-log (and the CSV export). All filters are
+// optional and AND-combined; `cursor` is an opaque keyset token (never an offset). Values arrive as URL
+// query params, so numeric/limit fields are coerced. Bounded by a max limit — no unbounded scans (ADR-0032).
+export const platformAuditQuerySchema = z.object({
+  action: z.string().trim().min(1).max(64).optional(), // exact action match (e.g. "tenant.suspend")
+  tenantId: z.string().uuid().optional(),
+  actorUserId: z.string().uuid().optional(),
+  since: z.string().datetime().optional(), // ISO lower bound (inclusive)
+  until: z.string().datetime().optional(), // ISO upper bound (exclusive)
+  cursor: z.string().max(256).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type PlatformAuditQuery = z.infer<typeof platformAuditQuerySchema>;
+
+/** One audit entry as surfaced to the staff console — the structured envelope only (never `metadata`). */
+export const platformAuditEntrySchema = z.object({
+  id: z.string().uuid(),
+  action: z.string(),
+  actorUserId: z.string().uuid().nullable(),
+  targetType: z.string().nullable(),
+  targetId: z.string().nullable(),
+  tenantId: z.string().uuid().nullable(),
+  workspaceId: z.string().uuid().nullable(),
+  ip: z.string().nullable(),
+  occurredAt: z.string(), // ISO-8601
+});
+export type PlatformAuditEntry = z.infer<typeof platformAuditEntrySchema>;
+
+/** A keyset page of audit entries — `nextCursor` is null when the last page has been reached. */
+export interface PlatformAuditPage {
+  entries: PlatformAuditEntry[];
+  nextCursor: string | null;
+}

@@ -14,3 +14,13 @@ export interface PlatformAuditEntry {
   ip: string | null;
   occurredAt: string;
 }
+
+/** The AND-combined filters for the audit-log viewer + export (13a F4). `since`/`until` are full ISO datetimes
+ *  (the page converts the date pickers to day bounds). All optional. */
+export interface AuditLogFilters {
+  action?: string;
+  tenantId?: string;
+  actorUserId?: string;
+  since?: string;
+  until?: string;
+}

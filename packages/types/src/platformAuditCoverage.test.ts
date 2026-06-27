@@ -23,6 +23,8 @@ const WRITTEN = new Set<string>([
   "user.reactivate",
   // 13a F1 — JIT elevation grant (POST /admin/elevations), consumed by the credit/suspend mutations.
   "elevation.grant",
+  // 13a F4 — audit-log CSV export (GET /admin/audit-log/export) writes its own audited row.
+  "audit.export",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;
@@ -33,7 +35,6 @@ const PENDING = new Set<string>([
   "impersonation.end",
   "feature_flag.set",
   "provider_config.update",
-  "audit.export",
   "staff.login",
   "staff.login.failure",
   "login.failure",
