@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 964,
-  "fileSetHash": "sha256:60142ac5bb9a8167a736be8a8733253d1961ffdc20386c0bc13fbe11b975659d",
+  "fileCount": 967,
+  "fileSetHash": "sha256:01bf3f5824e806b131b446ba10e796bdc03725ed2065a043bfe9175c48da369b",
   "features": {
     "account-search": {
       "web": [],
@@ -1208,7 +1208,8 @@
       "apps/admin/src/lib/adminGate.ts",
       "apps/admin/src/lib/authClient.ts",
       "apps/admin/src/lib/pkce.ts",
-      "apps/admin/src/lib/publicConfig.ts"
+      "apps/admin/src/lib/publicConfig.ts",
+      "apps/admin/src/lib/staffMe.tsx"
     ],
     "apps/api": [
       "apps/api/src/app.authz.test.ts",
@@ -1224,6 +1225,7 @@
       "apps/api/src/middleware/platformAdmin.ts",
       "apps/api/src/middleware/rateLimit.test.ts",
       "apps/api/src/middleware/rateLimit.ts",
+      "apps/api/src/middleware/requireCapability.ts",
       "apps/api/src/middleware/requireOrgRole.ts",
       "apps/api/src/middleware/requireRole.ts",
       "apps/api/src/middleware/requireStaffRole.ts",
@@ -1588,6 +1590,7 @@
       "packages/types/src/search.ts",
       "packages/types/src/sso.ts",
       "packages/types/src/staffAdmin.ts",
+      "packages/types/src/staffCapability.ts",
       "packages/types/src/supportNote.ts",
       "packages/types/src/tags.ts",
       "packages/types/src/tenantAdmin.ts",
