@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { SupportNote, TenantDetail, TenantRow } from "./types";
+import type { AccountHold, SupportNote, TenantDetail, TenantRow } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -87,6 +87,44 @@ export async function addTenantNote(
   if (!res.ok) throw new Error(await problemMessage(res, "Could not add note"));
   const data = (await res.json()) as { note: SupportNote };
   return data.note;
+}
+
+/** GET /admin/tenants/:id/holds — the abuse/fraud holds on a tenant (active first). */
+export async function fetchTenantHolds(id: string): Promise<AccountHold[]> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/holds`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load holds"));
+  const body = (await res.json()) as { holds: AccountHold[] };
+  return body.holds;
+}
+
+/** POST /admin/tenants/:id/holds — place an abuse/fraud hold (super_admin|support). Audited. */
+export async function placeTenantHold(
+  id: string,
+  kind: string,
+  reason: string,
+): Promise<AccountHold> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/holds`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind, reason }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not place the hold"));
+  const body = (await res.json()) as { hold: AccountHold };
+  return body.hold;
+}
+
+/** POST /admin/tenants/:id/holds/:holdId/lift — lift an active hold (super_admin|support). Audited. */
+export async function liftTenantHold(id: string, holdId: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/holds/${encodeURIComponent(holdId)}/lift`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not lift the hold"));
 }
 
 /** POST /admin/elevations — mint a time-boxed JIT elevation (13a F1) the gated action then consumes. The

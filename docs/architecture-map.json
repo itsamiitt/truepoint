@@ -76,8 +76,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1019,
-  "fileSetHash": "sha256:337c2fa24413fd3f17aec8b69b375904b24eca41a76b258e09880cb9e1f4a9da",
+  "fileCount": 1022,
+  "fileSetHash": "sha256:bc148ac7cb0192c0096fcb9a13a79f110230ba8d3d10fb59c3d275a6445bbe2d",
   "features": {
     "account-search": {
       "web": [],
@@ -1177,6 +1177,7 @@
         "apps/admin/src/features/tenants/components/SupportNotes.tsx",
         "apps/admin/src/features/tenants/components/TenantActions.tsx",
         "apps/admin/src/features/tenants/components/TenantDetailPage.tsx",
+        "apps/admin/src/features/tenants/components/TenantHolds.tsx",
         "apps/admin/src/features/tenants/components/TenantsPage.tsx",
         "apps/admin/src/features/tenants/format.test.ts",
         "apps/admin/src/features/tenants/format.ts",
@@ -1614,6 +1615,7 @@
       "packages/search/src/index.ts"
     ],
     "packages/types": [
+      "packages/types/src/accountHold.ts",
       "packages/types/src/accountsSearch.ts",
       "packages/types/src/activity.ts",
       "packages/types/src/aiSearch.ts",
@@ -1708,6 +1710,7 @@
     "apps/workers/src/queues/retentionSweep.ts",
     "apps/workers/src/queues/sequenceTick.ts",
     "apps/workers/src/queues/tokenRefresh.ts",
+    "packages/db/src/repositories/accountHoldRepository.ts",
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/authPolicyRepository.ts",
     "packages/db/src/repositories/creditPackRepository.ts",
