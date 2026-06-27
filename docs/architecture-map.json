@@ -78,8 +78,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1048,
-  "fileSetHash": "sha256:2457dead4d0161b864b731c3d71a74000b177c8335e80c6d2afec26efdb0df02",
+  "fileCount": 1049,
+  "fileSetHash": "sha256:80e51ee3585257c673c32831ac561c43b471f5f238d5cef3e5c1d74310dbd32a",
   "features": {
     "account-search": {
       "web": [],
@@ -229,6 +229,7 @@
       "admin": [
         "apps/admin/src/features/compliance/api.ts",
         "apps/admin/src/features/compliance/components/CompliancePage.tsx",
+        "apps/admin/src/features/compliance/components/GlobalSuppression.tsx",
         "apps/admin/src/features/compliance/components/RetentionPolicies.tsx",
         "apps/admin/src/features/compliance/hooks/useCompliance.ts",
         "apps/admin/src/features/compliance/index.ts",
