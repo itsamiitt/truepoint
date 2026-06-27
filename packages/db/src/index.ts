@@ -330,6 +330,10 @@ export {
   type VersionInsert,
   type TemplateRecord,
   type TemplateSummaryRow,
+  type TemplateDetailRow,
+  type TemplateVersionRow,
+  type TemplateListCursor,
+  type TemplateListRow,
 } from "./repositories/emailTemplateRepository.ts";
 export {
   schedulerRepository,

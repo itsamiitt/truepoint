@@ -343,8 +343,18 @@ export {
   createTemplate,
   updateTemplate,
   listTemplates,
+  getTemplate,
+  listTemplateVersions,
+  previewTemplate,
+  restoreVersion,
+  TEMPLATE_MERGE_FIELDS,
   type CreateTemplateInput,
   type UpdateTemplateInput,
+  type TemplateSummary,
+  type TemplateDetail,
+  type TemplateVersion,
+  type PreviewTemplateInput,
+  type RestoreVersionInput,
 } from "./email/templates.ts";
 // M12 P3 tracking (email-planning/13 P3, 04): the signed open/click token + the email_event → activities
 // projection that lights up the per-contact timeline (idempotent; opens informational, D6).

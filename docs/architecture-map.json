@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 974,
-  "fileSetHash": "sha256:da65067e2a14e018dcf35c0450f7dcae1ee667fff295f536495292a5f540aa6f",
+  "fileCount": 978,
+  "fileSetHash": "sha256:752ac0d69fba4be7b9af34ccf359943ecec37548f8cd13db1a3ca18b38cbe42d",
   "features": {
     "account-search": {
       "web": [],
@@ -323,6 +323,7 @@
         "packages/core/src/email/sequenceScheduler.ts",
         "packages/core/src/email/signingKeys.test.ts",
         "packages/core/src/email/signingKeys.ts",
+        "packages/core/src/email/templates.test.ts",
         "packages/core/src/email/templates.ts",
         "packages/core/src/email/tokenBucket.test.ts",
         "packages/core/src/email/tokenBucket.ts",
@@ -872,7 +873,9 @@
         "apps/web/src/features/sequences/components/SequenceBuilder.tsx",
         "apps/web/src/features/sequences/components/SequenceList.tsx",
         "apps/web/src/features/sequences/components/SequencesPage.tsx",
+        "apps/web/src/features/sequences/components/TemplateEditor.tsx",
         "apps/web/src/features/sequences/components/TemplatesPanel.tsx",
+        "apps/web/src/features/sequences/components/VersionHistoryDrawer.tsx",
         "apps/web/src/features/sequences/hooks/useDrafts.ts",
         "apps/web/src/features/sequences/hooks/useEnrollableContacts.ts",
         "apps/web/src/features/sequences/hooks/useEnrollment.ts",
@@ -1540,6 +1543,7 @@
       "packages/db/test/sendGate.itest.ts",
       "packages/db/test/suppressionMgmt.itest.ts",
       "packages/db/test/tags.itest.ts",
+      "packages/db/test/templateIsolation.itest.ts",
       "packages/db/test/trackingIngest.itest.ts",
       "packages/db/test/webhooks.itest.ts",
       "packages/db/test/workspaceSwitch.itest.ts"

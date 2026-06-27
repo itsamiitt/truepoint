@@ -601,3 +601,200 @@
   font-size: 13px;
   color: var(--danger);
 }
+
+/* ── Template library card (clickable) + pagination (M12 P2) ──────────────────────────────────────── */
+.templateCardButton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.templateCardButton:hover {
+  border-color: var(--tp-hairline-strong, var(--tp-ink-3));
+  box-shadow: var(--tp-shadow-1, 0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+.templateCardButton:focus-visible {
+  outline: 2px solid var(--tp-focus, var(--tp-cobalt));
+  outline-offset: 2px;
+}
+
+.loadMoreRow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.templateFilterRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* ── Template editor dialog (M12 P2) ─────────────────────────────────────────────────────────────── */
+.editorBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.editorLoading,
+.editorHint,
+.editorReadonlyNote {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.editorReadonlyNote {
+  padding: 10px 12px;
+  background: var(--tp-surface-3);
+  border-radius: var(--radius);
+}
+
+.editorError {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.editorControlsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editorShareToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--tp-ink-2);
+  cursor: pointer;
+}
+
+.editorSectionLabel {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+}
+
+.editorFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.editorFootLeft,
+.editorFootRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Render preview + fields used ─────────────────────────────────────────────────────────────────── */
+.templatePreview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--radius);
+  background: var(--tp-surface-2, var(--tp-surface-3));
+}
+
+.templatePreviewSubject {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink);
+}
+
+.templatePreviewBody {
+  margin: 0;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--tp-ink-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.templateFieldChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── Version history drawer (M12 P2) ─────────────────────────────────────────────────────────────── */
+.versionList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.versionRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: var(--tp-surface);
+}
+
+.versionMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.versionNumber {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink);
+}
+
+.versionDate {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+.versionSubject {
+  font-size: 13px;
+  color: var(--tp-ink-2);
+}
+
+.versionBody {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tp-ink-3);
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.versionActions {
+  display: flex;
+  justify-content: flex-end;
+}

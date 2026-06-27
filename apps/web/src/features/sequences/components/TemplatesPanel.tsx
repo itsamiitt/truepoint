@@ -1,110 +1,59 @@
-// TemplatesPanel.tsx — the "Templates" tab: the message-template library (M9, panel within Sequences) plus a
-// merge-field reference. The templates backend isn't wired yet, so when useTemplates reports available=false
-// the library shows a first-class "connect …" EmptyState (no invented templates) while the merge-field hints
-// — which are static documentation, not data — always render so a rep composing a step knows the vocabulary.
-// All async chrome via the State Kit. Pure presentation.
+// TemplatesPanel.tsx — the "Templates" tab: the owner-scoped message-template library (M12 P2) plus a
+// merge-field reference. The backend is LIVE: click a card to edit/view it, "New template" to author one — both
+// open the TemplateEditor dialog (versioned content, server-side safe preview, share/archive, version history).
+// An Active/Archived filter makes archiving reversible (an archived template opens with "Restore to active").
+// The library is keyset-paginated ("Load more"); a load-more failure surfaces inline and never tears down the
+// already-loaded grid. The merge-field hints are static documentation, always shown. Pure presentation.
 "use client";
 
-import {
-  Card,
-  EmptyState,
-  Icon,
-  StateSwitch,
-  StatusBadge,
-  TpButton,
-  TpInput,
-  TpTextarea,
-} from "@leadwolf/ui";
+import { Card, EmptyState, Icon, StateSwitch, StatusBadge, TpButton, TpChip } from "@leadwolf/ui";
 import { FileText } from "lucide-react";
-import { type FormEvent, useState } from "react";
-import { createTemplate } from "../api";
+import { useState } from "react";
 import { useTemplates } from "../hooks/useTemplates";
 import styles from "../sequences.module.css";
 import { CHANNEL_LABEL, MERGE_FIELDS, SEQUENCE_STATUS_TONE, type TemplateSummary } from "../types";
+import { TemplateEditor } from "./TemplateEditor";
 
-function NewTemplateForm({ onCreated }: { onCreated: () => void }) {
-  const [name, setName] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const canSubmit = name.trim().length > 0 && body.trim().length > 0 && !busy;
-
-  async function onSubmit(e: FormEvent): Promise<void> {
-    e.preventDefault();
-    if (!canSubmit) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await createTemplate({ name: name.trim(), subject: subject.trim() || null, body });
-      setName("");
-      setSubject("");
-      setBody("");
-      onCreated();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the template");
-    } finally {
-      setBusy(false);
-    }
-  }
-
+function TemplateCard({
+  template,
+  onOpen,
+}: {
+  template: TemplateSummary;
+  onOpen: () => void;
+}) {
   return (
-    <form className={styles.templateForm} onSubmit={(e) => void onSubmit(e)}>
-      <div className={styles.templateFormRow}>
-        <label className={styles.templateFormField} htmlFor="tpl-name">
-          <span className={styles.templateFormLabel}>Name</span>
-          <TpInput
-            id="tpl-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Intro — founders"
-          />
-        </label>
-        <label className={styles.templateFormField} htmlFor="tpl-subject">
-          <span className={styles.templateFormLabel}>Subject (optional)</span>
-          <TpInput
-            id="tpl-subject"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="Quick intro, {{first_name}}"
-          />
-        </label>
-      </div>
-      <label className={styles.templateFormField} htmlFor="tpl-body">
-        <span className={styles.templateFormLabel}>Body</span>
-        <TpTextarea
-          id="tpl-body"
-          rows={4}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Hi {{first_name | there}} — saw {{company}} is growing…"
-        />
-      </label>
-      <div className={styles.templateFormActions}>
-        <TpButton type="submit" disabled={!canSubmit}>
-          {busy ? "Saving…" : "Save template"}
-        </TpButton>
-        {error && <span className={styles.templateFormError}>{error}</span>}
-      </div>
-    </form>
-  );
-}
-
-function TemplateCard({ template }: { template: TemplateSummary }) {
-  return (
-    <div className={styles.templateCard}>
+    <button type="button" className={styles.templateCardButton} onClick={onOpen}>
       <div className={styles.templateHead}>
         <span className={styles.templateName}>{template.name}</span>
         <StatusBadge tone="muted">{CHANNEL_LABEL[template.channel]}</StatusBadge>
       </div>
       {template.subject && <span className={styles.templateSubject}>{template.subject}</span>}
       <p className={styles.templateBody}>{template.body}</p>
-    </div>
+    </button>
   );
 }
 
 export function TemplatesPanel() {
-  const { data, available, loading, error, reload } = useTemplates();
+  const {
+    data,
+    status,
+    setStatus,
+    available,
+    nextCursor,
+    loading,
+    loadingMore,
+    error,
+    loadMoreError,
+    reload,
+    loadMore,
+  } = useTemplates();
+  const [editor, setEditor] = useState<{ open: boolean; id: string | null }>({
+    open: false,
+    id: null,
+  });
+
+  const closeEditor = () => setEditor({ open: false, id: null });
+  const archived = status === "archived";
 
   return (
     <div className={styles.tabPanel}>
@@ -113,12 +62,27 @@ export function TemplatesPanel() {
           <div className={styles.cardHeaderText}>
             <h2 className={styles.cardTitle}>Template library</h2>
             <p className={styles.cardHint}>
-              Reusable subject + body templates with merge fields, shared across your sequences.
+              Reusable subject + body templates with merge fields, versioned and shareable across
+              your sequences.
             </p>
           </div>
+          {available && !archived ? (
+            <TpButton size="sm" onClick={() => setEditor({ open: true, id: null })}>
+              New template
+            </TpButton>
+          ) : null}
         </div>
 
-        {available && <NewTemplateForm onCreated={reload} />}
+        {available ? (
+          <div className={styles.templateFilterRow}>
+            <TpChip active={!archived} onClick={() => setStatus("active")}>
+              Active
+            </TpChip>
+            <TpChip active={archived} onClick={() => setStatus("archived")}>
+              Archived
+            </TpChip>
+          </div>
+        ) : null}
 
         <StateSwitch
           loading={loading}
@@ -128,20 +92,47 @@ export function TemplatesPanel() {
           emptyState={
             <EmptyState
               icon={<Icon icon={FileText} size={28} />}
-              title={available ? "No templates yet" : "Templates aren't connected yet"}
+              title={
+                !available
+                  ? "Templates aren't available"
+                  : archived
+                    ? "No archived templates"
+                    : "No templates yet"
+              }
               description={
-                available
-                  ? "Save a step's copy as a template to reuse it across sequences. Templates land here once you create them."
-                  : "The shared template library ships with the M9 outreach update. Until then, compose copy directly in each sequence step using the merge fields below."
+                !available
+                  ? "The template library couldn't be reached. Refresh, or compose copy directly in each sequence step using the merge fields below."
+                  : archived
+                    ? "Templates you archive land here. Open one to restore it to your active library."
+                    : "Create your first reusable template, or save a step's copy as one. Templates you own and ones shared with your workspace appear here."
               }
             />
           }
         >
           <div className={styles.templateGrid}>
             {data.map((t) => (
-              <TemplateCard key={t.id} template={t} />
+              <TemplateCard
+                key={t.id}
+                template={t}
+                onOpen={() => setEditor({ open: true, id: t.id })}
+              />
             ))}
           </div>
+          {nextCursor ? (
+            <div className={styles.loadMoreRow}>
+              <TpButton
+                variant="secondary"
+                size="sm"
+                onClick={() => void loadMore()}
+                loading={loadingMore}
+              >
+                Load more
+              </TpButton>
+              {loadMoreError ? (
+                <span className={styles.templateFormError}>{loadMoreError}</span>
+              ) : null}
+            </div>
+          ) : null}
         </StateSwitch>
       </section>
 
@@ -166,6 +157,15 @@ export function TemplatesPanel() {
           ))}
         </ul>
       </Card>
+
+      {editor.open ? (
+        <TemplateEditor
+          templateId={editor.id}
+          open={editor.open}
+          onClose={closeEditor}
+          onSaved={reload}
+        />
+      ) : null}
     </div>
   );
 }

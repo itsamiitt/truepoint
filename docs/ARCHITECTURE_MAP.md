@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **974 source files · 54 code-bearing domains · 21 shared areas · 31 domain-vocabulary warnings · 42
+> **978 source files · 54 code-bearing domains · 21 shared areas · 31 domain-vocabulary warnings · 42
 > unbucketed** (4 framework-root configs + 8 undeclared worker queues + 30 repositories whose entity isn't
 > in `REPO_DOMAIN` — see Notes). Design refs: [04](./planning/04-ui-ux-design.md),
 > [10-roadmap.md](./planning/10-roadmap.md), [11 §6](./planning/11-information-architecture.md),
@@ -201,7 +201,10 @@ apps/                           # deployable processes (thin transport adapters)
   `dispatchOutreachSend.ts` (P1 send-gate: verify identity + consume tenant send-quota in tx + per-mailbox
   rate-throttle check, then M9 `sendStep` unchanged; a throttle denial refunds the quota and defers the send),
   `providerAdapter.ts` (ESP adapter seam — **dark default `consoleSender`, no network until an SES/Google/SMTP adapter is wired**),
-  `templates.ts` + `renderTemplate.ts` (versioned owner-scoped templates; HTML-escaped single-pass `{{merge}}`),
+  `templates.ts` + `renderTemplate.ts` (**P2 editor:** versioned owner-scoped templates — create/update +
+  `getTemplate`/`listTemplateVersions`/`restoreVersion` (immutable append-only versions) + keyset-paginated
+  `listTemplates` + `previewTemplate` (server-side safe render: HTML-escaped single-pass `{{merge}}`, canonical
+  `allowedKeys` whitelist); D8 owner-only edits, IDOR→404),
   `sequenceScheduler.ts` (leader-locked tick: claim due enrollments `FOR UPDATE SKIP LOCKED`), `trackingToken.ts`
   (signed opaque open-pixel/click token), `ingestTrackingEvent.ts` (idempotent event → projects open/click to activities),
   `deliveryWebhook.ts` (HMAC-verified ESP webhook → delivery/bounce/complaint), `deliverabilityAnalytics.ts`
@@ -233,7 +236,8 @@ apps/                           # deployable processes (thin transport adapters)
   `emailEventRepository`/`emailTemplateRepository`/`emailAnalyticsRepository`/`sendQuotaRepository`/
   `oauthConnectStateRepository`/`emailThreadRepository`/`emailMessageRepository` (*all unassigned*)
 - **api:** `features/email/` — `routes.ts` (mailboxes **+ `POST /mailboxes/connect/start`**, sending-domains, verify,
-  reports), `templateRoutes.ts`, `webhookRoutes.ts` (PUBLIC session-less: ESP delivery webhook + open-pixel +
+  reports), `templateRoutes.ts` (**P2: GET `/`(paginated)·`/:id`·`/:id/versions` + POST `/`·`/:id/preview`·`/:id/restore` + PATCH `/:id`**),
+  `webhookRoutes.ts` (PUBLIC session-less: ESP delivery webhook + open-pixel +
   click-redirect), `connectRoutes.ts` **(new, P1: PUBLIC session-less OAuth `connect/callback`)**, `oauthProviders.ts`
   (side-effect provider registration from env)
 - **workers:** `queues/outreach.ts` (real-send path: flag-gated `dispatchOutreachSend`, `MailboxThrottledError`
