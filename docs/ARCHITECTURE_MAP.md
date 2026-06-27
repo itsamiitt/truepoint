@@ -122,6 +122,8 @@ apps/                           # deployable processes (thin transport adapters)
   `dataQualitySummary.ts` (`buildDataQualitySummary` — the per-workspace fill/verification/freshness count rollup the Data Health dashboard reads)
 - **workers:** `reverification.ts` (per-workspace re-verification job), `reverificationSweep.ts` (leader-locked
   daily fan-out enqueuing a per-workspace re-verification for every workspace with stale revealed contacts)
+- **db:** `verification_jobs` (the re-verification audit ledger — one row per completed run, workspace-scoped RLS;
+  `verificationJobRepository` record/listRecent; migration 0022) — written by `runReverification` (PLAN_06)
 
 #### reveal — *M1 masked reads + M3 money loop* ([07 §3](./planning/07-billing-credits.md), ADR-0007)
 - **core:** `reveal/revealContact.ts` — the monetized tx: in-tx suppression gate → idempotent claim (unique

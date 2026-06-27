@@ -12,7 +12,12 @@
 // withTenantTx. SAFE NO-OP when no real verifier is configured (passThrough): re-grading nothing must NOT reset
 // the freshness clock and falsely mark records fresh, so the loop returns early.
 
-import { type ContactWriteValues, contactRepository, withTenantTx } from "@leadwolf/db";
+import {
+  type ContactWriteValues,
+  contactRepository,
+  verificationJobRepository,
+  withTenantTx,
+} from "@leadwolf/db";
 import {
   type EmailStatus,
   FRESHNESS_SLA_DAYS,
@@ -146,6 +151,24 @@ export async function runReverification(
     // 4) Advance the keyset cursor; a short page means we reached the end of the stale set.
     cursor = batch[batch.length - 1]!.id;
     if (batch.length < limit) break;
+  }
+
+  // Record the completed run in the audit ledger (PLAN_06) — best-effort: a ledger write must NEVER fail the run
+  // (the tally is already computed + the freshness clocks stamped). Workspace-scoped like every write.
+  try {
+    await withTenantTx(scope, (tx) =>
+      verificationJobRepository.record(tx, {
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        startedAt: now,
+        finishedAt: new Date(),
+        scanned,
+        reverified,
+        errored,
+      }),
+    );
+  } catch (err) {
+    console.error("[reverify] audit-ledger write failed (non-fatal)", scope.workspaceId, err);
   }
 
   return { scanned, reverified, errored };

@@ -100,6 +100,7 @@ export const REPO_DOMAIN = {
   idempotency: "billing",
   consent: "compliance",
   dsar: "compliance",
+  verificationJob: "data-health",
 };
 export const PROVIDER_DOMAIN = {
   salesforce: "crm-sync",

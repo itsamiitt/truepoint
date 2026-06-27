@@ -80,6 +80,11 @@ export {
   type UnresolvedContactRow,
 } from "./repositories/contactRepository.ts";
 export {
+  verificationJobRepository,
+  type VerificationJobRecord,
+  type VerificationJobRow,
+} from "./repositories/verificationJobRepository.ts";
+export {
   sourceImportRepository,
   type SourceImportInput,
   type ImportBatchRow,

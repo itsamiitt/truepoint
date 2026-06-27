@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 956,
-  "fileSetHash": "sha256:d61eeec0d465d1b74f2c036189b342baea6abe92cb94b2fed8d6fb4ee013b5b9",
+  "fileCount": 959,
+  "fileSetHash": "sha256:4510947158dc7e480b0d8d82d6f0bc5f3e32764c8c194db2d2dbfc1565f1d1a0",
   "features": {
     "account-search": {
       "web": [],
@@ -279,7 +279,9 @@
         "packages/core/src/data-health/twilioPhoneVerifier.ts",
         "packages/core/src/data-health/validatePhone.ts"
       ],
-      "db": [],
+      "db": [
+        "packages/db/src/repositories/verificationJobRepository.ts"
+      ],
       "workers": [
         "apps/workers/src/queues/reverification.ts",
         "apps/workers/src/queues/reverificationSweep.ts"
@@ -1482,6 +1484,7 @@
       "packages/db/src/schema/savedSearches.ts",
       "packages/db/src/schema/scim.ts",
       "packages/db/src/schema/tags.ts",
+      "packages/db/src/schema/verificationJobs.ts",
       "packages/db/src/schema/webhooks.ts",
       "packages/db/src/seed.ts",
       "packages/db/test/accountSearch.itest.ts",
@@ -1527,6 +1530,7 @@
       "packages/db/test/suppressionMgmt.itest.ts",
       "packages/db/test/tags.itest.ts",
       "packages/db/test/trackingIngest.itest.ts",
+      "packages/db/test/verificationJobs.itest.ts",
       "packages/db/test/webhooks.itest.ts",
       "packages/db/test/workspaceSwitch.itest.ts"
     ],
