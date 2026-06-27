@@ -224,6 +224,7 @@ export {
   type PlatformPage,
   type PlatformTenantRow,
   type PlatformTenantDetail,
+  type PlatformTenantOverview,
   type PlatformWorkspaceRow,
   type PlatformWorkspaceListRow,
   type PlatformListOverviewRow,

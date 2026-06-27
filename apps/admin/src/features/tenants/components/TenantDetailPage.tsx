@@ -13,6 +13,7 @@ import type { TenantMember, TenantWorkspace } from "../types";
 import { SupportNotes } from "./SupportNotes";
 import { TenantActions } from "./TenantActions";
 import { TenantHolds } from "./TenantHolds";
+import { TenantOverview } from "./TenantOverview";
 
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
@@ -118,6 +119,8 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 <MetaField label="Created" value={shortDate(detail.tenant.createdAt)} />
               </div>
             </Card>
+
+            <TenantOverview tenantId={tenantId} />
 
             <h3 className="tp-section-title">Workspaces ({detail.workspaces.length})</h3>
             <DataTable

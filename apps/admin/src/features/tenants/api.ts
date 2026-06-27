@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { AccountHold, SupportNote, TenantDetail, TenantRow } from "./types";
+import type { AccountHold, SupportNote, TenantDetail, TenantOverview, TenantRow } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -58,6 +58,15 @@ export async function reactivateTenant(id: string, reason: string): Promise<void
     },
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not reactivate the tenant"));
+}
+
+/** GET /admin/tenants/:id/overview — the customer-360 usage/health aggregate for a tenant. */
+export async function fetchTenantOverview(id: string): Promise<TenantOverview> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/overview`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load overview"));
+  return (await res.json()) as TenantOverview;
 }
 
 /** GET /admin/tenants/:id/notes — the staff support notes for a tenant (newest first). */

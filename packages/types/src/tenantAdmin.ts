@@ -39,3 +39,16 @@ export const creditAdjustResultSchema = z.object({
   balanceAfter: z.number().int(),
 });
 export type CreditAdjustResult = z.infer<typeof creditAdjustResultSchema>;
+
+// ── Customer-360 overview (13a Area 3, 13 §3.3) ─────────────────────────────────────────────────────────
+
+/** An at-a-glance usage/health overview of a tenant for support — reveal activity, recent burn, and any
+ *  active abuse holds. Read-only aggregate; carries no record-level PII. */
+export const tenantOverviewSchema = z.object({
+  reveals30d: z.number().int(), // reveals in the last 30 days
+  burn30d: z.number().int(), // credits consumed in the last 30 days
+  revealsTotal: z.number().int(), // all-time reveals
+  lastRevealAt: z.string().nullable(), // ISO-8601 or null
+  activeHolds: z.number().int(), // unlifted account_holds (13a Area 7)
+});
+export type TenantOverview = z.infer<typeof tenantOverviewSchema>;

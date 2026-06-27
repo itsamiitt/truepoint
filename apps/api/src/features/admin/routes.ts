@@ -172,6 +172,30 @@ adminRoutes.get("/tenants/:id", async (c) => {
   return c.json(detail);
 });
 
+// ── Customer-360 overview (13a Area 3, 13 §3.3) — a tenant's reveal activity + active holds at a glance, for
+// support. Broad read (any staff tier); audited. PII-free aggregate. ──
+adminRoutes.get(
+  "/tenants/:id/overview",
+  requireStaffRole("super_admin", "support", "compliance_officer", "read_only"),
+  async (c) => {
+    const tenantId = c.req.param("id");
+    if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+    const o = await withPlatformTx(
+      actorOf(c),
+      "admin.tenant_overview",
+      (tx) => platformAdminRepository.getTenantOverview(tx, tenantId),
+      { targetType: "tenant", targetId: tenantId, tenantId },
+    );
+    return c.json({
+      reveals30d: o.reveals30d,
+      burn30d: o.burn30d,
+      revealsTotal: o.revealsTotal,
+      lastRevealAt: o.lastRevealAt ? o.lastRevealAt.toISOString() : null,
+      activeHolds: o.activeHolds,
+    });
+  },
+);
+
 // ── Tenant lifecycle + manual credit ops (13a Area 1, 13 §3.1) ─────────────────────────────────────────
 // These are the first cross-tenant WRITES on the admin surface. Each runs through withPlatformTx (owner
 // visibility + an in-tx platform_audit_log row), is gated by the doc-13 capability matrix, validates the id

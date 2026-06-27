@@ -47,6 +47,15 @@ export interface SupportNote {
   createdAt: string;
 }
 
+/** The customer-360 usage/health overview of a tenant (13a Area 3). Mirrors `/admin/tenants/:id/overview`. */
+export interface TenantOverview {
+  reveals30d: number;
+  burn30d: number;
+  revealsTotal: number;
+  lastRevealAt: string | null;
+  activeHolds: number;
+}
+
 /** An abuse / fraud hold on a tenant (13a Area 7). Mirrors the api `/admin/tenants/:id/holds` shape. */
 export interface AccountHold {
   id: string;

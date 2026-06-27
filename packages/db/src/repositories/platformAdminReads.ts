@@ -84,6 +84,15 @@ export interface PlatformUserRow {
   isPlatformAdmin: boolean;
 }
 
+/** The customer-360 usage/health aggregate for one tenant (13a Area 3) — reveal activity + active holds. */
+export interface PlatformTenantOverview {
+  reveals30d: number;
+  burn30d: number;
+  revealsTotal: number;
+  lastRevealAt: Date | null;
+  activeHolds: number;
+}
+
 export interface PlatformWorkspaceListRow {
   id: string;
   name: string;
@@ -196,6 +205,42 @@ export const platformAdminRepository = {
       .orderBy(desc(tenants.id))
       .limit(limit + 1);
     return toPage(rows, limit);
+  },
+
+  /**
+   * The customer-360 usage/health overview for one tenant (13a Area 3): reveal activity over the last 30 days
+   * and all-time, the last reveal, and the count of active abuse holds. Cross-tenant owner read (filtered by
+   * tenant_id); each query is a single aggregate over an indexed column. No record-level PII.
+   */
+  async getTenantOverview(tx: Tx, tenantId: string): Promise<PlatformTenantOverview> {
+    const [r] = (await tx.execute(sql`
+      SELECT
+        (count(*) FILTER (WHERE revealed_at >= now() - interval '30 days'))::int                       AS reveals_30d,
+        coalesce(sum(credits_consumed) FILTER (WHERE revealed_at >= now() - interval '30 days'), 0)::int AS burn_30d,
+        count(*)::int                                                                                   AS reveals_total,
+        max(revealed_at)                                                                                AS last_reveal_at
+      FROM contact_reveals
+      WHERE tenant_id = ${tenantId}::uuid
+    `)) as unknown as Array<{
+      reveals_30d: number;
+      burn_30d: number;
+      reveals_total: number;
+      last_reveal_at: Date | string | null;
+    }>;
+    const [h] = (await tx.execute(sql`
+      SELECT (count(*) FILTER (WHERE lifted_at IS NULL))::int AS active_holds
+      FROM account_holds
+      WHERE tenant_id = ${tenantId}::uuid
+    `)) as unknown as Array<{ active_holds: number }>;
+
+    const lastRaw = r?.last_reveal_at ?? null;
+    return {
+      reveals30d: Number(r?.reveals_30d ?? 0),
+      burn30d: Number(r?.burn_30d ?? 0),
+      revealsTotal: Number(r?.reveals_total ?? 0),
+      lastRevealAt: lastRaw == null ? null : lastRaw instanceof Date ? lastRaw : new Date(lastRaw),
+      activeHolds: Number(h?.active_holds ?? 0),
+    };
   },
 
   /** A tenant plus its workspaces and members (13 §3.1). Returns null if the id is unknown. */
