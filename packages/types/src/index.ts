@@ -36,4 +36,5 @@ export * from "./userAdmin.ts";
 export * from "./jitElevation.ts";
 export * from "./platformAdmin.ts";
 export * from "./supportNote.ts";
+export * from "./billingAdmin.ts";
 export * from "./listGovernance.ts";

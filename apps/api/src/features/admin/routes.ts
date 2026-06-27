@@ -36,6 +36,7 @@ import { type ApiVariables, authn } from "../../middleware/authn.ts";
 import { platformAdmin } from "../../middleware/platformAdmin.ts";
 import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
 import { auditLogRoutes } from "./auditLog.ts";
+import { billingRoutes } from "./billing.ts";
 import { elevationRoutes } from "./elevations.ts";
 import { impersonationRoutes } from "./impersonation.ts";
 import { providerConfigRoutes } from "./providerConfigs.ts";
@@ -516,3 +517,5 @@ adminRoutes.route("/staff", staffRoutes);
 adminRoutes.route("/impersonation", impersonationRoutes);
 // JIT elevation request/list (13a F1, super_admin|billing_ops) — minted here, consumed by the gated actions above.
 adminRoutes.route("/elevations", elevationRoutes);
+// Billing / revenue-ops economics (13a Area 4, super_admin|billing_ops).
+adminRoutes.route("/billing", billingRoutes);

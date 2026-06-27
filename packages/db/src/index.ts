@@ -245,6 +245,11 @@ export {
   supportNoteRepository,
   type SupportNoteRow,
 } from "./repositories/supportNoteRepository.ts";
+// Platform billing/economics reads (13a Area 4) — cross-tenant aggregates, run within withPlatformTx.
+export {
+  platformBillingReadRepository,
+  type EconomicsAggregate,
+} from "./repositories/platformBillingReads.ts";
 // JIT elevation grants (13a F1) — audited, time-boxed, tenant-scoped step-up for sensitive admin actions.
 export {
   jitElevationRepository,
