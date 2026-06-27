@@ -43,6 +43,7 @@ import { requireCapability } from "../../middleware/requireCapability.ts";
 import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
 import { auditLogRoutes } from "./auditLog.ts";
 import { billingRoutes } from "./billing.ts";
+import { complianceRoutes } from "./compliance.ts";
 import { elevationRoutes } from "./elevations.ts";
 import { impersonationRoutes } from "./impersonation.ts";
 import { pricingRoutes } from "./pricing.ts";
@@ -617,3 +618,5 @@ adminRoutes.route("/elevations", elevationRoutes);
 adminRoutes.route("/billing", billingRoutes);
 // Credit-pack pricing catalog (13a Area 5, pricing:manage).
 adminRoutes.route("/pricing", pricingRoutes);
+// Compliance ops — cross-tenant DSAR oversight (13a Area 8, compliance:read).
+adminRoutes.route("/compliance", complianceRoutes);

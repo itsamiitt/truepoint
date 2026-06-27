@@ -19,6 +19,7 @@ export const staffCapability = z.enum([
   "billing:read", // view billing / revenue economics
   "elevation:request", // mint a JIT elevation
   "audit:read", // read / export the platform audit log
+  "compliance:read", // read the cross-tenant compliance/DSAR oversight
   "impersonate:start", // start an impersonation session
   "staff:manage", // grant / revoke staff roles
   "providers:manage", // toggle / budget enrichment providers
@@ -33,7 +34,7 @@ const ALL_CAPABILITIES: StaffCapability[] = staffCapability.options;
 const ROLE_CAPABILITIES: Record<Exclude<StaffRole, "super_admin">, StaffCapability[]> = {
   support: ["users:deactivate", "tenants:notes:write", "tenants:hold", "impersonate:start"],
   billing_ops: ["tenants:credits", "billing:read", "elevation:request"],
-  compliance_officer: ["audit:read"],
+  compliance_officer: ["audit:read", "compliance:read"],
   read_only: [],
 };
 

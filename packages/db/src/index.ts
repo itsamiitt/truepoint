@@ -255,6 +255,11 @@ export {
   platformBillingReadRepository,
   type EconomicsAggregate,
 } from "./repositories/platformBillingReads.ts";
+// Platform compliance-ops reads (13a Area 8) — global DSAR queue (PII-free), run within withPlatformTx.
+export {
+  platformComplianceReadRepository,
+  type PlatformDsarRow,
+} from "./repositories/platformComplianceReads.ts";
 // Credit-pack pricing catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
 export {
   creditPackRepository,

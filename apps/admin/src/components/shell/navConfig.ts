@@ -10,6 +10,7 @@ import {
   Layers,
   Plug,
   ScrollText,
+  ShieldAlert,
   ShieldCheck,
   Tag,
   Users,
@@ -34,6 +35,7 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Providers", href: "/provider-configs", match: "/provider-configs", icon: Plug },
   { label: "Feature flags", href: "/feature-flags", match: "/feature-flags", icon: Flag },
   { label: "Staff", href: "/staff", match: "/staff", icon: ShieldCheck },
+  { label: "Compliance", href: "/compliance", match: "/compliance", icon: ShieldAlert },
   { label: "Audit log", href: "/audit-log", match: "/audit-log", icon: ScrollText },
   { label: "System health", href: "/system-health", match: "/system-health", icon: Activity },
 ];
