@@ -11,6 +11,7 @@ import {
   jitElevationRepository,
   platformAdminRepository,
   platformAdminWriteRepository,
+  supportNoteRepository,
   withPlatformTx,
 } from "@leadwolf/db";
 import {
@@ -18,7 +19,9 @@ import {
   LIST_PLATFORM_AUDIT_ACTIONS,
   NotFoundError,
   type StaffListOverview,
+  type SupportNoteView,
   ValidationError,
+  createSupportNoteSchema,
   creditAdjustSchema,
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
@@ -251,6 +254,64 @@ adminRoutes.post(
     return c.json({ tenantId, delta, balanceAfter });
   },
 );
+
+// ── Support notes (13a Area 3, 13 §3.3) — internal staff notes about a tenant, with an optional ticket link.
+// Read by the support-facing roles; written by super_admin|support (audited "support_note.add"). Staff-only
+// data — never surfaced to the customer (deny-all RLS + REVOKE). ──
+function toNoteView(r: {
+  id: string;
+  tenantId: string;
+  staffUserId: string;
+  body: string;
+  ticketUrl: string | null;
+  createdAt: Date;
+}): SupportNoteView {
+  return {
+    id: r.id,
+    tenantId: r.tenantId,
+    staffUserId: r.staffUserId,
+    body: r.body,
+    ticketUrl: r.ticketUrl,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+adminRoutes.get(
+  "/tenants/:id/notes",
+  requireStaffRole("super_admin", "support", "compliance_officer", "read_only"),
+  async (c) => {
+    const tenantId = c.req.param("id");
+    if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+    const notes = await withPlatformTx(
+      actorOf(c),
+      "admin.list_support_notes",
+      async (tx) => (await supportNoteRepository.listForTenant(tx, tenantId)).map(toNoteView),
+      { targetType: "tenant", targetId: tenantId, tenantId },
+    );
+    return c.json({ notes });
+  },
+);
+
+adminRoutes.post("/tenants/:id/notes", requireStaffRole("super_admin", "support"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = createSupportNoteSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
+  const note = await withPlatformTx(
+    actor,
+    "support_note.add",
+    (tx) =>
+      supportNoteRepository.add(tx, {
+        tenantId,
+        staffUserId: actor.userId,
+        body: parsed.data.body,
+        ticketUrl: parsed.data.ticketUrl ?? null,
+      }),
+    { targetType: "tenant", targetId: tenantId, tenantId },
+  );
+  return c.json({ note: toNoteView(note) });
+});
 
 // ── Staff lists-overview (list-plan/07 §3.1, D2) — the PRIVACY-FIRST staff view of a tenant's lists. ──────
 // Returns per-list METADATA + an AGGREGATE member COUNT only — NO list_members, NO contact PII. This is the

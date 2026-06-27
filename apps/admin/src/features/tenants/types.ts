@@ -36,3 +36,13 @@ export interface TenantDetail {
   workspaces: TenantWorkspace[];
   members: TenantMember[];
 }
+
+/** A staff support note about a tenant (13a Area 3). Mirrors the api `/admin/tenants/:id/notes` shape. */
+export interface SupportNote {
+  id: string;
+  tenantId: string;
+  staffUserId: string;
+  body: string;
+  ticketUrl: string | null;
+  createdAt: string;
+}

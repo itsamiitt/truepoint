@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { TenantDetail, TenantRow } from "./types";
+import type { SupportNote, TenantDetail, TenantRow } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -58,6 +58,35 @@ export async function reactivateTenant(id: string, reason: string): Promise<void
     },
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not reactivate the tenant"));
+}
+
+/** GET /admin/tenants/:id/notes — the staff support notes for a tenant (newest first). */
+export async function fetchTenantNotes(id: string): Promise<SupportNote[]> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/notes`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load notes"));
+  const body = (await res.json()) as { notes: SupportNote[] };
+  return body.notes;
+}
+
+/** POST /admin/tenants/:id/notes — add a staff support note (super_admin|support). Audited. */
+export async function addTenantNote(
+  id: string,
+  noteBody: string,
+  ticketUrl?: string,
+): Promise<SupportNote> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/notes`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: noteBody, ...(ticketUrl ? { ticketUrl } : {}) }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not add note"));
+  const data = (await res.json()) as { note: SupportNote };
+  return data.note;
 }
 
 /** POST /admin/elevations — mint a time-boxed JIT elevation (13a F1) the gated action then consumes. The

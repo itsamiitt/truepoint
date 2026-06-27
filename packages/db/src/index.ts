@@ -240,6 +240,11 @@ export {
 } from "./repositories/platformAdminWrites.ts";
 // Platform STAFF role lookup (ADR-0011) — owner-connection read for requireStaffRole authz.
 export { platformStaffRepository } from "./repositories/platformStaffRepository.ts";
+// Staff support notes (13a Area 3) — owner-connection, audited writes; deny-all to the customer app role.
+export {
+  supportNoteRepository,
+  type SupportNoteRow,
+} from "./repositories/supportNoteRepository.ts";
 // JIT elevation grants (13a F1) — audited, time-boxed, tenant-scoped step-up for sensitive admin actions.
 export {
   jitElevationRepository,

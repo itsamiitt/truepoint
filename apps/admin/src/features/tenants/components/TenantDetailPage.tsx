@@ -10,6 +10,7 @@ import Link from "next/link";
 import { formatInt, shortDate, statusTone } from "../format";
 import { useTenantDetail } from "../hooks/useTenantDetail";
 import type { TenantMember, TenantWorkspace } from "../types";
+import { SupportNotes } from "./SupportNotes";
 import { TenantActions } from "./TenantActions";
 
 function MetaField({ label, value }: { label: string; value: string }) {
@@ -142,6 +143,8 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 </p>
               }
             />
+
+            <SupportNotes tenantId={tenantId} />
           </>
         ) : null}
       </StateSwitch>

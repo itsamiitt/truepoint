@@ -25,6 +25,8 @@ const WRITTEN = new Set<string>([
   "elevation.grant",
   // 13a F4 — audit-log CSV export (GET /admin/audit-log/export) writes its own audited row.
   "audit.export",
+  // 13a Area 3 — staff support note added to a tenant (POST /admin/tenants/:id/notes).
+  "support_note.add",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;

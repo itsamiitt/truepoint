@@ -58,3 +58,21 @@ export const jitElevations = pgTable(
     lookup: index("jit_elevations_staff_action_status_idx").on(t.staffUserId, t.action, t.status),
   }),
 );
+
+// support_notes — internal staff notes against a tenant kept during support (13a Area 3, 13 §3.3), with an
+// optional ticket link. PLATFORM-owned staff data: written by the owner connection (withPlatformTx), deny-all
+// to leadwolf_app (rls/platformOps.sql + the applyMigrations REVOKE) — a customer never sees staff notes about
+// their org. Append-in-practice (notes aren't edited in v1), but no append-only trigger is enforced (this is
+// operational scratch, not the compliance audit-of-record). Indexed by (tenant_id, id) for the per-tenant feed.
+export const supportNotes = pgTable(
+  "support_notes",
+  {
+    id: id(),
+    tenantId: uuid("tenant_id").notNull(), // the org the note is about
+    staffUserId: uuid("staff_user_id").notNull(), // the staff author
+    body: text("body").notNull(),
+    ticketUrl: text("ticket_url"), // optional link to the support ticket
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ byTenant: index("support_notes_tenant_idx").on(t.tenantId, t.id) }),
+);

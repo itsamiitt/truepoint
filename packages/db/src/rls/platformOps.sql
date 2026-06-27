@@ -53,3 +53,18 @@ CREATE TABLE IF NOT EXISTS jit_elevations (
 );
 
 ALTER TABLE jit_elevations ENABLE ROW LEVEL SECURITY;
+
+-- support_notes (13a Area 3) — internal staff notes about a tenant. Same PLATFORM-owned staff posture: written
+-- only by the owner connection (withPlatformTx), deny-all to leadwolf_app so a customer can never read staff
+-- notes about their org. ENABLE (not FORCE) + no policy = owner-exempt, app role denied; the applyMigrations
+-- REVOKE removes the blanket grant too. Defensive CREATE mirrors the migration's column set; idempotent.
+CREATE TABLE IF NOT EXISTS support_notes (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id uuid NOT NULL,
+  staff_user_id uuid NOT NULL,
+  body text NOT NULL,
+  ticket_url text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE support_notes ENABLE ROW LEVEL SECURITY;
