@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 952,
-  "fileSetHash": "sha256:dfd2e6bddbe9595c2f5c405b34bcf89df6eef3e5c10c5149aa139f384acb3635",
+  "fileCount": 955,
+  "fileSetHash": "sha256:c4d754ccc99723fd8337ef15e592872c13e1aab2101662cb8e3f8f62ead1e04d",
   "features": {
     "account-search": {
       "web": [],
@@ -1106,6 +1106,7 @@
       "web": [],
       "admin": [
         "apps/admin/src/features/tenants/api.ts",
+        "apps/admin/src/features/tenants/components/SupportNotes.tsx",
         "apps/admin/src/features/tenants/components/TenantActions.tsx",
         "apps/admin/src/features/tenants/components/TenantDetailPage.tsx",
         "apps/admin/src/features/tenants/components/TenantsPage.tsx",
@@ -1577,6 +1578,7 @@
       "packages/types/src/search.ts",
       "packages/types/src/sso.ts",
       "packages/types/src/staffAdmin.ts",
+      "packages/types/src/supportNote.ts",
       "packages/types/src/tags.ts",
       "packages/types/src/tenantAdmin.ts",
       "packages/types/src/userAdmin.ts",
@@ -1650,6 +1652,7 @@
     "packages/db/src/repositories/sendingDomainRepository.ts",
     "packages/db/src/repositories/ssoConfigRepository.ts",
     "packages/db/src/repositories/staffRepository.ts",
+    "packages/db/src/repositories/supportNoteRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",
     "packages/db/src/repositories/webhookRepository.ts"
   ],
