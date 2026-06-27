@@ -27,3 +27,28 @@ export function staticVerifier(
     verify: (email) => Promise.resolve(results[email.toLowerCase()] ?? fallback),
   };
 }
+
+/** Statuses a pure SMTP probe cannot resolve on its own — catch-all domains + provider-blocked lookups
+ * (01 §5.2). The hybrid verifier escalates ONLY these to the secondary, so metered secondary spend is bounded. */
+const NON_DECISIVE: ReadonlySet<EmailStatus> = new Set<EmailStatus>(["catch_all", "unknown"]);
+
+/**
+ * Compose two verifiers (06 §9, 01 §5.2). Run `primary`; if it returns a NON-DECISIVE status
+ * (`catch_all`/`unknown`) and a `secondary` is given, consult `secondary` and prefer its result when it is
+ * decisive — otherwise keep the primary's. This bounds the (metered) secondary to exactly the cases a pure
+ * SMTP prober (Reacher) structurally cannot resolve, keeping commercial-verifier spend minimal.
+ */
+export function hybridVerifier(
+  primary: EmailVerifierPort,
+  secondary: EmailVerifierPort,
+): EmailVerifierPort {
+  return {
+    name: `hybrid(${primary.name}+${secondary.name})`,
+    async verify(email, currentStatus) {
+      const first = await primary.verify(email, currentStatus);
+      if (!NON_DECISIVE.has(first)) return first;
+      const second = await secondary.verify(email, first);
+      return NON_DECISIVE.has(second) ? first : second;
+    },
+  };
+}

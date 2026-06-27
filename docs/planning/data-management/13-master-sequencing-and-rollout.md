@@ -109,7 +109,7 @@ Ordered by the dependency chain + leverage. Each item is **designed**; this is t
 
 | # | Item | Spec | MVP vs scale track |
 |---|---|---|---|
-| 1 | **Verifier subsystem** (email hybrid Reacher+commercial; phone line-type) — unblocks "charge only for verified" already wired into `chargeFor` | `03`/`09 §5`; `01 §5.2/5.3` | MVP |
+| 1 | **Verifier subsystem** (email hybrid Reacher+commercial; phone line-type) — unblocks "charge only for verified" already wired into `chargeFor` | `03`/`09 §5`; `01 §5.2/5.3` | MVP — **email side in progress** (Reacher adapter + `hybridVerifier` + reveal wiring landed; commercial secondary + phone line-type pending) |
 | 2 | **Bulk COPY-staging pipeline** (million-row import/export) | ADR-0036 / `08 §5` | MVP |
 | 3 | **Freshness / re-enrichment loop** (`verification_jobs`, per-field cadence) | ADR-0025 / `09 §5` | MVP |
 | 4 | **Teams/visibility + RBAC `org_role`** (+ app-layer `scopeFor`) | ADR-0022/0030; `10`/`11` | MVP (M11) |

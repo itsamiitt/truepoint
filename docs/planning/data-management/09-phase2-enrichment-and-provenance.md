@@ -61,6 +61,13 @@ here (§5), not redesigned.
 
 ## 5. The genuine net-new (cite the existing design)
 
+> **Implementation status (2026-06-27):** the **email** verifier is now partially built — a config-gated
+> `defaultEmailVerifier()` + the `reacherVerifier` HTTP adapter (injectable fetch) + the pure
+> `hybridVerifier` composer + the reveal-path wiring landed (`packages/core/src/data-health/reacherVerifier.ts`,
+> `emailVerifier.ts`, `apps/api/src/features/reveal/routes.ts`; `REACHER_BACKEND_URL`/`REACHER_API_TOKEN`
+> in `packages/config/src/env.ts`). Absent config → unchanged passthrough. **Still pending:** the
+> commercial-verifier secondary (vendor open, §7) and the phone line-type port (§2.3).
+
 1. **Verifier subsystem** — a real `EmailVerifierPort` replaces `passThroughVerifier`
    (`data-health/emailVerifier.ts:14-18`): **hybrid** Reacher (honest domains) + a commercial verifier
    for catch-all/Gmail/Yahoo; catch-all is flagged `risky`/`catch_all` and **never billed valid**

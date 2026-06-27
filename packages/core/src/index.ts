@@ -130,8 +130,18 @@ export {
 export {
   passThroughVerifier,
   staticVerifier,
+  hybridVerifier,
   type EmailVerifierPort,
 } from "./data-health/emailVerifier.ts";
+// Email-verification subsystem (06 §9, 01 §5.2): the Reacher adapter + the config-gated factory the reveal
+// path wires. Absent REACHER_BACKEND_URL → passThroughVerifier (today's no-grading behaviour preserved).
+export {
+  reacherVerifier,
+  defaultEmailVerifier,
+  reacherStatusFrom,
+  type ReacherVerifierOptions,
+  type VerifierFetch,
+} from "./data-health/reacherVerifier.ts";
 export { chargeFor, type ChargeInput } from "./data-health/chargeFor.ts";
 export { validatePhone } from "./data-health/validatePhone.ts";
 // Data quality & freshness keystone (22 §2–§3, ADR-0025): the 0–100 data_quality_score composite + cold-start

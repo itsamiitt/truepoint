@@ -103,6 +103,13 @@ export const appEnvSchema = z
     // Global daily enrichment cost budget in micro-dollars (06 §6); exhaustion trips the budget breaker.
     ENRICH_DAILY_BUDGET_MICROS: z.coerce.number().int().positive().default(50_000_000),
 
+    // Email-verification backend (06 §9, 01 §5.2): a self-hosted Reacher (check-if-email-exists) or the
+    // hosted Reacher API BASE ORIGIN (e.g. https://api.reacher.email). Absent → the reveal path keeps
+    // passThroughVerifier (no grading, today's behaviour). REACHER_API_TOKEN is the hosted-API bearer token
+    // — a SECRET, read only here, never client-exposed; omit it for an unauthenticated self-host backend.
+    REACHER_BACKEND_URL: z.string().url().optional(),
+    REACHER_API_TOKEN: z.string().optional(),
+
     // Cloudflare Turnstile secret for the identifier step (ADR-0020). Optional: absent → dev passes, prod fails.
     TURNSTILE_SECRET: z.string().optional(),
 

@@ -3,7 +3,7 @@
 // scope comes from the verified token (never the body), the Idempotency-Key replay sits in middleware, and
 // masking + RLS + the credit invariants live in the core/db layers.
 
-import { editContactFields, revealContact } from "@leadwolf/core";
+import { defaultEmailVerifier, editContactFields, revealContact } from "@leadwolf/core";
 import { contactRepository } from "@leadwolf/db";
 import {
   ForbiddenError,
@@ -48,6 +48,9 @@ revealRoutes.post("/:id/reveal", idempotency, async (c) => {
     userId: c.get("claims").sub,
     contactId: c.req.param("id"),
     revealType: parsed.data.reveal_type,
+    // The dedicated email verifier (06 §9): Reacher when REACHER_BACKEND_URL is configured, else the
+    // pass-through (no grading). Verification runs OUTSIDE the charging tx inside revealContact.
+    verifier: defaultEmailVerifier(),
     ipAddress: c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
     userAgent: c.req.header("user-agent") ?? null,
   });
