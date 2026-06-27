@@ -8,6 +8,8 @@ import {
   computeContactDataQuality,
   type FieldProvenanceMap,
   type MaskedContact,
+  reverifyCutoff,
+  type WorkspaceDataQuality,
 } from "@leadwolf/types";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
@@ -426,6 +428,64 @@ export const contactRepository = {
         .orderBy(desc(contacts.createdAt))
         .limit(limit);
       return rows.map(toMaskedContact);
+    });
+  },
+
+  /**
+   * Per-workspace data-quality rollup (10 §5 / 22 — the Data Health dashboard): a LIVE aggregate over the
+   * workspace's non-tombstoned contacts → raw counts (fill / email+phone verification / freshness) the UI turns
+   * into rates. One aggregate scan per call (Postgres-native, fine at lakh-row scale — a precomputed snapshot is
+   * the deferred scale optimization). Freshness uses the record-level email-SLA proxy (reverifyCutoff, ADR-0025).
+   * RLS scopes every count to the workspace; nothing returned is PII (counts + present-flags + statuses only).
+   */
+  async dataQualitySummary(scope: TenantScope): Promise<WorkspaceDataQuality> {
+    const cutoff = reverifyCutoff();
+    return withTenantTx(scope, async (tx) => {
+      const [r] = (await tx.execute(sql`
+        SELECT
+          count(*)::int AS total,
+          count(*) FILTER (WHERE first_name IS NOT NULL OR last_name IS NOT NULL)::int AS with_name,
+          count(email_enc)::int AS with_email,
+          count(phone_enc)::int AS with_phone,
+          count(job_title)::int AS with_title,
+          count(*) FILTER (WHERE account_id IS NOT NULL OR email_domain IS NOT NULL)::int AS with_company,
+          count(*) FILTER (WHERE linkedin_public_id IS NOT NULL OR linkedin_url IS NOT NULL)::int AS with_linkedin,
+          count(*) FILTER (WHERE location_country IS NOT NULL OR location_city IS NOT NULL)::int AS with_location,
+          count(*) FILTER (WHERE email_status = 'valid')::int AS email_valid,
+          count(*) FILTER (WHERE email_status = 'risky')::int AS email_risky,
+          count(*) FILTER (WHERE email_status = 'invalid')::int AS email_invalid,
+          count(*) FILTER (WHERE email_status = 'catch_all')::int AS email_catch_all,
+          count(*) FILTER (WHERE email_status = 'unverified')::int AS email_unverified,
+          count(*) FILTER (WHERE email_status = 'unknown')::int AS email_unknown,
+          count(*) FILTER (WHERE phone_status IN ('direct','mobile','hq','valid'))::int AS phone_valid,
+          count(*) FILTER (WHERE phone_status = 'invalid')::int AS phone_invalid,
+          count(*) FILTER (WHERE last_verified_at >= ${cutoff})::int AS fresh,
+          count(*) FILTER (WHERE last_verified_at < ${cutoff})::int AS stale,
+          count(*) FILTER (WHERE last_verified_at IS NULL)::int AS never_verified
+        FROM contacts
+        WHERE deleted_at IS NULL
+      `)) as Array<Record<string, number>>;
+      return {
+        total: r?.total ?? 0,
+        withName: r?.with_name ?? 0,
+        withEmail: r?.with_email ?? 0,
+        withPhone: r?.with_phone ?? 0,
+        withTitle: r?.with_title ?? 0,
+        withCompany: r?.with_company ?? 0,
+        withLinkedin: r?.with_linkedin ?? 0,
+        withLocation: r?.with_location ?? 0,
+        emailValid: r?.email_valid ?? 0,
+        emailRisky: r?.email_risky ?? 0,
+        emailInvalid: r?.email_invalid ?? 0,
+        emailCatchAll: r?.email_catch_all ?? 0,
+        emailUnverified: r?.email_unverified ?? 0,
+        emailUnknown: r?.email_unknown ?? 0,
+        phoneValid: r?.phone_valid ?? 0,
+        phoneInvalid: r?.phone_invalid ?? 0,
+        fresh: r?.fresh ?? 0,
+        stale: r?.stale ?? 0,
+        neverVerified: r?.never_verified ?? 0,
+      };
     });
   },
 

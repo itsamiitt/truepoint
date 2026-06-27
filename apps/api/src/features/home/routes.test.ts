@@ -4,7 +4,7 @@
 // mocked (bun module mocks are process-global) so the test drives the REAL route through app.request().
 
 import { describe, expect, it, mock } from "bun:test";
-import type { HomeSummary } from "@leadwolf/types";
+import type { HomeSummary, WorkspaceDataQuality } from "@leadwolf/types";
 
 // A minimal but schema-valid summary (the route parses it against homeSummarySchema before sending).
 const summary: HomeSummary = {
@@ -18,6 +18,28 @@ const summary: HomeSummary = {
   activityFeed: [],
   todaysTasks: [],
   recentReplies: [],
+};
+
+const dataQuality: WorkspaceDataQuality = {
+  total: 3,
+  withName: 3,
+  withEmail: 2,
+  withPhone: 1,
+  withTitle: 2,
+  withCompany: 2,
+  withLinkedin: 1,
+  withLocation: 1,
+  emailValid: 1,
+  emailRisky: 0,
+  emailInvalid: 1,
+  emailCatchAll: 0,
+  emailUnverified: 0,
+  emailUnknown: 0,
+  phoneValid: 1,
+  phoneInvalid: 0,
+  fresh: 1,
+  stale: 1,
+  neverVerified: 1,
 };
 
 // authn/tenancy: pass through and stash a tenant + workspace so requireRole + the handler proceed.
@@ -45,9 +67,19 @@ mock.module("../../middleware/requireRole.ts", () => ({
 
 mock.module("@leadwolf/core", () => ({
   buildHomeSummary: async () => summary,
+  buildDataQualitySummary: async () => dataQuality,
 }));
 
 const { homeRoutes } = await import("./routes.ts");
+
+describe("GET /home/data-quality", () => {
+  it("returns the workspace data-quality rollup with a private Cache-Control", async () => {
+    const res = await homeRoutes.request("/data-quality");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("private, max-age=30");
+    expect((await res.json()) as WorkspaceDataQuality).toEqual(dataQuality);
+  });
+});
 
 describe("GET /home/summary caching headers", () => {
   it("returns the summary with a weak ETag and a private Cache-Control", async () => {

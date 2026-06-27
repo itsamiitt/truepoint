@@ -296,6 +296,33 @@ export const contactDataHealthSchema = z.object({
 });
 export type ContactDataHealth = z.infer<typeof contactDataHealthSchema>;
 
+/** Per-workspace data-quality rollup (10 §5 / 22) — the live aggregate the Data Health dashboard reads: raw
+ *  counts (the UI derives fill / bounce / freshness RATES) over the workspace's LIVE contacts. Non-PII (counts +
+ *  present-flags + statuses), workspace-scoped by RLS. Conflict rate (field_provenance disagreement) is a
+ *  follow-up; freshness uses the record-level email-SLA proxy (ADR-0025). */
+export const workspaceDataQualitySchema = z.object({
+  total: z.number().int().min(0),
+  withName: z.number().int().min(0),
+  withEmail: z.number().int().min(0),
+  withPhone: z.number().int().min(0),
+  withTitle: z.number().int().min(0),
+  withCompany: z.number().int().min(0),
+  withLinkedin: z.number().int().min(0),
+  withLocation: z.number().int().min(0),
+  emailValid: z.number().int().min(0),
+  emailRisky: z.number().int().min(0),
+  emailInvalid: z.number().int().min(0),
+  emailCatchAll: z.number().int().min(0),
+  emailUnverified: z.number().int().min(0),
+  emailUnknown: z.number().int().min(0),
+  phoneValid: z.number().int().min(0),
+  phoneInvalid: z.number().int().min(0),
+  fresh: z.number().int().min(0),
+  stale: z.number().int().min(0),
+  neverVerified: z.number().int().min(0),
+});
+export type WorkspaceDataQuality = z.infer<typeof workspaceDataQualitySchema>;
+
 // ── Masked contact view (what search/list returns before reveal — 05 §6/§7) ────────────────────────────
 /** A workspace-scoped contact with PII masked until reveal (M3). `emailDomain` is the non-PII facet. */
 export const maskedContactSchema = z.object({

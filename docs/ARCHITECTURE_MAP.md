@@ -117,7 +117,8 @@ apps/                           # deployable processes (thin transport adapters)
   `validatePhone.ts` (E.164), `phoneVerifier.ts` (phone verifier port + format-only default),
   `twilioPhoneVerifier.ts` (Twilio Lookup adapter + `defaultPhoneVerifier` config-gated factory; carrier-confirmed valid/invalid),
   `chargeFor.ts` (ADR-0013 charge-by-verified-result), `dataQualityScore.ts`
-  (the 0.4·completeness + 0.3·verification + 0.3·freshness formula; cold-start rules for imports)
+  (the 0.4·completeness + 0.3·verification + 0.3·freshness formula; cold-start rules for imports),
+  `dataQualitySummary.ts` (`buildDataQualitySummary` — the per-workspace fill/verification/freshness count rollup the Data Health dashboard reads)
 - **workers:** `reverification.ts` (per-workspace re-verification job), `reverificationSweep.ts` (leader-locked
   daily fan-out enqueuing a per-workspace re-verification for every workspace with stale revealed contacts)
 
@@ -239,7 +240,7 @@ apps/                           # deployable processes (thin transport adapters)
 - **api:** `features/ai/` — POST `/ai-search` (returns a validated `query` + notes; human confirms before applying), `aiPortProvider.ts`
 
 #### home — *the cockpit destination* (web + api + core)
-- **core:** `home/buildHomeSummary.ts` (fan-out over domain repos in one `withTenantTx`) · **api:** `features/home/*` (GET `/home/summary`)
+- **core:** `home/buildHomeSummary.ts` (fan-out over domain repos in one `withTenantTx`) + `data-health/dataQualitySummary.ts` · **api:** `features/home/*` (GET `/home/summary`, `/home/data-quality`)
 - **web:** `features/home/` — KPI tiles + cards (recent reveals, hot leads, burn sparkline, imports, enrichment, sequence
   snapshot, activity feed) + `QuickActionsRow`/`TasksCard`/`RepliesCard`; `(shell)/home`
 

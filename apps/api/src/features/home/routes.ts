@@ -12,8 +12,8 @@
 // per-workspace memo of the computed summary is a sensible follow-up, but that response-cache layer does not
 // exist yet (caching.md implementation status), so it is intentionally out of scope here.
 
-import { buildHomeSummary } from "@leadwolf/core";
-import { ForbiddenError, homeSummarySchema } from "@leadwolf/types";
+import { buildDataQualitySummary, buildHomeSummary } from "@leadwolf/core";
+import { ForbiddenError, homeSummarySchema, workspaceDataQualitySchema } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
@@ -53,4 +53,18 @@ homeRoutes.get("/summary", requireRole("owner", "admin", "member", "viewer"), as
 
   c.header("Content-Type", "application/json");
   return c.body(body);
+});
+
+/**
+ * GET /data-quality — the per-workspace Data Health dashboard rollup (10 §5 / 22): live fill / verification /
+ * freshness counts over the workspace's contacts. Same authn + tenancy + any-role gate as /summary; the heavy
+ * lifting is one RLS-scoped aggregate (contactRepository.dataQualitySummary). Short private cache like /summary.
+ */
+homeRoutes.get("/data-quality", requireRole("owner", "admin", "member", "viewer"), async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+
+  const summary = await buildDataQualitySummary({ tenantId: c.get("tenantId"), workspaceId });
+  c.header("Cache-Control", "private, max-age=30");
+  return c.json(workspaceDataQualitySchema.parse(summary));
 });
