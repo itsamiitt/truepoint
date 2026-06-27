@@ -317,6 +317,9 @@ export const workspaceDataQualitySchema = z.object({
   emailUnknown: z.number().int().min(0),
   phoneValid: z.number().int().min(0),
   phoneInvalid: z.number().int().min(0),
+  phoneMobile: z.number().int().min(0),
+  phoneLandline: z.number().int().min(0),
+  phoneVoip: z.number().int().min(0),
   fresh: z.number().int().min(0),
   stale: z.number().int().min(0),
   neverVerified: z.number().int().min(0),
@@ -335,6 +338,10 @@ export const maskedContactSchema = z.object({
   // Phone field-correctness verdict (list-plan/06 §3.2) — non-PII (a status label, never the number). Null
   // until a verification has graded the phone. Feeds the verification sub-score + the Data Health column.
   phoneStatus: phoneStatus.nullable(),
+  // Carrier line type (Twilio Lookup) — non-PII (a classification, never the number); the TCPA mobile-vs-landline
+  // signal surfaced pre-reveal so the UI can flag dial risk. Optional: populated by the main list/search/export
+  // projection (like `dataHealth`); surfaces that don't compute it omit it.
+  phoneLineType: phoneLineType.nullable().optional(),
   hasEmail: z.boolean(),
   hasPhone: z.boolean(),
   seniorityLevel: seniorityLevel.nullable(),
