@@ -4,7 +4,7 @@
 // the match itself.
 
 import type { SuppressionMatchType, SuppressionScope } from "@leadwolf/types";
-import { type SQL, desc, eq, inArray, ne, or } from "drizzle-orm";
+import { type SQL, and, desc, eq, inArray, ne, or } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { suppressionList } from "../schema/billing.ts";
 
@@ -105,5 +105,35 @@ export const suppressionRepository = {
       .from(suppressionList)
       .where(ne(suppressionList.scope, "global"))
       .orderBy(desc(suppressionList.createdAt));
+  },
+
+  /** List the GLOBAL suppression entries (the platform blocklist) — for the staff console (13a Area 8). Must
+   *  run inside a withPlatformTx transaction (owner). Blind-index columns are omitted (HMACs of PII never
+   *  leave the DB); a domain entry is fully shown. Newest first, bounded. */
+  async listGlobal(tx: Tx, limit = 500): Promise<SuppressionListRow[]> {
+    return tx
+      .select({
+        id: suppressionList.id,
+        scope: suppressionList.scope,
+        matchType: suppressionList.matchType,
+        domain: suppressionList.domain,
+        contactId: suppressionList.contactId,
+        reason: suppressionList.reason,
+        createdAt: suppressionList.createdAt,
+      })
+      .from(suppressionList)
+      .where(eq(suppressionList.scope, "global"))
+      .orderBy(desc(suppressionList.createdAt))
+      .limit(limit);
+  },
+
+  /** Remove a GLOBAL entry by id (staff only — the predicate pins scope='global' so a tenant/workspace row
+   *  can never be removed through this path). Returns rows touched (0 = unknown / not global). withPlatformTx. */
+  async removeGlobalById(tx: Tx, id: string): Promise<number> {
+    const deleted = await tx
+      .delete(suppressionList)
+      .where(and(eq(suppressionList.id, id), eq(suppressionList.scope, "global")))
+      .returning({ id: suppressionList.id });
+    return deleted.length;
   },
 };

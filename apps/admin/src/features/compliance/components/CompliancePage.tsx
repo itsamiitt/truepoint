@@ -15,6 +15,7 @@ import {
 import { ShieldAlert } from "lucide-react";
 import { useCompliance } from "../hooks/useCompliance";
 import type { DsarRequest } from "../types";
+import { GlobalSuppression } from "./GlobalSuppression";
 import { RetentionPolicies } from "./RetentionPolicies";
 
 const STATUSES = ["received", "verifying", "processing", "completed", "rejected"];
@@ -114,6 +115,7 @@ export function CompliancePage() {
         <DataTable columns={columns} rows={dsars ?? []} rowKey={(d) => d.id} />
       </StateSwitch>
 
+      <GlobalSuppression />
       <RetentionPolicies />
     </div>
   );

@@ -22,6 +22,33 @@ export const platformDsarQuerySchema = z.object({
 });
 export type PlatformDsarQuery = z.infer<typeof platformDsarQuerySchema>;
 
+// ── Global suppression (blocklist) (13a Area 8 / 13 §3.7) ────────────────────────────────────────────────
+
+/** Add a GLOBAL domain to the suppression/blocklist — blocks reveals + sends for that domain platform-wide
+ *  (the existing suppression gate honors global scope). Domain-level only here; email-level global suppression
+ *  (which requires the blind-index/HMAC path) is a separate slice. */
+export const addGlobalSuppressionSchema = z.object({
+  domain: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1)
+    .max(255)
+    .regex(/^[a-z0-9.-]+$/, "a bare domain like example.com"),
+  reason: z.string().trim().max(500).optional(),
+});
+export type AddGlobalSuppressionInput = z.infer<typeof addGlobalSuppressionSchema>;
+
+/** A global suppression entry as shown in the console (blind-index columns are never projected — PII). */
+export const globalSuppressionViewSchema = z.object({
+  id: z.string().uuid(),
+  matchType: z.string(),
+  domain: z.string().nullable(),
+  reason: z.string().nullable(),
+  createdAt: z.string(), // ISO-8601
+});
+export type GlobalSuppressionView = z.infer<typeof globalSuppressionViewSchema>;
+
 /** One DSAR request as surfaced to staff — the envelope only (never the encrypted subject email). */
 export const dsarOversightRowSchema = z.object({
   id: z.string().uuid(),

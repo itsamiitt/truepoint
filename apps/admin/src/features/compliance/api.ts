@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { DsarRequest, RetentionPolicy } from "./types";
+import type { DsarRequest, GlobalSuppression, RetentionPolicy } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -18,6 +18,33 @@ export async function fetchDsars(status?: string): Promise<DsarRequest[]> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load DSAR requests"));
   const body = (await res.json()) as { dsars: DsarRequest[] };
   return body.dsars;
+}
+
+/** GET /admin/compliance/suppression — the global blocklist. */
+export async function fetchGlobalSuppression(): Promise<GlobalSuppression[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/compliance/suppression`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the blocklist"));
+  const body = (await res.json()) as { entries: GlobalSuppression[] };
+  return body.entries;
+}
+
+/** POST /admin/compliance/suppression — block a domain globally (compliance:manage). */
+export async function addGlobalSuppression(domain: string, reason?: string): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/compliance/suppression`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ domain, ...(reason ? { reason } : {}) }),
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not add the block"));
+}
+
+/** POST /admin/compliance/suppression/:id/remove — lift a global block (compliance:manage). */
+export async function removeGlobalSuppression(id: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/compliance/suppression/${encodeURIComponent(id)}/remove`,
+    { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not remove the block"));
 }
 
 export interface RetentionPolicyInput {

@@ -38,6 +38,9 @@ const WRITTEN = new Set<string>([
   "announcement.publish",
   // 13a Area 8 — set / toggle a retention policy (POST/PUT /admin/compliance/retention).
   "retention.set",
+  // 13a Area 8 — add / remove a global suppression (POST /admin/compliance/suppression[/:id/remove]).
+  "suppress.add.global",
+  "suppress.remove.global",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;

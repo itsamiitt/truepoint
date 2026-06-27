@@ -11,6 +11,15 @@ export interface DsarRequest {
   completedAt: string | null;
 }
 
+/** A global suppression (blocklist) entry (13a Area 8). Mirrors `/admin/compliance/suppression`. */
+export interface GlobalSuppression {
+  id: string;
+  matchType: string;
+  domain: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
 /** A staff-authored retention policy (13a Area 8). Mirrors `/admin/compliance/retention`. */
 export interface RetentionPolicy {
   id: string;

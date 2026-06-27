@@ -7,13 +7,16 @@
 import {
   platformComplianceReadRepository,
   retentionPolicyRepository,
+  suppressionRepository,
   withPlatformTx,
 } from "@leadwolf/db";
 import {
   type DsarOversightRow,
+  type GlobalSuppressionView,
   NotFoundError,
   type RetentionPolicyView,
   ValidationError,
+  addGlobalSuppressionSchema,
   platformDsarQuerySchema,
   retentionPolicySetActiveSchema,
   retentionPolicyUpsertSchema,
@@ -141,5 +144,70 @@ complianceRoutes.post(
       { targetType: "retention_policy", targetId: id, metadata: { active: parsed.data.active } },
     );
     return c.json({ ok: true, id, active: parsed.data.active });
+  },
+);
+
+// ── Global suppression / blocklist (13a Area 8, 13 §3.7) — a global domain block, immediately honored by the
+// existing suppression gate (assertNotSuppressed). Read = compliance:read (router gate); writes need
+// compliance:manage. Audited "suppress.add.global" / "suppress.remove.global". ──
+function toSuppression(r: {
+  id: string;
+  matchType: string;
+  domain: string | null;
+  reason: string | null;
+  createdAt: Date;
+}): GlobalSuppressionView {
+  return {
+    id: r.id,
+    matchType: r.matchType,
+    domain: r.domain,
+    reason: r.reason,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+complianceRoutes.get("/suppression", async (c) => {
+  const entries = await withPlatformTx(actorOf(c), "admin.list_suppression", async (tx) =>
+    (await suppressionRepository.listGlobal(tx)).map(toSuppression),
+  );
+  return c.json({ entries });
+});
+
+complianceRoutes.post("/suppression", requireCapability("compliance:manage"), async (c) => {
+  const parsed = addGlobalSuppressionSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
+  const id = await withPlatformTx(
+    actor,
+    "suppress.add.global",
+    (tx) =>
+      suppressionRepository.insert(tx, {
+        scope: "global",
+        matchType: "domain",
+        domain: parsed.data.domain,
+        reason: parsed.data.reason ?? null,
+        createdByUserId: actor.userId,
+      }),
+    { targetType: "suppression", metadata: { domain: parsed.data.domain } },
+  );
+  return c.json({ ok: true, id, domain: parsed.data.domain });
+});
+
+complianceRoutes.post(
+  "/suppression/:id/remove",
+  requireCapability("compliance:manage"),
+  async (c) => {
+    const id = c.req.param("id");
+    if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+    await withPlatformTx(
+      actorOf(c),
+      "suppress.remove.global",
+      async (tx) => {
+        const touched = await suppressionRepository.removeGlobalById(tx, id);
+        if (touched === 0) throw new NotFoundError("Global suppression entry not found.");
+      },
+      { targetType: "suppression", targetId: id },
+    );
+    return c.json({ ok: true, id });
   },
 );
