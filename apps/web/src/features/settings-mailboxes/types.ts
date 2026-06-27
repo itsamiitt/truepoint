@@ -37,13 +37,21 @@ export interface SendQuotaView {
   periodStart: string;
 }
 
-/** The connect-mailbox form payload (the credential is server-side-only — never read back). */
+/** The direct-connect payload for an SMTP/SES mailbox (the credential is server-side-only — never read back).
+ *  Google/Microsoft do NOT use this — they go through the OAuth redirect flow (startMailboxConnect). */
 export interface ConnectMailboxInput {
-  provider: MailboxProvider;
+  provider: "smtp" | "ses";
   address: string;
   sending_domain_id?: string;
   smtp_password?: string;
-  oauth_token?: string;
+}
+
+/** Begin the OAuth connect for a Google/Microsoft mailbox. No credential — the consent screen mints it. */
+export interface StartMailboxConnectInput {
+  provider: "google" | "microsoft";
+  login_hint?: string;
+  /** A same-app absolute path to return to after the callback (e.g. the current settings path). */
+  redirect_after?: string;
 }
 
 /** A list that may not be wired yet — the {items, available} envelope (features/sequences convention). */

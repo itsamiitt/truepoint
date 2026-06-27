@@ -9,6 +9,7 @@ import {
   signEmailWebhookPayload,
   verifyEmailWebhookSignature,
 } from "./deliveryWebhook.ts";
+import { deriveEmailSigningKey } from "./signingKeys.ts";
 
 const SECRET = "whsec_email_test_0123456789";
 const NOW = 1_700_000_000;
@@ -88,5 +89,24 @@ describe("parseDeliveryEvent", () => {
     });
     expect(event?.outreachLogId).toBeNull();
     expect(event?.messageId).toBeNull();
+  });
+});
+
+describe("per-tenant webhook key (P0 email-sec-001)", () => {
+  const ROOT = "root_secret_webhook_0000";
+  const A = "11111111-1111-1111-1111-111111111111";
+  const B = "22222222-2222-2222-2222-222222222222";
+
+  test("a payload signed with tenant A's key fails verification under tenant B's key", () => {
+    const payload = `{"type":"bounce","providerEventId":"e1","tenantId":"${A}"}`;
+    const header = signEmailWebhookPayload(payload, deriveEmailSigningKey("webhook", A, ROOT), NOW);
+    // The route derives the key from the CLAIMED tenant: an attacker claiming B but holding only A's key fails.
+    expect(
+      verifyEmailWebhookSignature(payload, header, deriveEmailSigningKey("webhook", B, ROOT), NOW),
+    ).toBe(false);
+    // The legitimate path — verified under tenant A's own key — passes.
+    expect(
+      verifyEmailWebhookSignature(payload, header, deriveEmailSigningKey("webhook", A, ROOT), NOW),
+    ).toBe(true);
   });
 });

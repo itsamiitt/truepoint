@@ -141,6 +141,20 @@
       "when": 1782507523308,
       "tag": "0019_thin_johnny_blaze",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1782514471356,
+      "tag": "0020_new_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1782525944099,
+      "tag": "0021_far_blob",
+      "breakpoints": true
     }
   ]
 }

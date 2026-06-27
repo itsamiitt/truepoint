@@ -19,20 +19,43 @@ export type SendingDomainStatus = z.infer<typeof sendingDomainStatus>;
 export const dnsAuthState = z.enum(["unverified", "pass", "fail"]);
 export type DnsAuthState = z.infer<typeof dnsAuthState>;
 
+// ── Unified inbox (M12 P3) — closed enums mirror the email_thread / email_message CHECKs ─────────────────
+export const emailThreadStatus = z.enum(["open", "snoozed", "done"]);
+export type EmailThreadStatus = z.infer<typeof emailThreadStatus>;
+
+export const emailMessageDirection = z.enum(["inbound", "outbound"]);
+export type EmailMessageDirection = z.infer<typeof emailMessageDirection>;
+
+/** Reply classification (RFC 3834 ≥2-signal heuristic): only `human` counts as a real reply for auto-pause. */
+export const emailMessageClassification = z.enum([
+  "human",
+  "auto_reply",
+  "ooo",
+  "bounce",
+  "unknown",
+]);
+export type EmailMessageClassification = z.infer<typeof emailMessageClassification>;
+
 // ── Request schemas (09 §3 body naming: snake_case) ─────────────────────────────────────────────────────
+/** The OAuth-redirect providers — connected via the consent flow (connect/start), NOT by posting a token. */
+export const oauthMailboxProvider = z.enum(["google", "microsoft"]);
+export type OAuthMailboxProvider = z.infer<typeof oauthMailboxProvider>;
+
+/** The credential/platform-identity providers — connected directly via POST /mailboxes. */
+export const directMailboxProvider = z.enum(["smtp", "ses"]);
+
 /**
- * Connect a mailbox. The credential is SERVER-SIDE-ONLY and encrypted at rest (D7): `smtp_password` for an
- * SMTP mailbox, `oauth_token` (the serialized token bundle from a completed OAuth flow) for google/microsoft.
- * The refine enforces the right credential per provider. `ses` carries no per-mailbox credential (it uses the
- * platform SES identity), so neither is required.
+ * Connect an SMTP or platform-SES mailbox. The credential is SERVER-SIDE-ONLY and encrypted at rest (D7):
+ * `smtp_password` for an SMTP mailbox. `ses` carries no per-mailbox credential (it uses the platform SES
+ * identity). Google/Microsoft are NOT accepted here — a raw OAuth token is never posted by the client; those
+ * providers use the OAuth redirect flow (POST /mailboxes/connect/start).
  */
 export const mailboxConnectSchema = z
   .object({
-    provider: mailboxProvider,
+    provider: directMailboxProvider,
     address: z.string().email().max(255),
     sending_domain_id: z.string().uuid().optional(),
     smtp_password: z.string().min(1).max(2048).optional(),
-    oauth_token: z.string().min(1).max(8192).optional(),
   })
   .superRefine((val, ctx) => {
     if (val.provider === "smtp" && !val.smtp_password) {
@@ -42,15 +65,24 @@ export const mailboxConnectSchema = z
         message: "smtp_password is required for an SMTP mailbox.",
       });
     }
-    if ((val.provider === "google" || val.provider === "microsoft") && !val.oauth_token) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["oauth_token"],
-        message: "oauth_token is required for a Google/Microsoft mailbox.",
-      });
-    }
   });
 export type MailboxConnectRequest = z.infer<typeof mailboxConnectSchema>;
+
+/**
+ * Start the OAuth connect flow for a Google/Microsoft mailbox. No credential here — the consent screen mints it.
+ * `redirect_after` is a SAME-APP ABSOLUTE PATH only (`/...`, not `//...`) so the post-callback redirect can
+ * never be pointed off-origin (open-redirect guard); the server still builds the final URL from its own origin.
+ */
+export const mailboxConnectStartSchema = z.object({
+  provider: oauthMailboxProvider,
+  login_hint: z.string().email().max(255).optional(),
+  redirect_after: z
+    .string()
+    .max(200)
+    .regex(/^\/(?!\/)/, "must be a same-app absolute path (start with '/', not '//')")
+    .optional(),
+});
+export type MailboxConnectStartRequest = z.infer<typeof mailboxConnectStartSchema>;
 
 export const sendingDomainCreateSchema = z.object({
   domain: z.string().min(3).max(255),

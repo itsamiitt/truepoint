@@ -12,6 +12,7 @@ import type {
   MaybeList,
   SendQuotaView,
   SendingDomainView,
+  StartMailboxConnectInput,
 } from "./types";
 
 const EMAIL_BASE = `${API_BASE}/api/v1/email`;
@@ -44,6 +45,20 @@ export async function connectMailbox(input: ConnectMailboxInput): Promise<{ id: 
   });
   if (!res.ok) throw new Error(await problemMessage(res, "Could not connect the mailbox"));
   return (await res.json()) as { id: string };
+}
+
+/** Begin the OAuth connect — returns the provider consent URL the caller redirects the browser to. The token is
+ *  minted on the consent screen and exchanged server-side at the callback; it never touches the client (D7). */
+export async function startMailboxConnect(
+  input: StartMailboxConnectInput,
+): Promise<{ authorize_url: string }> {
+  const res = await fetchWithAuth(`${EMAIL_BASE}/mailboxes/connect/start`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not start the mailbox connection"));
+  return (await res.json()) as { authorize_url: string };
 }
 
 export async function fetchSendingDomains(): Promise<MaybeList<SendingDomainView>> {

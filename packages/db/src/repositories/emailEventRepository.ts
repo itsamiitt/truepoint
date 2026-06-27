@@ -9,7 +9,17 @@ import { desc, eq, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { emailEvent } from "../schema/email.ts";
 
-export type EmailEventType = "delivery" | "open" | "click" | "bounce" | "complaint" | "unsubscribe";
+// Mirrors the email_event_type CHECK (schema/email.ts). `reply`/`auto_reply` (M12 P3) make an inbound reply
+// representable so it can auto-pause the sequence (an auto_reply/OOO never counts as a human reply).
+export type EmailEventType =
+  | "delivery"
+  | "open"
+  | "click"
+  | "bounce"
+  | "complaint"
+  | "unsubscribe"
+  | "reply"
+  | "auto_reply";
 
 export interface EmailEventInsert {
   tenantId: string;

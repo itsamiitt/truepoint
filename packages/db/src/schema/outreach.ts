@@ -95,6 +95,9 @@ export const outreachLog = pgTable(
     status: varchar("status", { length: 20 }).notNull().default("enrolled"),
     currentStep: integer("current_step").notNull().default(0),
     lastEventAt: timestamp("last_event_at", { withTimezone: true }).notNull().defaultNow(),
+    // M12 P3: set when a confirmed HUMAN reply lands (email_message inbound) so auto-pause + the Sequences
+    // dashboard read the reply state WITHOUT scanning email_message (a cache, not the system of record).
+    lastReplyAt: timestamp("last_reply_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => ({

@@ -3,10 +3,12 @@
 // startWorkers() boots the consumers. As new queues land (CRM sync, outreach delivery, …) register them here.
 
 import { env } from "@leadwolf/config";
+import { registerEmailProviders } from "@leadwolf/core";
 import type { ImportDeadLetter } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { log } from "./logger.ts";
+import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
 import { DEDUP_QUEUE, type DedupJobData, processDedup } from "./queues/dedup.ts";
 import { DSAR_QUEUE, type DsarJobData, processDsar } from "./queues/dsar.ts";
 import {
@@ -36,7 +38,7 @@ import {
   type MasterBackfillSweepJobData,
   makeProcessMasterBackfillSweep,
 } from "./queues/masterBackfillSweep.ts";
-import { OUTREACH_QUEUE, type OutreachJobData, processOutreach } from "./queues/outreach.ts";
+import { OUTREACH_QUEUE, type OutreachJobData, makeProcessOutreach } from "./queues/outreach.ts";
 import {
   RETENTION_SWEEP_QUEUE,
   type RetentionSweepJobData,
@@ -48,6 +50,11 @@ import {
   type SequenceTickJobData,
   makeProcessSequenceTick,
 } from "./queues/sequenceTick.ts";
+import {
+  EMAIL_TOKEN_REFRESH_QUEUE,
+  type TokenRefreshJobData,
+  makeProcessTokenRefresh,
+} from "./queues/tokenRefresh.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -81,6 +88,11 @@ export const sequenceTickQueue = new Queue<SequenceTickJobData>(EMAIL_SEQUENCE_T
 });
 // M12 P6: the daily leader-locked retention sweep (expired idempotency keys; cold partition DROP later).
 export const retentionSweepQueue = new Queue<RetentionSweepJobData>(RETENTION_SWEEP_QUEUE, {
+  connection,
+});
+// M12 P1: the proactive OAuth token-refresh sweep (leader-locked, every 2 min) — refreshes tokens nearing
+// expiry off the send path so a send never pays the refresh latency.
+export const tokenRefreshQueue = new Queue<TokenRefreshJobData>(EMAIL_TOKEN_REFRESH_QUEUE, {
   connection,
 });
 
@@ -128,6 +140,15 @@ export async function scheduleRetentionSweep(): Promise<void> {
     "sweep",
     {},
     { repeat: { every: 24 * 60 * 60_000 }, jobId: "email-retention-sweep" },
+  );
+}
+
+/** Register the repeatable OAuth token-refresh sweep (M12 P1). Stable jobId → exactly one repeatable. */
+export async function scheduleTokenRefresh(): Promise<void> {
+  await tokenRefreshQueue.add(
+    "refresh",
+    {},
+    { repeat: { every: 2 * 60_000 }, jobId: "email-token-refresh" },
   );
 }
 
@@ -184,6 +205,14 @@ function instrument<T = unknown>(worker: Worker<T>, queue: string): Worker<T> {
 
 /** Boot every queue consumer. Returns the workers so the entry can manage their lifecycle. */
 export function startWorkers(): Worker[] {
+  // Wire the email send adapters + OAuth provider before the outreach consumer can process a real send (M12 P1):
+  // a Gmail send refreshes its token via the registered OAuth provider, so this must run at boot.
+  registerEmailProviders();
+
+  // Per-mailbox send-rate throttle (WARM-001). Conservative fixed defaults (10 burst, 1/sec ≈ 60/min); the P5
+  // warmup ramp makes this per-mailbox/day. A throttled send is deferred (re-enqueued), never dropped.
+  const mailboxThrottle = createRedisMailboxThrottle(connection, { capacity: 10, refillPerSec: 1 });
+
   const importsWorker = instrument(
     new Worker<ImportJobData>(IMPORTS_QUEUE, processImport, { connection }),
     IMPORTS_QUEUE,
@@ -234,7 +263,16 @@ export function startWorkers(): Worker[] {
     ),
     instrument(new Worker<DsarJobData>(DSAR_QUEUE, processDsar, { connection }), DSAR_QUEUE),
     instrument(
-      new Worker<OutreachJobData>(OUTREACH_QUEUE, processOutreach, { connection }),
+      new Worker<OutreachJobData>(
+        OUTREACH_QUEUE,
+        makeProcessOutreach({
+          throttle: mailboxThrottle,
+          reEnqueue: async (data, delayMs) => {
+            await enqueueOutreach(data, delayMs);
+          },
+        }),
+        { connection },
+      ),
       OUTREACH_QUEUE,
     ),
     instrument(new Worker<DedupJobData>(DEDUP_QUEUE, processDedup, { connection }), DEDUP_QUEUE),
@@ -286,6 +324,15 @@ export function startWorkers(): Worker[] {
       ),
       RETENTION_SWEEP_QUEUE,
     ),
+    // M12 P1: the proactive OAuth token-refresh consumer (leader-locked, every 2 min).
+    instrument(
+      new Worker<TokenRefreshJobData>(
+        EMAIL_TOKEN_REFRESH_QUEUE,
+        makeProcessTokenRefresh(connection),
+        { connection },
+      ),
+      EMAIL_TOKEN_REFRESH_QUEUE,
+    ),
   ];
   void scheduleSequenceTick().catch((e) =>
     log.error("failed to schedule the sequence tick", {
@@ -299,6 +346,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleMasterBackfillSweep().catch((e) =>
     log.error("failed to schedule the master-backfill sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleTokenRefresh().catch((e) =>
+    log.error("failed to schedule the token refresh", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );

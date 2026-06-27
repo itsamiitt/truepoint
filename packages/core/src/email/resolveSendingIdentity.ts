@@ -4,7 +4,12 @@
 // shared TruePoint identity or an unverified domain (the unforgiving risk this phase front-loads, 13 §4).
 // Pure data-access over the @leadwolf/db repositories; runs inside the caller's send-gate transaction.
 
-import { type Tx, mailboxRepository, sendingDomainRepository } from "@leadwolf/db";
+import {
+  type TenantScope,
+  type Tx,
+  mailboxRepository,
+  sendingDomainRepository,
+} from "@leadwolf/db";
 import { ValidationError } from "@leadwolf/types";
 import type { SendIdentity } from "./providerAdapter.ts";
 
@@ -21,10 +26,14 @@ function domainOf(address: string): string {
  */
 export async function resolveSendingIdentity(
   tx: Tx,
-  workspaceId: string,
+  scope: TenantScope & { workspaceId: string },
   fromAddress: string,
 ): Promise<SendIdentity> {
-  const mailbox = await mailboxRepository.findConnectedByAddress(tx, workspaceId, fromAddress);
+  const mailbox = await mailboxRepository.findConnectedByAddress(
+    tx,
+    scope.workspaceId,
+    fromAddress,
+  );
   if (!mailbox) {
     throw new ValidationError(
       `No connected mailbox for "${fromAddress}" — connect it before sending (D2).`,
@@ -53,5 +62,7 @@ export async function resolveSendingIdentity(
     fromAddress,
     sendingDomain: verifiedDomain,
     mailboxId: mailbox.id,
+    tenantId: scope.tenantId,
+    workspaceId: scope.workspaceId,
   };
 }

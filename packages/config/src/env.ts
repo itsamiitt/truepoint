@@ -130,6 +130,14 @@ export const appEnvSchema = z
     // same posture as STRIPE_WEBHOOK_SECRET.
     EMAIL_WEBHOOK_SECRET: z.string().optional(),
 
+    // Google OAuth client for connecting a Gmail mailbox (email-planning/13 P1, D1). Server-only secrets — the
+    // client secret is NEVER NEXT_PUBLIC_ and never logged. The redirect URI must exactly equal a URI
+    // allow-listed in the Google Cloud console. All three absent → the connect flow is unavailable and fails
+    // closed (no provider registered), never a silent misconfiguration.
+    GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
+    GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),
+    GOOGLE_OAUTH_REDIRECT_URI: z.string().url().optional(),
+
     // AI provider (23, ADR-0023). Anthropic Claude behind the AiPort. The API key is a SECRET — read only
     // here, never hardcoded; an absent key makes the adapter fail closed (ai_unavailable), it never throws
     // at construction. The base URL + model id are env-driven so the model is a configurable default
