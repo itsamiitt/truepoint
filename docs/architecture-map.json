@@ -43,6 +43,7 @@
     "outreach",
     "pipeline-stages",
     "pipelineStages",
+    "plans",
     "pricing",
     "prospect",
     "provider-configs",
@@ -75,8 +76,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 976,
-  "fileSetHash": "sha256:bd8286fa92205597605c3256f3ede4f6465fe6e3dd1710ed2664c197e4832e77",
+  "fileCount": 984,
+  "fileSetHash": "sha256:3b77912bce96a9f7df6cdb20d55004a698b6ea296f386a5136e635bf443a3b8a",
   "features": {
     "account-search": {
       "web": [],
@@ -586,6 +587,21 @@
       "core": [
         "packages/core/src/pipelineStages/manageStages.ts"
       ],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "plans": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/plans/api.ts",
+        "apps/admin/src/features/plans/components/PlansPage.tsx",
+        "apps/admin/src/features/plans/hooks/usePlans.ts",
+        "apps/admin/src/features/plans/index.ts",
+        "apps/admin/src/features/plans/types.ts"
+      ],
+      "api": [],
+      "core": [],
       "db": [],
       "workers": [],
       "integrations": []
@@ -1203,6 +1219,7 @@
       "apps/admin/src/app/(shell)/billing/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
       "apps/admin/src/app/(shell)/layout.tsx",
+      "apps/admin/src/app/(shell)/plans/page.tsx",
       "apps/admin/src/app/(shell)/pricing/page.tsx",
       "apps/admin/src/app/(shell)/provider-configs/page.tsx",
       "apps/admin/src/app/(shell)/staff/page.tsx",
@@ -1598,6 +1615,7 @@
       "packages/types/src/lists.ts",
       "packages/types/src/outreach.ts",
       "packages/types/src/pipelineStages.ts",
+      "packages/types/src/planTemplateAdmin.ts",
       "packages/types/src/platformAdmin.ts",
       "packages/types/src/platformAudit.ts",
       "packages/types/src/platformAuditCoverage.test.ts",
@@ -1675,6 +1693,7 @@
     "packages/db/src/repositories/mailboxRepository.ts",
     "packages/db/src/repositories/masterGraphRepository.ts",
     "packages/db/src/repositories/pipelineStageRepository.ts",
+    "packages/db/src/repositories/planTemplateRepository.ts",
     "packages/db/src/repositories/platformStaffRepository.ts",
     "packages/db/src/repositories/providerConfigRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
@@ -1703,6 +1722,7 @@
     "undeclared domain 'import-mapping-templates' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pipeline-stages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pipelineStages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'plans' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pricing' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'provider-configs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'saved-searches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
