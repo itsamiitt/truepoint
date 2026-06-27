@@ -18,6 +18,7 @@ import {
   type EmailStatus,
   InsufficientCreditsError,
   NotFoundError,
+  type PhoneLineType,
   type PhoneStatus,
   type RevealResponse,
   type RevealType,
@@ -71,6 +72,7 @@ interface VerifiedState {
   phone: string | null;
   emailStatus: EmailStatus;
   phoneStatus: PhoneStatus | null;
+  phoneLineType: PhoneLineType | null;
 }
 
 /** Decrypt + verify OUTSIDE any transaction — never inside the FOR UPDATE window (14 §3.5). */
@@ -85,8 +87,14 @@ async function verifyForReveal(
   const emailStatus = email
     ? await verifier.verify(email, contact.emailStatus as EmailStatus)
     : (contact.emailStatus as EmailStatus);
-  const phoneStatus = phone ? await phoneVerifier.verify(phone, null) : null;
-  return { email, phone, emailStatus, phoneStatus };
+  const phoneResult = phone ? await phoneVerifier.verify(phone, null) : null;
+  return {
+    email,
+    phone,
+    emailStatus,
+    phoneStatus: phoneResult?.status ?? null,
+    phoneLineType: phoneResult?.lineType ?? null,
+  };
 }
 
 export async function revealContact(input: RevealInput): Promise<RevealResponse> {
@@ -140,6 +148,7 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
       await contactRepository.update(tx, contact.id, {
         emailStatus: verified.emailStatus,
         ...(verified.phoneStatus ? { phoneStatus: verified.phoneStatus } : {}),
+        ...(verified.phoneLineType ? { phoneLineType: verified.phoneLineType } : {}),
         lastVerifiedAt: new Date(),
       });
 

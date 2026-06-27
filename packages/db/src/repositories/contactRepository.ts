@@ -47,6 +47,7 @@ export interface ContactWriteValues {
   phoneEnc?: Uint8Array | null;
   emailStatus?: string; // verification result (06 §9; NOT NULL column) — set by verify-on-reveal / enrichment
   phoneStatus?: string | null;
+  phoneLineType?: string | null; // carrier line type (Twilio Lookup) — set by the phone verifier (01 §5.3)
   lastVerifiedAt?: Date | null; // when PII was last verified (list-plan/06 §3.3) — set by verify/enrich
   linkedinUrl?: string | null;
   linkedinPublicId?: string | null;

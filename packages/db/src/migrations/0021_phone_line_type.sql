@@ -1,0 +1,1 @@
+ALTER TABLE "contacts" ADD COLUMN "phone_line_type" varchar(20);

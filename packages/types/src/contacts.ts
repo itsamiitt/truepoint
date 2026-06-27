@@ -33,6 +33,11 @@ export type EmailStatus = z.infer<typeof emailStatus>;
 export const phoneStatus = z.enum(["direct", "mobile", "hq", "unknown", "valid", "invalid"]);
 export type PhoneStatus = z.infer<typeof phoneStatus>;
 
+/** Carrier line type (Twilio Lookup line_type_intelligence) — the TCPA mobile-vs-landline gating signal
+ *  (01 §5.3), distinct from phone_status (the reachability/kind grade). `unknown` = couldn't classify. */
+export const phoneLineType = z.enum(["mobile", "landline", "voip", "unknown"]);
+export type PhoneLineType = z.infer<typeof phoneLineType>;
+
 export const seniorityLevel = z.enum(["c_suite", "vp", "director", "manager", "ic", "other"]);
 export type SeniorityLevel = z.infer<typeof seniorityLevel>;
 

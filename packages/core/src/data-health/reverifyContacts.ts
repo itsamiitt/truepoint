@@ -16,13 +16,14 @@ import { type ContactWriteValues, contactRepository, withTenantTx } from "@leadw
 import {
   type EmailStatus,
   FRESHNESS_SLA_DAYS,
+  type PhoneLineType,
   type PhoneStatus,
   reverifyCutoff,
 } from "@leadwolf/types";
 import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
 import { decryptPii } from "../import/encryptPii.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "./emailVerifier.ts";
-import { type PhoneVerifierPort, formatOnlyPhoneVerifier } from "./phoneVerifier.ts";
+import { formatOnlyPhoneVerifier, type PhoneVerifierPort } from "./phoneVerifier.ts";
 import { defaultEmailVerifier } from "./reacherVerifier.ts";
 import { defaultPhoneVerifier } from "./twilioPhoneVerifier.ts";
 
@@ -45,6 +46,7 @@ interface ReverifiedRow {
   contactId: string;
   emailStatus: EmailStatus;
   phoneStatus: PhoneStatus | null;
+  phoneLineType: PhoneLineType | null;
 }
 
 /**
@@ -109,10 +111,12 @@ export async function runReverification(
         const emailStatus = email
           ? await verifier.verify(email, row.emailStatus as EmailStatus)
           : (row.emailStatus as EmailStatus);
-        const phoneStatus = phone
+        const phoneResult = phone
           ? await phoneVerifier.verify(phone, row.phoneStatus as PhoneStatus | null)
-          : (row.phoneStatus as PhoneStatus | null);
-        graded.push({ contactId: row.id, emailStatus, phoneStatus });
+          : null;
+        const phoneStatus = phoneResult?.status ?? (row.phoneStatus as PhoneStatus | null);
+        const phoneLineType = phoneResult?.lineType ?? null;
+        graded.push({ contactId: row.id, emailStatus, phoneStatus, phoneLineType });
       } catch (err) {
         errored += 1;
         console.error("[reverify] verify failed; leaving row for a later sweep", row.id, err);
@@ -127,6 +131,7 @@ export async function runReverification(
           const values: Partial<ContactWriteValues> = {
             emailStatus: g.emailStatus,
             phoneStatus: g.phoneStatus,
+            ...(g.phoneLineType ? { phoneLineType: g.phoneLineType } : {}),
             lastVerifiedAt: now,
           };
           await contactRepository.update(tx, g.contactId, values);

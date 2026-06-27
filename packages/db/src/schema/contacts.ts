@@ -130,6 +130,10 @@ export const contacts = pgTable(
     department: varchar("department", { length: 100 }),
     phoneEnc: bytea("phone_enc"), // AES-GCM ciphertext; masked until reveal
     phoneStatus: varchar("phone_status", { length: 50 }),
+    // Carrier line type (Twilio Lookup line_type_intelligence): mobile|landline|voip|unknown — the TCPA
+    // mobile-vs-landline gating signal (01 §5.3), set by the phone verifier. Nullable; validated app-edge
+    // (the phoneLineType zod enum), no DB CHECK — consistent with phone_status.
+    phoneLineType: varchar("phone_line_type", { length: 20 }),
     locationCountry: varchar("location_country", { length: 100 }),
     locationCity: varchar("location_city", { length: 100 }),
     priorityScore: integer("priority_score"), // cache of latest scores.composite_score (M4)

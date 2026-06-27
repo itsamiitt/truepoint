@@ -150,11 +150,13 @@ export {
   formatOnlyPhoneVerifier,
   staticPhoneVerifier,
   type PhoneVerifierPort,
+  type PhoneVerifyResult,
 } from "./data-health/phoneVerifier.ts";
 export {
   twilioLookupVerifier,
   defaultPhoneVerifier,
   twilioStatusFrom,
+  twilioLineTypeFrom,
   type TwilioPhoneVerifierOptions,
   type PhoneLookupFetch,
 } from "./data-health/twilioPhoneVerifier.ts";
