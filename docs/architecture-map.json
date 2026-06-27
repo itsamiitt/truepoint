@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 951,
-  "fileSetHash": "sha256:fe4ce55615d9c57403a642f4e28a7cacb775d9ab1728ca163d98402889da2861",
+  "fileCount": 952,
+  "fileSetHash": "sha256:dfd2e6bddbe9595c2f5c405b34bcf89df6eef3e5c10c5149aa139f384acb3635",
   "features": {
     "account-search": {
       "web": [],
@@ -1567,6 +1567,7 @@
       "packages/types/src/lists.ts",
       "packages/types/src/outreach.ts",
       "packages/types/src/pipelineStages.ts",
+      "packages/types/src/platformAdmin.ts",
       "packages/types/src/platformAudit.ts",
       "packages/types/src/platformAuditCoverage.test.ts",
       "packages/types/src/providerConfigs.ts",
