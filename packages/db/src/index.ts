@@ -99,6 +99,19 @@ export {
   type RetentionRunInsert,
   type RecentRunsOptions,
 } from "./repositories/retentionRunRepository.ts";
+// Retention SHADOW sweep COUNT layer (data-management backlog #6, phase 2) — the per-class candidate counter (a
+// cross-tenant OWNER read with an explicit tenant predicate; COUNTS only, no deletion) + the fixed table/aging/
+// scope META phase 3's deleters reuse + the active-tenant fleet enumeration the sweep fans out over.
+export {
+  retentionScanRepository,
+  retentionClassMeta,
+  isRetentionV1Class,
+  RETENTION_V1_CLASSES,
+  type RetentionV1Class,
+  type RetentionClassMeta,
+  type RetentionTenantScope,
+  type OwnerReader,
+} from "./repositories/retentionScanRepository.ts";
 export {
   sourceImportRepository,
   type SourceImportInput,

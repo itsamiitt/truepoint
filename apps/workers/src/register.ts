@@ -65,6 +65,11 @@ import {
   makeProcessDataQualitySnapshotSweep,
 } from "./queues/dataQualitySnapshotSweep.ts";
 import {
+  DATA_RETENTION_SWEEP_QUEUE,
+  type DataRetentionSweepJobData,
+  makeProcessDataRetentionSweep,
+} from "./queues/dataRetentionSweep.ts";
+import {
   BULK_IMPORTS_DLQ,
   BULK_IMPORTS_QUEUE,
   type BulkImportJobData,
@@ -117,6 +122,12 @@ export const reverificationSweepQueue = new Queue<ReverificationSweepJobData>(
 // Data Health snapshot (10 §5): the leader-locked daily sweep that captures a per-workspace trend point.
 export const dataQualitySnapshotSweepQueue = new Queue<DataQualitySnapshotSweepJobData>(
   DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
+  { connection },
+);
+// Retention SHADOW sweep (data-management #6, phase 2): the leader-locked daily sweep that, per ACTIVE tenant,
+// COUNTS candidate rows per data class and records a retention_runs evidence row. Deletes nothing (flag-gated).
+export const dataRetentionSweepQueue = new Queue<DataRetentionSweepJobData>(
+  DATA_RETENTION_SWEEP_QUEUE,
   { connection },
 );
 
@@ -205,6 +216,17 @@ export async function scheduleDataQualitySnapshotSweep(): Promise<void> {
     "sweep",
     {},
     { repeat: { every: 24 * 60 * 60_000 }, jobId: "data-quality-snapshot-sweep" },
+  );
+}
+
+/** Register the daily retention SHADOW sweep (data-management #6, phase 2). Stable jobId → exactly one
+ *  repeatable. Harmless to schedule unconditionally: each per-tenant pass is gated by the per-tenant
+ *  retention_engine_enabled flag (off by default) and DELETES NOTHING (counts + records only). */
+export async function scheduleDataRetentionSweep(): Promise<void> {
+  await dataRetentionSweepQueue.add(
+    "sweep",
+    {},
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "data-retention-sweep" },
   );
 }
 
@@ -380,6 +402,16 @@ export function startWorkers(): Worker[] {
       ),
       DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
     ),
+    // Retention SHADOW sweep consumer (data-management #6, phase 2): leader-locked daily; per ACTIVE tenant it
+    // COUNTS candidate rows per data class and records a retention_runs row. Flag-gated; DELETES NOTHING.
+    instrument(
+      new Worker<DataRetentionSweepJobData>(
+        DATA_RETENTION_SWEEP_QUEUE,
+        makeProcessDataRetentionSweep(connection),
+        { connection },
+      ),
+      DATA_RETENTION_SWEEP_QUEUE,
+    ),
   ];
   // Bulk COPY-staging import (backlog #2, phase 6) — GATED DARK behind BULK_IMPORT_ENABLED (default false). Purely
   // ADDITIVE: when off, the bulk queues/worker are never even constructed (the array above is untouched) and the
@@ -461,6 +493,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleDataQualitySnapshotSweep().catch((e) =>
     log.error("failed to schedule the data-quality snapshot sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleDataRetentionSweep().catch((e) =>
+    log.error("failed to schedule the data-retention sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );

@@ -46,6 +46,7 @@
     "prospect",
     "provider-configs",
     "reports",
+    "retention",
     "reveal",
     "sales-navigator",
     "saved-searches",
@@ -75,8 +76,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 987,
-  "fileSetHash": "sha256:2b1022c6f8699bf799030aa22110ae6b2e393497e3675161a7599d26f8504300",
+  "fileCount": 990,
+  "fileSetHash": "sha256:c92badf82a480e4d7eb195cb37bdf67f04ca95db91bb55570bae0f7bc92b4f3d",
   "features": {
     "account-search": {
       "web": [],
@@ -216,9 +217,11 @@
         "packages/db/src/repositories/dsarRepository.ts",
         "packages/db/src/repositories/retentionPolicyRepository.ts",
         "packages/db/src/repositories/retentionRunRepository.ts",
+        "packages/db/src/repositories/retentionScanRepository.ts",
         "packages/db/src/repositories/suppressionRepository.ts"
       ],
       "workers": [
+        "apps/workers/src/queues/dataRetentionSweep.ts",
         "apps/workers/src/queues/dsar.ts"
       ],
       "integrations": []
@@ -744,6 +747,17 @@
       "admin": [],
       "api": [],
       "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "retention": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/retention/runRetentionSweep.ts"
+      ],
       "db": [],
       "workers": [],
       "integrations": []

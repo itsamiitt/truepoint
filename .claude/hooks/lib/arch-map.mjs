@@ -52,6 +52,7 @@ export const CANONICAL_DOMAINS = [
   "notifications",
   "data-health",
   "storage",
+  "retention",
   // Settings destination is composed of per-area web slices (12 §1–§5).
   "settings-billing",
   "settings-compliance",
@@ -63,6 +64,7 @@ export const QUEUE_DOMAIN = {
   scoring: "scoring",
   imports: "import",
   bulkImports: "import",
+  dataRetentionSweep: "compliance",
   "crm-sync": "crm-sync",
   outreach: "outreach",
   "search-sync": "search",
@@ -90,6 +92,7 @@ export const REPO_DOMAIN = {
   suppression: "compliance",
   retentionPolicy: "compliance",
   retentionRun: "compliance",
+  retentionScan: "compliance",
   tenant: "billing",
   user: "auth",
   workspace: "workspaces",
