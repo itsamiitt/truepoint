@@ -83,6 +83,7 @@ export const REPO_DOMAIN = {
   sales_nav_link: "sales-navigator",
   source_import: "import",
   sourceImport: "import",
+  importJob: "import",
   suppression: "compliance",
   tenant: "billing",
   user: "auth",

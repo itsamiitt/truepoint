@@ -78,8 +78,11 @@ UNLOGGED **non-RLS** staging tables are created/dropped at RUNTIME (not in the m
 ## 6. Build phases (safe → gated)
 
 1. **Contract** — `types/bulkImport.ts` (**done**).
-2. **Control plane** — `schema/importJobs.ts` + migration 0024 + RLS + `importJobRepository` + isolation itest
-   (mirrors the proven `verification_jobs`/`data_quality_snapshots`/enrichment trio — safe, no COPY, no object store).
+2. **Control plane — ✅ DONE** — `schema/importJobs.ts` (`import_jobs`/`_chunks`/`_rows`) + migration **0024**
+   + `rls/importJobs.sql` + `importJobRepository` (idempotent create, atomic counter deltas, race-free
+   `incrementCompletedChunks`) + RLS-isolation itest. Mirrors the proven `verification_jobs`/`data_quality_snapshots`/
+   enrichment trio (no COPY, no object store). CI exercises migrate 0024 + the RLS isolation; `drizzle-kit generate`
+   confirms the hand-authored 0024 snapshot.
 3. **Core primitives** — extract `prepareContact` (parity refactor), `streamParse`, `fileStore` (port + disk adapter),
    the batch repo methods.
 4. **⚠ Gated — COPY spike** — prove `postgres.js` COPY-FROM-STDIN streaming on a non-RLS UNLOGGED table over the

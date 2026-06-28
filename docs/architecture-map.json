@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 969,
-  "fileSetHash": "sha256:165f56c2f75b31c4fca5103e3f24d2cf928dfc9a6866568e07727728b4dbdbc8",
+  "fileCount": 972,
+  "fileSetHash": "sha256:016b4c8c9df166ba148cd33d499aa2e0399aa7c1b91316c2f461c1faf9a2a948",
   "features": {
     "account-search": {
       "web": [],
@@ -491,6 +491,7 @@
         "packages/core/src/import/validateRow.ts"
       ],
       "db": [
+        "packages/db/src/repositories/importJobRepository.ts",
         "packages/db/src/repositories/sourceImportRepository.ts"
       ],
       "workers": [
@@ -1480,6 +1481,7 @@
       "packages/db/src/schema/enrichmentJobs.ts",
       "packages/db/src/schema/enrichmentPolicy.ts",
       "packages/db/src/schema/featureFlags.ts",
+      "packages/db/src/schema/importJobs.ts",
       "packages/db/src/schema/importMappingTemplates.ts",
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
@@ -1512,6 +1514,7 @@
       "packages/db/test/fieldProvenancePin.itest.ts",
       "packages/db/test/home.itest.ts",
       "packages/db/test/import.itest.ts",
+      "packages/db/test/importJobs.itest.ts",
       "packages/db/test/importPinRespect.itest.ts",
       "packages/db/test/importTemplates.itest.ts",
       "packages/db/test/intel.itest.ts",
