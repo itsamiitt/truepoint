@@ -246,8 +246,8 @@ apps/                           # deployable processes (thin transport adapters)
 - **api:** `features/ai/` — POST `/ai-search` (returns a validated `query` + notes; human confirms before applying), `aiPortProvider.ts`
 
 #### home — *the cockpit destination* (web + api + core)
-- **core:** `home/buildHomeSummary.ts` (fan-out over domain repos in one `withTenantTx`) + `data-health/dataQualitySummary.ts` · **api:** `features/home/*` (GET `/home/summary`, `/home/data-quality`)
-- **web:** `features/home/` — KPI tiles + cards (recent reveals, hot leads, burn sparkline, imports, enrichment, sequence
+- **core:** `home/buildHomeSummary.ts` (fan-out over domain repos in one `withTenantTx`) + `data-health/dataQualitySummary.ts`/`dataQualitySnapshot.ts` · **api:** `features/home/*` (GET `/home/summary`, `/home/data-quality`, `/data-quality/history`, `/data-quality/reverification-runs`)
+- **web:** `features/home/` — KPI tiles + cards (recent reveals, hot leads, **data health**, burn sparkline, imports, enrichment, sequence
   snapshot, activity feed) + `QuickActionsRow`/`TasksCard`/`RepliesCard`; `(shell)/home`
 
 #### reports — *client rollups + XLSX export* (web)

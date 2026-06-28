@@ -80,7 +80,7 @@ Nothing below ran in the build sandbox. Required gates (`.github/workflows/ci.ym
 | **#7 CRM sync + write-back + erasure propagation** | Multi-tick greenfield (connectors, conflict resolution). |
 | **#8 Per-workspace ICP tuning** | ADR-0008 "revisit-if"; the weight *values* are config/business. |
 | **Conflict-rate metric** (dashboard) | Needs cross-source value comparison (`field_provenance` stores only winners; the raw values live in `source_imports`) — a real analysis feature, not a single tick. |
-| **Frontend Data Health view** (`apps/web`) | The endpoints (§4) exist but `apps/web` doesn't render them yet — a deliberate frontend feature (design/architecture conventions), best done with the gates available, not blind. |
+| **Frontend Data Health view** (`apps/web`) | **Started**: a Data Health card on the home dashboard (`DataHealthCard` + `useDataQuality`) renders coverage/deliverability/freshness from `GET /home/data-quality`. The trend chart (history endpoint) + a dedicated page remain. |
 
 ## 8. Recommended next move
 

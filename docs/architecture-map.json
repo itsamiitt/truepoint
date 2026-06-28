@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 964,
-  "fileSetHash": "sha256:fed76878f07b0f302acb0e287acfd67407964f501c6c27238a9fdc7884ae8e70",
+  "fileCount": 966,
+  "fileSetHash": "sha256:2c7ab54597e32ce40b183840c04c343ed3a87df4d007a8e501227d16158485e5",
   "features": {
     "account-search": {
       "web": [],
@@ -416,6 +416,7 @@
         "apps/web/src/features/home/api.ts",
         "apps/web/src/features/home/components/ActivityFeedCard.tsx",
         "apps/web/src/features/home/components/BurnSparkline.tsx",
+        "apps/web/src/features/home/components/DataHealthCard.tsx",
         "apps/web/src/features/home/components/EnrichmentActivityCard.tsx",
         "apps/web/src/features/home/components/HomePage.tsx",
         "apps/web/src/features/home/components/HotLeadsCard.tsx",
@@ -428,6 +429,7 @@
         "apps/web/src/features/home/components/WidgetCard.tsx",
         "apps/web/src/features/home/components/format.test.ts",
         "apps/web/src/features/home/components/format.ts",
+        "apps/web/src/features/home/hooks/useDataQuality.ts",
         "apps/web/src/features/home/hooks/useHomeSummary.ts",
         "apps/web/src/features/home/index.ts",
         "apps/web/src/features/home/types.ts"

@@ -12,4 +12,5 @@ export type {
   RecentReveal,
   SequenceSnapshot,
   TodaysTask,
+  WorkspaceDataQuality,
 } from "@leadwolf/types";
