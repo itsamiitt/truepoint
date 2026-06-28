@@ -247,7 +247,7 @@ apps/                           # deployable processes (thin transport adapters)
 
 #### home — *the cockpit destination* (web + api + core)
 - **core:** `home/buildHomeSummary.ts` (fan-out over domain repos in one `withTenantTx`) + `data-health/dataQualitySummary.ts`/`dataQualitySnapshot.ts` · **api:** `features/home/*` (GET `/home/summary`, `/home/data-quality`, `/data-quality/history`, `/data-quality/reverification-runs`)
-- **web:** `features/home/` — KPI tiles + cards (recent reveals, hot leads, **data health**, burn sparkline, imports, enrichment, sequence
+- **web:** `features/home/` — KPI tiles + cards (recent reveals, hot leads, **data health** + freshness trend, burn sparkline, imports, enrichment, sequence
   snapshot, activity feed) + `QuickActionsRow`/`TasksCard`/`RepliesCard`; `(shell)/home`
 
 #### reports — *client rollups + XLSX export* (web)

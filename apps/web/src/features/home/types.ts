@@ -4,6 +4,7 @@
 export type {
   ActivityFeedItem,
   BurnPoint,
+  DataQualityTrendPoint,
   EnrichmentActivity,
   HomeSummary,
   HotLead,

@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { HomeSummary, WorkspaceDataQuality } from "./types";
+import type { DataQualityTrendPoint, HomeSummary, WorkspaceDataQuality } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -23,4 +23,11 @@ export async function fetchDataQuality(): Promise<WorkspaceDataQuality> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/home/data-quality`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load your data health"));
   return (await res.json()) as WorkspaceDataQuality;
+}
+
+/** Load the per-workspace Data Health trend series (newest first). */
+export async function fetchDataQualityHistory(): Promise<DataQualityTrendPoint[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/home/data-quality/history`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load your data health history"));
+  return (await res.json()) as DataQualityTrendPoint[];
 }

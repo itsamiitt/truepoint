@@ -10,10 +10,12 @@ import { Skeleton, StatTile, StatusBadge, TpButton } from "@leadwolf/ui";
 import { RefreshCw } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useDataQuality } from "../hooks/useDataQuality";
+import { useDataQualityTrend } from "../hooks/useDataQualityTrend";
 import { useHomeSummary } from "../hooks/useHomeSummary";
 import { ActivityFeedCard } from "./ActivityFeedCard";
 import { BurnSparkline } from "./BurnSparkline";
 import { DataHealthCard } from "./DataHealthCard";
+import { DataHealthTrendCard } from "./DataHealthTrendCard";
 import { EnrichmentActivityCard } from "./EnrichmentActivityCard";
 import styles from "./HomePage.module.css";
 import { HotLeadsCard } from "./HotLeadsCard";
@@ -40,6 +42,7 @@ const KPI_CARD: CSSProperties = {
 export function HomePage() {
   const { summary, error, loading, reload } = useHomeSummary();
   const dq = useDataQuality();
+  const dqTrend = useDataQualityTrend();
 
   const ready = summary != null;
   const balance = summary?.creditBalance ?? null;
@@ -132,6 +135,12 @@ export function HomePage() {
             loading={dq.loading}
             error={dq.error}
             onRetry={dq.reload}
+          />
+          <DataHealthTrendCard
+            trend={dqTrend.trend}
+            loading={dqTrend.loading}
+            error={dqTrend.error}
+            onRetry={dqTrend.reload}
           />
           <BurnSparkline
             burn={summary?.burn ?? []}
