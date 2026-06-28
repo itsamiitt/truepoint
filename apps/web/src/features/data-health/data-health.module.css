@@ -1,0 +1,188 @@
+/*
+ * data-health.module.css — co-located styles for the Data Health destination (data-management slice). Mirrors the
+ * Reports/Home conventions: light + monochrome per packages/ui/src/tokens.css, hairline borders, Geist Mono micro-
+ * labels, color earned only via StatusBadge tones. All color/type come from --tp-* tokens; layout + rhythm here.
+ * Collapses: 4-col tiles -> 2-col at 860px -> 1-col at 540px; the field grid auto-fits.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 32px 48px;
+  max-width: 1120px;
+}
+
+/* ── Tab switcher ─────────────────────────────────────────────────────────────────────────────────── */
+.tabsRow {
+  border-bottom: 1px solid var(--tp-hairline);
+  overflow-x: auto;
+}
+
+/* ── Stacked section cards ────────────────────────────────────────────────────────────────────────── */
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tp-ink);
+}
+
+.sectionHint {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tp-ink-4);
+  white-space: nowrap;
+}
+
+/* A vertical stack for sections with multiple blocks (tiles + table, two tables + footnote). */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── KPI tile row ─────────────────────────────────────────────────────────────────────────────────── */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.kpiLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tp-ink-4);
+}
+
+/* ── Per-field coverage grid ──────────────────────────────────────────────────────────────────────── */
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+/* One coverage card (label + % + Progress + "N of M"). Mirrors the Reports RateBar surface. */
+.rate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.rateHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rateLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+}
+
+.rateValue {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.rateSub {
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+/* ── Freshness sparkline (duplicated from home DataHealthTrendCard) ───────────────────────────────── */
+.sparkWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sparkSvg {
+  display: block;
+  width: 100%;
+  height: 56px;
+}
+
+.sparkFooter {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+}
+
+.sparkTotal {
+  font-family: var(--font-mono);
+  color: var(--tp-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Verification / runs tables ───────────────────────────────────────────────────────────────────── */
+.tableBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subheading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+}
+
+.footnote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  line-height: 1.5;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .page {
+    padding: 24px 20px 40px;
+  }
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 540px) {
+  .page {
+    padding: 20px 16px 36px;
+  }
+  .tiles {
+    grid-template-columns: 1fr;
+  }
+}

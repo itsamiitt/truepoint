@@ -76,8 +76,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 991,
-  "fileSetHash": "sha256:9f6d1198f699db4315f7e6a524fee7a64f9b658ccb6f373eca6e035394b00685",
+  "fileCount": 1005,
+  "fileSetHash": "sha256:309c62582915cdc107700d25e6cb1f2e90d34fba5e32f9d8577d4acaf0008539",
   "features": {
     "account-search": {
       "web": [],
@@ -265,7 +265,21 @@
       "integrations": []
     },
     "data-health": {
-      "web": [],
+      "web": [
+        "apps/web/src/features/data-health/api.ts",
+        "apps/web/src/features/data-health/components/DataHealthPage.tsx",
+        "apps/web/src/features/data-health/components/FreshnessTrend.tsx",
+        "apps/web/src/features/data-health/components/MetricsSection.tsx",
+        "apps/web/src/features/data-health/components/PerFieldFill.tsx",
+        "apps/web/src/features/data-health/components/ReverificationActivity.tsx",
+        "apps/web/src/features/data-health/components/SectionCard.tsx",
+        "apps/web/src/features/data-health/components/VerificationBreakdown.tsx",
+        "apps/web/src/features/data-health/hooks/useDataHealthMetrics.ts",
+        "apps/web/src/features/data-health/hooks/useDataHealthTrend.ts",
+        "apps/web/src/features/data-health/hooks/useReverificationRuns.ts",
+        "apps/web/src/features/data-health/index.ts",
+        "apps/web/src/features/data-health/types.ts"
+      ],
       "admin": [],
       "api": [],
       "core": [
@@ -1372,6 +1386,7 @@
       "apps/auth/src/shared/TurnstileWidget.tsx"
     ],
     "apps/web/app": [
+      "apps/web/src/app/(shell)/data-health/page.tsx",
       "apps/web/src/app/(shell)/enrichment/jobs/page.tsx",
       "apps/web/src/app/(shell)/home/page.tsx",
       "apps/web/src/app/(shell)/inbox/page.tsx",
