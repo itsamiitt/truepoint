@@ -42,8 +42,19 @@ compute; no scheduled re-verify loop. Everything else ages forever. (`11 §4` li
 - **v1 scope = the LOW-RISK classes only** (no contact cascade, transient/low-PII, clean `created_at` aging):
   `email_event` (90d), `provider_calls` (90d), `enrichment_job_rows` (365d), `import_job_rows` (365d),
   `data_quality_snapshots` (730d), `verification_jobs` (730d). The contact-cascade classes (contacts, activities,
-  contact_reveals, source_imports, consent_records) + `enforce` mode are **v2/phase 3** (the dependents-before-
-  tombstone order + the PII stakes need the legal periods first).
+  contact_reveals, source_imports, consent_records) + `enforce` mode are **v2/phase 3**.
+
+  **v2 deletion-safety reconcile (done — why each is NOT a clean v1-style direct delete; needs human/legal
+  sign-off, not an autonomous build):**
+  - `source_imports` — has an INCOMING FK (`lists.source_import_id` → `source_imports.id`), so a direct
+    age-delete is not a clean leaf op (null or delete the list-member links first, or rely on the FK's ON DELETE).
+  - `consent_records` — COMPLIANCE-SENSITIVE: deleting consent/withdrawal proof by age is a legal-liability call
+    (keep proof-of-withdrawal — §4). Age on `withdrawn_at`, NEVER `created_at`, or you delete still-active consents.
+  - `contact_reveals` — the reveal/billing AUDIT trail; ageing it drops reveal history (audit/finance concern).
+  - `activities` — the timeline; the only NEAR-clean leaf (no incoming FK, analytics-not-compliance) — the most
+    plausible first v2 enforce, still pending the period sign-off.
+  - `contacts` — the true tombstone-after-dependents cascade; ttl `null` (never auto-deleted without legal).
+  Net: v2 enforce is per-class legal/audit-gated + (source_imports) needs link-handling — correctly deferred.
 
 ## 3. Data classes (v1 in **bold**; aging ts; default; cascade)
 
