@@ -198,6 +198,26 @@ adminRoutes.get(
   },
 );
 
+// ── Retention-runs review (data-management A5; 16-retention-engine-design) — recent retention-engine RUNS
+// ACROSS all tenants, the SHADOW evidence operators review BEFORE flipping a class to `enforce`. Per-run class /
+// mode / candidate ["would delete"] + deleted tallies / cutoff / run timestamps joined to the tenant name,
+// newest-first + bounded (PLATFORM_READ_LIMIT). The view-only compliance/read tiers may read (super_admin always
+// passes); the read runs on the audited withPlatformTx. The action `admin.list_retention_runs` is a READ —
+// like admin.list_import_jobs / admin.list_tenants it is a plain withPlatformTx string and is deliberately NOT
+// in the platformAuditAction mutation enum (only writes are enum-tracked). COUNTS-only (retention_runs carries
+// no contact rows / PII) — nothing sensitive leaves the boundary. Read-only: no actions on this surface. The
+// repo shape is returned directly via c.json (no Zod schema), matching the sibling cross-tenant reads.
+adminRoutes.get(
+  "/retention-runs",
+  requireStaffRole("super_admin", "compliance_officer", "read_only"),
+  async (c) => {
+    const runs = await withPlatformTx(actorOf(c), "admin.list_retention_runs", (tx) =>
+      platformAdminRepository.recentRetentionRuns(tx),
+    );
+    return c.json({ runs });
+  },
+);
+
 // ── Feature flags (13 §3.5, ADR-0011) ──────────────────────────────────────────────────────────────────
 // All reads + writes go through withPlatformTx: cross-tenant owner visibility + an in-tx platform_audit_log
 // row. Writes use the ADR-0032 platform-audit action vocabulary (feature_flag.set). Flags are global +

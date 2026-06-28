@@ -282,6 +282,7 @@ export {
   type PlatformMemberRow,
   type PlatformUserRow,
   type PlatformImportJobRow,
+  type PlatformRetentionRunRow,
 } from "./repositories/platformAdminReads.ts";
 // Platform STAFF role lookup (ADR-0011) — owner-connection read for requireStaffRole authz.
 export { platformStaffRepository } from "./repositories/platformStaffRepository.ts";

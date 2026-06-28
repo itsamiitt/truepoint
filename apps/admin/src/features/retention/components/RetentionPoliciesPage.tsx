@@ -3,7 +3,8 @@
 // four-state StateSwitch (loading/error/empty/content). super_admin may edit a row (EditPolicyDialog);
 // view-only staff tiers see the table but no edit affordance (the render-gate is UX; the api is the real
 // boundary). Shadow-first + OFF by default: a class only deletes when its mode is "enforce" AND the tenant
-// has the retention engine enabled. Public slice component (the shell route mounts it).
+// has the retention engine enabled. The Policies-tab CONTENT: the RetentionPage host owns the page chrome
+// (title + the Policies|Runs Tabs); this renders the table + edit dialog inside that host.
 "use client";
 
 import type { RetentionMode, RetentionPolicy } from "@leadwolf/types";
@@ -75,15 +76,12 @@ export function RetentionPoliciesPage() {
   ];
 
   return (
-    <main style={{ display: "flex", flexDirection: "column", gap: 16, padding: 24 }}>
-      <header>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Retention policies</h1>
-        <p style={{ color: "var(--tp-ink-3)", fontSize: 13, maxWidth: 640 }}>
-          One global policy per data class: its time-to-live and its mode. Shadow counts and audits but
-          deletes nothing; enforce permanently deletes aged rows for tenants with the retention engine
-          enabled. {isSuperAdmin ? "Every change is audited." : "Only a super admin can change a policy."}
-        </p>
-      </header>
+    <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <p style={{ color: "var(--tp-ink-3)", fontSize: 13, maxWidth: 640, margin: 0 }}>
+        One global policy per data class: its time-to-live and its mode. Shadow counts and audits but
+        deletes nothing; enforce permanently deletes aged rows for tenants with the retention engine
+        enabled. {isSuperAdmin ? "Every change is audited." : "Only a super admin can change a policy."}
+      </p>
 
       <StateSwitch
         loading={loading && policies.length === 0}
@@ -110,6 +108,6 @@ export function RetentionPoliciesPage() {
           }}
         />
       ) : null}
-    </main>
+    </section>
   );
 }

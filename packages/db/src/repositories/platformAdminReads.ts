@@ -10,6 +10,7 @@ import { tenantAuthPolicies, tenantMembers, tenants, users, workspaces } from ".
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
 import { importJobs } from "../schema/importJobs.ts";
 import { listMembers, lists } from "../schema/lists.ts";
+import { retentionRuns } from "../schema/retention.ts";
 
 /** The cross-tenant read cap — mirrors the bound the api admin routes already enforce (ADR-0032). */
 export const PLATFORM_READ_LIMIT = 500;
@@ -90,6 +91,26 @@ export interface PlatformImportJobRow {
   createdAt: Date;
   completedAt: Date | null;
   failedReason: string | null;
+}
+
+/**
+ * One recent retention-engine RUN as seen by STAFF (data-management A5) — the cross-tenant view of the SHADOW
+ * evidence: what the daily sweep found it WOULD delete for each data class, BEFORE a class is flipped to
+ * `enforce` (design 16-retention-engine-design.md). COUNTS + class + window only: candidate/deleted tallies,
+ * the disabled|shadow|enforce mode, and the age cutoff describe the RUN — retention_runs carries NO contact
+ * PII (no row references, no emails/phones), so none can ride this surface. The owning tenant is identified by
+ * id AND name (the org name is the customer's, not a person's PII — the same join the tenants directory makes).
+ */
+export interface PlatformRetentionRunRow {
+  tenantId: string;
+  tenantName: string;
+  dataClass: string;
+  mode: string;
+  candidateCount: number;
+  deletedCount: number;
+  cutoff: Date | null;
+  runStartedAt: Date;
+  runFinishedAt: Date;
 }
 
 /**
@@ -285,6 +306,36 @@ export const platformAdminRepository = {
       .from(importJobs)
       .innerJoin(tenants, eq(tenants.id, importJobs.tenantId))
       .orderBy(desc(importJobs.createdAt))
+      .limit(Math.min(limit, PLATFORM_READ_LIMIT));
+  },
+
+  /**
+   * Recent retention-engine RUNS ACROSS all tenants (data-management A5) — the staff view of the SHADOW
+   * evidence operators review BEFORE flipping a class to `enforce` (design 16-retention-engine-design.md). Each
+   * run row is joined to its tenant NAME and returns the genuinely useful monitoring columns (class / mode /
+   * candidate ["would delete"] + deleted tallies / cutoff window / run timestamps), newest-first. BOUNDED:
+   * `limit` is clamped to PLATFORM_READ_LIMIT so a caller can never widen it into an unbounded cross-tenant scan
+   * (ADR-0032). Runs inside withPlatformTx (owner connection, RLS bypass), so the read is audited. retention_runs
+   * is COUNTS-only — it references no contact rows and carries no PII — so nothing sensitive leaves the boundary
+   * (mirrors the privacy-first import-jobs/lists-overview idioms). The customer-facing recentRuns
+   * (retentionRunRepository) stays TENANT-scoped via RLS; this is the SEPARATE cross-tenant platform read.
+   */
+  async recentRetentionRuns(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformRetentionRunRow[]> {
+    return tx
+      .select({
+        tenantId: retentionRuns.tenantId,
+        tenantName: tenants.name,
+        dataClass: retentionRuns.dataClass,
+        mode: retentionRuns.mode,
+        candidateCount: retentionRuns.candidateCount,
+        deletedCount: retentionRuns.deletedCount,
+        cutoff: retentionRuns.cutoff,
+        runStartedAt: retentionRuns.runStartedAt,
+        runFinishedAt: retentionRuns.runFinishedAt,
+      })
+      .from(retentionRuns)
+      .innerJoin(tenants, eq(tenants.id, retentionRuns.tenantId))
+      .orderBy(desc(retentionRuns.createdAt))
       .limit(Math.min(limit, PLATFORM_READ_LIMIT));
   },
 };

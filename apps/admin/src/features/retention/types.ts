@@ -15,3 +15,19 @@ export interface RetentionPolicyPatch {
   ttlDays: number | null;
   mode: RetentionMode;
 }
+
+/** One cross-tenant retention RUN as the admin Runs panel renders it (data-management A5) — mirrors the api
+ *  `/admin/retention-runs` payload (backed by @leadwolf/db platformAdminReads.recentRetentionRuns). COUNTS +
+ *  class + window only — retention_runs carries no contact PII. Dates arrive as ISO strings (c.json serializes
+ *  the repo's Date columns); `cutoff` is null when the class never ages out. The api owns the canonical shape. */
+export interface RetentionRunRow {
+  tenantId: string;
+  tenantName: string;
+  dataClass: string;
+  mode: string;
+  candidateCount: number;
+  deletedCount: number;
+  cutoff: string | null;
+  runStartedAt: string;
+  runFinishedAt: string;
+}

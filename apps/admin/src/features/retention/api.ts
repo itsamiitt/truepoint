@@ -5,7 +5,7 @@
 // (the write is super_admin-only + audited there — this client cannot bypass it).
 
 import type { RetentionPolicy } from "@leadwolf/types";
-import type { RetentionPolicyPatch } from "./types";
+import type { RetentionPolicyPatch, RetentionRunRow } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_ADMIN_API_BASE ?? "";
 
@@ -40,4 +40,13 @@ export async function updateRetentionPolicy(
     body: JSON.stringify({ dataClass, ...patch }),
   });
   if (!res.ok) throw new Error(await problemMessage(res, "Could not update the policy"));
+}
+
+/** List recent retention-engine RUNS across all tenants — the cross-tenant SHADOW evidence (bounded +
+ *  newest-first by the api). Read-only + audited (admin.list_retention_runs) on the server. */
+export async function listRetentionRuns(): Promise<RetentionRunRow[]> {
+  const res = await adminFetch("/retention-runs");
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load retention runs"));
+  const body = (await res.json()) as { runs: RetentionRunRow[] };
+  return body.runs;
 }
