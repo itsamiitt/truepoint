@@ -6,7 +6,7 @@
 
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
-import { tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
+import { tenantAuthPolicies, tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
 import { listMembers, lists } from "../schema/lists.ts";
 
@@ -44,6 +44,11 @@ export interface PlatformMemberRow {
 
 export interface PlatformTenantDetail {
   tenant: PlatformTenantRow;
+  // The per-tenant P1-01 enforcement master switch (tenant_auth_policies.enforcement_enabled). STAFF-ONLY:
+  // flipped only via the audited admin POST /tenants/:id/auth-enforcement (authPolicyRepository.setEnforcement).
+  // Surfaced here read-only so the staff console can show + toggle current state. Defaults false when the
+  // tenant has no policy row yet (an unconfigured tenant is never enforced).
+  enforcementEnabled: boolean;
   workspaces: PlatformWorkspaceRow[];
   members: PlatformMemberRow[];
 }
@@ -141,6 +146,15 @@ export const platformAdminRepository = {
       .limit(1);
     if (!tenant) return null;
 
+    // The per-tenant enforcement master switch lives on tenant_auth_policies (1:1 with the tenant), not on
+    // tenants — so it is read separately. A tenant with no policy row yet is never enforced (default false).
+    const [policy] = await tx
+      .select({ enforcementEnabled: tenantAuthPolicies.enforcementEnabled })
+      .from(tenantAuthPolicies)
+      .where(eq(tenantAuthPolicies.tenantId, tenantId))
+      .limit(1);
+    const enforcementEnabled = policy?.enforcementEnabled ?? false;
+
     const tenantWorkspaces = await tx
       .select({
         id: workspaces.id,
@@ -168,7 +182,7 @@ export const platformAdminRepository = {
       .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.status, "active")))
       .limit(PLATFORM_READ_LIMIT);
 
-    return { tenant, workspaces: tenantWorkspaces, members };
+    return { tenant, enforcementEnabled, workspaces: tenantWorkspaces, members };
   },
 
   /**

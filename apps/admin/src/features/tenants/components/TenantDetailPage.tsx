@@ -9,6 +9,7 @@ import Link from "next/link";
 import { formatInt, shortDate, statusTone } from "../format";
 import { useTenantDetail } from "../hooks/useTenantDetail";
 import type { TenantMember, TenantWorkspace } from "../types";
+import { AuthEnforcementCard } from "./AuthEnforcementCard";
 
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
@@ -111,6 +112,8 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 <MetaField label="Created" value={shortDate(detail.tenant.createdAt)} />
               </div>
             </Card>
+
+            <AuthEnforcementCard detail={detail} onChanged={reload} />
 
             <h3 className="tp-section-title">Workspaces ({detail.workspaces.length})</h3>
             <DataTable

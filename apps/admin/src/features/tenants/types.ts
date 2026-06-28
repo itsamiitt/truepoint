@@ -33,6 +33,9 @@ export interface TenantMember {
 
 export interface TenantDetail {
   tenant: TenantRow;
+  // The per-tenant P1-01 auth-enforcement master switch (mirrors PlatformTenantDetail.enforcementEnabled).
+  // Read-only here; flipped only via the audited, super_admin-gated POST /admin/tenants/:id/auth-enforcement.
+  enforcementEnabled: boolean;
   workspaces: TenantWorkspace[];
   members: TenantMember[];
 }

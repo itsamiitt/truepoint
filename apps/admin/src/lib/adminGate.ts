@@ -21,3 +21,20 @@ export async function verifyPlatformAdmin(): Promise<AdminGateResult> {
     return "error";
   }
 }
+
+/**
+ * Classify whether the caller holds the super_admin staff role, by probing a super_admin-ONLY read
+ * (`GET /admin/staff` is gated by requireStaffRole("super_admin")): 200 ⇒ super_admin, 403 ⇒ staff but not
+ * super_admin. Mirrors verifyPlatformAdmin's probe-the-api pattern (the client never trusts a self-set flag).
+ *
+ * RENDER-GATE ONLY. This is UX — it decides whether to show/enable the lockout-capable enforcement switch.
+ * It is NOT a security boundary: the api re-checks requireStaffRole("super_admin") on the write itself, so a
+ * tampered client can never flip enforcement. The response body is discarded (only the status is read).
+ * Throws on a transient/unexpected status so the caller can surface a retryable error state.
+ */
+export async function verifySuperAdmin(): Promise<boolean> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/staff`);
+  if (res.ok) return true;
+  if (res.status === 403) return false;
+  throw new Error(`Could not verify role (${res.status})`);
+}
