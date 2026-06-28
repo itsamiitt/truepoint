@@ -75,8 +75,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 974,
-  "fileSetHash": "sha256:4e48c806af4ff80e90be0f7eea03754254a6cb8e0fce895362a672d61e3a08d0",
+  "fileCount": 975,
+  "fileSetHash": "sha256:e313cbae09afec99841ffab44b0a201e502e0d2545110d2cfd49d8c84cbd4108",
   "features": {
     "account-search": {
       "web": [],
@@ -482,6 +482,7 @@
         "packages/core/src/import/parseFile.ts",
         "packages/core/src/import/parseXlsx.test.ts",
         "packages/core/src/import/parseXlsx.ts",
+        "packages/core/src/import/prepareContact.ts",
         "packages/core/src/import/preview.test.ts",
         "packages/core/src/import/preview.ts",
         "packages/core/src/import/rejectedRowsCsv.test.ts",

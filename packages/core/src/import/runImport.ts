@@ -8,7 +8,6 @@
 
 import {
   type ContactWriteValues,
-  type DedupKeys,
   type Tx,
   accountRepository,
   contactRepository,
@@ -33,21 +32,10 @@ import { writeAudit } from "../compliance/writeAudit.ts";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import { assertListInWorkspace } from "../prospect/lists.ts";
-import { blindIndex } from "./blindIndex.ts";
-import { type MappedRow, type RawRow, mapRow } from "./columnMap.ts";
+import { type RawRow, mapRow } from "./columnMap.ts";
 import { contentHash } from "./contentHash.ts";
-import { encryptPii } from "./encryptPii.ts";
-import {
-  emailDomainOf,
-  linkedinPublicIdOf,
-  normalizeDomain,
-  normalizeEmailForIndex,
-  normalizeEmailForStorage,
-  normalizeText,
-} from "./normalize.ts";
+import { prepareContact, type PreparedContact } from "./prepareContact.ts";
 import { rejectedRowsFor, validateRow } from "./validateRow.ts";
-
-const SENIORITY = new Set(["c_suite", "vp", "director", "manager", "ic", "other"]);
 
 export interface RunImportInput {
   scope: { tenantId: string; workspaceId: string };
@@ -67,64 +55,6 @@ export interface RunImportInput {
    * (the client-supplied id is never trusted; list-plan D4). Absent = land in the overlay with no list linkage.
    */
   target?: ImportTarget;
-}
-
-type PreparedValues = Omit<ContactWriteValues, "tenantId" | "workspaceId" | "accountId">;
-
-interface PreparedContact {
-  values: PreparedValues;
-  dedupKeys: DedupKeys;
-  accountName?: string;
-  accountDomain?: string;
-}
-
-function coerceSeniority(raw: string | undefined): string | null {
-  const v = normalizeText(raw)
-    ?.toLowerCase()
-    .replace(/[\s-]+/g, "_");
-  return v && SENIORITY.has(v) ? v : null;
-}
-
-/** Pure preparation: normalize + encrypt + derive keys. Throws if the row carries no identity key. */
-function prepareContact(mapped: MappedRow): PreparedContact {
-  const storageEmail = normalizeEmailForStorage(mapped.email);
-  const linkedinPublicId = linkedinPublicIdOf(mapped.linkedinPublicId ?? mapped.linkedinUrl);
-  const salesNavLeadId = normalizeText(mapped.salesNavLeadId);
-  if (!storageEmail && !linkedinPublicId && !salesNavLeadId) {
-    throw new Error("Row has no email, LinkedIn, or Sales Navigator identifier.");
-  }
-
-  const values: PreparedValues = {
-    firstName: normalizeText(mapped.firstName) ?? null,
-    lastName: normalizeText(mapped.lastName) ?? null,
-    jobTitle: normalizeText(mapped.jobTitle) ?? null,
-    seniorityLevel: coerceSeniority(mapped.seniorityLevel),
-    department: normalizeText(mapped.department) ?? null,
-    linkedinUrl: normalizeText(mapped.linkedinUrl) ?? null,
-    linkedinPublicId: linkedinPublicId ?? null,
-    salesNavProfileUrl: normalizeText(mapped.salesNavProfileUrl) ?? null,
-    salesNavLeadId: salesNavLeadId ?? null,
-    locationCountry: normalizeText(mapped.locationCountry) ?? null,
-    locationCity: normalizeText(mapped.locationCity) ?? null,
-  };
-  if (storageEmail) {
-    values.emailEnc = encryptPii(storageEmail);
-    values.emailBlindIndex = blindIndex(normalizeEmailForIndex(storageEmail));
-    values.emailDomain = emailDomainOf(storageEmail) ?? null;
-  }
-  const phone = normalizeText(mapped.phone);
-  if (phone) values.phoneEnc = encryptPii(phone);
-
-  return {
-    values,
-    dedupKeys: {
-      emailBlindIndex: values.emailBlindIndex ?? undefined,
-      linkedinPublicId: linkedinPublicId ?? undefined,
-      salesNavLeadId: salesNavLeadId ?? undefined,
-    },
-    accountName: normalizeText(mapped.accountName),
-    accountDomain: normalizeDomain(mapped.accountDomain),
-  };
 }
 
 /** The per-row landing outcome. `duplicate` = matched an existing contact and was held back under a `skip`

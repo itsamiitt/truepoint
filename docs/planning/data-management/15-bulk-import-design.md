@@ -87,7 +87,7 @@ UNLOGGED **non-RLS** staging tables are created/dropped at RUNTIME (not in the m
    `parseFile`), `fileStore` (port + local-disk dev adapter), and the batch repo methods (`findByDedupKeysBatch`,
    `insertBatch`, `updateBatch`, `getFieldProvenanceBatch`, `sourceImport.appendBatch`, `account.upsertByDomainBatch`,
    `masterGraph.resolveForImportBatch`) shipped — additive, semantics-preserving. The `prepareContact` extraction
-   (parity-critical, touches `runImport`) is deferred to phase 5 to land + verify alongside its consumer `bulkStage`.
+   (parity-critical, touches `runImport`) is now **done** — moved verbatim to `core/import/prepareContact.ts`, `runImport` repointed (no behavior change; removed its now-unused imports), ready for `bulkStage`.
 4. **⚠ Gated — COPY spike** — prove `postgres.js` COPY-FROM-STDIN streaming on a non-RLS UNLOGGED table over the
    owner connection (needs `bun`+Postgres). Blocks the staging repo + stage phase.
 5. **Pipeline** — `importStagingRepository`, `bulkStage`, `bulkProcessChunk`, `runBulkImport`.
