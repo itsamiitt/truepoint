@@ -9,6 +9,24 @@ export { parseXlsx } from "./import/parseXlsx.ts";
 // Constant-memory streaming CSV reader for the bulk-import drive path (15-bulk-import-design §3) — parses
 // byte-identically to the sync parseCsv (the quoting state machine mirrors parseFile.ts parseMatrix). CSV only.
 export { streamParseCsv } from "./import/streamParse.ts";
+// Bulk COPY-staging import pipeline (15-bulk-import-design §2, phase 5) — DRIVE (stage + fan-out), per-chunk MERGE
+// (byte-identical landing parity with runImport, batched), and the finalize hook. DEAD CODE until phase-6 wires
+// apps/api + apps/workers; the worker composes these with the injected enqueue + FileStore + rollup hook.
+export { bulkStage, type BulkStageInput, type BulkStageResult } from "./import/bulkStage.ts";
+export {
+  bulkProcessChunk,
+  type BulkProcessChunkInput,
+  type BulkProcessChunkResult,
+} from "./import/bulkProcessChunk.ts";
+export {
+  runBulkImport,
+  finalizeIfLastChunk,
+  type EnqueueChunk,
+  type RunBulkImportInput,
+  type RunBulkImportResult,
+  type FinalizeIfLastChunkInput,
+  type FinalizeResult,
+} from "./import/runBulkImport.ts";
 export type { RawRow } from "./import/columnMap.ts";
 // Object-store seam (15-bulk-import-design §3/§4): the FileStore port the bulk pipeline writes through + a
 // dev/test local-disk adapter. The prod S3 adapter is injected at the app composition root (kept out of core).

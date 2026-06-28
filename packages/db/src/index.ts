@@ -211,6 +211,12 @@ export {
   type ImportChunkUpdate,
   type ImportJobRowInsert,
 } from "./repositories/importJobRepository.ts";
+// Per-job UNLOGGED, NON-RLS COPY-staging table (15-bulk-import-design §1/§2) — ALL on the owner connection
+// (COPY can't run on an RLS table); isolated by an explicit workspace_id predicate, confined to this repository.
+export {
+  importStagingRepository,
+  type StagingRow,
+} from "./repositories/importStagingRepository.ts";
 export {
   pipelineStageRepository,
   type StageCreateValues,

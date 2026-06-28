@@ -16,6 +16,16 @@ export const db = drizzle(client, { schema });
 export type Db = typeof db;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
+/**
+ * The raw OWNER (RLS-BYPASSING) postgres.js connection — the SAME base connection `db` wraps (so it inherits
+ * `prepare: false`, RDS-Proxy/PgBouncer-safe). Exported ONLY for `importStagingRepository`, which drives the
+ * per-job UNLOGGED, NON-RLS staging table: Postgres forbids COPY on an RLS table (15-bulk-import-design §1),
+ * so the COPY fast-load + the staging DDL/dedup/read run on this owner connection. NEVER use it for
+ * tenant-scoped data — that MUST go through `withTenantTx` (drops to leadwolf_app, RLS enforced). The only
+ * isolation on staging is the explicit `workspace_id` predicate every staging query carries (access path).
+ */
+export { client as ownerClient };
+
 /** Drain the shared pool — graceful shutdown for apps/workers and test teardown (open sockets otherwise
  * keep the process alive). Safe to call once at the end of a process's life; not for per-request use. */
 export async function closeDb(): Promise<void> {

@@ -16,7 +16,7 @@ export const BULK_IMPORTS_DLQ = "bulk-imports-dlq";
 // ── Enums ────────────────────────────────────────────────────────────────────────────────────────────────
 /** Lifecycle of a bulk-import job. `validating`→`staged` covers the COPY-stage + within-file dedup; `running`
  *  covers chunk fan-out; `partial` = completed with some rejected/errored rows; `paused` for a budget/ops hold. */
-export const importJobStatus = z.enum([
+export const bulkImportJobStatus = z.enum([
   "queued",
   "validating",
   "staged",
@@ -27,7 +27,7 @@ export const importJobStatus = z.enum([
   "failed",
   "cancelled",
 ]);
-export type ImportJobStatus = z.infer<typeof importJobStatus>;
+export type BulkImportJobStatus = z.infer<typeof bulkImportJobStatus>;
 
 /** AV-scan gate for an untrusted upload (G-IMP-6). `skipped` when AV is not configured; the promote-to-staging
  *  step refuses an `infected` file. A seam today — the scanner is wired at the composition root later. */
@@ -35,7 +35,7 @@ export const avScanStatus = z.enum(["pending", "clean", "infected", "skipped"]);
 export type AvScanStatus = z.infer<typeof avScanStatus>;
 
 /** Terminal outcome of one input row in the bulk merge (the import_job_rows ledger + the three-way tally). */
-export const importRowOutcome = z.enum([
+export const bulkImportRowOutcome = z.enum([
   "created",
   "matched",
   "duplicate",
@@ -43,7 +43,7 @@ export const importRowOutcome = z.enum([
   "rejected",
   "unprocessed",
 ]);
-export type ImportRowOutcome = z.infer<typeof importRowOutcome>;
+export type BulkImportRowOutcome = z.infer<typeof bulkImportRowOutcome>;
 
 // ── Job payload (queue) ──────────────────────────────────────────────────────────────────────────────────
 /** The workspace scope every bulk-import job carries (the worker re-enters withTenantTx with it). */
@@ -68,7 +68,7 @@ export type BulkImportJobData = z.infer<typeof bulkImportJobDataSchema>;
 
 // ── Status / accounting DTOs (customer-visible; non-PII) ─────────────────────────────────────────────────
 /** The 202 accept-response when a bulk import is taken for background processing: a job ref to poll. */
-export const bulkImportJobRefSchema = z.object({ jobId: z.string(), status: importJobStatus });
+export const bulkImportJobRefSchema = z.object({ jobId: z.string(), status: bulkImportJobStatus });
 export type BulkImportJobRef = z.infer<typeof bulkImportJobRefSchema>;
 
 /** Three-way row accounting off the import_jobs control row: rows_in = the sum of these. Non-PII counts only. */
@@ -85,10 +85,10 @@ export const importJobCountsSchema = z.object({
 export type ImportJobCounts = z.infer<typeof importJobCountsSchema>;
 
 /** The polled status of a bulk-import job (GET /imports/bulk/:jobId): counters + file name + timestamps. Non-PII. */
-export const bulkImportJobStatusSchema = z.object({
+export const bulkImportJobStatusResponseSchema = z.object({
   jobId: z.string(),
   sourceName: z.string(),
-  status: importJobStatus,
+  status: bulkImportJobStatus,
   progress: z.number().min(0).max(1), // completed_chunks ÷ total_chunks (0 when total is 0)
   counts: importJobCountsSchema,
   rejectedRowsUrl: z.string().nullable(), // signed download for the rejected-rows artifact, once finalized
@@ -97,7 +97,7 @@ export const bulkImportJobStatusSchema = z.object({
   completedAt: z.string().datetime({ offset: true }).nullable(),
   failedReason: z.string().nullable(),
 });
-export type BulkImportJobStatus = z.infer<typeof bulkImportJobStatusSchema>;
+export type BulkImportJobStatusResponse = z.infer<typeof bulkImportJobStatusResponseSchema>;
 
 /** PII-free dead-letter for a bulk-import job that exhausts retries (scope + source + reason only). */
 export const bulkImportDeadLetterSchema = z.object({

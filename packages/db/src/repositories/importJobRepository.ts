@@ -5,15 +5,15 @@
 // withTenantTx so RLS workspace isolation rides the GUC, chunks inherit it through their parent job, and a
 // chunk/row write carries the workspace scope of that tx. Counter writes (updateJobProgress,
 // incrementCompletedChunks) increment ATOMICALLY in SQL so concurrent chunk completions never clobber. The
-// closed enums (ImportJobStatus / AvScanStatus / ImportRowOutcome / ConflictPolicy) come from @leadwolf/types
+// closed enums (BulkImportJobStatus / AvScanStatus / BulkImportRowOutcome / ConflictPolicy) come from @leadwolf/types
 // and narrow at the edge; columns are string-widened like the rest of the package. No PII lives on these
 // control rows (the per-job UNLOGGED staging table holds the transient PII and is owned by importStagingRepository).
 
 import type {
   AvScanStatus,
+  BulkImportJobStatus,
+  BulkImportRowOutcome,
   ConflictPolicy,
-  ImportJobStatus,
-  ImportRowOutcome,
 } from "@leadwolf/types";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
@@ -37,7 +37,7 @@ export interface ImportJobCreateValues {
   createdByUserId?: string | null;
   sourceFile: string;
   sourceName: string;
-  status?: ImportJobStatus;
+  status?: BulkImportJobStatus;
   fileSize?: number | null;
   avScanStatus?: AvScanStatus;
   idempotencyKey?: string | null;
@@ -53,7 +53,7 @@ export interface ImportJobCreateValues {
  * on the same `staged` transition, and `avScanStatus` once the AV gate clears — so they ride this same patch.
  */
 export interface ImportJobStatusUpdate {
-  status: ImportJobStatus;
+  status: BulkImportJobStatus;
   startedAt?: Date | null;
   completedAt?: Date | null;
   failedReason?: string | null;
@@ -83,12 +83,12 @@ export interface ImportChunkCreateValues {
   chunkIndex: number;
   rowStart: number;
   rowEnd: number;
-  status?: ImportJobStatus; // the chunk status reuses a subset of the job-status vocabulary
+  status?: BulkImportJobStatus; // the chunk status reuses a subset of the job-status vocabulary
 }
 
 /** Sparse chunk patch (undefined fields are left untouched; `attempts` increments atomically when set). */
 export interface ImportChunkUpdate {
-  status?: ImportJobStatus;
+  status?: BulkImportJobStatus;
   processedRows?: number;
   incrementAttempts?: boolean;
   completedAt?: Date | null;
@@ -103,7 +103,7 @@ export interface ImportJobRowInsert {
   rowIndex: number;
   workspaceId: string;
   input?: Record<string, unknown>;
-  outcome?: ImportRowOutcome; // closed set; widened so callers may pass the DB default
+  outcome?: BulkImportRowOutcome; // closed set; widened so callers may pass the DB default
   rejectReason?: string | null;
   createdContactId?: string | null; // audit pointer (no FK)
   updatedContactId?: string | null; // audit pointer (no FK)

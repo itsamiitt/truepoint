@@ -89,8 +89,12 @@ UNLOGGED **non-RLS** staging tables are created/dropped at RUNTIME (not in the m
    `masterGraph.resolveForImportBatch`) shipped — additive, semantics-preserving. The `prepareContact` extraction
    (parity-critical, touches `runImport`) is now **done** — moved verbatim to `core/import/prepareContact.ts`, `runImport` repointed (no behavior change; removed its now-unused imports), ready for `bulkStage`.
 4. **⚠ Gated — COPY spike** — prove `postgres.js` COPY-FROM-STDIN streaming on a non-RLS UNLOGGED table over the
-   owner connection (needs `bun`+Postgres). Blocks the staging repo + stage phase.
-5. **Pipeline** — `importStagingRepository`, `bulkStage`, `bulkProcessChunk`, `runBulkImport`.
+   owner connection (needs `bun`+Postgres). Per the standing go-ahead the pipeline (phase 5) was built AHEAD of the spike as dead code, so this is now an ENABLE-gate, not a build-gate — clear it before `BULK_IMPORT_ENABLED` is turned on.
+5. **Pipeline — ✅ built (COPY path UNVERIFIED)** — `importStagingRepository` (COPY loader + UNLOGGED staging DDL +
+   within-file dedup + chunk-band read, all on the owner connection), `bulkStage` (stream→validate→prepare→COPY→dedup,
+   constant memory), `bulkProcessChunk` (batched merge, byte-parity with `runImport.importOneRow`), `runBulkImport`
+   (drive orchestrator + `finalizeIfLastChunk`). Additive DEAD CODE until phase 6. The one UNVERIFIED primitive is
+   `copyRows` (COPY-FROM-STDIN streaming) — the phase-4 spike must clear it before the flag is enabled.
 6. **Wiring + rollout** — API routes/queue, worker, `register.ts`; behind `BULK_IMPORT_ENABLED` (off) + the
    existing per-tenant flag system + shadow mode; then the plan-tier threshold routes large uploads to bulk.
 

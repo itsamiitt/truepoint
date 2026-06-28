@@ -75,8 +75,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 975,
-  "fileSetHash": "sha256:e313cbae09afec99841ffab44b0a201e502e0d2545110d2cfd49d8c84cbd4108",
+  "fileCount": 979,
+  "fileSetHash": "sha256:4e84a495b72c5b6ec33cc10ead2a535cd69289e5fb09b99c0cf47a07c69a94c5",
   "features": {
     "account-search": {
       "web": [],
@@ -472,6 +472,8 @@
       ],
       "core": [
         "packages/core/src/import/blindIndex.ts",
+        "packages/core/src/import/bulkProcessChunk.ts",
+        "packages/core/src/import/bulkStage.ts",
         "packages/core/src/import/columnMap.ts",
         "packages/core/src/import/contentHash.ts",
         "packages/core/src/import/dedupHelpers.test.ts",
@@ -487,6 +489,7 @@
         "packages/core/src/import/preview.ts",
         "packages/core/src/import/rejectedRowsCsv.test.ts",
         "packages/core/src/import/rejectedRowsCsv.ts",
+        "packages/core/src/import/runBulkImport.ts",
         "packages/core/src/import/runImport.ts",
         "packages/core/src/import/streamParse.ts",
         "packages/core/src/import/templates.ts",
@@ -495,6 +498,7 @@
       ],
       "db": [
         "packages/db/src/repositories/importJobRepository.ts",
+        "packages/db/src/repositories/importStagingRepository.ts",
         "packages/db/src/repositories/sourceImportRepository.ts"
       ],
       "workers": [
