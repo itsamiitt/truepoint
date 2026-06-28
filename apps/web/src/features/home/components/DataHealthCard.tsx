@@ -54,6 +54,12 @@ export function DataHealthCard({
           r: rate(metrics.withPhone, total),
         },
         {
+          key: "mobile",
+          label: "Mobile phones",
+          sub: `${metrics.phoneMobile.toLocaleString()} of ${metrics.withPhone.toLocaleString()} phones are mobile`,
+          r: rate(metrics.phoneMobile, metrics.withPhone),
+        },
+        {
           key: "fresh",
           label: "Freshness",
           sub: `${metrics.fresh.toLocaleString()} verified within SLA`,
