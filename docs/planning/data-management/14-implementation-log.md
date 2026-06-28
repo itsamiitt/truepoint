@@ -3,87 +3,114 @@
 > **Companion to the planning series (`00`–`13`).** Those docs are the *plan*; this is *what got
 > built* on branch `feat/data-mgmt-01-research-brief`, so the branch is reviewable + validatable in
 > one place. **Status: shipped + self-reviewed; NOT yet CI-validated** in the build sandbox (no
-> `bun`/`drizzle-kit`/Docker here — see §6 for the gate the reviewer must run before merge).
+> `bun`/`drizzle-kit`/Docker here — see §6 for the gates the reviewer must run before merge).
 
 ## 1. What shipped, by backlog item (`13 §6`)
 
 | # | Item | State | Key commits |
 |---|---|---|---|
-| 1 | **Verifier subsystem** | ✅ email + phone + carrier line-type | `b2c04a1` (Reacher + `hybridVerifier`, reveal-wired) · `cec26bb`/`d9ee5da` (Twilio phone verifier + `phone_line_type`) · `24f11c0` (local role/disposable pre-screen) · `1154c1c` (line-type read side) |
-| 3 | **Freshness re-verification** | ✅ loop + sweep + per-tenant flag + audit ledger | `6148980` (`runReverification` + worker + sweep) · `d6b9e1d` (`data_health.reverification` flag) · `698496e` (`verification_jobs` ledger) · `c741146` (runs read) |
-| 5 | **Quality metric dashboard** | ✅ per-contact badge + live aggregate + trend store + reads | `b538114` (per-contact badge on the list/search) · `e76231b` (`dataQualitySummary` + `GET /home/data-quality`) · `a5dd9c4` (`data_quality_snapshots` + daily sweep) · `b874d48` (trend read) |
+| 1 | **Verifier subsystem** | ✅ email + phone + carrier line-type | `b2c04a1` · `cec26bb`/`d9ee5da` · `24f11c0` · `1154c1c` |
+| 3 | **Freshness re-verification** | ✅ loop + sweep + per-tenant flag + audit ledger | `6148980` · `d6b9e1d` · `698496e` · `c741146` |
+| 5 | **Quality metric dashboard** | ✅ per-contact badge + live aggregate + trend + reads + **dedicated Data Health page** | `b538114` · `e76231b` · `a5dd9c4` · `b874d48` · **`07048d0`** (the standalone `/data-health` page) |
+| 2 | **Bulk COPY-staging import** | ✅ **fully built, DARK behind `BULK_IMPORT_ENABLED`** | `a7cc2d3` (control plane + mig 0024) · `e559f3d` (core primitives) · `2aff801` (`prepareContact` extract) · `bd27f2d` (pipeline + barrel-collision fix) · `721cfd8` (API + worker wiring) · `f9cff13` (pipeline itest = COPY spike + parity) |
+| 6 | **Per-data-class retention** | ✅ **v1 built, INERT + double-gated** | `11d3a1f` (design + contract) · `12f45ff` (control plane + mig 0025) · `0df2c07` (shadow sweep) · `6a8ebe1` (enforce deleters) · `335f6ce` (itest) |
 
-The planning docs `00`–`13` (commits `7ff8290`…`deafb6a`) are the reconciled spec series this build
-implements; the recurring finding (briefs' premises vs shipped code) is captured there + in `13 §5`.
+The planning docs `00`–`13` are the reconciled spec series this build implements; #2's on-branch
+design record is `15-bulk-import-design.md`, #6's is `16-retention-engine-design.md`.
 
 ## 2. Migrations (hand-authored — see §6)
 
-The build sandbox has no `drizzle-kit`, so these were authored by mirroring existing migrations
-(`0003` CREATE TABLE, `0017`/`0020` ADD COLUMN) + the snapshot format (`pipeline_stages`), and the
-JSON was `node`-validated. The runtime migrator reads only `meta/_journal.json` + the `.sql`; the
-`meta/NNNN_snapshot.json` is for `drizzle-kit` only (see the drift check in §6).
+No `drizzle-kit` in the sandbox, so these mirror existing migrations + the snapshot format and were
+`node`-validated (journal/snapshot chain + table count). The runtime migrator reads only
+`meta/_journal.json` + the `.sql`; `meta/NNNN_snapshot.json` is `drizzle-kit`-only (drift check, §6).
 
 | Migration | Change |
 |---|---|
-| `0021_phone_line_type` | `ALTER TABLE contacts ADD COLUMN phone_line_type varchar(20)` (the TCPA mobile/landline signal). |
-| `0022_verification_jobs` | New table `verification_jobs` (re-verification audit ledger) + 2 FKs + index + RLS. |
-| `0023_data_quality_snapshots` | New table `data_quality_snapshots` (Data Health trend store) + 2 FKs + index + RLS. |
+| `0021_phone_line_type` | `contacts ADD COLUMN phone_line_type` (TCPA mobile/landline signal). |
+| `0022_verification_jobs` | New `verification_jobs` (re-verification audit ledger) + FKs + index + RLS. |
+| `0023_data_quality_snapshots` | New `data_quality_snapshots` (Data Health trend store) + FKs + index + RLS. |
+| `0024_bulk_import_jobs` | New `import_jobs` / `import_job_chunks` / `import_job_rows` (bulk-import control plane) + 7 FKs + 5 indexes + RLS. |
+| `0025_retention_engine` | New `retention_policies` (global) + `retention_runs` (per-tenant) + FK + index + RLS + the 12 seeded default policies (all `shadow`). |
 
 ## 3. New tables + RLS
 
-Both new tables are workspace-scoped, FORCE-RLS with the standard NULLIF workspace-isolation policy
-(`rls/verificationJobs.sql`, `rls/dataQualitySnapshots.sql`, mirroring `enrichment_jobs`). Each has an
-`*.itest.ts` proving per-workspace isolation (A sees own / B can't / BYPASSRLS admin can) —
-`packages/db/test/verificationJobs.itest.ts`, `dataQualitySnapshots.itest.ts`.
+- **Workspace-scoped, FORCE-RLS (NULLIF isolation), mirror `enrichment_jobs`:** `verification_jobs`,
+  `data_quality_snapshots`, `import_jobs`, `import_job_rows` (chunks scoped through the parent job).
+- **`retention_policies`** — GLOBAL, platform-managed: app SELECT-only, NO write policy (the write
+  wall is FORCE-RLS + policy-ABSENCE, not the grant — `applyMigrations`' blanket grant runs after RLS;
+  the exact `feature_flags` mechanism).
+- **`retention_runs`** — per-tenant, APPEND-ONLY: tenant-scoped SELECT + INSERT, NO update/delete policy.
+- **Per-job UNLOGGED COPY-staging table** (`stg_import_<uuid>`) — NON-RLS by design (COPY can't run on
+  an RLS table); isolated by ACCESS PATH (owner connection + explicit `workspace_id` predicate, confined
+  to `importStagingRepository`); created/dropped at runtime, holds only encrypted PII + transient `raw_data`.
+- **Isolation itests:** `verificationJobs.itest.ts`, `dataQualitySnapshots.itest.ts`, `importJobs.itest.ts`,
+  `retention.itest.ts` (+ the pipeline itest below).
 
-## 4. New API endpoints (all under `home`, authn + tenancy + any-role)
+## 4. New API endpoints
 
-| Endpoint | Returns |
+| Endpoint | Returns / behavior |
 |---|---|
-| `GET /home/data-quality` | The live per-workspace fill/verification/freshness/line-type count rollup. |
-| `GET /home/data-quality/history` | The daily Data Health trend series (from `data_quality_snapshots`). |
-| `GET /home/data-quality/reverification-runs` | Recent re-verification runs (from `verification_jobs`). |
+| `GET /home/data-quality` · `/history` · `/reverification-runs` | The fill/freshness rollup, the trend series, recent re-verification runs (consumed by the Data Health page). |
+| `POST /imports/bulk` · `GET /imports/bulk/:jobId` | Bulk import accept (stream→FileStore→createJob→enqueue drive) + status poll. **Hard-gated**: 403 `bulk_import_disabled` (after authn) when `BULK_IMPORT_ENABLED` is off → creates/enqueues nothing. |
 
-Per-contact Data Health badge (`dataHealth`) + `phoneLineType` now populate on `MaskedContact` from
-the main list/search/export projection (`contactRepository.toMaskedContact`).
+Frontend: a dedicated **`/data-health`** page (`apps/web/features/data-health`, nav-wired) — Overview
+(headline tiles, per-field coverage, freshness sparkline, email/phone verification breakdown) +
+Re-verification activity, all on the 3 existing endpoints, four-states via `StateSwitch`.
 
 ## 5. Workers, flags, config
 
-- **Workers (leader-locked, daily):** `reverificationSweep` (fans out per-workspace re-verification),
-  `dataQualitySnapshotSweep` (captures a per-workspace trend point). Registered in `apps/workers/register.ts`.
-- **Per-tenant flag:** `data_health.reverification` (fail-closed/opt-in) gates the re-verification loop.
-- **Config (all optional; absent → today's behaviour):** `REACHER_BACKEND_URL`/`REACHER_API_TOKEN`
-  (email verifier), `TWILIO_ACCOUNT_SID`/`TWILIO_AUTH_TOKEN` (phone verifier + line-type — the latter
-  is a paid Lookup add-on). The email verifier wraps Reacher with a zero-network role/disposable
-  pre-screen to skip paid probes on the obvious cases.
+- **Workers (leader-locked, daily):** `reverificationSweep`, `dataQualitySnapshotSweep`,
+  **`dataRetentionSweep`** (shadow-counts/enforce-purges per the policies, per active tenant — INERT
+  until a tenant enables the flag). **Bulk:** the `bulk-imports` worker (drive→chunk fan-out → merge →
+  finalize → rollups once) — registered ONLY inside `if (env.BULK_IMPORT_ENABLED)` (never constructed when off).
+- **Per-tenant flags (fail-closed/opt-in):** `data_health.reverification`, **`retention_engine_enabled`**.
+- **Config (all optional; absent → today's behaviour):** `REACHER_*`, `TWILIO_*`;
+  **`BULK_IMPORT_ENABLED`** (default false), `BULK_IMPORT_STORAGE_DIR` (dev disk FileStore),
+  `BULK_IMPORT_THRESHOLD_ROWS`.
 
 ## 6. CI validation checklist (run before merge)
 
-Nothing below ran in the build sandbox. Required gates (`.github/workflows/ci.yml`):
+Nothing below ran in the build sandbox. Required gates:
 
 1. `bun install --frozen-lockfile`
-2. `bun run typecheck` · `bun run lint` (Biome — may want `biome check --write` for import-order nits)
-   · `bun run lint:boundaries`
-3. `bun test` (units, incl. the new `*.test.ts` for the verifiers, pre-screen, and the `home` routes)
-4. The **itests** against real Postgres + Redis — these provision the DB via `applyMigrations`, so they
-   exercise migrations **0021–0023** + the new **RLS isolation** itests. A bad `.sql`/journal fails here.
+2. `bun run typecheck` · `bun run lint` (Biome — may want `--write` for import-order nits) · `lint:boundaries`
+3. `bun test` (units, incl. the verifier/pre-screen/route units)
+4. The **itests** against real Postgres (+ Redis) — they provision via `applyMigrations`, so they exercise
+   migrations **0021–0025** + the RLS-isolation itests. Highest-value new itests:
+   - `retention.itest.ts` — RLS (policies read-only, runs append-only) + the sweep shadow/enforce + the
+     cross-tenant enforce-isolation (deletes only the swept tenant's rows).
+   - **`bulkImport.pipeline.itest.ts`** — **this IS the COPY-FROM-STDIN spike, executed in CI**: a
+     byte-for-byte `copyRows`→`readChunkBand` round-trip (bytea/NULL/jsonb/special-char), the full
+     drive→chunk→finalize, and the **bulk-vs-sync merge parity** (identical landed contact set).
 5. **`drizzle-kit generate`** — should be a **no-op**; a non-empty diff means a hand-authored snapshot
-   (0021/0022/0023) drifted → regenerate that snapshot from the diff.
+   (0021–0025) drifted → regenerate that snapshot from the diff.
 
-## 7. Deferred — NOT built (with rationale)
+## 7. Enable-gates for the dark/inert features (NOT build gates — the code exists + is tested)
 
-| Item | Why deferred |
+- **#2 bulk import** ships DARK. Before flipping `BULK_IMPORT_ENABLED`: (a) the COPY spike is now
+  green-in-CI via the pipeline itest (✅ if §6.4 passes); (b) a **prod object store** — only the dev
+  `diskFileStore` exists; the prod S3 adapter is injected at the composition root (no AWS SDK pulled in
+  yet); (c) the plan-tier threshold routing + shadow cutover.
+- **#6 retention** ships INERT. Before flipping a class to `enforce` on a flag-enabled tenant: confirm
+  the legal/business **retention periods** (doc 16 §4 — `audit_log`/`contacts`/`consent` windows ship
+  `null`/safe defaults); the enforce path is itest-gated (✅ if §6.4 passes).
+
+## 8. Deferred / not built (with rationale)
+
+| Item | Why |
 |---|---|
-| **#4 Teams/visibility + RBAC `org_role`** | Core decision (the role→permission matrix) is a product/security policy call — needs sign-off, not an autonomous guess; and it migrates every `is_tenant_owner` check (ADR-0030), high blast radius. |
-| **#6 Per-data-class retention engine** | The purge predicate (what to delete, when, what's exempt) is a compliance/business decision; it deletes data. Build shadow-first (policy + dry-run scan) once the predicate is signed off. |
-| **#2 Bulk COPY-staging pipeline** | Pure-technical but multi-tick (COPY staging + bulk merge + integration). |
-| **#7 CRM sync + write-back + erasure propagation** | Multi-tick greenfield (connectors, conflict resolution). |
-| **#8 Per-workspace ICP tuning** | ADR-0008 "revisit-if"; the weight *values* are config/business. |
-| **Conflict-rate metric** (dashboard) | Needs cross-source value comparison (`field_provenance` stores only winners; the raw values live in `source_imports`) — a real analysis feature, not a single tick. |
-| **Frontend Data Health view** (`apps/web`) | **In progress**: home-dashboard cards — `DataHealthCard` (coverage/deliverability/freshness from `GET /home/data-quality`) + `DataHealthTrendCard` (freshness sparkline from `/data-quality/history`). A dedicated Data Health page (vs the two cards) remains. |
+| **#4 Teams/visibility + RBAC `org_role`** | ◑ Largely ALREADY built (reconciled): `requireOrgRole` middleware, the `org_role` model (`auth.ts`/`roleModel.itest.ts`), owner-scope (`ownerId` on contacts/lists/saved-searches), `visibleContactIds`. The remaining gap is a single unified app-layer `scopeFor` + a teams layer — a product/security policy call (the role→permission matrix), not an autonomous guess. |
+| **ER/Splink tail · projection + true-ranked search** | ⏸ The deferred SCALE track (PLAN_00 C9) — not warranted at current scale. |
+| **#7 CRM sync + write-back + erasure propagation** | ⛔ Multi-tick greenfield with external connectors/credentials. |
+| **#8 Per-workspace ICP tuning** | ⛔ The weight *values* are a business/config decision (ADR-0008 "revisit-if"). |
+| **Conflict-rate metric** | Needs cross-source value comparison (`field_provenance` stores only winners; raw values live in `source_imports`) + instrumenting the write path — a real analysis feature, not a single tick. |
+| **On-demand re-verification trigger** | Metered-cost user action → needs a security/ops decision (role-gate + rate-limit + cost posture) before exposing. |
 
-## 8. Recommended next move
+## 9. Recommended next move
 
-**Run the §6 gate on the branch.** Once green (or with the failures sent back), the highest-leverage
-follow-ups are the **frontend Data Health view** (consumes §4) and — with a few inputs — **#6 retention**
-(shadow-first) or **#4 RBAC**.
+**Run the §6 gates on the branch.** This is now the single highest-leverage action — one CI pass
+validates 5 migrations, the COPY streaming, the bulk/sync merge parity, the retention engine + RLS,
+and typecheck/lint across two backend features + a frontend page + the sync-import barrel-collision
+fix. Once green (or with the failures sent back), the remaining work is the enable-gate inputs (§7 —
+the prod S3 adapter, the legal retention periods) and the deferred/blocked items (§8); the genuinely-
+unbuilt, in-sandbox-buildable, high-value data-management backlog is **done**.
