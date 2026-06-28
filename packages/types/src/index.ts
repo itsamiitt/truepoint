@@ -8,6 +8,7 @@ export * from "./fieldProvenance.ts";
 export * from "./importTemplates.ts";
 export * from "./tags.ts";
 export * from "./bulkEnrichment.ts";
+export * from "./bulkImport.ts";
 export * from "./billing.ts";
 export * from "./platformAudit.ts";
 export * from "./intel.ts";

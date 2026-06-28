@@ -74,8 +74,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 968,
-  "fileSetHash": "sha256:dc91b2406d840df38510e4dfd173e390490a2a20320dc5aa5fcc9bf8da4d9655",
+  "fileCount": 969,
+  "fileSetHash": "sha256:165f56c2f75b31c4fca5103e3f24d2cf928dfc9a6866568e07727728b4dbdbc8",
   "features": {
     "account-search": {
       "web": [],
@@ -1568,6 +1568,7 @@
       "packages/types/src/bulkActions.ts",
       "packages/types/src/bulkEnrichment.test.ts",
       "packages/types/src/bulkEnrichment.ts",
+      "packages/types/src/bulkImport.ts",
       "packages/types/src/compliance.ts",
       "packages/types/src/contacts.test.ts",
       "packages/types/src/contacts.ts",
