@@ -93,6 +93,7 @@ export function sectionTitleFor(pathname: string): string {
   for (const d of DESTINATIONS) {
     if (pathname === d.match || pathname.startsWith(`${d.match}/`)) return d.label;
   }
+  if (pathname.startsWith("/imports/")) return "Bulk import";
   if (pathname.startsWith("/import")) return "Import";
   if (pathname.startsWith("/enrichment/jobs")) return "Enrichment jobs";
   if (pathname.startsWith("/sales-navigator")) return "Sales Navigator";
@@ -134,6 +135,12 @@ export const PALETTE_QUICK: PaletteEntry[] = [
     keywords: ["list", "lists", "collection", "segment"],
   },
   { id: "act-import", label: "Import contacts", href: "/import", keywords: ["csv", "upload"] },
+  {
+    id: "act-bulk-import",
+    label: "Bulk import (large file)",
+    href: "/import",
+    keywords: ["bulk", "large", "background", "csv", "xlsx", "upload", "import"],
+  },
   {
     id: "act-enrichment-jobs",
     label: "Enrichment jobs",

@@ -1,0 +1,102 @@
+/*
+ * BulkImportProgress.module.css — co-located styles for the bulk-import progress surface (backlog #2). Light /
+ * monochrome per the TruePoint tokens (packages/ui/src/tokens.css): ink-on-grey, color only via the StatusBadge /
+ * Progress tones. Calm, flat: hairline borders, whitespace, no shadows, 8px radius. Mirrors EnrichmentJobsPage.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 28px 32px 48px;
+  max-width: 760px;
+}
+
+.card {
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  color: var(--tp-ink-2);
+}
+
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 20px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+.statValue {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tp-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.downloadLink {
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.failure {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--tp-hairline-2);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--tp-surface-2);
+}
+
+.failureLabel {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+}
+
+.failureText {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tp-ink);
+}
+
+@media (max-width: 720px) {
+  .statGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
