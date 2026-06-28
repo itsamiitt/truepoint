@@ -106,7 +106,38 @@ Nothing below ran in the build sandbox. Required gates:
 | **Conflict-rate metric** | Needs cross-source value comparison (`field_provenance` stores only winners; raw values live in `source_imports`) + instrumenting the write path — a real analysis feature, not a single tick. |
 | **On-demand re-verification trigger** | ✅ BUILT (data-management #3 follow-up): `POST /home/data-quality/reverify` — owner/admin-only (`requireRole("owner","admin")`) + per-caller `rateLimit` + a confirm dialog. NOT a new cost surface: the worker's `runReverification` re-checks the per-tenant `data_health.reverification` flag and **no-ops if off**, and the work is bounded to already-revealed, past-SLA contacts + idempotent — so it is the MANUAL form of the existing daily sweep, never a flag bypass. Platform-cost-only (re-verification re-runs the verifier; it does **not** debit tenant reveal credits — `chargeFor` is the reveal path only). The shared queue contract (`REVERIFICATION_QUEUE` + `ReverificationJobData`) moved to `@leadwolf/types` so api-producer + worker-consumer never drift. |
 
-## 9. Recommended next move
+## 9. Frontend dashboards (web + admin) — delivered
+
+The approved frontend plan (`.claude/plans/01-research-sparkling-crab.md`; W1/W2 + A1–A6) gives the
+data-management backend its UI. All shipped on this branch, gated/inert as designed; every admin
+surface is server-gated (`requireStaffRole` + `withPlatformTx` + a `platform_audit_log` row — client
+render-gates are UX only). `useState`+`useEffect` (no TanStack), `@leadwolf/ui` + tokens, four-states
+via `StateSwitch`, no new npm dependency (lockfile frozen).
+
+**Web (`apps/web`):**
+- **W1** — bulk-import polling UI (`features/import`: `postBulkImport`/`getBulkImportJob`, `useBulkImport`
+  poll-to-terminal, `BulkImportProgress` + the 7 counts + rejected-rows link, an ImportWizard "large file"
+  path, the `/imports/[jobId]` route). Renders a clear "not enabled" state for the dark-gate 403.
+- **W2** — on-demand lead-score Recompute button (`POST /contacts/:id/rescore`).
+
+**Admin (`apps/admin`):**
+- **A1** — per-tenant auth-enforcement toggle + break-glass (super_admin, confirm dialog) on tenant-detail.
+- **A2** — global retention policy editor (`GET`/`PUT /admin/retention-policies`; PUT super_admin + audited
+  `retention_policy.set`; the shadow→enforce flip behind an explicit "permanent deletion" confirm).
+- **A4** — cross-tenant bulk-import monitoring (`GET /admin/import-jobs`; bounded by `PLATFORM_READ_LIMIT`, no PII).
+- **A5** — cross-tenant retention runs review (`GET /admin/retention-runs`; the shadow "what WOULD delete"
+  evidence) — a Runs tab alongside A2's Policies.
+- **A6 + A3** — flag rollout: seeded `retention_engine_enabled` + `bulk_import_enabled` defs (migration **0026**);
+  the bulk gate is now `env` (global kill-switch) **+** the per-tenant `bulk_import_enabled` flag, both managed
+  through the existing feature-flags admin (no new admin screen).
+
+Backend prereqs built for the above: the admin retention GET/PUT + the `retention_policy.set` audit action (+
+coverage drift-guard), the bounded cross-tenant `platformAdminReads` methods (`recentImportJobs`,
+`recentRetentionRuns`), and the `enforcementEnabled` read on `getTenantDetail`. Backend-only **B1** (provider
+secret-hint/health) + **B2** (real system-health probes) remain Platform/Ops-owned (the screens already render
+those fields as stubs). The full plan + the autonomous decisions are in the plan file.
+
+## 10. Recommended next move
 
 **Run the §6 gates on the branch.** This is now the single highest-leverage action — one CI pass
 validates 5 migrations, the COPY streaming, the bulk/sync merge parity, the retention engine + RLS,
