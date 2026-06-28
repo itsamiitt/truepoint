@@ -39,24 +39,34 @@ compute; no scheduled re-verify loop. Everything else ages forever. (`11 §4` li
 - **A new per-class deleter, NOT deleteFanout.** Mirror `idempotencyRepository.deleteExpired` (batched
   `DELETE … WHERE <aging_ts> < now() - ttl LIMIT 5000 RETURNING id`) per class. No global suppression, no DSAR scan.
 - **Sweep = leader-locked daily**, mirroring `retentionSweep`/`reverificationSweep`/the master-backfill sweep.
-- **v1 scope = the LOW-RISK classes only** (no contact cascade, transient/low-PII, clean `created_at` aging):
+- **Wired scope = the LOW-RISK classes** (no contact cascade, transient/low-PII, clean `created_at` aging):
   `email_event` (90d), `provider_calls` (90d), `enrichment_job_rows` (365d), `import_job_rows` (365d),
-  `data_quality_snapshots` (730d), `verification_jobs` (730d). The contact-cascade classes (contacts, activities,
-  contact_reveals, source_imports, consent_records) + `enforce` mode are **v2/phase 3**.
+  `data_quality_snapshots` (730d), `verification_jobs` (730d) — PLUS `activities` (365d), the one cleanly-ageable
+  v2 leaf, now WIRED too (see the reconcile below). The remaining contact-cascade classes (contacts,
+  contact_reveals, source_imports, consent_records) stay **v2/phase 3** (deferred); `enforce` mode ships but is
+  inert until a class is flipped.
 
-  **v2 deletion-safety reconcile (done — why each is NOT a clean v1-style direct delete; needs human/legal
-  sign-off, not an autonomous build):**
-  - `source_imports` — has an INCOMING FK (`lists.source_import_id` → `source_imports.id`), so a direct
-    age-delete is not a clean leaf op (null or delete the list-member links first, or rely on the FK's ON DELETE).
-  - `consent_records` — COMPLIANCE-SENSITIVE: deleting consent/withdrawal proof by age is a legal-liability call
-    (keep proof-of-withdrawal — §4). Age on `withdrawn_at`, NEVER `created_at`, or you delete still-active consents.
-  - `contact_reveals` — the reveal/billing AUDIT trail; ageing it drops reveal history (audit/finance concern).
-  - `activities` — the timeline; the only NEAR-clean leaf (no incoming FK, analytics-not-compliance) — the most
-    plausible first v2 enforce, still pending the period sign-off.
-  - `contacts` — the true tombstone-after-dependents cascade; ttl `null` (never auto-deleted without legal).
-  Net: v2 enforce is per-class legal/audit-gated + (source_imports) needs link-handling — correctly deferred.
+  **v2 deletion-safety reconcile (COMPLETE — of the 5 v2 classes, `activities` is now WIRED; the other 4 stay
+  deferred, each needing human/legal/infra sign-off, not an autonomous build):**
+  - `activities` — ✅ **WIRED** (this change). The ONE cleanly-ageable v2 class: a LEAF (no incoming FK), direct
+    `tenant_id`/`workspace_id`, ages on `occurred_at`, analytics-not-compliance (no audit/legal/archive concern).
+    Wired into the engine as a `tenant_column` class (count + LOCKSTEP batched delete in
+    `retentionScanRepository`); ships INERT — its seeded policy is 365d `shadow`, so it counts but deletes NOTHING
+    until a human flips it to `enforce` on a flag-enabled tenant (the v1 safety model). No migration (0025 already
+    seeded the `activities` 365d shadow policy).
+  - `source_imports` — DEFERRED. The design wants this ARCHIVED (to S3) BEFORE purge (§4) — infra not yet built;
+    it also has an INCOMING FK (`lists.source_import_id` → `source_imports.id`), so a direct age-delete is not a
+    clean leaf op (null/delete the links first, or rely on the FK's ON DELETE). Needs S3 + link-handling.
+  - `contact_reveals` — DEFERRED. The reveal/billing AUDIT trail; ageing it drops reveal/credit history (an
+    audit/finance concern) — keep until a billing-retention decision lands.
+  - `consent_records` — DEFERRED. COMPLIANCE-SENSITIVE: deleting consent/withdrawal proof by age is a legal call
+    (keep proof-of-withdrawal — §4). Must age on `withdrawn_at`, NEVER `created_at`, or still-active consents die.
+  - `contacts` — DEFERRED. The true tombstone-after-dependents cascade; ttl `null` (never auto-deleted without
+    legal/budget sign-off).
+  Net: `activities` is wired + inert; the other 4 v2 classes are correctly deferred (archive-before-purge /
+  billing audit / legal proof / contact cascade).
 
-## 3. Data classes (v1 in **bold**; aging ts; default; cascade)
+## 3. Data classes (WIRED in **bold** + ✅; aging ts; default; cascade)
 
 | Class | Table | PII | Age on | Default TTL | Cascade | v1? |
 |---|---|---|---|---|---|---|
@@ -67,7 +77,7 @@ compute; no scheduled re-verify loop. Everything else ages forever. (`11 §4` li
 | **Data-health snapshots** | `data_quality_snapshots` | none | created_at | 730d | none | ✅ |
 | **Verification jobs** | `verification_jobs` | none | created_at | 730d | none | ✅ |
 | Contacts | `contacts` | names/email_enc/phone_enc/… | last_activity_at | null (tombstone only) | parent | v2 |
-| Timeline | `activities` | metadata jsonb | occurred_at | 365d | with contact | v2 |
+| **Timeline** | `activities` | metadata jsonb | occurred_at | 365d | leaf (cascade from contact) | ✅ (v2 leaf) |
 | Reveal events | `contact_reveals` | revealed_fields jsonb | revealed_at | 180d | with contact | v2 |
 | Import provenance | `source_imports` | raw_data jsonb | imported_at | 730d (archive first) | with contact | v2 |
 | Consent | `consent_records` | none | withdrawn_at | 180d post-withdrawal | with contact | v2 |

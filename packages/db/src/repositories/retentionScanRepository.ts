@@ -23,6 +23,7 @@
 import type { RetentionDataClass } from "@leadwolf/types";
 import { and, count, eq, inArray, lt, sql } from "drizzle-orm";
 import { type Db, type Tx, db } from "../client.ts";
+import { activities } from "../schema/activity.ts";
 import { workspaces } from "../schema/auth.ts";
 import { dataQualitySnapshots } from "../schema/dataQualitySnapshots.ts";
 import { emailEvent } from "../schema/email.ts";
@@ -39,8 +40,14 @@ export type OwnerReader = Db | Tx;
  *  (the high-volume *_rows ledgers carry only a denormalized workspace_id, no tenant_id of their own). */
 export type RetentionTenantScope = "tenant_column" | "workspace_join";
 
-/** The v1 classes this phase counts (low-risk, no contact cascade, clean created_at/occurred_at aging — design
- *  §3). The v2 contact-cascade / higher-PII classes are intentionally absent: their deleters are not wired yet. */
+/** The WIRED retention classes — those with a live count + batched deleter. Kept named `RETENTION_V1_CLASSES`
+ *  for back-compat (it is re-exported + the `RetentionV1Class` union is referenced across packages), but it is
+ *  really "the wired set": the 6 original low-risk v1 classes (no contact cascade, clean created_at aging — design
+ *  §3) PLUS `activities` — the one cleanly-ageable v2 class (a LEAF: no incoming FK, aged on occurred_at,
+ *  analytics-not-compliance; design 16 §2). The OTHER v2 classes stay absent on purpose: their deleters are
+ *  deferred (source_imports archive-before-purge, contact_reveals billing audit, consent_records legal proof,
+ *  contacts contact-cascade — design 16 §2). `activities` ships INERT all the same: its seeded policy is
+ *  365d `shadow`, so it counts but deletes nothing until a human flips it to `enforce` on a flag-enabled tenant. */
 export const RETENTION_V1_CLASSES = [
   "email_event",
   "provider_calls",
@@ -48,6 +55,7 @@ export const RETENTION_V1_CLASSES = [
   "import_job_rows",
   "data_quality_snapshots",
   "verification_jobs",
+  "activities",
 ] as const;
 export type RetentionV1Class = (typeof RETENTION_V1_CLASSES)[number];
 
@@ -281,6 +289,35 @@ export const retentionClassMeta: Record<RetentionV1Class, RetentionClassMeta> = 
         .delete(verificationJobs)
         .where(inArray(verificationJobs.id, expired))
         .returning({ id: verificationJobs.id });
+      return deleted.length;
+    },
+  },
+  // Direct tenant_id; age on occurred_at (the per-contact interaction timeline; schema/activity.ts). The ONE
+  // cleanly-ageable v2 class wired here: a LEAF (no incoming FK), analytics-not-compliance — so a direct age-out
+  // is safe (design 16 §2). Still INERT: its seeded policy is 365d `shadow`, so this counts but deletes nothing
+  // until a human flips it to `enforce` on a flag-enabled tenant. The other v2 classes stay deferred (design §2).
+  activities: {
+    table: "activities",
+    agingColumn: "occurred_at",
+    tenantScope: "tenant_column",
+    countExpired: (reader, tenantId, cutoff) =>
+      scalarCount(
+        reader
+          .select({ value: count() })
+          .from(activities)
+          .where(and(lt(activities.occurredAt, cutoff), eq(activities.tenantId, tenantId))),
+      ),
+    // LOCKSTEP with countExpired above — IDENTICAL WHERE: occurred_at < cutoff AND tenant_id = $t.
+    deleteExpired: async (reader, tenantId, cutoff, batchSize) => {
+      const expired = reader
+        .select({ id: activities.id })
+        .from(activities)
+        .where(and(lt(activities.occurredAt, cutoff), eq(activities.tenantId, tenantId)))
+        .limit(batchSize);
+      const deleted = await reader
+        .delete(activities)
+        .where(inArray(activities.id, expired))
+        .returning({ id: activities.id });
       return deleted.length;
     },
   },

@@ -21,10 +21,15 @@
 //          DELETED, the newer rows REMAIN, deletedCount = the OLD-row count, and the run row reflects it.
 //      B6. Tenant isolation of enforce — OLD rows seeded for BOTH tenants; enforce-sweep tenant A ONLY; tenant
 //          B's rows are UNTOUCHED (the explicit tenant predicate, never RLS, is the cross-tenant safety).
-//      B7. A null-ttl / not-yet-wired class (contacts, audit_log) is skipped — no run is ever recorded for it.
+//      B7. A null-ttl / not-yet-wired class (contacts, audit_log, the deferred v2 classes) is skipped — no run.
+//      B8. activities (the newly-wired v2 leaf, aged on occurred_at) — flag ON + shadow counts OLD rows only,
+//          deletes nothing.
+//      B9. activities — flag ON + class flipped to `enforce` → the OLD rows are DELETED, the fresh ones REMAIN.
+//      B10. activities — enforce is tenant-isolated: A's old rows go, B's identical-age rows are UNTOUCHED.
 //
-// Coverage of one `tenant_column` class (verification_jobs, aged on created_at) AND one `workspace_join` class
-// (import_job_rows, aged on created_at via the workspaces join) exercises both tenant-scope shapes the sweep uses.
+// Coverage spans both tenant-scope shapes: two `tenant_column` classes (verification_jobs aged on created_at,
+// activities aged on occurred_at) AND one `workspace_join` class (import_job_rows, aged on created_at via the
+// workspaces join) exercise every scope/aging shape the sweep uses.
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { RETENTION_ENGINE_FLAG_KEY, type RetentionDataClass } from "@leadwolf/types";
@@ -55,6 +60,9 @@ const VERIF_OLD = daysBeforeNow(740); // expired — older than the 730d cutoff
 const VERIF_FRESH = daysBeforeNow(720); // retained — newer than the 730d cutoff
 const IMPORT_OLD = daysBeforeNow(375); // expired — older than the 365d cutoff
 const IMPORT_FRESH = daysBeforeNow(355); // retained — newer than the 365d cutoff
+// activities = 365d (the newly-wired v2 leaf, aged on occurred_at).
+const ACTIVITY_OLD = daysBeforeNow(375); // expired — older than the 365d cutoff
+const ACTIVITY_FRESH = daysBeforeNow(355); // retained — newer than the 365d cutoff
 
 interface Scope {
   tenantId: string;
@@ -100,6 +108,31 @@ async function seedImportJobRows(scope: Scope, createdAt: Date, n: number): Prom
   }
 }
 
+// activities ages on occurred_at and needs a contact_id (NOT NULL FK) + the NOT-NULL closed-enum activity_type
+// /channel cols (metadata/occurred_at default; outcome/note/actor nullable). Seed one minimal contact per scope
+// (tenant_id + workspace_id are the only NOT-NULL contact cols; everything else defaults / passes the reveal
+// CHECKs), then activity rows with an EXPLICIT occurred_at on the owner `admin` connection (the aging the sweep
+// keys off can only be set there — the repo path defaults occurred_at to now()).
+async function seedContact(scope: Scope): Promise<string> {
+  const [c] = await admin`
+    INSERT INTO contacts (tenant_id, workspace_id)
+    VALUES (${scope.tenantId}, ${scope.workspaceId}) RETURNING id`;
+  return c!.id as string;
+}
+
+async function seedActivities(
+  scope: Scope,
+  contactId: string,
+  occurredAt: Date,
+  n: number,
+): Promise<void> {
+  for (let i = 0; i < n; i++) {
+    await admin`
+      INSERT INTO activities (tenant_id, workspace_id, contact_id, activity_type, channel, occurred_at)
+      VALUES (${scope.tenantId}, ${scope.workspaceId}, ${contactId}, 'note_added', 'email', ${occurredAt})`;
+  }
+}
+
 async function countVerification(tenantId: string): Promise<number> {
   const rows = (await admin`
     SELECT count(*)::int AS n FROM verification_jobs WHERE tenant_id = ${tenantId}`) as Count[];
@@ -108,6 +141,11 @@ async function countVerification(tenantId: string): Promise<number> {
 async function countImportRows(workspaceId: string): Promise<number> {
   const rows = (await admin`
     SELECT count(*)::int AS n FROM import_job_rows WHERE workspace_id = ${workspaceId}`) as Count[];
+  return rows[0]!.n;
+}
+async function countActivities(tenantId: string): Promise<number> {
+  const rows = (await admin`
+    SELECT count(*)::int AS n FROM activities WHERE tenant_id = ${tenantId}`) as Count[];
   return rows[0]!.n;
 }
 async function countRuns(): Promise<number> {
@@ -275,6 +313,8 @@ describe("retention sweep: gates, shadow/enforce, tenant isolation", () => {
     await admin`DELETE FROM import_jobs`;
     await admin`DELETE FROM verification_jobs`;
     await admin`DELETE FROM data_quality_snapshots`;
+    await admin`DELETE FROM activities`;
+    await admin`DELETE FROM contacts`; // cascades to any activities; seeded only by the activities cases (B8–B10)
     await admin`DELETE FROM tenant_feature_flags`;
     await admin`UPDATE retention_policies SET mode = 'shadow'`;
   });
@@ -306,11 +346,12 @@ describe("retention sweep: gates, shadow/enforce, tenant isolation", () => {
     const result = await core.runRetentionSweepForTenant({ tenantId: tenantA, now: NOW });
 
     expect(result.enabled).toBe(true);
-    // One run per eligible v1 class (all 6 v1 classes have a finite ttl + default shadow mode).
-    expect(result.classesRecorded).toBe(6);
-    expect(await countRuns()).toBe(6);
+    // One run per eligible WIRED class (the 6 v1 classes + activities, all finite ttl + default shadow mode).
+    expect(result.classesRecorded).toBe(7);
+    expect(await countRuns()).toBe(7);
     expect(result.totalDeleted).toBe(0);
-    // Only the OLD rows are candidates (fresh, newer-than-cutoff rows are excluded): 3 + 4 = 7.
+    // Only the OLD rows are candidates (fresh, newer-than-cutoff rows are excluded): 3 + 4 = 7. No activities are
+    // seeded here, so the activities run contributes 0 candidates — its own coverage is B8/B9/B10.
     expect(result.totalCandidates).toBe(7);
 
     const verifRun = await latestRun(tenantA, "verification_jobs");
@@ -323,9 +364,12 @@ describe("retention sweep: gates, shadow/enforce, tenant isolation", () => {
     expect(importRun?.candidateCount).toBe(4);
     expect(importRun?.deletedCount).toBe(0);
 
-    // A class with no rows still records a run, with a zero candidate count.
+    // A class with no rows still records a run, with a zero candidate count (email_event + activities here).
     const emailRun = await latestRun(tenantA, "email_event");
     expect(emailRun?.candidateCount).toBe(0);
+    const activitiesRun = await latestRun(tenantA, "activities");
+    expect(activitiesRun?.mode).toBe("shadow");
+    expect(activitiesRun?.candidateCount).toBe(0);
 
     // SHADOW deletes NOTHING — every seeded row (old AND fresh) is still present.
     expect(await countVerification(tenantA)).toBe(5);
@@ -344,8 +388,8 @@ describe("retention sweep: gates, shadow/enforce, tenant isolation", () => {
     const result = await core.runRetentionSweepForTenant({ tenantId: tenantA, now: NOW });
 
     expect(result.enabled).toBe(true);
-    expect(result.classesRecorded).toBe(6);
-    expect(result.totalDeleted).toBe(7); // 3 verification + 4 import OLD rows purged
+    expect(result.classesRecorded).toBe(7);
+    expect(result.totalDeleted).toBe(7); // 3 verification + 4 import OLD rows purged (activities stays shadow)
 
     const verifRun = await latestRun(tenantA, "verification_jobs");
     expect(verifRun?.mode).toBe("enforce");
@@ -397,9 +441,77 @@ describe("retention sweep: gates, shadow/enforce, tenant isolation", () => {
 
     const result = await core.runRetentionSweepForTenant({ tenantId: tenantA, now: NOW });
     expect(result.enabled).toBe(true);
-    // Only the 6 v1 classes are recorded; the v2 / null-ttl classes are gated out (ttlDays null AND not yet wired).
-    expect(result.classesRecorded).toBe(6);
+    // The 7 WIRED classes are recorded; the rest are gated out — null-ttl (contacts, audit_log) OR not-yet-wired.
+    expect(result.classesRecorded).toBe(7);
     expect(await latestRun(tenantA, "contacts")).toBeUndefined();
     expect(await latestRun(tenantA, "audit_log")).toBeUndefined();
+    // A deferred v2 class with a FINITE ttl (contact_reveals 180d) is still gated out — not wired, so no run.
+    expect(await latestRun(tenantA, "contact_reveals")).toBeUndefined();
+  });
+
+  // ── activities (the newly-wired v2 leaf, aged on occurred_at) — shadow / enforce / tenant-isolation ──────────
+  test("B8: flag ON, shadow counts OLD activities only and deletes nothing", async () => {
+    await enableEngineFlag(tenantA);
+    const contactA = await seedContact(scopeA());
+    // 3 expired + 2 fresh activities (ttl 365d, aged on occurred_at).
+    await seedActivities(scopeA(), contactA, ACTIVITY_OLD, 3);
+    await seedActivities(scopeA(), contactA, ACTIVITY_FRESH, 2);
+
+    const result = await core.runRetentionSweepForTenant({ tenantId: tenantA, now: NOW });
+    expect(result.enabled).toBe(true);
+    expect(result.totalDeleted).toBe(0);
+
+    const activitiesRun = await latestRun(tenantA, "activities");
+    expect(activitiesRun?.mode).toBe("shadow");
+    expect(activitiesRun?.candidateCount).toBe(3); // only the OLD rows; the 2 fresh are newer than the cutoff
+    expect(activitiesRun?.deletedCount).toBe(0);
+    expect(activitiesRun?.cutoff).not.toBeNull();
+
+    // SHADOW deletes NOTHING — every seeded activity (old AND fresh) is still present.
+    expect(await countActivities(tenantA)).toBe(5);
+  });
+
+  test("B9: flag ON + enforce deletes OLD activities, keeps fresh", async () => {
+    await enableEngineFlag(tenantA);
+    await setPolicyMode("activities", 365, "enforce");
+    const contactA = await seedContact(scopeA());
+    await seedActivities(scopeA(), contactA, ACTIVITY_OLD, 3);
+    await seedActivities(scopeA(), contactA, ACTIVITY_FRESH, 2);
+
+    const result = await core.runRetentionSweepForTenant({ tenantId: tenantA, now: NOW });
+    expect(result.enabled).toBe(true);
+    expect(result.totalDeleted).toBe(3); // only activities is in enforce — the 3 OLD activity rows purged
+
+    const activitiesRun = await latestRun(tenantA, "activities");
+    expect(activitiesRun?.mode).toBe("enforce");
+    expect(activitiesRun?.candidateCount).toBe(3);
+    expect(activitiesRun?.deletedCount).toBe(3);
+
+    // Only the fresh (newer-than-cutoff) activities survive; the OLD ones are gone (lockstep with the count).
+    expect(await countActivities(tenantA)).toBe(2);
+  });
+
+  test("B10: enforce of activities is tenant-isolated (A never touches B)", async () => {
+    await enableEngineFlag(tenantA); // only A is flag-enabled; the sweep is invoked for A only
+    await setPolicyMode("activities", 365, "enforce");
+    const contactA = await seedContact(scopeA());
+    const contactB = await seedContact(scopeB());
+    // OLD activities for BOTH tenants — B's are older than the cutoff too, so ONLY the explicit tenant predicate
+    // (not RLS — the count/delete run on the owner connection) keeps them safe.
+    await seedActivities(scopeA(), contactA, ACTIVITY_OLD, 3);
+    await seedActivities(scopeB(), contactB, ACTIVITY_OLD, 5);
+
+    const result = await core.runRetentionSweepForTenant({ tenantId: tenantA, now: NOW });
+    expect(result.enabled).toBe(true);
+    expect(result.totalDeleted).toBe(3); // tenant A only
+
+    // Tenant A purged; tenant B completely untouched.
+    expect(await countActivities(tenantA)).toBe(0);
+    expect(await countActivities(tenantB)).toBe(5);
+    expect((await latestRun(tenantA, "activities"))?.deletedCount).toBe(3);
+    const runsB = await db.withTenantTx({ tenantId: tenantB }, (tx) =>
+      db.retentionRunRepository.recentRuns(tx),
+    );
+    expect(runsB).toHaveLength(0);
   });
 });
