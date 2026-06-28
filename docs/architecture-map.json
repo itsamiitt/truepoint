@@ -75,8 +75,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 983,
-  "fileSetHash": "sha256:37b7a45adf77491aa7123ce8383f45f266ffcdc6025305c65fa6d3e7dcb99a42",
+  "fileCount": 987,
+  "fileSetHash": "sha256:2b1022c6f8699bf799030aa22110ae6b2e393497e3675161a7599d26f8504300",
   "features": {
     "account-search": {
       "web": [],
@@ -214,6 +214,8 @@
         "packages/db/src/repositories/auditRepository.ts",
         "packages/db/src/repositories/consentRepository.ts",
         "packages/db/src/repositories/dsarRepository.ts",
+        "packages/db/src/repositories/retentionPolicyRepository.ts",
+        "packages/db/src/repositories/retentionRunRepository.ts",
         "packages/db/src/repositories/suppressionRepository.ts"
       ],
       "workers": [
@@ -1512,6 +1514,7 @@
       "packages/db/src/schema/outreach.ts",
       "packages/db/src/schema/pipelineStages.ts",
       "packages/db/src/schema/platformOps.ts",
+      "packages/db/src/schema/retention.ts",
       "packages/db/src/schema/salesnav.ts",
       "packages/db/src/schema/savedSearches.ts",
       "packages/db/src/schema/scim.ts",
@@ -1618,6 +1621,7 @@
       "packages/types/src/platformAudit.ts",
       "packages/types/src/platformAuditCoverage.test.ts",
       "packages/types/src/providerConfigs.ts",
+      "packages/types/src/retention.ts",
       "packages/types/src/savedSearch.test.ts",
       "packages/types/src/savedSearch.ts",
       "packages/types/src/scim.ts",

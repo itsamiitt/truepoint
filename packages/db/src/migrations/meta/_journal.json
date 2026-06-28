@@ -176,6 +176,13 @@
       "when": 1782632526254,
       "tag": "0024_bulk_import_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1782700000000,
+      "tag": "0025_retention_engine",
+      "breakpoints": true
     }
   ]
 }

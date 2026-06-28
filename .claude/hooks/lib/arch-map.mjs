@@ -88,6 +88,8 @@ export const REPO_DOMAIN = {
   importJob: "import",
   importStaging: "import",
   suppression: "compliance",
+  retentionPolicy: "compliance",
+  retentionRun: "compliance",
   tenant: "billing",
   user: "auth",
   workspace: "workspaces",

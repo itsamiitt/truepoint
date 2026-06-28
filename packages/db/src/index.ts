@@ -88,6 +88,17 @@ export {
   dataQualitySnapshotRepository,
   type DataQualitySnapshotRow,
 } from "./repositories/dataQualitySnapshotRepository.ts";
+// Retention engine control plane (data-management backlog #6; design 16-retention-engine-design.md) — the GLOBAL
+// policy store + the per-tenant, append-only run audit. No deletion logic yet (the sweep lives in core/workers, a
+// later phase); this is purely the policy/run store. Policies are platform-managed (app reads via a SELECT-only
+// RLS policy; writes are owner/withPlatformTx only); runs compose inside withTenantTx (tenant-scoped, append-only).
+export { retentionPolicyRepository } from "./repositories/retentionPolicyRepository.ts";
+export {
+  retentionRunRepository,
+  type RetentionRunRow,
+  type RetentionRunInsert,
+  type RecentRunsOptions,
+} from "./repositories/retentionRunRepository.ts";
 export {
   sourceImportRepository,
   type SourceImportInput,
