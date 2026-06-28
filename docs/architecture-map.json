@@ -37,6 +37,7 @@
     "home",
     "import",
     "import-mapping-templates",
+    "imports",
     "inbox",
     "lists",
     "notifications",
@@ -76,8 +77,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1012,
-  "fileSetHash": "sha256:a717125fff0e9fb1a8818e9236168ddd78abc24f82026c3193b81a96fd09a82c",
+  "fileCount": 1038,
+  "fileSetHash": "sha256:c261c609f7a98bb583dfcc37b2e91458ae943d8720a69e1f5426da2504aaa38c",
   "features": {
     "account-search": {
       "web": [],
@@ -477,9 +478,12 @@
     "import": {
       "web": [
         "apps/web/src/features/import/api.ts",
+        "apps/web/src/features/import/components/BulkImportProgress.tsx",
         "apps/web/src/features/import/components/ContactsTable.tsx",
         "apps/web/src/features/import/components/ImportPage.tsx",
         "apps/web/src/features/import/components/ImportWizard.tsx",
+        "apps/web/src/features/import/components/bulkFormat.ts",
+        "apps/web/src/features/import/hooks/useBulkImport.ts",
         "apps/web/src/features/import/hooks/useContacts.ts",
         "apps/web/src/features/import/hooks/useImport.ts",
         "apps/web/src/features/import/importJob.test.ts",
@@ -541,6 +545,22 @@
         "apps/api/src/features/import-mapping-templates/index.ts",
         "apps/api/src/features/import-mapping-templates/routes.ts"
       ],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "imports": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/imports/api.ts",
+        "apps/admin/src/features/imports/components/ImportsMonitorPage.tsx",
+        "apps/admin/src/features/imports/format.ts",
+        "apps/admin/src/features/imports/hooks/useImportJobs.ts",
+        "apps/admin/src/features/imports/index.ts",
+        "apps/admin/src/features/imports/types.ts"
+      ],
+      "api": [],
       "core": [],
       "db": [],
       "workers": [],
@@ -662,6 +682,7 @@
         "apps/web/src/features/prospect/components/ProspectToolbar.tsx",
         "apps/web/src/features/prospect/components/QuickViewDrawer.tsx",
         "apps/web/src/features/prospect/components/RecentSearches.tsx",
+        "apps/web/src/features/prospect/components/RecomputeScoreButton.tsx",
         "apps/web/src/features/prospect/components/RecordDetail.tsx",
         "apps/web/src/features/prospect/components/RevealDialog.tsx",
         "apps/web/src/features/prospect/components/RowActions.tsx",
@@ -772,7 +793,18 @@
     },
     "retention": {
       "web": [],
-      "admin": [],
+      "admin": [
+        "apps/admin/src/features/retention/api.ts",
+        "apps/admin/src/features/retention/components/EditPolicyDialog.tsx",
+        "apps/admin/src/features/retention/components/RetentionPage.tsx",
+        "apps/admin/src/features/retention/components/RetentionPoliciesPage.tsx",
+        "apps/admin/src/features/retention/components/RetentionRunsPanel.tsx",
+        "apps/admin/src/features/retention/hooks/useIsSuperAdmin.ts",
+        "apps/admin/src/features/retention/hooks/useRetentionPolicies.ts",
+        "apps/admin/src/features/retention/hooks/useRetentionRuns.ts",
+        "apps/admin/src/features/retention/index.ts",
+        "apps/admin/src/features/retention/types.ts"
+      ],
       "api": [],
       "core": [
         "packages/core/src/retention/runRetentionSweep.ts"
@@ -1184,10 +1216,13 @@
       "web": [],
       "admin": [
         "apps/admin/src/features/tenants/api.ts",
+        "apps/admin/src/features/tenants/components/AuthEnforcementCard.tsx",
         "apps/admin/src/features/tenants/components/TenantDetailPage.tsx",
         "apps/admin/src/features/tenants/components/TenantsPage.tsx",
         "apps/admin/src/features/tenants/format.test.ts",
         "apps/admin/src/features/tenants/format.ts",
+        "apps/admin/src/features/tenants/hooks/useAuthEnforcement.ts",
+        "apps/admin/src/features/tenants/hooks/useIsSuperAdmin.ts",
         "apps/admin/src/features/tenants/hooks/useTenantDetail.ts",
         "apps/admin/src/features/tenants/hooks/useTenants.ts",
         "apps/admin/src/features/tenants/index.ts",
@@ -1253,8 +1288,10 @@
     "apps/admin/app": [
       "apps/admin/src/app/(shell)/audit-log/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
+      "apps/admin/src/app/(shell)/imports/page.tsx",
       "apps/admin/src/app/(shell)/layout.tsx",
       "apps/admin/src/app/(shell)/provider-configs/page.tsx",
+      "apps/admin/src/app/(shell)/retention/page.tsx",
       "apps/admin/src/app/(shell)/staff/page.tsx",
       "apps/admin/src/app/(shell)/system-health/page.tsx",
       "apps/admin/src/app/(shell)/tenants/[id]/page.tsx",
@@ -1394,6 +1431,7 @@
       "apps/web/src/app/(shell)/data-health/page.tsx",
       "apps/web/src/app/(shell)/enrichment/jobs/page.tsx",
       "apps/web/src/app/(shell)/home/page.tsx",
+      "apps/web/src/app/(shell)/imports/[jobId]/page.tsx",
       "apps/web/src/app/(shell)/inbox/page.tsx",
       "apps/web/src/app/(shell)/layout.tsx",
       "apps/web/src/app/(shell)/lists/[id]/page.tsx",
