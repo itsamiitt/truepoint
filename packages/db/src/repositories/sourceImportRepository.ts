@@ -64,6 +64,37 @@ export const sourceImportRepository = {
   },
 
   /**
+   * Append a whole import chunk's provenance rows in ONE multi-row INSERT (15-bulk-import-design §2), with
+   * ON CONFLICT (workspace_id, content_hash) DO NOTHING — the same idempotent re-import skip findByContentHash
+   * drives on the sync path (append/findByContentHash stay for that path). The conflict target carries the
+   * partial-index predicate `content_hash IS NOT NULL` (matching uniq_source_imports_ws_content): rows with a
+   * NULL content_hash are not part of the unique index, so they never conflict and are always inserted. No
+   * RETURNING — the bulk path links list members by contact id, not the per-row source_import_id (the sync path's
+   * concern); callers needing the id keep using append.
+   */
+  async appendBatch(tx: Tx, inputs: SourceImportInput[]): Promise<void> {
+    if (inputs.length === 0) return;
+    await tx
+      .insert(sourceImports)
+      .values(
+        inputs.map((input) => ({
+          tenantId: input.tenantId,
+          workspaceId: input.workspaceId,
+          contactId: input.contactId,
+          importedByUserId: input.importedByUserId ?? null,
+          sourceName: input.sourceName,
+          sourceFile: input.sourceFile ?? null,
+          rawData: input.rawData,
+          contentHash: input.contentHash ?? null,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [sourceImports.workspaceId, sourceImports.contentHash],
+        targetWhere: sql`${sourceImports.contentHash} IS NOT NULL`,
+      });
+  },
+
+  /**
    * The most recent import batches for the Home dashboard: provenance rows grouped by
    * (source_file, source_name, minute) with their contact count, newest first. Workspace-scoped via RLS.
    * Pass `tx` to run on a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it

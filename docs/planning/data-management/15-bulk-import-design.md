@@ -83,8 +83,11 @@ UNLOGGED **non-RLS** staging tables are created/dropped at RUNTIME (not in the m
    `incrementCompletedChunks`) + RLS-isolation itest. Mirrors the proven `verification_jobs`/`data_quality_snapshots`/
    enrichment trio (no COPY, no object store). CI exercises migrate 0024 + the RLS isolation; `drizzle-kit generate`
    confirms the hand-authored 0024 snapshot.
-3. **Core primitives** — extract `prepareContact` (parity refactor), `streamParse`, `fileStore` (port + disk adapter),
-   the batch repo methods.
+3. **Core primitives — ◑ mostly done** — `streamParse` (constant-memory CSV; byte-identical quoting parity to
+   `parseFile`), `fileStore` (port + local-disk dev adapter), and the batch repo methods (`findByDedupKeysBatch`,
+   `insertBatch`, `updateBatch`, `getFieldProvenanceBatch`, `sourceImport.appendBatch`, `account.upsertByDomainBatch`,
+   `masterGraph.resolveForImportBatch`) shipped — additive, semantics-preserving. The `prepareContact` extraction
+   (parity-critical, touches `runImport`) is deferred to phase 5 to land + verify alongside its consumer `bulkStage`.
 4. **⚠ Gated — COPY spike** — prove `postgres.js` COPY-FROM-STDIN streaming on a non-RLS UNLOGGED table over the
    owner connection (needs `bun`+Postgres). Blocks the staging repo + stage phase.
 5. **Pipeline** — `importStagingRepository`, `bulkStage`, `bulkProcessChunk`, `runBulkImport`.

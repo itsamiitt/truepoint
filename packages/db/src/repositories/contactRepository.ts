@@ -73,6 +73,11 @@ function definedOnly<T extends object>(v: T): Partial<T> {
   return Object.fromEntries(Object.entries(v).filter(([, val]) => val !== undefined)) as Partial<T>;
 }
 
+/** Hex key so a bytea blind index can index a JS Map (a Uint8Array can't — Map keys use object identity). */
+function byteaKey(b: Uint8Array): string {
+  return Buffer.from(b).toString("hex");
+}
+
 /** Non-PII per-contact signals the bulk spend-estimate reads (list-plan/06 §4.2). Presence flags + state
  *  only — never the encrypted PII. `emailStatus` is the verification grade (drives charge-only-valid). */
 export interface EnrichEstimateSignal {
@@ -370,10 +375,101 @@ export const contactRepository = {
     return null;
   },
 
+  /**
+   * Batched against-existing dedup for a whole import chunk (15-bulk-import-design §2). Returns one result per
+   * input, index-aligned, resolving each by the SAME email → linkedin → sales-nav precedence as findByDedupKeys
+   * (and, like it, NOT excluding soft-deleted/tombstoned rows — the dedup lookups intentionally match them, see
+   * runImport.addLandedToList). This CANNOT be one ON CONFLICT: the identity ladder spans THREE partial-unique
+   * indexes (uniq_contacts_ws_email / _linkedin / _salesnav) and ON CONFLICT targets exactly ONE. So we collect
+   * every key across the chunk, run ≤3 workspace-scoped IN-list SELECTs (each per-workspace key is unique by its
+   * partial index → at most one row per key), build lookup maps, then resolve each input by precedence in app.
+   */
+  async findByDedupKeysBatch(
+    tx: Tx,
+    workspaceId: string,
+    keysList: DedupKeys[],
+  ): Promise<Array<{ id: string } | null>> {
+    if (keysList.length === 0) return [];
+
+    const emailKeys: Uint8Array[] = [];
+    const linkedinIds: string[] = [];
+    const salesNavIds: string[] = [];
+    for (const k of keysList) {
+      if (k.emailBlindIndex) emailKeys.push(k.emailBlindIndex);
+      if (k.linkedinPublicId) linkedinIds.push(k.linkedinPublicId);
+      if (k.salesNavLeadId) salesNavIds.push(k.salesNavLeadId);
+    }
+
+    const emailMap = new Map<string, string>();
+    if (emailKeys.length > 0) {
+      const rows = await tx
+        .select({ id: contacts.id, emailBlindIndex: contacts.emailBlindIndex })
+        .from(contacts)
+        .where(
+          and(eq(contacts.workspaceId, workspaceId), inArray(contacts.emailBlindIndex, emailKeys)),
+        );
+      for (const r of rows) if (r.emailBlindIndex) emailMap.set(byteaKey(r.emailBlindIndex), r.id);
+    }
+
+    const linkedinMap = new Map<string, string>();
+    if (linkedinIds.length > 0) {
+      const rows = await tx
+        .select({ id: contacts.id, linkedinPublicId: contacts.linkedinPublicId })
+        .from(contacts)
+        .where(
+          and(
+            eq(contacts.workspaceId, workspaceId),
+            inArray(contacts.linkedinPublicId, linkedinIds),
+          ),
+        );
+      for (const r of rows) if (r.linkedinPublicId) linkedinMap.set(r.linkedinPublicId, r.id);
+    }
+
+    const salesNavMap = new Map<string, string>();
+    if (salesNavIds.length > 0) {
+      const rows = await tx
+        .select({ id: contacts.id, salesNavLeadId: contacts.salesNavLeadId })
+        .from(contacts)
+        .where(
+          and(eq(contacts.workspaceId, workspaceId), inArray(contacts.salesNavLeadId, salesNavIds)),
+        );
+      for (const r of rows) if (r.salesNavLeadId) salesNavMap.set(r.salesNavLeadId, r.id);
+    }
+
+    // Resolve each input by the findByDedupKeys precedence: email first (if a row hit), else linkedin, else
+    // sales-nav, else null. A present-but-unmatched key falls through to the next, exactly like the single-row.
+    return keysList.map((k) => {
+      if (k.emailBlindIndex) {
+        const id = emailMap.get(byteaKey(k.emailBlindIndex));
+        if (id) return { id };
+      }
+      if (k.linkedinPublicId) {
+        const id = linkedinMap.get(k.linkedinPublicId);
+        if (id) return { id };
+      }
+      if (k.salesNavLeadId) {
+        const id = salesNavMap.get(k.salesNavLeadId);
+        if (id) return { id };
+      }
+      return null;
+    });
+  },
+
   /** Insert a new contact; returns its id. (undefined optional fields fall back to column defaults/null.) */
   async insert(tx: Tx, values: ContactWriteValues): Promise<string> {
     const rows = await tx.insert(contacts).values(values).returning({ id: contacts.id });
     return rows[0]!.id;
+  },
+
+  /**
+   * Batched mirror of insert: ONE multi-row INSERT for a whole chunk, returning the new ids in input order.
+   * Column handling matches insert (the value objects pass straight through — undefined optional fields fall
+   * back to column defaults/null; no definedOnly, exactly like the single-row insert). A single INSERT statement's
+   * RETURNING preserves the VALUES order, so result[i] is the id for values[i] (the caller relies on alignment).
+   */
+  async insertBatch(tx: Tx, values: ContactWriteValues[]): Promise<Array<{ id: string }>> {
+    if (values.length === 0) return [];
+    return tx.insert(contacts).values(values).returning({ id: contacts.id });
   },
 
   /** Merge non-undefined fields into an existing contact (sparse re-imports never wipe known values). */
@@ -382,6 +478,26 @@ export const contactRepository = {
       .update(contacts)
       .set({ ...definedOnly(values), updatedAt: new Date() })
       .where(eq(contacts.id, id));
+  },
+
+  /**
+   * Batched updates for an import chunk. This LOOPS the single-row update rather than one set-based statement on
+   * purpose: each row writes a DIFFERENT subset of columns (after planFieldWrite drops the rows' pinned scalars),
+   * and definedOnly (never clobber a value with undefined) is inherently per-row — a single CASE/VALUES-join
+   * UPDATE could not express the heterogeneous column sets safely. The batching win the design wants is the ONE
+   * withTenantTx per chunk (not one tx per row), which the caller already owns; each iteration is byte-identical
+   * to update (definedOnly + updatedAt bump), so semantics are preserved exactly.
+   */
+  async updateBatch(
+    tx: Tx,
+    updates: Array<{ id: string; values: Partial<ContactWriteValues> }>,
+  ): Promise<void> {
+    for (const u of updates) {
+      await tx
+        .update(contacts)
+        .set({ ...definedOnly(u.values), updatedAt: new Date() })
+        .where(eq(contacts.id, u.id));
+    }
   },
 
   /** The non-PII inputs the rule-based scorer reads (ADR-0008). Tx-aware: composed in the score tx. */
@@ -428,6 +544,29 @@ export const contactRepository = {
       .where(eq(contacts.id, contactId))
       .limit(1);
     return (rows[0]?.fieldProvenance as FieldProvenanceMap | null | undefined) ?? {};
+  },
+
+  /**
+   * Batched mirror of getFieldProvenance: one IN-list SELECT for a whole chunk's matched contacts, RLS-scoped via
+   * the caller's tx (isolation rides the GUC — no explicit workspace predicate, like getFieldProvenance). Returns
+   * a map of contactId → provenance for the rows that exist+are visible; a null field_provenance maps to {} (the
+   * single-row default). A foreign/absent id is simply ABSENT from the map — callers resolve it with `?? {}`, which
+   * reproduces getFieldProvenance's "no visible row → {}" contract.
+   */
+  async getFieldProvenanceBatch(
+    tx: Tx,
+    contactIds: string[],
+  ): Promise<Map<string, FieldProvenanceMap>> {
+    const out = new Map<string, FieldProvenanceMap>();
+    if (contactIds.length === 0) return out;
+    const rows = await tx
+      .select({ id: contacts.id, fieldProvenance: contacts.fieldProvenance })
+      .from(contacts)
+      .where(inArray(contacts.id, contactIds));
+    for (const r of rows) {
+      out.set(r.id, (r.fieldProvenance as FieldProvenanceMap | null | undefined) ?? {});
+    }
+    return out;
   },
 
   /** Masked, workspace-scoped list for the search/results + post-import surfaces. Never returns PII. */

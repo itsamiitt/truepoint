@@ -66,6 +66,7 @@
     "settings-user",
     "settings-workspace",
     "staff",
+    "storage",
     "system-health",
     "tags",
     "templates",
@@ -74,8 +75,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 972,
-  "fileSetHash": "sha256:016b4c8c9df166ba148cd33d499aa2e0399aa7c1b91316c2f461c1faf9a2a948",
+  "fileCount": 974,
+  "fileSetHash": "sha256:4e48c806af4ff80e90be0f7eea03754254a6cb8e0fce895362a672d61e3a08d0",
   "features": {
     "account-search": {
       "web": [],
@@ -486,6 +487,7 @@
         "packages/core/src/import/rejectedRowsCsv.test.ts",
         "packages/core/src/import/rejectedRowsCsv.ts",
         "packages/core/src/import/runImport.ts",
+        "packages/core/src/import/streamParse.ts",
         "packages/core/src/import/templates.ts",
         "packages/core/src/import/validateRow.test.ts",
         "packages/core/src/import/validateRow.ts"
@@ -1090,6 +1092,17 @@
       ],
       "api": [],
       "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "storage": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/storage/fileStore.ts"
+      ],
       "db": [],
       "workers": [],
       "integrations": []

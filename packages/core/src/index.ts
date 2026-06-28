@@ -6,7 +6,13 @@
 export { runImport, type RunImportInput } from "./import/runImport.ts";
 export { parseImportFile, parseCsv, isXlsxFile, type ParsedCsv } from "./import/parseFile.ts";
 export { parseXlsx } from "./import/parseXlsx.ts";
+// Constant-memory streaming CSV reader for the bulk-import drive path (15-bulk-import-design §3) — parses
+// byte-identically to the sync parseCsv (the quoting state machine mirrors parseFile.ts parseMatrix). CSV only.
+export { streamParseCsv } from "./import/streamParse.ts";
 export type { RawRow } from "./import/columnMap.ts";
+// Object-store seam (15-bulk-import-design §3/§4): the FileStore port the bulk pipeline writes through + a
+// dev/test local-disk adapter. The prod S3 adapter is injected at the app composition root (kept out of core).
+export { diskFileStore, type FileStore } from "./storage/fileStore.ts";
 export {
   saveMappingTemplate,
   listMappingTemplates,

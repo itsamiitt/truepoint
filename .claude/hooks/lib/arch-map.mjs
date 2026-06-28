@@ -51,6 +51,7 @@ export const CANONICAL_DOMAINS = [
   "templates",
   "notifications",
   "data-health",
+  "storage",
   // Settings destination is composed of per-area web slices (12 §1–§5).
   "settings-billing",
   "settings-compliance",

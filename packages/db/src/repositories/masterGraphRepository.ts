@@ -161,4 +161,24 @@ export const masterGraphRepository = {
 
     return { masterPersonId, masterCompanyId };
   },
+
+  /**
+   * Batched MATCH-AGAINST for a whole import chunk (15-bulk-import-design §2): run the UNCHANGED single-row
+   * resolveForImport once per input, but inside the caller's ONE withErTx — collapsing today's "one withErTx
+   * per row" into "one per chunk". This is a THIN LOOP by design: only the transaction count changes. The
+   * co-op-safe MINT boundary is byte-for-byte IDENTICAL — each identity still LINKs-or-MINTs exactly as the
+   * single-row path (identity/dedup only; never revealable PII or contributed profile fields; see the file
+   * header). Mints stay per-identity, the global UNIQUE constraints stay the concurrency guard; no set-based
+   * mint over staging (which would breach the leadwolf_er trust boundary). Results are index-aligned to inputs.
+   */
+  async resolveForImportBatch(
+    tx: Tx,
+    inputs: ResolveForImportInput[],
+  ): Promise<ResolveForImportResult[]> {
+    const results: ResolveForImportResult[] = [];
+    for (const input of inputs) {
+      results.push(await masterGraphRepository.resolveForImport(tx, input));
+    }
+    return results;
+  },
 };
