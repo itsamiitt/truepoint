@@ -76,8 +76,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1005,
-  "fileSetHash": "sha256:309c62582915cdc107700d25e6cb1f2e90d34fba5e32f9d8577d4acaf0008539",
+  "fileCount": 1006,
+  "fileSetHash": "sha256:1649f17472bed289e061d5d80efde0e5669b27da011f76b64e1779e46a8025b1",
   "features": {
     "account-search": {
       "web": [],
@@ -1556,6 +1556,7 @@
       "packages/db/test/adminSessions.itest.ts",
       "packages/db/test/authPolicyEnforcement.itest.ts",
       "packages/db/test/bootstrapAdmin.itest.ts",
+      "packages/db/test/bulkImport.pipeline.itest.ts",
       "packages/db/test/compliance.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
