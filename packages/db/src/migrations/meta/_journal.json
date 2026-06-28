@@ -183,6 +183,13 @@
       "when": 1782700000000,
       "tag": "0025_retention_engine",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1782800000000,
+      "tag": "0026_seed_rollout_flags",
+      "breakpoints": true
     }
   ]
 }

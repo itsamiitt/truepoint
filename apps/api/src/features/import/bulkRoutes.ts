@@ -9,10 +9,11 @@
 
 import { randomUUID } from "node:crypto";
 import { env } from "@leadwolf/config";
-import { assertListInWorkspace } from "@leadwolf/core";
+import { assertListInWorkspace, isFlagEnabledForTenant } from "@leadwolf/core";
 import { type ImportJobRow, importJobRepository, withTenantTx } from "@leadwolf/db";
 import {
   type AvScanStatus,
+  BULK_IMPORT_FLAG_KEY,
   type BulkImportJobRef,
   type BulkImportJobStatus,
   type BulkImportJobStatusResponse,
@@ -41,10 +42,14 @@ bulkImportRoutes.use("*", authn);
 bulkImportRoutes.use("*", tenancy);
 bulkImportRoutes.use("*", rateLimit);
 
-// HARD GATE (the safety): while BULK_IMPORT_ENABLED is false the feature is DARK — every bulk route fails with a
-// clear RFC-9457 problem and NOTHING is read, created, or enqueued. A `use` so it covers POST + GET uniformly;
-// placed AFTER authn so an unauthenticated caller still gets a 401 (the feature's existence is never revealed to
-// an anonymous request). The api creating/enqueuing nothing while off is what makes the dark worker harmless.
+// LAYER 1 — the GLOBAL kill-switch (env.BULK_IMPORT_ENABLED): while it is false the feature is DARK for EVERYONE —
+// every bulk route fails with a clear RFC-9457 problem and NOTHING is read, created, or enqueued. A `use` so it
+// covers POST + GET uniformly; placed AFTER authn so an unauthenticated caller still gets a 401 (the feature's
+// existence is never revealed to an anonymous request). With env on, a SECOND per-tenant layer applies: the
+// `bulk_import_enabled` flag is additionally required on the CREATE (POST) path (checked in the handler, where the
+// tenant tx is available — see below). GET (status poll) needs env ONLY, so a tenant can keep polling an in-flight
+// job even if an operator later toggles the per-tenant flag back off. The api creating/enqueuing nothing while the
+// gate is closed is what makes the dark worker harmless.
 bulkImportRoutes.use("*", async (_c, next) => {
   if (!env.BULK_IMPORT_ENABLED) {
     throw new ForbiddenError("bulk_import_disabled", "Bulk import is not enabled.");
@@ -131,6 +136,17 @@ bulkImportRoutes.post("/", async (c) => {
   const tenantId = c.get("tenantId");
   const claims = c.get("claims");
   const scope = { tenantId, workspaceId };
+
+  // LAYER 2 — the per-tenant rollout flag (A3): env passed (the global kill-switch above), so the CREATE path now
+  // ALSO requires the `bulk_import_enabled` flag to be on for THIS tenant. Read under the request's tenant-scoped
+  // tx (RLS exposes the global def + this tenant's override; unknown/no override → off, fail-closed) — mirrors the
+  // reverification rollout gate. Checked HERE, before the (potentially huge) upload body is read, so a non-enrolled
+  // tenant fails fast with the exact same 403 contract and NOTHING is parsed, stored, or enqueued.
+  const tenantEnabled = await withTenantTx(scope, (tx) =>
+    isFlagEnabledForTenant(tx, tenantId, BULK_IMPORT_FLAG_KEY),
+  );
+  if (!tenantEnabled)
+    throw new ForbiddenError("bulk_import_disabled", "Bulk import is not enabled.");
 
   const form = await c.req.formData();
   const { file, sourceName: src, mapping } = await parseBulkImportForm(form);

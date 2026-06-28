@@ -16,8 +16,9 @@ import IORedis from "ioredis";
 type BulkImportDriveJobData = Extract<BulkImportJobData, { kind: "drive" }>;
 
 // Lazily opened on first use so merely importing this module (e.g. mounting the router) never dials Redis — the
-// feature is DARK until BULK_IMPORT_ENABLED is on, and the route gates before ever calling the producer.
-// BullMQ requires maxRetriesPerRequest: null on its connection.
+// feature is DARK until the bulk gate opens (the global env.BULK_IMPORT_ENABLED kill-switch AND the per-tenant
+// `bulk_import_enabled` flag), and the route gates on BOTH before ever calling the producer, so the producer is
+// never reached while gated. BullMQ requires maxRetriesPerRequest: null on its connection.
 let queue: Queue<BulkImportJobData> | undefined;
 function bulkImportQueue(): Queue<BulkImportJobData> {
   if (!queue) {

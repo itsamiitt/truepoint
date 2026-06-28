@@ -13,6 +13,13 @@ export const BULK_IMPORTS_QUEUE = "bulk-imports";
 /** Dead-letter queue for bulk-import jobs that exhaust their retries. Shared producer/consumer. */
 export const BULK_IMPORTS_DLQ = "bulk-imports-dlq";
 
+// ── Rollout gate ─────────────────────────────────────────────────────────────────────────────────────────
+/** Per-tenant feature-flag key for the bulk import pipeline (existing feature-flag system; default false →
+ *  fail-closed). The TWO-LAYER gate: the global env.BULK_IMPORT_ENABLED kill-switch must be on AND this
+ *  per-tenant flag must be enabled for the caller's tenant before a bulk import is accepted. Mirrors
+ *  RETENTION_ENGINE_FLAG_KEY (retention.ts) — the shared key lives here so api/workers can never drift. */
+export const BULK_IMPORT_FLAG_KEY = "bulk_import_enabled";
+
 // ── Enums ────────────────────────────────────────────────────────────────────────────────────────────────
 /** Lifecycle of a bulk-import job. `validating`→`staged` covers the COPY-stage + within-file dedup; `running`
  *  covers chunk fan-out; `partial` = completed with some rejected/errored rows; `paused` for a budget/ops hold. */
