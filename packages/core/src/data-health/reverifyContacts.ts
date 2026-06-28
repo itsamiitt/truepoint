@@ -1,10 +1,11 @@
 // reverifyContacts.ts — the freshness re-verification loop (ADR-0025, 22 §3/§4; data-management 09 §5 / 13 §6).
 // runImport/reveal grade a channel AS it lands; B2B data then decays, so this RE-grades REVEALED (in-use), live
 // contacts whose last_verified_at is past the freshness SLA — keyset-paged, per workspace, off the request
-// thread. It reuses THE SAME verifier the reveal path wires (defaultEmailVerifier → Reacher when configured) and
-// validatePhone — no second grading path (DM1). The freshness clock (contacts.last_verified_at) IS the watermark:
-// a re-verified row's last_verified_at resets to now, so it leaves the stale set until it decays again — so the
-// loop needs no separate verification_jobs ledger (that richer per-job tracking is a follow-up, PLAN_06).
+// thread. It reuses THE SAME verifiers the reveal path wires (defaultEmailVerifier → Reacher when configured;
+// defaultPhoneVerifier → Twilio Lookup when configured) — no second grading path (DM1). The freshness clock
+// (contacts.last_verified_at) IS the watermark: a re-verified row's last_verified_at resets to now, so it leaves
+// the stale set until it decays again. Each completed run is ALSO recorded in the verification_jobs audit ledger
+// (PLAN_06) for observability — best-effort, never fails the run.
 //
 // In-use gate = REVEALED contacts only (the workspace paid for them → they are the ones worth re-verifying),
 // which bounds verifier spend. Tx topology mirrors runMasterBackfill: read a batch under withTenantTx (RLS),
