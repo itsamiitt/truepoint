@@ -157,6 +157,23 @@ export const appEnvSchema = z
     // Max NL→search model calls per tenant per UTC day — the per-tenant request budget guard (23 §7). A
     // call that would exceed this is rejected with a budget error BEFORE any model spend.
     AI_NL_SEARCH_DAILY_BUDGET: z.coerce.number().int().positive().default(200),
+
+    // Bulk COPY-staging import (backlog #2, phase 6; 15-bulk-import-design). HARD GATE, default FALSE: the whole
+    // pipeline is DARK in prod until the COPY spike + a prod object store are ready. While off, the apps/api
+    // producer creates/enqueues NOTHING and the apps/workers consumer is not even registered. Modelled on
+    // AUTH_POLICY_ENFORCEMENT_ENABLED's posture (a lockout-/risk-capable switch where ONLY an explicit "true"
+    // enables it) but kept a real boolean via transform — "false"/"0"/""/unset can never read truthy.
+    BULK_IMPORT_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Filesystem root for the DEV/TEST local-disk FileStore (packages/core diskFileStore). The PRODUCTION
+    // FileStore (S3: presigned multipart + AV-scan-before-promote) is injected at the app composition root later —
+    // no AWS SDK is added here; this dir is only the dev adapter's root. Has a sane default so dev/test boot clean.
+    BULK_IMPORT_STORAGE_DIR: z.string().min(1).default(".data/bulk-imports"),
+    // The sync→bulk promotion threshold (rows): an import larger than this is steered onto the bulk pipeline
+    // rather than the inline `imports` queue. Consumed by the promotion logic; a sensible default until tuned.
+    BULK_IMPORT_THRESHOLD_ROWS: z.coerce.number().int().positive().default(5000),
   })
   .superRefine((val, ctx) => {
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.

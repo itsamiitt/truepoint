@@ -95,8 +95,11 @@ UNLOGGED **non-RLS** staging tables are created/dropped at RUNTIME (not in the m
    constant memory), `bulkProcessChunk` (batched merge, byte-parity with `runImport.importOneRow`), `runBulkImport`
    (drive orchestrator + `finalizeIfLastChunk`). Additive DEAD CODE until phase 6. The one UNVERIFIED primitive is
    `copyRows` (COPY-FROM-STDIN streaming) — the phase-4 spike must clear it before the flag is enabled.
-6. **Wiring + rollout** — API routes/queue, worker, `register.ts`; behind `BULK_IMPORT_ENABLED` (off) + the
-   existing per-tenant flag system + shadow mode; then the plan-tier threshold routes large uploads to bulk.
+6. **Wiring + rollout — ✅ built (gated dark)** — `bulkRoutes` (POST/GET, hard-gated 403 when off) + `bulkQueue`
+   producer + `bulkStore` (diskFileStore) mounted at `/api/v1/imports/bulk`; the `bulkImports` worker (drive→chunk
+   fan-out, finalize→rollups once) registered in `register.ts` ONLY when `BULK_IMPORT_ENABLED`; env flags added. All
+   ADDITIVE + dark by default (off ⇒ the API creates/enqueues nothing, the worker is never constructed). Remaining
+   before ENABLE: the COPY spike + a prod object store; then the plan-tier threshold + shadow cutover.
 
 ## 7. Open questions (need a human / a gated env)
 

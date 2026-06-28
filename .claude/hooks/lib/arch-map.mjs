@@ -62,6 +62,7 @@ export const QUEUE_DOMAIN = {
   enrichment: "enrichment",
   scoring: "scoring",
   imports: "import",
+  bulkImports: "import",
   "crm-sync": "crm-sync",
   outreach: "outreach",
   "search-sync": "search",

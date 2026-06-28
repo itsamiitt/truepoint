@@ -75,8 +75,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 979,
-  "fileSetHash": "sha256:4e84a495b72c5b6ec33cc10ead2a535cd69289e5fb09b99c0cf47a07c69a94c5",
+  "fileCount": 983,
+  "fileSetHash": "sha256:37b7a45adf77491aa7123ce8383f45f266ffcdc6025305c65fa6d3e7dcb99a42",
   "features": {
     "account-search": {
       "web": [],
@@ -466,6 +466,9 @@
       ],
       "admin": [],
       "api": [
+        "apps/api/src/features/import/bulkQueue.ts",
+        "apps/api/src/features/import/bulkRoutes.ts",
+        "apps/api/src/features/import/bulkStore.ts",
         "apps/api/src/features/import/index.ts",
         "apps/api/src/features/import/queue.ts",
         "apps/api/src/features/import/routes.ts"
@@ -502,6 +505,7 @@
         "packages/db/src/repositories/sourceImportRepository.ts"
       ],
       "workers": [
+        "apps/workers/src/queues/bulkImports.ts",
         "apps/workers/src/queues/imports.ts"
       ],
       "integrations": []

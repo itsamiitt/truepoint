@@ -18,7 +18,7 @@ import { emailRoutes, emailWebhookRoutes, templateRoutes } from "./features/emai
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
-import { importRoutes } from "./features/import/index.ts";
+import { bulkImportRoutes, importRoutes } from "./features/import/index.ts";
 import { listsRoutes } from "./features/lists/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
@@ -82,6 +82,10 @@ app.route("/api/v1/home", homeRoutes);
 // Mapping-templates BEFORE the import router: imports has a `GET /:jobId` that would otherwise capture
 // `/imports/mapping-templates` as a job id. The more specific prefix must register first (Hono first-match).
 app.route("/api/v1/imports/mapping-templates", importMappingTemplatesRoutes);
+// Bulk COPY-staging import (backlog #2, phase 6) BEFORE the import router for the same first-match reason as
+// mapping-templates: importRoutes' `GET /:jobId` would otherwise capture `/imports/bulk` as a job id. The router
+// is GATED DARK behind BULK_IMPORT_ENABLED (default false) — every route 403s and nothing is created while off.
+app.route("/api/v1/imports/bulk", bulkImportRoutes);
 app.route("/api/v1/imports", importRoutes);
 // Bulk actions BEFORE the reveal router: the literal `bulk` segment must register before reveal's `/:id/reveal`
 // so a bulk path is never captured as a contact id (same first-match pattern as imports/mapping-templates).

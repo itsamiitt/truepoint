@@ -3,7 +3,8 @@
 // startWorkers() boots the consumers. As new queues land (CRM sync, outreach delivery, …) register them here.
 
 import { env } from "@leadwolf/config";
-import type { ImportDeadLetter } from "@leadwolf/types";
+import { diskFileStore } from "@leadwolf/core";
+import type { BulkImportDeadLetter, BulkImportScope, ImportDeadLetter } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { log } from "./logger.ts";
@@ -63,6 +64,13 @@ import {
   type DataQualitySnapshotSweepJobData,
   makeProcessDataQualitySnapshotSweep,
 } from "./queues/dataQualitySnapshotSweep.ts";
+import {
+  BULK_IMPORTS_DLQ,
+  BULK_IMPORTS_QUEUE,
+  type BulkImportJobData,
+  deadLetterFailedBulkImport,
+  makeProcessBulkImport,
+} from "./queues/bulkImports.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -282,7 +290,9 @@ export function startWorkers(): Worker[] {
       }),
     );
   });
-  const workers = [
+  // Typed as Worker[] (not the inferred per-generic union) so the gated bulk worker — a Worker<BulkImportJobData> —
+  // can be pushed below without a generic-mismatch error. Same element type the function already returns.
+  const workers: Worker[] = [
     importsWorker,
     instrument(
       new Worker<EnrichmentJobData>(ENRICHMENT_QUEUE, processEnrichment, { connection }),
@@ -371,6 +381,64 @@ export function startWorkers(): Worker[] {
       DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
     ),
   ];
+  // Bulk COPY-staging import (backlog #2, phase 6) — GATED DARK behind BULK_IMPORT_ENABLED (default false). Purely
+  // ADDITIVE: when off, the bulk queues/worker are never even constructed (the array above is untouched) and the
+  // apps/api producer enqueues nothing, so the feature is inert in prod until the COPY spike + a prod object store
+  // land. When on: a `drive` job stages the upload + fans out `chunk` jobs onto the SAME bulk queue; each `chunk`
+  // merges one staged band, and the LAST chunk's finalize fires the dedup/firmographics/masterBackfill rollups
+  // ONCE — the SAME idempotent per-workspace rollups the sync import kicks on completion (best-effort).
+  if (env.BULK_IMPORT_ENABLED) {
+    const bulkImportsQueue = new Queue<BulkImportJobData>(BULK_IMPORTS_QUEUE, { connection });
+    const bulkImportDeadLetterQueue = new Queue<BulkImportDeadLetter>(BULK_IMPORTS_DLQ, {
+      connection,
+    });
+    // DEV/TEST local-disk store; the prod FileStore (S3, presigned multipart, AV-before-promote) is injected here
+    // later (no AWS SDK pulled in). Same env dir the apps/api producer composes against (apps never import apps).
+    const bulkFileStore = diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
+    const bulkImportsWorker = instrument(
+      new Worker<BulkImportJobData>(
+        BULK_IMPORTS_QUEUE,
+        makeProcessBulkImport({
+          fileStore: bulkFileStore,
+          // The drive phase fans out one chunk job per staged band onto the SAME bulk queue.
+          enqueueChunk: async (jobId, scope, chunkId) => {
+            await bulkImportsQueue.add("chunk", { kind: "chunk", jobId, scope, chunkId });
+          },
+          // The LAST chunk's finalize fires these ONCE — the SAME idempotent per-workspace rollups the sync import
+          // kicks on completion. Best-effort: a rollup-enqueue failure never fails the chunk job.
+          fireRollups: (scope: BulkImportScope) => {
+            const data = { tenantId: scope.tenantId, workspaceId: scope.workspaceId };
+            void enqueueDedup(data).catch((e) =>
+              log.error("bulk-import: dedup enqueue failed", {
+                error: e instanceof Error ? e.message : String(e),
+              }),
+            );
+            void enqueueFirmographics(data).catch((e) =>
+              log.error("bulk-import: firmographics enqueue failed", {
+                error: e instanceof Error ? e.message : String(e),
+              }),
+            );
+            void enqueueMasterBackfill(data).catch((e) =>
+              log.error("bulk-import: master-backfill enqueue failed", {
+                error: e instanceof Error ? e.message : String(e),
+              }),
+            );
+          },
+        }),
+        { connection },
+      ),
+      BULK_IMPORTS_QUEUE,
+    );
+    // Bulk-import jobs that exhaust their retries are dead-lettered (PII-free) for ops triage instead of lost.
+    bulkImportsWorker.on("failed", (job, err) => {
+      void deadLetterFailedBulkImport(bulkImportDeadLetterQueue, job, err).catch((e) =>
+        log.error("bulk-import: dead-letter routing failed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    });
+    workers.push(bulkImportsWorker);
+  }
   void scheduleSequenceTick().catch((e) =>
     log.error("failed to schedule the sequence tick", {
       error: e instanceof Error ? e.message : String(e),
