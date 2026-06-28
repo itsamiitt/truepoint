@@ -1,7 +1,8 @@
-// DataHealthPage.tsx — the Data Health destination: a Tabs switcher (Overview · Re-verification activity) over the
-// per-workspace data-quality rollups — headline metrics, per-field coverage, the freshness trend, and the email/
-// phone verification breakdown — plus the daily re-verification activity. Every read is an EXISTING, workspace-
-// scoped, PII-safe GET /home/data-quality* endpoint (no new backend). A pure composition shell. Public slice component.
+// DataHealthPage.tsx — the Data Health destination: a Tabs switcher (Overview · Re-verification activity · Retention)
+// over the per-workspace data-quality rollups — headline metrics, per-field coverage, the freshness trend, and the
+// email/phone verification breakdown — plus the daily re-verification activity and the tenant-wide retention-engine
+// run audit (the SHADOW evidence). Every read is a workspace- or tenant-scoped, PII-safe GET /home/data-quality*
+// endpoint. A pure composition shell. Public slice component.
 "use client";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -11,32 +12,37 @@ import { useState } from "react";
 import styles from "../data-health.module.css";
 import { useDataHealthMetrics } from "../hooks/useDataHealthMetrics";
 import { useDataHealthTrend } from "../hooks/useDataHealthTrend";
+import { useRetentionRuns } from "../hooks/useRetentionRuns";
 import { useReverificationRuns } from "../hooks/useReverificationRuns";
 import { FreshnessTrend } from "./FreshnessTrend";
 import { MetricsSection } from "./MetricsSection";
 import { PerFieldFill } from "./PerFieldFill";
+import { RetentionActivity } from "./RetentionActivity";
 import { ReverificationActivity } from "./ReverificationActivity";
 import { SectionCard } from "./SectionCard";
 import { VerificationBreakdown } from "./VerificationBreakdown";
 
-type TabId = "overview" | "activity";
+type TabId = "overview" | "activity" | "retention";
 
 const TABS: { value: TabId; label: string }[] = [
   { value: "overview", label: "Overview" },
   { value: "activity", label: "Re-verification activity" },
+  { value: "retention", label: "Retention" },
 ];
 
 export function DataHealthPage() {
   const metrics = useDataHealthMetrics();
   const trend = useDataHealthTrend();
   const runs = useReverificationRuns();
+  const retention = useRetentionRuns();
   const [tab, setTab] = useState<TabId>("overview");
 
-  const refreshing = metrics.loading || trend.loading || runs.loading;
+  const refreshing = metrics.loading || trend.loading || runs.loading || retention.loading;
   const reloadAll = () => {
     void metrics.reload();
     void trend.reload();
     void runs.reload();
+    void retention.reload();
   };
 
   return (
@@ -101,7 +107,9 @@ export function DataHealthPage() {
             />
           </SectionCard>
         </div>
-      ) : (
+      ) : null}
+
+      {tab === "activity" ? (
         <div className={styles.sections}>
           <SectionCard title="Re-verification activity" hint="Daily freshness sweeps">
             <ReverificationActivity
@@ -112,7 +120,20 @@ export function DataHealthPage() {
             />
           </SectionCard>
         </div>
-      )}
+      ) : null}
+
+      {tab === "retention" ? (
+        <div className={styles.sections}>
+          <SectionCard title="Retention activity" hint="Daily retention sweeps">
+            <RetentionActivity
+              runs={retention.runs}
+              loading={retention.loading}
+              error={retention.error}
+              onRetry={retention.reload}
+            />
+          </SectionCard>
+        </div>
+      ) : null}
     </main>
   );
 }

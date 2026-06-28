@@ -4,6 +4,7 @@
 // counts-only rollup, so this destination derives coverage / deliverability / freshness rates from those counts.
 export type {
   DataQualityTrendPoint,
+  RetentionRun,
   ReverificationRun,
   WorkspaceDataQuality,
 } from "@leadwolf/types";

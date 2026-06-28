@@ -5,7 +5,12 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { DataQualityTrendPoint, ReverificationRun, WorkspaceDataQuality } from "./types";
+import type {
+  DataQualityTrendPoint,
+  RetentionRun,
+  ReverificationRun,
+  WorkspaceDataQuality,
+} from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -33,4 +38,13 @@ export async function fetchReverificationRuns(): Promise<ReverificationRun[]> {
     throw new Error(await problemMessage(res, "Could not load your re-verification activity"));
   }
   return (await res.json()) as ReverificationRun[];
+}
+
+/** Load the per-tenant retention-engine run audit (shadow evidence; newest first). */
+export async function fetchRetentionRuns(): Promise<RetentionRun[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/home/data-quality/retention-runs`);
+  if (!res.ok) {
+    throw new Error(await problemMessage(res, "Could not load your retention activity"));
+  }
+  return (await res.json()) as RetentionRun[];
 }

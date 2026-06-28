@@ -18,10 +18,12 @@ import {
   recentDataQualityTrend,
   recentReverificationRuns,
 } from "@leadwolf/core";
+import { retentionRunRepository, withTenantTx } from "@leadwolf/db";
 import {
   dataQualityTrendSchema,
   ForbiddenError,
   homeSummarySchema,
+  retentionRunSchema,
   reverificationRunsSchema,
   workspaceDataQualitySchema,
 } from "@leadwolf/types";
@@ -113,5 +115,34 @@ homeRoutes.get(
     const runs = await recentReverificationRuns({ tenantId: c.get("tenantId"), workspaceId });
     c.header("Cache-Control", "private, max-age=60");
     return c.json(reverificationRunsSchema.parse(runs));
+  },
+);
+
+/**
+ * GET /data-quality/retention-runs — the per-TENANT retention-engine SHADOW evidence (data-management #6): the
+ * recent run audit (one immutable row per data class per daily sweep) — candidates that WOULD delete + rows
+ * actually deleted (0 unless a class is `enforce`) + cutoff + window, newest-first. The evidence an operator
+ * reviews BEFORE flipping a class to `enforce`. TENANT-scoped (retention_runs has no workspace_id): reads under
+ * withTenantTx({ tenantId }); the `retention_runs_tenant_read` RLS policy confines recentRuns to the caller's own
+ * tenant. Same authn + tenancy + any-role gate as the siblings; short private cache. READ-ONLY (append-only audit).
+ */
+homeRoutes.get(
+  "/data-quality/retention-runs",
+  requireRole("owner", "admin", "member", "viewer"),
+  async (c) => {
+    const tenantId = c.get("tenantId");
+    const rows = await withTenantTx({ tenantId }, (tx) => retentionRunRepository.recentRuns(tx));
+    const runs = rows.map((r) => ({
+      tenantId: r.tenantId,
+      dataClass: r.dataClass,
+      mode: r.mode,
+      candidateCount: r.candidateCount,
+      deletedCount: r.deletedCount,
+      cutoff: r.cutoff ? r.cutoff.toISOString() : null,
+      runStartedAt: r.runStartedAt.toISOString(),
+      runFinishedAt: r.runFinishedAt.toISOString(),
+    }));
+    c.header("Cache-Control", "private, max-age=60");
+    return c.json(retentionRunSchema.array().parse(runs));
   },
 );
