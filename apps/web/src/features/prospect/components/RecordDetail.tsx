@@ -41,6 +41,7 @@ import {
   displayName,
 } from "../types";
 import { AddToListDialog } from "./AddToListDialog";
+import { RecomputeScoreButton } from "./RecomputeScoreButton";
 import { RevealDialog } from "./RevealDialog";
 import { StageSelector } from "./StageSelector";
 import { TagPicker } from "./TagPicker";
@@ -54,51 +55,61 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** The lead-score breakdown: a big composite + a row per sub-score with a thin Progress bar (out of 100). */
+/**
+ * The Lead score section: the breakdown (a big composite + a row per sub-score with a thin Progress bar)
+ * plus the on-demand Recompute control (W2). One useScores instance owns the load + `reload`, so the
+ * button re-runs that same reload on success — the freshly computed row shows without a bespoke refetch.
+ */
 function ScoreBreakdown({ contactId }: { contactId: string }) {
   const { scores, error, loading, reload } = useScores(contactId);
   const latest = scores?.[0];
 
   return (
-    <StateSwitch
-      loading={loading}
-      error={error}
-      empty={!loading && !latest}
-      onRetry={reload}
-      skeleton={<Progress value={0} aria-label="Loading score" />}
-      emptyState={
-        <EmptyState
-          title="Not scored yet"
-          description="A score lands after the next scoring run."
-        />
-      }
-    >
-      {latest ? (
-        <div className={styles.scoreGrid}>
-          <div className={styles.scoreComposite}>
-            <span className={styles.scoreBig}>{latest.compositeScore}</span>
-            <span className={styles.scoreCompositeLabel}>Composite</span>
-          </div>
-          <div className={styles.scoreParts}>
-            {(
-              [
-                ["ICP fit", latest.icpFit],
-                ["Intent", latest.intentScore],
-                ["Engagement", latest.engagementScore],
-              ] as const
-            ).map(([label, value]) => (
-              <div className={styles.scorePart} key={label}>
-                <div className={styles.scorePartHead}>
-                  <span className={styles.scorePartLabel}>{label}</span>
-                  <span className={styles.scorePartValue}>{value}</span>
+    <section className={styles.section}>
+      <div className={styles.sectionHead}>
+        <h3 className={styles.sectionTitle}>Lead score</h3>
+        <RecomputeScoreButton contactId={contactId} onScored={reload} />
+      </div>
+      <StateSwitch
+        loading={loading}
+        error={error}
+        empty={!loading && !latest}
+        onRetry={reload}
+        skeleton={<Progress value={0} aria-label="Loading score" />}
+        emptyState={
+          <EmptyState
+            title="Not scored yet"
+            description="Recompute to score this contact now, or wait for the next scoring run."
+          />
+        }
+      >
+        {latest ? (
+          <div className={styles.scoreGrid}>
+            <div className={styles.scoreComposite}>
+              <span className={styles.scoreBig}>{latest.compositeScore}</span>
+              <span className={styles.scoreCompositeLabel}>Composite</span>
+            </div>
+            <div className={styles.scoreParts}>
+              {(
+                [
+                  ["ICP fit", latest.icpFit],
+                  ["Intent", latest.intentScore],
+                  ["Engagement", latest.engagementScore],
+                ] as const
+              ).map(([label, value]) => (
+                <div className={styles.scorePart} key={label}>
+                  <div className={styles.scorePartHead}>
+                    <span className={styles.scorePartLabel}>{label}</span>
+                    <span className={styles.scorePartValue}>{value}</span>
+                  </div>
+                  <Progress value={value} max={100} label={`${label} ${value}`} />
                 </div>
-                <Progress value={value} max={100} label={`${label} ${value}`} />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      ) : null}
-    </StateSwitch>
+        ) : null}
+      </StateSwitch>
+    </section>
   );
 }
 
@@ -505,12 +516,7 @@ export function RecordDetail({
             <RecordTags key={contact.id} contactId={contact.id} onTagCreated={onTagsChanged} />
           </section>
 
-          <section className={styles.section}>
-            <div className={styles.sectionHead}>
-              <h3 className={styles.sectionTitle}>Lead score</h3>
-            </div>
-            <ScoreBreakdown contactId={contact.id} />
-          </section>
+          <ScoreBreakdown contactId={contact.id} />
 
           <section className={styles.section}>
             <div className={styles.sectionHead}>

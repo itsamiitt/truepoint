@@ -93,6 +93,26 @@ export async function fetchScores(id: string): Promise<ScoreHistoryRow[]> {
   return data.scores;
 }
 
+/** The inline rescore result (09 §2): computeScore appends a versioned row + returns the fresh sub-scores. */
+export interface RescoreResult {
+  scoreId: string;
+  icpFit: number;
+  intentScore: number;
+  engagementScore: number;
+  compositeScore: number;
+}
+
+/**
+ * POST /contacts/:id/rescore — recompute the lead score on demand. The endpoint runs computeScore inline
+ * (pure DB work, fast), appends a fresh score-history row, and returns the new sub-scores. No body/charge:
+ * the contact id + tenancy come from the path + the access token. Callers re-load fetchScores to show it.
+ */
+export async function rescoreContact(id: string): Promise<RescoreResult> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${id}/rescore`, { method: "POST" });
+  if (!res.ok) throw await toApiError(res, "Could not recompute score");
+  return (await res.json()) as RescoreResult;
+}
+
 /**
  * THE monetized path (07 §3): reveal a contact's PII. Idempotent — a fresh Idempotency-Key per attempt
  * means a network retry replays the same charge instead of double-spending. PII appears ONLY in this
