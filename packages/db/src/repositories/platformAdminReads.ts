@@ -4,10 +4,11 @@
 // reach these tables. All lists are bounded by PLATFORM_READ_LIMIT — no unbounded cross-tenant scans
 // (ADR-0032). Read-only: never writes (staff mutations go through their own audited endpoints later).
 
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenantAuthPolicies, tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
+import { importJobs } from "../schema/importJobs.ts";
 import { listMembers, lists } from "../schema/lists.ts";
 
 /** The cross-tenant read cap — mirrors the bound the api admin routes already enforce (ADR-0032). */
@@ -66,6 +67,29 @@ export interface PlatformWorkspaceListRow {
   name: string;
   slug: string;
   tenantId: string;
+}
+
+/**
+ * One recent bulk-import job as seen by STAFF (data-management A4) — the cross-tenant rollout-monitoring shape
+ * for the COPY-staging import pipeline (15-bulk-import-design). METADATA + outcome TALLIES only: status /
+ * av-scan / row counts / failure reason describe the JOB, never an `import_job_rows` row, so no imported
+ * contact PII rides this surface. The owning tenant is identified by id AND name (the org name is the
+ * customer's, not a person's PII — same join the tenants directory already makes).
+ */
+export interface PlatformImportJobRow {
+  jobId: string;
+  tenantId: string;
+  tenantName: string;
+  status: string;
+  sourceName: string;
+  avScanStatus: string;
+  rowsTotal: number;
+  rowsCreated: number;
+  rowsMatched: number;
+  rowsRejected: number;
+  createdAt: Date;
+  completedAt: Date | null;
+  failedReason: string | null;
 }
 
 /**
@@ -230,5 +254,37 @@ export const platformAdminRepository = {
       .from(enrichmentJobs)
       .limit(PLATFORM_READ_LIMIT);
     return rows.map((r) => r.status);
+  },
+
+  /**
+   * Recent bulk-import jobs ACROSS all tenants (data-management A4) — the staff rollout-monitoring feed for the
+   * COPY-staging import pipeline (15-bulk-import-design, ADR-0036). Each control row is joined to its tenant
+   * NAME and returns the genuinely useful monitoring columns (status / av-scan / row tallies / failure
+   * reason), newest-first. BOUNDED: `limit` is clamped to PLATFORM_READ_LIMIT so a caller can never widen it
+   * into an unbounded cross-tenant scan (ADR-0032). Runs inside withPlatformTx (owner connection, RLS bypass),
+   * so the read is audited; it selects from `import_jobs` only — NEVER an `import_job_rows` row — so no
+   * imported contact PII leaves the boundary (mirrors the privacy-first lists-overview aggregate idiom).
+   */
+  async recentImportJobs(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformImportJobRow[]> {
+    return tx
+      .select({
+        jobId: importJobs.id,
+        tenantId: importJobs.tenantId,
+        tenantName: tenants.name,
+        status: importJobs.status,
+        sourceName: importJobs.sourceName,
+        avScanStatus: importJobs.avScanStatus,
+        rowsTotal: importJobs.rowsTotal,
+        rowsCreated: importJobs.rowsCreated,
+        rowsMatched: importJobs.rowsMatched,
+        rowsRejected: importJobs.rowsRejected,
+        createdAt: importJobs.createdAt,
+        completedAt: importJobs.completedAt,
+        failedReason: importJobs.failedReason,
+      })
+      .from(importJobs)
+      .innerJoin(tenants, eq(tenants.id, importJobs.tenantId))
+      .orderBy(desc(importJobs.createdAt))
+      .limit(Math.min(limit, PLATFORM_READ_LIMIT));
   },
 };

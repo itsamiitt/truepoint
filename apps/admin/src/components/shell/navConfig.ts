@@ -3,7 +3,17 @@
 // (Users, Billing, Compliance, …) added by sibling units as their own feature folders. Add a destination
 // here once and the rail + top-bar title pick it up.
 import type { IconComponent } from "@leadwolf/ui";
-import { Activity, Building2, Flag, Plug, ScrollText, ShieldCheck, Timer, Users } from "lucide-react";
+import {
+  Activity,
+  Building2,
+  FileUp,
+  Flag,
+  Plug,
+  ScrollText,
+  ShieldCheck,
+  Timer,
+  Users,
+} from "lucide-react";
 
 export interface NavDestination {
   label: string;
@@ -22,6 +32,7 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Retention", href: "/retention", match: "/retention", icon: Timer },
   { label: "Staff", href: "/staff", match: "/staff", icon: ShieldCheck },
   { label: "Audit log", href: "/audit-log", match: "/audit-log", icon: ScrollText },
+  { label: "Bulk imports", href: "/imports", match: "/imports", icon: FileUp },
   { label: "System health", href: "/system-health", match: "/system-health", icon: Activity },
 ];
 

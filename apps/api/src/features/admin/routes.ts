@@ -178,6 +178,26 @@ adminRoutes.get("/system-health", async (c) => {
   });
 });
 
+// ── Import-jobs monitor (data-management A4; 15-bulk-import-design) — recent bulk-import jobs ACROSS all
+// tenants, the staff rollout-monitoring feed for the COPY-staging pipeline. Per-job status / av-scan / row
+// tallies / failure reason joined to the tenant name, newest-first + bounded (PLATFORM_READ_LIMIT). View-only
+// staff tiers may read (super_admin always passes); the read runs on the audited withPlatformTx. The action
+// `admin.list_import_jobs` is a READ — like admin.list_tenants / admin.list_users it is a plain withPlatformTx
+// string and is deliberately NOT in the platformAuditAction mutation enum (only writes are enum-tracked).
+// METADATA + tallies only (the repo selects import_jobs, never import_job_rows) — no imported contact PII
+// leaves the boundary. Read-only: no actions on this surface. The repo shape is returned directly via c.json
+// (no Zod schema), matching the sibling cross-tenant list reads (tenants / users / workspaces).
+adminRoutes.get(
+  "/import-jobs",
+  requireStaffRole("super_admin", "support", "read_only"),
+  async (c) => {
+    const jobs = await withPlatformTx(actorOf(c), "admin.list_import_jobs", (tx) =>
+      platformAdminRepository.recentImportJobs(tx),
+    );
+    return c.json({ jobs });
+  },
+);
+
 // ── Feature flags (13 §3.5, ADR-0011) ──────────────────────────────────────────────────────────────────
 // All reads + writes go through withPlatformTx: cross-tenant owner visibility + an in-tx platform_audit_log
 // row. Writes use the ADR-0032 platform-audit action vocabulary (feature_flag.set). Flags are global +
