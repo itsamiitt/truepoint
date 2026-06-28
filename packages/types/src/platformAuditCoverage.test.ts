@@ -24,6 +24,7 @@ const PENDING = new Set<string>([
   "impersonation.end",
   "feature_flag.set",
   "provider_config.update",
+  "retention_policy.set",
   "audit.export",
   "staff.login",
   "staff.login.failure",

@@ -9,6 +9,7 @@ import {
   authPolicyRepository,
   featureFlagRepository,
   platformAdminRepository,
+  retentionPolicyRepository,
   withPlatformTx,
 } from "@leadwolf/db";
 import {
@@ -19,6 +20,8 @@ import {
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
+  retentionPolicySchema,
+  retentionPolicyUpdateSchema,
   setAuthEnforcementSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
@@ -270,6 +273,51 @@ adminRoutes.get("/feature-flags/evaluate/:tenantId", async (c) => {
     evaluateFlagsForTenant(tx, tenantId),
   );
   return c.json({ tenantId, flags });
+});
+
+// ── Global retention policies (data-management A2; design 16-retention-engine-design.md) ─────────────────
+// One GLOBAL policy per data class: its TTL (null = never) + its disabled|shadow|enforce mode. The store is
+// platform-managed (no tenant_id) and the customer app role has NO write policy under FORCE RLS, so both the
+// read and the write run on the audited withPlatformTx (the owner path). The READ is open to the view-only
+// staff tiers; the WRITE arms real deletion when a class is flipped to `enforce`, so it is super_admin-ONLY
+// and audited (retention_policy.set). The per-tenant `retention_engine_enabled` flag is the outer gate on
+// the sweep — a policy never deletes for a tenant that has the engine off.
+
+/** List every global retention policy. View-only staff tiers may read; the write below is super_admin only.
+ *  Response is Zod-validated against the shared RetentionPolicy contract before it leaves the boundary. */
+adminRoutes.get(
+  "/retention-policies",
+  requireStaffRole("super_admin", "compliance_officer", "read_only"),
+  async (c) => {
+    const policies = await withPlatformTx(actorOf(c), "admin.list_retention_policies", (tx) =>
+      retentionPolicyRepository.listPolicies(tx),
+    );
+    return c.json({ policies: retentionPolicySchema.array().parse(policies) });
+  },
+);
+
+/** Define or update a class's policy (idempotent on data class). super_admin ONLY — flipping `mode` to
+ *  `enforce` ARMS permanent deletion for that class — and AUDITED (retention_policy.set, with the class +
+ *  new ttl/mode as the target/metadata). The upsert runs on withPlatformTx: under FORCE RLS the app role has
+ *  no write policy on retention_policies, so the write MUST run on the owner path. dataClass is validated as
+ *  a real retentionDataClass by the body schema (retentionPolicyUpdateSchema). FUTURE: a compliance_officer
+ *  co-sign (dual-control) could be required on the enforce flip — a separate approval workflow, out of scope
+ *  here; today the controls are super_admin-only + audit + the UI confirm dialog. */
+adminRoutes.put("/retention-policies", requireStaffRole("super_admin"), async (c) => {
+  const parsed = retentionPolicyUpdateSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const policy = parsed.data;
+  await withPlatformTx(
+    actorOf(c),
+    "retention_policy.set",
+    (tx) => retentionPolicyRepository.upsertPolicy(tx, policy),
+    {
+      targetType: "retention_policy",
+      targetId: policy.dataClass,
+      metadata: { ttlDays: policy.ttlDays, mode: policy.mode },
+    },
+  );
+  return c.json({ ok: true, dataClass: policy.dataClass });
 });
 
 // ── Provider configs (13 §3.6) — enable/disable + monthly budget, super_admin-gated. Own module to keep

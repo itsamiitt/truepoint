@@ -49,6 +49,22 @@ export const retentionPolicySchema = z.object({
 export type RetentionPolicy = z.infer<typeof retentionPolicySchema>;
 
 /**
+ * The admin WRITE contract for defining/updating ONE class's policy (the platform retention-policy admin
+ * surface — data-management A2). Kept SEPARATE from `retentionPolicySchema` (the shared read contract) so the
+ * writable shape is an explicit, validated boundary: `dataClass` identifies the target class, `ttlDays` is a
+ * positive int or null (null = NEVER auto-delete), and `mode` is the lifecycle. Flipping `mode` to `enforce`
+ * ARMS real deletion for that class — the server gates the write super_admin-only + audits it, and the UI
+ * gates the enforce flip behind an explicit confirm. FUTURE: a compliance_officer co-sign (dual-control)
+ * could be required on the enforce flip; out of scope for this pass.
+ */
+export const retentionPolicyUpdateSchema = z.object({
+  dataClass: retentionDataClass,
+  ttlDays: z.number().int().positive().nullable(),
+  mode: retentionMode,
+});
+export type RetentionPolicyUpdate = z.infer<typeof retentionPolicyUpdateSchema>;
+
+/**
  * The conservative SEED defaults (design §3/§4). Every class ships `shadow` (deletes nothing); periods anchor on
  * ADR-0025 SLAs (email 90d) + GDPR storage-limitation + analytics value. `contacts` and `audit_log` are `null`
  * (never auto-delete) pending a legal/budget decision — only a human flips a class to `enforce` after confirming.
