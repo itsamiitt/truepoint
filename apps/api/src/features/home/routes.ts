@@ -25,12 +25,15 @@ import {
   homeSummarySchema,
   retentionRunSchema,
   reverificationRunsSchema,
+  reverificationTriggerAckSchema,
   workspaceDataQualitySchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
+import { enqueueReverification } from "./reverificationQueue.ts";
 
 export const homeRoutes = new Hono<{ Variables: RoleVariables }>();
 
@@ -115,6 +118,27 @@ homeRoutes.get(
     const runs = await recentReverificationRuns({ tenantId: c.get("tenantId"), workspaceId });
     c.header("Cache-Control", "private, max-age=60");
     return c.json(reverificationRunsSchema.parse(runs));
+  },
+);
+
+/**
+ * POST /data-quality/reverify — ON-DEMAND freshness re-verification (data-management #3 follow-up). Runs the SAME
+ * bounded, idempotent per-workspace re-verification the daily sweep runs, on demand. GUARDED: requireRole("owner",
+ * "admin") (it can spend metered verifier budget — NEVER member/viewer) + a per-caller rateLimit. INHERENTLY SAFE:
+ * the worker's runReverification re-checks the per-tenant `data_health.reverification` flag and NO-OPS if off, and
+ * the work is bounded to already-revealed, past-SLA contacts + idempotent — the manual form of an existing bounded
+ * operation, not a new cost surface. Enqueue-only: no flag bypass; returns 202 + a job ref.
+ */
+homeRoutes.post(
+  "/data-quality/reverify",
+  rateLimit,
+  requireRole("owner", "admin"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+
+    const jobId = await enqueueReverification({ tenantId: c.get("tenantId"), workspaceId });
+    return c.json(reverificationTriggerAckSchema.parse({ queued: true, jobId }), 202);
   },
 );
 

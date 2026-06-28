@@ -147,6 +147,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* On-demand "Re-verify now" trigger — right-aligned above the runs table (owner/admin only). */
+.activityActions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
 /* ── Verification / runs tables ───────────────────────────────────────────────────────────────────── */
 .tableBlock {
   display: flex;

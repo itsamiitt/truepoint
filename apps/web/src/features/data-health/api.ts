@@ -48,3 +48,28 @@ export async function fetchRetentionRuns(): Promise<RetentionRun[]> {
   }
   return (await res.json()) as RetentionRun[];
 }
+
+/** The outcome of an on-demand re-verification trigger (POST /home/data-quality/reverify), branched so the UI
+ *  can show distinct toasts for rate-limit (429) and not-allowed (403) without throwing. */
+export type ReverifyTriggerResult =
+  | { ok: true }
+  | { ok: false; reason: "rate_limited" | "forbidden" | "error"; message: string };
+
+/** Trigger the per-workspace re-verification on demand. Owner/admin only + rate-limited + flag-gated server-side;
+ *  inherently bounded + idempotent (the worker no-ops when re-verification is off for the tenant). */
+export async function triggerReverification(): Promise<ReverifyTriggerResult> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/home/data-quality/reverify`, {
+    method: "POST",
+  });
+  if (res.ok) return { ok: true };
+  if (res.status === 429) {
+    const message = await problemMessage(res, "Try again shortly");
+    return { ok: false, reason: "rate_limited", message };
+  }
+  if (res.status === 403) {
+    const message = await problemMessage(res, "You don't have access");
+    return { ok: false, reason: "forbidden", message };
+  }
+  const message = await problemMessage(res, "Could not start re-verification");
+  return { ok: false, reason: "error", message };
+}

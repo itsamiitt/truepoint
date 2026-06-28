@@ -104,7 +104,7 @@ Nothing below ran in the build sandbox. Required gates:
 | **#7 CRM sync + write-back + erasure propagation** | ⛔ Multi-tick greenfield with external connectors/credentials. |
 | **#8 Per-workspace ICP tuning** | ⛔ The weight *values* are a business/config decision (ADR-0008 "revisit-if"). |
 | **Conflict-rate metric** | Needs cross-source value comparison (`field_provenance` stores only winners; raw values live in `source_imports`) + instrumenting the write path — a real analysis feature, not a single tick. |
-| **On-demand re-verification trigger** | Metered-cost user action → needs a security/ops decision (role-gate + rate-limit + cost posture) before exposing. |
+| **On-demand re-verification trigger** | ✅ BUILT (data-management #3 follow-up): `POST /home/data-quality/reverify` — owner/admin-only (`requireRole("owner","admin")`) + per-caller `rateLimit` + a confirm dialog. NOT a new cost surface: the worker's `runReverification` re-checks the per-tenant `data_health.reverification` flag and **no-ops if off**, and the work is bounded to already-revealed, past-SLA contacts + idempotent — so it is the MANUAL form of the existing daily sweep, never a flag bypass. Platform-cost-only (re-verification re-runs the verifier; it does **not** debit tenant reveal credits — `chargeFor` is the reveal path only). The shared queue contract (`REVERIFICATION_QUEUE` + `ReverificationJobData`) moved to `@leadwolf/types` so api-producer + worker-consumer never drift. |
 
 ## 9. Recommended next move
 

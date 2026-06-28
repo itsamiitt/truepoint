@@ -14,11 +14,13 @@ import { useDataHealthMetrics } from "../hooks/useDataHealthMetrics";
 import { useDataHealthTrend } from "../hooks/useDataHealthTrend";
 import { useRetentionRuns } from "../hooks/useRetentionRuns";
 import { useReverificationRuns } from "../hooks/useReverificationRuns";
+import { useSessionRole } from "../hooks/useSessionRole";
 import { FreshnessTrend } from "./FreshnessTrend";
 import { MetricsSection } from "./MetricsSection";
 import { PerFieldFill } from "./PerFieldFill";
 import { RetentionActivity } from "./RetentionActivity";
 import { ReverificationActivity } from "./ReverificationActivity";
+import { ReverifyNowButton } from "./ReverifyNowButton";
 import { SectionCard } from "./SectionCard";
 import { VerificationBreakdown } from "./VerificationBreakdown";
 
@@ -35,6 +37,8 @@ export function DataHealthPage() {
   const trend = useDataHealthTrend();
   const runs = useReverificationRuns();
   const retention = useRetentionRuns();
+  const role = useSessionRole();
+  const canReverify = role === "owner" || role === "admin";
   const [tab, setTab] = useState<TabId>("overview");
 
   const refreshing = metrics.loading || trend.loading || runs.loading || retention.loading;
@@ -112,6 +116,10 @@ export function DataHealthPage() {
       {tab === "activity" ? (
         <div className={styles.sections}>
           <SectionCard title="Re-verification activity" hint="Daily freshness sweeps">
+            <ReverifyNowButton
+              canTrigger={canReverify}
+              onQueued={() => window.setTimeout(() => void runs.reload(), 2000)}
+            />
             <ReverificationActivity
               runs={runs.runs}
               loading={runs.loading}

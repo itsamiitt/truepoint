@@ -76,8 +76,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1008,
-  "fileSetHash": "sha256:249bf41c797a21a29e6c7302c8511be5b397a7194ced46724f828f4e8db8dbae",
+  "fileCount": 1012,
+  "fileSetHash": "sha256:a717125fff0e9fb1a8818e9236168ddd78abc24f82026c3193b81a96fd09a82c",
   "features": {
     "account-search": {
       "web": [],
@@ -273,12 +273,14 @@
         "apps/web/src/features/data-health/components/PerFieldFill.tsx",
         "apps/web/src/features/data-health/components/RetentionActivity.tsx",
         "apps/web/src/features/data-health/components/ReverificationActivity.tsx",
+        "apps/web/src/features/data-health/components/ReverifyNowButton.tsx",
         "apps/web/src/features/data-health/components/SectionCard.tsx",
         "apps/web/src/features/data-health/components/VerificationBreakdown.tsx",
         "apps/web/src/features/data-health/hooks/useDataHealthMetrics.ts",
         "apps/web/src/features/data-health/hooks/useDataHealthTrend.ts",
         "apps/web/src/features/data-health/hooks/useRetentionRuns.ts",
         "apps/web/src/features/data-health/hooks/useReverificationRuns.ts",
+        "apps/web/src/features/data-health/hooks/useSessionRole.ts",
         "apps/web/src/features/data-health/index.ts",
         "apps/web/src/features/data-health/types.ts"
       ],
@@ -461,6 +463,7 @@
       "admin": [],
       "api": [
         "apps/api/src/features/home/index.ts",
+        "apps/api/src/features/home/reverificationQueue.ts",
         "apps/api/src/features/home/routes.test.ts",
         "apps/api/src/features/home/routes.ts"
       ],
@@ -1655,6 +1658,7 @@
       "packages/types/src/platformAuditCoverage.test.ts",
       "packages/types/src/providerConfigs.ts",
       "packages/types/src/retention.ts",
+      "packages/types/src/reverification.ts",
       "packages/types/src/savedSearch.test.ts",
       "packages/types/src/savedSearch.ts",
       "packages/types/src/scim.ts",
