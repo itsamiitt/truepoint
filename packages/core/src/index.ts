@@ -578,11 +578,11 @@ export {
   type SetValuesInput,
 } from "./customFields/setValues.ts";
 
-// Per-data-class retention engine — SHADOW pass (data-management backlog #6, phase 2; design
-// 16-retention-engine-design.md). Per tenant: gate on the per-tenant engine flag, then COUNT candidate rows per
-// eligible v1 class and append a retention_runs evidence row. DELETES NOTHING (enforce-mode deletion is phase 3);
-// run by the leader-locked daily dataRetentionSweep worker.
+// Per-data-class retention engine — per-tenant sweep (data-management backlog #6; design
+// 16-retention-engine-design.md). Per tenant: gate on the per-tenant engine flag, then per eligible v1 class COUNT
+// candidate rows, PURGE them only when the class is in `enforce` mode (double-gated: flag + per-class enforce; ships
+// INERT), and append a retention_runs evidence row. Run by the leader-locked daily dataRetentionSweep worker.
 export {
-  runRetentionShadowSweep,
-  type RetentionShadowSweepResult,
+  runRetentionSweepForTenant,
+  type RetentionSweepResult,
 } from "./retention/runRetentionSweep.ts";

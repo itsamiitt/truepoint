@@ -1,13 +1,14 @@
-// dataRetentionSweep.ts — the scheduled, leader-locked retention SHADOW sweep (data-management backlog #6, phase 2;
-// design 16-retention-engine-design.md §5). Mirrors the reverification / master-backfill / data-quality-snapshot
-// sweeps: a single repeatable daily job enumerates ACTIVE tenants and runs the per-tenant SHADOW retention pass for
-// each. The pass is gated INSIDE by the per-tenant `retention_engine_enabled` flag (off, the fail-closed default ⇒
-// it records nothing), so registering this schedule is harmless — a tenant without the flag is skipped. SHADOW: the
-// pass COUNTS candidate rows per data class and appends a retention_runs evidence row — it DELETES NOTHING
-// (enforce-mode deletion is phase 3). Leader-locked so exactly one worker fans out per tick; best-effort per
-// tenant — one tenant's failure never aborts the sweep.
+// dataRetentionSweep.ts — the scheduled, leader-locked retention sweep (data-management backlog #6; design
+// 16-retention-engine-design.md §5). Mirrors the reverification / master-backfill / data-quality-snapshot sweeps:
+// a single repeatable daily job enumerates ACTIVE tenants and runs the per-tenant retention pass for each. The pass
+// is DOUBLE-GATED and ships INERT: it is gated INSIDE by the per-tenant `retention_engine_enabled` flag (off, the
+// fail-closed default ⇒ it records nothing), and a class deletes ONLY when its policy.mode === 'enforce' (the
+// default is `shadow`, which COUNTS + records evidence but DELETES NOTHING). So registering this schedule is
+// harmless — with the shipped defaults nothing is purged until an operator flips a class to `enforce` on a
+// flag-enabled tenant. Leader-locked so exactly one worker fans out per tick; best-effort per tenant — one
+// tenant's failure never aborts the sweep.
 
-import { runRetentionShadowSweep } from "@leadwolf/core";
+import { runRetentionSweepForTenant } from "@leadwolf/core";
 import { retentionScanRepository } from "@leadwolf/db";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
@@ -24,8 +25,9 @@ export type DataRetentionSweepJobData = Record<string, never>;
 
 /**
  * Build the sweep processor. Takes the Redis leader lock, enumerates ACTIVE tenants (a system-level, non-PII,
- * owner-connection read), and runs the per-tenant SHADOW retention pass for each — best-effort: one tenant's
- * failure never aborts the sweep. Each pass is itself flag-gated and DELETES NOTHING (counts + records only).
+ * owner-connection read), and runs the per-tenant retention pass for each — best-effort: one tenant's failure
+ * never aborts the sweep. Each pass is double-gated (per-tenant flag + per-class `enforce` mode) and deletes
+ * nothing unless a class has been deliberately flipped to `enforce` on a flag-enabled tenant.
  */
 export function makeProcessDataRetentionSweep(redis: IORedis) {
   return async function processDataRetentionSweep(
@@ -34,19 +36,21 @@ export function makeProcessDataRetentionSweep(redis: IORedis) {
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
       const tenantIds = await retentionScanRepository.listActiveTenants(MAX_TENANTS_PER_SWEEP);
       let recorded = 0;
+      let deleted = 0;
       for (const tenantId of tenantIds) {
         try {
-          const result = await runRetentionShadowSweep({ tenantId });
+          const result = await runRetentionSweepForTenant({ tenantId });
           recorded += result.classesRecorded;
+          deleted += result.totalDeleted;
         } catch (e) {
-          log.error("data-retention sweep: per-tenant shadow pass failed", {
+          log.error("data-retention sweep: per-tenant pass failed", {
             tenantId,
             error: e instanceof Error ? e.message : String(e),
           });
         }
       }
       if (recorded > 0) {
-        log.info("data-retention sweep: shadow runs recorded", { count: recorded });
+        log.info("data-retention sweep: runs recorded", { count: recorded, deleted });
       }
     });
   };
