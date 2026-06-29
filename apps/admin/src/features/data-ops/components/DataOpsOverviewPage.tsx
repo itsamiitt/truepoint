@@ -8,6 +8,7 @@
 "use client";
 
 import { StatTile, StateSwitch } from "@leadwolf/ui";
+import Link from "next/link";
 import { formatInt } from "../format";
 import { useDataOpsOverview } from "../hooks/useDataOpsOverview";
 
@@ -63,6 +64,15 @@ export function DataOpsOverviewPage() {
           </div>
         ) : null}
       </StateSwitch>
+
+      <div style={{ marginTop: 24, display: "flex", gap: 20, flexWrap: "wrap" }}>
+        <Link href="/imports" style={{ fontWeight: 500 }}>
+          Bulk imports monitor →
+        </Link>
+        <Link href="/data-ops/enrichment" style={{ fontWeight: 500 }}>
+          Enrichment runs →
+        </Link>
+      </div>
     </div>
   );
 }

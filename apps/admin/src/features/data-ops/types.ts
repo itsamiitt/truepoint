@@ -55,3 +55,21 @@ export interface DataImportDetail {
   failedReason: string | null;
   chunkTally: ImportChunkTally[];
 }
+
+/** One row of the cross-tenant enrichment-run monitor, mirroring GET /admin/data/enrichment/runs. METADATA +
+ * credit spend only — no enriched contact PII. creditSpentMicros is micro-credits (1e6 = 1). Dates are ISO strings. */
+export interface EnrichmentRunRow {
+  jobId: string;
+  tenantId: string;
+  tenantName: string;
+  status: string;
+  sourceName: string;
+  totalRows: number;
+  matchedRows: number;
+  enrichedRows: number;
+  chargedRows: number;
+  creditSpentMicros: number;
+  createdAt: string;
+  completedAt: string | null;
+  failedReason: string | null;
+}

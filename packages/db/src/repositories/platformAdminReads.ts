@@ -163,6 +163,28 @@ export interface PlatformImportJobDetail {
 }
 
 /**
+ * One recent bulk-ENRICHMENT job as seen by STAFF (database-management-research 08) — the cross-tenant
+ * enrichment-run monitoring shape. Like PlatformImportJobRow it is the control-row METADATA + denormalized
+ * tallies + credit SPEND only; it carries NO enrichment_job_rows data (no raw CSV `input`, no `enriched_fields`),
+ * so no enriched contact PII crosses the boundary. creditSpentMicros is micro-credits (1e6 = 1 credit).
+ */
+export interface PlatformEnrichmentJobRow {
+  jobId: string;
+  tenantId: string;
+  tenantName: string;
+  status: string;
+  sourceName: string;
+  totalRows: number;
+  matchedRows: number;
+  enrichedRows: number;
+  chargedRows: number;
+  creditSpentMicros: number;
+  createdAt: Date;
+  completedAt: Date | null;
+  failedReason: string | null;
+}
+
+/**
  * One recent retention-engine RUN as seen by STAFF (data-management A5) — the cross-tenant view of the SHADOW
  * evidence: what the daily sweep found it WOULD delete for each data class, BEFORE a class is flipped to
  * `enforce` (design 16-retention-engine-design.md). COUNTS + class + window only: candidate/deleted tallies,
@@ -500,6 +522,37 @@ export const platformAdminRepository = {
       .groupBy(importJobChunks.status);
 
     return { ...job, chunkTally };
+  },
+
+  /**
+   * Recent bulk-ENRICHMENT jobs ACROSS all tenants (database-management-research 08 — the enrichment-run console
+   * read slice). Each control row joined to its tenant NAME, returning the monitoring columns (status / row
+   * tallies / credit spend / failure), newest-first. BOUNDED to PLATFORM_READ_LIMIT — no unbounded cross-tenant
+   * scan. Runs inside the caller's audited withPlatformTx; selects from `enrichment_jobs` ONLY — NEVER an
+   * `enrichment_job_rows` row — so no enriched contact PII (no `input`/`enriched_fields`) leaves the boundary
+   * (mirrors the recentImportJobs privacy-first idiom).
+   */
+  async recentEnrichmentJobs(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformEnrichmentJobRow[]> {
+    return tx
+      .select({
+        jobId: enrichmentJobs.id,
+        tenantId: enrichmentJobs.tenantId,
+        tenantName: tenants.name,
+        status: enrichmentJobs.status,
+        sourceName: enrichmentJobs.sourceName,
+        totalRows: enrichmentJobs.totalRows,
+        matchedRows: enrichmentJobs.matchedRows,
+        enrichedRows: enrichmentJobs.enrichedRows,
+        chargedRows: enrichmentJobs.chargedRows,
+        creditSpentMicros: enrichmentJobs.creditSpentMicros,
+        createdAt: enrichmentJobs.createdAt,
+        completedAt: enrichmentJobs.completedAt,
+        failedReason: enrichmentJobs.failedReason,
+      })
+      .from(enrichmentJobs)
+      .innerJoin(tenants, eq(tenants.id, enrichmentJobs.tenantId))
+      .orderBy(desc(enrichmentJobs.createdAt))
+      .limit(Math.min(limit, PLATFORM_READ_LIMIT));
   },
 
   /**

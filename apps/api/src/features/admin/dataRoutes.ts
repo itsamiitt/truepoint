@@ -98,3 +98,15 @@ dataRoutes.get("/imports/:jobId", requireCapability("data:read"), async (c) => {
   if (!detail) throw new NotFoundError("Import job not found.");
   return c.json(detail);
 });
+
+// ── Enrichment-run monitor (database-management-research 08, Phase 2 read slice) — recent bulk-enrichment jobs
+// ACROSS all tenants: status / row tallies / credit spend / failures joined to the tenant name, newest-first +
+// PLATFORM_READ_LIMIT-bounded. METADATA + cost ONLY (enrichment_jobs control table; NEVER enrichment_job_rows)
+// — no enriched contact PII crosses the boundary. data:read-gated; the read runs on the audited withPlatformTx.
+// The write actions (re-run / test-batch / preview-then-commit) land later behind data:manage + the approval flow.
+dataRoutes.get("/enrichment/runs", requireCapability("data:read"), async (c) => {
+  const runs = await withPlatformTx(actorOf(c), "admin.data_enrichment_runs", (tx) =>
+    platformAdminRepository.recentEnrichmentJobs(tx),
+  );
+  return c.json({ runs });
+});

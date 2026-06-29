@@ -6,7 +6,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { DataImportDetail, DataOpsOverview } from "./types";
+import type { DataImportDetail, DataOpsOverview, EnrichmentRunRow } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -25,4 +25,12 @@ export async function fetchDataImportDetail(jobId: string): Promise<DataImportDe
   const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/imports/${jobId}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load the import job"));
   return (await res.json()) as DataImportDetail;
+}
+
+/** GET /admin/data/enrichment/runs — recent bulk-enrichment jobs across all tenants (metadata + credit spend). */
+export async function fetchEnrichmentRuns(): Promise<EnrichmentRunRow[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/enrichment/runs`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load enrichment runs"));
+  const body = (await res.json()) as { runs: EnrichmentRunRow[] };
+  return body.runs;
 }
