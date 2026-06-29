@@ -9,7 +9,7 @@ import { type SQL, and, asc, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenantAuthPolicies, tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
-import { importJobs } from "../schema/importJobs.ts";
+import { importJobChunks, importJobs } from "../schema/importJobs.ts";
 import { listMembers, lists } from "../schema/lists.ts";
 import { retentionRuns } from "../schema/retention.ts";
 
@@ -128,6 +128,38 @@ export interface PlatformImportJobRow {
   createdAt: Date;
   completedAt: Date | null;
   failedReason: string | null;
+}
+
+/**
+ * One bulk-import job's DETAIL as seen by STAFF (database-management-research Phase 1D) — the richer single-job
+ * shape behind the import drill-down. METADATA + denormalized outcome tallies + a per-status chunk tally; like
+ * PlatformImportJobRow it carries NO import_job_rows data (no raw CSV `input`, no free-text `reject_reason`), so
+ * no imported contact PII crosses the boundary.
+ */
+export interface PlatformImportJobDetail {
+  jobId: string;
+  tenantId: string;
+  tenantName: string;
+  status: string;
+  sourceName: string;
+  avScanStatus: string;
+  conflictPolicy: string;
+  fileSize: number | null;
+  totalChunks: number;
+  completedChunks: number;
+  rowsTotal: number;
+  rowsCreated: number;
+  rowsMatched: number;
+  rowsDuplicate: number;
+  rowsSkipped: number;
+  rowsRejected: number;
+  rowsDeduped: number;
+  rowsUnprocessed: number;
+  createdAt: Date;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  failedReason: string | null;
+  chunkTally: { status: string; count: number }[];
 }
 
 /**
@@ -418,6 +450,56 @@ export const platformAdminRepository = {
       .innerJoin(tenants, eq(tenants.id, importJobs.tenantId))
       .orderBy(desc(importJobs.createdAt))
       .limit(Math.min(limit, PLATFORM_READ_LIMIT));
+  },
+
+  /**
+   * One bulk-import job's DETAIL across tenants (database-management-research Phase 1D) — the control-row
+   * metadata + denormalized outcome tallies joined to the tenant NAME, plus a per-status CHUNK tally so an
+   * operator can see WHERE a job stalled or failed. Like recentImportJobs it selects from import_jobs /
+   * import_job_chunks ONLY — NEVER import_job_rows — so neither the raw CSV `input` nor a free-text
+   * `reject_reason` (which may embed a row value) leaves the boundary: METADATA + counts only. Audited via the
+   * caller's withPlatformTx. Returns null when the job id is unknown (the route turns that into a clean 404).
+   * The reject-reason histogram is deferred until reject_reason is confirmed a non-PII code.
+   */
+  async importJobDetail(tx: Tx, jobId: string): Promise<PlatformImportJobDetail | null> {
+    const [job] = await tx
+      .select({
+        jobId: importJobs.id,
+        tenantId: importJobs.tenantId,
+        tenantName: tenants.name,
+        status: importJobs.status,
+        sourceName: importJobs.sourceName,
+        avScanStatus: importJobs.avScanStatus,
+        conflictPolicy: importJobs.conflictPolicy,
+        fileSize: importJobs.fileSize,
+        totalChunks: importJobs.totalChunks,
+        completedChunks: importJobs.completedChunks,
+        rowsTotal: importJobs.rowsTotal,
+        rowsCreated: importJobs.rowsCreated,
+        rowsMatched: importJobs.rowsMatched,
+        rowsDuplicate: importJobs.rowsDuplicate,
+        rowsSkipped: importJobs.rowsSkipped,
+        rowsRejected: importJobs.rowsRejected,
+        rowsDeduped: importJobs.rowsDeduped,
+        rowsUnprocessed: importJobs.rowsUnprocessed,
+        createdAt: importJobs.createdAt,
+        startedAt: importJobs.startedAt,
+        completedAt: importJobs.completedAt,
+        failedReason: importJobs.failedReason,
+      })
+      .from(importJobs)
+      .innerJoin(tenants, eq(tenants.id, importJobs.tenantId))
+      .where(eq(importJobs.id, jobId))
+      .limit(1);
+    if (!job) return null;
+
+    const chunkTally = await tx
+      .select({ status: importJobChunks.status, count: sql<number>`count(*)::int` })
+      .from(importJobChunks)
+      .where(eq(importJobChunks.jobId, jobId))
+      .groupBy(importJobChunks.status);
+
+    return { ...job, chunkTally };
   },
 
   /**

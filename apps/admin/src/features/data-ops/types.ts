@@ -21,3 +21,37 @@ export interface DataOpsOverview {
   /** Recent retention-engine RUNS — the shadow-mode evidence operators review before any `enforce` flip. */
   retention: { recentRuns: number; truncated: boolean };
 }
+
+/** One row of the per-status chunk tally on the import drill-down. */
+export interface ImportChunkTally {
+  status: string;
+  count: number;
+}
+
+/** One bulk-import job's drill-down, mirroring GET /admin/data/imports/:jobId. METADATA + counts only — no raw
+ * CSV row contents and no reject-reason text (those stay server-side). Dates arrive as ISO strings. */
+export interface DataImportDetail {
+  jobId: string;
+  tenantId: string;
+  tenantName: string;
+  status: string;
+  sourceName: string;
+  avScanStatus: string;
+  conflictPolicy: string;
+  fileSize: number | null;
+  totalChunks: number;
+  completedChunks: number;
+  rowsTotal: number;
+  rowsCreated: number;
+  rowsMatched: number;
+  rowsDuplicate: number;
+  rowsSkipped: number;
+  rowsRejected: number;
+  rowsDeduped: number;
+  rowsUnprocessed: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  failedReason: string | null;
+  chunkTally: ImportChunkTally[];
+}

@@ -6,7 +6,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { DataOpsOverview } from "./types";
+import type { DataImportDetail, DataOpsOverview } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -18,4 +18,11 @@ export async function fetchDataOpsOverview(): Promise<DataOpsOverview> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/overview`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load the data-ops overview"));
   return (await res.json()) as DataOpsOverview;
+}
+
+/** GET /admin/data/imports/:jobId — one bulk-import job's metadata + per-status chunk tally (counts only, no PII). */
+export async function fetchDataImportDetail(jobId: string): Promise<DataImportDetail> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/imports/${jobId}`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the import job"));
+  return (await res.json()) as DataImportDetail;
 }

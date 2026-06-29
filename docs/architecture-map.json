@@ -82,8 +82,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1156,
-  "fileSetHash": "sha256:f615e42104f7962bc11304afac73a8794174532a533c4b6cfcee804674d674fa",
+  "fileCount": 1159,
+  "fileSetHash": "sha256:82ba6534346400a451aa23cc1580866c89bbd964922daeae6042001e5cbd344f",
   "features": {
     "account-search": {
       "web": [],
@@ -377,8 +377,10 @@
       "web": [],
       "admin": [
         "apps/admin/src/features/data-ops/api.ts",
+        "apps/admin/src/features/data-ops/components/DataImportDetailPage.tsx",
         "apps/admin/src/features/data-ops/components/DataOpsOverviewPage.tsx",
         "apps/admin/src/features/data-ops/format.ts",
+        "apps/admin/src/features/data-ops/hooks/useDataImportDetail.ts",
         "apps/admin/src/features/data-ops/hooks/useDataOpsOverview.ts",
         "apps/admin/src/features/data-ops/index.ts",
         "apps/admin/src/features/data-ops/types.ts"
@@ -1427,6 +1429,7 @@
       "apps/admin/src/app/(shell)/billing/page.tsx",
       "apps/admin/src/app/(shell)/compliance/page.tsx",
       "apps/admin/src/app/(shell)/content/page.tsx",
+      "apps/admin/src/app/(shell)/data-ops/imports/[jobId]/page.tsx",
       "apps/admin/src/app/(shell)/data-ops/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
       "apps/admin/src/app/(shell)/imports/page.tsx",

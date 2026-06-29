@@ -11,9 +11,13 @@
 // retention_runs CONTROL tables, never import_job_rows, so no imported contact PII crosses the boundary
 // (truepoint-security: a cross-tenant admin read exposes counts, not records).
 import { PLATFORM_READ_LIMIT, platformAdminRepository, withPlatformTx } from "@leadwolf/db";
+import { NotFoundError, ValidationError } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
+
+// Accept any RFC-4122-shaped UUID (incl. the v7 ids this app mints) for path-param validation.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const dataRoutes = new Hono<{ Variables: ApiVariables }>();
 
@@ -74,4 +78,23 @@ dataRoutes.get("/overview", requireCapability("data:read"), async (c) => {
   });
 
   return c.json(overview);
+});
+
+// ── Import-job drill-down (database-management-research Phase 1D) — one bulk-import job's control-row metadata +
+// denormalized outcome tallies + a per-status CHUNK tally, so an operator can see WHERE a job stalled or failed.
+// METADATA + counts ONLY (import_jobs / import_job_chunks; NEVER import_job_rows) — no raw CSV `input` and no
+// free-text `reject_reason` cross the boundary. data:read-gated; the read runs on the audited withPlatformTx
+// (targets the job). The jobId is UUID-validated BEFORE the tx (a malformed id is a clean 422, no Postgres 22P02
+// 500); an unknown id is a clean 404 after the tx (the lookup-attempt audit row is kept, matching /tenants/:id).
+dataRoutes.get("/imports/:jobId", requireCapability("data:read"), async (c) => {
+  const jobId = c.req.param("jobId");
+  if (!UUID_RE.test(jobId)) throw new ValidationError("jobId must be a UUID");
+  const detail = await withPlatformTx(
+    actorOf(c),
+    "admin.data_import_detail",
+    (tx) => platformAdminRepository.importJobDetail(tx, jobId),
+    { targetType: "import_job", targetId: jobId },
+  );
+  if (!detail) throw new NotFoundError("Import job not found.");
+  return c.json(detail);
 });

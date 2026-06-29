@@ -8,6 +8,7 @@
 
 import { type Column, DataTable, EmptyState, StateSwitch, StatusBadge } from "@leadwolf/ui";
 import { FileUp } from "lucide-react";
+import Link from "next/link";
 import { avScanTone, formatInt, jobStatusTone, shortDate } from "../format";
 import { useImportJobs } from "../hooks/useImportJobs";
 import type { ImportJobRow } from "../types";
@@ -81,6 +82,17 @@ export function ImportsMonitorPage() {
       header: "Created",
       sortValue: (j) => j.createdAt,
       cell: (j) => <span className="tp-cell-mono">{shortDate(j.createdAt)}</span>,
+    },
+    {
+      // Bridge into the Data-management drill-down (database-management-research Phase 1D). A URL-only link — no
+      // code coupling to the data-ops feature; the target route gates on the data:read capability server-side.
+      key: "detail",
+      header: "",
+      cell: (j) => (
+        <Link href={`/data-ops/imports/${j.jobId}`} style={{ fontWeight: 500 }}>
+          View
+        </Link>
+      ),
     },
   ];
 
