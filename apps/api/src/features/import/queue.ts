@@ -44,3 +44,46 @@ export async function enqueueImport(data: ImportJobData): Promise<string> {
 export async function getImportJob(jobId: string): Promise<Job<ImportJobData> | undefined> {
   return importQueue().getJob(jobId);
 }
+
+const HEALTH_PROBE_TIMEOUT_MS = 1500;
+
+/** Live depth/worker probe for the platform system-health surface (B2). Reuses the lazy producer singleton
+ *  (no new connection per call) and THROWS on a ~1.5s timeout or Redis error so the caller's allSettled
+ *  marks this queue unreachable — we never fabricate a zeroed reading. Read-only: never enqueues. */
+export async function importQueueHealth(): Promise<{
+  name: string;
+  waiting: number;
+  active: number;
+  failed: number;
+  delayed: number;
+  workers: number;
+}> {
+  const q = importQueue();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      (async () => {
+        const [counts, workers] = await Promise.all([
+          q.getJobCounts("waiting", "active", "failed", "delayed"),
+          q.getWorkers(),
+        ]);
+        return {
+          name: IMPORTS_QUEUE,
+          waiting: counts.waiting ?? 0,
+          active: counts.active ?? 0,
+          failed: counts.failed ?? 0,
+          delayed: counts.delayed ?? 0,
+          workers: workers.length,
+        };
+      })(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${IMPORTS_QUEUE} health probe timed out`)),
+          HEALTH_PROBE_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}

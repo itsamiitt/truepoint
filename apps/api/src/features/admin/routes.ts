@@ -32,6 +32,7 @@ import { auditLogRoutes } from "./auditLog.ts";
 import { impersonationRoutes } from "./impersonation.ts";
 import { providerConfigRoutes } from "./providerConfigs.ts";
 import { staffRoutes } from "./staff.ts";
+import { type SystemHealthProbe, probeQueues } from "./systemHealthProbes.ts";
 
 // Accept any RFC-4122-shaped UUID (incl. the v7 ids this app mints) for path-param validation.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -145,8 +146,13 @@ adminRoutes.post(
   },
 );
 
-// ── System health (13 §9) — service status + the bulk-enrichment job queue tallied by status (the
-// queue-depth / DLQ proxy until the worker metrics surface lands). Bounded read, tallied in JS. ──
+// ── System health (13 §9) — service status + two complementary job views. `jobs` is the import_jobs
+// CONTROL-TABLE tally (a bounded DB read, the historical queue-depth/DLQ proxy); `queues` is the LIVE BullMQ
+// view (real depth/DLQ + connected-worker counts the api reads off Redis via the producer singletons, B2).
+// workers/redis are now REAL probe results — no longer hardcoded "unknown"; search STAYS "unknown" (it has no
+// api client to probe — do not fabricate a green check). The route never hangs (each probe is timeout-bounded)
+// and never 500s on a probe failure (probeQueues always resolves; the defensive .catch degrades a total
+// failure to redis:"down"/workers:"unknown" and still returns 200). ──
 adminRoutes.get("/system-health", async (c) => {
   const statuses = await withPlatformTx(actorOf(c), "admin.system_health", (tx) =>
     platformAdminRepository.sampleJobStatuses(tx),
@@ -158,16 +164,25 @@ adminRoutes.get("/system-health", async (c) => {
   const queueDepth = (byStatus.queued ?? 0) + (byStatus.running ?? 0) + (byStatus.estimating ?? 0);
   const deadLetter = byStatus.failed ?? 0;
 
+  // Live BullMQ probe. probeQueues already absorbs per-queue failures via allSettled and always resolves; the
+  // .catch is belt-and-suspenders against a synchronous singleton-construction error so the route can NEVER
+  // 500 from a probe — a total failure degrades to redis:"down"/workers:"unknown" with no queue readings.
+  const probe = await probeQueues().catch(
+    () => ({ redis: "down", workers: "unknown", queues: [] }) as SystemHealthProbe,
+  );
+
   return c.json({
-    // The api answered this request, so it is up; other services are reported as unknown until a
-    // dedicated probe surface exists (do not fabricate green checks).
+    // The api answered this request, so it is up; database is up (the tx above ran). workers/redis are real
+    // BullMQ probe results; search stays "unknown" — no api client exists to probe it (no fabricated checks).
     services: [
       { name: "api", status: "up" },
       { name: "database", status: "up" },
-      { name: "workers", status: "unknown" },
-      { name: "redis", status: "unknown" },
+      { name: "workers", status: probe.workers },
+      { name: "redis", status: probe.redis },
       { name: "search", status: "unknown" },
     ],
+    // Live per-queue depth / DLQ (failed) / connected-worker counts; reachable:false + null counts when down.
+    queues: probe.queues,
     jobs: {
       sampleSize: statuses.length,
       truncated: statuses.length >= PLATFORM_READ_LIMIT,
