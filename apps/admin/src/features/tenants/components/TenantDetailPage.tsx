@@ -1,6 +1,7 @@
 // TenantDetailPage.tsx — one org's detail (13 §3.1): the tenant's plan/limits/region, its workspaces, and its
-// members, all read from the api `/admin/tenants/:id` surface. Read-only in this phase. Renders each async
-// state through the shared State Kit.
+// members, all read from the api `/admin/tenants/:id` surface. The header carries the staff mutation row
+// (TenantActions: suspend/reactivate + manual credit grant/adjustment — 13a Area 1). Renders each async state
+// through the shared State Kit.
 "use client";
 
 import { Card, type Column, DataTable, StateSwitch, StatusBadge } from "@leadwolf/ui";
@@ -10,6 +11,11 @@ import { formatInt, shortDate, statusTone } from "../format";
 import { useTenantDetail } from "../hooks/useTenantDetail";
 import type { TenantMember, TenantWorkspace } from "../types";
 import { AuthEnforcementCard } from "./AuthEnforcementCard";
+import { SupportNotes } from "./SupportNotes";
+import { TenantActions } from "./TenantActions";
+import { TenantHolds } from "./TenantHolds";
+import { TenantOverview } from "./TenantOverview";
+import { TenantPurchases } from "./TenantPurchases";
 
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
@@ -87,9 +93,12 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 <h2 className="tp-page-title">{detail.tenant.name}</h2>
                 <p className="tp-page-sub">{detail.tenant.slug}</p>
               </div>
-              <StatusBadge tone={statusTone(detail.tenant.status)}>
-                {detail.tenant.status}
-              </StatusBadge>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <StatusBadge tone={statusTone(detail.tenant.status)}>
+                  {detail.tenant.status}
+                </StatusBadge>
+                <TenantActions tenant={detail.tenant} onChanged={reload} />
+              </div>
             </div>
 
             <Card style={{ marginBottom: 24 }}>
@@ -113,6 +122,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               </div>
             </Card>
 
+            <TenantOverview tenantId={tenantId} />
             <AuthEnforcementCard detail={detail} onChanged={reload} />
 
             <h3 className="tp-section-title">Workspaces ({detail.workspaces.length})</h3>
@@ -140,6 +150,10 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 </p>
               }
             />
+
+            <TenantPurchases tenantId={tenantId} onRefunded={reload} />
+            <TenantHolds tenantId={tenantId} />
+            <SupportNotes tenantId={tenantId} />
           </>
         ) : null}
       </StateSwitch>

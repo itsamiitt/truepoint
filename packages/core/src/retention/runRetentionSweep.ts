@@ -29,7 +29,7 @@
 
 import {
   isRetentionV1Class,
-  retentionPolicyRepository,
+  retentionClassPolicyRepository,
   retentionRunRepository,
   retentionScanRepository,
   withTenantTx,
@@ -68,7 +68,7 @@ export async function runRetentionSweepForTenant(input: {
   const gate = await withTenantTx({ tenantId }, async (tx) => {
     const enabled = await isFlagEnabledForTenant(tx, tenantId, RETENTION_ENGINE_FLAG_KEY);
     if (!enabled) return { enabled: false as const, policies: [] as RetentionPolicy[] };
-    const policies = await retentionPolicyRepository.listPolicies(tx);
+    const policies = await retentionClassPolicyRepository.listPolicies(tx);
     return { enabled: true as const, policies };
   });
   if (!gate.enabled) {

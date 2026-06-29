@@ -25,8 +25,8 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **924 source files · 54 code-bearing domains · 21 shared areas · 31 domain-vocabulary warnings · 34
-> unbucketed** (4 framework-root configs + 4 undeclared worker queues + 26 repositories whose entity isn't
+> **978 source files · 54 code-bearing domains · 21 shared areas · 31 domain-vocabulary warnings · 42
+> unbucketed** (4 framework-root configs + 8 undeclared worker queues + 30 repositories whose entity isn't
 > in `REPO_DOMAIN` — see Notes). Design refs: [04](./planning/04-ui-ux-design.md),
 > [10-roadmap.md](./planning/10-roadmap.md), [11 §6](./planning/11-information-architecture.md),
 > [16 §5](./planning/16-code-organization.md), ADR-0006/0007/0008/0009/0011/0013/0016/0018/0019/0021/0023/0028/0035/0037/0040.
@@ -71,7 +71,8 @@ apps/                           # deployable processes (thin transport adapters)
     components/shell/{AdminShell,Sidebar,TopBar,navConfig,Brandmark}  components/ImpersonationBanner  lib/{adminGate,authClient,pkce}
     app/(shell)/{tenants,users,staff,provider-configs,feature-flags,audit-log,system-health}  features/*
   workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring · dsar · outreach · firmographics ·
-                                #   dedup · retentionSweep · sequenceTick queues + leaderLock + health/logger  [LIVE]
+                                #   dedup · retentionSweep · sequenceTick · tokenRefresh queues + leaderLock +
+                                #   mailboxThrottle (Redis token-bucket) + health/logger  [LIVE]
 ```
 
 ## FEATURE → FILES index (live)
@@ -210,19 +211,52 @@ apps/                           # deployable processes (thin transport adapters)
 - **core:** `email/` — `sendingDomains.ts` (create + DNS-verify SPF/DKIM/DMARC per-tenant domains) + `dnsAuth.ts`
   (verify against an injected DnsResolverPort), `connectMailbox.ts` (workspace mailbox + KMS-envelope-encrypted credential)
   + `secretStore.ts` (AES-256-GCM versioned envelope), `resolveSendingIdentity.ts` (own mailbox + verified domain or refuse),
-  `dispatchOutreachSend.ts` (P1 send-gate: verify identity + consume tenant send-quota in tx, then M9 `sendStep` unchanged),
+  `dispatchOutreachSend.ts` (P1 send-gate: verify identity + consume tenant send-quota in tx + per-mailbox
+  rate-throttle check, then M9 `sendStep` unchanged; a throttle denial refunds the quota and defers the send),
   `providerAdapter.ts` (ESP adapter seam — **dark default `consoleSender`, no network until an SES/Google/SMTP adapter is wired**),
-  `templates.ts` + `renderTemplate.ts` (versioned owner-scoped templates; HTML-escaped single-pass `{{merge}}`),
+  `templates.ts` + `renderTemplate.ts` (**P2 editor:** versioned owner-scoped templates — create/update +
+  `getTemplate`/`listTemplateVersions`/`restoreVersion` (immutable append-only versions) + keyset-paginated
+  `listTemplates` + `previewTemplate` (server-side safe render: HTML-escaped single-pass `{{merge}}`, canonical
+  `allowedKeys` whitelist); D8 owner-only edits, IDOR→404),
   `sequenceScheduler.ts` (leader-locked tick: claim due enrollments `FOR UPDATE SKIP LOCKED`), `trackingToken.ts`
   (signed opaque open-pixel/click token), `ingestTrackingEvent.ts` (idempotent event → projects open/click to activities),
   `deliveryWebhook.ts` (HMAC-verified ESP webhook → delivery/bounce/complaint), `deliverabilityAnalytics.ts`
   (workspace aggregates; reply-rate primary, opens MPP-inflated), `warmup.ts` (deterministic ramp curve), `governance.ts`
-  (staff-only global suppression + per-tenant send-quota)
+  (staff-only global suppression + per-tenant send-quota); **P1 OAuth + Gmail send (new):** `signingKeys.ts` (P0
+  per-tenant webhook/tracking key derivation — closes the global-secret forgery), `pkce.ts` + `oauthProvider.ts`
+  (provider-agnostic connect seam + registry + injectable HTTP port) + `googleOAuth.ts` (Gmail OAuth:
+  authorize/exchange/refresh/revoke/identity; scopes `gmail.send`+`gmail.readonly`), `mailboxConnectFlow.ts`
+  (start/complete connect handshake — single-use state, send-scope-downgrade reject, encrypted token vault),
+  `gmailSend.ts` + `mimeMessage.ts` (Gmail `messages.send` adapter realizing the M9 `EmailSenderPort`: RFC 5322
+  build + stable Message-ID threading key + CR/LF header-injection guard), `mailboxTokenProvider.ts`
+  (send-time token loader — the D7-sanctioned server-side credential read-back: decrypt + proactive-refresh +
+  rotate, `invalid_grant`→`reauth_required`), `registerProviders.ts` (`registerEmailProviders` — wires the
+  OAuth provider + Gmail send adapter at api/worker boot; `resolveSender` falls back to dark `consoleSender`
+  until then), `recordOutboundMessage.ts` (best-effort, post-`sendStep`: find-or-create the conversation thread +
+  persist the outbound `email_message` w/ the rfc822 Message-ID — never fails a sent email; outbound rows store
+  the tenant's own from-address, recipient via `contact_id`); **per-mailbox throttle + token refresh (new):**
+  `tokenBucket.ts` (pure refill-then-consume token-bucket algorithm) + `mailboxThrottle.ts` (the
+  `MailboxThrottlePort` seam + `allowAllThrottle` default + `MailboxThrottledError`), `refreshDueMailboxTokens.ts`
+  (the leader-locked sweep body: owner-connection id-only scan of mailboxes near expiry → per-mailbox
+  tenant-scoped refresh, each failure isolated)
 - **db:** `schema/email.ts` (`sending_domain` TENANT-scoped + globally unique; `mailbox_integration` WORKSPACE-scoped +
-  encrypted credential; `email_event` firehose → activities); repos `mailboxRepository`/`sendingDomainRepository`/
-  `emailEventRepository`/`emailTemplateRepository`/`emailAnalyticsRepository`/`sendQuotaRepository` (*all unassigned*)
-- **api:** `features/email/` — `routes.ts` (mailboxes, sending-domains, verify, reports), `templateRoutes.ts`,
-  `webhookRoutes.ts` (PUBLIC session-less: ESP delivery webhook + open-pixel + click-redirect)
+  encrypted credential **+ P1 OAuth token-lifecycle cols** `oauth_expires_at`/`oauth_scopes`/`provider_account_id`/
+  `reauth_required`/`reauth_reason`; `oauth_connect_state` **(new, P1)** short-lived CSRF+PKCE handshake, RLS
+  ENABLE-not-FORCE for the session-less callback; `email_thread`+`email_message` **(new, P1/P3)** the conversation +
+  per-message store — workspace+owner-scoped (D8), encrypted body (D7), `rfc822_message_id` reply-threading key;
+  `email_event` firehose **+ `reply`/`auto_reply` event types**; `outreach_log.last_reply_at` cache) + migrations
+  `0020_new_patriot`/`0021_far_blob` (additive); repos `mailboxRepository`/`sendingDomainRepository`/
+  `emailEventRepository`/`emailTemplateRepository`/`emailAnalyticsRepository`/`sendQuotaRepository`/
+  `oauthConnectStateRepository`/`emailThreadRepository`/`emailMessageRepository` (*all unassigned*)
+- **api:** `features/email/` — `routes.ts` (mailboxes **+ `POST /mailboxes/connect/start`**, sending-domains, verify,
+  reports), `templateRoutes.ts` (**P2: GET `/`(paginated)·`/:id`·`/:id/versions` + POST `/`·`/:id/preview`·`/:id/restore` + PATCH `/:id`**),
+  `webhookRoutes.ts` (PUBLIC session-less: ESP delivery webhook + open-pixel +
+  click-redirect), `connectRoutes.ts` **(new, P1: PUBLIC session-less OAuth `connect/callback`)**, `oauthProviders.ts`
+  (side-effect provider registration from env)
+- **workers:** `queues/outreach.ts` (real-send path: flag-gated `dispatchOutreachSend`, `MailboxThrottledError`
+  → clamped re-enqueue, never a double-send) + `queues/tokenRefresh.ts` (leader-locked `email_token_refresh`
+  repeatable sweep, every 2 min) + `mailboxThrottle.ts` (Redis atomic-Lua token-bucket adapter realizing
+  `MailboxThrottlePort`, keyed `email:throttle:{mailboxId}`); both wired in `register.ts`
 - **web:** `features/settings-mailboxes/` (connect mailbox + sending-domain DNS records + send-quota) + `features/settings-enrichment/` (auto-enrich policy)
 
 #### inbox — *M9 unified replies + tasks* (web)
@@ -448,15 +482,18 @@ flowchart TD
 - **Framework-root files (4, in `unassigned[]`):** `apps/{admin,auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs`
   — framework-mandated app-root files that cannot live under `src/` (the generator only classifies under `src/`). A framework
   constraint, not a placement error.
-- **Undeclared worker queues (4, in `unassigned[]`):** `apps/workers/src/queues/{dedup,firmographics,retentionSweep,sequenceTick}.ts`
-  are real processors whose queue name isn't in `QUEUE_DOMAIN` (`lib/arch-map.mjs`). They belong to `prospect`/`prospect`/
-  `compliance`/`email` respectively. Reconcile by extending `QUEUE_DOMAIN` (the spec-sanctioned way to grow the declared maps).
-- **Unmapped repositories (26, in `unassigned[]`):** repositories whose entity isn't in `REPO_DOMAIN` —
-  `accountSearch`, `authPolicy`, `customField`, `domain`, `emailAnalytics`, `emailEvent`, `emailTemplate`, `enrichmentJob`,
-  `enrichmentPolicy`, `featureFlag`, `impersonation`, `importMappingTemplate`, `mailbox`, `pipelineStage`, `platformStaff`,
-  `providerConfig`, `savedSearch`, `scheduler`, `scimToken`, `searchRepository`, `sendQuota`, `sendingDomain`, `ssoConfig`,
-  `staff`, `tag`, `webhook`. All are real, intentional repos; they bucket cleanly to the domains above (email/enrichment/
-  custom-fields/saved-searches/tags/webhooks/admin/scim/settings). Reconcile by extending `REPO_DOMAIN` as the schema grows.
+- **Undeclared worker queues (8, in `unassigned[]`):** `apps/workers/src/queues/{dedup,firmographics,masterBackfill,masterBackfill.test,masterBackfillSweep,retentionSweep,sequenceTick,tokenRefresh}.ts`
+  are real processors whose queue name isn't in `QUEUE_DOMAIN` (`lib/arch-map.mjs`). They belong to `prospect`
+  (dedup/firmographics), the master-graph backfill (`masterBackfill*` — prospect/enrichment), `compliance`
+  (retentionSweep) and `email` (sequenceTick — the sequence cron; `tokenRefresh` — the leader-locked OAuth
+  token-refresh sweep, M12 P1) respectively. Reconcile by extending `QUEUE_DOMAIN` (the spec-sanctioned way to grow the declared maps).
+- **Unmapped repositories (30, in `unassigned[]`):** repositories whose entity isn't in `REPO_DOMAIN` —
+  `accountSearch`, `authPolicy`, `customField`, `domain`, `emailAnalytics`, `emailEvent`, `emailMessage`, `emailTemplate`,
+  `emailThread`, `enrichmentJob`, `enrichmentPolicy`, `featureFlag`, `impersonation`, `importMappingTemplate`, `mailbox`,
+  `masterGraph`, `oauthConnectState`, `pipelineStage`, `platformStaff`, `providerConfig`, `savedSearch`, `scheduler`,
+  `scimToken`, `searchRepository`, `sendQuota`, `sendingDomain`, `ssoConfig`, `staff`, `tag`, `webhook`. All are real,
+  intentional repos; they bucket cleanly to the domains above (email/enrichment/prospect/custom-fields/saved-searches/
+  tags/webhooks/admin/scim/settings). Reconcile by extending `REPO_DOMAIN` as the schema grows.
 - **Domain-vocabulary warnings (31):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the new feature
   families since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
   `custom-fields`/`customFields`, `email`, `enrichment-jobs`, `feature-flags`/`featureFlags`, `import-mapping-templates`,
@@ -465,6 +502,6 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was refreshed from the 924-file JSON. When the source set changes again, re-run
+- **Map hygiene:** this prose was refreshed from the 967-file JSON. When the source set changes again, re-run
   `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares the `fileSetHash`) and refresh these purposes.
 ```

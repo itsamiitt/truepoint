@@ -4,7 +4,8 @@
 // reach these tables. All lists are bounded by PLATFORM_READ_LIMIT — no unbounded cross-tenant scans
 // (ADR-0032). Read-only: never writes (staff mutations go through their own audited endpoints later).
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import type { PlatformListQuery } from "@leadwolf/types";
+import { type SQL, and, asc, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenantAuthPolicies, tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
@@ -14,6 +15,33 @@ import { retentionRuns } from "../schema/retention.ts";
 
 /** The cross-tenant read cap — mirrors the bound the api admin routes already enforce (ADR-0032). */
 export const PLATFORM_READ_LIMIT = 500;
+
+/** A keyset directory page: the rows plus the cursor for the next page (null at the end). */
+export interface PlatformPage<T> {
+  rows: T[];
+  nextCursor: string | null;
+}
+
+// Opaque keyset cursor over the time-ordered v7 `id` (uuid_generate_v7 sorts by creation time, so `id DESC`
+// is newest-first and `id < cursor` is the next older page). base64url, never an offset.
+function encodeIdCursor(id: string): string {
+  return Buffer.from(id, "utf8").toString("base64url");
+}
+function decodeIdCursor(cursor: string): string | null {
+  try {
+    return Buffer.from(cursor, "base64url").toString("utf8") || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Slice the limit+1 probe into a page + the next cursor (built from the last row's id). */
+function toPage<T extends { id: string }>(rows: T[], limit: number): PlatformPage<T> {
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  return { rows: page, nextCursor: hasMore && last ? encodeIdCursor(last.id) : null };
+}
 
 export interface PlatformTenantRow {
   id: string;
@@ -61,6 +89,15 @@ export interface PlatformUserRow {
   fullName: string | null;
   status: string;
   isPlatformAdmin: boolean;
+}
+
+/** The customer-360 usage/health aggregate for one tenant (13a Area 3) — reveal activity + active holds. */
+export interface PlatformTenantOverview {
+  reveals30d: number;
+  burn30d: number;
+  revealsTotal: number;
+  lastRevealAt: Date | null;
+  activeHolds: number;
 }
 
 export interface PlatformWorkspaceListRow {
@@ -163,9 +200,23 @@ export const platformAdminRepository = {
       .limit(PLATFORM_READ_LIMIT);
   },
 
-  /** All users (cross-tenant), bounded. */
-  async listUsers(tx: Tx): Promise<PlatformUserRow[]> {
-    return tx
+  /** The users directory (cross-tenant) — searchable (email / name) + keyset-paginated (13a F5). */
+  async listUsers(
+    tx: Tx,
+    q: PlatformListQuery = { limit: 50 },
+  ): Promise<PlatformPage<PlatformUserRow>> {
+    const limit = Math.min(q.limit, PLATFORM_READ_LIMIT);
+    const conds: SQL[] = [];
+    if (q.search) {
+      const like = `%${q.search}%`;
+      const pred = or(ilike(users.email, like), ilike(users.fullName, like));
+      if (pred) conds.push(pred);
+    }
+    if (q.cursor) {
+      const id = decodeIdCursor(q.cursor);
+      if (id) conds.push(lt(users.id, id));
+    }
+    const rows = await tx
       .select({
         id: users.id,
         email: users.email,
@@ -174,12 +225,72 @@ export const platformAdminRepository = {
         isPlatformAdmin: users.isPlatformAdmin,
       })
       .from(users)
-      .limit(PLATFORM_READ_LIMIT);
+      .where(conds.length > 0 ? and(...conds) : undefined)
+      .orderBy(desc(users.id))
+      .limit(limit + 1);
+    return toPage(rows, limit);
   },
 
-  /** The tenants directory — plan/status/seats/credits per org (13 §3.1), bounded. */
-  async listTenants(tx: Tx): Promise<PlatformTenantRow[]> {
-    return tx.select(tenantCols).from(tenants).limit(PLATFORM_READ_LIMIT);
+  /** The tenants directory — plan/status/seats/credits per org (13 §3.1), searchable (name / slug) +
+   *  keyset-paginated (13a F5). */
+  async listTenants(
+    tx: Tx,
+    q: PlatformListQuery = { limit: 50 },
+  ): Promise<PlatformPage<PlatformTenantRow>> {
+    const limit = Math.min(q.limit, PLATFORM_READ_LIMIT);
+    const conds: SQL[] = [];
+    if (q.search) {
+      const like = `%${q.search}%`;
+      const pred = or(ilike(tenants.name, like), ilike(tenants.slug, like));
+      if (pred) conds.push(pred);
+    }
+    if (q.cursor) {
+      const id = decodeIdCursor(q.cursor);
+      if (id) conds.push(lt(tenants.id, id));
+    }
+    const rows = await tx
+      .select(tenantCols)
+      .from(tenants)
+      .where(conds.length > 0 ? and(...conds) : undefined)
+      .orderBy(desc(tenants.id))
+      .limit(limit + 1);
+    return toPage(rows, limit);
+  },
+
+  /**
+   * The customer-360 usage/health overview for one tenant (13a Area 3): reveal activity over the last 30 days
+   * and all-time, the last reveal, and the count of active abuse holds. Cross-tenant owner read (filtered by
+   * tenant_id); each query is a single aggregate over an indexed column. No record-level PII.
+   */
+  async getTenantOverview(tx: Tx, tenantId: string): Promise<PlatformTenantOverview> {
+    const [r] = (await tx.execute(sql`
+      SELECT
+        (count(*) FILTER (WHERE revealed_at >= now() - interval '30 days'))::int                       AS reveals_30d,
+        coalesce(sum(credits_consumed) FILTER (WHERE revealed_at >= now() - interval '30 days'), 0)::int AS burn_30d,
+        count(*)::int                                                                                   AS reveals_total,
+        max(revealed_at)                                                                                AS last_reveal_at
+      FROM contact_reveals
+      WHERE tenant_id = ${tenantId}::uuid
+    `)) as unknown as Array<{
+      reveals_30d: number;
+      burn_30d: number;
+      reveals_total: number;
+      last_reveal_at: Date | string | null;
+    }>;
+    const [h] = (await tx.execute(sql`
+      SELECT (count(*) FILTER (WHERE lifted_at IS NULL))::int AS active_holds
+      FROM account_holds
+      WHERE tenant_id = ${tenantId}::uuid
+    `)) as unknown as Array<{ active_holds: number }>;
+
+    const lastRaw = r?.last_reveal_at ?? null;
+    return {
+      reveals30d: Number(r?.reveals_30d ?? 0),
+      burn30d: Number(r?.burn_30d ?? 0),
+      revealsTotal: Number(r?.reveals_total ?? 0),
+      lastRevealAt: lastRaw == null ? null : lastRaw instanceof Date ? lastRaw : new Date(lastRaw),
+      activeHolds: Number(h?.active_holds ?? 0),
+    };
   },
 
   /** A tenant plus its workspaces and members (13 §3.1). Returns null if the id is unknown. */

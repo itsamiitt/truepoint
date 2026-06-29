@@ -1,19 +1,22 @@
 // webhookRoutes.ts — the PUBLIC email tracking surface (email-planning/13 P1/P3, 04). Session-less; the trust
-// boundary is a SIGNATURE: the inbound ESP webhook is HMAC-verified (EMAIL_WEBHOOK_SECRET, fail closed), and
-// the open-pixel / click-redirect carry an HMAC-signed token (verifyTrackingToken) so a recipient cannot forge
-// a tracking hit. Verified bounce/complaint drive the UNCHANGED M9 handleBounce (suppression + credit-back);
-// every event is recorded idempotently in email_event and open/click project into the activities timeline
-// (ingestTrackingEvent). RLS scopes every write to the workspace the signed token/event names. Mounted BEFORE
-// the authed email router (its `*` authn would 401 these session-less calls), mirroring dsarPublicRoutes.
+// boundary is a SIGNATURE under a PER-TENANT key (P0 email-sec-001): the inbound ESP webhook is HMAC-verified
+// with deriveEmailSigningKey('webhook', tenantId, root) and the open-pixel/click token with the per-tenant
+// tracking key (verifyTrackingTokenScoped). Because the key is per-tenant, a payload that NAMES a tenant only
+// verifies if it was signed with THAT tenant's key — so the tenant/workspace the route then uses to scope the
+// RLS write is AUTHENTIC, not attacker-asserted (the global-secret forgery is closed). Verified bounce/complaint
+// drive the UNCHANGED M9 handleBounce (suppression + credit-back); every event is recorded idempotently in
+// email_event and open/click project into the activities timeline (ingestTrackingEvent). Mounted BEFORE the
+// authed email router (its `*` authn would 401 these session-less calls), mirroring dsarPublicRoutes.
 
 import { createHash } from "node:crypto";
 import { env } from "@leadwolf/config";
 import {
+  deriveEmailSigningKey,
   handleBounce,
   ingestTrackingEvent,
   parseDeliveryEvent,
   verifyEmailWebhookSignature,
-  verifyTrackingToken,
+  verifyTrackingTokenScoped,
 } from "@leadwolf/core";
 import { Hono } from "hono";
 
@@ -39,25 +42,31 @@ function looksProxied(ua: string | undefined): boolean {
 // ── Inbound ESP webhook: delivery / bounce / complaint (HMAC-signed) ────────────────────────────────────
 emailWebhookRoutes.post("/delivery", async (c) => {
   const raw = await c.req.text(); // RAW body — hash exactly what the ESP signed
-  if (
-    !verifyEmailWebhookSignature(
-      raw,
-      c.req.header(SIGNATURE_HEADER),
-      env.EMAIL_WEBHOOK_SECRET ?? "",
-    )
-  ) {
-    return c.json({ error: "invalid_signature" }, 400);
-  }
-
   let parsedJson: unknown;
   try {
     parsedJson = JSON.parse(raw);
   } catch {
     return c.json({ error: "invalid_payload" }, 400);
   }
+  // P0 (email-sec-001): select the verification key from the CLAIMED tenant, then HMAC-verify the raw body
+  // under THAT tenant's per-tenant key. A payload naming another tenant cannot be signed without that tenant's
+  // key, so a passing signature makes the claimed tenant/workspace AUTHENTIC — the route never trusts
+  // attacker-asserted scope. The claimed tenant is read from the unverified JSON ONLY to pick the key; nothing
+  // is acted on until the signature passes.
+  const claimedTenantId =
+    typeof (parsedJson as { tenantId?: unknown } | null)?.tenantId === "string"
+      ? (parsedJson as { tenantId: string }).tenantId
+      : null;
+  if (!claimedTenantId) return c.json({ ok: true }); // nothing to attribute → benign no-op
+  const webhookKey = deriveEmailSigningKey("webhook", claimedTenantId, env.EMAIL_WEBHOOK_SECRET);
+  if (!verifyEmailWebhookSignature(raw, c.req.header(SIGNATURE_HEADER), webhookKey)) {
+    return c.json({ error: "invalid_signature" }, 400);
+  }
+
   const event = parseDeliveryEvent(parsedJson);
   if (!event) return c.json({ ok: true }); // unknown/benign → 200 (no ESP retry storm)
 
+  // event.tenantId is the signature-bound claimedTenantId → the scope is authentic, not attacker-asserted.
   const scope = { tenantId: event.tenantId, workspaceId: event.workspaceId };
   // Bounce/complaint → the M9 handleBounce (suppression + ADR-0013 credit-back), idempotent.
   if ((event.type === "bounce" || event.type === "complaint") && event.outreachLogId) {
@@ -76,7 +85,7 @@ emailWebhookRoutes.post("/delivery", async (c) => {
 
 // ── Open pixel (signed token) — first-open-only, idempotent; always returns the gif ─────────────────────
 emailWebhookRoutes.get("/open/:token", async (c) => {
-  const payload = verifyTrackingToken(c.req.param("token"), env.EMAIL_WEBHOOK_SECRET ?? "");
+  const payload = verifyTrackingTokenScoped(c.req.param("token"), env.EMAIL_WEBHOOK_SECRET ?? "");
   if (payload) {
     // Best-effort: a tracking failure must never break the pixel render.
     await ingestTrackingEvent(
@@ -99,7 +108,7 @@ emailWebhookRoutes.get("/open/:token", async (c) => {
 // ── Click redirect (signed token) — records the click, then 302s to a validated http(s) destination ─────
 emailWebhookRoutes.get("/click/:token", async (c) => {
   const url = c.req.query("u");
-  const payload = verifyTrackingToken(c.req.param("token"), env.EMAIL_WEBHOOK_SECRET ?? "");
+  const payload = verifyTrackingTokenScoped(c.req.param("token"), env.EMAIL_WEBHOOK_SECRET ?? "");
   if (payload && url) {
     const urlHash = createHash("sha256").update(url).digest("hex").slice(0, 16);
     await ingestTrackingEvent(

@@ -2,19 +2,20 @@
 // parent router already applied authn + platformAdmin (the coarse `pa` gate). Granting / revoking a staff
 // role hands out platform-wide, cross-tenant authority, so these additionally require the super_admin staff
 // role — only a super_admin manages staff. All reads/writes go through withPlatformTx (cross-tenant owner
-// visibility + a platform_audit_log row). The role lookup is resolved per-request (requireStaffRole), so a
+// visibility + a platform_audit_log row). The role lookup is resolved per-request (requireCapability), so a
 // revoke takes effect on the next request — no stale-JWT window.
 
 import { staffRepository, withPlatformTx } from "@leadwolf/db";
 import { type StaffMemberView, ValidationError, grantStaffSchema } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
-import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
+import { requireCapability } from "../../middleware/requireCapability.ts";
 
 export const staffRoutes = new Hono<{ Variables: ApiVariables }>();
 
-// Managing staff grants is the most privileged platform action → super_admin only (above the coarse `pa` gate).
-staffRoutes.use("*", requireStaffRole("super_admin"));
+// Managing staff grants is the most privileged platform action → staff:manage = super_admin only (13a F3
+// capability gate, above the coarse `pa` gate).
+staffRoutes.use("*", requireCapability("staff:manage"));
 
 const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   userId: c.get("claims").sub,

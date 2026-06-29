@@ -17,13 +17,13 @@ import {
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
-import { requireStaffRole } from "../../middleware/requireStaffRole.ts";
+import { requireCapability } from "../../middleware/requireCapability.ts";
 
 export const impersonationRoutes = new Hono<{ Variables: ApiVariables }>();
 
-// Impersonation: super_admin or support (above the coarse `pa` gate). billing_ops / compliance / read_only
-// cannot enter a tenant's context.
-impersonationRoutes.use("*", requireStaffRole("super_admin", "support"));
+// Impersonation: impersonate:start = super_admin + support (13a F3). billing_ops / compliance / read_only
+// cannot enter a tenant's context. Above the coarse `pa` gate.
+impersonationRoutes.use("*", requireCapability("impersonate:start"));
 
 const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   userId: c.get("claims").sub,

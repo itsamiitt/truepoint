@@ -181,6 +181,24 @@ export class InsufficientCreditsError extends AppError {
   }
 }
 
+/**
+ * A sensitive staff action needs a just-in-time elevation that the caller does not currently hold (13a F1,
+ * 13 §2). 403 with the required action class in extensions so the console can mint the elevation (reason) and
+ * retry. Distinct from the role gate (ForbiddenError): the caller may have the role yet still lack a live,
+ * time-boxed, tenant-scoped elevation for this action.
+ */
+export class ElevationRequiredError extends AppError {
+  constructor(action: string, detail?: string) {
+    super({
+      status: 403,
+      code: "elevation_required",
+      title: "Elevation required",
+      detail: detail ?? `This action requires a just-in-time elevation for '${action}'.`,
+      extensions: { action },
+    });
+  }
+}
+
 /** The contact is on a suppression/DNC list — reveals and sends are blocked, regardless of credits (08 §3). */
 export class SuppressedError extends AppError {
   constructor(reason?: string) {

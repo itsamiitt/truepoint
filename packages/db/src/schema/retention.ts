@@ -2,7 +2,7 @@
 // management backlog #6; design docs/planning/data-management/16-retention-engine-design.md, spec 08-compliance
 // §7 + ADR-0025). Two tables, no deletion logic here (the sweep that reads them lives in core/workers, a later
 // phase) — this is purely the policy/run store:
-//   • retention_policies — GLOBAL, platform-managed config (one row per data class; `data_class` is the natural
+//   • retention_class_policies — GLOBAL, platform-managed config (one row per data class; `data_class` is the natural
 //                          PK, no surrogate id — mirrors feature_flags). The app role READS it to evaluate;
 //                          writes are platform-only (rls/retention.sql). SHADOW-first: every class ships `shadow`.
 //   • retention_runs     — per-tenant, APPEND-ONLY audit of each sweep's outcome for ONE class (the shadow-mode
@@ -22,9 +22,9 @@ const tenantId = () =>
     .notNull()
     .references(() => tenants.id, { onDelete: "cascade" });
 
-// ── retention_policies — GLOBAL config (one row per data class; NOT tenant-scoped, no surrogate id) ─────────
-export const retentionPolicies = pgTable(
-  "retention_policies",
+// ── retention_class_policies — GLOBAL config (one row per data class; NOT tenant-scoped, no surrogate id) ─────────
+export const retentionClassPolicies = pgTable(
+  "retention_class_policies",
   {
     dataClass: varchar("data_class", { length: 50 }).primaryKey(), // the class this policy governs (natural PK)
     ttlDays: integer("ttl_days"), // null = NEVER auto-delete
@@ -34,7 +34,7 @@ export const retentionPolicies = pgTable(
   },
   (t) => ({
     modeEnum: check(
-      "retention_policies_mode_enum",
+      "retention_class_policies_mode_enum",
       sql`${t.mode} IN ('disabled','shadow','enforce')`,
     ),
   }),

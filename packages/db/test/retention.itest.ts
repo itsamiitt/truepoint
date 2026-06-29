@@ -7,7 +7,7 @@
 // It proves two things end-to-end against the SHIPPED engine entry points (no logic is re-implemented here):
 //
 //   A. RLS / access posture (rls/retention.sql):
-//      A1. retention_policies — GLOBAL, platform-managed. The app role (withTenantTx) can SELECT the seeded
+//      A1. retention_class_policies — GLOBAL, platform-managed. The app role (withTenantTx) can SELECT the seeded
 //          defaults but can NEVER INSERT (RLS WITH CHECK rejects) / UPDATE / DELETE (no policy → 0 rows).
 //      A2. retention_runs — per-tenant, APPEND-ONLY. Tenant A appends + reads its own runs; tenant B cannot see
 //          them (RLS); the app role can never UPDATE or DELETE a run (no policy → 0 rows; the trail is immutable).
@@ -17,7 +17,7 @@
 //      B3. Flag OFF (the fail-closed default) → enabled:false, records NOTHING, deletes NOTHING.
 //      B4. Flag ON, default `shadow` → one retention_runs row per eligible v1 class; candidateCount = the OLD
 //          rows only (newer-than-cutoff rows are NOT counted), deletedCount = 0, and NOTHING is deleted.
-//      B5. Flag ON, class flipped to `enforce` (via retentionPolicyRepository.upsertPolicy) → the OLD rows are
+//      B5. Flag ON, class flipped to `enforce` (via retentionClassPolicyRepository.upsertPolicy) → the OLD rows are
 //          DELETED, the newer rows REMAIN, deletedCount = the OLD-row count, and the run row reflects it.
 //      B6. Tenant isolation of enforce — OLD rows seeded for BOTH tenants; enforce-sweep tenant A ONLY; tenant
 //          B's rows are UNTOUCHED (the explicit tenant predicate, never RLS, is the cross-tenant safety).
@@ -173,7 +173,7 @@ async function setPolicyMode(
   mode: "disabled" | "shadow" | "enforce",
 ): Promise<void> {
   await db.db.transaction((tx) =>
-    db.retentionPolicyRepository.upsertPolicy(tx, { dataClass, ttlDays, mode }),
+    db.retentionClassPolicyRepository.upsertPolicy(tx, { dataClass, ttlDays, mode }),
   );
 }
 
@@ -219,7 +219,7 @@ describe("retention control plane: RLS / access posture", () => {
   test("A1: app role can SELECT the seeded policy defaults but can never write one", async () => {
     // SELECT: the migration seeds the 12 DEFAULT_RETENTION_POLICIES; the app role reads them all (USING true).
     const policies = await db.withTenantTx(scopeA(), (tx) =>
-      db.retentionPolicyRepository.listPolicies(tx),
+      db.retentionClassPolicyRepository.listPolicies(tx),
     );
     expect(policies).toHaveLength(12);
     const verif = policies.find((p) => p.dataClass === "verification_jobs");
@@ -230,27 +230,27 @@ describe("retention control plane: RLS / access posture", () => {
     await expect(
       db.withTenantTx(scopeA(), (tx) =>
         tx
-          .insert(db.schema.retentionPolicies)
+          .insert(db.schema.retentionClassPolicies)
           .values({ dataClass: "itest_blocked_class", ttlDays: 1, mode: "shadow" }),
       ),
     ).rejects.toThrow();
 
     // UPDATE / DELETE affect ZERO rows (no UPDATE/DELETE policy → no rows are visible to the command).
     const updated = await db.withTenantTx(scopeA(), (tx) =>
-      tx.update(db.schema.retentionPolicies).set({ mode: "enforce" }).returning(),
+      tx.update(db.schema.retentionClassPolicies).set({ mode: "enforce" }).returning(),
     );
     expect(updated).toHaveLength(0);
     const deleted = await db.withTenantTx(scopeA(), (tx) =>
-      tx.delete(db.schema.retentionPolicies).returning(),
+      tx.delete(db.schema.retentionClassPolicies).returning(),
     );
     expect(deleted).toHaveLength(0);
 
     // The owner connection confirms NOTHING changed: still 12 rows, none flipped to enforce, no bogus class.
     const [policyCount] = (await admin`
-      SELECT count(*)::int AS n FROM retention_policies`) as Count[];
+      SELECT count(*)::int AS n FROM retention_class_policies`) as Count[];
     expect(policyCount!.n).toBe(12);
     const [enforceCount] = (await admin`
-      SELECT count(*)::int AS n FROM retention_policies WHERE mode = 'enforce'`) as Count[];
+      SELECT count(*)::int AS n FROM retention_class_policies WHERE mode = 'enforce'`) as Count[];
     expect(enforceCount!.n).toBe(0);
   });
 
@@ -316,7 +316,7 @@ describe("retention sweep: gates, shadow/enforce, tenant isolation", () => {
     await admin`DELETE FROM activities`;
     await admin`DELETE FROM contacts`; // cascades to any activities; seeded only by the activities cases (B8–B10)
     await admin`DELETE FROM tenant_feature_flags`;
-    await admin`UPDATE retention_policies SET mode = 'shadow'`;
+    await admin`UPDATE retention_class_policies SET mode = 'shadow'`;
   });
 
   test("B3: flag OFF (default) - enabled:false, records nothing, deletes nothing", async () => {

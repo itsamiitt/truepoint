@@ -8,11 +8,16 @@ import {
   Building2,
   FileUp,
   Flag,
+  Layers,
+  Megaphone,
   Plug,
   ScrollText,
+  ShieldAlert,
   ShieldCheck,
+  Tag,
   Timer,
   Users,
+  Wallet,
 } from "lucide-react";
 
 export interface NavDestination {
@@ -27,10 +32,15 @@ export interface NavDestination {
 export const DESTINATIONS: NavDestination[] = [
   { label: "Tenants", href: "/tenants", match: "/tenants", icon: Building2 },
   { label: "Users", href: "/users", match: "/users", icon: Users },
+  { label: "Billing", href: "/billing", match: "/billing", icon: Wallet },
+  { label: "Plans", href: "/plans", match: "/plans", icon: Layers },
+  { label: "Pricing", href: "/pricing", match: "/pricing", icon: Tag },
   { label: "Providers", href: "/provider-configs", match: "/provider-configs", icon: Plug },
   { label: "Feature flags", href: "/feature-flags", match: "/feature-flags", icon: Flag },
+  { label: "Content", href: "/content", match: "/content", icon: Megaphone },
   { label: "Retention", href: "/retention", match: "/retention", icon: Timer },
   { label: "Staff", href: "/staff", match: "/staff", icon: ShieldCheck },
+  { label: "Compliance", href: "/compliance", match: "/compliance", icon: ShieldAlert },
   { label: "Audit log", href: "/audit-log", match: "/audit-log", icon: ScrollText },
   { label: "Bulk imports", href: "/imports", match: "/imports", icon: FileUp },
   { label: "System health", href: "/system-health", match: "/system-health", icon: Activity },

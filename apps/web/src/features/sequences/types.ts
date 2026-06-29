@@ -92,7 +92,7 @@ export interface SendResult {
   status: string;
 }
 
-// ── Templates (GET /templates — M9, panel within Sequences; 11 §4.3, 05 §20) ───────────────────────────
+// ── Templates (GET /templates — M12 P2, panel within Sequences; 11 §4.3, 05 §20) ───────────────────────
 /** One message template from the library: subject + body with {{merge_field}} placeholders. */
 export interface TemplateSummary {
   id: string;
@@ -101,6 +101,38 @@ export interface TemplateSummary {
   subject: string | null;
   body: string;
   updatedAt: string;
+}
+
+export type TemplateStatus = "active" | "archived";
+
+/** GET /templates/:id — the full editor view. `canEdit` is the server's D8 gate (owner-only edits/archive). */
+export interface TemplateDetail {
+  id: string;
+  name: string;
+  channel: StepChannel;
+  status: TemplateStatus;
+  shared: boolean;
+  subject: string | null;
+  body: string;
+  currentVersion: number | null;
+  updatedAt: string;
+  canEdit: boolean;
+}
+
+/** One immutable row of a template's history (newest first). */
+export interface TemplateVersion {
+  version: number;
+  subject: string | null;
+  body: string;
+  createdByUserId: string | null;
+  createdAt: string;
+}
+
+/** POST /templates/:id/preview — server-rendered content + the merge fields it referenced. */
+export interface TemplatePreview {
+  subject: string | null;
+  body: string;
+  fields: string[];
 }
 
 // ── Drafts (GET/POST/PATCH /outreach/drafts — AI draft → review → send seam; 05 §13/§16) ────────────────

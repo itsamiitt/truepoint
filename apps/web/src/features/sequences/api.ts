@@ -3,10 +3,11 @@
 // fetchWithAuth (ADR-0016); never touches the DB or the auth origin directly. The slice's only seam to
 // the backend. Errors carry the RFC-9457 problem `code` so enroll/send can branch on the failure mode.
 //
-// The redesign adds: pause/resume on a sequence, a templates list (GET /templates), and the AI draft seam
-// (GET /outreach/drafts). The templates + drafts backends are post-MVP (M9) — when they 404/501 the helpers
-// return an empty list with `available: false` so the panels render a "connect …" EmptyState instead of an
-// error. The existing GET/POST /outreach/sequences contracts are unchanged.
+// The redesign adds: pause/resume on a sequence, the templates editor (GET/POST/PATCH /templates + versions/
+// preview/restore — M12 P2, LIVE), and the AI draft seam (GET /outreach/drafts, still post-MVP). The drafts
+// helper returns `available: false` on a 404/501 so its panel renders a "connect …" EmptyState instead of an
+// error; templates degrade the same way for an older deploy. The GET/POST /outreach/sequences contracts are
+// unchanged.
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
@@ -20,7 +21,11 @@ import type {
   SendResult,
   SequenceStatus,
   SequenceSummary,
+  TemplateDetail,
+  TemplatePreview,
+  TemplateStatus,
   TemplateSummary,
+  TemplateVersion,
 } from "./types";
 
 const OUTREACH_BASE = `${API_BASE}/api/v1/outreach`;
@@ -143,19 +148,48 @@ export async function fetchContacts(limit = 100): Promise<MaskedContact[]> {
   return data.contacts;
 }
 
+/** A page of the template library + whether the backend exists yet + the opaque keyset cursor for the next page. */
+export interface TemplatePage extends MaybeList<TemplateSummary> {
+  nextCursor: string | null;
+}
+
 /**
- * GET /templates — the message-template library (M9, panel within Sequences; 11 §4.3). Backend is not
- * wired yet, so a 404/501 resolves to `{ items: [], available: false }` and the panel shows a "connect …"
- * empty state rather than an error.
+ * GET /templates — the owner-scoped template library (M12 P2, 11 §4.3), keyset-paginated. The backend is
+ * live; a 404/501 (older deploy) still resolves to `available: false` so the panel degrades gracefully rather
+ * than erroring. Pass the prior page's `nextCursor` to fetch the next page.
  */
-export async function fetchTemplates(): Promise<MaybeList<TemplateSummary>> {
-  const res = await fetchWithAuth(TEMPLATES_BASE);
+export async function fetchTemplates(
+  opts: { cursor?: string; status?: TemplateStatus } = {},
+): Promise<TemplatePage> {
+  const params = new URLSearchParams();
+  if (opts.cursor) params.set("cursor", opts.cursor);
+  if (opts.status && opts.status !== "active") params.set("status", opts.status);
+  const qs = params.toString();
+  const res = await fetchWithAuth(qs ? `${TEMPLATES_BASE}?${qs}` : TEMPLATES_BASE);
   if (res.ok) {
-    const data = (await res.json()) as { templates: TemplateSummary[] };
-    return { items: data.templates ?? [], available: true };
+    const data = (await res.json()) as {
+      templates: TemplateSummary[];
+      nextCursor: string | null;
+    };
+    return { items: data.templates ?? [], available: true, nextCursor: data.nextCursor ?? null };
   }
-  if (isUnavailable(res.status)) return { items: [], available: false };
+  if (isUnavailable(res.status)) return { items: [], available: false, nextCursor: null };
   throw await toApiError(res, "Could not load templates");
+}
+
+/** GET /templates/:id — one template's full editor view (owner-or-shared; 404 if not visible). */
+export async function fetchTemplateDetail(id: string): Promise<TemplateDetail> {
+  const res = await fetchWithAuth(`${TEMPLATES_BASE}/${id}`);
+  if (!res.ok) throw await toApiError(res, "Could not load the template");
+  return (await res.json()) as TemplateDetail;
+}
+
+/** GET /templates/:id/versions — the template's immutable version history (newest first). */
+export async function fetchTemplateVersions(id: string): Promise<TemplateVersion[]> {
+  const res = await fetchWithAuth(`${TEMPLATES_BASE}/${id}/versions`);
+  if (!res.ok) throw await toApiError(res, "Could not load version history");
+  const data = (await res.json()) as { versions: TemplateVersion[] };
+  return data.versions;
 }
 
 /** Create a reusable, versioned template (M12 P2). The created template is owner-scoped (D8). */
@@ -164,6 +198,7 @@ export async function createTemplate(input: {
   subject?: string | null;
   body: string;
   channel?: "email" | "linkedin";
+  shared?: boolean;
 }): Promise<{ id: string }> {
   const res = await fetchWithAuth(TEMPLATES_BASE, {
     method: "POST",
@@ -172,6 +207,60 @@ export async function createTemplate(input: {
   });
   if (!res.ok) throw await toApiError(res, "Could not create the template");
   return (await res.json()) as { id: string };
+}
+
+/**
+ * PATCH /templates/:id — owner-only (D8). A content change (subject+body together) appends an immutable
+ * version; name/shared/status are metadata. Send only the changed fields.
+ */
+export async function updateTemplate(
+  id: string,
+  patch: {
+    subject?: string | null;
+    body?: string;
+    name?: string;
+    shared?: boolean;
+    status?: TemplateStatus;
+  },
+): Promise<{ version: number | null }> {
+  const res = await fetchWithAuth(`${TEMPLATES_BASE}/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not save the template");
+  return (await res.json()) as { version: number | null };
+}
+
+/**
+ * POST /templates/:id/preview — render the saved content (or an unsaved draft) with sample merge data. The
+ * render is server-side + safe; this is read-only.
+ */
+export async function previewTemplate(
+  id: string,
+  draft?: { subject?: string | null; body?: string; sample?: Record<string, string> },
+): Promise<TemplatePreview> {
+  const res = await fetchWithAuth(`${TEMPLATES_BASE}/${id}/preview`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(draft ?? {}),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not preview the template");
+  return (await res.json()) as TemplatePreview;
+}
+
+/** POST /templates/:id/restore — owner-only (D8): append a new version cloning version N. */
+export async function restoreTemplateVersion(
+  id: string,
+  version: number,
+): Promise<{ version: number }> {
+  const res = await fetchWithAuth(`${TEMPLATES_BASE}/${id}/restore`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ version }),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not restore that version");
+  return (await res.json()) as { version: number };
 }
 
 /**

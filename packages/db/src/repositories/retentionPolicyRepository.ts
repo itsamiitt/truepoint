@@ -1,57 +1,91 @@
-// retentionPolicyRepository.ts — data access for the GLOBAL retention POLICY store (retention_policies, data-
-// management backlog #6; design 16-retention-engine-design.md). One row per data class: its TTL (null = never)
-// and its disabled|shadow|enforce mode. The table is platform-managed — reads run on any path (the app role has
-// a SELECT-only RLS policy for in-request evaluation); the upsert here is for the FUTURE admin surface and must
-// run on the owner/withPlatformTx path (under FORCE RLS the app role has no write policy, so it cannot write).
-// Tx-aware (every method takes a Tx) like the rest of this package; rows map onto the shipped RetentionPolicy
-// contract from @leadwolf/types (the single source of truth shared with the sweep). No deletion logic here.
+// retentionPolicyRepository.ts — data access for retention_policies (13a Area 8). Every method takes the
+// transaction handed by withPlatformTx (owner connection, audited). create/update by id (field can be null =
+// whole entity, so there is no natural upsert key). Reads are bounded — no unbounded scans (ADR-0032).
 
-import type { RetentionDataClass, RetentionMode, RetentionPolicy } from "@leadwolf/types";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
-import { retentionPolicies } from "../schema/retention.ts";
+import { retentionPolicies } from "../schema/platformOps.ts";
 
-/** Map a widened DB row onto the closed RetentionPolicy contract (narrowing the varchar enums at the edge). */
-function toPolicy(row: typeof retentionPolicies.$inferSelect): RetentionPolicy {
-  return {
-    dataClass: row.dataClass as RetentionDataClass,
-    ttlDays: row.ttlDays,
-    mode: row.mode as RetentionMode,
-  };
+export interface RetentionPolicyRow {
+  id: string;
+  entity: string;
+  field: string | null;
+  retentionDays: number;
+  reason: string | null;
+  active: boolean;
+  updatedAt: Date;
 }
 
+export interface RetentionPolicyWrite {
+  entity: string;
+  field: string | null;
+  retentionDays: number;
+  reason: string | null;
+}
+
+const LIMIT = 200;
+
+const COLS = {
+  id: retentionPolicies.id,
+  entity: retentionPolicies.entity,
+  field: retentionPolicies.field,
+  retentionDays: retentionPolicies.retentionDays,
+  reason: retentionPolicies.reason,
+  active: retentionPolicies.active,
+  updatedAt: retentionPolicies.updatedAt,
+};
+
 export const retentionPolicyRepository = {
-  /** Every policy, ordered by data class (the stable seed order the engine iterates). Read path (any tx). */
-  async listPolicies(tx: Tx): Promise<RetentionPolicy[]> {
-    const rows = await tx
-      .select()
+  /** The full list (active + retired), ordered by entity then field, bounded. */
+  async list(tx: Tx): Promise<RetentionPolicyRow[]> {
+    return tx
+      .select(COLS)
       .from(retentionPolicies)
-      .orderBy(asc(retentionPolicies.dataClass));
-    return rows.map(toPolicy);
+      .orderBy(asc(retentionPolicies.entity), asc(retentionPolicies.field))
+      .limit(LIMIT);
   },
 
-  /** A single class's policy by its natural PK, or null if no row exists for it. */
-  async getPolicy(tx: Tx, dataClass: RetentionDataClass): Promise<RetentionPolicy | null> {
-    const rows = await tx
-      .select()
-      .from(retentionPolicies)
-      .where(eq(retentionPolicies.dataClass, dataClass))
-      .limit(1);
-    return rows[0] ? toPolicy(rows[0]) : null;
-  },
-
-  /**
-   * Define or update a class's policy (idempotent on data_class) — for the FUTURE admin surface. MUST run on the
-   * owner/withPlatformTx path: under FORCE RLS the app role has no write policy on retention_policies, so a write
-   * attempted on the app path fails closed. Touches updated_at on every change.
-   */
-  async upsertPolicy(tx: Tx, policy: RetentionPolicy): Promise<void> {
-    await tx
+  /** Create a policy (active by default). */
+  async create(
+    tx: Tx,
+    input: RetentionPolicyWrite & { createdByUserId: string },
+  ): Promise<RetentionPolicyRow> {
+    const [row] = await tx
       .insert(retentionPolicies)
-      .values({ dataClass: policy.dataClass, ttlDays: policy.ttlDays, mode: policy.mode })
-      .onConflictDoUpdate({
-        target: retentionPolicies.dataClass,
-        set: { ttlDays: policy.ttlDays, mode: policy.mode, updatedAt: new Date() },
-      });
+      .values({
+        entity: input.entity,
+        field: input.field,
+        retentionDays: input.retentionDays,
+        reason: input.reason,
+        createdByUserId: input.createdByUserId,
+      })
+      .returning(COLS);
+    return row as RetentionPolicyRow;
+  },
+
+  /** Update a policy by id. Returns rows touched (0 = unknown id → caller raises 404). */
+  async update(tx: Tx, id: string, input: RetentionPolicyWrite): Promise<number> {
+    const updated = await tx
+      .update(retentionPolicies)
+      .set({
+        entity: input.entity,
+        field: input.field,
+        retentionDays: input.retentionDays,
+        reason: input.reason,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(retentionPolicies.id, id))
+      .returning({ id: retentionPolicies.id });
+    return updated.length;
+  },
+
+  /** Toggle a policy on/off. Returns rows touched (0 = unknown id). */
+  async setActive(tx: Tx, id: string, active: boolean): Promise<number> {
+    const updated = await tx
+      .update(retentionPolicies)
+      .set({ active, updatedAt: sql`now()` })
+      .where(eq(retentionPolicies.id, id))
+      .returning({ id: retentionPolicies.id });
+    return updated.length;
   },
 };

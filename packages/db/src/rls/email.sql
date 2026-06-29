@@ -54,5 +54,36 @@ CREATE POLICY email_template_version_workspace_isolation ON email_template_versi
   USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
   WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
 
+-- oauth_connect_state — TENANT-scoped, RLS ENABLE (NOT FORCE). The START insert runs as leadwolf_app under the
+-- tenant GUC (scoped); the SESSION-LESS OAuth callback resolves the row by its high-entropy state_token on the
+-- OWNER connection (RLS-exempt as table owner — the platform_audit_log pattern in rls/platform.sql), so FORCE
+-- would wrongly block the legitimate callback read. The state_token is the unguessable capability.
+ALTER TABLE oauth_connect_state ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS oauth_connect_state_tenant_isolation ON oauth_connect_state;
+CREATE POLICY oauth_connect_state_tenant_isolation ON oauth_connect_state
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+
+-- email_thread — WORKSPACE-scoped (owner-scope is an app filter on top, D8)
+ALTER TABLE email_thread ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_thread FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS email_thread_workspace_isolation ON email_thread;
+CREATE POLICY email_thread_workspace_isolation ON email_thread
+  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
+  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+DROP TRIGGER IF EXISTS email_thread_set_updated_at ON email_thread;
+CREATE TRIGGER email_thread_set_updated_at BEFORE UPDATE ON email_thread
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- email_message — WORKSPACE-scoped, append-mostly (classification may be set after insert; no updated_at)
+ALTER TABLE email_message ENABLE ROW LEVEL SECURITY;
+ALTER TABLE email_message FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS email_message_workspace_isolation ON email_message;
+CREATE POLICY email_message_workspace_isolation ON email_message
+  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
+  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON sending_domain, mailbox_integration, email_event TO leadwolf_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON email_template, email_template_version TO leadwolf_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON oauth_connect_state TO leadwolf_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON email_thread, email_message TO leadwolf_app;

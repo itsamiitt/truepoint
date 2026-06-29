@@ -9,12 +9,18 @@ import { accountSearchRoutes } from "./features/account-search/index.ts";
 import { activityRoutes } from "./features/activity/index.ts";
 import { adminRoutes } from "./features/admin/index.ts";
 import { aiSearchRoutes } from "./features/ai/index.ts";
+import { announcementsRoutes } from "./features/announcements/index.ts";
 import { authRoutes } from "./features/auth/index.ts";
 import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
 import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
-import { emailRoutes, emailWebhookRoutes, templateRoutes } from "./features/email/index.ts";
+import {
+  emailConnectRoutes,
+  emailRoutes,
+  emailWebhookRoutes,
+  templateRoutes,
+} from "./features/email/index.ts";
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
@@ -71,6 +77,7 @@ app.use("/api/*", rateLimit);
 app.route("/api/v1/auth", authRoutes);
 // Platform super-admin (ADR-0032): pa-gated, cross-tenant, audited — NOT workspace-scoped. Highest privilege.
 app.route("/api/v1/admin", adminRoutes);
+app.route("/api/v1/announcements", announcementsRoutes); // 13a Area 10 — customer banner read
 app.route("/api/v1/workspaces", workspacesRoutes);
 // Workspace-admin session management (G-AUTH-2): /security/sessions + revoke/force-reauth. The /security/*
 // paths don't overlap workspacesRoutes' GET / (same shared-prefix pattern as /api/v1/contacts).
@@ -108,6 +115,9 @@ app.route("/api/v1/templates", templateRoutes);
 // Public, SIGNATURE-verified ESP delivery/bounce webhook (P1) must register BEFORE the authed email router,
 // whose `*` authn would otherwise 401 the session-less ESP call (mirrors dsar-before-compliance).
 app.route("/api/v1/email/webhooks", emailWebhookRoutes);
+// Session-less OAuth connect CALLBACK (P1) — the provider redirects the browser here with no Bearer token, so
+// it too must register BEFORE the authed email router; identity is recovered from the single-use `state`.
+app.route("/api/v1/email", emailConnectRoutes);
 // M12 email subsystem foundations (email-planning/13 P0): mailbox connect + sending-domain DNS auth +
 // send-quota read. Workspace/tenant-scoped behind authn+tenancy; credential writes never echo the secret.
 app.route("/api/v1/email", emailRoutes);

@@ -6,22 +6,28 @@
 // action (the P6 admin surface refines sending-domain management to the tenant-admin org role).
 
 import {
+  OAuthError,
   computeDeliverability,
   connectMailbox,
   createSendingDomain,
+  startMailboxConnect,
   verifySendingDomain,
 } from "@leadwolf/core";
 import { mailboxRepository, sendQuotaRepository, sendingDomainRepository } from "@leadwolf/db";
 import {
+  AppError,
   ForbiddenError,
   ValidationError,
   mailboxConnectSchema,
+  mailboxConnectStartSchema,
   sendingDomainCreateSchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+// Register the configured OAuth providers once (side-effect import) so connect/start can resolve one.
+import "./oauthProviders.ts";
 
 export const emailRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -40,7 +46,8 @@ emailRoutes.get("/mailboxes", async (c) => {
   return c.json({ mailboxes });
 });
 
-// Connect a mailbox — stores the credential KMS-envelope-encrypted server-side (D7). owner/admin only.
+// Connect an SMTP/SES mailbox — stores the credential KMS-envelope-encrypted server-side (D7). owner/admin only.
+// Google/Microsoft do NOT come through here: a raw token is never posted by the client — they use connect/start.
 emailRoutes.post("/mailboxes", requireRole("owner", "admin"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
@@ -48,7 +55,7 @@ emailRoutes.post("/mailboxes", requireRole("owner", "admin"), async (c) => {
   const parsed = mailboxConnectSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success)
     throw new ValidationError(
-      "Body must be { provider, address, sending_domain_id?, smtp_password? | oauth_token? }.",
+      "Body must be { provider: 'smtp'|'ses', address, sending_domain_id?, smtp_password? }.",
     );
   const result = await connectMailbox({
     scope: { tenantId: c.get("tenantId"), workspaceId },
@@ -57,9 +64,42 @@ emailRoutes.post("/mailboxes", requireRole("owner", "admin"), async (c) => {
     address: parsed.data.address,
     sendingDomainId: parsed.data.sending_domain_id ?? null,
     smtpPassword: parsed.data.smtp_password,
-    oauthToken: parsed.data.oauth_token,
   });
   return c.json(result, 201);
+});
+
+// Begin the OAuth connect for a Google/Microsoft mailbox — mints the PKCE+state handshake and returns the
+// consent URL the client redirects the browser to. No credential crosses the wire (the consent screen mints it).
+// owner/admin only. The session-less callback that completes it is mounted separately (connectRoutes.ts).
+emailRoutes.post("/mailboxes/connect/start", requireRole("owner", "admin"), async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace before connecting a mailbox.");
+  const parsed = mailboxConnectStartSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success)
+    throw new ValidationError(
+      "Body must be { provider: 'google'|'microsoft', login_hint?, redirect_after? }.",
+    );
+  try {
+    const { authorizeUrl } = await startMailboxConnect({
+      scope: { tenantId: c.get("tenantId"), workspaceId },
+      userId: c.get("claims").sub,
+      provider: parsed.data.provider,
+      loginHint: parsed.data.login_hint,
+      redirectAfter: parsed.data.redirect_after ?? null,
+    });
+    return c.json({ authorize_url: authorizeUrl }, 201);
+  } catch (e) {
+    if (e instanceof OAuthError && e.code === "provider_unconfigured") {
+      throw new AppError({
+        status: 503,
+        code: "mailbox_oauth_unconfigured",
+        title: "Mailbox connect is unavailable",
+        detail: `The ${parsed.data.provider} mailbox connector is not configured on this environment.`,
+      });
+    }
+    throw e;
+  }
 });
 
 // ── Sending domains (tenant-scoped) ─────────────────────────────────────────────────────────────────────

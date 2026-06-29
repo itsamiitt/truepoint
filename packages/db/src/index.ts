@@ -92,7 +92,7 @@ export {
 // policy store + the per-tenant, append-only run audit. No deletion logic yet (the sweep lives in core/workers, a
 // later phase); this is purely the policy/run store. Policies are platform-managed (app reads via a SELECT-only
 // RLS policy; writes are owner/withPlatformTx only); runs compose inside withTenantTx (tenant-scoped, append-only).
-export { retentionPolicyRepository } from "./repositories/retentionPolicyRepository.ts";
+export { retentionClassPolicyRepository } from "./repositories/retentionClassPolicyRepository.ts";
 export {
   retentionRunRepository,
   type RetentionRunRow,
@@ -274,8 +274,10 @@ export {
 export {
   platformAdminRepository,
   PLATFORM_READ_LIMIT,
+  type PlatformPage,
   type PlatformTenantRow,
   type PlatformTenantDetail,
+  type PlatformTenantOverview,
   type PlatformWorkspaceRow,
   type PlatformWorkspaceListRow,
   type PlatformListOverviewRow,
@@ -284,8 +286,71 @@ export {
   type PlatformImportJobRow,
   type PlatformRetentionRunRow,
 } from "./repositories/platformAdminReads.ts";
+// Platform super-admin WRITE surface (13a Area 1) — audited cross-tenant mutations, run within withPlatformTx.
+export {
+  platformAdminWriteRepository,
+  type TenantLifecycleStatus,
+  type CreditAdjustOutcome,
+  type UserAccountStatus,
+  type UserStatusOutcome,
+  type RefundOutcome,
+} from "./repositories/platformAdminWrites.ts";
 // Platform STAFF role lookup (ADR-0011) — owner-connection read for requireStaffRole authz.
 export { platformStaffRepository } from "./repositories/platformStaffRepository.ts";
+// Staff support notes (13a Area 3) — owner-connection, audited writes; deny-all to the customer app role.
+export {
+  supportNoteRepository,
+  type SupportNoteRow,
+} from "./repositories/supportNoteRepository.ts";
+// Account holds (13a Area 7) — staff abuse/fraud holds; owner-connection, audited writes; deny-all to app role.
+export {
+  accountHoldRepository,
+  type AccountHoldRow,
+} from "./repositories/accountHoldRepository.ts";
+// Announcements (13a Area 10) — staff-authored banners; admin writes via withPlatformTx, customer read is an
+// owner-connection, server-scoped projection.
+export {
+  announcementRepository,
+  type AnnouncementRow,
+  type ActiveAnnouncementRow,
+  type AnnouncementWrite,
+} from "./repositories/announcementRepository.ts";
+// Platform billing/economics reads (13a Area 4) — cross-tenant aggregates, run within withPlatformTx.
+export {
+  platformBillingReadRepository,
+  type EconomicsAggregate,
+  type PlatformPurchaseRow,
+} from "./repositories/platformBillingReads.ts";
+// Platform compliance-ops reads (13a Area 8) — global DSAR queue (PII-free), run within withPlatformTx.
+export {
+  platformComplianceReadRepository,
+  type PlatformDsarRow,
+} from "./repositories/platformComplianceReads.ts";
+// Retention policies (13a Area 8) — staff-authored retention SLAs; owner-connection, audited writes.
+export {
+  retentionPolicyRepository,
+  type RetentionPolicyRow,
+  type RetentionPolicyWrite,
+} from "./repositories/retentionPolicyRepository.ts";
+// Credit-pack pricing catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
+export {
+  creditPackRepository,
+  type CreditPackRow,
+  type UpsertCreditPackInput,
+} from "./repositories/creditPackRepository.ts";
+// Plan/entitlement template catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
+export {
+  planTemplateRepository,
+  type PlanTemplateRow,
+  type UpsertPlanTemplateInput,
+} from "./repositories/planTemplateRepository.ts";
+// JIT elevation grants (13a F1) — audited, time-boxed, tenant-scoped step-up for sensitive admin actions.
+export {
+  jitElevationRepository,
+  JIT_ELEVATION_TTL_SECONDS,
+  type GrantElevationInput,
+  type JitElevationRow,
+} from "./repositories/jitElevationRepository.ts";
 // Provider configs (13 §3.6) — platform-global enable/budget + cross-tenant month-to-date spend.
 export {
   providerConfigRepository,
@@ -306,6 +371,7 @@ export {
 // Platform audit-log read surface (ADR-0032) — bounded cross-tenant read, run within withPlatformTx.
 export {
   platformAuditReadRepository,
+  AUDIT_EXPORT_CAP,
   type PlatformAuditRow,
   type TenantStaffAccessRow,
 } from "./repositories/platformAuditReads.ts";
@@ -350,7 +416,23 @@ export {
   mailboxRepository,
   type MailboxInsert,
   type MailboxRecord,
+  type MailboxDueRow,
 } from "./repositories/mailboxRepository.ts";
+export {
+  oauthConnectStateRepository,
+  type ConnectStateInsert,
+  type ConnectStateRecord,
+} from "./repositories/oauthConnectStateRepository.ts";
+// M12 P1 outbound persistence / P3 inbox — the conversation + per-message store (rfc822 Message-ID threading
+// key). Net-new, additive to outreach_log/sendStep (D11). Bodies encrypted (D7), never projected to the API.
+export {
+  emailThreadRepository,
+  type ThreadInsert,
+} from "./repositories/emailThreadRepository.ts";
+export {
+  emailMessageRepository,
+  type MessageInsert,
+} from "./repositories/emailMessageRepository.ts";
 export {
   emailEventRepository,
   type EmailEventType,
@@ -369,6 +451,10 @@ export {
   type VersionInsert,
   type TemplateRecord,
   type TemplateSummaryRow,
+  type TemplateDetailRow,
+  type TemplateVersionRow,
+  type TemplateListCursor,
+  type TemplateListRow,
 } from "./repositories/emailTemplateRepository.ts";
 export {
   schedulerRepository,

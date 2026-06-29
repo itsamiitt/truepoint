@@ -39,3 +39,53 @@ export interface TenantDetail {
   workspaces: TenantWorkspace[];
   members: TenantMember[];
 }
+
+/** A staff support note about a tenant (13a Area 3). Mirrors the api `/admin/tenants/:id/notes` shape. */
+export interface SupportNote {
+  id: string;
+  tenantId: string;
+  staffUserId: string;
+  body: string;
+  ticketUrl: string | null;
+  createdAt: string;
+}
+
+/** The customer-360 usage/health overview of a tenant (13a Area 3). Mirrors `/admin/tenants/:id/overview`. */
+export interface TenantOverview {
+  reveals30d: number;
+  burn30d: number;
+  revealsTotal: number;
+  lastRevealAt: string | null;
+  activeHolds: number;
+}
+
+/** A plan template option for the plan-override picker (13a Area 1). A thin projection of the pricing
+ *  catalog's plan_templates (`/admin/pricing/plan-templates`). */
+export interface PlanTemplateOption {
+  key: string;
+  name: string;
+  seatLimit: number;
+  workspaceLimit: number | null;
+  active: boolean;
+}
+
+/** A credit-pack purchase by a tenant (13a Area 4). Mirrors `/admin/tenants/:id/purchases`. */
+export interface Purchase {
+  id: string;
+  credits: number;
+  amountCents: number | null;
+  status: string;
+  createdAt: string;
+}
+
+/** An abuse / fraud hold on a tenant (13a Area 7). Mirrors the api `/admin/tenants/:id/holds` shape. */
+export interface AccountHold {
+  id: string;
+  tenantId: string;
+  kind: string;
+  reason: string;
+  placedByUserId: string;
+  placedAt: string;
+  liftedAt: string | null;
+  liftedByUserId: string | null;
+}

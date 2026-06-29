@@ -6,6 +6,7 @@
 // (sidebarOpen), closes the rail on route change, and passes toggle/close callbacks to TopBar and Sidebar.
 "use client";
 
+import { AnnouncementBanner } from "@/features/announcements/AnnouncementBanner";
 import {
   clearAccessToken,
   fetchWithAuth,
@@ -172,6 +173,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               pinned={pinned}
               onTogglePin={togglePinned}
             />
+            <AnnouncementBanner />
             <main className="tp-content">{children}</main>
           </div>
           <CommandPalette />

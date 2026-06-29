@@ -8,6 +8,7 @@
 import { verifyPlatformAdmin } from "@/lib/adminGate";
 import { fetchWithAuth, getAccessToken, silentRefresh, startLogin } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import { StaffMeProvider } from "@/lib/staffMe";
 import { ToastProvider } from "@leadwolf/ui";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
@@ -135,25 +136,31 @@ export function AdminShell({ children }: { children: ReactNode }) {
 
   return (
     <ToastProvider>
-      <div className="tp-shell" data-density="comfortable">
-        {sidebarOpen && (
-          <button
-            type="button"
-            className="tp-sidebar-scrim"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Close navigation"
+      <StaffMeProvider>
+        <div className="tp-shell" data-density="comfortable">
+          {sidebarOpen && (
+            <button
+              type="button"
+              className="tp-sidebar-scrim"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close navigation"
+            />
+          )}
+          <Sidebar
+            userEmail={userEmail}
+            isOpen={sidebarOpen}
+            onClose={() => setSidebarOpen(false)}
           />
-        )}
-        <Sidebar userEmail={userEmail} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="tp-main">
-          <ImpersonationBanner />
-          <TopBar
-            title={sectionTitleFor(pathname)}
-            onMenuToggle={() => setSidebarOpen((v) => !v)}
-          />
-          <main className="tp-content">{children}</main>
+          <div className="tp-main">
+            <ImpersonationBanner />
+            <TopBar
+              title={sectionTitleFor(pathname)}
+              onMenuToggle={() => setSidebarOpen((v) => !v)}
+            />
+            <main className="tp-content">{children}</main>
+          </div>
         </div>
-      </div>
+      </StaffMeProvider>
     </ToastProvider>
   );
 }

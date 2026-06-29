@@ -90,6 +90,25 @@ const GRANTS = `
   REVOKE ALL ON platform_staff FROM leadwolf_app;
   -- impersonation_sessions (ADR-0011) is platform-owned staff data — deny the customer app role entirely.
   REVOKE ALL ON impersonation_sessions FROM leadwolf_app;
+  -- jit_elevations (ADR-0011 / 13a F1) is platform-owned staff data too — the app role must never see who is
+  -- elevated for what. RLS denies it; REVOKE the blanket grant (defence-in-depth). withPlatformTx (owner) is unaffected.
+  REVOKE ALL ON jit_elevations FROM leadwolf_app;
+  -- support_notes (13a Area 3) is platform-owned staff data — a customer must never read staff notes about
+  -- their org. RLS denies it; REVOKE the blanket grant too. withPlatformTx (owner) is unaffected.
+  REVOKE ALL ON support_notes FROM leadwolf_app;
+  -- account_holds (13a Area 7) is platform-owned staff abuse data — deny-all to the customer app role.
+  REVOKE ALL ON account_holds FROM leadwolf_app;
+  -- announcements (13a Area 10) is platform-owned authoring data — deny-all to the customer app role; the
+  -- customer banner read goes through a dedicated server-scoped api endpoint (owner connection), not this table.
+  REVOKE ALL ON announcements FROM leadwolf_app;
+  -- retention_policies (13a Area 8) is platform-owned compliance config — deny-all to the customer app role.
+  REVOKE ALL ON retention_policies FROM leadwolf_app;
+  -- credit_packs (13a Area 5) is staff-authored pricing config — for now platform-owned (deny-all to the app
+  -- role); the public pricing surface is separate. REVOKE the blanket grant. withPlatformTx (owner) unaffected.
+  REVOKE ALL ON credit_packs FROM leadwolf_app;
+  -- plan_templates (13a Area 5) is staff-authored plan config — platform-owned, deny-all to the app role.
+  -- REVOKE the blanket grant. withPlatformTx (owner) unaffected.
+  REVOKE ALL ON plan_templates FROM leadwolf_app;
   -- Layer-0 master graph (ADR-0021) is SYSTEM-OWNED, isolated by ACCESS PATH not RLS: it has NO workspace_id,
   -- so NO fail-closed RLS predicate. The blanket GRANT above handed leadwolf_app DML on it — REVOKE it so the
   -- customer app role can NEVER read the shared universe directly (PLAN_04/PLAN_07 "grant-off is the wall").
