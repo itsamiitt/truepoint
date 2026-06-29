@@ -608,3 +608,33 @@ export {
   getCustomFieldValues,
   type SetValuesInput,
 } from "./customFields/setValues.ts";
+
+// CRM bidirectional sync (crm-sync §5.1 / §6): core OWNS the CrmConnector port + the two PURE conflict
+// planners; the adapters in packages/integrations implement the port; core never imports integrations. The
+// planners are IO-free (no DB, no network) so they unit-test cleanly and converge on replay.
+export type {
+  CrmConnector,
+  CrmFetch,
+  CrmTokenBundle,
+  CrmOutcome,
+  CrmLimitSignal,
+  CrmAccountInfo,
+  CrmUpsertRecord,
+  CrmUpsertResult,
+  CrmWebhookEvent,
+  CrmEraseMode,
+} from "./crm/port.ts";
+export {
+  planCrmOutboundPush,
+  type OutboundPushInput,
+  type OutboundPushPlan,
+  type CrmPushOperation,
+} from "./crm/planOutboundPush.ts";
+export {
+  planCrmInboundMerge,
+  type InboundMergeInput,
+  type InboundMergePlan,
+  type InboundMergeField,
+  type InboundFieldOutcome,
+  type CrmMergeDecision,
+} from "./crm/planInboundMerge.ts";

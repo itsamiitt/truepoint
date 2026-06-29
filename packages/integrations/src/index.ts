@@ -21,3 +21,16 @@ export {
   type FetchJson as AiFetchJson,
   defaultFetchJson as defaultAiFetchJson,
 } from "./anthropic/nlSearchAdapter.ts";
+
+// CRM connector adapters (crm-sync §5.1): the HubSpot adapter implementing core's CrmConnector port, plus the
+// configured-set factory (mirrors defaultProviders()). The transport is the injectable CrmFetch; client
+// id/secret are injected (never read from env here), so the adapter is unit-testable on recorded fixtures.
+// Salesforce is the deferred fast-follow. core OWNS the port; this package implements it (16 §5).
+export { hubspotConnector, defaultCrmConnectors, type HubspotConfig } from "./crm/hubspot.ts";
+export {
+  defaultCrmFetch,
+  classifyHubspotStatus,
+  parseHubspotLimits,
+  CrmOAuthError,
+  type CrmErrorOutcome,
+} from "./crm/hubspotHttp.ts";
