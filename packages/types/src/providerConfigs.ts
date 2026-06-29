@@ -7,6 +7,40 @@ import { z } from "zod";
 export const providerHealth = z.enum(["healthy", "degraded", "down", "unknown"]);
 export type ProviderHealth = z.infer<typeof providerHealth>;
 
+/**
+ * Recent call-STATUS counts for ONE provider over a bounded window — the raw input to
+ * {@link deriveProviderHealth}. Sourced from `provider_calls.status` only (never response_payload, so no
+ * PII/secrets): `hit` = served from cache (provider NOT contacted); `miss` = live call SUCCEEDED;
+ * `rateLimited` = provider throttled us; `error` = call failed.
+ */
+export interface ProviderCallStatusCounts {
+  hit: number;
+  miss: number;
+  rateLimited: number;
+  error: number;
+}
+
+/**
+ * PASSIVE provider health, derived PURELY from recent call-STATUS history — no live probe, no secret read.
+ *
+ * Only *live* calls reflect provider liveness, so cache hits are EXCLUDED from the denominator:
+ *   liveCalls = miss + rateLimited + error.
+ *
+ * Thresholds (evaluated over the caller's window — 24h in the admin console):
+ *   - liveCalls === 0                          → "unknown"  (no live activity to judge — honest, not green)
+ *   - errorRate (error / liveCalls) >= 0.5     → "down"     (failing the majority of live calls)
+ *   - (error + rateLimited) / liveCalls >= 0.2 → "degraded" (a meaningful failure/throttle rate)
+ *   - otherwise                                → "healthy"
+ */
+export function deriveProviderHealth(counts: ProviderCallStatusCounts): ProviderHealth {
+  const liveCalls = counts.miss + counts.rateLimited + counts.error;
+  if (liveCalls === 0) return "unknown";
+  const errorRate = counts.error / liveCalls;
+  if (errorRate >= 0.5) return "down";
+  if ((counts.error + counts.rateLimited) / liveCalls >= 0.2) return "degraded";
+  return "healthy";
+}
+
 /** The masked provider row shown in the staff console. `keyHint` is a non-reversible indicator, never the secret. */
 export const providerConfigViewSchema = z.object({
   provider: z.string(),

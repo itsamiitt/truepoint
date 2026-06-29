@@ -2,14 +2,17 @@
 // the parent router already applied authn + platformAdmin (the `pa` gate); provider config is a sensitive
 // platform control (data sources + spend), so these additionally require the super_admin staff role. All
 // reads/writes go through withPlatformTx (cross-tenant owner visibility + a platform_audit_log row). No
-// provider SECRET is ever returned — keyHint is a deferred masked indicator and health is unknown until a
-// live probe lands (honest, not fabricated). Month-to-date spend is a real cross-tenant aggregation.
+// provider SECRET is ever returned. `health` is a PASSIVE signal from provider_calls call-STATUS history
+// (no live probe, no secret touched); `keyHint` stays deferred/null — a masked secret hint is security-
+// owned (it needs KMS-decrypted key material). Month-to-date spend + recent health are real cross-tenant
+// aggregations over provider_calls (status/cost counts only, never response_payload).
 
 import { providerConfigRepository, withPlatformTx } from "@leadwolf/db";
 import {
   NotFoundError,
   type ProviderConfigView,
   ValidationError,
+  deriveProviderHealth,
   providerBudgetSchema,
   providerEnabledToggleSchema,
 } from "@leadwolf/types";
@@ -42,12 +45,18 @@ function startOfMonthUtc(): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
+/** Lower bound (24h ago) for the PASSIVE provider-health window over provider_calls call-status history. */
+function startOfHealthWindowUtc(): Date {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000);
+}
+
 /** List the supported providers merged with their stored config + live month-to-date spend (masked). */
 providerConfigRoutes.get("/", async (c) => {
   const providers = await withPlatformTx(actorOf(c), "admin.list_provider_configs", async (tx) => {
-    const [configs, mtd] = await Promise.all([
+    const [configs, mtd, healthCounts] = await Promise.all([
       providerConfigRepository.list(tx),
       providerConfigRepository.monthToDateCentsByProvider(tx, startOfMonthUtc()),
+      providerConfigRepository.recentHealthByProvider(tx, startOfHealthWindowUtc()),
     ]);
     const byProvider = new Map(configs.map((r) => [r.provider, r]));
     return KNOWN_PROVIDERS.map(({ provider, label }): ProviderConfigView => {
@@ -60,7 +69,9 @@ providerConfigRoutes.get("/", async (c) => {
         rateLimitPerMin: cfg?.rateLimitPerMin ?? null,
         monthlyBudgetCents: cfg?.monthlyBudgetCents ?? null,
         monthToDateCents: mtd[provider] ?? 0,
-        health: "unknown", // WIRE: live provider health probe
+        health: deriveProviderHealth(
+          healthCounts[provider] ?? { hit: 0, miss: 0, rateLimited: 0, error: 0 },
+        ),
       };
     });
   });
