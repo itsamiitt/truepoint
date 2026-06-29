@@ -81,8 +81,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1148,
-  "fileSetHash": "sha256:cc09ff224f5094decb2d4d7e337fc46ef81cab65d45c924ee93c9f3a70f7de58",
+  "fileCount": 1149,
+  "fileSetHash": "sha256:c684e128d717f892def3bec6105de371509c9068fda5caacb0e736d4caad6163",
   "features": {
     "account-search": {
       "web": [],
@@ -1427,6 +1427,7 @@
     ],
     "apps/admin/components": [
       "apps/admin/src/components/ImpersonationBanner.tsx",
+      "apps/admin/src/components/TenantPicker.tsx",
       "apps/admin/src/components/shell/AdminShell.tsx",
       "apps/admin/src/components/shell/Brandmark.tsx",
       "apps/admin/src/components/shell/Sidebar.tsx",

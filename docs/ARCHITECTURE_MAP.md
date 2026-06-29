@@ -68,8 +68,8 @@ apps/                           # deployable processes (thin transport adapters)
     components/{shell/*,PageHeader}  features/{import,prospect,home,sequences,inbox,reports,lists,sales-navigator,
                                               enrichment-jobs,settings-*}/   lib/{authClient,pkce,publicConfig}
   admin/ src/                   # admin.truepoint.in internal staff console (Next 15)  [LIVE — was a target]
-    components/shell/{AdminShell,Sidebar,TopBar,navConfig,Brandmark}  components/ImpersonationBanner  lib/{adminGate,authClient,pkce}
-    app/(shell)/{tenants,users,staff,provider-configs,feature-flags,audit-log,system-health}  features/*
+    components/shell/{AdminShell,Sidebar,TopBar,navConfig,Brandmark}  components/{ImpersonationBanner,TenantPicker}  lib/{adminGate,authClient,pkce}
+    app/(shell)/{tenants,users,billing,plans,pricing,provider-configs,feature-flags,content,retention,staff,compliance,audit-log,imports,system-health}  features/*
   workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring · dsar · outreach · firmographics ·
                                 #   dedup · retentionSweep · sequenceTick · tokenRefresh queues + leaderLock +
                                 #   mailboxThrottle (Redis token-bucket) + health/logger  [LIVE]
@@ -365,7 +365,7 @@ apps/                           # deployable processes (thin transport adapters)
 
 #### apps/admin shell + features (web)
 - **shell/lib:** `components/shell/` (`AdminShell` two-stage gate, `Sidebar`/`TopBar`/`navConfig`/`Brandmark`),
-  `ImpersonationBanner` (polls `/admin/impersonation/active`), `lib/` (`adminGate` API probe, `authClient`, `pkce`, `publicConfig`)
+  `ImpersonationBanner` (polls `/admin/impersonation/active`), `TenantPicker` (async typeahead over `/admin/tenants?search=`, replaces raw-UUID entry), `lib/` (`adminGate` API probe, `authClient`, `pkce`, `publicConfig`)
 - **tenants** — directory (plan/status/seats/credits) + detail (workspaces/members/usage; plan overrides, suspend, credit grants)
 - **users** — cross-tenant user search; deactivate; reset MFA / force reset; revoke sessions
 - **staff** — grant/revoke platform staff roles (super_admin/support/billing_ops/compliance_officer/read_only)
@@ -472,7 +472,7 @@ flowchart TD
   (AppShell auth gate, Sidebar/TopBar/navConfig, CommandPalette, DensityProvider, CreditPill, NotificationsBell,
   WorkspaceSwitcher/OrgSwitcher/TeamSwitcher, useSidebarPin); `lib/` (`authClient`, `pkce`, `publicConfig`).
 - **`apps/admin`** — `app/(shell)/*` staff pages + `components/shell/*` (AdminShell two-stage gate, Sidebar/TopBar/navConfig,
-  Brandmark) + `ImpersonationBanner`; `lib/` (`adminGate`, `authClient`, `pkce`, `publicConfig`).
+  Brandmark) + `ImpersonationBanner` + `TenantPicker`; `lib/` (`adminGate`, `authClient`, `pkce`, `publicConfig`).
 - **`apps/workers`** — `index.ts` (entry + graceful drain), `register.ts` (composition root + producers), `leaderLock.ts`
   (single-runner election for scheduled ticks), `health`/`logger`; queue processors bucketed to their feature (imports/
   enrichment/scoring/dsar/outreach) — see Notes for the four undeclared queues. Queue itests in `apps/workers/test/`.
