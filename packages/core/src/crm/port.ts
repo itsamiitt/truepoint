@@ -84,6 +84,19 @@ export interface CrmWebhookEvent {
 /** How an outward erasure is satisfied per provider (DSAR propagation, §7.6). */
 export type CrmEraseMode = "delete" | "gdpr_delete" | "anonymize";
 
+/** Which erasure path the provider could actually satisfy — the §7.6 erased-vs-anonymized proof. */
+export type CrmErasePath = "deleted" | "gdpr_deleted" | "anonymized";
+
+/**
+ * The explicit result of `eraseOrSuppress` — the connector NEVER silently no-ops an erasure: an `ok`
+ * outcome always names the path taken (so the DSAR `scope_report` records erased-vs-anonymized, §7.6).
+ */
+export interface CrmEraseResult {
+  path: CrmErasePath;
+  /** Set when the path could not hard-delete and instead anonymized + flagged Do-Not-Contact. */
+  doNotContact?: boolean;
+}
+
 /**
  * The CRM connector port. OAuth is server-side only; the data plane is upsert-by-external-key (the TP UUID)
  * so create-or-update is one idempotent call (§6.4). Every data-plane method takes an OPTIONAL `fetch` so a
@@ -135,7 +148,7 @@ export interface CrmConnector {
   eraseOrSuppress(
     a: { bundle: CrmTokenBundle; object: CrmObjectType; externalId: string; mode: CrmEraseMode },
     fetch?: CrmFetch,
-  ): Promise<CrmOutcome<void>>;
+  ): Promise<CrmOutcome<CrmEraseResult>>;
 
   // Inbound trust boundary.
   verifyWebhook(raw: string, headers: Record<string, string>, secret: string): boolean;

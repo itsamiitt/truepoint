@@ -21,6 +21,7 @@ import {
   formEncode,
   parseHubspotLimits,
 } from "./hubspotHttp.ts";
+import { type SalesforceConfig, salesforceConnector } from "./salesforce.ts";
 
 const AUTH_ENDPOINT = "https://app.hubspot.com/oauth/authorize";
 const TOKEN_ENDPOINT = "https://api.hubapi.com/oauth/v1/token";
@@ -49,9 +50,10 @@ const mapRecord = (r: HubspotRecord) => ({
   properties: r.properties ?? {},
 });
 
-/** The CRM record's modstamp drives the inbound watermark (valid-time). */
-const modstamp = (r: HubspotRecord): string | undefined => {
-  const v = r.properties?.hs_lastmodifieddate;
+/** The CRM record's modstamp drives the inbound watermark (valid-time). Accepts `undefined` so an
+ * out-of-range index access (noUncheckedIndexedAccess) is safe at the call site. */
+const modstamp = (r: HubspotRecord | undefined): string | undefined => {
+  const v = r?.properties?.hs_lastmodifieddate;
   return typeof v === "string" ? v : undefined;
 };
 
@@ -214,9 +216,9 @@ export function hubspotConnector(config: HubspotConfig = {}, fetch: CrmFetch = d
       const path = pathFor(object);
       if (!path) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
       if (mode === "gdpr_delete" && path === "contacts") {
-        return call(f, { method: "POST", url: `${API_BASE}/crm/v3/objects/contacts/gdpr-delete`, bundle, body: { objectId: externalId } }, () => undefined);
+        return call(f, { method: "POST", url: `${API_BASE}/crm/v3/objects/contacts/gdpr-delete`, bundle, body: { objectId: externalId } }, () => ({ path: "gdpr_deleted" as const }));
       }
-      return call(f, { method: "DELETE", url: `${API_BASE}/crm/v3/objects/${path}/${encodeURIComponent(externalId)}`, bundle }, () => undefined);
+      return call(f, { method: "DELETE", url: `${API_BASE}/crm/v3/objects/${path}/${encodeURIComponent(externalId)}`, bundle }, () => ({ path: "deleted" as const }));
     },
 
     verifyWebhook(raw, headers, secret) {
@@ -255,7 +257,12 @@ export function hubspotConnector(config: HubspotConfig = {}, fetch: CrmFetch = d
   };
 }
 
-/** The configured connector set — mirrors defaultProviders(); salesforce is the deferred fast-follow. */
-export function defaultCrmConnectors(config: { hubspot?: HubspotConfig } = {}): Partial<Record<CrmProvider, CrmConnector>> {
-  return { hubspot: hubspotConnector(config.hubspot) };
+/** The configured connector set — mirrors defaultProviders(). HubSpot + Salesforce both ship in phase 1. */
+export function defaultCrmConnectors(
+  config: { hubspot?: HubspotConfig; salesforce?: SalesforceConfig } = {},
+): Partial<Record<CrmProvider, CrmConnector>> {
+  return {
+    hubspot: hubspotConnector(config.hubspot),
+    salesforce: salesforceConnector(config.salesforce),
+  };
 }

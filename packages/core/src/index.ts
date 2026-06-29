@@ -623,7 +623,19 @@ export type {
   CrmUpsertResult,
   CrmWebhookEvent,
   CrmEraseMode,
+  CrmErasePath,
+  CrmEraseResult,
 } from "./crm/port.ts";
+export {
+  classifyRetry,
+  backoffDelayMs,
+  rateBudgetDecision,
+  type CrmRetryClass,
+  type RetryAction,
+  type BackoffOpts,
+  type RateBudgetInput,
+  type RateBudgetDecision,
+} from "./crm/reliability.ts";
 export {
   planCrmOutboundPush,
   type OutboundPushInput,
