@@ -184,3 +184,34 @@ export const planTemplates = pgTable("plan_templates", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// approval_requests (database-management-research 09) — the maker-checker gate for HIGH-RISK Data-management
+// operations (bulk delete, dedup merge, retention-enforce flip, bulk export). PLATFORM-owned staff data, the
+// same posture as jit_elevations: owner-written (withPlatformTx), deny-all to leadwolf_app (rls/platformOps.sql
+// + the applyMigrations REVOKE). MUTABLE (status pending → approved/rejected/executed/expired), so — like
+// jit_elevations — NO append-only trigger; the platform_audit_log rows (data.approval.*) are the immutable
+// trail. The approve action is gated by data:review + a server-side requested_by != decided_by (maker != checker)
+// check; a high-risk op routes through a pending request before it runs. target_tenant_id is a REFERENCE (the
+// org the op acts on; null = platform-wide), NOT an RLS key — this table spans tenants.
+export const approvalRequests = pgTable(
+  "approval_requests",
+  {
+    id: id(),
+    operation: text("operation").notNull(), // the high-risk op class (closed dataApprovalOperation vocabulary)
+    params: jsonb("params").notNull().default({}), // the op's parameters (validated per-op at execute time)
+    targetTenantId: uuid("target_tenant_id"), // the org the op acts on (null = platform-wide); a reference
+    requestedByUserId: uuid("requested_by_user_id").notNull(), // the MAKER
+    requestReason: text("request_reason").notNull(), // justification captured at request (audited)
+    status: text("status").notNull().default("pending"), // pending | approved | rejected | executed | expired
+    decidedByUserId: uuid("decided_by_user_id"), // the CHECKER (server-enforced != requested_by_user_id)
+    decisionReason: text("decision_reason"), // justification captured at approve/reject
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), // hard time-box on a pending request
+    executedAt: timestamp("executed_at", { withTimezone: true }), // set when the approved op actually ran
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    // The review-queue read: requests by status, newest-first (backward scan on the time-ordered v7 id).
+    byStatus: index("approval_requests_status_idx").on(t.status, t.id),
+  }),
+);

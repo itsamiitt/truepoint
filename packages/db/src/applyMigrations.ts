@@ -109,6 +109,10 @@ const GRANTS = `
   -- plan_templates (13a Area 5) is staff-authored plan config — platform-owned, deny-all to the app role.
   -- REVOKE the blanket grant. withPlatformTx (owner) unaffected.
   REVOKE ALL ON plan_templates FROM leadwolf_app;
+  -- approval_requests (database-management-research 09) is platform-owned maker-checker staff data — the customer
+  -- app role must never read or tamper with the staff approval workflow. RLS denies it; REVOKE the blanket grant
+  -- too (defence-in-depth). withPlatformTx (owner) is unaffected.
+  REVOKE ALL ON approval_requests FROM leadwolf_app;
   -- Layer-0 master graph (ADR-0021) is SYSTEM-OWNED, isolated by ACCESS PATH not RLS: it has NO workspace_id,
   -- so NO fail-closed RLS predicate. The blanket GRANT above handed leadwolf_app DML on it — REVOKE it so the
   -- customer app role can NEVER read the shared universe directly (PLAN_04/PLAN_07 "grant-off is the wall").

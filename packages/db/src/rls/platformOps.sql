@@ -159,3 +159,30 @@ CREATE TABLE IF NOT EXISTS plan_templates (
 );
 
 ALTER TABLE plan_templates ENABLE ROW LEVEL SECURITY;
+
+-- approval_requests (database-management-research 09) — the maker-checker gate for high-risk Data-management
+-- operations. Same PLATFORM-owned staff posture as jit_elevations: written ONLY by the owner connection
+-- (withPlatformTx), deny-all to leadwolf_app (this file + the applyMigrations REVOKE). ENABLE (not FORCE) keeps
+-- the owner writer exempt while the policy-subject app role sees zero rows and cannot write — deny-all. MUTABLE
+-- (status pending → approved/rejected/executed), so no append-only trigger; the data.approval.* platform_audit_log
+-- rows are the trail. Defensive CREATE mirrors the migration's column set so this file is safe to run standalone
+-- (and guarantees the table exists at runtime regardless of the Drizzle journal); idempotent.
+CREATE TABLE IF NOT EXISTS approval_requests (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  operation text NOT NULL,
+  params jsonb NOT NULL DEFAULT '{}'::jsonb,
+  target_tenant_id uuid,
+  requested_by_user_id uuid NOT NULL,
+  request_reason text NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  decided_by_user_id uuid,
+  decision_reason text,
+  decided_at timestamptz,
+  expires_at timestamptz NOT NULL,
+  executed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS approval_requests_status_idx ON approval_requests (status, id);
+
+ALTER TABLE approval_requests ENABLE ROW LEVEL SECURITY;

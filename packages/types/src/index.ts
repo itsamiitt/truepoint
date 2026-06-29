@@ -48,3 +48,4 @@ export * from "./complianceAdmin.ts";
 export * from "./announcementAdmin.ts";
 export * from "./retentionAdmin.ts";
 export * from "./listGovernance.ts";
+export * from "./dataApproval.ts";
