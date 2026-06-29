@@ -3,6 +3,7 @@
 // the audited /admin/feature-flags/:key/tenant endpoint. Rendered by FeatureFlagsPage.
 "use client";
 
+import { TenantPicker } from "@/components/TenantPicker";
 import type { FeatureFlagWithOverrides } from "@leadwolf/types";
 import {
   Dialog,
@@ -10,7 +11,6 @@ import {
   FieldGroup,
   StatusBadge,
   TpButton,
-  TpInput,
   TpSelect,
   useToast,
 } from "@leadwolf/ui";
@@ -28,6 +28,7 @@ export function OverrideDialog({
 }) {
   const toast = useToast();
   const [tenantId, setTenantId] = useState("");
+  const [tenantName, setTenantName] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<"true" | "false">("true");
   const [busy, setBusy] = useState(false);
 
@@ -37,6 +38,7 @@ export function OverrideDialog({
       await setTenantOverride(flag.key, { tenant_id: targetTenant, enabled: value });
       toast.success(value === null ? "Override cleared" : "Override set for tenant");
       setTenantId("");
+      setTenantName(null);
       await onChanged();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Override change failed");
@@ -102,12 +104,15 @@ export function OverrideDialog({
         </section>
 
         <section style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <FieldGroup label="Tenant id" htmlFor="ov-tenant" className="tp-ui-grow">
-            <TpInput
+          <FieldGroup label="Tenant" htmlFor="ov-tenant" className="tp-ui-grow">
+            <TenantPicker
               id="ov-tenant"
               value={tenantId}
-              placeholder="00000000-0000-0000-0000-000000000000"
-              onChange={(e) => setTenantId(e.currentTarget.value)}
+              selectedName={tenantName}
+              onChange={(tid, name) => {
+                setTenantId(tid);
+                setTenantName(name);
+              }}
             />
           </FieldGroup>
           <FieldGroup label="Force">

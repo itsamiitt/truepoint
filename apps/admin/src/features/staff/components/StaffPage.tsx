@@ -5,6 +5,7 @@
 // shared State Kit. Public slice component.
 "use client";
 
+import { UserPicker } from "@/components/UserPicker";
 import {
   type Column,
   DataTable,
@@ -14,7 +15,6 @@ import {
   StatusBadge,
   type StatusTone,
   TpButton,
-  TpInput,
   TpSelect,
   useToast,
 } from "@leadwolf/ui";
@@ -40,6 +40,7 @@ export function StaffPage() {
   const toast = useToast();
 
   const [userId, setUserId] = useState("");
+  const [userLabel, setUserLabel] = useState<string | null>(null);
   const [role, setRole] = useState<StaffRole>("support");
   const [granting, setGranting] = useState(false);
   const [confirmRevoke, setConfirmRevoke] = useState<StaffMember | null>(null);
@@ -56,6 +57,7 @@ export function StaffPage() {
       await grantStaff(id, role);
       toast.success("Staff role granted.");
       setUserId("");
+      setUserLabel(null);
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Grant failed");
@@ -148,13 +150,16 @@ export function StaffPage() {
           htmlFor="staff-grant-user"
           style={{ display: "flex", flexDirection: "column", gap: 4, flex: "1 1 280px" }}
         >
-          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>User id</span>
-          <TpInput
+          <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>User</span>
+          <UserPicker
             id="staff-grant-user"
             value={userId}
-            placeholder="user UUID"
+            selectedLabel={userLabel}
             disabled={granting}
-            onChange={(e) => setUserId(e.currentTarget.value)}
+            onChange={(uid, label) => {
+              setUserId(uid);
+              setUserLabel(label);
+            }}
           />
         </label>
         <label
