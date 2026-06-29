@@ -82,8 +82,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1162,
-  "fileSetHash": "sha256:b34b3fcb53a5520120bc24cce6bc96c892b042bc4d41f4d6a82c1958111bde85",
+  "fileCount": 1165,
+  "fileSetHash": "sha256:11d9be8d9cc8615f4c35b0d2e4451f63d69f6e5336455492c5fda0780ecb7096",
   "features": {
     "account-search": {
       "web": [],
@@ -380,10 +380,12 @@
         "apps/admin/src/features/data-ops/components/DataImportDetailPage.tsx",
         "apps/admin/src/features/data-ops/components/DataOpsOverviewPage.tsx",
         "apps/admin/src/features/data-ops/components/EnrichmentRunsPage.tsx",
+        "apps/admin/src/features/data-ops/components/VerificationRunsPage.tsx",
         "apps/admin/src/features/data-ops/format.ts",
         "apps/admin/src/features/data-ops/hooks/useDataImportDetail.ts",
         "apps/admin/src/features/data-ops/hooks/useDataOpsOverview.ts",
         "apps/admin/src/features/data-ops/hooks/useEnrichmentRuns.ts",
+        "apps/admin/src/features/data-ops/hooks/useVerificationRuns.ts",
         "apps/admin/src/features/data-ops/index.ts",
         "apps/admin/src/features/data-ops/types.ts"
       ],
@@ -1434,6 +1436,7 @@
       "apps/admin/src/app/(shell)/data-ops/enrichment/page.tsx",
       "apps/admin/src/app/(shell)/data-ops/imports/[jobId]/page.tsx",
       "apps/admin/src/app/(shell)/data-ops/page.tsx",
+      "apps/admin/src/app/(shell)/data-ops/verification/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
       "apps/admin/src/app/(shell)/imports/page.tsx",
       "apps/admin/src/app/(shell)/layout.tsx",

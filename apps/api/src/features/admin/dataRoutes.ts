@@ -110,3 +110,14 @@ dataRoutes.get("/enrichment/runs", requireCapability("data:read"), async (c) => 
   );
   return c.json({ runs });
 });
+
+// ── Verification-run monitor (database-management-research 08/10, Phase 2 read slice) — recent freshness
+// re-verification runs ACROSS all tenants: scanned / reverified / errored + run window joined to the tenant name,
+// newest-first + PLATFORM_READ_LIMIT-bounded. COUNTS only (verification_jobs ledger; no contact rows / PII).
+// data:read-gated; the read runs on the audited withPlatformTx.
+dataRoutes.get("/verification/runs", requireCapability("data:read"), async (c) => {
+  const runs = await withPlatformTx(actorOf(c), "admin.data_verification_runs", (tx) =>
+    platformAdminRepository.recentVerificationJobs(tx),
+  );
+  return c.json({ runs });
+});

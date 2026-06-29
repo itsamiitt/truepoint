@@ -73,3 +73,17 @@ export interface EnrichmentRunRow {
   completedAt: string | null;
   failedReason: string | null;
 }
+
+/** One row of the cross-tenant freshness re-verification monitor, mirroring GET /admin/data/verification/runs.
+ * COUNTS only (scanned/reverified/errored + the run window) — no contact PII. Dates arrive as ISO strings. */
+export interface VerificationRunRow {
+  jobId: string;
+  tenantId: string;
+  tenantName: string;
+  scanned: number;
+  reverified: number;
+  errored: number;
+  startedAt: string;
+  finishedAt: string;
+  createdAt: string;
+}

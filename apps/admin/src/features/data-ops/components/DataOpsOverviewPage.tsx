@@ -72,6 +72,9 @@ export function DataOpsOverviewPage() {
         <Link href="/data-ops/enrichment" style={{ fontWeight: 500 }}>
           Enrichment runs →
         </Link>
+        <Link href="/data-ops/verification" style={{ fontWeight: 500 }}>
+          Verification runs →
+        </Link>
       </div>
     </div>
   );

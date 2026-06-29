@@ -12,6 +12,7 @@ import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
 import { importJobChunks, importJobs } from "../schema/importJobs.ts";
 import { listMembers, lists } from "../schema/lists.ts";
 import { retentionRuns } from "../schema/retention.ts";
+import { verificationJobs } from "../schema/verificationJobs.ts";
 
 /** The cross-tenant read cap — mirrors the bound the api admin routes already enforce (ADR-0032). */
 export const PLATFORM_READ_LIMIT = 500;
@@ -182,6 +183,23 @@ export interface PlatformEnrichmentJobRow {
   createdAt: Date;
   completedAt: Date | null;
   failedReason: string | null;
+}
+
+/**
+ * One recent freshness RE-VERIFICATION run as seen by STAFF (database-management-research 08/10) — the
+ * cross-tenant view of the reverify-sweep audit ledger. COUNTS only (scanned / reverified / errored + the run
+ * window); verification_jobs carries no contact rows / PII, so nothing sensitive leaves the boundary.
+ */
+export interface PlatformVerificationJobRow {
+  jobId: string;
+  tenantId: string;
+  tenantName: string;
+  scanned: number;
+  reverified: number;
+  errored: number;
+  startedAt: Date;
+  finishedAt: Date;
+  createdAt: Date;
 }
 
 /**
@@ -552,6 +570,32 @@ export const platformAdminRepository = {
       .from(enrichmentJobs)
       .innerJoin(tenants, eq(tenants.id, enrichmentJobs.tenantId))
       .orderBy(desc(enrichmentJobs.createdAt))
+      .limit(Math.min(limit, PLATFORM_READ_LIMIT));
+  },
+
+  /**
+   * Recent freshness RE-VERIFICATION runs ACROSS all tenants (database-management-research 08/10 — the
+   * data-health verification observability). Each run row joined to its tenant NAME, returning the scanned /
+   * reverified / errored tally + the run window, newest-first. BOUNDED to PLATFORM_READ_LIMIT. Runs inside the
+   * caller's audited withPlatformTx; verification_jobs is COUNTS-only (no contact rows / PII), so nothing
+   * sensitive leaves the boundary (mirrors the recentRetentionRuns / recentImportJobs privacy-first idioms).
+   */
+  async recentVerificationJobs(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformVerificationJobRow[]> {
+    return tx
+      .select({
+        jobId: verificationJobs.id,
+        tenantId: verificationJobs.tenantId,
+        tenantName: tenants.name,
+        scanned: verificationJobs.scanned,
+        reverified: verificationJobs.reverified,
+        errored: verificationJobs.errored,
+        startedAt: verificationJobs.startedAt,
+        finishedAt: verificationJobs.finishedAt,
+        createdAt: verificationJobs.createdAt,
+      })
+      .from(verificationJobs)
+      .innerJoin(tenants, eq(tenants.id, verificationJobs.tenantId))
+      .orderBy(desc(verificationJobs.createdAt))
       .limit(Math.min(limit, PLATFORM_READ_LIMIT));
   },
 

@@ -3,3 +3,4 @@
 export { DataImportDetailPage } from "./components/DataImportDetailPage";
 export { DataOpsOverviewPage } from "./components/DataOpsOverviewPage";
 export { EnrichmentRunsPage } from "./components/EnrichmentRunsPage";
+export { VerificationRunsPage } from "./components/VerificationRunsPage";

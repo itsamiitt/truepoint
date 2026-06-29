@@ -6,7 +6,12 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { DataImportDetail, DataOpsOverview, EnrichmentRunRow } from "./types";
+import type {
+  DataImportDetail,
+  DataOpsOverview,
+  EnrichmentRunRow,
+  VerificationRunRow,
+} from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -32,5 +37,13 @@ export async function fetchEnrichmentRuns(): Promise<EnrichmentRunRow[]> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/enrichment/runs`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load enrichment runs"));
   const body = (await res.json()) as { runs: EnrichmentRunRow[] };
+  return body.runs;
+}
+
+/** GET /admin/data/verification/runs — recent freshness re-verification runs across all tenants (counts only). */
+export async function fetchVerificationRuns(): Promise<VerificationRunRow[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/verification/runs`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load verification runs"));
+  const body = (await res.json()) as { runs: VerificationRunRow[] };
   return body.runs;
 }
