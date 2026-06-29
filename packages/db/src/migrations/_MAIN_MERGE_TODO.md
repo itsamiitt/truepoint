@@ -44,6 +44,34 @@ main's 13a `retention_policies` (`schema/platformOps.ts`, `repositories/retentio
 `api/.../admin/compliance.ts`) is **unchanged**. The audit action `retention_policy.set` (engine) and
 `retention.set` (13a) are both kept and both accounted for in `platformAuditCoverage.test.ts`.
 
+## ⚠ Independent pre-FF review safeguards (read BEFORE running the steps below)
+
+An independent adversarial review of this branch (read-only) confirmed the **code** merge is clean: the
+`retention_policies`→`retention_class_policies` rename is complete with **no orphans**, the two retention
+concepts are fully disentangled, both retention sweeps + both admins are preserved, the conflict files are
+unioned (not clobbered), and there are no conflict markers. No build/runtime defect was found. The remaining
+risk is entirely in executing the deferred migration step correctly:
+
+- **MED-1 — preserve the 14 seed INSERTs; do NOT `drizzle-kit generate` from scratch.** The six preserved
+  SQL files carry hand-written seeds drizzle-kit **cannot** reproduce: `0025_retention_engine.sql:31-42`
+  (12 `retention_class_policies` default rows) + `0026_seed_rollout_flags.sql:1-2` (the `retention_engine_enabled`
+  + `bulk_import_enabled` feature flags). A from-scratch `drizzle-kit generate` emits only schema-derivable
+  DDL → it would **silently drop all 14 seeds**, leaving the retention engine with no classes (nothing to
+  shadow-count or ever enforce) and the two features un-flippable. So step 1–2 below = **renumber + hand-stitch**
+  (rename the six files to `0029…0034`, keep every INSERT, append journal entries with `0029.prevId==0028.id`…),
+  NOT a DDL regenerate. **Correctness gate:** after stitching, `bun drizzle-kit generate` must report **no
+  further diff** — a clean no-op proves the snapshots match the merged schema TS without having dropped anything.
+- **MED-2 — renumber BEFORE the DB itests, in the same CI job.** The engine migrations are inert on this
+  branch, so `migrate`/`applyMigrations` does not create `retention_class_policies`/`retention_runs`, and the
+  later `rls/retention.sql` (step 3) would fail "relation does not exist". The renumber (step 1–2) is a HARD
+  prerequisite for the gate suite (step 3) — never run the itests before it, never reorder.
+- **LOW (non-blocking):** the engine admin routes (`/admin/retention-policies`, `/import-jobs`,
+  `/retention-runs`) sit on `requireStaffRole` (super_admin-only write — strictest; reads match main's own
+  multi-tier cross-tenant pattern + the frontend render-gate matches), NOT the 13a F3 `requireCapability`
+  model. Safe + internally consistent; an optional later cleanup is dedicated `retention:read`/`retention:manage`
+  capabilities. Also: step 1's "RLS grants" actually live in `rls/*.sql` (applied separately by
+  `applyMigrations`), not inside the six migration SQL files — only the **seeds** need preserving there.
+
 ## What CI / a bun environment must do to finish
 
 1. Renumber feat's six SQL files **`0021…0026` → `0029…0034`** (preserving their content, including the
