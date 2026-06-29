@@ -1,13 +1,14 @@
-// api.ts — the retention-policy slice's only seam to the internal /admin/* API (apps/api). Self-contained
-// (mirrors the feature-flags slice): it calls the staff-authenticated admin endpoints over the session
-// cookie (credentials: "include") and reads its API base from NEXT_PUBLIC_ADMIN_API_BASE (falls back to
-// same-origin). The shapes are the shared @leadwolf/types contract; the server is the real authz boundary
-// (the write is super_admin-only + audited there — this client cannot bypass it).
+// api.ts — the retention-policy slice's only seam to the internal /admin/* API (apps/api). Authenticates via
+// the in-memory access token (fetchWithAuth, Bearer — ADR-0016), the SAME client the Tenants/Imports slices +
+// the platform-admin gate (adminGate) use. The api authn middleware is Bearer-only (no cookie fallback —
+// authn.ts), so the previous cookie credentials carried nothing usable. The shapes are the shared
+// @leadwolf/types contract; the server is the real authz boundary (the write is super_admin-only + audited
+// there — this client cannot bypass it).
 
+import { fetchWithAuth } from "@/lib/authClient";
+import { API_BASE } from "@/lib/publicConfig";
 import type { RetentionPolicy } from "@leadwolf/types";
 import type { RetentionPolicyPatch, RetentionRunRow } from "./types";
-
-const API_BASE = process.env.NEXT_PUBLIC_ADMIN_API_BASE ?? "";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -15,9 +16,8 @@ async function problemMessage(res: Response, fallback: string): Promise<string> 
 }
 
 async function adminFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${API_BASE}/api/v1/admin${path}`, {
+  return fetchWithAuth(`${API_BASE}/api/v1/admin${path}`, {
     ...init,
-    credentials: "include",
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
 }

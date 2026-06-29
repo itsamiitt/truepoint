@@ -1,12 +1,12 @@
-// api.ts — the provider-configs slice's seam to the internal /admin/* API (apps/api). Self-contained
-// (credentials: "include"; base from NEXT_PUBLIC_ADMIN_API_BASE). Provider configs are managed by existing
-// admin endpoints (13 §3.6); this slice reads the masked config (NEVER plaintext secrets) and posts
-// enable/disable + budget changes. The provider-config admin endpoints are part of the broader admin track;
-// this slice degrades gracefully (a clear "not yet available" state) until they are mounted.
+// api.ts — the provider-configs slice's seam to the internal /admin/* API (apps/api). Authenticates via the
+// in-memory access token (fetchWithAuth, Bearer — ADR-0016), the SAME client the Tenants/Imports slices + the
+// platform-admin gate use. The api authn middleware is Bearer-only (no cookie fallback — authn.ts), so the
+// previous cookie credentials carried nothing usable. Reads the masked config (NEVER plaintext secrets) and
+// posts enable/disable + budget changes; a 404 still degrades to a clear "not yet available" state.
 
+import { fetchWithAuth } from "@/lib/authClient";
+import { API_BASE } from "@/lib/publicConfig";
 import type { ProviderConfigView } from "./types";
-
-const API_BASE = process.env.NEXT_PUBLIC_ADMIN_API_BASE ?? "";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -14,9 +14,8 @@ async function problemMessage(res: Response, fallback: string): Promise<string> 
 }
 
 async function adminFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${API_BASE}/api/v1/admin${path}`, {
+  return fetchWithAuth(`${API_BASE}/api/v1/admin${path}`, {
     ...init,
-    credentials: "include",
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
 }

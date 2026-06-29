@@ -1,8 +1,10 @@
-// api.ts — the feature-flags slice's only seam to the internal /admin/* API (apps/api). Self-contained:
-// it calls the staff-authenticated admin endpoints over the session cookie (credentials: "include"). The
-// admin shell (a sibling unit) owns global auth/session wiring; this slice only needs the typed calls and
-// reads its API base from NEXT_PUBLIC_ADMIN_API_BASE (falls back to same-origin).
+// api.ts — the feature-flags slice's only seam to the internal /admin/* API (apps/api). Authenticates via the
+// in-memory access token (fetchWithAuth, Bearer — ADR-0016), the SAME client the Tenants/Imports slices + the
+// platform-admin gate use. The api authn middleware is Bearer-only (no cookie fallback — authn.ts), so the
+// previous cookie credentials carried no usable credential. Reads its API base from publicConfig.
 
+import { fetchWithAuth } from "@/lib/authClient";
+import { API_BASE } from "@/lib/publicConfig";
 import type {
   FeatureFlagGlobalToggle,
   FeatureFlagTenantToggle,
@@ -10,17 +12,14 @@ import type {
   FeatureFlagWithOverrides,
 } from "@leadwolf/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_ADMIN_API_BASE ?? "";
-
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
   return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
 }
 
 async function adminFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${API_BASE}/api/v1/admin${path}`, {
+  return fetchWithAuth(`${API_BASE}/api/v1/admin${path}`, {
     ...init,
-    credentials: "include",
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
 }
