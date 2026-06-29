@@ -619,7 +619,7 @@ export const contactRepository = {
           count(*) FILTER (WHERE last_verified_at IS NULL)::int AS never_verified
         FROM contacts
         WHERE deleted_at IS NULL
-      `)) as Array<Record<string, number>>;
+      `)) as unknown as Array<Record<string, number>>;
       return {
         total: r?.total ?? 0,
         withName: r?.with_name ?? 0,

@@ -90,7 +90,9 @@ export const sourceImportRepository = {
       )
       .onConflictDoNothing({
         target: [sourceImports.workspaceId, sourceImports.contentHash],
-        targetWhere: sql`${sourceImports.contentHash} IS NOT NULL`,
+        // onConflictDoNothing's config takes `where` for the conflict-target predicate (only
+        // onConflictDoUpdate uses `targetWhere`); both emit the same `ON CONFLICT (…) WHERE …`.
+        where: sql`${sourceImports.contentHash} IS NOT NULL`,
       });
   },
 
