@@ -28,7 +28,7 @@ function Ready({ job }: { job: BulkImportJobStatusResponse }) {
       <Progress
         value={pct}
         tone={job.status === "failed" ? "danger" : "ink"}
-        label={`${job.sourceName} progress`}
+        label="Import progress"
       />
 
       <div className={styles.statGrid}>
@@ -66,7 +66,7 @@ export function BulkImportProgress({ jobId }: { jobId: string }) {
   return (
     <main className={styles.page}>
       <PageHeader
-        title={job ? job.sourceName : "Bulk import"}
+        title="Bulk import"
         subtitle="Your import runs in the background — status, progress, and results update live."
       />
 

@@ -29,7 +29,7 @@ export function ImportsMonitorPage() {
     },
     {
       key: "source",
-      header: "Source file",
+      header: "Source",
       sortValue: (j) => j.sourceName,
       cell: (j) => <span className="tp-cell-mono">{j.sourceName}</span>,
     },
