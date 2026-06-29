@@ -77,8 +77,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1042,
-  "fileSetHash": "sha256:135cbd947cebc9294482442b9d302f74e14e2b54610f1caf665a0fd190e72397",
+  "fileCount": 1043,
+  "fileSetHash": "sha256:2fd700d7cb1c95bd5904a0562687edb08271c19d124489ec965f810dfd868cb7",
   "features": {
     "account-search": {
       "web": [],
@@ -1630,6 +1630,7 @@
       "packages/db/test/members.itest.ts",
       "packages/db/test/outreach.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
+      "packages/db/test/platformAdminReads.itest.ts",
       "packages/db/test/platformAuditLog.itest.ts",
       "packages/db/test/providerConfigs.itest.ts",
       "packages/db/test/retention.itest.ts",
