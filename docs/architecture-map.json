@@ -77,8 +77,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1040,
-  "fileSetHash": "sha256:901d212e24593ee4b82bb6706371bdf777f2b03f954b02141795e748d0aea729",
+  "fileCount": 1041,
+  "fileSetHash": "sha256:036a93bc31b81e2f21e2c9489e5dbe6cd100a5dcac4f3833d05ad750d18cb630",
   "features": {
     "account-search": {
       "web": [],
@@ -118,6 +118,7 @@
         "apps/api/src/features/admin/providerConfigs.ts",
         "apps/api/src/features/admin/routes.ts",
         "apps/api/src/features/admin/staff.ts",
+        "apps/api/src/features/admin/systemHealthProbes.test.ts",
         "apps/api/src/features/admin/systemHealthProbes.ts"
       ],
       "core": [],
