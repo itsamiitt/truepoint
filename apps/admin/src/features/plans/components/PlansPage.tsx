@@ -5,6 +5,7 @@
 // plan-override path) is a separate surface.
 "use client";
 
+import { useStaffMe } from "@/lib/staffMe";
 import {
   type Column,
   DataTable,
@@ -61,6 +62,8 @@ function enabledFeatureKeys(features: Record<string, boolean>): string[] {
 export function PlansPage() {
   const { templates, loading, error, reload } = usePlans();
   const toast = useToast();
+  const { canMaybe } = useStaffMe();
+  const canManage = canMaybe("pricing:manage");
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -203,16 +206,17 @@ export function PlansPage() {
       key: "actions",
       header: "",
       align: "right",
-      cell: (t) => (
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <TpButton variant="ghost" size="sm" onClick={() => openEdit(t)}>
-            Edit
-          </TpButton>
-          <TpButton variant="ghost" size="sm" onClick={() => void onToggle(t)}>
-            {t.active ? "Retire" : "Offer"}
-          </TpButton>
-        </div>
-      ),
+      cell: (t) =>
+        canManage ? (
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="ghost" size="sm" onClick={() => openEdit(t)}>
+              Edit
+            </TpButton>
+            <TpButton variant="ghost" size="sm" onClick={() => void onToggle(t)}>
+              {t.active ? "Retire" : "Offer"}
+            </TpButton>
+          </div>
+        ) : null,
     },
   ];
 
@@ -226,7 +230,7 @@ export function PlansPage() {
             grant, and feature entitlements.
           </p>
         </div>
-        <TpButton onClick={openNew}>New plan</TpButton>
+        {canManage ? <TpButton onClick={openNew}>New plan</TpButton> : null}
       </div>
 
       <StateSwitch

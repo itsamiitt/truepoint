@@ -4,6 +4,7 @@
 // pricing page (ADR-0012) is a separate customer surface.
 "use client";
 
+import { useStaffMe } from "@/lib/staffMe";
 import {
   type Column,
   DataTable,
@@ -46,6 +47,8 @@ function money(cents: number): string {
 export function PricingPage() {
   const { packs, loading, error, reload } = usePricing();
   const toast = useToast();
+  const { canMaybe } = useStaffMe();
+  const canManage = canMaybe("pricing:manage");
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -156,16 +159,17 @@ export function PricingPage() {
       key: "actions",
       header: "",
       align: "right",
-      cell: (p) => (
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <TpButton variant="ghost" size="sm" onClick={() => openEdit(p)}>
-            Edit
-          </TpButton>
-          <TpButton variant="ghost" size="sm" onClick={() => void onToggle(p)}>
-            {p.active ? "Retire" : "Offer"}
-          </TpButton>
-        </div>
-      ),
+      cell: (p) =>
+        canManage ? (
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="ghost" size="sm" onClick={() => openEdit(p)}>
+              Edit
+            </TpButton>
+            <TpButton variant="ghost" size="sm" onClick={() => void onToggle(p)}>
+              {p.active ? "Retire" : "Offer"}
+            </TpButton>
+          </div>
+        ) : null,
     },
   ];
 
@@ -178,7 +182,7 @@ export function PricingPage() {
             The credit-pack catalog the product sells — transparent, public pricing (no demo gate).
           </p>
         </div>
-        <TpButton onClick={openNew}>New pack</TpButton>
+        {canManage ? <TpButton onClick={openNew}>New pack</TpButton> : null}
       </div>
 
       <StateSwitch

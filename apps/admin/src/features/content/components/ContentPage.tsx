@@ -3,6 +3,7 @@
 // content:manage-gated api. Renders async state through the State Kit.
 "use client";
 
+import { useStaffMe } from "@/lib/staffMe";
 import {
   type Column,
   DataTable,
@@ -61,6 +62,8 @@ function shortDate(iso: string | null): string {
 export function ContentPage() {
   const { announcements, loading, error, reload } = useContent();
   const toast = useToast();
+  const { canMaybe } = useStaffMe();
+  const canManage = canMaybe("content:manage");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -171,16 +174,17 @@ export function ContentPage() {
       key: "actions",
       header: "",
       align: "right",
-      cell: (a) => (
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <TpButton variant="ghost" size="sm" onClick={() => openEdit(a)}>
-            Edit
-          </TpButton>
-          <TpButton variant="ghost" size="sm" onClick={() => void onToggle(a)}>
-            {a.active ? "Retire" : "Show"}
-          </TpButton>
-        </div>
-      ),
+      cell: (a) =>
+        canManage ? (
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="ghost" size="sm" onClick={() => openEdit(a)}>
+              Edit
+            </TpButton>
+            <TpButton variant="ghost" size="sm" onClick={() => void onToggle(a)}>
+              {a.active ? "Retire" : "Show"}
+            </TpButton>
+          </div>
+        ) : null,
     },
   ];
 
@@ -193,7 +197,7 @@ export function ContentPage() {
             In-app announcements / banners shown to customers — to all tenants or a targeted org.
           </p>
         </div>
-        <TpButton onClick={openNew}>New announcement</TpButton>
+        {canManage ? <TpButton onClick={openNew}>New announcement</TpButton> : null}
       </div>
 
       <StateSwitch
