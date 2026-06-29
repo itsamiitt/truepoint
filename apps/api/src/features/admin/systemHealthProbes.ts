@@ -33,6 +33,23 @@ export type SystemHealthProbe = {
   queues: QueueReport[];
 };
 
+/**
+ * Derive the redis + workers service statuses from the per-queue probe results — PURE, so the threshold
+ * logic is unit-testable in isolation (probeQueues just does the I/O fan-out, then calls this). redis is
+ * "up" iff ≥1 queue answered (Redis reachable); workers is "unknown" when NO queue was reachable (Redis
+ * down → we genuinely cannot tell), else "up" iff ANY reachable queue has ≥1 connected worker (any-queue,
+ * NOT a sum — one worker process serving several queues must not read as "many"), else "down".
+ */
+export function deriveServiceHealth(queues: QueueReport[]): {
+  redis: "up" | "down";
+  workers: "up" | "down" | "unknown";
+} {
+  const anyReachable = queues.some((q) => q.reachable);
+  if (!anyReachable) return { redis: "down", workers: "unknown" };
+  const workers = queues.some((q) => q.reachable && (q.workers ?? 0) >= 1) ? "up" : "down";
+  return { redis: "up", workers };
+}
+
 // Pair each accessor with its known queue name so an unreachable (rejected) probe can still be named.
 const SPECS = [
   { name: IMPORTS_QUEUE, probe: importQueueHealth },
@@ -61,17 +78,6 @@ export async function probeQueues(): Promise<SystemHealthProbe> {
         },
   );
 
-  const anyReachable = queues.some((q) => q.reachable);
-  const redis: "up" | "down" = anyReachable ? "up" : "down";
-
-  let workers: "up" | "down" | "unknown";
-  if (!anyReachable) {
-    workers = "unknown";
-  } else if (queues.some((q) => q.reachable && (q.workers ?? 0) >= 1)) {
-    workers = "up";
-  } else {
-    workers = "down";
-  }
-
+  const { redis, workers } = deriveServiceHealth(queues);
   return { redis, workers, queues };
 }
