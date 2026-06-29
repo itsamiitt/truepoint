@@ -3,6 +3,7 @@
 // content:manage-gated api. Renders async state through the State Kit.
 "use client";
 
+import { TenantPicker } from "@/components/TenantPicker";
 import { useStaffMe } from "@/lib/staffMe";
 import {
   type Column,
@@ -34,6 +35,7 @@ interface Draft {
   level: string;
   audience: string; // all | tenant
   tenantTarget: string;
+  tenantTargetName: string | null; // display name of the picked tenant when known (UX only)
   startsDate: string;
   endsDate: string;
 }
@@ -45,6 +47,7 @@ const EMPTY: Draft = {
   level: "info",
   audience: "all",
   tenantTarget: "",
+  tenantTargetName: null,
   startsDate: "",
   endsDate: "",
 };
@@ -78,6 +81,7 @@ export function ContentPage() {
       level: a.level,
       audience: a.audience,
       tenantTarget: a.tenantTarget ?? "",
+      tenantTargetName: null,
       startsDate: a.startsAt ? a.startsAt.slice(0, 10) : "",
       endsDate: a.endsAt ? a.endsAt.slice(0, 10) : "",
     });
@@ -279,13 +283,15 @@ export function ContentPage() {
               </Field>
             </div>
             {draft.audience === "tenant" ? (
-              <Field label="Tenant UUID" htmlFor="a-target">
-                <TpInput
+              <Field label="Target tenant" htmlFor="a-target">
+                <TenantPicker
                   id="a-target"
                   value={draft.tenantTarget}
-                  placeholder="tenant UUID"
+                  selectedName={draft.tenantTargetName}
                   disabled={busy}
-                  onChange={(e) => setDraft({ ...draft, tenantTarget: e.currentTarget.value })}
+                  onChange={(id, name) =>
+                    setDraft({ ...draft, tenantTarget: id, tenantTargetName: name })
+                  }
                 />
               </Field>
             ) : null}
