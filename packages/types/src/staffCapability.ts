@@ -27,9 +27,13 @@ export const staffCapability = z.enum([
   "providers:manage", // toggle / budget enrichment providers
   "pricing:manage", // author the credit-pack pricing catalog
   "content:manage", // author announcements / in-app banners
-  // ── Data-management control panel (database-management-research, Phase 1). Read-only today; the write tiers
-  // (data:manage / data:review / data:export) land with their surfaces in later phases — keep this set in sync. ──
+  // ── Data-management control panel (database-management-research). data:read backs the read surfaces;
+  // data:manage / data:review / data:export back the write tiers (mutations / maker-checker approvals / audited
+  // export). The approve action is gated by data:review + a server-side requester!=approver (maker-checker) check. ──
   "data:read", // read the cross-tenant data-ops overview + import drill-down (counts/metadata only, no PII)
+  "data:manage", // perform data-ops mutations (retry/cancel jobs, trigger enrichment) — cross-tenant, audited
+  "data:review", // approve / reject a maker-checker data-ops request (requester != approver, server-enforced)
+  "data:export", // initiate an audited cross-tenant data export (PII egress; suppression-checked, approval-gated)
 ]);
 export type StaffCapability = z.infer<typeof staffCapability>;
 
@@ -47,7 +51,13 @@ const ROLE_CAPABILITIES: Record<Exclude<StaffRole, "super_admin">, StaffCapabili
     "data:read",
   ],
   billing_ops: ["tenants:credits", "billing:read", "elevation:request"],
-  compliance_officer: ["audit:read", "compliance:read", "compliance:manage", "data:read"],
+  compliance_officer: [
+    "audit:read",
+    "compliance:read",
+    "compliance:manage",
+    "data:read",
+    "data:review",
+  ],
   read_only: ["data:read"],
 };
 
