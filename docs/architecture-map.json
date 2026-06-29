@@ -77,8 +77,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1041,
-  "fileSetHash": "sha256:036a93bc31b81e2f21e2c9489e5dbe6cd100a5dcac4f3833d05ad750d18cb630",
+  "fileCount": 1042,
+  "fileSetHash": "sha256:135cbd947cebc9294482442b9d302f74e14e2b54610f1caf665a0fd190e72397",
   "features": {
     "account-search": {
       "web": [],
@@ -484,6 +484,7 @@
         "apps/web/src/features/import/components/ContactsTable.tsx",
         "apps/web/src/features/import/components/ImportPage.tsx",
         "apps/web/src/features/import/components/ImportWizard.tsx",
+        "apps/web/src/features/import/components/bulkFormat.test.ts",
         "apps/web/src/features/import/components/bulkFormat.ts",
         "apps/web/src/features/import/hooks/useBulkImport.ts",
         "apps/web/src/features/import/hooks/useContacts.ts",
