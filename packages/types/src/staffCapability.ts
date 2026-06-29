@@ -27,6 +27,9 @@ export const staffCapability = z.enum([
   "providers:manage", // toggle / budget enrichment providers
   "pricing:manage", // author the credit-pack pricing catalog
   "content:manage", // author announcements / in-app banners
+  // ── Data-management control panel (database-management-research, Phase 1). Read-only today; the write tiers
+  // (data:manage / data:review / data:export) land with their surfaces in later phases — keep this set in sync. ──
+  "data:read", // read the cross-tenant data-ops overview + import drill-down (counts/metadata only, no PII)
 ]);
 export type StaffCapability = z.infer<typeof staffCapability>;
 
@@ -41,10 +44,11 @@ const ROLE_CAPABILITIES: Record<Exclude<StaffRole, "super_admin">, StaffCapabili
     "tenants:hold",
     "impersonate:start",
     "content:manage",
+    "data:read",
   ],
   billing_ops: ["tenants:credits", "billing:read", "elevation:request"],
-  compliance_officer: ["audit:read", "compliance:read", "compliance:manage"],
-  read_only: [],
+  compliance_officer: ["audit:read", "compliance:read", "compliance:manage", "data:read"],
+  read_only: ["data:read"],
 };
 
 /** Every capability a role holds (super_admin → all). */

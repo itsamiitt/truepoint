@@ -30,6 +30,7 @@
     "custom-fields",
     "customFields",
     "data-health",
+    "data-ops",
     "email",
     "enrichment",
     "enrichment-jobs",
@@ -81,8 +82,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1148,
-  "fileSetHash": "sha256:cc09ff224f5094decb2d4d7e337fc46ef81cab65d45c924ee93c9f3a70f7de58",
+  "fileCount": 1156,
+  "fileSetHash": "sha256:f615e42104f7962bc11304afac73a8794174532a533c4b6cfcee804674d674fa",
   "features": {
     "account-search": {
       "web": [],
@@ -120,6 +121,7 @@
         "apps/api/src/features/admin/auditLog.ts",
         "apps/api/src/features/admin/billing.ts",
         "apps/api/src/features/admin/compliance.ts",
+        "apps/api/src/features/admin/dataRoutes.ts",
         "apps/api/src/features/admin/elevations.ts",
         "apps/api/src/features/admin/impersonation.ts",
         "apps/api/src/features/admin/index.ts",
@@ -369,6 +371,22 @@
         "apps/workers/src/queues/reverification.ts",
         "apps/workers/src/queues/reverificationSweep.ts"
       ],
+      "integrations": []
+    },
+    "data-ops": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/data-ops/api.ts",
+        "apps/admin/src/features/data-ops/components/DataOpsOverviewPage.tsx",
+        "apps/admin/src/features/data-ops/format.ts",
+        "apps/admin/src/features/data-ops/hooks/useDataOpsOverview.ts",
+        "apps/admin/src/features/data-ops/index.ts",
+        "apps/admin/src/features/data-ops/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "email": {
@@ -1409,6 +1427,7 @@
       "apps/admin/src/app/(shell)/billing/page.tsx",
       "apps/admin/src/app/(shell)/compliance/page.tsx",
       "apps/admin/src/app/(shell)/content/page.tsx",
+      "apps/admin/src/app/(shell)/data-ops/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
       "apps/admin/src/app/(shell)/imports/page.tsx",
       "apps/admin/src/app/(shell)/layout.tsx",
@@ -1942,6 +1961,7 @@
     "undeclared domain 'content' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'customFields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'data-ops' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'email' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'enrichment-jobs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'feature-flags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

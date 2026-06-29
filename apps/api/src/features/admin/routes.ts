@@ -51,6 +51,7 @@ import { announcementRoutes } from "./announcements.ts";
 import { auditLogRoutes } from "./auditLog.ts";
 import { billingRoutes } from "./billing.ts";
 import { complianceRoutes } from "./compliance.ts";
+import { dataRoutes } from "./dataRoutes.ts";
 import { elevationRoutes } from "./elevations.ts";
 import { impersonationRoutes } from "./impersonation.ts";
 import { pricingRoutes } from "./pricing.ts";
@@ -836,3 +837,6 @@ adminRoutes.route("/pricing", pricingRoutes);
 adminRoutes.route("/compliance", complianceRoutes);
 // Announcements authoring (13a Area 10, content:manage).
 adminRoutes.route("/announcements", announcementRoutes);
+// Data-management control panel — cross-tenant data-ops overview, read-only (data:read).
+// database-management-research Phase 1 / MVP. Own module; parent authn + platformAdmin already apply.
+adminRoutes.route("/data", dataRoutes);

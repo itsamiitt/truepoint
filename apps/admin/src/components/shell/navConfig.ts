@@ -6,6 +6,7 @@ import type { IconComponent } from "@leadwolf/ui";
 import {
   Activity,
   Building2,
+  Database,
   FileUp,
   Flag,
   Layers,
@@ -42,6 +43,9 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Staff", href: "/staff", match: "/staff", icon: ShieldCheck },
   { label: "Compliance", href: "/compliance", match: "/compliance", icon: ShieldAlert },
   { label: "Audit log", href: "/audit-log", match: "/audit-log", icon: ScrollText },
+  // Data-management control panel (database-management-research Phase 1) — the cross-tenant data-ops overview.
+  // A single destination today; later phases expand it into a group (Imports / Validation / Dedup / …).
+  { label: "Data management", href: "/data-ops", match: "/data-ops", icon: Database },
   { label: "Bulk imports", href: "/imports", match: "/imports", icon: FileUp },
   { label: "System health", href: "/system-health", match: "/system-health", icon: Activity },
 ];
