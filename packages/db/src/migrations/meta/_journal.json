@@ -204,6 +204,48 @@
       "when": 1782538112130,
       "tag": "0028_outstanding_venom",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1782577399311,
+      "tag": "0029_phone_line_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1782588181690,
+      "tag": "0030_verification_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1782591829917,
+      "tag": "0031_data_quality_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1782632526254,
+      "tag": "0032_bulk_import_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1782700000000,
+      "tag": "0033_retention_engine",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1782800000000,
+      "tag": "0034_seed_rollout_flags",
+      "breakpoints": true
     }
   ]
 }
