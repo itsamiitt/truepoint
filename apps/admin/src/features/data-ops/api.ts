@@ -10,6 +10,7 @@ import type {
   DataImportDetail,
   DataOpsOverview,
   EnrichmentRunRow,
+  FleetQualityRow,
   VerificationRunRow,
 } from "./types";
 
@@ -46,4 +47,12 @@ export async function fetchVerificationRuns(): Promise<VerificationRunRow[]> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load verification runs"));
   const body = (await res.json()) as { runs: VerificationRunRow[] };
   return body.runs;
+}
+
+/** GET /admin/data/quality/snapshots — recent per-workspace data-quality snapshots across all tenants (counts). */
+export async function fetchFleetQuality(): Promise<FleetQualityRow[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/quality/snapshots`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the fleet quality view"));
+  const body = (await res.json()) as { snapshots: FleetQualityRow[] };
+  return body.snapshots;
 }

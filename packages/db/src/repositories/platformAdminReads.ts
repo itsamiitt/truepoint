@@ -4,10 +4,11 @@
 // reach these tables. All lists are bounded by PLATFORM_READ_LIMIT — no unbounded cross-tenant scans
 // (ADR-0032). Read-only: never writes (staff mutations go through their own audited endpoints later).
 
-import type { PlatformListQuery } from "@leadwolf/types";
+import type { PlatformListQuery, WorkspaceDataQuality } from "@leadwolf/types";
 import { type SQL, and, asc, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenantAuthPolicies, tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
+import { dataQualitySnapshots } from "../schema/dataQualitySnapshots.ts";
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
 import { importJobChunks, importJobs } from "../schema/importJobs.ts";
 import { listMembers, lists } from "../schema/lists.ts";
@@ -199,6 +200,20 @@ export interface PlatformVerificationJobRow {
   errored: number;
   startedAt: Date;
   finishedAt: Date;
+  createdAt: Date;
+}
+
+/**
+ * One recent per-workspace DATA-QUALITY snapshot as seen by STAFF (database-management-research 10 — the fleet
+ * quality view, gap G18). The daily WorkspaceDataQuality count rollup at capture time, joined to the tenant
+ * NAME. The metrics are NON-PII (counts + present-flags + statuses; the UI derives fill/verified/fresh RATES).
+ */
+export interface PlatformDataQualitySnapshotRow {
+  snapshotId: string;
+  tenantId: string;
+  tenantName: string;
+  workspaceId: string;
+  metrics: WorkspaceDataQuality;
   createdAt: Date;
 }
 
@@ -597,6 +612,35 @@ export const platformAdminRepository = {
       .innerJoin(tenants, eq(tenants.id, verificationJobs.tenantId))
       .orderBy(desc(verificationJobs.createdAt))
       .limit(Math.min(limit, PLATFORM_READ_LIMIT));
+  },
+
+  /**
+   * Recent per-workspace DATA-QUALITY snapshots ACROSS all tenants (database-management-research 10 — the fleet
+   * quality view, gap G18: there is no cross-tenant staff quality view today). Each daily snapshot joined to its
+   * tenant NAME, newest-first + PLATFORM_READ_LIMIT-bounded. The metrics jsonb is the WorkspaceDataQuality count
+   * rollup — NON-PII (counts + present-flags + statuses) — so nothing sensitive leaves the boundary. Runs inside
+   * the caller's audited withPlatformTx. (Latest-per-workspace is a follow-up; this returns the recent series.)
+   */
+  async recentDataQualitySnapshots(
+    tx: Tx,
+    limit = PLATFORM_READ_LIMIT,
+  ): Promise<PlatformDataQualitySnapshotRow[]> {
+    const rows = await tx
+      .select({
+        snapshotId: dataQualitySnapshots.id,
+        tenantId: dataQualitySnapshots.tenantId,
+        tenantName: tenants.name,
+        workspaceId: dataQualitySnapshots.workspaceId,
+        metrics: dataQualitySnapshots.metrics,
+        createdAt: dataQualitySnapshots.createdAt,
+      })
+      .from(dataQualitySnapshots)
+      .innerJoin(tenants, eq(tenants.id, dataQualitySnapshots.tenantId))
+      .orderBy(desc(dataQualitySnapshots.createdAt))
+      .limit(Math.min(limit, PLATFORM_READ_LIMIT));
+    // `metrics` is plain jsonb (no $type on the column); the snapshot sweep writes it as WorkspaceDataQuality, so
+    // cast it back for the typed boundary. Counts/statuses only — non-PII.
+    return rows.map((r) => ({ ...r, metrics: r.metrics as WorkspaceDataQuality }));
   },
 
   /**

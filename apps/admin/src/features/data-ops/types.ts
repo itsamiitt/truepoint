@@ -2,6 +2,8 @@
 // (apps/api/src/features/admin/dataRoutes, backed by @leadwolf/db platformAdminRepository). Presentation-side
 // types only; the api owns the canonical shape. COUNTS + tallies only — never an imported row's contents.
 
+import type { WorkspaceDataQuality } from "@leadwolf/types";
+
 export interface DataOpsOverview {
   /** Overall pipeline-job status tally (the historical queue-depth / dead-letter proxy), over a bounded sample. */
   jobs: {
@@ -85,5 +87,16 @@ export interface VerificationRunRow {
   errored: number;
   startedAt: string;
   finishedAt: string;
+  createdAt: string;
+}
+
+/** One row of the fleet data-quality view, mirroring GET /admin/data/quality/snapshots. `metrics` is the non-PII
+ * WorkspaceDataQuality count rollup; the UI derives fill/verified/fresh RATES. createdAt is an ISO string. */
+export interface FleetQualityRow {
+  snapshotId: string;
+  tenantId: string;
+  tenantName: string;
+  workspaceId: string;
+  metrics: WorkspaceDataQuality;
   createdAt: string;
 }

@@ -121,3 +121,14 @@ dataRoutes.get("/verification/runs", requireCapability("data:read"), async (c) =
   );
   return c.json({ runs });
 });
+
+// ── Fleet data-quality view (database-management-research 10, gap G18) — recent per-workspace data-quality
+// snapshots ACROSS all tenants: the daily WorkspaceDataQuality count rollup joined to the tenant name, newest-
+// first + PLATFORM_READ_LIMIT-bounded. NON-PII (counts + present-flags + statuses; the UI derives rates).
+// data:read-gated; the read runs on the audited withPlatformTx. This fills the "no fleet quality view" gap.
+dataRoutes.get("/quality/snapshots", requireCapability("data:read"), async (c) => {
+  const snapshots = await withPlatformTx(actorOf(c), "admin.data_quality_snapshots", (tx) =>
+    platformAdminRepository.recentDataQualitySnapshots(tx),
+  );
+  return c.json({ snapshots });
+});

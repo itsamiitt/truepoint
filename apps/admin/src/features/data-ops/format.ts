@@ -11,6 +11,11 @@ export function formatCredits(micros: number): string {
   return (micros / 1_000_000).toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+/** A whole-number percentage n/d for the fleet tables ("—" when the denominator is 0). */
+export function pct(n: number, d: number): string {
+  return d > 0 ? `${Math.round((n / d) * 100)}%` : "—";
+}
+
 /** A compact local date-time for created/run columns (client-rendered; "use client" pages only). */
 export function shortDate(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
