@@ -27,6 +27,7 @@ export const staffCapability = z.enum([
   "providers:manage", // toggle / budget enrichment providers
   "pricing:manage", // author the credit-pack pricing catalog
   "content:manage", // author announcements / in-app banners
+  "flags:manage", // create / toggle feature flags + per-tenant overrides (super_admin-only)
 ]);
 export type StaffCapability = z.infer<typeof staffCapability>;
 

@@ -12,10 +12,10 @@ import {
   jitElevationRepository,
   planTemplateRepository,
   platformAdminRepository,
-  retentionClassPolicyRepository,
   platformAdminWriteRepository,
   platformBillingReadRepository,
   platformStaffRepository,
+  retentionClassPolicyRepository,
   supportNoteRepository,
   withPlatformTx,
 } from "@leadwolf/db";
@@ -33,11 +33,11 @@ import {
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
-  retentionPolicySchema,
-  retentionPolicyUpdateSchema,
   placeAccountHoldSchema,
   planOverrideSchema,
   platformListQuerySchema,
+  retentionPolicySchema,
+  retentionPolicyUpdateSchema,
   setAuthEnforcementSchema,
   tenantStatusChangeSchema,
   userStatusChangeSchema,
@@ -710,7 +710,7 @@ adminRoutes.get("/feature-flags", async (c) => {
 });
 
 /** Define or update a flag (idempotent on key). Audited. */
-adminRoutes.put("/feature-flags", async (c) => {
+adminRoutes.put("/feature-flags", requireCapability("flags:manage"), async (c) => {
   const parsed = featureFlagUpsertSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const input = parsed.data;
@@ -727,7 +727,7 @@ adminRoutes.put("/feature-flags", async (c) => {
 
 /** Toggle a flag's global default on/off. Audited. 404 if the flag is undefined — the NotFoundError is
  *  thrown INSIDE the tx so the audit row rolls back (a failed toggle leaves no "feature_flag.set" trace). */
-adminRoutes.post("/feature-flags/:key/global", async (c) => {
+adminRoutes.post("/feature-flags/:key/global", requireCapability("flags:manage"), async (c) => {
   const key = c.req.param("key");
   const parsed = featureFlagGlobalToggleSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
@@ -739,7 +739,7 @@ adminRoutes.post("/feature-flags/:key/global", async (c) => {
 });
 
 /** Set or clear a per-tenant override. `enabled: null` clears it. Audited. */
-adminRoutes.post("/feature-flags/:key/tenant", async (c) => {
+adminRoutes.post("/feature-flags/:key/tenant", requireCapability("flags:manage"), async (c) => {
   const key = c.req.param("key");
   const parsed = featureFlagTenantToggleSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
