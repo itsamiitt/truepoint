@@ -650,3 +650,12 @@ export {
   type InboundFieldOutcome,
   type CrmMergeDecision,
 } from "./crm/planInboundMerge.ts";
+// Out-of-box per-provider field-mapping presets (crm-sync §4.3): HubSpot + Salesforce × contact/account,
+// bucketed by direction/authority per the §6.1/§6.2 merge ladder. Tunable defaults a tenant overrides later.
+export { DEFAULT_CRM_FIELD_MAPPINGS, defaultMappingsFor } from "./crm/defaultMappings.ts";
+// The PURE field-mapping validator (crm-sync §4.3) the admin mapping editor + a startup self-check call.
+export {
+  validateCrmMappings,
+  type CrmMappingError,
+  type CrmMappingErrorCode,
+} from "./crm/validateMapping.ts";
