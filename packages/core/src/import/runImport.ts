@@ -183,18 +183,32 @@ async function recordImportEvidence(
         resolvedCompanyId: resolved.masterCompanyId,
       });
       if (!ev || !ev.created) return; // idempotent re-ingest → don't double-link
-      if (resolved.masterPersonId)
+      if (resolved.masterPersonId) {
         await evidenceRepository.linkToCluster(tx, {
           entityType: "person",
           clusterId: resolved.masterPersonId,
           sourceRecordId: ev.id,
         });
-      if (resolved.masterCompanyId)
+        // Enqueue a survivorship re-projection for the cluster (I1 / Phase 05). The projector worker rebuilds the
+        // golden record from the evidence log; until that worker + the authoritative flip ship, this is just a queue.
+        await evidenceRepository.enqueueProjection(tx, {
+          entityType: "person",
+          clusterId: resolved.masterPersonId,
+          reason: "evidence_added",
+        });
+      }
+      if (resolved.masterCompanyId) {
         await evidenceRepository.linkToCluster(tx, {
           entityType: "company",
           clusterId: resolved.masterCompanyId,
           sourceRecordId: ev.id,
         });
+        await evidenceRepository.enqueueProjection(tx, {
+          entityType: "company",
+          clusterId: resolved.masterCompanyId,
+          reason: "evidence_added",
+        });
+      }
     });
   } catch (err) {
     console.error("[import] evidence dual-write failed (non-fatal; flag-gated)", err);

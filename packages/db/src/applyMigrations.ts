@@ -123,7 +123,7 @@ const GRANTS = `
   -- overlay's master_*_id FK still works: referential checks run with the table-OWNER privilege, not leadwolf_app.
   -- Re-run every migrate (idempotent); a future master_* table MUST be added to this list.
   REVOKE ALL ON master_persons, master_companies, master_employment, master_emails, master_phones,
-                source_records, match_links FROM leadwolf_app;
+                source_records, match_links, projection_outbox FROM leadwolf_app;
   -- Defense-in-depth belt: dynamically REVOKE from leadwolf_app any table named master_*. A FUTURE Layer-0
   -- master table is auto-granted by the ALTER DEFAULT PRIVILEGES above at CREATE time, so this convention-based
   -- catch-all makes it fail closed even before someone adds it to the explicit list. (Tables NOT matching
@@ -141,7 +141,7 @@ const GRANTS = `
   -- BYPASSRLS (it has no business reading any RLS-scoped table). It needs sequence USAGE to default the v7 PKs.
   -- Idempotent; re-run every migrate. A future Layer-0 table that the resolver writes MUST be added here.
   GRANT SELECT, INSERT, UPDATE ON master_persons, master_companies, master_employment, master_emails,
-                                   master_phones, source_records, match_links TO leadwolf_er;
+                                   master_phones, source_records, match_links, projection_outbox TO leadwolf_er;
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_er;
 `;
 

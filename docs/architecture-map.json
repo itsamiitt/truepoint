@@ -85,8 +85,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1207,
-  "fileSetHash": "sha256:5d80effd9dc89427c78ad0fc21fdfecafa519ac43e932fbe38233e0c2f2c50f4",
+  "fileCount": 1208,
+  "fileSetHash": "sha256:1dd0bdc6db75abfd25b441de7238ecd91ddefa35c784c73d5083a4b1ff7a1b85",
   "features": {
     "account-search": {
       "web": [],
@@ -1813,6 +1813,7 @@
       "packages/db/src/schema/outreach.ts",
       "packages/db/src/schema/pipelineStages.ts",
       "packages/db/src/schema/platformOps.ts",
+      "packages/db/src/schema/projectionOutbox.ts",
       "packages/db/src/schema/retention.ts",
       "packages/db/src/schema/salesnav.ts",
       "packages/db/src/schema/savedSearches.ts",

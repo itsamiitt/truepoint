@@ -26,3 +26,4 @@ export * from "./verificationJobs.ts";
 export * from "./dataQualitySnapshots.ts";
 export * from "./retention.ts";
 export * from "./validationRules.ts";
+export * from "./projectionOutbox.ts";

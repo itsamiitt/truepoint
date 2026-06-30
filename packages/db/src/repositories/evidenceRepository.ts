@@ -12,6 +12,7 @@
 import { eq } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { matchLinks, sourceRecords } from "../schema/masterGraph.ts";
+import { projectionOutbox } from "../schema/projectionOutbox.ts";
 
 /** One observed payload to append as evidence. `contentHash` is sha256(canonical payload) — the UNIQUE idempotency
  *  key, so re-ingesting an identical payload is a no-op. `rawData` is kept verbatim; `matchKeys` are the extracted
@@ -77,6 +78,20 @@ export const evidenceRepository = {
       matchMethod: input.matchMethod ?? "deterministic",
       matchProbability: input.matchProbability != null ? String(input.matchProbability) : null,
       reviewStatus: input.reviewStatus ?? "auto",
+    });
+  },
+
+  /** Enqueue a survivorship re-projection for a golden cluster (prospect-database-platform I1 / Phase 05). The
+   *  projector worker drains `projection_outbox` and rebuilds the golden master_* record from the evidence log.
+   *  `reason` = evidence_added | merge | unmerge | refresh. */
+  async enqueueProjection(
+    tx: Tx,
+    input: { entityType: "person" | "company"; clusterId: string; reason: string },
+  ): Promise<void> {
+    await tx.insert(projectionOutbox).values({
+      entityType: input.entityType,
+      clusterId: input.clusterId,
+      reason: input.reason,
     });
   },
 };
