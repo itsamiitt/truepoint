@@ -30,6 +30,7 @@ interface Draft {
   seatLimit: string;
   workspaceLimit: string; // blank = unlimited
   monthlyCreditGrant: string; // blank = none
+  trialBonusCredits: string; // blank = none
   features: string; // comma-separated enabled feature keys
   sortOrder: string;
 }
@@ -41,6 +42,7 @@ const EMPTY: Draft = {
   seatLimit: "1",
   workspaceLimit: "",
   monthlyCreditGrant: "",
+  trialBonusCredits: "",
   features: "",
   sortOrder: "0",
 };
@@ -81,6 +83,7 @@ export function PlansPage() {
       seatLimit: String(t.seatLimit),
       workspaceLimit: t.workspaceLimit == null ? "" : String(t.workspaceLimit),
       monthlyCreditGrant: t.monthlyCreditGrant == null ? "" : String(t.monthlyCreditGrant),
+      trialBonusCredits: t.trialBonusCredits == null ? "" : String(t.trialBonusCredits),
       features: enabledFeatureKeys(t.features).join(", "),
       sortOrder: String(t.sortOrder),
     });
@@ -93,6 +96,7 @@ export function PlansPage() {
     const seatLimit = Number(draft.seatLimit);
     const workspaceLimit = optInt(draft.workspaceLimit);
     const monthlyCreditGrant = optInt(draft.monthlyCreditGrant);
+    const trialBonusCredits = optInt(draft.trialBonusCredits);
     const sortOrder = Number(draft.sortOrder || "0");
     if (!/^[a-z0-9_]+$/.test(key)) {
       toast.error("Key: lowercase letters, digits and underscore only.");
@@ -114,6 +118,10 @@ export function PlansPage() {
       toast.error("Monthly credit grant must be blank (none) or a whole number ≥ 0.");
       return;
     }
+    if (trialBonusCredits === undefined) {
+      toast.error("Signup bonus must be blank (none) or a whole number ≥ 0.");
+      return;
+    }
     const features: Record<string, boolean> = {};
     for (const k of draft.features
       .split(",")
@@ -129,6 +137,7 @@ export function PlansPage() {
         seatLimit,
         workspaceLimit,
         monthlyCreditGrant,
+        trialBonusCredits,
         features,
         sortOrder: Number.isInteger(sortOrder) ? sortOrder : 0,
       });
@@ -346,6 +355,16 @@ export function PlansPage() {
                 />
               </Field>
             </div>
+            <Field label="Signup bonus credits (blank = none)" htmlFor="plan-trial">
+              <TpInput
+                id="plan-trial"
+                type="number"
+                value={draft.trialBonusCredits}
+                placeholder="none"
+                disabled={busy}
+                onChange={(e) => setDraft({ ...draft, trialBonusCredits: e.currentTarget.value })}
+              />
+            </Field>
             <Field label="Features (comma-separated enabled keys)" htmlFor="plan-features">
               <TpInput
                 id="plan-features"

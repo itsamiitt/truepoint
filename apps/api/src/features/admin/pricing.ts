@@ -99,6 +99,7 @@ function toTemplateView(r: {
   seatLimit: number;
   workspaceLimit: number | null;
   monthlyCreditGrant: number | null;
+  trialBonusCredits: number | null;
   features: Record<string, boolean>;
   active: boolean;
   sortOrder: number;
@@ -110,6 +111,7 @@ function toTemplateView(r: {
     seatLimit: r.seatLimit,
     workspaceLimit: r.workspaceLimit,
     monthlyCreditGrant: r.monthlyCreditGrant,
+    trialBonusCredits: r.trialBonusCredits,
     features: r.features,
     active: r.active,
     sortOrder: r.sortOrder,

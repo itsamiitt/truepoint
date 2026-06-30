@@ -17,6 +17,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "../schema/auth.ts";
+import { planTemplates } from "../schema/platformOps.ts";
 
 // ── Workspaces (RLS-scoped) ──────────────────────────────────────────────────────────────────────────
 export interface WorkspaceSummary {
@@ -103,10 +104,7 @@ export const workspaceRepository = {
         .from(workspaceMembers)
         .innerJoin(users, eq(users.id, workspaceMembers.userId))
         .where(
-          and(
-            eq(workspaceMembers.workspaceId, workspaceId),
-            eq(workspaceMembers.status, "active"),
-          ),
+          and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.status, "active")),
         )
         .orderBy(asc(workspaceMembers.joinedAt), asc(workspaceMembers.id))
         .limit(limit);
@@ -119,9 +117,7 @@ export const workspaceRepository = {
           createdAt: invitations.createdAt,
         })
         .from(invitations)
-        .where(
-          and(eq(invitations.workspaceId, workspaceId), isNull(invitations.acceptedAt)),
-        )
+        .where(and(eq(invitations.workspaceId, workspaceId), isNull(invitations.acceptedAt)))
         .orderBy(asc(invitations.createdAt), asc(invitations.id))
         .limit(limit);
 
@@ -615,9 +611,22 @@ export const tenantRepository = {
     workspaceSlug: string;
   }): Promise<{ tenantId: string; workspaceId: string }> {
     return db.transaction(async (tx) => {
+      // OD-7 MVP trial: seed the new org with its plan's signup-bonus credits (the default 'free' plan). Read on
+      // the owner connection (plan_templates is owner-owned); atomic with creation → granted exactly once per
+      // org. No template / null bonus → 0 (the prior behavior), so onboarding is unchanged until staff set it.
+      const [freeTpl] = await tx
+        .select({ bonus: planTemplates.trialBonusCredits })
+        .from(planTemplates)
+        .where(eq(planTemplates.key, "free"))
+        .limit(1);
+      const signupBonus = freeTpl?.bonus ?? 0;
       const [t] = await tx
         .insert(tenants)
-        .values({ name: input.tenantName, slug: input.tenantSlug })
+        .values({
+          name: input.tenantName,
+          slug: input.tenantSlug,
+          revealCreditBalance: signupBonus,
+        })
         .returning({ id: tenants.id });
       await tx.insert(tenantMembers).values({
         tenantId: t!.id,
