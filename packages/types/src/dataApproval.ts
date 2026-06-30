@@ -62,3 +62,12 @@ export const retentionEnforceParamsSchema = z.object({
   ttlDays: z.number().int().positive().nullable(),
 });
 export type RetentionEnforceParams = z.infer<typeof retentionEnforceParamsSchema>;
+
+/** Params a `bulk_export` approval carries — the TARGET workspace whose contacts a staff member exports
+ *  (cross-tenant PII egress). The executor reads that workspace's contacts under the owner path, applies the
+ *  explicit-scope suppression filter, decrypts, and writes a CSV. Platform-audited, not credit-charged. */
+export const bulkExportParamsSchema = z.object({
+  tenantId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+});
+export type BulkExportParams = z.infer<typeof bulkExportParamsSchema>;

@@ -73,6 +73,54 @@ export const suppressionRepository = {
     };
   },
 
+  /**
+   * Like findMatch, but for the OWNER/privileged path (a STAFF cross-tenant export under withPlatformTx) where
+   * RLS is BYPASSED. findMatch trusts the RLS read policy to expose only global + this-tenant + this-workspace
+   * rows; under the owner that policy is NOT in effect, so this matcher adds that scope predicate EXPLICITLY.
+   * Without it, a suppression row belonging to ANOTHER tenant/workspace would falsely match — the email
+   * blind-index is a deterministic global HMAC, identical for the same email across every workspace.
+   *
+   * SECURITY-CRITICAL (database-management-research export; audit A1/X3): this is the unbypassable suppression
+   * gate for the cross-tenant export. The explicit `global OR tenant=? OR workspace=?` predicate is what keeps it
+   * correct without RLS — never widen it. MUST run inside a withPlatformTx (owner) transaction.
+   */
+  async findMatchExplicit(
+    tx: Tx,
+    keys: SuppressionKeys & { tenantId: string; workspaceId: string },
+  ): Promise<SuppressionHit | null> {
+    const matches: SQL[] = [];
+    if (keys.contactId) matches.push(eq(suppressionList.contactId, keys.contactId));
+    if (keys.emailBlindIndex)
+      matches.push(eq(suppressionList.emailBlindIndex, keys.emailBlindIndex));
+    if (keys.emailDomain) matches.push(eq(suppressionList.domain, keys.emailDomain));
+    if (matches.length === 0) return null;
+
+    // Replicate the RLS read policy EXPLICITLY (the owner bypasses RLS): a row gates this subject only if it is
+    // global, or scoped to THIS tenant, or scoped to THIS workspace — never another tenant's/workspace's row.
+    const inScope = or(
+      eq(suppressionList.scope, "global"),
+      and(eq(suppressionList.scope, "tenant"), eq(suppressionList.tenantId, keys.tenantId)),
+      and(eq(suppressionList.scope, "workspace"), eq(suppressionList.workspaceId, keys.workspaceId)),
+    );
+
+    const rows = await tx
+      .select({
+        scope: suppressionList.scope,
+        matchType: suppressionList.matchType,
+        reason: suppressionList.reason,
+      })
+      .from(suppressionList)
+      .where(and(or(...matches), inScope))
+      .limit(1);
+    const hit = rows[0];
+    if (!hit) return null;
+    return {
+      scope: hit.scope as SuppressionScope,
+      matchType: hit.matchType as SuppressionMatchType,
+      reason: hit.reason,
+    };
+  },
+
   /** Insert an entry (tenant/workspace scope from the app; global rows are platform-managed). */
   async insert(tx: Tx, entry: SuppressionEntryInput): Promise<string> {
     const rows = await tx
