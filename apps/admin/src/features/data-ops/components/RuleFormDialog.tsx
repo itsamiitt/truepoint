@@ -4,7 +4,12 @@
 // only for the checks that use them (pattern / max length / allowed values). Remounted per open, so state resets.
 "use client";
 
-import type { UpsertValidationRuleInput, ValidationCheckType, ValidationRule } from "@leadwolf/types";
+import {
+  type UpsertValidationRuleInput,
+  type ValidationCheckType,
+  type ValidationRule,
+  canonicalField,
+} from "@leadwolf/types";
 import { Dialog, TpButton, TpInput, TpSelect, TpSwitch, useToast } from "@leadwolf/ui";
 import type { ReactNode } from "react";
 import { useState } from "react";
@@ -17,6 +22,10 @@ const CHECK_TYPES: { value: ValidationCheckType; label: string }[] = [
   { value: "max_length", label: "Maximum length" },
   { value: "one_of", label: "One of a list of values" },
 ];
+
+// The picker options: the canonical contact fields the import pipeline maps to (so a rule's field always matches
+// a real mapped key — no silent typo that never fires). Built-in rules use these same keys (email / firstName).
+const CANONICAL_FIELDS = canonicalField.options;
 
 function Labeled({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -115,13 +124,17 @@ export function RuleFormDialog({
             onChange={(e) => setName(e.currentTarget.value)}
           />
         </Labeled>
-        <Labeled label="Field (canonical key)">
-          <TpInput
-            value={field}
-            disabled={busy}
-            placeholder="e.g. email, firstName, company"
-            onChange={(e) => setField(e.currentTarget.value)}
-          />
+        <Labeled label="Field">
+          <TpSelect value={field} disabled={busy} onChange={(e) => setField(e.currentTarget.value)}>
+            <option value="" disabled>
+              Select a field…
+            </option>
+            {CANONICAL_FIELDS.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </TpSelect>
         </Labeled>
         <Labeled label="Check">
           <TpSelect
