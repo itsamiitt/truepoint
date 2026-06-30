@@ -60,6 +60,13 @@ export { buildImportPreview, type PreviewOptions } from "./import/preview.ts";
 export { rejectedRowsToCsv } from "./import/rejectedRowsCsv.ts";
 
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
+// Customer own-workspace REVEALED CSV export (doc 12; audit A1, Phase 1) — reveals each contact THROUGH the gate
+// (suppression-checked, charged, audited), excludes suppressed, writes the CSV through the FileStore port.
+export {
+  bulkRevealExport,
+  type BulkRevealExportInput,
+  type BulkRevealExportResult,
+} from "./reveal/bulkRevealExport.ts";
 export { assertNotSuppressed, type SuppressionKeys } from "./compliance/assertNotSuppressed.ts";
 export { writeAudit, type AuditEntryInput } from "./compliance/writeAudit.ts";
 
