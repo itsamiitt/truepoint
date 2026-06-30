@@ -86,8 +86,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1210,
-  "fileSetHash": "sha256:52a4359bab782366a01ef8ff4d6804a23d3d7cfdfdf3b7f600f131187a028246",
+  "fileCount": 1211,
+  "fileSetHash": "sha256:1bf79fae84b2d1aacad753168baa501f7b65b9b84627c2bdf67c12ef7cec1387",
   "features": {
     "account-search": {
       "web": [],
@@ -2005,6 +2005,7 @@
     "apps/workers/src/queues/masterBackfill.test.ts",
     "apps/workers/src/queues/masterBackfill.ts",
     "apps/workers/src/queues/masterBackfillSweep.ts",
+    "apps/workers/src/queues/projectionSweep.ts",
     "apps/workers/src/queues/retentionSweep.ts",
     "apps/workers/src/queues/sequenceTick.ts",
     "apps/workers/src/queues/tokenRefresh.ts",
