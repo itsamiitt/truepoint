@@ -82,8 +82,10 @@ complianceRoutes.post("/dsars/:id/status", requireCapability("compliance:manage"
     actorOf(c),
     "dsar.transition",
     async (tx) => {
-      const touched = await platformAdminWriteRepository.setDsarStatus(tx, id, status);
-      if (touched === 0) throw new NotFoundError("DSAR request not found.");
+      const res = await platformAdminWriteRepository.setDsarStatus(tx, id, status);
+      if (!res.found) throw new NotFoundError("DSAR request not found.");
+      if (res.invalidFrom)
+        throw new ValidationError(`Cannot move a '${res.invalidFrom}' DSAR to '${status}'.`);
     },
     {
       targetType: "dsar_request",

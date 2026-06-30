@@ -168,6 +168,10 @@ export function BillingEconomicsPage() {
                 <h3 className="tp-section-title">Top tenants by provider spend</h3>
                 <DataTable columns={tenantColumns} rows={tenants} rowKey={(t) => t.tenantId} />
               </div>
+            ) : tenants ? (
+              <p className="app-muted" style={{ marginTop: 24, fontSize: 13 }}>
+                No tenant activity in this window.
+              </p>
             ) : null}
           </>
         ) : null}

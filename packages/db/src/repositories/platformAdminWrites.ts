@@ -42,6 +42,14 @@ export interface CreditAdjustOutcome {
   balanceAfter: number;
 }
 
+/** Outcome of a DSAR transition, so the caller maps it to the right HTTP result IN-tx (rolling the audit row
+ *  back on a refusal): unknown id → 404, an illegal or terminal-state transition → 422 (invalidFrom = the
+ *  blocking current state), else applied. */
+export interface DsarTransitionOutcome {
+  found: boolean;
+  invalidFrom: string | null;
+}
+
 export const platformAdminWriteRepository = {
   /**
    * Set a tenant's lifecycle status (active|suspended) — the suspend/reactivate mutation (13 §3.1). Returns
@@ -91,16 +99,27 @@ export const platformAdminWriteRepository = {
     tx: Tx,
     id: string,
     status: "verifying" | "processing" | "rejected",
-  ): Promise<number> {
-    const updated = await tx
+  ): Promise<DsarTransitionOutcome> {
+    // Lock the row + read the current state so the transition is ENFORCED server-side (the console's per-row
+    // buttons are UX only — a crafted request must not write a nonsensical trail). Forward-only:
+    // received → verifying|processing|rejected, verifying → processing|rejected, processing → rejected;
+    // terminal states (completed|rejected) never transition.
+    const rows = (await tx.execute(
+      sql`SELECT status FROM dsar_requests WHERE id = ${id}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ status: string }>;
+    if (rows.length === 0) return { found: false, invalidFrom: null };
+    const from = rows[0]!.status;
+    const legal: Record<string, readonly string[]> = {
+      received: ["verifying", "processing", "rejected"],
+      verifying: ["processing", "rejected"],
+      processing: ["rejected"],
+    };
+    if (!legal[from]?.includes(status)) return { found: true, invalidFrom: from };
+    await tx
       .update(dsarRequests)
-      .set({
-        status,
-        ...(status === "processing" ? { verifiedAt: new Date() } : {}),
-      })
-      .where(eq(dsarRequests.id, id))
-      .returning({ id: dsarRequests.id });
-    return updated.length;
+      .set({ status, ...(status === "processing" ? { verifiedAt: new Date() } : {}) })
+      .where(eq(dsarRequests.id, id));
+    return { found: true, invalidFrom: null };
   },
 
   /**

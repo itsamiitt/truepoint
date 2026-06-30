@@ -9,8 +9,9 @@ import { API_BASE } from "@/lib/publicConfig";
 import { type EntityOption, EntityPicker } from "./EntityPicker";
 
 async function searchTenants(query: string): Promise<EntityOption[]> {
-  const qs = query ? `?search=${encodeURIComponent(query)}` : "";
-  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/tenants${qs}`);
+  const params = new URLSearchParams({ limit: "10" });
+  if (query) params.set("search", query);
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/tenants?${params}`);
   if (!res.ok) return [];
   const body = (await res.json()) as { tenants?: { id: string; name: string; slug: string }[] };
   return (body.tenants ?? [])

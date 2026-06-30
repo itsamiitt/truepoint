@@ -196,7 +196,7 @@ export function CompliancePage() {
 
       <Dialog
         open={!!rejecting}
-        onClose={() => (busyId ? undefined : setRejecting(null))}
+        onClose={() => !busyId && setRejecting(null)}
         title="Reject DSAR request"
         description="Recorded with your reason in the audit log. Rejection closes the request; it does not delete any data."
         maxWidth={480}
