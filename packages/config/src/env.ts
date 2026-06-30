@@ -182,6 +182,17 @@ export const appEnvSchema = z
     // The sync→bulk promotion threshold (rows): an import larger than this is steered onto the bulk pipeline
     // rather than the inline `imports` queue. Consumed by the promotion logic; a sensible default until tuned.
     BULK_IMPORT_THRESHOLD_ROWS: z.coerce.number().int().positive().default(5000),
+    // Low-balance notifier sweep (plans-pricing-credits). HARD GATE, default FALSE: DARK in prod until a
+    // customer-facing delivery channel (email / in-app, ADR-0027) is wired. While off, the apps/workers consumer
+    // is not even registered and nothing is scanned. The sweep is READ-ONLY — it charges and deletes NOTHING.
+    // Only an explicit "true" enables it ("false"/"0"/""/unset can never read truthy).
+    LOW_BALANCE_NOTIFIER_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // The reveal-credit-balance threshold (credits) at/under which the notifier flags a tenant. Mirrors the
+    // admin /billing/low-balance default; a sensible default until tuned.
+    LOW_BALANCE_NOTIFIER_THRESHOLD: z.coerce.number().int().min(0).default(100),
   })
   .superRefine((val, ctx) => {
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.
