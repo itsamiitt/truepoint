@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS announcements (
   title text NOT NULL,
   body text NOT NULL,
   level text NOT NULL DEFAULT 'info',
+  type text NOT NULL DEFAULT 'general',
   audience text NOT NULL DEFAULT 'all',
   tenant_target uuid,
   starts_at timestamptz,

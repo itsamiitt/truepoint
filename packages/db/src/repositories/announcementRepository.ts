@@ -13,6 +13,7 @@ export interface AnnouncementRow {
   title: string;
   body: string;
   level: string;
+  type: string;
   audience: string;
   tenantTarget: string | null;
   startsAt: Date | null;
@@ -27,12 +28,14 @@ export interface ActiveAnnouncementRow {
   title: string;
   body: string;
   level: string;
+  type: string;
 }
 
 export interface AnnouncementWrite {
   title: string;
   body: string;
   level: string;
+  type: string;
   audience: string;
   tenantTarget: string | null;
   startsAt: string | null; // ISO or null
@@ -44,6 +47,7 @@ const COLS = {
   title: announcements.title,
   body: announcements.body,
   level: announcements.level,
+  type: announcements.type,
   audience: announcements.audience,
   tenantTarget: announcements.tenantTarget,
   startsAt: announcements.startsAt,
@@ -72,6 +76,7 @@ export const announcementRepository = {
         title: input.title,
         body: input.body,
         level: input.level,
+        type: input.type,
         audience: input.audience,
         tenantTarget: input.tenantTarget,
         startsAt: ts(input.startsAt),
@@ -90,6 +95,7 @@ export const announcementRepository = {
         title: input.title,
         body: input.body,
         level: input.level,
+        type: input.type,
         audience: input.audience,
         tenantTarget: input.tenantTarget,
         startsAt: ts(input.startsAt),
@@ -124,6 +130,7 @@ export const announcementRepository = {
         title: announcements.title,
         body: announcements.body,
         level: announcements.level,
+        type: announcements.type,
       })
       .from(announcements)
       .where(

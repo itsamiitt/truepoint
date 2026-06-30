@@ -117,6 +117,7 @@ export const announcements = pgTable(
     title: text("title").notNull(),
     body: text("body").notNull(),
     level: text("level").notNull().default("info"), // info | warning | critical
+    type: text("type").notNull().default("general"), // general | maintenance (site-wide critical, non-dismissible)
     audience: text("audience").notNull().default("all"), // all | tenant
     tenantTarget: uuid("tenant_target"), // set iff audience = 'tenant'
     startsAt: timestamp("starts_at", { withTimezone: true }),
