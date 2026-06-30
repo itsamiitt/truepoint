@@ -81,6 +81,9 @@ export function DataOpsOverviewPage() {
         <Link href="/data-ops/approvals" style={{ fontWeight: 500 }}>
           Approvals →
         </Link>
+        <Link href="/data-ops/validation" style={{ fontWeight: 500 }}>
+          Validation rules →
+        </Link>
       </div>
     </div>
   );

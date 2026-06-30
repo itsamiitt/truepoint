@@ -5,4 +5,5 @@ export { DataImportDetailPage } from "./components/DataImportDetailPage";
 export { DataOpsOverviewPage } from "./components/DataOpsOverviewPage";
 export { EnrichmentRunsPage } from "./components/EnrichmentRunsPage";
 export { FleetQualityPage } from "./components/FleetQualityPage";
+export { ValidationRulesPage } from "./components/ValidationRulesPage";
 export { VerificationRunsPage } from "./components/VerificationRunsPage";

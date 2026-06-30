@@ -6,7 +6,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { ApprovalRequestView } from "@leadwolf/types";
+import type { ApprovalRequestView, UpsertValidationRuleInput, ValidationRule } from "@leadwolf/types";
 import type {
   DataImportDetail,
   DataOpsOverview,
@@ -86,4 +86,57 @@ export function approveRequest(id: string, reason: string): Promise<void> {
 
 export function rejectRequest(id: string, reason: string): Promise<void> {
   return decide(id, "reject", reason);
+}
+
+/** GET /admin/data/validation/rules — the global data-quality rule set (built-in checks + custom). data:read. */
+export async function fetchValidationRules(): Promise<ValidationRule[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/validation/rules`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load validation rules"));
+  const body = (await res.json()) as { rules: ValidationRule[] };
+  return body.rules;
+}
+
+/** POST /admin/data/validation/rules — create a custom rule (data:manage). */
+export async function createValidationRule(input: UpsertValidationRuleInput): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/validation/rules`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not create the rule"));
+}
+
+/** PUT /admin/data/validation/rules/:id — update a custom rule (data:manage). */
+export async function updateValidationRule(id: string, input: UpsertValidationRuleInput): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/data/validation/rules/${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not update the rule"));
+}
+
+/** POST /admin/data/validation/rules/:id/toggle — enable/disable a custom rule (data:manage). */
+export async function toggleValidationRule(id: string, enabled: boolean): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/data/validation/rules/${encodeURIComponent(id)}/toggle`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not change the rule"));
+}
+
+/** DELETE /admin/data/validation/rules/:id — delete a custom rule (data:manage). Built-ins can't be deleted. */
+export async function deleteValidationRule(id: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/data/validation/rules/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not delete the rule"));
 }
