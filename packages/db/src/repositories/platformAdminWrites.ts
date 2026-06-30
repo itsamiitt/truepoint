@@ -8,6 +8,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenants, users } from "../schema/auth.ts";
+import { dsarRequests } from "../schema/compliance.ts";
 
 /** A tenant's lifecycle status the staff console can set (13 §3.1). */
 export type TenantLifecycleStatus = "active" | "suspended";
@@ -77,6 +78,29 @@ export const platformAdminWriteRepository = {
       sql`UPDATE tenants SET reveal_credit_balance = ${next}, updated_at = now() WHERE id = ${tenantId}::uuid`,
     );
     return { found: true, wouldOverdraw: false, balanceAfter: next };
+  },
+
+  /**
+   * Advance a DSAR's workflow state (08 §4) — the staff-drivable transitions ONLY: verifying / processing /
+   * rejected. 'completed' is intentionally NOT settable here: fulfilment (the erasure/export process) records
+   * completion, never a manual flag — a hand-set 'completed' with no actual fulfilment would be a compliance
+   * violation. Entering 'processing' stamps verified_at (identity confirmed). Returns rows touched (0 = unknown
+   * id → the caller raises a clean 404 in-tx, rolling the audit row back).
+   */
+  async setDsarStatus(
+    tx: Tx,
+    id: string,
+    status: "verifying" | "processing" | "rejected",
+  ): Promise<number> {
+    const updated = await tx
+      .update(dsarRequests)
+      .set({
+        status,
+        ...(status === "processing" ? { verifiedAt: new Date() } : {}),
+      })
+      .where(eq(dsarRequests.id, id))
+      .returning({ id: dsarRequests.id });
+    return updated.length;
   },
 
   /**

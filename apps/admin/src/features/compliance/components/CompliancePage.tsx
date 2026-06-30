@@ -3,16 +3,23 @@
 // queue shows the request envelope (type / state / timestamps) only. Renders async state through the State Kit.
 "use client";
 
+import { useStaffMe } from "@/lib/staffMe";
 import {
   type Column,
   DataTable,
+  Dialog,
   EmptyState,
   StateSwitch,
   StatusBadge,
   type StatusTone,
+  TpButton,
   TpSelect,
+  TpTextarea,
+  useToast,
 } from "@leadwolf/ui";
 import { ShieldAlert } from "lucide-react";
+import { useState } from "react";
+import { transitionDsar } from "../api";
 import { useCompliance } from "../hooks/useCompliance";
 import type { DsarRequest } from "../types";
 import { GlobalSuppression } from "./GlobalSuppression";
@@ -35,6 +42,41 @@ function shortDateTime(iso: string | null): string {
 
 export function CompliancePage() {
   const { dsars, status, loading, error, setStatus, reload } = useCompliance();
+  const { canMaybe } = useStaffMe();
+  const canManage = canMaybe("compliance:manage");
+  const toast = useToast();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<DsarRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  async function transition(
+    d: DsarRequest,
+    next: "verifying" | "processing" | "rejected",
+    reason?: string,
+  ) {
+    setBusyId(d.id);
+    try {
+      await transitionDsar(d.id, next, reason);
+      toast.success(`DSAR marked ${next}.`);
+      await reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not update the DSAR");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function onReject() {
+    if (!rejecting) return;
+    const r = rejectReason.trim();
+    if (r.length < 3) {
+      toast.error("Enter a rejection reason (min 3 characters).");
+      return;
+    }
+    await transition(rejecting, "rejected", r);
+    setRejecting(null);
+    setRejectReason("");
+  }
 
   const columns: Column<DsarRequest>[] = [
     {
@@ -72,6 +114,43 @@ export function CompliancePage() {
       header: "Request",
       sortValue: (d) => d.id,
       cell: (d) => <span className="tp-cell-mono">{d.id.slice(0, 8)}</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "right",
+      cell: (d) => {
+        const terminal = d.status === "completed" || d.status === "rejected";
+        if (!canManage || terminal) return null;
+        const busy = busyId === d.id;
+        return (
+          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+            {d.status === "received" ? (
+              <TpButton
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => void transition(d, "verifying")}
+              >
+                Verify
+              </TpButton>
+            ) : null}
+            {d.status === "received" || d.status === "verifying" ? (
+              <TpButton
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => void transition(d, "processing")}
+              >
+                Process
+              </TpButton>
+            ) : null}
+            <TpButton variant="ghost" size="sm" disabled={busy} onClick={() => setRejecting(d)}>
+              Reject
+            </TpButton>
+          </div>
+        );
+      },
     },
   ];
 
@@ -114,6 +193,32 @@ export function CompliancePage() {
       >
         <DataTable columns={columns} rows={dsars ?? []} rowKey={(d) => d.id} />
       </StateSwitch>
+
+      <Dialog
+        open={!!rejecting}
+        onClose={() => (busyId ? undefined : setRejecting(null))}
+        title="Reject DSAR request"
+        description="Recorded with your reason in the audit log. Rejection closes the request; it does not delete any data."
+        maxWidth={480}
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="secondary" onClick={() => setRejecting(null)} disabled={!!busyId}>
+              Cancel
+            </TpButton>
+            <TpButton variant="danger" onClick={() => void onReject()} disabled={!!busyId}>
+              {busyId ? "Rejecting…" : "Reject"}
+            </TpButton>
+          </div>
+        }
+      >
+        <TpTextarea
+          aria-label="Rejection reason"
+          value={rejectReason}
+          rows={3}
+          placeholder="Why is this request being rejected? (e.g. identity not verified, not a valid subject)"
+          onChange={(e) => setRejectReason(e.currentTarget.value)}
+        />
+      </Dialog>
 
       <GlobalSuppression />
       <RetentionPolicies />

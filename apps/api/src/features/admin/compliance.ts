@@ -5,6 +5,7 @@
 // (never the encrypted subject email). DSAR requests are global, not per-tenant.
 
 import {
+  platformAdminWriteRepository,
   platformComplianceReadRepository,
   retentionPolicyRepository,
   suppressionRepository,
@@ -17,6 +18,7 @@ import {
   type RetentionPolicyView,
   ValidationError,
   addGlobalSuppressionSchema,
+  dsarTransitionSchema,
   platformDsarQuerySchema,
   retentionPolicySetActiveSchema,
   retentionPolicyUpsertSchema,
@@ -65,6 +67,31 @@ complianceRoutes.get("/dsars", async (c) => {
     (await platformComplianceReadRepository.listDsarRequests(tx, parsed.data)).map(toRow),
   );
   return c.json({ dsars });
+});
+
+/** Advance a DSAR through its staff workflow — verifying / processing / rejected. compliance:manage; audited
+ *  "dsar.transition". 'completed' is NOT settable here: the erasure/export fulfilment records completion, never
+ *  a manual flag (a hand-set 'completed' with no fulfilment would be a compliance violation). */
+complianceRoutes.post("/dsars/:id/status", requireCapability("compliance:manage"), async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  const parsed = dsarTransitionSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { status, reason } = parsed.data;
+  await withPlatformTx(
+    actorOf(c),
+    "dsar.transition",
+    async (tx) => {
+      const touched = await platformAdminWriteRepository.setDsarStatus(tx, id, status);
+      if (touched === 0) throw new NotFoundError("DSAR request not found.");
+    },
+    {
+      targetType: "dsar_request",
+      targetId: id,
+      metadata: { status, ...(reason ? { reason } : {}) },
+    },
+  );
+  return c.json({ ok: true, id, status });
 });
 
 // ── Retention policies (13a Area 8, 13 §3.8) — staff-authored retention SLAs. Read = compliance:read (the

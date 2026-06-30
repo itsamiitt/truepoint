@@ -59,3 +59,17 @@ export const dsarOversightRowSchema = z.object({
   completedAt: z.string().nullable(),
 });
 export type DsarOversightRow = z.infer<typeof dsarOversightRowSchema>;
+
+/** The staff-drivable DSAR transitions (08 §4). 'completed' is DELIBERATELY excluded — completion is recorded
+ *  by the actual erasure/export fulfilment, never hand-set (a manual 'completed' with no fulfilment would be a
+ *  compliance violation); 'received' is the intake state. Rejecting requires a reason. */
+export const dsarTransitionSchema = z
+  .object({
+    status: z.enum(["verifying", "processing", "rejected"]),
+    reason: z.string().trim().max(1000).optional(),
+  })
+  .refine((v) => v.status !== "rejected" || (!!v.reason && v.reason.length >= 3), {
+    message: "A rejection needs a reason (min 3 characters).",
+    path: ["reason"],
+  });
+export type DsarTransition = z.infer<typeof dsarTransitionSchema>;

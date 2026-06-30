@@ -20,6 +20,24 @@ export async function fetchDsars(status?: string): Promise<DsarRequest[]> {
   return body.dsars;
 }
 
+/** POST /admin/compliance/dsars/:id/status — advance a DSAR (verifying|processing|rejected; compliance:manage).
+ *  'completed' is intentionally not settable from the console — fulfilment records that, not a manual flag. */
+export async function transitionDsar(
+  id: string,
+  status: "verifying" | "processing" | "rejected",
+  reason?: string,
+): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/compliance/dsars/${encodeURIComponent(id)}/status`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not update the DSAR"));
+}
+
 /** GET /admin/compliance/suppression — the global blocklist. */
 export async function fetchGlobalSuppression(): Promise<GlobalSuppression[]> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/compliance/suppression`);
