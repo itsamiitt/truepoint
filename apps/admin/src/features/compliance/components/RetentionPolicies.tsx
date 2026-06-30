@@ -43,6 +43,7 @@ export function RetentionPolicies() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [enableTarget, setEnableTarget] = useState<RetentionPolicy | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -168,7 +169,10 @@ export function RetentionPolicies() {
               variant="ghost"
               size="sm"
               disabled={togglingId === p.id}
-              onClick={() => void onToggle(p)}
+              onClick={() => {
+                if (p.active) void onToggle(p);
+                else setEnableTarget(p);
+              }}
             >
               {p.active ? "Retire" : "Enable"}
             </TpButton>
@@ -268,6 +272,33 @@ export function RetentionPolicies() {
           </div>
         ) : null}
       </Dialog>
+
+      <Dialog
+        open={!!enableTarget}
+        onClose={() => setEnableTarget(null)}
+        title="Enable this retention policy?"
+        description={
+          enableTarget
+            ? `Enabling the "${enableTarget.entity}${enableTarget.field ? `.${enableTarget.field}` : ""}" policy ARMS the retention sweep — rows older than ${enableTarget.retentionDays} days become eligible for deletion. This is audited.`
+            : undefined
+        }
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="secondary" onClick={() => setEnableTarget(null)}>
+              Cancel
+            </TpButton>
+            <TpButton
+              variant="danger"
+              onClick={() => {
+                if (enableTarget) void onToggle(enableTarget);
+                setEnableTarget(null);
+              }}
+            >
+              Enable policy
+            </TpButton>
+          </div>
+        }
+      />
     </div>
   );
 }

@@ -200,6 +200,10 @@ export function BillingEconomicsPage() {
                   rowKey={(t) => t.tenantId}
                 />
               </div>
+            ) : lowBalance ? (
+              <p className="app-muted" style={{ marginTop: 24, fontSize: 13 }}>
+                No tenants with low credit balance.
+              </p>
             ) : null}
           </>
         ) : null}

@@ -196,6 +196,7 @@ function BudgetCell({
       <TpInput
         type="number"
         min={0}
+        max={1000000}
         value={value}
         placeholder="unset"
         disabled={disabled}

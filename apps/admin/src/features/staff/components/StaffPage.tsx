@@ -49,7 +49,7 @@ export function StaffPage() {
   async function onGrant() {
     const id = userId.trim();
     if (!id) {
-      toast.error("Enter the user id to grant.");
+      toast.error("Select a user to grant.");
       return;
     }
     setGranting(true);
