@@ -184,3 +184,26 @@ export const planTemplates = pgTable("plan_templates", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// sub_processors — the GDPR Art. 28 sub-processor registry staff publish (compliance ops, 13 §3.8): the third
+// parties that process customer/prospect data on TruePoint's behalf — name, purpose, processing location
+// (residency disclosure), and a DPA link. PLATFORM config, not tenant data: written ONLY by the owner connection
+// (withPlatformTx), deny-all to leadwolf_app (rls/platformOps.sql + the applyMigrations REVOKE). A removed
+// sub-processor is kept (active=false) for the disclosure history. (A public Trust-Center read surface is a
+// SEPARATE customer-facing slice — not wired here.)
+export const subProcessors = pgTable(
+  "sub_processors",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    purpose: text("purpose").notNull(), // what they process / why
+    location: text("location").notNull(), // country / region of processing (residency disclosure)
+    dpaUrl: text("dpa_url"), // optional link to the Data Processing Agreement
+    active: boolean("active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ activeIdx: index("sub_processors_active_idx").on(t.active, t.id) }),
+);
