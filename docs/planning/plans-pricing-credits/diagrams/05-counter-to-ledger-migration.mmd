@@ -1,0 +1,29 @@
+%% 05-counter-to-ledger-migration.mmd — counter -> derived cache cutover + ledger backfill (Phase 3, M11)
+sequenceDiagram
+    autonumber
+    participant OPS as Ops (migration runner)
+    participant DB as Postgres
+    participant BF as backfill job (apps/workers)
+    participant REC as billing-recon worker
+    participant APP as apps/api (reveal/grant tx)
+
+    Note over OPS,DB: STEP 0 — hand-authored migration (NO drizzle-kit generate; no docker on host)
+    OPS->>DB: CREATE TABLE credit_ledger (append-only trigger, RLS, idem unique)
+    Note over DB: counter (tenants.reveal_credit_balance) STILL authoritative
+
+    Note over BF,DB: STEP 1 — backfill ledger from history (idempotent, replayable)
+    BF->>DB: INSERT grant rows  <- purchases            (key grant:<stripe_event_id>)
+    BF->>DB: INSERT spend rows  <- contact_reveals      (key reveal:<id>, delta=-credits_consumed)
+    BF->>DB: INSERT adjustment  <- audit_log credit.adjust / credit.grant (key adjust:<audit_id>)
+    BF->>DB: INSERT balancing 'adjustment' = counter - SUM(delta) per tenant (reconcile opening drift)
+
+    Note over REC,DB: STEP 2 — assert invariant in SHADOW (read-only, dual-run)
+    REC->>DB: per tenant: balance == SUM(delta) ? log drift, DO NOT cut over on mismatch
+
+    Note over APP,DB: STEP 3 — dual-write window (ledger + counter both in the SAME tx)
+    APP->>DB: BEGIN; FOR UPDATE counter; INSERT ledger spend; UPDATE counter; COMMIT
+    Note over REC: recon green for N days across all tenants
+
+    Note over APP,DB: STEP 4 — flip source of truth: counter becomes a DERIVED CACHE of the ledger
+    APP->>DB: balance reads = cached counter, maintained in-tx from ledger (ADR-0029)
+    REC->>DB: ongoing: assert balance == SUM(delta) directly (closes G-BIL-1 no-recon gap)
