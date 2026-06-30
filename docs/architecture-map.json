@@ -30,6 +30,7 @@
     "custom-fields",
     "customFields",
     "data-health",
+    "data-quality",
     "email",
     "enrichment",
     "enrichment-jobs",
@@ -81,8 +82,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1154,
-  "fileSetHash": "sha256:8853436287ef14957d2862c2be7907097512c93da3e33e37b3d9e56047109353",
+  "fileCount": 1160,
+  "fileSetHash": "sha256:62987df3e0825e4ac2097b9a7b51e085d4a98b976f4cf8b7f1ecbedcc4d1e751",
   "features": {
     "account-search": {
       "web": [],
@@ -370,6 +371,21 @@
         "apps/workers/src/queues/reverification.ts",
         "apps/workers/src/queues/reverificationSweep.ts"
       ],
+      "integrations": []
+    },
+    "data-quality": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/data-quality/api.ts",
+        "apps/admin/src/features/data-quality/components/DataQualityPage.tsx",
+        "apps/admin/src/features/data-quality/hooks/useDataQuality.ts",
+        "apps/admin/src/features/data-quality/index.ts",
+        "apps/admin/src/features/data-quality/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "email": {
@@ -1410,6 +1426,7 @@
       "apps/admin/src/app/(shell)/billing/page.tsx",
       "apps/admin/src/app/(shell)/compliance/page.tsx",
       "apps/admin/src/app/(shell)/content/page.tsx",
+      "apps/admin/src/app/(shell)/data-quality/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
       "apps/admin/src/app/(shell)/imports/page.tsx",
       "apps/admin/src/app/(shell)/layout.tsx",
@@ -1948,6 +1965,7 @@
     "undeclared domain 'content' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'customFields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'data-quality' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'email' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'enrichment-jobs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'feature-flags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

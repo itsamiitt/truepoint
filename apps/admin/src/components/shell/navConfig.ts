@@ -8,6 +8,7 @@ import {
   Building2,
   FileUp,
   Flag,
+  Gauge,
   Layers,
   Megaphone,
   Plug,
@@ -43,6 +44,7 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Compliance", href: "/compliance", match: "/compliance", icon: ShieldAlert },
   { label: "Audit log", href: "/audit-log", match: "/audit-log", icon: ScrollText },
   { label: "Bulk imports", href: "/imports", match: "/imports", icon: FileUp },
+  { label: "Data quality", href: "/data-quality", match: "/data-quality", icon: Gauge },
   { label: "System health", href: "/system-health", match: "/system-health", icon: Activity },
 ];
 
