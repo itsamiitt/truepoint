@@ -12,6 +12,7 @@ import { dataQualitySnapshots } from "../schema/dataQualitySnapshots.ts";
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
 import { importJobChunks, importJobs } from "../schema/importJobs.ts";
 import { listMembers, lists } from "../schema/lists.ts";
+import { approvalRequests } from "../schema/platformOps.ts";
 import { retentionRuns } from "../schema/retention.ts";
 import { verificationJobs } from "../schema/verificationJobs.ts";
 
@@ -214,6 +215,27 @@ export interface PlatformDataQualitySnapshotRow {
   tenantName: string;
   workspaceId: string;
   metrics: WorkspaceDataQuality;
+  createdAt: Date;
+}
+
+/**
+ * One maker-checker approval request as the staff queue sees it (database-management-research 09). PLATFORM
+ * staff data (approval_requests); `params` are operator-supplied operation parameters (counts/ids/flags), NOT
+ * imported PII. Dates are returned as Date and serialized to ISO at the api boundary.
+ */
+export interface PlatformApprovalRow {
+  id: string;
+  operation: string;
+  params: unknown;
+  targetTenantId: string | null;
+  requestedByUserId: string;
+  requestReason: string;
+  status: string;
+  decidedByUserId: string | null;
+  decisionReason: string | null;
+  decidedAt: Date | null;
+  expiresAt: Date;
+  executedAt: Date | null;
   createdAt: Date;
 }
 
@@ -641,6 +663,34 @@ export const platformAdminRepository = {
     // `metrics` is plain jsonb (no $type on the column); the snapshot sweep writes it as WorkspaceDataQuality, so
     // cast it back for the typed boundary. Counts/statuses only — non-PII.
     return rows.map((r) => ({ ...r, metrics: r.metrics as WorkspaceDataQuality }));
+  },
+
+  /**
+   * Pending maker-checker approval requests ACROSS all tenants (database-management-research 09) — the staff
+   * review queue. Newest-first + PLATFORM_READ_LIMIT-bounded. PLATFORM staff data; runs inside the caller's
+   * audited withPlatformTx. No tenant PII — `params` are operator-supplied op parameters.
+   */
+  async listPendingApprovals(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformApprovalRow[]> {
+    return tx
+      .select({
+        id: approvalRequests.id,
+        operation: approvalRequests.operation,
+        params: approvalRequests.params,
+        targetTenantId: approvalRequests.targetTenantId,
+        requestedByUserId: approvalRequests.requestedByUserId,
+        requestReason: approvalRequests.requestReason,
+        status: approvalRequests.status,
+        decidedByUserId: approvalRequests.decidedByUserId,
+        decisionReason: approvalRequests.decisionReason,
+        decidedAt: approvalRequests.decidedAt,
+        expiresAt: approvalRequests.expiresAt,
+        executedAt: approvalRequests.executedAt,
+        createdAt: approvalRequests.createdAt,
+      })
+      .from(approvalRequests)
+      .where(eq(approvalRequests.status, "pending"))
+      .orderBy(desc(approvalRequests.id))
+      .limit(Math.min(limit, PLATFORM_READ_LIMIT));
   },
 
   /**

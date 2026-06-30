@@ -10,8 +10,20 @@
 // in the SAME tx) and is PLATFORM_READ_LIMIT-bounded. METADATA + tallies ONLY — the repo reads the import_jobs /
 // retention_runs CONTROL tables, never import_job_rows, so no imported contact PII crosses the boundary
 // (truepoint-security: a cross-tenant admin read exposes counts, not records).
-import { PLATFORM_READ_LIMIT, platformAdminRepository, withPlatformTx } from "@leadwolf/db";
-import { NotFoundError, ValidationError } from "@leadwolf/types";
+import {
+  PLATFORM_READ_LIMIT,
+  platformAdminRepository,
+  platformAdminWriteRepository,
+  withPlatformTx,
+} from "@leadwolf/db";
+import {
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  approvalRequestViewSchema,
+  createApprovalSchema,
+  decideApprovalSchema,
+} from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
@@ -25,6 +37,65 @@ const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   userId: c.get("claims").sub,
   ip: c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
 });
+
+// One approval row as the repo returns it (PlatformApprovalRow), serialized to the shared ApprovalRequestView.
+type ApprovalRow = Awaited<ReturnType<typeof platformAdminRepository.listPendingApprovals>>[number];
+
+function toApprovalView(r: ApprovalRow) {
+  return {
+    id: r.id,
+    operation: r.operation,
+    params: (r.params ?? {}) as Record<string, unknown>,
+    targetTenantId: r.targetTenantId,
+    requestedByUserId: r.requestedByUserId,
+    requestReason: r.requestReason,
+    status: r.status,
+    decidedByUserId: r.decidedByUserId,
+    decisionReason: r.decisionReason,
+    decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
+    expiresAt: r.expiresAt.toISOString(),
+    executedAt: r.executedAt ? r.executedAt.toISOString() : null,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+// Shared approve/reject handler — the CHECKER path (data:review). The decision + its refusals all run INSIDE the
+// withPlatformTx fn, so a refusal (not found / not pending / self-approval) throws and rolls the audit row back
+// (the "no trace for an action that did not happen" discipline); only a real decision commits its audit row.
+async function decideApprovalRoute(
+  c: Context<{ Variables: ApiVariables }>,
+  decision: "approved" | "rejected",
+  action: string,
+) {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  const parsed = decideApprovalSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
+  const view = await withPlatformTx(
+    actor,
+    action,
+    async (tx) => {
+      const outcome = await platformAdminWriteRepository.decideApproval(
+        tx,
+        id,
+        actor.userId,
+        decision,
+        parsed.data.reason,
+      );
+      if (!outcome.found) throw new NotFoundError("Approval request not found.");
+      if (outcome.selfApproval)
+        throw new ForbiddenError(
+          "maker_checker",
+          "You filed this request — it must be decided by a different operator (separation of duties).",
+        );
+      if (outcome.notPending) throw new ValidationError("This request is no longer pending.");
+      return toApprovalView(outcome.row!);
+    },
+    { targetType: "approval_request", targetId: id, metadata: { decision } },
+  );
+  return c.json({ approval: approvalRequestViewSchema.parse(view) });
+}
 
 // ── Data-Ops Overview (database-management-research 04 §UI / 14 Phase 0) — the cross-tenant data-operations
 // rollup the new "Data management" area opens on. One audited withPlatformTx runs three bounded reads in
@@ -132,3 +203,58 @@ dataRoutes.get("/quality/snapshots", requireCapability("data:read"), async (c) =
   );
   return c.json({ snapshots });
 });
+
+// ── Maker-checker approvals (database-management-research 09) — the review queue + the request/approve/reject
+// actions for high-risk Data-management ops. The MAKER files a request (data:manage); the CHECKER lists + decides
+// (data:review). Separation of duties (requester != approver) is enforced server-side in decideApproval. Every
+// mutation runs on the audited withPlatformTx (data.approval.*). PLATFORM staff data; params are operator-supplied
+// op parameters (never imported PII). The op EXECUTION on approve (e.g. the retention-enforce flip) is wired
+// per-op in a follow-up; this lands the request/decision lifecycle + its audit + the review queue.
+
+/** File an approval request (the MAKER). data:manage. Audited `data.approval.request`. A pending request is
+ *  hard-expired after 7 days (a worker-driven expiry sweep is a follow-up). */
+dataRoutes.post("/approvals", requireCapability("data:manage"), async (c) => {
+  const parsed = createApprovalSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const view = await withPlatformTx(
+    actor,
+    "data.approval.request",
+    (tx) =>
+      platformAdminWriteRepository
+        .createApproval(tx, {
+          operation: parsed.data.operation,
+          params: parsed.data.params,
+          targetTenantId: parsed.data.targetTenantId ?? null,
+          requestedByUserId: actor.userId,
+          requestReason: parsed.data.reason,
+          expiresAt,
+        })
+        .then(toApprovalView),
+    {
+      targetType: "approval_request",
+      tenantId: parsed.data.targetTenantId ?? undefined,
+      metadata: { operation: parsed.data.operation },
+    },
+  );
+  return c.json({ approval: approvalRequestViewSchema.parse(view) });
+});
+
+/** The review queue — pending requests (the CHECKER). data:review. Audited read. */
+dataRoutes.get("/approvals", requireCapability("data:review"), async (c) => {
+  const rows = await withPlatformTx(actorOf(c), "admin.data_approvals", (tx) =>
+    platformAdminRepository.listPendingApprovals(tx),
+  );
+  return c.json({ approvals: approvalRequestViewSchema.array().parse(rows.map(toApprovalView)) });
+});
+
+/** Approve a pending request (the CHECKER; requester != approver enforced). data:review. */
+dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), (c) =>
+  decideApprovalRoute(c, "approved", "data.approval.approve"),
+);
+
+/** Reject a pending request (the CHECKER). data:review. */
+dataRoutes.post("/approvals/:id/reject", requireCapability("data:review"), (c) =>
+  decideApprovalRoute(c, "rejected", "data.approval.reject"),
+);

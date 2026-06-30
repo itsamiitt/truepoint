@@ -8,6 +8,8 @@
 import { eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenants, users } from "../schema/auth.ts";
+import { approvalRequests } from "../schema/platformOps.ts";
+import type { PlatformApprovalRow } from "./platformAdminReads.ts";
 
 /** A tenant's lifecycle status the staff console can set (13 §3.1). */
 export type TenantLifecycleStatus = "active" | "suspended";
@@ -39,6 +41,16 @@ export interface CreditAdjustOutcome {
   found: boolean;
   wouldOverdraw: boolean;
   balanceAfter: number;
+}
+
+/** The outcome of an approve/reject decision, mapped to the right HTTP result INSIDE the tx (rolling the audit
+ *  row back on a refusal): unknown id → 404, not pending → 422, the requester deciding their own → 403
+ *  (maker != checker), else the decided row. */
+export interface ApprovalDecisionOutcome {
+  found: boolean;
+  notPending: boolean;
+  selfApproval: boolean;
+  row: PlatformApprovalRow | null;
 }
 
 export const platformAdminWriteRepository = {
@@ -164,5 +176,80 @@ export const platformAdminWriteRepository = {
       .where(eq(tenants.id, tenantId))
       .returning({ id: tenants.id });
     return updated.length;
+  },
+
+  /**
+   * File a maker-checker approval REQUEST for a high-risk Data-management op (database-management-research 09).
+   * The MAKER (data:manage) supplies the operation, its params, the target org (null = platform-wide), a reason,
+   * and a hard expiry. status defaults to 'pending'. Returns the created row for the audit/view.
+   */
+  async createApproval(
+    tx: Tx,
+    input: {
+      operation: string;
+      params: Record<string, unknown>;
+      targetTenantId: string | null;
+      requestedByUserId: string;
+      requestReason: string;
+      expiresAt: Date;
+    },
+  ): Promise<PlatformApprovalRow> {
+    const [row] = await tx
+      .insert(approvalRequests)
+      .values({
+        operation: input.operation,
+        params: input.params,
+        targetTenantId: input.targetTenantId,
+        requestedByUserId: input.requestedByUserId,
+        requestReason: input.requestReason,
+        expiresAt: input.expiresAt,
+      })
+      .returning();
+    return row as PlatformApprovalRow;
+  },
+
+  /**
+   * Decide (approve|reject) a pending request — the CHECKER path (data:review). The request row is taken
+   * FOR UPDATE (the serialization adjustCredits/refundPurchase use) so two checkers can't race a decision.
+   * SEPARATION OF DUTIES is enforced HERE, server-side: the requester can NEVER decide their own request
+   * (selfApproval → the caller raises 403 INSIDE the tx, rolling the audit row back). An unknown id →
+   * found:false (404); a non-pending request → notPending (422). On success the
+   * status/decided_by/decision_reason/decided_at are set and the row returned.
+   */
+  async decideApproval(
+    tx: Tx,
+    id: string,
+    deciderUserId: string,
+    decision: "approved" | "rejected",
+    reason: string,
+  ): Promise<ApprovalDecisionOutcome> {
+    const locked = (await tx.execute(
+      sql`SELECT status, requested_by_user_id AS requester FROM approval_requests
+          WHERE id = ${id}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ status: string; requester: string }>;
+    if (locked.length === 0)
+      return { found: false, notPending: false, selfApproval: false, row: null };
+    const current = locked[0]!;
+    if (current.status !== "pending")
+      return { found: true, notPending: true, selfApproval: false, row: null };
+    // Maker != checker: a request can never be decided by the staff member who filed it.
+    if (current.requester === deciderUserId)
+      return { found: true, notPending: false, selfApproval: true, row: null };
+    const [row] = await tx
+      .update(approvalRequests)
+      .set({
+        status: decision,
+        decidedByUserId: deciderUserId,
+        decisionReason: reason,
+        decidedAt: new Date(),
+      })
+      .where(eq(approvalRequests.id, id))
+      .returning();
+    return {
+      found: true,
+      notPending: false,
+      selfApproval: false,
+      row: (row ?? null) as PlatformApprovalRow | null,
+    };
   },
 };
