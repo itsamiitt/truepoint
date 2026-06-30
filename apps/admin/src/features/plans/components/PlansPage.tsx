@@ -67,6 +67,7 @@ export function PlansPage() {
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
 
   function openNew() {
     setDraft({ ...EMPTY });
@@ -141,12 +142,15 @@ export function PlansPage() {
   }
 
   async function onToggle(t: PlanTemplate) {
+    setTogglingKey(t.key);
     try {
       await setPlanTemplateActive(t.key, !t.active);
       toast.success(t.active ? "Plan retired." : "Plan offered.");
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the plan");
+    } finally {
+      setTogglingKey(null);
     }
   }
 
@@ -209,10 +213,20 @@ export function PlansPage() {
       cell: (t) =>
         canManage ? (
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <TpButton variant="ghost" size="sm" onClick={() => openEdit(t)}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingKey === t.key}
+              onClick={() => openEdit(t)}
+            >
               Edit
             </TpButton>
-            <TpButton variant="ghost" size="sm" onClick={() => void onToggle(t)}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingKey === t.key}
+              onClick={() => void onToggle(t)}
+            >
               {t.active ? "Retire" : "Offer"}
             </TpButton>
           </div>

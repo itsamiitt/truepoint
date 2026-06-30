@@ -69,6 +69,7 @@ export function ContentPage() {
   const canManage = canMaybe("content:manage");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   function openNew() {
     setDraft({ ...EMPTY });
@@ -100,6 +101,11 @@ export function ContentPage() {
       toast.error("A tenant-targeted announcement needs a valid tenant UUID.");
       return;
     }
+    // yyyy-mm-dd strings sort chronologically, so a lexical compare guards an inverted display window.
+    if (draft.startsDate && draft.endsDate && draft.startsDate > draft.endsDate) {
+      toast.error("The start date must be on or before the end date.");
+      return;
+    }
     const input = {
       title,
       body,
@@ -124,12 +130,15 @@ export function ContentPage() {
   }
 
   async function onToggle(a: Announcement) {
+    setTogglingId(a.id);
     try {
       await setAnnouncementActive(a.id, !a.active);
       toast.success(a.active ? "Announcement retired." : "Announcement shown.");
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the announcement");
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -181,10 +190,20 @@ export function ContentPage() {
       cell: (a) =>
         canManage ? (
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <TpButton variant="ghost" size="sm" onClick={() => openEdit(a)}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingId === a.id}
+              onClick={() => openEdit(a)}
+            >
               Edit
             </TpButton>
-            <TpButton variant="ghost" size="sm" onClick={() => void onToggle(a)}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingId === a.id}
+              onClick={() => void onToggle(a)}
+            >
               {a.active ? "Retire" : "Show"}
             </TpButton>
           </div>

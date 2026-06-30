@@ -52,6 +52,7 @@ export function PricingPage() {
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
 
   function openNew() {
     setDraft({ ...EMPTY });
@@ -110,12 +111,15 @@ export function PricingPage() {
   }
 
   async function onToggle(p: CreditPack) {
+    setTogglingKey(p.key);
     try {
       await setCreditPackActive(p.key, !p.active);
       toast.success(p.active ? "Pack retired." : "Pack offered.");
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the pack");
+    } finally {
+      setTogglingKey(null);
     }
   }
 
@@ -162,10 +166,20 @@ export function PricingPage() {
       cell: (p) =>
         canManage ? (
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <TpButton variant="ghost" size="sm" onClick={() => openEdit(p)}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingKey === p.key}
+              onClick={() => openEdit(p)}
+            >
               Edit
             </TpButton>
-            <TpButton variant="ghost" size="sm" onClick={() => void onToggle(p)}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingKey === p.key}
+              onClick={() => void onToggle(p)}
+            >
               {p.active ? "Retire" : "Offer"}
             </TpButton>
           </div>

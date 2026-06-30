@@ -25,6 +25,7 @@ export function GlobalSuppression() {
   const [domain, setDomain] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -63,12 +64,15 @@ export function GlobalSuppression() {
   }
 
   async function onRemove(entry: GlobalSuppressionEntry) {
+    setRemovingId(entry.id);
     try {
       await removeGlobalSuppression(entry.id);
       toast.success("Block removed.");
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not remove the block");
+    } finally {
+      setRemovingId(null);
     }
   }
 
@@ -97,7 +101,12 @@ export function GlobalSuppression() {
       align: "right",
       cell: (e) =>
         canManage ? (
-          <TpButton variant="ghost" size="sm" onClick={() => void onRemove(e)}>
+          <TpButton
+            variant="ghost"
+            size="sm"
+            disabled={removingId === e.id}
+            onClick={() => void onRemove(e)}
+          >
             Remove
           </TpButton>
         ) : null,
