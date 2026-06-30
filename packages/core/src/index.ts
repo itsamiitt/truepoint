@@ -38,6 +38,8 @@ export {
   runValidationRules,
   type ValidationRuleSpec,
 } from "./validation/index.ts";
+// Knowledge-DB survivorship quality score (prospect-database-platform I1 / Phase 05) — pure cluster-quality v1.
+export { computeClusterQualityScore, type ClusterQualityInput } from "./projection/computeQuality.ts";
 export {
   saveMappingTemplate,
   listMappingTemplates,

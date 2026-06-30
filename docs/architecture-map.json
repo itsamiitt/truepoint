@@ -50,6 +50,7 @@
     "pipelineStages",
     "plans",
     "pricing",
+    "projection",
     "prospect",
     "provider-configs",
     "reports",
@@ -85,8 +86,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1208,
-  "fileSetHash": "sha256:1dd0bdc6db75abfd25b441de7238ecd91ddefa35c784c73d5083a4b1ff7a1b85",
+  "fileCount": 1210,
+  "fileSetHash": "sha256:52a4359bab782366a01ef8ff4d6804a23d3d7cfdfdf3b7f600f131187a028246",
   "features": {
     "account-search": {
       "web": [],
@@ -817,6 +818,17 @@
       ],
       "api": [],
       "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "projection": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/projection/computeQuality.ts"
+      ],
       "db": [],
       "workers": [],
       "integrations": []
@@ -2021,6 +2033,7 @@
     "packages/db/src/repositories/pipelineStageRepository.ts",
     "packages/db/src/repositories/planTemplateRepository.ts",
     "packages/db/src/repositories/platformStaffRepository.ts",
+    "packages/db/src/repositories/projectorRepository.ts",
     "packages/db/src/repositories/providerConfigRepository.ts",
     "packages/db/src/repositories/retentionClassPolicyRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
@@ -2057,6 +2070,7 @@
     "undeclared domain 'pipelineStages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'plans' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pricing' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'projection' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'provider-configs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'saved-searches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'savedSearches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

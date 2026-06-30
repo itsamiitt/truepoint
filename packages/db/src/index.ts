@@ -112,6 +112,13 @@ export {
   type SourceRecordInput,
   type MatchLinkInput,
 } from "./repositories/evidenceRepository.ts";
+// Survivorship projector data access (prospect-database-platform I1 / Phase 05) — drains projection_outbox + writes
+// the shadow seams (data_quality_score, prov_hwm) on the golden row; NEVER the authoritative scalar columns.
+export {
+  projectorRepository,
+  type PendingProjection,
+  type ClusterEvidenceSummary,
+} from "./repositories/projectorRepository.ts";
 // Retention SHADOW sweep COUNT layer (data-management backlog #6, phase 2) — the per-class candidate counter (a
 // cross-tenant OWNER read with an explicit tenant predicate; COUNTS only, no deletion) + the fixed table/aging/
 // scope META phase 3's deleters reuse + the active-tenant fleet enumeration the sweep fans out over.
