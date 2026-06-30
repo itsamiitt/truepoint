@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { SetAuthEnforcementInput } from "@leadwolf/types";
+import type { SetAuthEnforcementInput, TenantEconomicsDetail } from "@leadwolf/types";
 import type {
   AccountHold,
   PlanTemplateOption,
@@ -108,6 +108,19 @@ export async function applyTenantPlan(id: string, templateKey: string): Promise<
     },
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not apply the plan"));
+}
+
+/** GET /admin/tenants/:id/economics — the tenant's windowed + lifetime economics detail (billing:read). */
+export async function fetchTenantEconomics(
+  id: string,
+  sinceDays = 30,
+): Promise<TenantEconomicsDetail> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/economics?sinceDays=${sinceDays}`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load economics"));
+  const body = (await res.json()) as { economics: TenantEconomicsDetail };
+  return body.economics;
 }
 
 /** GET /admin/tenants/:id/purchases — the tenant's credit-pack purchases (billing:read). */

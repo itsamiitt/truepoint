@@ -13,6 +13,7 @@ import type { TenantMember, TenantWorkspace } from "../types";
 import { AuthEnforcementCard } from "./AuthEnforcementCard";
 import { SupportNotes } from "./SupportNotes";
 import { TenantActions } from "./TenantActions";
+import { TenantEconomics } from "./TenantEconomics";
 import { TenantHolds } from "./TenantHolds";
 import { TenantOverview } from "./TenantOverview";
 import { TenantPurchases } from "./TenantPurchases";
@@ -123,6 +124,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
             </Card>
 
             <TenantOverview tenantId={tenantId} />
+            <TenantEconomics tenantId={tenantId} />
             <AuthEnforcementCard detail={detail} onChanged={reload} />
 
             <h3 className="tp-section-title">Workspaces ({detail.workspaces.length})</h3>
