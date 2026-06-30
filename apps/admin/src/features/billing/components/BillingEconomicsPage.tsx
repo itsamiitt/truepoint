@@ -3,8 +3,9 @@
 // window. Read-only cross-tenant aggregates from the audited api. Renders async state through the State Kit.
 "use client";
 
-import { StatTile, StateSwitch, TpSelect } from "@leadwolf/ui";
+import { type Column, DataTable, StatTile, StateSwitch, TpSelect } from "@leadwolf/ui";
 import { useEconomics } from "../hooks/useEconomics";
+import type { TenantEconomicsRow } from "../types";
 
 const PERIODS = [
   { value: 7, label: "Last 7 days" },
@@ -21,8 +22,52 @@ function count(n: number): string {
   return n.toLocaleString();
 }
 
+const tenantColumns: Column<TenantEconomicsRow>[] = [
+  {
+    key: "tenant",
+    header: "Tenant",
+    sortValue: (t) => t.tenantName,
+    cell: (t) => <span style={{ fontWeight: 500, color: "var(--tp-ink)" }}>{t.tenantName}</span>,
+  },
+  {
+    key: "revenue",
+    header: "Revenue",
+    align: "right",
+    sortValue: (t) => t.revenueCents,
+    cell: (t) => money(t.revenueCents),
+  },
+  {
+    key: "spend",
+    header: "Provider spend",
+    align: "right",
+    sortValue: (t) => t.providerSpendCents,
+    cell: (t) => money(t.providerSpendCents),
+  },
+  {
+    key: "margin",
+    header: "Margin",
+    align: "right",
+    sortValue: (t) => t.marginCents,
+    cell: (t) => money(t.marginCents),
+  },
+  {
+    key: "reveals",
+    header: "Reveals",
+    align: "right",
+    sortValue: (t) => t.reveals,
+    cell: (t) => `${count(t.reveals)} · ${count(t.chargedReveals)} charged`,
+  },
+  {
+    key: "credits",
+    header: "Credits sold",
+    align: "right",
+    sortValue: (t) => t.creditsSold,
+    cell: (t) => count(t.creditsSold),
+  },
+];
+
 export function BillingEconomicsPage() {
-  const { summary, sinceDays, loading, error, setPeriod, reload } = useEconomics();
+  const { summary, tenants, sinceDays, loading, error, setPeriod, reload } = useEconomics();
 
   return (
     <div className="tp-page">
@@ -49,42 +94,50 @@ export function BillingEconomicsPage() {
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {summary ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: 12,
-            }}
-          >
-            <StatTile
-              label="Revenue"
-              value={money(summary.revenueCents)}
-              sublabel={
-                summary.refundedCents > 0 ? `${money(summary.refundedCents)} refunded` : undefined
-              }
-            />
-            <StatTile label="Provider spend" value={money(summary.providerSpendCents)} />
-            <StatTile
-              label="Gross margin"
-              value={money(summary.marginCents)}
-              sublabel="revenue − provider spend"
-            />
-            <StatTile
-              label="Cost per reveal"
-              value={`$${(summary.costPerRevealCents / 100).toFixed(4)}`}
-              sublabel="provider spend ÷ charged reveals"
-            />
-            <StatTile
-              label="Credits sold"
-              value={count(summary.creditsSold)}
-              sublabel={`${count(summary.creditsConsumed)} consumed`}
-            />
-            <StatTile
-              label="Reveals"
-              value={count(summary.reveals)}
-              sublabel={`${count(summary.chargedReveals)} charged`}
-            />
-          </div>
+          <>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: 12,
+              }}
+            >
+              <StatTile
+                label="Revenue"
+                value={money(summary.revenueCents)}
+                sublabel={
+                  summary.refundedCents > 0 ? `${money(summary.refundedCents)} refunded` : undefined
+                }
+              />
+              <StatTile label="Provider spend" value={money(summary.providerSpendCents)} />
+              <StatTile
+                label="Gross margin"
+                value={money(summary.marginCents)}
+                sublabel="revenue − provider spend"
+              />
+              <StatTile
+                label="Cost per reveal"
+                value={`$${(summary.costPerRevealCents / 100).toFixed(4)}`}
+                sublabel="provider spend ÷ charged reveals"
+              />
+              <StatTile
+                label="Credits sold"
+                value={count(summary.creditsSold)}
+                sublabel={`${count(summary.creditsConsumed)} consumed`}
+              />
+              <StatTile
+                label="Reveals"
+                value={count(summary.reveals)}
+                sublabel={`${count(summary.chargedReveals)} charged`}
+              />
+            </div>
+            {tenants && tenants.length > 0 ? (
+              <div style={{ marginTop: 24 }}>
+                <h3 className="tp-section-title">Top tenants by provider spend</h3>
+                <DataTable columns={tenantColumns} rows={tenants} rowKey={(t) => t.tenantId} />
+              </div>
+            ) : null}
+          </>
         ) : null}
       </StateSwitch>
     </div>

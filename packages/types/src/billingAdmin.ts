@@ -32,6 +32,20 @@ export const refundResultSchema = z.object({
 });
 export type RefundResult = z.infer<typeof refundResultSchema>;
 
+/** One tenant's slice of the economics window — the per-tenant drill-down behind the rollup (which tenants
+ *  actually drive the revenue and the metered provider spend). Money is integer cents; the rest are counts. */
+export const tenantEconomicsRowSchema = z.object({
+  tenantId: z.string().uuid(),
+  tenantName: z.string(),
+  revenueCents: z.number().int(), // SUM purchases.amount_cents (completed) for this tenant
+  creditsSold: z.number().int(),
+  reveals: z.number().int(),
+  chargedReveals: z.number().int(),
+  providerSpendCents: z.number().int(), // SUM provider_calls.cost_micros / 10_000 for this tenant
+  marginCents: z.number().int(), // revenueCents - providerSpendCents
+});
+export type TenantEconomicsRow = z.infer<typeof tenantEconomicsRowSchema>;
+
 /** The economics summary for the window (07 §9 "internal reporting"). */
 export const economicsSummarySchema = z.object({
   sinceDays: z.number().int(),

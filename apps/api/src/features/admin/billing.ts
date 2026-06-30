@@ -4,7 +4,12 @@
 // withPlatformTx (cross-tenant owner read) and returns aggregates only — never per-tenant PII or row dumps.
 
 import { platformBillingReadRepository, withPlatformTx } from "@leadwolf/db";
-import { type EconomicsSummary, ValidationError, economicsQuerySchema } from "@leadwolf/types";
+import {
+  type EconomicsSummary,
+  type TenantEconomicsRow,
+  ValidationError,
+  economicsQuerySchema,
+} from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
@@ -50,4 +55,33 @@ billingRoutes.get("/economics", async (c) => {
     marginCents: agg.revenueCents - providerSpendCents,
   };
   return c.json({ summary });
+});
+
+// Top tenants by provider spend over the window — the drill-down behind the rollup (which orgs drive revenue
+// and the metered cost). Same audited owner read; bounded server-side. Aggregates only — never per-tenant PII.
+const TENANT_ECONOMICS_LIMIT = 50;
+
+billingRoutes.get("/economics/by-tenant", async (c) => {
+  const parsed = economicsQuerySchema.safeParse({ sinceDays: c.req.query("sinceDays") });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const since = new Date(Date.now() - parsed.data.sinceDays * 86_400_000);
+
+  const rows = await withPlatformTx(actorOf(c), "admin.billing_economics_by_tenant", (tx) =>
+    platformBillingReadRepository.economicsByTenant(tx, since, TENANT_ECONOMICS_LIMIT),
+  );
+
+  const tenants: TenantEconomicsRow[] = rows.map((r) => {
+    const providerSpendCents = Math.round(r.providerSpendMicros / 10_000);
+    return {
+      tenantId: r.tenantId,
+      tenantName: r.tenantName,
+      revenueCents: r.revenueCents,
+      creditsSold: r.creditsSold,
+      reveals: r.reveals,
+      chargedReveals: r.chargedReveals,
+      providerSpendCents,
+      marginCents: r.revenueCents - providerSpendCents,
+    };
+  });
+  return c.json({ tenants });
 });

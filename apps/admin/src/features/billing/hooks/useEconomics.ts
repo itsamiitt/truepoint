@@ -3,11 +3,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchEconomics } from "../api";
-import type { EconomicsSummary } from "../types";
+import { fetchEconomics, fetchEconomicsByTenant } from "../api";
+import type { EconomicsSummary, TenantEconomicsRow } from "../types";
 
 export function useEconomics(initialDays = 30) {
   const [summary, setSummary] = useState<EconomicsSummary | null>(null);
+  const [tenants, setTenants] = useState<TenantEconomicsRow[] | null>(null);
   const [sinceDays, setSinceDays] = useState(initialDays);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -16,7 +17,10 @@ export function useEconomics(initialDays = 30) {
     setLoading(true);
     setError(null);
     try {
-      setSummary(await fetchEconomics(days));
+      // The rollup and the per-tenant drill-down share the window — load them together for one period select.
+      const [s, t] = await Promise.all([fetchEconomics(days), fetchEconomicsByTenant(days)]);
+      setSummary(s);
+      setTenants(t);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load economics");
     } finally {
@@ -38,6 +42,7 @@ export function useEconomics(initialDays = 30) {
 
   return {
     summary,
+    tenants,
     sinceDays,
     loading,
     error,

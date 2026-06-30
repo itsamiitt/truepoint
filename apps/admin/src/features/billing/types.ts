@@ -14,3 +14,16 @@ export interface EconomicsSummary {
   costPerRevealCents: number;
   marginCents: number;
 }
+
+/** One tenant's slice of the window — the drill-down table behind the rollup. Mirrors the api
+ *  `/admin/billing/economics/by-tenant` payload. Money is integer cents. */
+export interface TenantEconomicsRow {
+  tenantId: string;
+  tenantName: string;
+  revenueCents: number;
+  creditsSold: number;
+  reveals: number;
+  chargedReveals: number;
+  providerSpendCents: number;
+  marginCents: number;
+}
