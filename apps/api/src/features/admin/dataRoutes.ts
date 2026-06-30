@@ -10,7 +10,7 @@
 // in the SAME tx) and is PLATFORM_READ_LIMIT-bounded. METADATA + tallies ONLY — the repo reads the import_jobs /
 // retention_runs CONTROL tables, never import_job_rows, so no imported contact PII crosses the boundary
 // (truepoint-security: a cross-tenant admin read exposes counts, not records).
-import { BUILTIN_VALIDATION_RULES } from "@leadwolf/core";
+import { BUILTIN_VALIDATION_RULES, staffWorkspaceExport } from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
   platformAdminRepository,
@@ -23,6 +23,7 @@ import {
   NotFoundError,
   ValidationError,
   approvalRequestViewSchema,
+  bulkExportParamsSchema,
   createApprovalSchema,
   decideApprovalSchema,
   retentionEnforceParamsSchema,
@@ -33,6 +34,7 @@ import {
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
+import { bulkFileStore } from "../import/bulkStore.ts";
 
 // Accept any RFC-4122-shaped UUID (incl. the v7 ids this app mints) for path-param validation.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -325,6 +327,20 @@ dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), asyn
           ttlDays: p.data.ttlDays,
           mode: "enforce",
         });
+      } else if (row.operation === "bulk_export") {
+        const p = bulkExportParamsSchema.safeParse(row.params);
+        if (!p.success)
+          throw new ValidationError(p.error.issues[0]?.message ?? "Invalid bulk_export params");
+        // SECURITY-SENSITIVE (audit X3): cross-tenant PII decryption, gated by the EXPLICIT-scope suppression
+        // filter (findMatchExplicit — the owner bypasses RLS). Audited via THIS approval's platform_audit_log row
+        // (NOT per-contact credit-charged — admin egress by policy). The artifact is keyed to the approval id; a
+        // separate data:export-gated route streams it. Flagged for security review.
+        await staffWorkspaceExport(tx, {
+          tenantId: p.data.tenantId,
+          workspaceId: p.data.workspaceId,
+          fileStore: bulkFileStore(),
+          exportKey: `exports/staff/${id}.csv`,
+        });
       } else {
         throw new ValidationError(
           `No executor is wired for '${row.operation}' yet — it can be filed but not approved until its feature ships.`,
@@ -465,4 +481,27 @@ dataRoutes.get("/dedup/links", requireCapability("data:review"), async (c) => {
     platformAdminRepository.listMatchLinksForReview(tx),
   );
   return c.json({ links: links.map(toMatchLinkView) });
+});
+
+/**
+ * GET /admin/data/approvals/:id/export — stream a completed staff cross-tenant export artifact (Phase 2). data:export.
+ * The artifact exists only for an EXECUTED bulk_export approval, and the key is the approval id (server-side), so a
+ * client can't fetch an arbitrary object. Cross-tenant PII egress — already approval-gated + audited. (v1 buffers
+ * the bounded file; streaming is a follow-up.)
+ */
+dataRoutes.get("/approvals/:id/export", requireCapability("data:export"), async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  let bytes: Uint8Array;
+  try {
+    const stream = await bulkFileStore().getObjectStream(`exports/staff/${id}.csv`);
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    bytes = Buffer.concat(chunks);
+  } catch {
+    throw new NotFoundError("Export artifact not found.");
+  }
+  c.header("content-type", "text/csv; charset=utf-8");
+  c.header("content-disposition", `attachment; filename="staff-export-${id}.csv"`);
+  return c.body(bytes, 200);
 });

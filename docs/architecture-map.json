@@ -85,8 +85,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1205,
-  "fileSetHash": "sha256:75c165232e5df21dcce90e9d0152914049e4557d73e138baecc31b3cd2a5ed2c",
+  "fileCount": 1206,
+  "fileSetHash": "sha256:9616c169c177d7fc4beafae1dd6f23de9e5815be576f1f730c0c415309160c3f",
   "features": {
     "account-search": {
       "web": [],
@@ -986,7 +986,8 @@
       ],
       "core": [
         "packages/core/src/reveal/bulkRevealExport.ts",
-        "packages/core/src/reveal/revealContact.ts"
+        "packages/core/src/reveal/revealContact.ts",
+        "packages/core/src/reveal/staffWorkspaceExport.ts"
       ],
       "db": [
         "packages/db/src/repositories/accountRepository.ts",

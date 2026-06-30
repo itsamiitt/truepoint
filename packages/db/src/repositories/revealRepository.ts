@@ -19,6 +19,26 @@ export interface ContactForReveal {
   isRevealed: boolean;
 }
 
+/** What the STAFF cross-tenant export needs per contact (database-management-research export; audit A1, Phase 2):
+ *  the ciphertext (decrypted IN the executor, never returned over HTTP), the suppression keys, and the masked
+ *  non-PII fields. Read ONLY under withPlatformTx (owner) — no RLS GUCs on this path, so the scope is EXPLICIT. */
+export interface ContactForExport {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  jobTitle: string | null;
+  emailEnc: Uint8Array | null;
+  phoneEnc: Uint8Array | null;
+  emailBlindIndex: Uint8Array | null;
+  emailDomain: string | null;
+  emailStatus: string;
+  seniorityLevel: string | null;
+  department: string | null;
+  locationCountry: string | null;
+  locationCity: string | null;
+  createdAt: Date;
+}
+
 export interface RevealClaimInput {
   tenantId: string;
   workspaceId: string;
@@ -56,6 +76,47 @@ export const revealRepository = {
       .where(and(eq(contacts.id, contactId), isNull(contacts.deletedAt))) // tombstones are gone (08 §4.2)
       .limit(1);
     return rows[0] ?? null;
+  },
+
+  /**
+   * Read a TARGET workspace's live contacts for a STAFF cross-tenant export — ciphertext + suppression keys +
+   * masked fields, bounded. MUST run under withPlatformTx (owner): there are no RLS GUCs on this path, so the
+   * tenant + workspace predicate is EXPLICIT. The ciphertext is decrypted IN the executor (never returned over
+   * HTTP); the executor's findMatchExplicit gate excludes suppressed subjects before any decrypt is surfaced.
+   */
+  async listForExport(
+    tx: Tx,
+    tenantId: string,
+    workspaceId: string,
+    limit: number,
+  ): Promise<ContactForExport[]> {
+    return tx
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        jobTitle: contacts.jobTitle,
+        emailEnc: contacts.emailEnc,
+        phoneEnc: contacts.phoneEnc,
+        emailBlindIndex: contacts.emailBlindIndex,
+        emailDomain: contacts.emailDomain,
+        emailStatus: contacts.emailStatus,
+        seniorityLevel: contacts.seniorityLevel,
+        department: contacts.department,
+        locationCountry: contacts.locationCountry,
+        locationCity: contacts.locationCity,
+        createdAt: contacts.createdAt,
+      })
+      .from(contacts)
+      .where(
+        and(
+          eq(contacts.tenantId, tenantId),
+          eq(contacts.workspaceId, workspaceId),
+          isNull(contacts.deletedAt),
+        ),
+      )
+      .orderBy(contacts.id)
+      .limit(limit);
   },
 
   /**

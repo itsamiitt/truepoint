@@ -67,6 +67,13 @@ export {
   type BulkRevealExportInput,
   type BulkRevealExportResult,
 } from "./reveal/bulkRevealExport.ts";
+// Staff cross-tenant export executor (doc 12; audit A1, Phase 2) — runs on a bulk_export approval under the owner
+// tx; explicit-scope suppression filter + decrypt + CSV through the FileStore. Platform-audited, not credit-charged.
+export {
+  staffWorkspaceExport,
+  type StaffWorkspaceExportInput,
+  type StaffWorkspaceExportResult,
+} from "./reveal/staffWorkspaceExport.ts";
 export { assertNotSuppressed, type SuppressionKeys } from "./compliance/assertNotSuppressed.ts";
 export { writeAudit, type AuditEntryInput } from "./compliance/writeAudit.ts";
 
