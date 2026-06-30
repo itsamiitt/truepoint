@@ -25,3 +25,4 @@ export * from "./platformOps.ts";
 export * from "./verificationJobs.ts";
 export * from "./dataQualitySnapshots.ts";
 export * from "./retention.ts";
+export * from "./validationRules.ts";

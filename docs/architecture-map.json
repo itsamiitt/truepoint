@@ -81,11 +81,12 @@
     "tenants",
     "trust-abuse",
     "users",
+    "validation",
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1191,
-  "fileSetHash": "sha256:726bda752ac1232612c99cef52e92bb96b748e9aa847b08ce3173b84e9e45bbc",
+  "fileCount": 1196,
+  "fileSetHash": "sha256:be5c3febb1dc2d3b113b4d0657e767870cf8c8e671c55dde8dfb0b5af609e220",
   "features": {
     "account-search": {
       "web": [],
@@ -1430,6 +1431,19 @@
       "workers": [],
       "integrations": []
     },
+    "validation": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/validation/builtins.ts",
+        "packages/core/src/validation/index.ts",
+        "packages/core/src/validation/runRules.ts"
+      ],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "webhooks": {
       "web": [],
       "admin": [],
@@ -1795,6 +1809,7 @@
       "packages/db/src/schema/savedSearches.ts",
       "packages/db/src/schema/scim.ts",
       "packages/db/src/schema/tags.ts",
+      "packages/db/src/schema/validationRules.ts",
       "packages/db/src/schema/verificationJobs.ts",
       "packages/db/src/schema/webhooks.ts",
       "packages/db/src/seed.ts",
@@ -1925,6 +1940,7 @@
       "packages/types/src/tags.ts",
       "packages/types/src/tenantAdmin.ts",
       "packages/types/src/userAdmin.ts",
+      "packages/types/src/validation.ts",
       "packages/types/src/webhooks.ts"
     ],
     "packages/ui": [
@@ -2047,6 +2063,7 @@
     "undeclared domain 'tenants' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'trust-abuse' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'users' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'validation' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'webhooks' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder"
   ],
   "dependencies": {

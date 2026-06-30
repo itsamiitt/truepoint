@@ -31,6 +31,13 @@ export type { RawRow } from "./import/columnMap.ts";
 // Object-store seam (15-bulk-import-design §3/§4): the FileStore port the bulk pipeline writes through + a
 // dev/test local-disk adapter. The prod S3 adapter is injected at the app composition root (kept out of core).
 export { diskFileStore, type FileStore } from "./storage/fileStore.ts";
+// Data-quality validation engine (database-management-research 06) — the built-in + custom rules a prepared
+// import row must pass (reject-on-fail). The DB-row custom rules are read by apps/api/apps/workers and passed in.
+export {
+  BUILTIN_VALIDATION_RULES,
+  runValidationRules,
+  type ValidationRuleSpec,
+} from "./validation/index.ts";
 export {
   saveMappingTemplate,
   listMappingTemplates,
