@@ -85,8 +85,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1200,
-  "fileSetHash": "sha256:13c009a8d3aa7da00fc679ee80f7e208e22b852fbaa9f81aa10d05f2d333d808",
+  "fileCount": 1201,
+  "fileSetHash": "sha256:903f5679a0e28d78dbecb720778dbacca43ad5635c0af55e559eed94581d0a90",
   "features": {
     "account-search": {
       "web": [],
@@ -2027,6 +2027,7 @@
     "packages/db/src/repositories/subProcessorRepository.ts",
     "packages/db/src/repositories/supportNoteRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",
+    "packages/db/src/repositories/validationRuleRepository.ts",
     "packages/db/src/repositories/webhookRepository.ts"
   ],
   "warnings": [

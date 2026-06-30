@@ -14,6 +14,7 @@ import {
   listRepository,
   masterGraphRepository,
   sourceImportRepository,
+  validationRuleRepository,
   withErTx,
   withTenantTx,
 } from "@leadwolf/db";
@@ -32,6 +33,7 @@ import { writeAudit } from "../compliance/writeAudit.ts";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import { assertListInWorkspace } from "../prospect/lists.ts";
+import { type ValidationRuleSpec, runValidationRules } from "../validation/index.ts";
 import { type RawRow, mapRow } from "./columnMap.ts";
 import { contentHash } from "./contentHash.ts";
 import { prepareContact, type PreparedContact } from "./prepareContact.ts";
@@ -280,6 +282,28 @@ async function importOneRow(
 }
 
 /**
+ * Load the ENABLED custom data-quality rules once for an import (database-management-research 06). FAIL-OPEN: a
+ * rules-read hiccup must never block an import — the custom rules are an added quality gate, not a correctness
+ * invariant — so on error we log and enforce nothing. Built-in checks are deliberately NOT loaded here (they would
+ * reject LinkedIn-only / nameless rows the pipeline otherwise accepts); only staff-authored custom rules apply.
+ */
+async function loadEnabledValidationRules(scope: RunImportInput["scope"]): Promise<ValidationRuleSpec[]> {
+  try {
+    const rows = await withTenantTx(scope, (tx) => validationRuleRepository.listEnabledForImport(tx));
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      field: r.field,
+      checkType: r.checkType as ValidationRuleSpec["checkType"],
+      config: (r.config ?? {}) as ValidationRuleSpec["config"],
+    }));
+  } catch (err) {
+    console.error("[import] failed to load validation rules; proceeding without them", err);
+    return [];
+  }
+}
+
+/**
  * Run a full per-workspace import and return the accounting summary (30 §4): created / matched / skipped /
  * duplicates / rejected + addedToList, plus the rejected-rows artifact. A row that fails validation is REJECTED
  * (collected with per-field reasons for the downloadable error file, G-IMP-1) — it never reaches the DB; a row
@@ -297,6 +321,10 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
   if (input.target) {
     await assertListInWorkspace({ scope: input.scope, listId: input.target.listId });
   }
+
+  // The global custom data-quality rules (database-management-research 06), loaded ONCE. Empty unless staff have
+  // authored rules → no behaviour change for an import with none. Reject-on-fail, additive to validateRow below.
+  const validationRules = await loadEnabledValidationRules(input.scope);
 
   const errors: ImportRowError[] = [];
   const rejectedRows: RejectedRow[] = [];
@@ -316,6 +344,18 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
       rejectedRows.push(...rejectedRowsFor(i, raw, verdict.reasons));
       errors.push({ row: i, message: verdict.reasons[0]?.reason ?? "Row rejected." });
       continue;
+    }
+
+    // Staff custom data-quality rules (reject-on-fail, database-management-research 06): run them over the mapped
+    // row; any failure rejects the row with its per-field reason (built-ins are NOT enforced here). A failed row
+    // never reaches the DB — identical treatment to a validateRow rejection.
+    if (validationRules.length > 0) {
+      const ruleFailures = runValidationRules(verdict.mapped as Record<string, unknown>, validationRules);
+      if (ruleFailures.length > 0) {
+        rejectedRows.push(...ruleFailures.map((f) => ({ row: i, field: f.field, reason: f.message, raw })));
+        errors.push({ row: i, message: ruleFailures[0]!.message });
+        continue;
+      }
     }
 
     try {

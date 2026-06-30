@@ -99,6 +99,12 @@ export {
   type RetentionRunInsert,
   type RecentRunsOptions,
 } from "./repositories/retentionRunRepository.ts";
+// Global data-quality validation rules (database-management-research 06) — the import-enforcement read (app
+// SELECT-only RLS; staff author them via withPlatformTx in the admin rule-builder).
+export {
+  validationRuleRepository,
+  type ImportValidationRule,
+} from "./repositories/validationRuleRepository.ts";
 // Retention SHADOW sweep COUNT layer (data-management backlog #6, phase 2) — the per-class candidate counter (a
 // cross-tenant OWNER read with an explicit tenant predicate; COUNTS only, no deletion) + the fixed table/aging/
 // scope META phase 3's deleters reuse + the active-tenant fleet enumeration the sweep fans out over.
