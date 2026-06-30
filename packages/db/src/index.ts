@@ -328,6 +328,13 @@ export {
   type VerificationRunRow,
   type VerificationTotals,
 } from "./repositories/platformDataQualityReads.ts";
+// Platform trust/abuse reads (P6) — cross-tenant signup velocity, active holds, status mix; within withPlatformTx.
+export {
+  platformTrustReadRepository,
+  type SignupVelocity,
+  type CountBucket,
+  type TrustSignals,
+} from "./repositories/platformTrustReads.ts";
 // Platform compliance-ops reads (13a Area 8) — global DSAR queue (PII-free), run within withPlatformTx.
 export {
   platformComplianceReadRepository,

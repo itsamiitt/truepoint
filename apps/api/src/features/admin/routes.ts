@@ -17,6 +17,7 @@ import {
   platformBillingReadRepository,
   platformDataQualityReadRepository,
   platformStaffRepository,
+  platformTrustReadRepository,
   retentionClassPolicyRepository,
   supportNoteRepository,
   withPlatformTx,
@@ -705,6 +706,21 @@ adminRoutes.get("/data-quality", async (c) => {
       })),
     },
   });
+});
+
+// ── Trust & abuse (P6, 13 §3 abuse-ops) — cross-tenant trust signals: signup velocity (tenants/users), a
+// free/disposable-email signup heuristic, active abuse/fraud holds by kind, and the tenant-status mix. Read-only,
+// coarse-gated (any staff, like /system-health + /data-quality); `admin.trust_abuse` is a plain withPlatformTx
+// read string, NOT in the mutation enum. NON-PII — counts only. ──
+adminRoutes.get("/trust-abuse", async (c) => {
+  const data = await withPlatformTx(actorOf(c), "admin.trust_abuse", async (tx) => {
+    // Sequential — one tx is one connection; no concurrent statements on it.
+    const signals = await platformTrustReadRepository.signals(tx);
+    const holds = await platformTrustReadRepository.activeHoldsByKind(tx);
+    const tenantStatus = await platformTrustReadRepository.tenantsByStatus(tx);
+    return { signals, holds, tenantStatus };
+  });
+  return c.json(data);
 });
 
 // ── Import-jobs monitor (data-management A4; 15-bulk-import-design) — recent bulk-import jobs ACROSS all
