@@ -4,6 +4,7 @@
 // requested_by != decided_by (maker != checker) check; a high-risk op routes through a pending request before
 // it runs. Backed by the platform-owned `approval_requests` table (schema/platformOps.ts, rls/platformOps.sql).
 
+import { retentionDataClass } from "./retention.ts";
 import { z } from "zod";
 
 /** The closed set of high-risk operations that require maker-checker approval. Extend as ops are gated. */
@@ -53,3 +54,11 @@ export const approvalRequestViewSchema = z.object({
   createdAt: z.string().datetime({ offset: true }),
 });
 export type ApprovalRequestView = z.infer<typeof approvalRequestViewSchema>;
+
+/** Params a `retention_enforce` approval carries — which data class to flip to `enforce`, and its TTL (days;
+ *  null = never auto-delete). The executor validates these before the flip runs. */
+export const retentionEnforceParamsSchema = z.object({
+  dataClass: retentionDataClass,
+  ttlDays: z.number().int().positive().nullable(),
+});
+export type RetentionEnforceParams = z.infer<typeof retentionEnforceParamsSchema>;

@@ -906,6 +906,14 @@ adminRoutes.put("/retention-policies", requireStaffRole("super_admin"), async (c
   const parsed = retentionPolicyUpdateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const policy = parsed.data;
+  // Flipping a class to `enforce` ARMS real deletion — it now requires maker-checker approval
+  // (database-management-research 09). The direct switch only sets disabled/shadow + TTL here; an enforce flip
+  // goes through POST /api/v1/admin/data/approvals (operation=retention_enforce; data:manage to file, data:review
+  // to approve, requester != approver), and the approval executor runs the flip.
+  if (policy.mode === "enforce")
+    throw new ValidationError(
+      "Enforcing a retention class requires maker-checker approval — file a request in the Data management approvals queue (operation=retention_enforce).",
+    );
   await withPlatformTx(
     actorOf(c),
     "retention_policy.set",

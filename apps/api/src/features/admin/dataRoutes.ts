@@ -14,6 +14,7 @@ import {
   PLATFORM_READ_LIMIT,
   platformAdminRepository,
   platformAdminWriteRepository,
+  retentionClassPolicyRepository,
   withPlatformTx,
 } from "@leadwolf/db";
 import {
@@ -23,6 +24,7 @@ import {
   approvalRequestViewSchema,
   createApprovalSchema,
   decideApprovalSchema,
+  retentionEnforceParamsSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
@@ -250,9 +252,56 @@ dataRoutes.get("/approvals", requireCapability("data:review"), async (c) => {
 });
 
 /** Approve a pending request (the CHECKER; requester != approver enforced). data:review. */
-dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), (c) =>
-  decideApprovalRoute(c, "approved", "data.approval.approve"),
-);
+dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  const parsed = decideApprovalSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
+  const view = await withPlatformTx(
+    actor,
+    "data.approval.approve",
+    async (tx) => {
+      const outcome = await platformAdminWriteRepository.decideApproval(
+        tx,
+        id,
+        actor.userId,
+        "approved",
+        parsed.data.reason,
+      );
+      if (!outcome.found) throw new NotFoundError("Approval request not found.");
+      if (outcome.selfApproval)
+        throw new ForbiddenError(
+          "maker_checker",
+          "You filed this request — it must be decided by a different operator (separation of duties).",
+        );
+      if (outcome.notPending) throw new ValidationError("This request is no longer pending.");
+      const row = outcome.row!;
+      // EXECUTE the approved op IMMEDIATELY, in the SAME audited tx — a failed run rolls the approval back so the
+      // decision and the effect are atomic. Only retention_enforce is wired today; a filed request for an unwired
+      // op can't be approved until its feature ships (the throw rolls back). Bulk ops add a row-cap here.
+      if (row.operation === "retention_enforce") {
+        const p = retentionEnforceParamsSchema.safeParse(row.params);
+        if (!p.success)
+          throw new ValidationError(p.error.issues[0]?.message ?? "Invalid retention_enforce params");
+        // Arm real deletion for the class (the per-tenant retention_engine_enabled flag is still the outer gate).
+        await retentionClassPolicyRepository.upsertPolicy(tx, {
+          dataClass: p.data.dataClass,
+          ttlDays: p.data.ttlDays,
+          mode: "enforce",
+        });
+      } else {
+        throw new ValidationError(
+          `No executor is wired for '${row.operation}' yet — it can be filed but not approved until its feature ships.`,
+        );
+      }
+      await platformAdminWriteRepository.markApprovalExecuted(tx, id);
+      return toApprovalView({ ...row, status: "executed", executedAt: new Date() });
+    },
+    { targetType: "approval_request", targetId: id, metadata: { decision: "approved" } },
+  );
+  return c.json({ approval: approvalRequestViewSchema.parse(view) });
+});
 
 /** Reject a pending request (the CHECKER). data:review. */
 dataRoutes.post("/approvals/:id/reject", requireCapability("data:review"), (c) =>

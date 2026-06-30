@@ -295,4 +295,16 @@ export const platformAdminWriteRepository = {
       row: (row ?? null) as PlatformApprovalRow | null,
     };
   },
+
+  /**
+   * Mark an APPROVED request executed (status → executed, executed_at = now). Called in the SAME tx as the op's
+   * execution, immediately after a successful run (database-management-research 09; run-on-approve), so the
+   * approval, the op, and the executed marker all commit — or roll back — together.
+   */
+  async markApprovalExecuted(tx: Tx, id: string): Promise<void> {
+    await tx
+      .update(approvalRequests)
+      .set({ status: "executed", executedAt: new Date() })
+      .where(eq(approvalRequests.id, id));
+  },
 };
