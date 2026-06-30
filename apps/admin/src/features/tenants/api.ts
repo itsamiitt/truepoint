@@ -233,7 +233,9 @@ export async function adjustTenantCredits(
     `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/credits`,
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      // A per-submit Idempotency-Key so a transport retry replays the committed grant instead of 403-ing on
+      // the already-consumed JIT elevation; the api keys the replay on (tenant, key).
+      headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
       body: JSON.stringify({ delta, reason }),
     },
   );

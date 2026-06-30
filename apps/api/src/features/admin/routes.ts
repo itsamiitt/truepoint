@@ -9,6 +9,7 @@ import {
   accountHoldRepository,
   authPolicyRepository,
   featureFlagRepository,
+  idempotencyRepository,
   jitElevationRepository,
   planTemplateRepository,
   platformAdminRepository,
@@ -277,6 +278,20 @@ adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), a
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const { delta, reason } = parsed.data;
   const actor = actorOf(c);
+
+  // Idempotency-Key replay (ADR-0004/0007): a network retry must NOT 403 on the already-consumed JIT
+  // elevation (nor re-grant) — if this (tenant, key) already committed, replay its stored response without
+  // re-running the grant or writing a second audit row. Owner-path read (no tenancy context on this surface).
+  const idemKey = c.req.header("idempotency-key");
+  if (idemKey) {
+    const replay = await idempotencyRepository.findOwner(tenantId, idemKey);
+    if (replay) {
+      return c.json(
+        replay.responseBody as { tenantId: string; delta: number; balanceAfter: number },
+      );
+    }
+  }
+
   const balanceAfter = await withPlatformTx(
     actor,
     delta > 0 ? "credit.grant" : "credit.adjust",
@@ -294,6 +309,13 @@ adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), a
           `This adjustment would overdraw the balance (current ${res.balanceAfter}).`,
           { balance: res.balanceAfter },
         );
+      // Record the replay row IN-tx so the key commits atomically with the grant + its audit row.
+      if (idemKey) {
+        await idempotencyRepository.storeOwner(tx, tenantId, idemKey, {
+          responseStatus: 200,
+          responseBody: { tenantId, delta, balanceAfter: res.balanceAfter },
+        });
+      }
       return res.balanceAfter;
     },
     { targetType: "tenant", targetId: tenantId, tenantId, metadata: { delta, reason } },
