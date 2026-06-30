@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { EconomicsSummary, TenantEconomicsRow } from "./types";
+import type { EconomicsSummary, LowBalanceTenant, TenantEconomicsRow } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -47,4 +47,14 @@ export async function exportEconomicsByTenant(sinceDays: number): Promise<void> 
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/** GET /admin/billing/low-balance — active tenants at/under a credit-balance threshold (default 100). */
+export async function fetchLowBalance(threshold = 100): Promise<LowBalanceTenant[]> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/billing/low-balance?threshold=${encodeURIComponent(threshold)}`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load low-balance tenants"));
+  const body = (await res.json()) as { tenants: LowBalanceTenant[] };
+  return body.tenants;
 }

@@ -6,9 +6,11 @@
 import { platformBillingReadRepository, withPlatformTx } from "@leadwolf/db";
 import {
   type EconomicsSummary,
+  type LowBalanceTenant,
   type TenantEconomicsRow,
   ValidationError,
   economicsQuerySchema,
+  lowBalanceQuerySchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
@@ -141,4 +143,21 @@ billingRoutes.get("/economics/by-tenant/export", async (c) => {
   c.header("content-type", "text/csv; charset=utf-8");
   c.header("content-disposition", 'attachment; filename="billing-economics-by-tenant.csv"');
   return c.body(lines.join("\r\n"));
+});
+
+/** Active tenants at/under a credit-balance threshold — the proactive top-up / churn-risk list (07 §9).
+ *  Audited owner read of the live tenant counter, bounded. billing:read (router gate). Aggregate-ish, no PII. */
+billingRoutes.get("/low-balance", async (c) => {
+  const parsed = lowBalanceQuerySchema.safeParse({
+    threshold: c.req.query("threshold"),
+    limit: c.req.query("limit"),
+  });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { threshold, limit } = parsed.data;
+  const tenants: LowBalanceTenant[] = await withPlatformTx(
+    actorOf(c),
+    "admin.billing_low_balance",
+    (tx) => platformBillingReadRepository.lowBalanceTenants(tx, threshold, limit),
+  );
+  return c.json({ threshold, tenants });
 });

@@ -30,6 +30,14 @@ export interface TenantEconomicsAggregate {
   providerSpendMicros: number;
 }
 
+/** One active tenant at/under a credit-balance threshold (the proactive top-up / churn-risk view). */
+export interface LowBalanceTenantRow {
+  tenantId: string;
+  tenantName: string;
+  plan: string;
+  revealCreditBalance: number;
+}
+
 /** One credit-pack purchase row (no Stripe ids). */
 export interface PlatformPurchaseRow {
   id: string;
@@ -140,6 +148,33 @@ export const platformBillingReadRepository = {
       reveals: Number(row.reveals),
       chargedReveals: Number(row.charged_reveals),
       providerSpendMicros: Number(row.provider_spend_micros),
+    }));
+  },
+
+  /** Active tenants at/under a reveal-credit-balance threshold, lowest first, bounded — the proactive top-up /
+   *  churn-risk view (07 §9). Owner read; the balance is the live tenant counter. */
+  async lowBalanceTenants(
+    tx: Tx,
+    threshold: number,
+    limit: number,
+  ): Promise<LowBalanceTenantRow[]> {
+    const rows = (await tx.execute(sql`
+      SELECT id::text AS tenant_id, name AS tenant_name, plan, reveal_credit_balance
+      FROM tenants
+      WHERE status = 'active' AND reveal_credit_balance <= ${threshold}
+      ORDER BY reveal_credit_balance ASC, id
+      LIMIT ${limit}
+    `)) as unknown as Array<{
+      tenant_id: string;
+      tenant_name: string;
+      plan: string;
+      reveal_credit_balance: number;
+    }>;
+    return rows.map((r) => ({
+      tenantId: r.tenant_id,
+      tenantName: r.tenant_name,
+      plan: r.plan,
+      revealCreditBalance: Number(r.reveal_credit_balance),
     }));
   },
 

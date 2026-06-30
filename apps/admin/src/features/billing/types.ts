@@ -27,3 +27,12 @@ export interface TenantEconomicsRow {
   providerSpendCents: number;
   marginCents: number;
 }
+
+/** One active tenant at/under a credit-balance threshold (the proactive top-up / churn-risk list). Mirrors
+ *  the api `/admin/billing/low-balance` payload. */
+export interface LowBalanceTenant {
+  tenantId: string;
+  tenantName: string;
+  plan: string;
+  revealCreditBalance: number;
+}

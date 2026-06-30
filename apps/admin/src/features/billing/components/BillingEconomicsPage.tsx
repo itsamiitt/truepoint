@@ -15,7 +15,7 @@ import {
 import { useState } from "react";
 import { exportEconomicsByTenant } from "../api";
 import { useEconomics } from "../hooks/useEconomics";
-import type { TenantEconomicsRow } from "../types";
+import type { LowBalanceTenant, TenantEconomicsRow } from "../types";
 
 const PERIODS = [
   { value: 7, label: "Last 7 days" },
@@ -76,8 +76,26 @@ const tenantColumns: Column<TenantEconomicsRow>[] = [
   },
 ];
 
+const lowBalanceColumns: Column<LowBalanceTenant>[] = [
+  {
+    key: "tenant",
+    header: "Tenant",
+    sortValue: (t) => t.tenantName,
+    cell: (t) => <span style={{ fontWeight: 500, color: "var(--tp-ink)" }}>{t.tenantName}</span>,
+  },
+  { key: "plan", header: "Plan", sortValue: (t) => t.plan, cell: (t) => t.plan },
+  {
+    key: "balance",
+    header: "Credit balance",
+    align: "right",
+    sortValue: (t) => t.revealCreditBalance,
+    cell: (t) => count(t.revealCreditBalance),
+  },
+];
+
 export function BillingEconomicsPage() {
-  const { summary, tenants, sinceDays, loading, error, setPeriod, reload } = useEconomics();
+  const { summary, tenants, lowBalance, sinceDays, loading, error, setPeriod, reload } =
+    useEconomics();
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
 
@@ -172,6 +190,16 @@ export function BillingEconomicsPage() {
               <p className="app-muted" style={{ marginTop: 24, fontSize: 13 }}>
                 No tenant activity in this window.
               </p>
+            ) : null}
+            {lowBalance && lowBalance.length > 0 ? (
+              <div style={{ marginTop: 24 }}>
+                <h3 className="tp-section-title">Low credit balance (≤ 100)</h3>
+                <DataTable
+                  columns={lowBalanceColumns}
+                  rows={lowBalance}
+                  rowKey={(t) => t.tenantId}
+                />
+              </div>
             ) : null}
           </>
         ) : null}

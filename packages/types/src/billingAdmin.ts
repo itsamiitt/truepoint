@@ -46,6 +46,23 @@ export const tenantEconomicsRowSchema = z.object({
 });
 export type TenantEconomicsRow = z.infer<typeof tenantEconomicsRowSchema>;
 
+/** Query the low-credit-balance tenant list — the proactive top-up / churn-risk view (07 §9). `threshold` is
+ *  the at-or-below credit balance; both bounded. */
+export const lowBalanceQuerySchema = z.object({
+  threshold: z.coerce.number().int().min(0).max(100_000).default(100),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type LowBalanceQuery = z.infer<typeof lowBalanceQuerySchema>;
+
+/** One active tenant at/under the credit-balance threshold — who to nudge for a top-up before they churn. */
+export const lowBalanceTenantSchema = z.object({
+  tenantId: z.string().uuid(),
+  tenantName: z.string(),
+  plan: z.string(),
+  revealCreditBalance: z.number().int(),
+});
+export type LowBalanceTenant = z.infer<typeof lowBalanceTenantSchema>;
+
 /** The economics summary for the window (07 §9 "internal reporting"). */
 export const economicsSummarySchema = z.object({
   sinceDays: z.number().int(),

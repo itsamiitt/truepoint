@@ -3,12 +3,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchEconomics, fetchEconomicsByTenant } from "../api";
-import type { EconomicsSummary, TenantEconomicsRow } from "../types";
+import { fetchEconomics, fetchEconomicsByTenant, fetchLowBalance } from "../api";
+import type { EconomicsSummary, LowBalanceTenant, TenantEconomicsRow } from "../types";
 
 export function useEconomics(initialDays = 30) {
   const [summary, setSummary] = useState<EconomicsSummary | null>(null);
   const [tenants, setTenants] = useState<TenantEconomicsRow[] | null>(null);
+  const [lowBalance, setLowBalance] = useState<LowBalanceTenant[] | null>(null);
   const [sinceDays, setSinceDays] = useState(initialDays);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -17,10 +18,16 @@ export function useEconomics(initialDays = 30) {
     setLoading(true);
     setError(null);
     try {
-      // The rollup and the per-tenant drill-down share the window — load them together for one period select.
-      const [s, t] = await Promise.all([fetchEconomics(days), fetchEconomicsByTenant(days)]);
+      // The rollup + drill-down share the window; the low-balance list is current-state (window-independent)
+      // but loaded in the same cycle so the page is one fetch.
+      const [s, t, lb] = await Promise.all([
+        fetchEconomics(days),
+        fetchEconomicsByTenant(days),
+        fetchLowBalance(),
+      ]);
       setSummary(s);
       setTenants(t);
+      setLowBalance(lb);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load economics");
     } finally {
@@ -43,6 +50,7 @@ export function useEconomics(initialDays = 30) {
   return {
     summary,
     tenants,
+    lowBalance,
     sinceDays,
     loading,
     error,
