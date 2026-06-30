@@ -6,6 +6,7 @@ export {
   withPrivilegedTx,
   withErTx,
   withPlatformTx,
+  withPlatformReadTx,
   recordPlatformEvent,
   type PlatformEventInput,
   closeDb,

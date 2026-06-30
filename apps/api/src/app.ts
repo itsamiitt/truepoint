@@ -28,6 +28,7 @@ import { bulkImportRoutes, importRoutes } from "./features/import/index.ts";
 import { listsRoutes } from "./features/lists/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
+import { publicPricingRoutes } from "./features/pricing/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
 import { salesNavRoutes } from "./features/sales-navigator/index.ts";
 import { savedSearchesRoutes } from "./features/saved-searches/index.ts";
@@ -124,6 +125,10 @@ app.route("/api/v1/email", emailRoutes);
 // Pipeline stages (G-REV-7, ADR-0028): workspace stage CRUD + POST /contacts/:id/stage rollup. Mounted on
 // its OWN base so /contacts/:id/stage cannot collide with the /api/v1/contacts reveal/scoring/activity slices.
 app.route("/api/v1/pipeline-stages", pipelineStagesRoutes);
+// Public, UNAUTHENTICATED transparent pricing catalog (ADR-0012): active credit packs + plan tiers. Carries
+// no authn/tenancy (the page renders with no token/tenant/balance); only the coarse /api/* IP rate-limit
+// above applies. Reads NON-PII platform config on the owner connection (withPlatformReadTx) — never tenant data.
+app.route("/api/v1/pricing", publicPricingRoutes);
 app.route("/api/v1/billing", billingRoutes);
 app.route("/api/v1/credits", creditsRoutes);
 app.route("/api/v1/enrichment", enrichmentRoutes);

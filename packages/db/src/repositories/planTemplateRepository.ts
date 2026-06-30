@@ -53,6 +53,19 @@ export const planTemplateRepository = {
     return rows as PlanTemplateRow[];
   },
 
+  /** ACTIVE templates only, ordered for display — the public plan tiers (ADR-0012 transparent pricing) and the
+   *  resolver behind the tenant plan envelope. Read on the owner connection via withPlatformReadTx; never
+   *  exposes retired templates. */
+  async listActive(tx: Tx): Promise<PlanTemplateRow[]> {
+    const rows = await tx
+      .select(TEMPLATE_COLS)
+      .from(planTemplates)
+      .where(eq(planTemplates.active, true))
+      .orderBy(asc(planTemplates.sortOrder), asc(planTemplates.name))
+      .limit(TEMPLATE_LIMIT);
+    return rows as PlanTemplateRow[];
+  },
+
   /** Create or update a template (idempotent on `key`); keeps `active` (toggled separately) but bumps
    *  updated_at. Returns the resulting row. */
   async upsert(tx: Tx, input: UpsertPlanTemplateInput): Promise<PlanTemplateRow> {
