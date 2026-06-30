@@ -15,6 +15,7 @@ import {
   ScrollText,
   ShieldAlert,
   ShieldCheck,
+  Siren,
   Tag,
   Timer,
   Users,
@@ -45,6 +46,7 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Audit log", href: "/audit-log", match: "/audit-log", icon: ScrollText },
   { label: "Bulk imports", href: "/imports", match: "/imports", icon: FileUp },
   { label: "Data quality", href: "/data-quality", match: "/data-quality", icon: Gauge },
+  { label: "Trust & abuse", href: "/trust-abuse", match: "/trust-abuse", icon: Siren },
   { label: "System health", href: "/system-health", match: "/system-health", icon: Activity },
 ];
 

@@ -78,12 +78,13 @@
     "tags",
     "templates",
     "tenants",
+    "trust-abuse",
     "users",
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1161,
-  "fileSetHash": "sha256:c5a036560479f2271188715a131106f82f412c2c86f7abc9af43297b2cf5ce9e",
+  "fileCount": 1167,
+  "fileSetHash": "sha256:b1ef45c4b8b9e76db7e50ee1d10e28d2f3e6ae4a820843e1d7351366c892b02b",
   "features": {
     "account-search": {
       "web": [],
@@ -1370,6 +1371,21 @@
       "workers": [],
       "integrations": []
     },
+    "trust-abuse": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/trust-abuse/api.ts",
+        "apps/admin/src/features/trust-abuse/components/TrustAbusePage.tsx",
+        "apps/admin/src/features/trust-abuse/hooks/useTrustAbuse.ts",
+        "apps/admin/src/features/trust-abuse/index.ts",
+        "apps/admin/src/features/trust-abuse/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "users": {
       "web": [],
       "admin": [
@@ -1438,6 +1454,7 @@
       "apps/admin/src/app/(shell)/system-health/page.tsx",
       "apps/admin/src/app/(shell)/tenants/[id]/page.tsx",
       "apps/admin/src/app/(shell)/tenants/page.tsx",
+      "apps/admin/src/app/(shell)/trust-abuse/page.tsx",
       "apps/admin/src/app/(shell)/users/page.tsx",
       "apps/admin/src/app/callback/page.tsx",
       "apps/admin/src/app/layout.tsx",
@@ -1992,6 +2009,7 @@
     "undeclared domain 'system-health' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'tags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'tenants' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'trust-abuse' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'users' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'webhooks' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder"
   ],
