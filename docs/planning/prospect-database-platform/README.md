@@ -93,3 +93,8 @@ Scalability · Future Enhancements · **Implementation Checklist** · Rationale 
 
 - **2026-06-30:** Program opened. Phase 00 (Vision & Scope Reconciliation) drafted. Export Phase 1/2 backends
   (from the prior task) are shipped and folded into the current-state baseline.
+- **2026-06-30:** **Planning documentation COMPLETE** — Phases 00–10 drafted + internally consistent (vision →
+  research → audit → unified ingestion → processing/ER → knowledge-DB → extension → enrichment → DB-ops →
+  security/scale → implementation roadmap). The **documentation-first gate is reached**: implementation (stages
+  I0 → I7, per [`10-Implementation-Roadmap`](./10-Implementation-Roadmap.md)) begins **after review**, evidence
+  substrate (I0) first. All phases committed to `feat/data-mgmt-01-research-brief` (never `main`).
