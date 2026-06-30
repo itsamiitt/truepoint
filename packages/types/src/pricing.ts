@@ -47,7 +47,7 @@ export type PublicPlansResponse = z.infer<typeof publicPlansResponseSchema>;
  *  catalog, or null when the key has no active template. */
 export const tenantPlanEnvelopeSchema = z.object({
   plan: z.string(), // tenants.plan = plan_templates.key (denormalized, no FK)
-  planName: z.string().nullable(), // resolved active-template name, or null
+  planName: z.string().nullable(), // resolved template name (incl. grandfathered/retired), or null
   seatLimit: z.number().int(),
   seatsUsed: z.number().int(),
   workspaceLimit: z.number().int().nullable(), // null = unlimited

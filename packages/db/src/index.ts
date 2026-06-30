@@ -40,6 +40,7 @@ export {
   tenantMemberRepository,
   tenantDomainRepository,
   tenantRepository,
+  type TenantBillingProfile,
   tenantSsoConfigRepository,
   invitationRepository,
   type WorkspaceSummary,

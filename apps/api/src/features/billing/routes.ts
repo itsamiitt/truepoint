@@ -5,8 +5,19 @@
 
 import { env } from "@leadwolf/config";
 import { grantFromStripe, parseCreditGrantEvent, verifyStripeSignature } from "@leadwolf/core";
-import { creditRepository, revealRepository } from "@leadwolf/db";
-import { ForbiddenError, ValidationError } from "@leadwolf/types";
+import {
+  creditRepository,
+  planTemplateRepository,
+  revealRepository,
+  tenantRepository,
+  withPlatformReadTx,
+} from "@leadwolf/db";
+import {
+  ForbiddenError,
+  NotFoundError,
+  type TenantPlanEnvelope,
+  ValidationError,
+} from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
@@ -48,6 +59,30 @@ creditsRoutes.use("*", tenancy);
 creditsRoutes.get("/balance", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const balance = await creditRepository.getBalance({ tenantId: c.get("tenantId") });
   return c.json({ balance });
+});
+
+// The tenant's plan + credits + live seat/workspace usage — the web billing hub plan tiles (replaces the
+// null-tolerant GET /tenants/me the web client used to probe). RLS-scoped read of the tenant's own row; the
+// plan display NAME is resolved against the owner-only plan-template catalog (non-PII), incl. grandfathered keys.
+creditsRoutes.get("/me", requireRole("owner", "admin", "member", "viewer"), async (c) => {
+  const tenantId = c.get("tenantId");
+  const profile = await tenantRepository.getBillingProfile(tenantId);
+  if (!profile) throw new NotFoundError("Tenant not found.");
+  const planName = await withPlatformReadTx(async (tx) => {
+    const tpl = await planTemplateRepository.getByKey(tx, profile.plan);
+    return tpl?.name ?? null;
+  });
+  const plan: TenantPlanEnvelope = {
+    plan: profile.plan,
+    planName,
+    seatLimit: profile.seatLimit,
+    seatsUsed: profile.seatsUsed,
+    workspaceLimit: profile.workspaceLimit,
+    workspacesUsed: profile.workspacesUsed,
+    revealCreditBalance: profile.revealCreditBalance,
+    features: profile.features,
+  };
+  return c.json({ plan });
 });
 
 creditsRoutes.get("/usage", requireRole("owner", "admin", "member", "viewer"), async (c) => {
