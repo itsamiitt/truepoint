@@ -9,6 +9,7 @@ import { BUILTIN_VALIDATION_RULES } from "./builtins.ts";
 /** The minimal rule shape the engine needs — built-in constants and validation_rules DB rows both satisfy it. */
 export interface ValidationRuleSpec {
   id: string;
+  name: string;
   field: string;
   checkType: ValidationCheckType;
   config: ValidationRuleConfig;

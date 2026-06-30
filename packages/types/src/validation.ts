@@ -26,7 +26,7 @@ export type ValidationRuleConfig = z.infer<typeof validationRuleConfigSchema>;
 /** A global validation rule: which canonical field to check, the check, its config, and whether it's active.
  *  `field` is a canonical contact field key (e.g. "email", "firstName", "company"). */
 export const validationRuleSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().min(1), // a uuid for custom rules; a "builtin:*" key for the code-defined built-ins
   name: z.string().min(1).max(120),
   field: z.string().min(1).max(60),
   checkType: validationCheckType,

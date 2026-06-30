@@ -10,6 +10,7 @@
 // in the SAME tx) and is PLATFORM_READ_LIMIT-bounded. METADATA + tallies ONLY — the repo reads the import_jobs /
 // retention_runs CONTROL tables, never import_job_rows, so no imported contact PII crosses the boundary
 // (truepoint-security: a cross-tenant admin read exposes counts, not records).
+import { BUILTIN_VALIDATION_RULES } from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
   platformAdminRepository,
@@ -25,6 +26,9 @@ import {
   createApprovalSchema,
   decideApprovalSchema,
   retentionEnforceParamsSchema,
+  toggleValidationRuleSchema,
+  upsertValidationRuleSchema,
+  validationRuleSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
@@ -60,6 +64,37 @@ function toApprovalView(r: ApprovalRow) {
     createdAt: r.createdAt.toISOString(),
   };
 }
+
+// One custom validation_rules row → the shared ValidationRule view (builtin=false; ISO dates).
+type ValidationRuleRow = Awaited<ReturnType<typeof platformAdminRepository.listValidationRules>>[number];
+
+function toValidationRuleView(r: ValidationRuleRow) {
+  return {
+    id: r.id,
+    name: r.name,
+    field: r.field,
+    checkType: r.checkType,
+    config: (r.config ?? {}) as Record<string, unknown>,
+    enabled: r.enabled,
+    builtin: false,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  };
+}
+
+// The built-in checks as ValidationRule views — always-on, read-only (builtin=true). A fixed epoch timestamp
+// since they are code constants, not rows; the api prepends them to the custom rules in the list.
+const BUILTIN_RULE_VIEWS = BUILTIN_VALIDATION_RULES.map((b) => ({
+  id: b.id,
+  name: b.name,
+  field: b.field,
+  checkType: b.checkType,
+  config: b.config as Record<string, unknown>,
+  enabled: true,
+  builtin: true,
+  createdAt: "1970-01-01T00:00:00.000Z",
+  updatedAt: "1970-01-01T00:00:00.000Z",
+}));
 
 // Shared approve/reject handler — the CHECKER path (data:review). The decision + its refusals all run INSIDE the
 // withPlatformTx fn, so a refusal (not found / not pending / self-approval) throws and rolls the audit row back
@@ -307,3 +342,97 @@ dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), asyn
 dataRoutes.post("/approvals/:id/reject", requireCapability("data:review"), (c) =>
   decideApprovalRoute(c, "rejected", "data.approval.reject"),
 );
+
+// ── Data-quality validation rules (database-management-research 06) — the global rule set the import pipeline
+// enforces (reject-on-fail). The built-in checks are code constants (read-only); staff author CUSTOM rules here.
+// List = data:read; create/update/toggle/delete = data:manage. All writes run on the audited withPlatformTx
+// (data.validation_rule.*). config carries the per-check settings (pattern / maxLength / allowed).
+
+/** List the active rules — built-in checks + custom rules. data:read. */
+dataRoutes.get("/validation/rules", requireCapability("data:read"), async (c) => {
+  const custom = await withPlatformTx(actorOf(c), "admin.data_validation_rules", (tx) =>
+    platformAdminRepository.listValidationRules(tx),
+  );
+  const rules = [...BUILTIN_RULE_VIEWS, ...custom.map(toValidationRuleView)];
+  return c.json({ rules: validationRuleSchema.array().parse(rules) });
+});
+
+/** Create a custom rule (the rule-builder). data:manage. Audited data.validation_rule.create. */
+dataRoutes.post("/validation/rules", requireCapability("data:manage"), async (c) => {
+  const parsed = upsertValidationRuleSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const view = await withPlatformTx(
+    actorOf(c),
+    "data.validation_rule.create",
+    (tx) =>
+      platformAdminWriteRepository
+        .createValidationRule(tx, {
+          name: parsed.data.name,
+          field: parsed.data.field,
+          checkType: parsed.data.checkType,
+          config: parsed.data.config,
+          enabled: parsed.data.enabled,
+        })
+        .then(toValidationRuleView),
+    { targetType: "validation_rule", metadata: { field: parsed.data.field, checkType: parsed.data.checkType } },
+  );
+  return c.json({ rule: validationRuleSchema.parse(view) });
+});
+
+/** Update a custom rule. data:manage. Audited. Built-in ids (builtin:*) are not UUIDs → a clean 422. */
+dataRoutes.put("/validation/rules/:id", requireCapability("data:manage"), async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID (built-in rules cannot be edited)");
+  const parsed = upsertValidationRuleSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "data.validation_rule.update",
+    async (tx) => {
+      const n = await platformAdminWriteRepository.updateValidationRule(tx, id, {
+        name: parsed.data.name,
+        field: parsed.data.field,
+        checkType: parsed.data.checkType,
+        config: parsed.data.config,
+        enabled: parsed.data.enabled,
+      });
+      if (n === 0) throw new NotFoundError("Validation rule not found.");
+    },
+    { targetType: "validation_rule", targetId: id },
+  );
+  return c.json({ ok: true, id });
+});
+
+/** Enable/disable a custom rule. data:manage. Audited. */
+dataRoutes.post("/validation/rules/:id/toggle", requireCapability("data:manage"), async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  const parsed = toggleValidationRuleSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "data.validation_rule.toggle",
+    async (tx) => {
+      const n = await platformAdminWriteRepository.setValidationRuleEnabled(tx, id, parsed.data.enabled);
+      if (n === 0) throw new NotFoundError("Validation rule not found.");
+    },
+    { targetType: "validation_rule", targetId: id, metadata: { enabled: parsed.data.enabled } },
+  );
+  return c.json({ ok: true, id, enabled: parsed.data.enabled });
+});
+
+/** Delete a custom rule (built-ins can't be deleted — they're code constants). data:manage. Audited. */
+dataRoutes.delete("/validation/rules/:id", requireCapability("data:manage"), async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID (built-in rules cannot be deleted)");
+  await withPlatformTx(
+    actorOf(c),
+    "data.validation_rule.delete",
+    async (tx) => {
+      const n = await platformAdminWriteRepository.deleteValidationRule(tx, id);
+      if (n === 0) throw new NotFoundError("Validation rule not found.");
+    },
+    { targetType: "validation_rule", targetId: id },
+  );
+  return c.json({ ok: true, id });
+});

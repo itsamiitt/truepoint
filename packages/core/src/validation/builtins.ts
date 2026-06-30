@@ -5,7 +5,13 @@
 import type { ValidationRuleSpec } from "./runRules.ts";
 
 export const BUILTIN_VALIDATION_RULES: ValidationRuleSpec[] = [
-  { id: "builtin:email-required", field: "email", checkType: "required", config: {} },
-  { id: "builtin:email-format", field: "email", checkType: "email_format", config: {} },
-  { id: "builtin:first-name-required", field: "firstName", checkType: "required", config: {} },
+  { id: "builtin:email-required", name: "Email required", field: "email", checkType: "required", config: {} },
+  { id: "builtin:email-format", name: "Valid email format", field: "email", checkType: "email_format", config: {} },
+  {
+    id: "builtin:first-name-required",
+    name: "First name required",
+    field: "firstName",
+    checkType: "required",
+    config: {},
+  },
 ];

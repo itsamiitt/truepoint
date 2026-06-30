@@ -10,7 +10,8 @@ import type { Tx } from "../client.ts";
 import { tenants, users } from "../schema/auth.ts";
 import { dsarRequests } from "../schema/compliance.ts";
 import { approvalRequests } from "../schema/platformOps.ts";
-import type { PlatformApprovalRow } from "./platformAdminReads.ts";
+import { validationRules } from "../schema/validationRules.ts";
+import type { PlatformApprovalRow, PlatformValidationRuleRow } from "./platformAdminReads.ts";
 
 /** A tenant's lifecycle status the staff console can set (13 §3.1). */
 export type TenantLifecycleStatus = "active" | "suspended";
@@ -306,5 +307,63 @@ export const platformAdminWriteRepository = {
       .update(approvalRequests)
       .set({ status: "executed", executedAt: new Date() })
       .where(eq(approvalRequests.id, id));
+  },
+
+  /** Create a CUSTOM data-quality validation rule (the rule-builder, data:manage). Returns the created row. */
+  async createValidationRule(
+    tx: Tx,
+    input: { name: string; field: string; checkType: string; config: unknown; enabled: boolean },
+  ): Promise<PlatformValidationRuleRow> {
+    const [row] = await tx
+      .insert(validationRules)
+      .values({
+        name: input.name,
+        field: input.field,
+        checkType: input.checkType,
+        config: input.config as Record<string, unknown>,
+        enabled: input.enabled,
+      })
+      .returning();
+    return row as PlatformValidationRuleRow;
+  },
+
+  /** Update a custom rule. Returns rows touched (0 = unknown id, so the caller raises a 404). */
+  async updateValidationRule(
+    tx: Tx,
+    id: string,
+    input: { name: string; field: string; checkType: string; config: unknown; enabled: boolean },
+  ): Promise<number> {
+    const updated = await tx
+      .update(validationRules)
+      .set({
+        name: input.name,
+        field: input.field,
+        checkType: input.checkType,
+        config: input.config as Record<string, unknown>,
+        enabled: input.enabled,
+        updatedAt: new Date(),
+      })
+      .where(eq(validationRules.id, id))
+      .returning({ id: validationRules.id });
+    return updated.length;
+  },
+
+  /** Enable/disable a custom rule. Returns rows touched (0 = unknown id → 404). */
+  async setValidationRuleEnabled(tx: Tx, id: string, enabled: boolean): Promise<number> {
+    const updated = await tx
+      .update(validationRules)
+      .set({ enabled, updatedAt: new Date() })
+      .where(eq(validationRules.id, id))
+      .returning({ id: validationRules.id });
+    return updated.length;
+  },
+
+  /** Delete a custom rule (built-ins aren't rows, so can't be deleted). Returns rows touched (0 = unknown → 404). */
+  async deleteValidationRule(tx: Tx, id: string): Promise<number> {
+    const deleted = await tx
+      .delete(validationRules)
+      .where(eq(validationRules.id, id))
+      .returning({ id: validationRules.id });
+    return deleted.length;
   },
 };

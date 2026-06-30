@@ -14,6 +14,7 @@ import { importJobChunks, importJobs } from "../schema/importJobs.ts";
 import { listMembers, lists } from "../schema/lists.ts";
 import { approvalRequests } from "../schema/platformOps.ts";
 import { retentionRuns } from "../schema/retention.ts";
+import { validationRules } from "../schema/validationRules.ts";
 import { verificationJobs } from "../schema/verificationJobs.ts";
 
 /** The cross-tenant read cap — mirrors the bound the api admin routes already enforce (ADR-0032). */
@@ -237,6 +238,19 @@ export interface PlatformApprovalRow {
   expiresAt: Date;
   executedAt: Date | null;
   createdAt: Date;
+}
+
+/** One CUSTOM data-quality validation rule row (database-management-research 06). The built-in checks are code
+ *  constants (@leadwolf/core), not rows; this is a custom rule the rule-builder created. config is untyped jsonb. */
+export interface PlatformValidationRuleRow {
+  id: string;
+  name: string;
+  field: string;
+  checkType: string;
+  config: unknown;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 /**
@@ -697,6 +711,27 @@ export const platformAdminRepository = {
       .where(eq(approvalRequests.status, "pending"))
       .orderBy(desc(approvalRequests.id))
       .limit(Math.min(limit, PLATFORM_READ_LIMIT));
+  },
+
+  /**
+   * Every CUSTOM data-quality validation rule (database-management-research 06), ordered by field then name. The
+   * built-in checks are code constants (@leadwolf/core; the api prepends them) — this returns only validation_rules
+   * rows. A GLOBAL platform read (no tenant scope); runs on the caller's audited withPlatformTx.
+   */
+  async listValidationRules(tx: Tx): Promise<PlatformValidationRuleRow[]> {
+    return tx
+      .select({
+        id: validationRules.id,
+        name: validationRules.name,
+        field: validationRules.field,
+        checkType: validationRules.checkType,
+        config: validationRules.config,
+        enabled: validationRules.enabled,
+        createdAt: validationRules.createdAt,
+        updatedAt: validationRules.updatedAt,
+      })
+      .from(validationRules)
+      .orderBy(asc(validationRules.field), asc(validationRules.name));
   },
 
   /**
