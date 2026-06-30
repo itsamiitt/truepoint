@@ -16,10 +16,12 @@ import {
   bulkEnrich,
   bulkExportCsv,
   bulkRemoveTags,
+  bulkRevealExport,
   estimateBulkSpend,
 } from "@leadwolf/core";
 import {
   ForbiddenError,
+  NotFoundError,
   ValidationError,
   bulkArchiveSchema,
   bulkAssignOwnerSchema,
@@ -33,6 +35,7 @@ import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
+import { bulkFileStore } from "../import/bulkStore.ts";
 
 export const contactsBulkRoutes = new Hono<{ Variables: RoleVariables }>();
 
@@ -193,4 +196,65 @@ contactsBulkRoutes.post("/export", async (c) => {
   c.header("content-disposition", `attachment; filename="contacts-export-${affected}.csv"`);
   c.header("x-affected-count", String(affected));
   return c.body(csv, 200);
+});
+
+/**
+ * POST /contacts/bulk/export/revealed — REVEALED CSV export (decrypted email/phone) of the selection. Each contact
+ * is revealed THROUGH the gated reveal path (suppression-checked, charged per newly-revealed contact, audited);
+ * suppressed contacts are EXCLUDED from the file. Viewer is denied in core (403). The CSV is written through the
+ * FileStore (dev disk; prod S3); this returns the export id + counts. SPEND: the UI MUST call /estimate
+ * (action:'reveal') first and confirm — this charges credits for newly-revealed contacts. Download via
+ * GET /export/revealed/:exportId. (v1: explicit { contactIds } only; criteria/select-all is a follow-up.)
+ */
+contactsBulkRoutes.post("/export/revealed", async (c) => {
+  const workspaceId = requireWorkspace(c);
+  const parsed = bulkExportSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError("Body must be one of { contactIds | criteria }.");
+  if (!parsed.data.contactIds || parsed.data.contactIds.length === 0)
+    throw new ValidationError("A revealed export requires an explicit { contactIds } selection.");
+  const exportId = crypto.randomUUID();
+  const result = await bulkRevealExport({
+    scope: { tenantId: c.get("tenantId"), workspaceId },
+    callerUserId: c.get("claims").sub,
+    role: c.get("role"),
+    contactIds: parsed.data.contactIds,
+    fileStore: bulkFileStore(),
+    exportKey: `exports/${workspaceId}/${exportId}.csv`,
+  });
+  return c.json(
+    {
+      exportId,
+      exported: result.exported,
+      suppressedExcluded: result.suppressedExcluded,
+      selected: result.selected,
+    },
+    200,
+  );
+});
+
+/**
+ * GET /contacts/bulk/export/revealed/:exportId — stream a previously-generated revealed CSV. The object key is
+ * scoped to the CALLER's workspace (from the verified token, NEVER the client), so one workspace can never fetch
+ * another's export. A missing / foreign id → 404. (v1 buffers the bounded file; streaming is a follow-up.)
+ */
+contactsBulkRoutes.get("/export/revealed/:exportId", async (c) => {
+  const workspaceId = requireWorkspace(c);
+  if (c.get("role") === "viewer")
+    throw new ForbiddenError("insufficient_role", "Your role does not allow downloading exports.");
+  const exportId = c.req.param("exportId");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(exportId))
+    throw new ValidationError("exportId must be a UUID.");
+  const key = `exports/${workspaceId}/${exportId}.csv`;
+  let bytes: Uint8Array;
+  try {
+    const stream = await bulkFileStore().getObjectStream(key);
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    bytes = Buffer.concat(chunks);
+  } catch {
+    throw new NotFoundError("Export not found.");
+  }
+  c.header("content-type", "text/csv; charset=utf-8");
+  c.header("content-disposition", `attachment; filename="contacts-revealed-${exportId}.csv"`);
+  return c.body(bytes, 200);
 });
