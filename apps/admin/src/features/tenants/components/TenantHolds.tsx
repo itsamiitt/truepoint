@@ -8,6 +8,7 @@ import { useStaffMe } from "@/lib/staffMe";
 import { accountHoldKind } from "@leadwolf/types";
 import {
   Card,
+  Dialog,
   StateSwitch,
   StatusBadge,
   TpButton,
@@ -35,6 +36,8 @@ export function TenantHolds({ tenantId }: { tenantId: string }) {
   const [kind, setKind] = useState<string>("fraud");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [liftTarget, setLiftTarget] = useState<AccountHold | null>(null);
+  const [lifting, setLifting] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -71,13 +74,18 @@ export function TenantHolds({ tenantId }: { tenantId: string }) {
     }
   }
 
-  async function onLift(hold: AccountHold) {
+  async function onConfirmLift() {
+    if (!liftTarget) return;
+    setLifting(true);
     try {
-      await liftTenantHold(tenantId, hold.id);
+      await liftTenantHold(tenantId, liftTarget.id);
       toast.success("Hold lifted.");
+      setLiftTarget(null);
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not lift the hold");
+    } finally {
+      setLifting(false);
     }
   }
 
@@ -174,7 +182,7 @@ export function TenantHolds({ tenantId }: { tenantId: string }) {
                     </div>
                   </div>
                   {active && canManage ? (
-                    <TpButton variant="ghost" size="sm" onClick={() => void onLift(h)}>
+                    <TpButton variant="ghost" size="sm" onClick={() => setLiftTarget(h)}>
                       Lift
                     </TpButton>
                   ) : null}
@@ -184,6 +192,27 @@ export function TenantHolds({ tenantId }: { tenantId: string }) {
           })}
         </div>
       </StateSwitch>
+
+      <Dialog
+        open={!!liftTarget}
+        onClose={() => !lifting && setLiftTarget(null)}
+        title="Lift account hold?"
+        description={
+          liftTarget
+            ? `Lift the "${liftTarget.kind}" hold on this org? The abuse/fraud flag is removed and the org is no longer held. This is audited.`
+            : undefined
+        }
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="secondary" onClick={() => setLiftTarget(null)} disabled={lifting}>
+              Cancel
+            </TpButton>
+            <TpButton variant="danger" onClick={() => void onConfirmLift()} disabled={lifting}>
+              {lifting ? "Lifting…" : "Lift hold"}
+            </TpButton>
+          </div>
+        }
+      />
     </div>
   );
 }

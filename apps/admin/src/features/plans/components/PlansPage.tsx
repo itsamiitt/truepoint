@@ -68,6 +68,7 @@ export function PlansPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
+  const [retireTarget, setRetireTarget] = useState<PlanTemplate | null>(null);
 
   function openNew() {
     setDraft({ ...EMPTY });
@@ -225,7 +226,10 @@ export function PlansPage() {
               variant="ghost"
               size="sm"
               disabled={togglingKey === t.key}
-              onClick={() => void onToggle(t)}
+              onClick={() => {
+                if (t.active) setRetireTarget(t);
+                else void onToggle(t);
+              }}
             >
               {t.active ? "Retire" : "Offer"}
             </TpButton>
@@ -354,6 +358,33 @@ export function PlansPage() {
           </div>
         ) : null}
       </Dialog>
+
+      <Dialog
+        open={!!retireTarget}
+        onClose={() => setRetireTarget(null)}
+        title="Retire this plan?"
+        description={
+          retireTarget
+            ? `Retire "${retireTarget.name}"? It is removed from the offered catalog and can no longer be applied to a tenant (you can re-offer it later). This is audited.`
+            : undefined
+        }
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="secondary" onClick={() => setRetireTarget(null)}>
+              Cancel
+            </TpButton>
+            <TpButton
+              variant="danger"
+              onClick={() => {
+                if (retireTarget) void onToggle(retireTarget);
+                setRetireTarget(null);
+              }}
+            >
+              Retire plan
+            </TpButton>
+          </div>
+        }
+      />
     </div>
   );
 }
