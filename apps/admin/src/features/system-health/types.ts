@@ -16,7 +16,20 @@ export interface JobsHealth {
   deadLetter: number;
 }
 
+/** One live BullMQ queue reading. Counts are null (NOT 0) when the queue was unreachable — an honest
+ *  "unknown", never a fabricated empty queue. Mirrors the api QueueReport. */
+export interface QueueReport {
+  name: string;
+  waiting: number | null;
+  active: number | null;
+  failed: number | null;
+  delayed: number | null;
+  workers: number | null;
+  reachable: boolean;
+}
+
 export interface SystemHealth {
   services: ServiceHealth[];
+  queues: QueueReport[];
   jobs: JobsHealth;
 }
