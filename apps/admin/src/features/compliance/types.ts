@@ -30,3 +30,15 @@ export interface RetentionPolicy {
   active: boolean;
   updatedAt: string;
 }
+
+/** A staff-published sub-processor (GDPR Art. 28, 13a Area 8). Mirrors `/admin/compliance/sub-processors`. */
+export interface SubProcessor {
+  id: string;
+  name: string;
+  purpose: string;
+  location: string;
+  dpaUrl: string | null;
+  active: boolean;
+  sortOrder: number;
+  updatedAt: string;
+}

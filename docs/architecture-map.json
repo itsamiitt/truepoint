@@ -81,8 +81,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1151,
-  "fileSetHash": "sha256:e8529404c4da5e876790197d047029cb428310b9c40d38cb66f3cfbbc2524d71",
+  "fileCount": 1153,
+  "fileSetHash": "sha256:5bf3c3af96b52ed3b3204302e18ab9ea7f2aeefe75d95005c99d29abc3e5e214",
   "features": {
     "account-search": {
       "web": [],
@@ -236,6 +236,7 @@
         "apps/admin/src/features/compliance/components/CompliancePage.tsx",
         "apps/admin/src/features/compliance/components/GlobalSuppression.tsx",
         "apps/admin/src/features/compliance/components/RetentionPolicies.tsx",
+        "apps/admin/src/features/compliance/components/SubProcessors.tsx",
         "apps/admin/src/features/compliance/hooks/useCompliance.ts",
         "apps/admin/src/features/compliance/index.ts",
         "apps/admin/src/features/compliance/types.ts"
@@ -1932,6 +1933,7 @@
     "packages/db/src/repositories/sendingDomainRepository.ts",
     "packages/db/src/repositories/ssoConfigRepository.ts",
     "packages/db/src/repositories/staffRepository.ts",
+    "packages/db/src/repositories/subProcessorRepository.ts",
     "packages/db/src/repositories/supportNoteRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",
     "packages/db/src/repositories/webhookRepository.ts"

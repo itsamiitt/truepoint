@@ -24,6 +24,7 @@ import { useCompliance } from "../hooks/useCompliance";
 import type { DsarRequest } from "../types";
 import { GlobalSuppression } from "./GlobalSuppression";
 import { RetentionPolicies } from "./RetentionPolicies";
+import { SubProcessors } from "./SubProcessors";
 
 const STATUSES = ["received", "verifying", "processing", "completed", "rejected"];
 
@@ -222,6 +223,7 @@ export function CompliancePage() {
 
       <GlobalSuppression />
       <RetentionPolicies />
+      <SubProcessors />
     </div>
   );
 }
