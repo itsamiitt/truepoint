@@ -81,8 +81,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1153,
-  "fileSetHash": "sha256:5bf3c3af96b52ed3b3204302e18ab9ea7f2aeefe75d95005c99d29abc3e5e214",
+  "fileCount": 1154,
+  "fileSetHash": "sha256:8853436287ef14957d2862c2be7907097512c93da3e33e37b3d9e56047109353",
   "features": {
     "account-search": {
       "web": [],
@@ -1700,6 +1700,7 @@
       "packages/db/src/repositories/platformAuditReads.ts",
       "packages/db/src/repositories/platformBillingReads.ts",
       "packages/db/src/repositories/platformComplianceReads.ts",
+      "packages/db/src/repositories/platformDataQualityReads.ts",
       "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/auth.ts",
       "packages/db/src/schema/billing.ts",
