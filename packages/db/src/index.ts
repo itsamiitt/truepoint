@@ -321,6 +321,13 @@ export {
   type EconomicsAggregate,
   type PlatformPurchaseRow,
 } from "./repositories/platformBillingReads.ts";
+// Platform data-quality reads (P5 cockpit) — cross-tenant DQ rollup + re-verification ledger, within withPlatformTx.
+export {
+  platformDataQualityReadRepository,
+  type DataQualityRollup,
+  type VerificationRunRow,
+  type VerificationTotals,
+} from "./repositories/platformDataQualityReads.ts";
 // Platform compliance-ops reads (13a Area 8) — global DSAR queue (PII-free), run within withPlatformTx.
 export {
   platformComplianceReadRepository,

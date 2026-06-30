@@ -15,6 +15,7 @@ import {
   platformAdminRepository,
   platformAdminWriteRepository,
   platformBillingReadRepository,
+  platformDataQualityReadRepository,
   platformStaffRepository,
   retentionClassPolicyRepository,
   supportNoteRepository,
@@ -657,6 +658,51 @@ adminRoutes.get("/system-health", async (c) => {
       byStatus,
       queueDepth,
       deadLetter,
+    },
+  });
+});
+
+// ── Data-quality cockpit (P5; 10 §5 Data Health + PLAN_06 re-verification) — cross-tenant DQ observability: the
+// platform-wide rollup of the latest per-workspace data_quality_snapshots + the recent re-verification ledger.
+// Read-only and coarse-gated (any staff, like /system-health); `admin.data_quality` is a plain withPlatformTx
+// read string, deliberately NOT in the mutation enum. NON-PII — counts only, never contact rows. ──
+adminRoutes.get("/data-quality", async (c) => {
+  const rawDays = Number(c.req.query("days") ?? "30");
+  const days = Number.isInteger(rawDays) && rawDays >= 1 && rawDays <= 365 ? rawDays : 30;
+  const since = new Date(Date.now() - days * 86_400_000);
+  const data = await withPlatformTx(actorOf(c), "admin.data_quality", async (tx) => {
+    // Sequential — one tx is one connection; no concurrent statements on it.
+    const rollup = await platformDataQualityReadRepository.rollup(tx);
+    const totals = await platformDataQualityReadRepository.verificationTotals(tx, since);
+    const recentRuns = await platformDataQualityReadRepository.recentVerificationRuns(
+      tx,
+      PLATFORM_READ_LIMIT,
+    );
+    return { rollup, totals, recentRuns };
+  });
+  return c.json({
+    windowDays: days,
+    rollup: {
+      workspaces: data.rollup.workspaces,
+      latestAt: data.rollup.latestAt ? data.rollup.latestAt.toISOString() : null,
+      total: data.rollup.total,
+      withEmail: data.rollup.withEmail,
+      withPhone: data.rollup.withPhone,
+      emailValid: data.rollup.emailValid,
+      fresh: data.rollup.fresh,
+      stale: data.rollup.stale,
+      neverVerified: data.rollup.neverVerified,
+    },
+    verification: {
+      totals: data.totals,
+      recentRuns: data.recentRuns.map((r) => ({
+        tenantId: r.tenantId,
+        tenantName: r.tenantName,
+        finishedAt: r.finishedAt.toISOString(),
+        scanned: r.scanned,
+        reverified: r.reverified,
+        errored: r.errored,
+      })),
     },
   });
 });
