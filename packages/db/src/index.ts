@@ -105,6 +105,13 @@ export {
   validationRuleRepository,
   type ImportValidationRule,
 } from "./repositories/validationRuleRepository.ts";
+// Evidence substrate writers (prospect-database-platform I0 / audit P01) — append-only source_records + match_links;
+// the survivorship projection (Phase 05) reads them. Additive; wired behind INGESTION_EVIDENCE_ENABLED.
+export {
+  evidenceRepository,
+  type SourceRecordInput,
+  type MatchLinkInput,
+} from "./repositories/evidenceRepository.ts";
 // Retention SHADOW sweep COUNT layer (data-management backlog #6, phase 2) — the per-class candidate counter (a
 // cross-tenant OWNER read with an explicit tenant predicate; COUNTS only, no deletion) + the fixed table/aging/
 // scope META phase 3's deleters reuse + the active-tenant fleet enumeration the sweep fans out over.

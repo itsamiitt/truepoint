@@ -182,6 +182,15 @@ export const appEnvSchema = z
     // The sync→bulk promotion threshold (rows): an import larger than this is steered onto the bulk pipeline
     // rather than the inline `imports` queue. Consumed by the promotion logic; a sensible default until tuned.
     BULK_IMPORT_THRESHOLD_ROWS: z.coerce.number().int().positive().default(5000),
+    // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
+    // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
+    // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the
+    // golden landing stays byte-identical. Flipping it to authoritative (the survivorship projector reads the log)
+    // is a SEPARATE, CI-parity-gated step. Same explicit-"true"-only posture as BULK_IMPORT_ENABLED.
+    INGESTION_EVIDENCE_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
   })
   .superRefine((val, ctx) => {
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.
