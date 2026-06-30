@@ -111,6 +111,7 @@ export function DataQualityPage() {
         <TpSelect
           aria-label="Window"
           value={String(days)}
+          disabled={loading}
           onChange={(e) => applyDays(Number(e.currentTarget.value))}
         >
           {WINDOWS.map((w) => (

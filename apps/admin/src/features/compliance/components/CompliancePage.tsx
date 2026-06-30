@@ -54,14 +54,16 @@ export function CompliancePage() {
     d: DsarRequest,
     next: "verifying" | "processing" | "rejected",
     reason?: string,
-  ) {
+  ): Promise<boolean> {
     setBusyId(d.id);
     try {
       await transitionDsar(d.id, next, reason);
       toast.success(`DSAR marked ${next}.`);
       await reload();
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the DSAR");
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -74,9 +76,12 @@ export function CompliancePage() {
       toast.error("Enter a rejection reason (min 3 characters).");
       return;
     }
-    await transition(rejecting, "rejected", r);
-    setRejecting(null);
-    setRejectReason("");
+    // Only close the dialog + clear the reason if the reject actually succeeded — a failed reject must keep
+    // the dialog open with the typed reason so the operator can retry, not silently lose it.
+    if (await transition(rejecting, "rejected", r)) {
+      setRejecting(null);
+      setRejectReason("");
+    }
   }
 
   const columns: Column<DsarRequest>[] = [

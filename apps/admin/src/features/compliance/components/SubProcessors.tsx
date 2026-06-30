@@ -93,8 +93,8 @@ export function SubProcessors() {
       return;
     }
     const sortOrder = Number(draft.sortOrder);
-    if (!Number.isInteger(sortOrder) || sortOrder < 0) {
-      toast.error("Sort order must be a whole number ≥ 0.");
+    if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 100000) {
+      toast.error("Sort order must be a whole number between 0 and 100000.");
       return;
     }
     const input = { name, purpose, location, dpaUrl: dpaUrl || undefined, sortOrder };

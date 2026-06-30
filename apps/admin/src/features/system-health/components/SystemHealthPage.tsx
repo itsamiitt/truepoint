@@ -100,7 +100,13 @@ export function SystemHealthPage() {
       key: "saturation",
       header: "Saturation",
       align: "right",
-      sortValue: (q) => (q.reachable && q.workers ? (q.active ?? 0) / q.workers : -1),
+      // Match the displayed value's ordering: a reachable queue with active work but ZERO workers is "∞"
+      // (max saturation) and must sort LAST, not first. Unreachable → -1 (sorts before any real reading).
+      sortValue: (q) => {
+        if (!q.reachable || q.active == null) return -1;
+        const w = q.workers ?? 0;
+        return w > 0 ? q.active / w : q.active > 0 ? Number.POSITIVE_INFINITY : 0;
+      },
       cell: (q) => saturation(q),
     },
   ];

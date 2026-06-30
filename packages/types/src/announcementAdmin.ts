@@ -33,6 +33,13 @@ export const announcementUpsertSchema = z
   .refine((v) => (v.audience === "all" ? v.tenantTarget == null : v.tenantTarget != null), {
     message: "audience 'tenant' requires a tenantTarget; audience 'all' must omit it",
     path: ["tenantTarget"],
+  })
+  // A maintenance notice IS the site-wide critical, non-dismissible banner — enforce that contract here so a
+  // crafted request can't create a `maintenance` row that is not critical/all (the apps/web banner keys on
+  // `type` and renders it non-dismissible; a non-critical/tenant-scoped one would be an inconsistent surprise).
+  .refine((v) => v.type !== "maintenance" || (v.level === "critical" && v.audience === "all"), {
+    message: "A 'maintenance' announcement must be level 'critical' and audience 'all'.",
+    path: ["type"],
   });
 export type AnnouncementUpsertInput = z.infer<typeof announcementUpsertSchema>;
 
