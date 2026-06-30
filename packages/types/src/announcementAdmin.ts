@@ -12,6 +12,10 @@ export type AnnouncementLevel = z.infer<typeof announcementLevel>;
 export const announcementAudience = z.enum(["all", "tenant"]);
 export type AnnouncementAudience = z.infer<typeof announcementAudience>;
 
+/** general = a normal banner; maintenance = a site-wide critical, non-dismissible maintenance notice (P4). */
+export const announcementType = z.enum(["general", "maintenance"]);
+export type AnnouncementType = z.infer<typeof announcementType>;
+
 /** Create or update an announcement. `startsAt`/`endsAt` bound the display window (null = open-ended). The
  *  audience ↔ tenantTarget coherence is enforced: an `all` announcement must omit a target; a `tenant` one
  *  must name it. */
@@ -20,6 +24,7 @@ export const announcementUpsertSchema = z
     title: z.string().trim().min(1).max(200),
     body: z.string().trim().min(1).max(4000),
     level: announcementLevel,
+    type: announcementType.default("general"),
     audience: announcementAudience,
     tenantTarget: z.string().uuid().nullable().default(null),
     startsAt: z.string().datetime().nullable().default(null),
@@ -28,6 +33,13 @@ export const announcementUpsertSchema = z
   .refine((v) => (v.audience === "all" ? v.tenantTarget == null : v.tenantTarget != null), {
     message: "audience 'tenant' requires a tenantTarget; audience 'all' must omit it",
     path: ["tenantTarget"],
+  })
+  // A maintenance notice IS the site-wide critical, non-dismissible banner — enforce that contract here so a
+  // crafted request can't create a `maintenance` row that is not critical/all (the apps/web banner keys on
+  // `type` and renders it non-dismissible; a non-critical/tenant-scoped one would be an inconsistent surprise).
+  .refine((v) => v.type !== "maintenance" || (v.level === "critical" && v.audience === "all"), {
+    message: "A 'maintenance' announcement must be level 'critical' and audience 'all'.",
+    path: ["type"],
   });
 export type AnnouncementUpsertInput = z.infer<typeof announcementUpsertSchema>;
 
@@ -41,6 +53,7 @@ export const announcementViewSchema = z.object({
   title: z.string(),
   body: z.string(),
   level: announcementLevel,
+  type: announcementType,
   audience: announcementAudience,
   tenantTarget: z.string().uuid().nullable(),
   startsAt: z.string().nullable(),
@@ -57,5 +70,6 @@ export const activeAnnouncementSchema = z.object({
   title: z.string(),
   body: z.string(),
   level: announcementLevel,
+  type: announcementType,
 });
 export type ActiveAnnouncement = z.infer<typeof activeAnnouncementSchema>;

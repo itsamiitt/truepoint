@@ -28,6 +28,8 @@ export const platformAuditAction = z.enum([
   "feature_flag.set",
   "provider_config.update",
   "retention_policy.set",
+  "dsar.transition",
+  "sub_processor.set",
   "audit.export",
   "staff.login",
   "staff.login.failure",

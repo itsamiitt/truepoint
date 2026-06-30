@@ -3,6 +3,8 @@
 // content:manage-gated api. Renders async state through the State Kit.
 "use client";
 
+import { TenantPicker } from "@/components/TenantPicker";
+import { useStaffMe } from "@/lib/staffMe";
 import {
   type Column,
   DataTable,
@@ -31,8 +33,10 @@ interface Draft {
   title: string;
   body: string;
   level: string;
+  type: string; // general | maintenance
   audience: string; // all | tenant
   tenantTarget: string;
+  tenantTargetName: string | null; // display name of the picked tenant when known (UX only)
   startsDate: string;
   endsDate: string;
 }
@@ -42,8 +46,10 @@ const EMPTY: Draft = {
   title: "",
   body: "",
   level: "info",
+  type: "general",
   audience: "all",
   tenantTarget: "",
+  tenantTargetName: null,
   startsDate: "",
   endsDate: "",
 };
@@ -61,8 +67,11 @@ function shortDate(iso: string | null): string {
 export function ContentPage() {
   const { announcements, loading, error, reload } = useContent();
   const toast = useToast();
+  const { canMaybe } = useStaffMe();
+  const canManage = canMaybe("content:manage");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   function openNew() {
     setDraft({ ...EMPTY });
@@ -73,8 +82,10 @@ export function ContentPage() {
       title: a.title,
       body: a.body,
       level: a.level,
+      type: a.type,
       audience: a.audience,
       tenantTarget: a.tenantTarget ?? "",
+      tenantTargetName: null,
       startsDate: a.startsAt ? a.startsAt.slice(0, 10) : "",
       endsDate: a.endsAt ? a.endsAt.slice(0, 10) : "",
     });
@@ -93,10 +104,16 @@ export function ContentPage() {
       toast.error("A tenant-targeted announcement needs a valid tenant UUID.");
       return;
     }
+    // yyyy-mm-dd strings sort chronologically, so a lexical compare guards an inverted display window.
+    if (draft.startsDate && draft.endsDate && draft.startsDate > draft.endsDate) {
+      toast.error("The start date must be on or before the end date.");
+      return;
+    }
     const input = {
       title,
       body,
       level: draft.level,
+      type: draft.type,
       audience: draft.audience,
       tenantTarget,
       startsAt: draft.startsDate ? `${draft.startsDate}T00:00:00.000Z` : null,
@@ -117,12 +134,15 @@ export function ContentPage() {
   }
 
   async function onToggle(a: Announcement) {
+    setTogglingId(a.id);
     try {
       await setAnnouncementActive(a.id, !a.active);
       toast.success(a.active ? "Announcement retired." : "Announcement shown.");
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the announcement");
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -171,16 +191,27 @@ export function ContentPage() {
       key: "actions",
       header: "",
       align: "right",
-      cell: (a) => (
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <TpButton variant="ghost" size="sm" onClick={() => openEdit(a)}>
-            Edit
-          </TpButton>
-          <TpButton variant="ghost" size="sm" onClick={() => void onToggle(a)}>
-            {a.active ? "Retire" : "Show"}
-          </TpButton>
-        </div>
-      ),
+      cell: (a) =>
+        canManage ? (
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingId === a.id}
+              onClick={() => openEdit(a)}
+            >
+              Edit
+            </TpButton>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingId === a.id}
+              onClick={() => void onToggle(a)}
+            >
+              {a.active ? "Retire" : "Show"}
+            </TpButton>
+          </div>
+        ) : null,
     },
   ];
 
@@ -193,7 +224,7 @@ export function ContentPage() {
             In-app announcements / banners shown to customers — to all tenants or a targeted org.
           </p>
         </div>
-        <TpButton onClick={openNew}>New announcement</TpButton>
+        {canManage ? <TpButton onClick={openNew}>New announcement</TpButton> : null}
       </div>
 
       <StateSwitch
@@ -247,12 +278,39 @@ export function ContentPage() {
                 onChange={(e) => setDraft({ ...draft, body: e.currentTarget.value })}
               />
             </Field>
+            <Field label="Type" htmlFor="a-type">
+              <TpSelect
+                id="a-type"
+                value={draft.type}
+                disabled={busy}
+                onChange={(e) => {
+                  const type = e.currentTarget.value;
+                  // A maintenance notice is always a site-wide critical banner — pin level/audience so the
+                  // authoring intent matches what apps/web renders (non-dismissible, every tenant).
+                  setDraft(
+                    type === "maintenance"
+                      ? {
+                          ...draft,
+                          type,
+                          level: "critical",
+                          audience: "all",
+                          tenantTarget: "",
+                          tenantTargetName: null,
+                        }
+                      : { ...draft, type },
+                  );
+                }}
+              >
+                <option value="general">General</option>
+                <option value="maintenance">Maintenance (site-wide, non-dismissible)</option>
+              </TpSelect>
+            </Field>
             <div style={{ display: "flex", gap: 12 }}>
               <Field label="Level" htmlFor="a-level" grow>
                 <TpSelect
                   id="a-level"
                   value={draft.level}
-                  disabled={busy}
+                  disabled={busy || draft.type === "maintenance"}
                   onChange={(e) => setDraft({ ...draft, level: e.currentTarget.value })}
                 >
                   {LEVELS.map((l) => (
@@ -266,7 +324,7 @@ export function ContentPage() {
                 <TpSelect
                   id="a-audience"
                   value={draft.audience}
-                  disabled={busy}
+                  disabled={busy || draft.type === "maintenance"}
                   onChange={(e) => setDraft({ ...draft, audience: e.currentTarget.value })}
                 >
                   <option value="all">All tenants</option>
@@ -275,13 +333,15 @@ export function ContentPage() {
               </Field>
             </div>
             {draft.audience === "tenant" ? (
-              <Field label="Tenant UUID" htmlFor="a-target">
-                <TpInput
+              <Field label="Target tenant" htmlFor="a-target">
+                <TenantPicker
                   id="a-target"
                   value={draft.tenantTarget}
-                  placeholder="tenant UUID"
+                  selectedName={draft.tenantTargetName}
                   disabled={busy}
-                  onChange={(e) => setDraft({ ...draft, tenantTarget: e.currentTarget.value })}
+                  onChange={(id, name) =>
+                    setDraft({ ...draft, tenantTarget: id, tenantTargetName: name })
+                  }
                 />
               </Field>
             ) : null}

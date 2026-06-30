@@ -9,12 +9,14 @@ import {
   Database,
   FileUp,
   Flag,
+  Gauge,
   Layers,
   Megaphone,
   Plug,
   ScrollText,
   ShieldAlert,
   ShieldCheck,
+  Siren,
   Tag,
   Timer,
   Users,
@@ -47,6 +49,8 @@ export const DESTINATIONS: NavDestination[] = [
   // A single destination today; later phases expand it into a group (Imports / Validation / Dedup / …).
   { label: "Data management", href: "/data-ops", match: "/data-ops", icon: Database },
   { label: "Bulk imports", href: "/imports", match: "/imports", icon: FileUp },
+  { label: "Data quality", href: "/data-quality", match: "/data-quality", icon: Gauge },
+  { label: "Trust & abuse", href: "/trust-abuse", match: "/trust-abuse", icon: Siren },
   { label: "System health", href: "/system-health", match: "/system-health", icon: Activity },
 ];
 

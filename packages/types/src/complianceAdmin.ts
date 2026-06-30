@@ -59,3 +59,54 @@ export const dsarOversightRowSchema = z.object({
   completedAt: z.string().nullable(),
 });
 export type DsarOversightRow = z.infer<typeof dsarOversightRowSchema>;
+
+/** The staff-drivable DSAR transitions (08 §4). 'completed' is DELIBERATELY excluded — completion is recorded
+ *  by the actual erasure/export fulfilment, never hand-set (a manual 'completed' with no fulfilment would be a
+ *  compliance violation); 'received' is the intake state. Rejecting requires a reason. */
+export const dsarTransitionSchema = z
+  .object({
+    status: z.enum(["verifying", "processing", "rejected"]),
+    reason: z.string().trim().max(1000).optional(),
+  })
+  .refine((v) => v.status !== "rejected" || (!!v.reason && v.reason.length >= 3), {
+    message: "A rejection needs a reason (min 3 characters).",
+    path: ["reason"],
+  });
+export type DsarTransition = z.infer<typeof dsarTransitionSchema>;
+
+// ── Sub-processor registry (13a Area 8 / GDPR Art. 28) ─────────────────────────────────────────────────────
+
+/** Create / update a sub-processor disclosure entry — name, purpose, processing location, and an optional DPA
+ *  link (when present it must be an http(s) URL, validated here so a `javascript:`/garbage link can never reach
+ *  the row that the public Trust Center would later render). */
+export const subProcessorUpsertSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  purpose: z.string().trim().min(1).max(500),
+  location: z.string().trim().min(1).max(120),
+  dpaUrl: z
+    .string()
+    .trim()
+    .max(2048)
+    .regex(/^https?:\/\/\S+$/, "a DPA link must be an http(s) URL")
+    .optional()
+    .or(z.literal("")),
+  sortOrder: z.coerce.number().int().min(0).max(100000).default(0),
+});
+export type SubProcessorUpsertInput = z.infer<typeof subProcessorUpsertSchema>;
+
+/** Toggle a sub-processor's published state (remove from / restore to the registry). */
+export const subProcessorSetActiveSchema = z.object({ active: z.boolean() });
+export type SubProcessorSetActiveInput = z.infer<typeof subProcessorSetActiveSchema>;
+
+/** A sub-processor as shown in the console (and, later, the public Trust Center). */
+export const subProcessorViewSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  purpose: z.string(),
+  location: z.string(),
+  dpaUrl: z.string().nullable(),
+  active: z.boolean(),
+  sortOrder: z.number(),
+  updatedAt: z.string(), // ISO-8601
+});
+export type SubProcessorView = z.infer<typeof subProcessorViewSchema>;

@@ -5,7 +5,15 @@
 "use client";
 
 import { useStaffMe } from "@/lib/staffMe";
-import { type Column, DataTable, StateSwitch, TpButton, TpInput, useToast } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  Dialog,
+  StateSwitch,
+  TpButton,
+  TpInput,
+  useToast,
+} from "@leadwolf/ui";
 import { useCallback, useEffect, useState } from "react";
 import { addGlobalSuppression, fetchGlobalSuppression, removeGlobalSuppression } from "../api";
 import type { GlobalSuppression as GlobalSuppressionEntry } from "../types";
@@ -25,6 +33,8 @@ export function GlobalSuppression() {
   const [domain, setDomain] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<GlobalSuppressionEntry | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -63,12 +73,15 @@ export function GlobalSuppression() {
   }
 
   async function onRemove(entry: GlobalSuppressionEntry) {
+    setRemovingId(entry.id);
     try {
       await removeGlobalSuppression(entry.id);
       toast.success("Block removed.");
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not remove the block");
+    } finally {
+      setRemovingId(null);
     }
   }
 
@@ -97,7 +110,12 @@ export function GlobalSuppression() {
       align: "right",
       cell: (e) =>
         canManage ? (
-          <TpButton variant="ghost" size="sm" onClick={() => void onRemove(e)}>
+          <TpButton
+            variant="ghost"
+            size="sm"
+            disabled={removingId === e.id}
+            onClick={() => setRemoveTarget(e)}
+          >
             Remove
           </TpButton>
         ) : null,
@@ -170,6 +188,33 @@ export function GlobalSuppression() {
       >
         <DataTable columns={columns} rows={entries ?? []} rowKey={(e) => e.id} />
       </StateSwitch>
+
+      <Dialog
+        open={!!removeTarget}
+        onClose={() => setRemoveTarget(null)}
+        title="Remove global block?"
+        description={
+          removeTarget
+            ? `Unblock "${removeTarget.domain ?? removeTarget.matchType}" across ALL tenants? Reveals and sends to it resume immediately. This is audited.`
+            : undefined
+        }
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="secondary" onClick={() => setRemoveTarget(null)}>
+              Cancel
+            </TpButton>
+            <TpButton
+              variant="danger"
+              onClick={() => {
+                if (removeTarget) void onRemove(removeTarget);
+                setRemoveTarget(null);
+              }}
+            >
+              Remove block
+            </TpButton>
+          </div>
+        }
+      />
     </div>
   );
 }

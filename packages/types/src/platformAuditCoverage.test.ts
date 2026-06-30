@@ -47,6 +47,13 @@ const WRITTEN = new Set<string>([
   // 13a Area 8 — add / remove a global suppression (POST /admin/compliance/suppression[/:id/remove]).
   "suppress.add.global",
   "suppress.remove.global",
+  // 13a Area 8 — staff DSAR workflow transition (POST /admin/compliance/dsars/:id/status): verifying /
+  // processing / rejected only. 'completed' is deliberately NOT staff-settable (the erasure/export process
+  // records completion; a manual 'completed' with no fulfilment would be a compliance violation).
+  "dsar.transition",
+  // 13a Area 8 / GDPR Art. 28 — set / toggle a sub-processor registry entry (POST/PUT + /:id/active under
+  // /admin/compliance/sub-processors). Audited "sub_processor.set".
+  "sub_processor.set",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;

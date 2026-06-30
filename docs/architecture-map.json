@@ -31,6 +31,7 @@
     "customFields",
     "data-health",
     "data-ops",
+    "data-quality",
     "email",
     "enrichment",
     "enrichment-jobs",
@@ -78,12 +79,13 @@
     "tags",
     "templates",
     "tenants",
+    "trust-abuse",
     "users",
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1172,
-  "fileSetHash": "sha256:92fddec123e39a0b2cd9a4480dba5b7f2ecb8e62899b68c6a888bcef3a9bbe14",
+  "fileCount": 1191,
+  "fileSetHash": "sha256:726bda752ac1232612c99cef52e92bb96b748e9aa847b08ce3173b84e9e45bbc",
   "features": {
     "account-search": {
       "web": [],
@@ -238,6 +240,7 @@
         "apps/admin/src/features/compliance/components/CompliancePage.tsx",
         "apps/admin/src/features/compliance/components/GlobalSuppression.tsx",
         "apps/admin/src/features/compliance/components/RetentionPolicies.tsx",
+        "apps/admin/src/features/compliance/components/SubProcessors.tsx",
         "apps/admin/src/features/compliance/hooks/useCompliance.ts",
         "apps/admin/src/features/compliance/index.ts",
         "apps/admin/src/features/compliance/types.ts"
@@ -392,6 +395,21 @@
         "apps/admin/src/features/data-ops/hooks/useVerificationRuns.ts",
         "apps/admin/src/features/data-ops/index.ts",
         "apps/admin/src/features/data-ops/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "data-quality": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/data-quality/api.ts",
+        "apps/admin/src/features/data-quality/components/DataQualityPage.tsx",
+        "apps/admin/src/features/data-quality/hooks/useDataQuality.ts",
+        "apps/admin/src/features/data-quality/index.ts",
+        "apps/admin/src/features/data-quality/types.ts"
       ],
       "api": [],
       "core": [],
@@ -1381,6 +1399,21 @@
       "workers": [],
       "integrations": []
     },
+    "trust-abuse": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/trust-abuse/api.ts",
+        "apps/admin/src/features/trust-abuse/components/TrustAbusePage.tsx",
+        "apps/admin/src/features/trust-abuse/hooks/useTrustAbuse.ts",
+        "apps/admin/src/features/trust-abuse/index.ts",
+        "apps/admin/src/features/trust-abuse/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "users": {
       "web": [],
       "admin": [
@@ -1443,6 +1476,7 @@
       "apps/admin/src/app/(shell)/data-ops/page.tsx",
       "apps/admin/src/app/(shell)/data-ops/quality/page.tsx",
       "apps/admin/src/app/(shell)/data-ops/verification/page.tsx",
+      "apps/admin/src/app/(shell)/data-quality/page.tsx",
       "apps/admin/src/app/(shell)/feature-flags/page.tsx",
       "apps/admin/src/app/(shell)/imports/page.tsx",
       "apps/admin/src/app/(shell)/layout.tsx",
@@ -1454,13 +1488,17 @@
       "apps/admin/src/app/(shell)/system-health/page.tsx",
       "apps/admin/src/app/(shell)/tenants/[id]/page.tsx",
       "apps/admin/src/app/(shell)/tenants/page.tsx",
+      "apps/admin/src/app/(shell)/trust-abuse/page.tsx",
       "apps/admin/src/app/(shell)/users/page.tsx",
       "apps/admin/src/app/callback/page.tsx",
       "apps/admin/src/app/layout.tsx",
       "apps/admin/src/app/page.tsx"
     ],
     "apps/admin/components": [
+      "apps/admin/src/components/EntityPicker.tsx",
       "apps/admin/src/components/ImpersonationBanner.tsx",
+      "apps/admin/src/components/TenantPicker.tsx",
+      "apps/admin/src/components/UserPicker.tsx",
       "apps/admin/src/components/shell/AdminShell.tsx",
       "apps/admin/src/components/shell/Brandmark.tsx",
       "apps/admin/src/components/shell/Sidebar.tsx",
@@ -1730,6 +1768,8 @@
       "packages/db/src/repositories/platformAuditReads.ts",
       "packages/db/src/repositories/platformBillingReads.ts",
       "packages/db/src/repositories/platformComplianceReads.ts",
+      "packages/db/src/repositories/platformDataQualityReads.ts",
+      "packages/db/src/repositories/platformTrustReads.ts",
       "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/auth.ts",
       "packages/db/src/schema/billing.ts",
@@ -1964,6 +2004,7 @@
     "packages/db/src/repositories/sendingDomainRepository.ts",
     "packages/db/src/repositories/ssoConfigRepository.ts",
     "packages/db/src/repositories/staffRepository.ts",
+    "packages/db/src/repositories/subProcessorRepository.ts",
     "packages/db/src/repositories/supportNoteRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",
     "packages/db/src/repositories/webhookRepository.ts"
@@ -1978,6 +2019,7 @@
     "undeclared domain 'custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'customFields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'data-ops' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'data-quality' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'email' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'enrichment-jobs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'feature-flags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
@@ -2003,6 +2045,7 @@
     "undeclared domain 'system-health' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'tags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'tenants' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'trust-abuse' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'users' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'webhooks' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder"
   ],

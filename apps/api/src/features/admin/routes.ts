@@ -9,13 +9,16 @@ import {
   accountHoldRepository,
   authPolicyRepository,
   featureFlagRepository,
+  idempotencyRepository,
   jitElevationRepository,
   planTemplateRepository,
   platformAdminRepository,
-  retentionClassPolicyRepository,
   platformAdminWriteRepository,
   platformBillingReadRepository,
+  platformDataQualityReadRepository,
   platformStaffRepository,
+  platformTrustReadRepository,
+  retentionClassPolicyRepository,
   supportNoteRepository,
   withPlatformTx,
 } from "@leadwolf/db";
@@ -33,11 +36,11 @@ import {
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
-  retentionPolicySchema,
-  retentionPolicyUpdateSchema,
   placeAccountHoldSchema,
   planOverrideSchema,
   platformListQuerySchema,
+  retentionPolicySchema,
+  retentionPolicyUpdateSchema,
   setAuthEnforcementSchema,
   tenantStatusChangeSchema,
   userStatusChangeSchema,
@@ -91,6 +94,7 @@ adminRoutes.get("/workspaces", async (c) => {
 adminRoutes.get("/users", async (c) => {
   const parsed = platformListQuerySchema.safeParse({
     search: c.req.query("search"),
+    status: c.req.query("status"),
     cursor: c.req.query("cursor"),
     limit: c.req.query("limit"),
   });
@@ -158,6 +162,7 @@ adminRoutes.post("/users/:id/reactivate", requireCapability("users:deactivate"),
 adminRoutes.get("/tenants", async (c) => {
   const parsed = platformListQuerySchema.safeParse({
     search: c.req.query("search"),
+    status: c.req.query("status"),
     cursor: c.req.query("cursor"),
     limit: c.req.query("limit"),
   });
@@ -278,6 +283,20 @@ adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), a
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const { delta, reason } = parsed.data;
   const actor = actorOf(c);
+
+  // Idempotency-Key replay (ADR-0004/0007): a network retry must NOT 403 on the already-consumed JIT
+  // elevation (nor re-grant) — if this (tenant, key) already committed, replay its stored response without
+  // re-running the grant or writing a second audit row. Owner-path read (no tenancy context on this surface).
+  const idemKey = c.req.header("idempotency-key");
+  if (idemKey) {
+    const replay = await idempotencyRepository.findOwner(tenantId, idemKey);
+    if (replay) {
+      return c.json(
+        replay.responseBody as { tenantId: string; delta: number; balanceAfter: number },
+      );
+    }
+  }
+
   const balanceAfter = await withPlatformTx(
     actor,
     delta > 0 ? "credit.grant" : "credit.adjust",
@@ -295,6 +314,13 @@ adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), a
           `This adjustment would overdraw the balance (current ${res.balanceAfter}).`,
           { balance: res.balanceAfter },
         );
+      // Record the replay row IN-tx so the key commits atomically with the grant + its audit row.
+      if (idemKey) {
+        await idempotencyRepository.storeOwner(tx, tenantId, idemKey, {
+          responseStatus: 200,
+          responseBody: { tenantId, delta, balanceAfter: res.balanceAfter },
+        });
+      }
       return res.balanceAfter;
     },
     { targetType: "tenant", targetId: tenantId, tenantId, metadata: { delta, reason } },
@@ -598,45 +624,118 @@ adminRoutes.post(
 // api client to probe — do not fabricate a green check). The route never hangs (each probe is timeout-bounded)
 // and never 500s on a probe failure (probeQueues always resolves; the defensive .catch degrades a total
 // failure to redis:"down"/workers:"unknown" and still returns 200). ──
-adminRoutes.get("/system-health", async (c) => {
-  const statuses = await withPlatformTx(actorOf(c), "admin.system_health", (tx) =>
-    platformAdminRepository.sampleJobStatuses(tx),
-  );
+adminRoutes.get(
+  "/system-health",
+  requireStaffRole("support", "billing_ops", "compliance_officer", "read_only"),
+  async (c) => {
+    const statuses = await withPlatformTx(actorOf(c), "admin.system_health", (tx) =>
+      platformAdminRepository.sampleJobStatuses(tx),
+    );
 
-  const byStatus: Record<string, number> = {};
-  for (const s of statuses) byStatus[s] = (byStatus[s] ?? 0) + 1;
+    const byStatus: Record<string, number> = {};
+    for (const s of statuses) byStatus[s] = (byStatus[s] ?? 0) + 1;
 
-  const queueDepth = (byStatus.queued ?? 0) + (byStatus.running ?? 0) + (byStatus.estimating ?? 0);
-  const deadLetter = byStatus.failed ?? 0;
+    const queueDepth =
+      (byStatus.queued ?? 0) + (byStatus.running ?? 0) + (byStatus.estimating ?? 0);
+    const deadLetter = byStatus.failed ?? 0;
 
-  // Live BullMQ probe. probeQueues already absorbs per-queue failures via allSettled and always resolves; the
-  // .catch is belt-and-suspenders against a synchronous singleton-construction error so the route can NEVER
-  // 500 from a probe — a total failure degrades to redis:"down"/workers:"unknown" with no queue readings.
-  const probe = await probeQueues().catch(
-    () => ({ redis: "down", workers: "unknown", queues: [] }) as SystemHealthProbe,
-  );
+    // Live BullMQ probe. probeQueues already absorbs per-queue failures via allSettled and always resolves; the
+    // .catch is belt-and-suspenders against a synchronous singleton-construction error so the route can NEVER
+    // 500 from a probe — a total failure degrades to redis:"down"/workers:"unknown" with no queue readings.
+    const probe = await probeQueues().catch(
+      () => ({ redis: "down", workers: "unknown", queues: [] }) as SystemHealthProbe,
+    );
 
-  return c.json({
-    // The api answered this request, so it is up; database is up (the tx above ran). workers/redis are real
-    // BullMQ probe results; search stays "unknown" — no api client exists to probe it (no fabricated checks).
-    services: [
-      { name: "api", status: "up" },
-      { name: "database", status: "up" },
-      { name: "workers", status: probe.workers },
-      { name: "redis", status: probe.redis },
-      { name: "search", status: "unknown" },
-    ],
-    // Live per-queue depth / DLQ (failed) / connected-worker counts; reachable:false + null counts when down.
-    queues: probe.queues,
-    jobs: {
-      sampleSize: statuses.length,
-      truncated: statuses.length >= PLATFORM_READ_LIMIT,
-      byStatus,
-      queueDepth,
-      deadLetter,
-    },
-  });
-});
+    return c.json({
+      // The api answered this request, so it is up; database is up (the tx above ran). workers/redis are real
+      // BullMQ probe results; search stays "unknown" — no api client exists to probe it (no fabricated checks).
+      services: [
+        { name: "api", status: "up" },
+        { name: "database", status: "up" },
+        { name: "workers", status: probe.workers },
+        { name: "redis", status: probe.redis },
+        { name: "search", status: "unknown" },
+      ],
+      // Live per-queue depth / DLQ (failed) / connected-worker counts; reachable:false + null counts when down.
+      queues: probe.queues,
+      jobs: {
+        sampleSize: statuses.length,
+        truncated: statuses.length >= PLATFORM_READ_LIMIT,
+        byStatus,
+        queueDepth,
+        deadLetter,
+      },
+    });
+  },
+);
+
+// ── Data-quality cockpit (P5; 10 §5 Data Health + PLAN_06 re-verification) — cross-tenant DQ observability: the
+// platform-wide rollup of the latest per-workspace data_quality_snapshots + the recent re-verification ledger.
+// Read-only and coarse-gated (any staff, like /system-health); `admin.data_quality` is a plain withPlatformTx
+// read string, deliberately NOT in the mutation enum. NON-PII — counts only, never contact rows. ──
+adminRoutes.get(
+  "/data-quality",
+  requireStaffRole("support", "billing_ops", "compliance_officer", "read_only"),
+  async (c) => {
+    const rawDays = Number(c.req.query("days") ?? "30");
+    const days = Number.isInteger(rawDays) && rawDays >= 1 && rawDays <= 365 ? rawDays : 30;
+    const since = new Date(Date.now() - days * 86_400_000);
+    const data = await withPlatformTx(actorOf(c), "admin.data_quality", async (tx) => {
+      // Sequential — one tx is one connection; no concurrent statements on it.
+      const rollup = await platformDataQualityReadRepository.rollup(tx);
+      const totals = await platformDataQualityReadRepository.verificationTotals(tx, since);
+      const recentRuns = await platformDataQualityReadRepository.recentVerificationRuns(
+        tx,
+        PLATFORM_READ_LIMIT,
+      );
+      return { rollup, totals, recentRuns };
+    });
+    return c.json({
+      windowDays: days,
+      rollup: {
+        workspaces: data.rollup.workspaces,
+        latestAt: data.rollup.latestAt ? data.rollup.latestAt.toISOString() : null,
+        total: data.rollup.total,
+        withEmail: data.rollup.withEmail,
+        withPhone: data.rollup.withPhone,
+        emailValid: data.rollup.emailValid,
+        fresh: data.rollup.fresh,
+        stale: data.rollup.stale,
+        neverVerified: data.rollup.neverVerified,
+      },
+      verification: {
+        totals: data.totals,
+        recentRuns: data.recentRuns.map((r) => ({
+          tenantId: r.tenantId,
+          tenantName: r.tenantName,
+          finishedAt: r.finishedAt.toISOString(),
+          scanned: r.scanned,
+          reverified: r.reverified,
+          errored: r.errored,
+        })),
+      },
+    });
+  },
+);
+
+// ── Trust & abuse (P6, 13 §3 abuse-ops) — cross-tenant trust signals: signup velocity (tenants/users), a
+// free/disposable-email signup heuristic, active abuse/fraud holds by kind, and the tenant-status mix. Read-only,
+// coarse-gated (any staff, like /system-health + /data-quality); `admin.trust_abuse` is a plain withPlatformTx
+// read string, NOT in the mutation enum. NON-PII — counts only. ──
+adminRoutes.get(
+  "/trust-abuse",
+  requireStaffRole("support", "billing_ops", "compliance_officer", "read_only"),
+  async (c) => {
+    const data = await withPlatformTx(actorOf(c), "admin.trust_abuse", async (tx) => {
+      // Sequential — one tx is one connection; no concurrent statements on it.
+      const signals = await platformTrustReadRepository.signals(tx);
+      const holds = await platformTrustReadRepository.activeHoldsByKind(tx);
+      const tenantStatus = await platformTrustReadRepository.tenantsByStatus(tx);
+      return { signals, holds, tenantStatus };
+    });
+    return c.json(data);
+  },
+);
 
 // ── Import-jobs monitor (data-management A4; 15-bulk-import-design) — recent bulk-import jobs ACROSS all
 // tenants, the staff rollout-monitoring feed for the COPY-staging pipeline. Per-job status / av-scan / row
@@ -711,7 +810,7 @@ adminRoutes.get("/feature-flags", async (c) => {
 });
 
 /** Define or update a flag (idempotent on key). Audited. */
-adminRoutes.put("/feature-flags", async (c) => {
+adminRoutes.put("/feature-flags", requireCapability("flags:manage"), async (c) => {
   const parsed = featureFlagUpsertSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const input = parsed.data;
@@ -728,7 +827,7 @@ adminRoutes.put("/feature-flags", async (c) => {
 
 /** Toggle a flag's global default on/off. Audited. 404 if the flag is undefined — the NotFoundError is
  *  thrown INSIDE the tx so the audit row rolls back (a failed toggle leaves no "feature_flag.set" trace). */
-adminRoutes.post("/feature-flags/:key/global", async (c) => {
+adminRoutes.post("/feature-flags/:key/global", requireCapability("flags:manage"), async (c) => {
   const key = c.req.param("key");
   const parsed = featureFlagGlobalToggleSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
@@ -740,7 +839,7 @@ adminRoutes.post("/feature-flags/:key/global", async (c) => {
 });
 
 /** Set or clear a per-tenant override. `enabled: null` clears it. Audited. */
-adminRoutes.post("/feature-flags/:key/tenant", async (c) => {
+adminRoutes.post("/feature-flags/:key/tenant", requireCapability("flags:manage"), async (c) => {
   const key = c.req.param("key");
   const parsed = featureFlagTenantToggleSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);

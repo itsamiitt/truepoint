@@ -42,6 +42,8 @@ export function RetentionPolicies() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [enableTarget, setEnableTarget] = useState<RetentionPolicy | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -100,12 +102,15 @@ export function RetentionPolicies() {
   }
 
   async function onToggle(p: RetentionPolicy) {
+    setTogglingId(p.id);
     try {
       await setRetentionActive(p.id, !p.active);
       toast.success(p.active ? "Policy retired." : "Policy enabled.");
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the policy");
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -152,10 +157,23 @@ export function RetentionPolicies() {
       cell: (p) =>
         canManage ? (
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <TpButton variant="ghost" size="sm" onClick={() => openEdit(p)}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingId === p.id}
+              onClick={() => openEdit(p)}
+            >
               Edit
             </TpButton>
-            <TpButton variant="ghost" size="sm" onClick={() => void onToggle(p)}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingId === p.id}
+              onClick={() => {
+                if (p.active) void onToggle(p);
+                else setEnableTarget(p);
+              }}
+            >
               {p.active ? "Retire" : "Enable"}
             </TpButton>
           </div>
@@ -254,6 +272,33 @@ export function RetentionPolicies() {
           </div>
         ) : null}
       </Dialog>
+
+      <Dialog
+        open={!!enableTarget}
+        onClose={() => setEnableTarget(null)}
+        title="Enable this retention policy?"
+        description={
+          enableTarget
+            ? `Enabling the "${enableTarget.entity}${enableTarget.field ? `.${enableTarget.field}` : ""}" policy ARMS the retention sweep — rows older than ${enableTarget.retentionDays} days become eligible for deletion. This is audited.`
+            : undefined
+        }
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="secondary" onClick={() => setEnableTarget(null)}>
+              Cancel
+            </TpButton>
+            <TpButton
+              variant="danger"
+              onClick={() => {
+                if (enableTarget) void onToggle(enableTarget);
+                setEnableTarget(null);
+              }}
+            >
+              Enable policy
+            </TpButton>
+          </div>
+        }
+      />
     </div>
   );
 }

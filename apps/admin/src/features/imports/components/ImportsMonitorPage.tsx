@@ -51,7 +51,7 @@ export function ImportsMonitorPage() {
     },
     {
       key: "rowsCreated",
-      header: "Created",
+      header: "New",
       align: "right",
       sortValue: (j) => j.rowsCreated,
       cell: (j) => formatInt(j.rowsCreated),
@@ -102,7 +102,8 @@ export function ImportsMonitorPage() {
         <div>
           <h2 className="tp-page-title">Bulk imports</h2>
           <p className="tp-page-sub">
-            Cross-tenant bulk-import monitor — recent jobs, AV scan, row outcomes and failures across all orgs.
+            Cross-tenant bulk-import monitor — recent jobs, AV scan, row outcomes and failures
+            across all orgs.
           </p>
         </div>
       </div>

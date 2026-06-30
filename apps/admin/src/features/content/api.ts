@@ -15,6 +15,7 @@ export interface AnnouncementInput {
   title: string;
   body: string;
   level: string;
+  type: string;
   audience: string;
   tenantTarget: string | null;
   startsAt: string | null;

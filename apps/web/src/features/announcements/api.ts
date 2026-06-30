@@ -10,6 +10,7 @@ export interface ActiveAnnouncement {
   title: string;
   body: string;
   level: string; // info | warning | critical
+  type: string; // general | maintenance (maintenance = site-wide, non-dismissible)
 }
 
 export async function fetchActiveAnnouncements(): Promise<ActiveAnnouncement[]> {

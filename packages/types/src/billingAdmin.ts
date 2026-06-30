@@ -32,6 +32,37 @@ export const refundResultSchema = z.object({
 });
 export type RefundResult = z.infer<typeof refundResultSchema>;
 
+/** One tenant's slice of the economics window — the per-tenant drill-down behind the rollup (which tenants
+ *  actually drive the revenue and the metered provider spend). Money is integer cents; the rest are counts. */
+export const tenantEconomicsRowSchema = z.object({
+  tenantId: z.string().uuid(),
+  tenantName: z.string(),
+  revenueCents: z.number().int(), // SUM purchases.amount_cents (completed) for this tenant
+  creditsSold: z.number().int(),
+  reveals: z.number().int(),
+  chargedReveals: z.number().int(),
+  providerSpendCents: z.number().int(), // SUM provider_calls.cost_micros / 10_000 for this tenant
+  marginCents: z.number().int(), // revenueCents - providerSpendCents
+});
+export type TenantEconomicsRow = z.infer<typeof tenantEconomicsRowSchema>;
+
+/** Query the low-credit-balance tenant list — the proactive top-up / churn-risk view (07 §9). `threshold` is
+ *  the at-or-below credit balance; both bounded. */
+export const lowBalanceQuerySchema = z.object({
+  threshold: z.coerce.number().int().min(0).max(100_000).default(100),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export type LowBalanceQuery = z.infer<typeof lowBalanceQuerySchema>;
+
+/** One active tenant at/under the credit-balance threshold — who to nudge for a top-up before they churn. */
+export const lowBalanceTenantSchema = z.object({
+  tenantId: z.string().uuid(),
+  tenantName: z.string(),
+  plan: z.string(),
+  revealCreditBalance: z.number().int(),
+});
+export type LowBalanceTenant = z.infer<typeof lowBalanceTenantSchema>;
+
 /** The economics summary for the window (07 §9 "internal reporting"). */
 export const economicsSummarySchema = z.object({
   sinceDays: z.number().int(),

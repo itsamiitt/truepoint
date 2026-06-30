@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS announcements (
   title text NOT NULL,
   body text NOT NULL,
   level text NOT NULL DEFAULT 'info',
+  type text NOT NULL DEFAULT 'general',
   audience text NOT NULL DEFAULT 'all',
   tenant_target uuid,
   starts_at timestamptz,
@@ -186,3 +187,22 @@ CREATE TABLE IF NOT EXISTS approval_requests (
 CREATE INDEX IF NOT EXISTS approval_requests_status_idx ON approval_requests (status, id);
 
 ALTER TABLE approval_requests ENABLE ROW LEVEL SECURITY;
+
+-- sub_processors (13a Area 8 / GDPR Art. 28) — staff-published sub-processor disclosure registry. Same
+-- PLATFORM-owned posture: written only by the owner connection (withPlatformTx), deny-all to leadwolf_app (this
+-- file + the applyMigrations REVOKE). A public Trust-Center read surface, when it lands, is a SEPARATE endpoint
+-- (owner connection), never this table. Defensive CREATE mirrors the migration's column set; idempotent.
+CREATE TABLE IF NOT EXISTS sub_processors (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  name text NOT NULL,
+  purpose text NOT NULL,
+  location text NOT NULL,
+  dpa_url text,
+  active boolean NOT NULL DEFAULT true,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_by_user_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE sub_processors ENABLE ROW LEVEL SECURITY;

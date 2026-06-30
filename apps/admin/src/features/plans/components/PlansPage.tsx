@@ -5,6 +5,7 @@
 // plan-override path) is a separate surface.
 "use client";
 
+import { useStaffMe } from "@/lib/staffMe";
 import {
   type Column,
   DataTable,
@@ -61,9 +62,13 @@ function enabledFeatureKeys(features: Record<string, boolean>): string[] {
 export function PlansPage() {
   const { templates, loading, error, reload } = usePlans();
   const toast = useToast();
+  const { canMaybe } = useStaffMe();
+  const canManage = canMaybe("pricing:manage");
 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
+  const [retireTarget, setRetireTarget] = useState<PlanTemplate | null>(null);
 
   function openNew() {
     setDraft({ ...EMPTY });
@@ -138,12 +143,15 @@ export function PlansPage() {
   }
 
   async function onToggle(t: PlanTemplate) {
+    setTogglingKey(t.key);
     try {
       await setPlanTemplateActive(t.key, !t.active);
       toast.success(t.active ? "Plan retired." : "Plan offered.");
       await reload();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not update the plan");
+    } finally {
+      setTogglingKey(null);
     }
   }
 
@@ -203,16 +211,30 @@ export function PlansPage() {
       key: "actions",
       header: "",
       align: "right",
-      cell: (t) => (
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <TpButton variant="ghost" size="sm" onClick={() => openEdit(t)}>
-            Edit
-          </TpButton>
-          <TpButton variant="ghost" size="sm" onClick={() => void onToggle(t)}>
-            {t.active ? "Retire" : "Offer"}
-          </TpButton>
-        </div>
-      ),
+      cell: (t) =>
+        canManage ? (
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingKey === t.key}
+              onClick={() => openEdit(t)}
+            >
+              Edit
+            </TpButton>
+            <TpButton
+              variant="ghost"
+              size="sm"
+              disabled={togglingKey === t.key}
+              onClick={() => {
+                if (t.active) setRetireTarget(t);
+                else void onToggle(t);
+              }}
+            >
+              {t.active ? "Retire" : "Offer"}
+            </TpButton>
+          </div>
+        ) : null,
     },
   ];
 
@@ -226,7 +248,7 @@ export function PlansPage() {
             grant, and feature entitlements.
           </p>
         </div>
-        <TpButton onClick={openNew}>New plan</TpButton>
+        {canManage ? <TpButton onClick={openNew}>New plan</TpButton> : null}
       </div>
 
       <StateSwitch
@@ -336,6 +358,33 @@ export function PlansPage() {
           </div>
         ) : null}
       </Dialog>
+
+      <Dialog
+        open={!!retireTarget}
+        onClose={() => setRetireTarget(null)}
+        title="Retire this plan?"
+        description={
+          retireTarget
+            ? `Retire "${retireTarget.name}"? It is removed from the offered catalog and can no longer be applied to a tenant (you can re-offer it later). This is audited.`
+            : undefined
+        }
+        footer={
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <TpButton variant="secondary" onClick={() => setRetireTarget(null)}>
+              Cancel
+            </TpButton>
+            <TpButton
+              variant="danger"
+              onClick={() => {
+                if (retireTarget) void onToggle(retireTarget);
+                setRetireTarget(null);
+              }}
+            >
+              Retire plan
+            </TpButton>
+          </div>
+        }
+      />
     </div>
   );
 }

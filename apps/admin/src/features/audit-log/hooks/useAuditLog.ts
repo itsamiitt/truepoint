@@ -14,6 +14,7 @@ export function useAuditLog() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
 
   const load = useCallback(async (f: AuditLogFilters) => {
     setLoading(true);
@@ -42,13 +43,15 @@ export function useAuditLog() {
   const loadMore = useCallback(async () => {
     if (!nextCursor) return;
     setLoadingMore(true);
-    setError(null);
+    setLoadMoreError(null);
     try {
       const page = await fetchAuditLog(filters, nextCursor);
       setEntries((prev) => [...(prev ?? []), ...page.entries]);
       setNextCursor(page.nextCursor);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load more");
+      // A pagination failure must NOT clear the loaded list — setting the page `error` that StateSwitch
+      // consumes would replace the table with the error state. Surface it inline by the Load-more button.
+      setLoadMoreError(e instanceof Error ? e.message : "Failed to load more");
     } finally {
       setLoadingMore(false);
     }
@@ -65,6 +68,7 @@ export function useAuditLog() {
     error,
     loading,
     loadingMore,
+    loadMoreError,
     applyFilters,
     loadMore,
     reload: useCallback(() => load(filters), [load, filters]),

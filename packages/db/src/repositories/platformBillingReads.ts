@@ -19,6 +19,25 @@ export interface EconomicsAggregate {
   providerSpendMicros: number;
 }
 
+/** Per-tenant slice of the economics window — provider spend stays in micros (the api converts to cents). */
+export interface TenantEconomicsAggregate {
+  tenantId: string;
+  tenantName: string;
+  revenueCents: number;
+  creditsSold: number;
+  reveals: number;
+  chargedReveals: number;
+  providerSpendMicros: number;
+}
+
+/** One active tenant at/under a credit-balance threshold (the proactive top-up / churn-risk view). */
+export interface LowBalanceTenantRow {
+  tenantId: string;
+  tenantName: string;
+  plan: string;
+  revealCreditBalance: number;
+}
+
 /** One credit-pack purchase row (no Stripe ids). */
 export interface PlatformPurchaseRow {
   id: string;
@@ -71,6 +90,92 @@ export const platformBillingReadRepository = {
       chargedReveals: Number(r?.charged_reveals ?? 0),
       providerSpendMicros: Number(s?.provider_spend_micros ?? 0),
     };
+  },
+
+  /** The per-tenant drill-down behind economicsSummary: the same three windowed aggregates (purchases,
+   *  reveals, provider spend) GROUPED BY tenant and joined to `tenants` for the name, filtered to tenants with
+   *  any activity, ordered by provider spend (the cost drivers) then revenue, bounded to `limit`. Owner read. */
+  async economicsByTenant(tx: Tx, since: Date, limit: number): Promise<TenantEconomicsAggregate[]> {
+    const iso = since.toISOString();
+    const rows = (await tx.execute(sql`
+      WITH p AS (
+        SELECT tenant_id,
+          coalesce(sum(credits) FILTER (WHERE status = 'completed'), 0)::bigint      AS credits_sold,
+          coalesce(sum(amount_cents) FILTER (WHERE status = 'completed'), 0)::bigint AS revenue_cents
+        FROM purchases WHERE created_at >= ${iso}::timestamptz GROUP BY tenant_id
+      ),
+      r AS (
+        SELECT tenant_id,
+          count(*)::bigint                                       AS reveals,
+          (count(*) FILTER (WHERE credits_consumed > 0))::bigint AS charged_reveals
+        FROM contact_reveals WHERE revealed_at >= ${iso}::timestamptz GROUP BY tenant_id
+      ),
+      s AS (
+        SELECT tenant_id, coalesce(sum(cost_micros), 0)::bigint AS provider_spend_micros
+        FROM provider_calls WHERE called_at >= ${iso}::timestamptz GROUP BY tenant_id
+      )
+      SELECT
+        t.id::text                              AS tenant_id,
+        t.name                                  AS tenant_name,
+        coalesce(p.revenue_cents, 0)::bigint    AS revenue_cents,
+        coalesce(p.credits_sold, 0)::bigint     AS credits_sold,
+        coalesce(r.reveals, 0)::bigint          AS reveals,
+        coalesce(r.charged_reveals, 0)::bigint  AS charged_reveals,
+        coalesce(s.provider_spend_micros, 0)::bigint AS provider_spend_micros
+      FROM tenants t
+      LEFT JOIN p ON p.tenant_id = t.id
+      LEFT JOIN r ON r.tenant_id = t.id
+      LEFT JOIN s ON s.tenant_id = t.id
+      WHERE coalesce(p.revenue_cents, 0) > 0
+         OR coalesce(r.reveals, 0) > 0
+         OR coalesce(s.provider_spend_micros, 0) > 0
+      ORDER BY coalesce(s.provider_spend_micros, 0) DESC, coalesce(p.revenue_cents, 0) DESC
+      LIMIT ${limit}
+    `)) as unknown as Array<{
+      tenant_id: string;
+      tenant_name: string;
+      revenue_cents: number;
+      credits_sold: number;
+      reveals: number;
+      charged_reveals: number;
+      provider_spend_micros: number;
+    }>;
+    return rows.map((row) => ({
+      tenantId: row.tenant_id,
+      tenantName: row.tenant_name,
+      revenueCents: Number(row.revenue_cents),
+      creditsSold: Number(row.credits_sold),
+      reveals: Number(row.reveals),
+      chargedReveals: Number(row.charged_reveals),
+      providerSpendMicros: Number(row.provider_spend_micros),
+    }));
+  },
+
+  /** Active tenants at/under a reveal-credit-balance threshold, lowest first, bounded — the proactive top-up /
+   *  churn-risk view (07 §9). Owner read; the balance is the live tenant counter. */
+  async lowBalanceTenants(
+    tx: Tx,
+    threshold: number,
+    limit: number,
+  ): Promise<LowBalanceTenantRow[]> {
+    const rows = (await tx.execute(sql`
+      SELECT id::text AS tenant_id, name AS tenant_name, plan, reveal_credit_balance
+      FROM tenants
+      WHERE status = 'active' AND reveal_credit_balance <= ${threshold}
+      ORDER BY reveal_credit_balance ASC, id
+      LIMIT ${limit}
+    `)) as unknown as Array<{
+      tenant_id: string;
+      tenant_name: string;
+      plan: string;
+      reveal_credit_balance: number;
+    }>;
+    return rows.map((r) => ({
+      tenantId: r.tenant_id,
+      tenantName: r.tenant_name,
+      plan: r.plan,
+      revealCreditBalance: Number(r.reveal_credit_balance),
+    }));
   },
 
   /** One tenant's credit-pack purchases, newest first, bounded (13a Area 4). Stripe ids are not projected. */

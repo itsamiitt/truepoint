@@ -13,6 +13,7 @@ export interface AnnouncementRow {
   title: string;
   body: string;
   level: string;
+  type: string;
   audience: string;
   tenantTarget: string | null;
   startsAt: Date | null;
@@ -27,12 +28,14 @@ export interface ActiveAnnouncementRow {
   title: string;
   body: string;
   level: string;
+  type: string;
 }
 
 export interface AnnouncementWrite {
   title: string;
   body: string;
   level: string;
+  type: string;
   audience: string;
   tenantTarget: string | null;
   startsAt: string | null; // ISO or null
@@ -44,6 +47,7 @@ const COLS = {
   title: announcements.title,
   body: announcements.body,
   level: announcements.level,
+  type: announcements.type,
   audience: announcements.audience,
   tenantTarget: announcements.tenantTarget,
   startsAt: announcements.startsAt,
@@ -72,6 +76,7 @@ export const announcementRepository = {
         title: input.title,
         body: input.body,
         level: input.level,
+        type: input.type,
         audience: input.audience,
         tenantTarget: input.tenantTarget,
         startsAt: ts(input.startsAt),
@@ -90,6 +95,7 @@ export const announcementRepository = {
         title: input.title,
         body: input.body,
         level: input.level,
+        type: input.type,
         audience: input.audience,
         tenantTarget: input.tenantTarget,
         startsAt: ts(input.startsAt),
@@ -114,7 +120,8 @@ export const announcementRepository = {
   /**
    * CUSTOMER read — the active announcements applicable to one tenant, for the in-app banner. Runs on the
    * OWNER connection (announcements are platform broadcasts, deny-all to the app role) with a server-controlled
-   * filter: active, within the [starts_at, ends_at) window, and audience all OR a tenant match. `tenantId` MUST
+   * filter: active, within the [starts_at, ends_at) window (the admin sets ends_at to 23:59:59.999 of the
+   * chosen end DATE, so that end date is inclusive), and audience all OR a tenant match. `tenantId` MUST
    * come from the verified session, never the request body — that is what makes this owner read safe.
    */
   async listActiveForTenant(tenantId: string): Promise<ActiveAnnouncementRow[]> {
@@ -124,6 +131,7 @@ export const announcementRepository = {
         title: announcements.title,
         body: announcements.body,
         level: announcements.level,
+        type: announcements.type,
       })
       .from(announcements)
       .where(

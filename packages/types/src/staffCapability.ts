@@ -34,6 +34,7 @@ export const staffCapability = z.enum([
   "data:manage", // perform data-ops mutations (retry/cancel jobs, trigger enrichment) — cross-tenant, audited
   "data:review", // approve / reject a maker-checker data-ops request (requester != approver, server-enforced)
   "data:export", // initiate an audited cross-tenant data export (PII egress; suppression-checked, approval-gated)
+  "flags:manage", // create / toggle feature flags + per-tenant overrides (super_admin-only)
 ]);
 export type StaffCapability = z.infer<typeof staffCapability>;
 

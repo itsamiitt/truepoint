@@ -4,6 +4,7 @@
 // the customer app role is read-only on these tables. Public slice component (the shell renders it).
 "use client";
 
+import { useStaffMe } from "@/lib/staffMe";
 import type { FeatureFlagWithOverrides } from "@leadwolf/types";
 import {
   type Column,
@@ -26,6 +27,8 @@ import { OverrideDialog } from "./OverrideDialog";
 export function FeatureFlagsPage() {
   const { flags, error, loading, reload } = useFeatureFlags();
   const toast = useToast();
+  const { canMaybe } = useStaffMe();
+  const canManage = canMaybe("flags:manage");
   const [creating, setCreating] = useState(false);
   const [overrideFor, setOverrideFor] = useState<FeatureFlagWithOverrides | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -65,7 +68,7 @@ export function FeatureFlagsPage() {
       cell: (f) => (
         <TpSwitch
           checked={f.globalEnabled}
-          disabled={busyKey === f.key}
+          disabled={busyKey === f.key || !canManage}
           aria-label={`Toggle ${f.key} globally`}
           onChange={(e) => void toggleGlobal(f, e.currentTarget.checked)}
         />
@@ -114,9 +117,11 @@ export function FeatureFlagsPage() {
             global default. Every change is audited.
           </p>
         </div>
-        <TpButton leftIcon={<Plus size={14} />} onClick={() => setCreating(true)}>
-          New flag
-        </TpButton>
+        {canManage ? (
+          <TpButton leftIcon={<Plus size={14} />} onClick={() => setCreating(true)}>
+            New flag
+          </TpButton>
+        ) : null}
       </header>
 
       {loading && flags.length === 0 ? (

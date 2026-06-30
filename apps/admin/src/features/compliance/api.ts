@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { DsarRequest, GlobalSuppression, RetentionPolicy } from "./types";
+import type { DsarRequest, GlobalSuppression, RetentionPolicy, SubProcessor } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -18,6 +18,24 @@ export async function fetchDsars(status?: string): Promise<DsarRequest[]> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load DSAR requests"));
   const body = (await res.json()) as { dsars: DsarRequest[] };
   return body.dsars;
+}
+
+/** POST /admin/compliance/dsars/:id/status — advance a DSAR (verifying|processing|rejected; compliance:manage).
+ *  'completed' is intentionally not settable from the console — fulfilment records that, not a manual flag. */
+export async function transitionDsar(
+  id: string,
+  status: "verifying" | "processing" | "rejected",
+  reason?: string,
+): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/compliance/dsars/${encodeURIComponent(id)}/status`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not update the DSAR"));
 }
 
 /** GET /admin/compliance/suppression — the global blocklist. */
@@ -96,4 +114,56 @@ export async function setRetentionActive(id: string, active: boolean): Promise<v
     },
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not update the policy"));
+}
+
+export interface SubProcessorInput {
+  name: string;
+  purpose: string;
+  location: string;
+  dpaUrl?: string;
+  sortOrder: number;
+}
+
+/** GET /admin/compliance/sub-processors — the GDPR Art. 28 sub-processor registry. */
+export async function fetchSubProcessors(): Promise<SubProcessor[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/compliance/sub-processors`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load sub-processors"));
+  const body = (await res.json()) as { subProcessors: SubProcessor[] };
+  return body.subProcessors;
+}
+
+/** POST /admin/compliance/sub-processors — add a sub-processor (compliance:manage). */
+export async function createSubProcessor(input: SubProcessorInput): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/compliance/sub-processors`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not save the sub-processor"));
+}
+
+/** PUT /admin/compliance/sub-processors/:id — update a sub-processor (compliance:manage). */
+export async function updateSubProcessor(id: string, input: SubProcessorInput): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/compliance/sub-processors/${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not update the sub-processor"));
+}
+
+/** POST /admin/compliance/sub-processors/:id/active — remove/restore a sub-processor (compliance:manage). */
+export async function setSubProcessorActive(id: string, active: boolean): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/compliance/sub-processors/${encodeURIComponent(id)}/active`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ active }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not update the sub-processor"));
 }

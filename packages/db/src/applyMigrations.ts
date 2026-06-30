@@ -113,6 +113,9 @@ const GRANTS = `
   -- app role must never read or tamper with the staff approval workflow. RLS denies it; REVOKE the blanket grant
   -- too (defence-in-depth). withPlatformTx (owner) is unaffected.
   REVOKE ALL ON approval_requests FROM leadwolf_app;
+  -- sub_processors (13a Area 8 / GDPR Art. 28) is staff-published compliance config — platform-owned, deny-all
+  -- to the customer app role. REVOKE the blanket grant. withPlatformTx (owner) unaffected.
+  REVOKE ALL ON sub_processors FROM leadwolf_app;
   -- Layer-0 master graph (ADR-0021) is SYSTEM-OWNED, isolated by ACCESS PATH not RLS: it has NO workspace_id,
   -- so NO fail-closed RLS predicate. The blanket GRANT above handed leadwolf_app DML on it — REVOKE it so the
   -- customer app role can NEVER read the shared universe directly (PLAN_04/PLAN_07 "grant-off is the wall").

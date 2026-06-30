@@ -32,6 +32,7 @@ function toView(r: {
   title: string;
   body: string;
   level: string;
+  type: string;
   audience: string;
   tenantTarget: string | null;
   startsAt: Date | null;
@@ -45,6 +46,7 @@ function toView(r: {
     title: r.title,
     body: r.body,
     level: r.level as AnnouncementView["level"],
+    type: r.type as AnnouncementView["type"],
     audience: r.audience as AnnouncementView["audience"],
     tenantTarget: r.tenantTarget,
     startsAt: r.startsAt ? r.startsAt.toISOString() : null,

@@ -4,6 +4,7 @@
 // endpoints. NO plaintext secrets ever reach this screen. Public slice component.
 "use client";
 
+import { useStaffMe } from "@/lib/staffMe";
 import {
   type Column,
   DataTable,
@@ -38,6 +39,8 @@ function dollars(cents: number | null): string {
 export function ProviderConfigsPage() {
   const { providers, error, unavailable, loading, reload } = useProviderConfigs();
   const toast = useToast();
+  const { canMaybe } = useStaffMe();
+  const canManage = canMaybe("providers:manage");
   const [busy, setBusy] = useState<string | null>(null);
 
   async function toggle(p: ProviderConfigView, enabled: boolean) {
@@ -86,7 +89,7 @@ export function ProviderConfigsPage() {
       cell: (p) => (
         <TpSwitch
           checked={p.enabled}
-          disabled={busy === p.provider}
+          disabled={busy === p.provider || !canManage}
           aria-label={`Toggle ${p.label}`}
           onChange={(e) => void toggle(p, e.currentTarget.checked)}
         />
@@ -117,7 +120,9 @@ export function ProviderConfigsPage() {
       key: "budget",
       header: "Monthly budget ($)",
       width: 200,
-      cell: (p) => <BudgetCell provider={p} disabled={busy === p.provider} onSave={saveBudget} />,
+      cell: (p) => (
+        <BudgetCell provider={p} disabled={busy === p.provider || !canManage} onSave={saveBudget} />
+      ),
     },
     {
       key: "spend",
@@ -191,6 +196,7 @@ function BudgetCell({
       <TpInput
         type="number"
         min={0}
+        max={1000000}
         value={value}
         placeholder="unset"
         disabled={disabled}

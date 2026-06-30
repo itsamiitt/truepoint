@@ -275,7 +275,7 @@ export async function bulkProcessChunk(
           src,
         });
         for (const f of scalarFields) {
-          if (!writableFields.has(f)) delete (values as Record<string, unknown>)[f];
+          if (!writableFields.has(f)) delete (values as unknown as Record<string, unknown>)[f];
         }
         values.fieldProvenance = provenance;
         updates.push({ id: matchId, values });

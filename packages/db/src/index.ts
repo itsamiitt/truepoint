@@ -321,6 +321,20 @@ export {
   type EconomicsAggregate,
   type PlatformPurchaseRow,
 } from "./repositories/platformBillingReads.ts";
+// Platform data-quality reads (P5 cockpit) — cross-tenant DQ rollup + re-verification ledger, within withPlatformTx.
+export {
+  platformDataQualityReadRepository,
+  type DataQualityRollup,
+  type VerificationRunRow,
+  type VerificationTotals,
+} from "./repositories/platformDataQualityReads.ts";
+// Platform trust/abuse reads (P6) — cross-tenant signup velocity, active holds, status mix; within withPlatformTx.
+export {
+  platformTrustReadRepository,
+  type SignupVelocity,
+  type CountBucket,
+  type TrustSignals,
+} from "./repositories/platformTrustReads.ts";
 // Platform compliance-ops reads (13a Area 8) — global DSAR queue (PII-free), run within withPlatformTx.
 export {
   platformComplianceReadRepository,
@@ -332,6 +346,12 @@ export {
   type RetentionPolicyRow,
   type RetentionPolicyWrite,
 } from "./repositories/retentionPolicyRepository.ts";
+// Sub-processor registry (13a Area 8 / GDPR Art. 28) — staff-published config; owner-connection, audited writes.
+export {
+  subProcessorRepository,
+  type SubProcessorRow,
+  type SubProcessorWrite,
+} from "./repositories/subProcessorRepository.ts";
 // Credit-pack pricing catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
 export {
   creditPackRepository,

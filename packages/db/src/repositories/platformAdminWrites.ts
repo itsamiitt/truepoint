@@ -8,6 +8,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenants, users } from "../schema/auth.ts";
+import { dsarRequests } from "../schema/compliance.ts";
 import { approvalRequests } from "../schema/platformOps.ts";
 import type { PlatformApprovalRow } from "./platformAdminReads.ts";
 
@@ -53,6 +54,14 @@ export interface ApprovalDecisionOutcome {
   row: PlatformApprovalRow | null;
 }
 
+/** Outcome of a DSAR transition, so the caller maps it to the right HTTP result IN-tx (rolling the audit row
+ *  back on a refusal): unknown id → 404, an illegal or terminal-state transition → 422 (invalidFrom = the
+ *  blocking current state), else applied. */
+export interface DsarTransitionOutcome {
+  found: boolean;
+  invalidFrom: string | null;
+}
+
 export const platformAdminWriteRepository = {
   /**
    * Set a tenant's lifecycle status (active|suspended) — the suspend/reactivate mutation (13 §3.1). Returns
@@ -89,6 +98,40 @@ export const platformAdminWriteRepository = {
       sql`UPDATE tenants SET reveal_credit_balance = ${next}, updated_at = now() WHERE id = ${tenantId}::uuid`,
     );
     return { found: true, wouldOverdraw: false, balanceAfter: next };
+  },
+
+  /**
+   * Advance a DSAR's workflow state (08 §4) — the staff-drivable transitions ONLY: verifying / processing /
+   * rejected. 'completed' is intentionally NOT settable here: fulfilment (the erasure/export process) records
+   * completion, never a manual flag — a hand-set 'completed' with no actual fulfilment would be a compliance
+   * violation. Entering 'processing' stamps verified_at (identity confirmed). Returns rows touched (0 = unknown
+   * id → the caller raises a clean 404 in-tx, rolling the audit row back).
+   */
+  async setDsarStatus(
+    tx: Tx,
+    id: string,
+    status: "verifying" | "processing" | "rejected",
+  ): Promise<DsarTransitionOutcome> {
+    // Lock the row + read the current state so the transition is ENFORCED server-side (the console's per-row
+    // buttons are UX only — a crafted request must not write a nonsensical trail). Forward-only:
+    // received → verifying|processing|rejected, verifying → processing|rejected, processing → rejected;
+    // terminal states (completed|rejected) never transition.
+    const rows = (await tx.execute(
+      sql`SELECT status FROM dsar_requests WHERE id = ${id}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ status: string }>;
+    if (rows.length === 0) return { found: false, invalidFrom: null };
+    const from = rows[0]!.status;
+    const legal: Record<string, readonly string[]> = {
+      received: ["verifying", "processing", "rejected"],
+      verifying: ["processing", "rejected"],
+      processing: ["rejected"],
+    };
+    if (!legal[from]?.includes(status)) return { found: true, invalidFrom: from };
+    await tx
+      .update(dsarRequests)
+      .set({ status, ...(status === "processing" ? { verifiedAt: new Date() } : {}) })
+      .where(eq(dsarRequests.id, id));
+    return { found: true, invalidFrom: null };
   },
 
   /**

@@ -68,7 +68,7 @@ export async function probeQueues(): Promise<SystemHealthProbe> {
     r.status === "fulfilled"
       ? { ...r.value, reachable: true }
       : {
-          name: SPECS[i].name,
+          name: SPECS[i]!.name,
           waiting: null,
           active: null,
           failed: null,

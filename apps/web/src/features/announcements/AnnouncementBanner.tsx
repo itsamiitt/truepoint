@@ -54,7 +54,9 @@ export function AnnouncementBanner() {
     };
   }, []);
 
-  const visible = items.filter((i) => !dismissed.has(i.id));
+  // Maintenance notices are non-dismissible — they ignore the per-user dismiss set so a critical system
+  // message can't be permanently hidden by a click.
+  const visible = items.filter((i) => i.type === "maintenance" || !dismissed.has(i.id));
   if (visible.length === 0) return null;
 
   function dismiss(id: string) {
@@ -83,22 +85,24 @@ export function AnnouncementBanner() {
           <span>
             <strong>{a.title}</strong> {a.body}
           </span>
-          <button
-            type="button"
-            aria-label="Dismiss announcement"
-            onClick={() => dismiss(a.id)}
-            style={{
-              flex: "0 0 auto",
-              border: "none",
-              background: "transparent",
-              color: "var(--tp-ink-3)",
-              cursor: "pointer",
-              fontSize: 16,
-              lineHeight: 1,
-            }}
-          >
-            ✕
-          </button>
+          {a.type === "maintenance" ? null : (
+            <button
+              type="button"
+              aria-label="Dismiss announcement"
+              onClick={() => dismiss(a.id)}
+              style={{
+                flex: "0 0 auto",
+                border: "none",
+                background: "transparent",
+                color: "var(--tp-ink-3)",
+                cursor: "pointer",
+                fontSize: 16,
+                lineHeight: 1,
+              }}
+            >
+              ✕
+            </button>
+          )}
         </div>
       ))}
     </div>

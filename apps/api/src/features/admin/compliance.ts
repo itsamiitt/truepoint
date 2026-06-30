@@ -5,8 +5,10 @@
 // (never the encrypted subject email). DSAR requests are global, not per-tenant.
 
 import {
+  platformAdminWriteRepository,
   platformComplianceReadRepository,
   retentionPolicyRepository,
+  subProcessorRepository,
   suppressionRepository,
   withPlatformTx,
 } from "@leadwolf/db";
@@ -15,11 +17,15 @@ import {
   type GlobalSuppressionView,
   NotFoundError,
   type RetentionPolicyView,
+  type SubProcessorView,
   ValidationError,
   addGlobalSuppressionSchema,
+  dsarTransitionSchema,
   platformDsarQuerySchema,
   retentionPolicySetActiveSchema,
   retentionPolicyUpsertSchema,
+  subProcessorSetActiveSchema,
+  subProcessorUpsertSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
@@ -65,6 +71,33 @@ complianceRoutes.get("/dsars", async (c) => {
     (await platformComplianceReadRepository.listDsarRequests(tx, parsed.data)).map(toRow),
   );
   return c.json({ dsars });
+});
+
+/** Advance a DSAR through its staff workflow — verifying / processing / rejected. compliance:manage; audited
+ *  "dsar.transition". 'completed' is NOT settable here: the erasure/export fulfilment records completion, never
+ *  a manual flag (a hand-set 'completed' with no fulfilment would be a compliance violation). */
+complianceRoutes.post("/dsars/:id/status", requireCapability("compliance:manage"), async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  const parsed = dsarTransitionSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { status, reason } = parsed.data;
+  await withPlatformTx(
+    actorOf(c),
+    "dsar.transition",
+    async (tx) => {
+      const res = await platformAdminWriteRepository.setDsarStatus(tx, id, status);
+      if (!res.found) throw new NotFoundError("DSAR request not found.");
+      if (res.invalidFrom)
+        throw new ValidationError(`Cannot move a '${res.invalidFrom}' DSAR to '${status}'.`);
+    },
+    {
+      targetType: "dsar_request",
+      targetId: id,
+      metadata: { status, ...(reason ? { reason } : {}) },
+    },
+  );
+  return c.json({ ok: true, id, status });
 });
 
 // ── Retention policies (13a Area 8, 13 §3.8) — staff-authored retention SLAs. Read = compliance:read (the
@@ -209,5 +242,102 @@ complianceRoutes.post(
       { targetType: "suppression", targetId: id },
     );
     return c.json({ ok: true, id });
+  },
+);
+
+// ── Sub-processor registry (13a Area 8 / GDPR Art. 28) — the third-party processors TruePoint discloses (name,
+// purpose, processing location, DPA link). Read = compliance:read (router gate); writes need compliance:manage.
+// Audited "sub_processor.set". An empty dpaUrl normalises to null. ──
+function toSubProcessor(r: {
+  id: string;
+  name: string;
+  purpose: string;
+  location: string;
+  dpaUrl: string | null;
+  active: boolean;
+  sortOrder: number;
+  updatedAt: Date;
+}): SubProcessorView {
+  return {
+    id: r.id,
+    name: r.name,
+    purpose: r.purpose,
+    location: r.location,
+    dpaUrl: r.dpaUrl,
+    active: r.active,
+    sortOrder: r.sortOrder,
+    updatedAt: r.updatedAt.toISOString(),
+  };
+}
+
+complianceRoutes.get("/sub-processors", async (c) => {
+  const subProcessors = await withPlatformTx(actorOf(c), "admin.list_sub_processors", async (tx) =>
+    (await subProcessorRepository.list(tx)).map(toSubProcessor),
+  );
+  return c.json({ subProcessors });
+});
+
+complianceRoutes.post("/sub-processors", requireCapability("compliance:manage"), async (c) => {
+  const parsed = subProcessorUpsertSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const actor = actorOf(c);
+  const row = await withPlatformTx(
+    actor,
+    "sub_processor.set",
+    (tx) =>
+      subProcessorRepository.create(tx, {
+        name: parsed.data.name,
+        purpose: parsed.data.purpose,
+        location: parsed.data.location,
+        dpaUrl: parsed.data.dpaUrl?.trim() || null,
+        sortOrder: parsed.data.sortOrder,
+        createdByUserId: actor.userId,
+      }),
+    { targetType: "sub_processor", metadata: { name: parsed.data.name } },
+  );
+  return c.json({ subProcessor: toSubProcessor(row) });
+});
+
+complianceRoutes.put("/sub-processors/:id", requireCapability("compliance:manage"), async (c) => {
+  const id = c.req.param("id");
+  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  const parsed = subProcessorUpsertSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  await withPlatformTx(
+    actorOf(c),
+    "sub_processor.set",
+    async (tx) => {
+      const touched = await subProcessorRepository.update(tx, id, {
+        name: parsed.data.name,
+        purpose: parsed.data.purpose,
+        location: parsed.data.location,
+        dpaUrl: parsed.data.dpaUrl?.trim() || null,
+        sortOrder: parsed.data.sortOrder,
+      });
+      if (touched === 0) throw new NotFoundError("Sub-processor not found.");
+    },
+    { targetType: "sub_processor", targetId: id },
+  );
+  return c.json({ ok: true, id });
+});
+
+complianceRoutes.post(
+  "/sub-processors/:id/active",
+  requireCapability("compliance:manage"),
+  async (c) => {
+    const id = c.req.param("id");
+    if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+    const parsed = subProcessorSetActiveSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+    await withPlatformTx(
+      actorOf(c),
+      "sub_processor.set",
+      async (tx) => {
+        const touched = await subProcessorRepository.setActive(tx, id, parsed.data.active);
+        if (touched === 0) throw new NotFoundError("Sub-processor not found.");
+      },
+      { targetType: "sub_processor", targetId: id, metadata: { active: parsed.data.active } },
+    );
+    return c.json({ ok: true, id, active: parsed.data.active });
   },
 );

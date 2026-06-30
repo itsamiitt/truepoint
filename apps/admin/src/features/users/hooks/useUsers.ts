@@ -11,15 +11,17 @@ export function useUsers() {
   const [users, setUsers] = useState<PlatformUser[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
 
-  const load = useCallback(async (q: string) => {
+  const load = useCallback(async (q: string, st: string) => {
     setLoading(true);
     setError(null);
     try {
-      const page = await fetchUsers(q || undefined);
+      const page = await fetchUsers({ search: q || undefined, status: st || undefined });
       setUsers(page.users);
       setNextCursor(page.nextCursor);
     } catch (e) {
@@ -32,39 +34,55 @@ export function useUsers() {
   const applySearch = useCallback(
     (q: string) => {
       setSearch(q);
-      void load(q);
+      void load(q, status);
     },
-    [load],
+    [load, status],
+  );
+
+  const applyStatus = useCallback(
+    (st: string) => {
+      setStatus(st);
+      void load(search, st);
+    },
+    [load, search],
   );
 
   const loadMore = useCallback(async () => {
     if (!nextCursor) return;
     setLoadingMore(true);
-    setError(null);
+    setLoadMoreError(null);
     try {
-      const page = await fetchUsers(search || undefined, nextCursor);
+      const page = await fetchUsers({
+        search: search || undefined,
+        status: status || undefined,
+        cursor: nextCursor,
+      });
       setUsers((prev) => [...(prev ?? []), ...page.users]);
       setNextCursor(page.nextCursor);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load more");
+      // A pagination failure must NOT wipe the loaded list (the page `error` drives StateSwitch). Inline it.
+      setLoadMoreError(e instanceof Error ? e.message : "Failed to load more");
     } finally {
       setLoadingMore(false);
     }
-  }, [search, nextCursor]);
+  }, [search, status, nextCursor]);
 
   useEffect(() => {
-    void load("");
+    void load("", "");
   }, [load]);
 
   return {
     users,
     nextCursor,
     search,
+    status,
     error,
     loading,
     loadingMore,
+    loadMoreError,
     applySearch,
+    applyStatus,
     loadMore,
-    reload: useCallback(() => load(search), [load, search]),
+    reload: useCallback(() => load(search, status), [load, search, status]),
   };
 }
