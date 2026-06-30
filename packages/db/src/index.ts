@@ -323,6 +323,7 @@ export {
 export {
   platformBillingReadRepository,
   type EconomicsAggregate,
+  type TenantEconomicsDetailAggregate,
   type PlatformPurchaseRow,
 } from "./repositories/platformBillingReads.ts";
 // Platform data-quality reads (P5 cockpit) — cross-tenant DQ rollup + re-verification ledger, within withPlatformTx.

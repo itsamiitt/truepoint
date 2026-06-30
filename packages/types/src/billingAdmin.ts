@@ -63,6 +63,35 @@ export const lowBalanceTenantSchema = z.object({
 });
 export type LowBalanceTenant = z.infer<typeof lowBalanceTenantSchema>;
 
+/** One tenant's economics detail — the per-tenant drill-down on the tenant-detail console (complements the
+ *  cross-tenant rollup). Windowed (`sinceDays`) + lifetime money picture; PII-free. Money is integer cents;
+ *  cost-per-reveal may be fractional. `lastPurchaseAt` is the newest completed top-up (ISO), or null. NOTE:
+ *  packs-not-subscriptions — there is NO MRR/ARR here (that is decision-gated on OD-1), only realized spend. */
+export const tenantEconomicsDetailSchema = z.object({
+  tenantId: z.string().uuid(),
+  tenantName: z.string(),
+  plan: z.string(),
+  revealCreditBalance: z.number().int(),
+  sinceDays: z.number().int(),
+  // window [since, now]
+  revenueCents: z.number().int(),
+  refundedCents: z.number().int(),
+  creditsSold: z.number().int(),
+  creditsConsumed: z.number().int(),
+  reveals: z.number().int(),
+  chargedReveals: z.number().int(),
+  providerSpendCents: z.number().int(),
+  costPerRevealCents: z.number(), // providerSpendCents / chargedReveals (0 when none)
+  marginCents: z.number().int(), // revenueCents - providerSpendCents
+  // lifetime (all-time)
+  lifetimeRevenueCents: z.number().int(),
+  lifetimeRefundedCents: z.number().int(),
+  lifetimeCreditsSold: z.number().int(),
+  lifetimeCreditsConsumed: z.number().int(),
+  lastPurchaseAt: z.string().nullable(), // ISO-8601 or null
+});
+export type TenantEconomicsDetail = z.infer<typeof tenantEconomicsDetailSchema>;
+
 /** The economics summary for the window (07 §9 "internal reporting"). */
 export const economicsSummarySchema = z.object({
   sinceDays: z.number().int(),

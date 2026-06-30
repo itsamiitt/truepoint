@@ -29,10 +29,12 @@ import {
   NotFoundError,
   type StaffListOverview,
   type SupportNoteView,
+  type TenantEconomicsDetail,
   ValidationError,
   capabilitiesForRole,
   createSupportNoteSchema,
   creditAdjustSchema,
+  economicsQuerySchema,
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
   featureFlagUpsertSchema,
@@ -506,6 +508,49 @@ adminRoutes.post(
 // ── Purchases + refunds (13a Area 4, 13 §3.4, 07 §6/§7) — a tenant's credit-pack purchases and an audited
 // refund (reverse the credits + mark refunded). Read = billing:read; refund = tenants:credits (a credit move).
 // The refund clamps to the available balance (the bare counter can't go negative). ──
+// Per-tenant economics detail (13a Area 4, 07 §9) — one tenant's windowed + lifetime money picture for the
+// tenant-detail console: revenue, credits sold/consumed, reveals, provider spend, margin, cost-per-reveal,
+// balance, last top-up. Read = billing:read; audited. PII-free aggregate; complements the cross-tenant rollup.
+// Packs-not-subscriptions, so this is realized spend only — NO MRR/ARR (that is OD-1 decision-gated).
+adminRoutes.get("/tenants/:id/economics", requireCapability("billing:read"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = economicsQuerySchema.safeParse({ sinceDays: c.req.query("sinceDays") });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { sinceDays } = parsed.data;
+  const since = new Date(Date.now() - sinceDays * 86_400_000);
+  const detail = await withPlatformTx(
+    actorOf(c),
+    "admin.tenant_economics",
+    (tx) => platformBillingReadRepository.economicsForTenant(tx, tenantId, since),
+    { targetType: "tenant", targetId: tenantId, tenantId, metadata: { sinceDays } },
+  );
+  if (!detail) throw new NotFoundError("Tenant not found.");
+  const providerSpendCents = Math.round(detail.providerSpendMicros / 10_000);
+  const economics: TenantEconomicsDetail = {
+    tenantId: detail.tenantId,
+    tenantName: detail.tenantName,
+    plan: detail.plan,
+    revealCreditBalance: detail.revealCreditBalance,
+    sinceDays,
+    revenueCents: detail.revenueCents,
+    refundedCents: detail.refundedCents,
+    creditsSold: detail.creditsSold,
+    creditsConsumed: detail.creditsConsumed,
+    reveals: detail.reveals,
+    chargedReveals: detail.chargedReveals,
+    providerSpendCents,
+    costPerRevealCents: detail.chargedReveals > 0 ? providerSpendCents / detail.chargedReveals : 0,
+    marginCents: detail.revenueCents - providerSpendCents,
+    lifetimeRevenueCents: detail.lifetimeRevenueCents,
+    lifetimeRefundedCents: detail.lifetimeRefundedCents,
+    lifetimeCreditsSold: detail.lifetimeCreditsSold,
+    lifetimeCreditsConsumed: detail.lifetimeCreditsConsumed,
+    lastPurchaseAt: detail.lastPurchaseAt ? detail.lastPurchaseAt.toISOString() : null,
+  };
+  return c.json({ economics });
+});
+
 adminRoutes.get("/tenants/:id/purchases", requireCapability("billing:read"), async (c) => {
   const tenantId = c.req.param("id");
   if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
