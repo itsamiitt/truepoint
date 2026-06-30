@@ -6,11 +6,13 @@
 // all inside the SAME per-row transaction. Returns the new-vs-matched-vs-skipped tally + the added-to-list
 // count. Each row runs in its own tight transaction so one bad row never rolls back the whole import.
 
+import { env } from "@leadwolf/config";
 import {
   type ContactWriteValues,
   type Tx,
   accountRepository,
   contactRepository,
+  evidenceRepository,
   listRepository,
   masterGraphRepository,
   sourceImportRepository,
@@ -153,6 +155,52 @@ async function resolveMasterForLanding(prepared: PreparedContact): Promise<Resol
   }
 }
 
+/**
+ * I0 evidence dual-write (prospect-database-platform; audit P01), BEHIND INGESTION_EVIDENCE_ENABLED. Appends the
+ * immutable source_records evidence row for this LANDED row + its match_links cluster membership, in their OWN
+ * withErTx (the master-graph write role). NON-FATAL + idempotent (content-hash): a failure logs and never fails
+ * the landing, and an identical re-ingest does not double-link. The shipped golden landing stays authoritative —
+ * the survivorship projector reading this log is a SEPARATE, CI-parity-gated flip.
+ */
+async function recordImportEvidence(
+  input: RunImportInput,
+  raw: RawRow,
+  hash: Uint8Array,
+  resolved: ResolvedMaster,
+  prepared: PreparedContact,
+): Promise<void> {
+  try {
+    await withErTx(async (tx) => {
+      const ev = await evidenceRepository.appendSourceRecord(tx, {
+        sourceName: input.sourceName,
+        contentHash: hash,
+        rawData: raw,
+        matchKeys: {
+          emailDomain: prepared.values.emailDomain ?? undefined,
+          linkedinPublicId: prepared.values.linkedinPublicId ?? undefined,
+        },
+        resolvedPersonId: resolved.masterPersonId,
+        resolvedCompanyId: resolved.masterCompanyId,
+      });
+      if (!ev || !ev.created) return; // idempotent re-ingest → don't double-link
+      if (resolved.masterPersonId)
+        await evidenceRepository.linkToCluster(tx, {
+          entityType: "person",
+          clusterId: resolved.masterPersonId,
+          sourceRecordId: ev.id,
+        });
+      if (resolved.masterCompanyId)
+        await evidenceRepository.linkToCluster(tx, {
+          entityType: "company",
+          clusterId: resolved.masterCompanyId,
+          sourceRecordId: ev.id,
+        });
+    });
+  } catch (err) {
+    console.error("[import] evidence dual-write failed (non-fatal; flag-gated)", err);
+  }
+}
+
 async function importOneRow(
   tx: Tx,
   input: RunImportInput,
@@ -204,7 +252,11 @@ async function importOneRow(
   // Co-op-safe MATCH-AGAINST resolution runs BEFORE the overlay write, in its OWN `withErTx` tx (leadwolf_er) —
   // OUTSIDE this per-row `withTenantTx` (leadwolf_app has no master_* grant; PLAN_02 §1.4, ADR-0021). The
   // bridge ids are nullable in-flight staging, so a resolution failure leaves them null and the row still lands.
-  const { masterPersonId, masterCompanyId } = await resolveMasterForLanding(prepared);
+  const resolved = await resolveMasterForLanding(prepared);
+  const { masterPersonId, masterCompanyId } = resolved;
+  // I0 evidence dual-write (flag-off by default → no-op; audit P01). Additive + non-fatal; never affects the
+  // golden landing below.
+  if (env.INGESTION_EVIDENCE_ENABLED) await recordImportEvidence(input, raw, hash, resolved, prepared);
 
   let accountId: string | undefined;
   if (prepared.accountDomain) {
