@@ -5,6 +5,7 @@
 // Tab selection is mirrored to ?tab= via history.replaceState (no useSearchParams Suspense constraint).
 "use client";
 
+import { isWorkspaceAdmin, useSessionRole } from "@/lib/useSessionRole";
 import { StateSwitch, Tabs } from "@leadwolf/ui";
 import { useEffect, useState } from "react";
 import styles from "../billing.module.css";
@@ -25,6 +26,9 @@ const TAB_ITEMS = [
 
 export function BillingPage() {
   const { balance, plan, error, loading, reload, topUp } = useBilling();
+  // OD-8: only a workspace admin (owner/admin) may purchase; members see a read-only hint. Server enforces the
+  // real gate on the (not-yet-built) checkout endpoint — this is UX, fail-closed until the role resolves.
+  const canPurchase = isWorkspaceAdmin(useSessionRole());
   // Initial render uses the default (SSR-safe); the effect syncs the deep-linked ?tab= on the client.
   const [tab, setTab] = useState<string>(DEFAULT_BILLING_TAB);
   useEffect(() => setTab(readBillingTabFromUrl()), []);
@@ -63,7 +67,9 @@ export function BillingPage() {
         ) : (
           <StateSwitch loading={loading} error={error} onRetry={reload}>
             {tab === BillingTab.Plan && <PlanTab plan={plan} />}
-            {tab === BillingTab.Credits && <CreditsTab balance={balance} topUp={topUp} />}
+            {tab === BillingTab.Credits && (
+              <CreditsTab balance={balance} topUp={topUp} canPurchase={canPurchase} />
+            )}
             {tab === BillingTab.Usage && <UsageTab />}
           </StateSwitch>
         )}
