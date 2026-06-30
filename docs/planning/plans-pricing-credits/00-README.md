@@ -4,7 +4,7 @@ scope: plans-pricing-credits
 docs: 8
 last_updated: 2026-06-30
 owner: product + platform + billing
-status: Plan (not yet built)
+status: Plan authored + first build cycle (P2 self-serve slice) SHIPPED — see 05
 ---
 
 # TruePoint — Plans, Pricing, Credits, Subscriptions & Billing
@@ -144,7 +144,7 @@ flag where the alternative would change the design.
 | **`04_Admin_Experience.md`** | Target-state design for the **internal** commercial surfaces (Billing/economics, Plans, Pricing, Tenant credit/plan/refund ops) — wireframes under `wireframes/admin/` | Planned |
 | **`05_Web_Experience.md`** | Target-state design for the **customer** surfaces (billing hub, public pricing page, self-serve up/down/cancel, invoices, credit history, allocation UI) — wireframes under `wireframes/web/` | Planned |
 | **`06_Architecture_And_Data.md`** | Target data model (ledger, subscriptions, invoices, budgets), APIs, workers, RLS, migrations (hand-authored — no `drizzle-kit generate`), diagrams under `diagrams/` | Planned |
-| **`07_Implementation_Roadmap.md`** | **Synthesis doc.** Reconciles all above into the finalized **P0–P6 roadmap** + the completed **cross-cutting dependency matrix** + testing/rollback per phase | Planned (synthesis) |
+| **`07_Implementation_Roadmap.md`** | **Synthesis doc.** Reconciles all above into the finalized **P0–P6 roadmap** + the completed **cross-cutting dependency matrix** + testing/rollback per phase | Authored as **`05_Implementation_Roadmap.md`** (the package structure diverged: 05/06 content lives under `database/`+`api/`+`wireframes/`, so the synthesis is numbered `05`) — **first build cycle SHIPPED** |
 
 > Every numbered doc carries the **required 12-section spine** (Executive Summary → Objectives →
 > Research Findings → Industry Best Practices → Current System Observations → Recommendations →
@@ -254,8 +254,13 @@ table designs, and the competitor citations from the three tab audits verbatim.
 
 ## 10. Implementation note — how this package gets built
 
-- **Docs first, code never (in this package).** This folder is **enterprise planning
-  documentation**. No source under `apps/**` or `packages/**` is modified by this work.
+- **Docs first; the first build cycle has now SHIPPED (owner-directed).** This folder began as
+  enterprise planning documentation. On owner direction, the gate-respecting self-serve slice (P2:
+  public pricing API + page, the billing hub, `GET /credits/me`, credit-history depth, the OD-8 gate,
+  OD-7 signup-bonus, and a dark low-balance notifier) has been built and committed to `main` — see
+  [`05_Implementation_Roadmap.md`](./05_Implementation_Roadmap.md) §2 for the as-built status.
+  Deferred infra (M11 ledger, M12 leases, Stripe, subscriptions) stays documentation-only until its
+  gate clears.
 - **Defer-honest.** Every proposed table/job/endpoint carries a gating tag; deferred infra is
   **never** presented as built. Auto-renewal/expiry/annual-lock are **proposed amendments**
   (`ADR-0041`), not decided facts.
