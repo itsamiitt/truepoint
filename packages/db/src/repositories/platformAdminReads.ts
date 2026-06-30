@@ -212,6 +212,9 @@ export const platformAdminRepository = {
       const pred = or(ilike(users.email, like), ilike(users.fullName, like));
       if (pred) conds.push(pred);
     }
+    if (q.status) {
+      conds.push(eq(users.status, q.status));
+    }
     if (q.cursor) {
       const id = decodeIdCursor(q.cursor);
       if (id) conds.push(lt(users.id, id));
@@ -431,7 +434,10 @@ export const platformAdminRepository = {
    * (mirrors the privacy-first import-jobs/lists-overview idioms). The customer-facing recentRuns
    * (retentionRunRepository) stays TENANT-scoped via RLS; this is the SEPARATE cross-tenant platform read.
    */
-  async recentRetentionRuns(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformRetentionRunRow[]> {
+  async recentRetentionRuns(
+    tx: Tx,
+    limit = PLATFORM_READ_LIMIT,
+  ): Promise<PlatformRetentionRunRow[]> {
     return tx
       .select({
         tenantId: retentionRuns.tenantId,

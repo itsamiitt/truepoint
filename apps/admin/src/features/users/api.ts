@@ -17,10 +17,13 @@ export interface UsersPage {
 }
 
 /** GET /admin/users — one keyset page of the directory, optionally filtered by an email/name search (13a F5). */
-export async function fetchUsers(search?: string, cursor?: string): Promise<UsersPage> {
+export async function fetchUsers(
+  opts: { search?: string; status?: string; cursor?: string } = {},
+): Promise<UsersPage> {
   const p = new URLSearchParams();
-  if (search) p.set("search", search);
-  if (cursor) p.set("cursor", cursor);
+  if (opts.search) p.set("search", opts.search);
+  if (opts.status) p.set("status", opts.status);
+  if (opts.cursor) p.set("cursor", opts.cursor);
   const qs = p.toString();
   const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/users${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load users"));

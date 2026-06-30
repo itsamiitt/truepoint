@@ -14,6 +14,7 @@ import {
   StatusBadge,
   TpButton,
   TpInput,
+  TpSelect,
   TpTextarea,
   useToast,
 } from "@leadwolf/ui";
@@ -28,8 +29,18 @@ const MIN_REASON = 5;
 type PendingAction = { user: PlatformUser; kind: "deactivate" | "reactivate" };
 
 export function UsersPage() {
-  const { users, nextCursor, loading, loadingMore, error, applySearch, loadMore, reload } =
-    useUsers();
+  const {
+    users,
+    nextCursor,
+    status,
+    loading,
+    loadingMore,
+    error,
+    applySearch,
+    applyStatus,
+    loadMore,
+    reload,
+  } = useUsers();
   const toast = useToast();
   const { canMaybe } = useStaffMe();
   const canManage = canMaybe("users:deactivate");
@@ -134,24 +145,43 @@ export function UsersPage() {
         </div>
       </div>
 
-      {/* Server-side search over email / name; Enter or the button applies it. */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          applySearch(query.trim());
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          alignItems: "center",
+          flexWrap: "wrap",
         }}
-        style={{ display: "flex", gap: 8, marginBottom: 16, maxWidth: 420 }}
       >
-        <TpInput
-          value={query}
-          placeholder="Search by email or name…"
-          aria-label="Search users"
-          onChange={(e) => setQuery(e.currentTarget.value)}
-        />
-        <TpButton type="submit" variant="secondary">
-          <Search size={14} /> Search
-        </TpButton>
-      </form>
+        {/* Server-side search over email / name; Enter or the button applies it (keeps the status filter). */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            applySearch(query.trim());
+          }}
+          style={{ display: "flex", gap: 8, maxWidth: 420, flex: "1 1 320px" }}
+        >
+          <TpInput
+            value={query}
+            placeholder="Search by email or name…"
+            aria-label="Search users"
+            onChange={(e) => setQuery(e.currentTarget.value)}
+          />
+          <TpButton type="submit" variant="secondary">
+            <Search size={14} /> Search
+          </TpButton>
+        </form>
+        <TpSelect
+          aria-label="Status filter"
+          value={status}
+          onChange={(e) => applyStatus(e.currentTarget.value)}
+        >
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="suspended">Suspended</option>
+        </TpSelect>
+      </div>
 
       <StateSwitch
         loading={loading}

@@ -10,6 +10,9 @@ import { z } from "zod";
  *  Values arrive as URL query params, so `limit` is coerced. */
 export const platformListQuerySchema = z.object({
   search: z.string().trim().min(1).max(120).optional(),
+  // Exact account/lifecycle status filter (e.g. "active" | "suspended"), applied by listUsers and reusable by
+  // other directories. A value the column never holds simply returns no rows — no enum coupling needed here.
+  status: z.string().trim().min(1).max(40).optional(),
   cursor: z.string().max(256).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
