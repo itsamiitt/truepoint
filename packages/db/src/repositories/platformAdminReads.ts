@@ -247,6 +247,9 @@ export const platformAdminRepository = {
       const pred = or(ilike(tenants.name, like), ilike(tenants.slug, like));
       if (pred) conds.push(pred);
     }
+    if (q.status) {
+      conds.push(eq(tenants.status, q.status));
+    }
     if (q.cursor) {
       const id = decodeIdCursor(q.cursor);
       if (id) conds.push(lt(tenants.id, id));

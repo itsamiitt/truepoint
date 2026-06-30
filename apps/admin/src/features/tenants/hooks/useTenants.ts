@@ -11,15 +11,16 @@ export function useTenants() {
   const [tenants, setTenants] = useState<TenantRow[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  const load = useCallback(async (q: string) => {
+  const load = useCallback(async (q: string, st: string) => {
     setLoading(true);
     setError(null);
     try {
-      const page = await fetchTenants(q || undefined);
+      const page = await fetchTenants({ search: q || undefined, status: st || undefined });
       setTenants(page.tenants);
       setNextCursor(page.nextCursor);
     } catch (e) {
@@ -32,9 +33,17 @@ export function useTenants() {
   const applySearch = useCallback(
     (q: string) => {
       setSearch(q);
-      void load(q);
+      void load(q, status);
     },
-    [load],
+    [load, status],
+  );
+
+  const applyStatus = useCallback(
+    (st: string) => {
+      setStatus(st);
+      void load(search, st);
+    },
+    [load, search],
   );
 
   const loadMore = useCallback(async () => {
@@ -42,7 +51,11 @@ export function useTenants() {
     setLoadingMore(true);
     setError(null);
     try {
-      const page = await fetchTenants(search || undefined, nextCursor);
+      const page = await fetchTenants({
+        search: search || undefined,
+        status: status || undefined,
+        cursor: nextCursor,
+      });
       setTenants((prev) => [...(prev ?? []), ...page.tenants]);
       setNextCursor(page.nextCursor);
     } catch (e) {
@@ -50,21 +63,23 @@ export function useTenants() {
     } finally {
       setLoadingMore(false);
     }
-  }, [search, nextCursor]);
+  }, [search, status, nextCursor]);
 
   useEffect(() => {
-    void load("");
+    void load("", "");
   }, [load]);
 
   return {
     tenants,
     nextCursor,
     search,
+    status,
     error,
     loading,
     loadingMore,
     applySearch,
+    applyStatus,
     loadMore,
-    reload: useCallback(() => load(search), [load, search]),
+    reload: useCallback(() => load(search, status), [load, search, status]),
   };
 }

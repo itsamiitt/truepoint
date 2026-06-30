@@ -11,6 +11,7 @@ import {
   StatusBadge,
   TpButton,
   TpInput,
+  TpSelect,
 } from "@leadwolf/ui";
 import { Building2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -21,8 +22,18 @@ import type { TenantRow } from "../types";
 
 export function TenantsPage() {
   const router = useRouter();
-  const { tenants, nextCursor, loading, loadingMore, error, applySearch, loadMore, reload } =
-    useTenants();
+  const {
+    tenants,
+    nextCursor,
+    status,
+    loading,
+    loadingMore,
+    error,
+    applySearch,
+    applyStatus,
+    loadMore,
+    reload,
+  } = useTenants();
   const [query, setQuery] = useState("");
 
   const columns: Column<TenantRow>[] = [
@@ -83,24 +94,43 @@ export function TenantsPage() {
         </div>
       </div>
 
-      {/* Server-side search over name / slug; Enter or the button applies it. */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          applySearch(query.trim());
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          alignItems: "center",
+          flexWrap: "wrap",
         }}
-        style={{ display: "flex", gap: 8, marginBottom: 16, maxWidth: 420 }}
       >
-        <TpInput
-          value={query}
-          placeholder="Search by name or slug…"
-          aria-label="Search tenants"
-          onChange={(e) => setQuery(e.currentTarget.value)}
-        />
-        <TpButton type="submit" variant="secondary">
-          <Search size={14} /> Search
-        </TpButton>
-      </form>
+        {/* Server-side search over name / slug; Enter or the button applies it (keeps the status filter). */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            applySearch(query.trim());
+          }}
+          style={{ display: "flex", gap: 8, maxWidth: 420, flex: "1 1 320px" }}
+        >
+          <TpInput
+            value={query}
+            placeholder="Search by name or slug…"
+            aria-label="Search tenants"
+            onChange={(e) => setQuery(e.currentTarget.value)}
+          />
+          <TpButton type="submit" variant="secondary">
+            <Search size={14} /> Search
+          </TpButton>
+        </form>
+        <TpSelect
+          aria-label="Status filter"
+          value={status}
+          onChange={(e) => applyStatus(e.currentTarget.value)}
+        >
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="suspended">Suspended</option>
+        </TpSelect>
+      </div>
 
       <StateSwitch
         loading={loading}

@@ -159,6 +159,7 @@ adminRoutes.post("/users/:id/reactivate", requireCapability("users:deactivate"),
 adminRoutes.get("/tenants", async (c) => {
   const parsed = platformListQuerySchema.safeParse({
     search: c.req.query("search"),
+    status: c.req.query("status"),
     cursor: c.req.query("cursor"),
     limit: c.req.query("limit"),
   });

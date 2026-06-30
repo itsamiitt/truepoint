@@ -26,10 +26,13 @@ export interface TenantsPage {
 }
 
 /** GET /admin/tenants — one keyset page of the directory, optionally filtered by a name/slug search (13a F5). */
-export async function fetchTenants(search?: string, cursor?: string): Promise<TenantsPage> {
+export async function fetchTenants(
+  opts: { search?: string; status?: string; cursor?: string } = {},
+): Promise<TenantsPage> {
   const p = new URLSearchParams();
-  if (search) p.set("search", search);
-  if (cursor) p.set("cursor", cursor);
+  if (opts.search) p.set("search", opts.search);
+  if (opts.status) p.set("status", opts.status);
+  if (opts.cursor) p.set("cursor", opts.cursor);
   const qs = p.toString();
   const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/tenants${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load tenants"));
