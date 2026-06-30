@@ -33,6 +33,7 @@ interface Draft {
   title: string;
   body: string;
   level: string;
+  type: string; // general | maintenance
   audience: string; // all | tenant
   tenantTarget: string;
   tenantTargetName: string | null; // display name of the picked tenant when known (UX only)
@@ -45,6 +46,7 @@ const EMPTY: Draft = {
   title: "",
   body: "",
   level: "info",
+  type: "general",
   audience: "all",
   tenantTarget: "",
   tenantTargetName: null,
@@ -80,6 +82,7 @@ export function ContentPage() {
       title: a.title,
       body: a.body,
       level: a.level,
+      type: a.type,
       audience: a.audience,
       tenantTarget: a.tenantTarget ?? "",
       tenantTargetName: null,
@@ -110,6 +113,7 @@ export function ContentPage() {
       title,
       body,
       level: draft.level,
+      type: draft.type,
       audience: draft.audience,
       tenantTarget,
       startsAt: draft.startsDate ? `${draft.startsDate}T00:00:00.000Z` : null,
@@ -274,12 +278,39 @@ export function ContentPage() {
                 onChange={(e) => setDraft({ ...draft, body: e.currentTarget.value })}
               />
             </Field>
+            <Field label="Type" htmlFor="a-type">
+              <TpSelect
+                id="a-type"
+                value={draft.type}
+                disabled={busy}
+                onChange={(e) => {
+                  const type = e.currentTarget.value;
+                  // A maintenance notice is always a site-wide critical banner — pin level/audience so the
+                  // authoring intent matches what apps/web renders (non-dismissible, every tenant).
+                  setDraft(
+                    type === "maintenance"
+                      ? {
+                          ...draft,
+                          type,
+                          level: "critical",
+                          audience: "all",
+                          tenantTarget: "",
+                          tenantTargetName: null,
+                        }
+                      : { ...draft, type },
+                  );
+                }}
+              >
+                <option value="general">General</option>
+                <option value="maintenance">Maintenance (site-wide, non-dismissible)</option>
+              </TpSelect>
+            </Field>
             <div style={{ display: "flex", gap: 12 }}>
               <Field label="Level" htmlFor="a-level" grow>
                 <TpSelect
                   id="a-level"
                   value={draft.level}
-                  disabled={busy}
+                  disabled={busy || draft.type === "maintenance"}
                   onChange={(e) => setDraft({ ...draft, level: e.currentTarget.value })}
                 >
                   {LEVELS.map((l) => (
@@ -293,7 +324,7 @@ export function ContentPage() {
                 <TpSelect
                   id="a-audience"
                   value={draft.audience}
-                  disabled={busy}
+                  disabled={busy || draft.type === "maintenance"}
                   onChange={(e) => setDraft({ ...draft, audience: e.currentTarget.value })}
                 >
                   <option value="all">All tenants</option>
