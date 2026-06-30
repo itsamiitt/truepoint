@@ -7,10 +7,12 @@ import type { RevealType, UsageReveal } from "@leadwolf/types";
 
 export type { RevealType, UsageReveal };
 
-/** GET /tenants/me — the tenant's plan tier, seat usage, workspace limit, and credit balance (09 §3.1). */
+/** GET /credits/me — the tenant's plan tier, seat usage, workspace limit, entitlements, and credit balance. */
 export interface TenantPlan {
   /** Plan tier key — e.g. "free" | "starter" | "team" | "enterprise" (12 §6). */
   tier: string;
+  /** Server-resolved plan display name (incl. grandfathered/retired keys), or null. */
+  planName?: string | null;
   /** Seats currently consumed (active tenant members). */
   seatsUsed?: number;
   /** Seat ceiling for the plan; null/undefined ⇒ unlimited. */
@@ -19,8 +21,10 @@ export interface TenantPlan {
   workspacesUsed?: number;
   /** Workspace ceiling for the plan; null/undefined ⇒ unlimited. */
   workspaceLimit?: number | null;
-  /** Credit-pool balance (mirrors /credits/balance; present on the envelope per 09 §3.1). */
+  /** Credit-pool balance (mirrors /credits/balance; present on the envelope). */
   balance?: number;
+  /** Entitlement flags the plan grants (feature key → enabled). */
+  features?: Record<string, boolean>;
 }
 
 export const TIER_LABEL: Record<string, string> = {
