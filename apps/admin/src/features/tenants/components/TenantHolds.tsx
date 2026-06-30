@@ -5,6 +5,7 @@
 "use client";
 
 import { useStaffMe } from "@/lib/staffMe";
+import { accountHoldKind } from "@leadwolf/types";
 import {
   Card,
   StateSwitch,
@@ -19,7 +20,8 @@ import { fetchTenantHolds, liftTenantHold, placeTenantHold } from "../api";
 import { shortDate } from "../format";
 import type { AccountHold } from "../types";
 
-const HOLD_KINDS = ["fraud", "payment", "abuse", "compliance", "manual"] as const;
+// Derive the kind options from the canonical @leadwolf/types enum so the form never drifts from the api/db.
+const HOLD_KINDS = accountHoldKind.options;
 const MIN_REASON = 5;
 
 export function TenantHolds({ tenantId }: { tenantId: string }) {
