@@ -12,6 +12,7 @@ import { dataQualitySnapshots } from "../schema/dataQualitySnapshots.ts";
 import { enrichmentJobs } from "../schema/enrichmentJobs.ts";
 import { importJobChunks, importJobs } from "../schema/importJobs.ts";
 import { listMembers, lists } from "../schema/lists.ts";
+import { masterPersons, matchLinks } from "../schema/masterGraph.ts";
 import { approvalRequests } from "../schema/platformOps.ts";
 import { retentionRuns } from "../schema/retention.ts";
 import { validationRules } from "../schema/validationRules.ts";
@@ -251,6 +252,21 @@ export interface PlatformValidationRuleRow {
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** One ER match-link row for the dedup REVIEW surface (database-management-research 07). The golden person name is
+ *  joined for display (null for company clusters / unresolved). matchProbability is pg numeric → string. PII: the
+ *  matched person name is shown to data:review staff on the cross-tenant clerical-review surface. */
+export interface PlatformMatchLinkRow {
+  id: string;
+  entityType: string;
+  clusterId: string;
+  matchMethod: string;
+  matchProbability: string | null;
+  reviewStatus: string;
+  isDuplicateOf: string | null;
+  resolvedAt: Date;
+  personName: string | null;
 }
 
 /**
@@ -732,6 +748,32 @@ export const platformAdminRepository = {
       })
       .from(validationRules)
       .orderBy(asc(validationRules.field), asc(validationRules.name));
+  },
+
+  /**
+   * Recent ER match-links for the dedup clerical-review surface (database-management-research 07), newest first,
+   * bounded. Joins the golden person's name for display (null for company clusters). A GLOBAL master-graph read —
+   * runs on the audited withPlatformTx OWNER connection (the only path with master_* visibility; leadwolf_app has
+   * no grant). `pending` review_status is the human-decision queue (fed by probabilistic ER, a later phase);
+   * `auto` rows are the deterministic resolutions, shown for oversight.
+   */
+  async listMatchLinksForReview(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformMatchLinkRow[]> {
+    return tx
+      .select({
+        id: matchLinks.id,
+        entityType: matchLinks.entityType,
+        clusterId: matchLinks.clusterId,
+        matchMethod: matchLinks.matchMethod,
+        matchProbability: matchLinks.matchProbability,
+        reviewStatus: matchLinks.reviewStatus,
+        isDuplicateOf: matchLinks.isDuplicateOf,
+        resolvedAt: matchLinks.resolvedAt,
+        personName: masterPersons.fullName,
+      })
+      .from(matchLinks)
+      .leftJoin(masterPersons, eq(matchLinks.clusterId, masterPersons.id))
+      .orderBy(desc(matchLinks.resolvedAt))
+      .limit(Math.min(limit, PLATFORM_READ_LIMIT));
   },
 
   /**

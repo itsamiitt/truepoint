@@ -84,6 +84,9 @@ export function DataOpsOverviewPage() {
         <Link href="/data-ops/validation" style={{ fontWeight: 500 }}>
           Validation rules →
         </Link>
+        <Link href="/data-ops/dedup" style={{ fontWeight: 500 }}>
+          Dedup review →
+        </Link>
       </div>
     </div>
   );

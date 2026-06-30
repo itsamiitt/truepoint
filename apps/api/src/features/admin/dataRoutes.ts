@@ -436,3 +436,33 @@ dataRoutes.delete("/validation/rules/:id", requireCapability("data:manage"), asy
   );
   return c.json({ ok: true, id });
 });
+
+// ── Dedup / ER clerical-review surface (database-management-research 07). Recent match-links across all tenants;
+// the matched person NAME is PII, so this is gated on data:review (the reviewer capability), NOT the PII-free
+// data:read. Read-only foundation — the non-destructive merge/split actions (which mutate the system-owned master
+// graph via withErTx) land next behind maker-checker approval. `pending` rows are the human-decision queue (fed by
+// probabilistic ER, a later phase); `auto` rows are the deterministic resolutions, shown for oversight.
+
+type MatchLinkRow = Awaited<ReturnType<typeof platformAdminRepository.listMatchLinksForReview>>[number];
+
+function toMatchLinkView(r: MatchLinkRow) {
+  return {
+    id: r.id,
+    entityType: r.entityType,
+    clusterId: r.clusterId,
+    matchMethod: r.matchMethod,
+    matchProbability: r.matchProbability != null ? Number(r.matchProbability) : null,
+    reviewStatus: r.reviewStatus,
+    isDuplicateOf: r.isDuplicateOf,
+    resolvedAt: r.resolvedAt.toISOString(),
+    name: r.personName,
+  };
+}
+
+/** Recent ER match-links for clerical review. data:review (exposes the matched entity name). */
+dataRoutes.get("/dedup/links", requireCapability("data:review"), async (c) => {
+  const links = await withPlatformTx(actorOf(c), "admin.data_dedup_links", (tx) =>
+    platformAdminRepository.listMatchLinksForReview(tx),
+  );
+  return c.json({ links: links.map(toMatchLinkView) });
+});

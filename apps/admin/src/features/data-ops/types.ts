@@ -100,3 +100,18 @@ export interface FleetQualityRow {
   metrics: WorkspaceDataQuality;
   createdAt: string;
 }
+
+/** One ER match-link on the dedup clerical-review surface, mirroring GET /admin/data/dedup/links. Shows the
+ * matched person `name` (PII — the read is data:review-gated). matchProbability is 0–1 (null for deterministic
+ * resolutions). Read-only for now; non-destructive merge/split actions land next. resolvedAt is an ISO string. */
+export interface MatchLinkRow {
+  id: string;
+  entityType: string;
+  clusterId: string;
+  matchMethod: string;
+  matchProbability: number | null;
+  reviewStatus: string;
+  isDuplicateOf: string | null;
+  resolvedAt: string;
+  name: string | null;
+}

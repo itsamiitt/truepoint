@@ -12,6 +12,7 @@ import type {
   DataOpsOverview,
   EnrichmentRunRow,
   FleetQualityRow,
+  MatchLinkRow,
   VerificationRunRow,
 } from "./types";
 
@@ -139,4 +140,12 @@ export async function deleteValidationRule(id: string): Promise<void> {
     { method: "DELETE" },
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not delete the rule"));
+}
+
+/** GET /admin/data/dedup/links — recent ER match-links for clerical review (data:review; exposes the matched name). */
+export async function fetchDedupLinks(): Promise<MatchLinkRow[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/dedup/links`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the dedup review queue"));
+  const body = (await res.json()) as { links: MatchLinkRow[] };
+  return body.links;
 }

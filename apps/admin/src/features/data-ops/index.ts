@@ -3,6 +3,7 @@
 export { ApprovalsPage } from "./components/ApprovalsPage";
 export { DataImportDetailPage } from "./components/DataImportDetailPage";
 export { DataOpsOverviewPage } from "./components/DataOpsOverviewPage";
+export { DedupReviewPage } from "./components/DedupReviewPage";
 export { EnrichmentRunsPage } from "./components/EnrichmentRunsPage";
 export { FleetQualityPage } from "./components/FleetQualityPage";
 export { ValidationRulesPage } from "./components/ValidationRulesPage";
