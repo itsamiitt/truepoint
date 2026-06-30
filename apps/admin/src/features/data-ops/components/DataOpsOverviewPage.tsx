@@ -78,6 +78,9 @@ export function DataOpsOverviewPage() {
         <Link href="/data-ops/quality" style={{ fontWeight: 500 }}>
           Fleet data quality →
         </Link>
+        <Link href="/data-ops/approvals" style={{ fontWeight: 500 }}>
+          Approvals →
+        </Link>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import type { ApprovalRequestView } from "@leadwolf/types";
 import type {
   DataImportDetail,
   DataOpsOverview,
@@ -55,4 +56,34 @@ export async function fetchFleetQuality(): Promise<FleetQualityRow[]> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load the fleet quality view"));
   const body = (await res.json()) as { snapshots: FleetQualityRow[] };
   return body.snapshots;
+}
+
+/** GET /admin/data/approvals — the pending maker-checker review queue (data:review). */
+export async function fetchPendingApprovals(): Promise<ApprovalRequestView[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/data/approvals`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the approvals queue"));
+  const body = (await res.json()) as { approvals: ApprovalRequestView[] };
+  return body.approvals;
+}
+
+/** POST /admin/data/approvals/:id/{approve|reject} — decide a pending request. The server enforces
+ *  requester != approver (separation of duties); a self-decision returns 403. */
+async function decide(id: string, action: "approve" | "reject", reason: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/data/approvals/${encodeURIComponent(id)}/${action}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, `Could not ${action} the request`));
+}
+
+export function approveRequest(id: string, reason: string): Promise<void> {
+  return decide(id, "approve", reason);
+}
+
+export function rejectRequest(id: string, reason: string): Promise<void> {
+  return decide(id, "reject", reason);
 }
