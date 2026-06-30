@@ -38,6 +38,7 @@ export const staffRole = z.enum([
   "billing_ops",
   "compliance_officer",
   "read_only",
+  "data_ops", // the Database Management team — the data:* write tier (database-management-research 11)
 ]);
 export type StaffRole = z.infer<typeof staffRole>;
 

@@ -60,6 +60,10 @@ const ROLE_CAPABILITIES: Record<Exclude<StaffRole, "super_admin">, StaffCapabili
     "data:review",
   ],
   read_only: ["data:read"],
+  // The Database Management team (database-management-research 11) — the data:* write tier. Holds BOTH data:manage
+  // (file requests) AND data:review (approve): separation of duties is enforced per-USER (requested_by != decided_by),
+  // so two data_ops members maker/check each other while a single member can never decide their own request.
+  data_ops: ["data:read", "data:manage", "data:review", "data:export"],
 };
 
 /** Every capability a role holds (super_admin → all). */

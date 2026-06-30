@@ -62,7 +62,7 @@ ALTER TABLE tenant_members ADD CONSTRAINT tenant_members_org_role_check
   CHECK (org_role IN ('owner', 'billing_admin', 'security_admin', 'compliance_admin', 'member'));
 ALTER TABLE platform_staff DROP CONSTRAINT IF EXISTS platform_staff_role_check;
 ALTER TABLE platform_staff ADD CONSTRAINT platform_staff_role_check
-  CHECK (staff_role IN ('super_admin', 'support', 'billing_ops', 'compliance_officer', 'read_only'));
+  CHECK (staff_role IN ('super_admin', 'support', 'billing_ops', 'compliance_officer', 'read_only', 'data_ops'));
 
 -- Backfill the granular roles from the legacy booleans (idempotent): every is_tenant_owner member becomes
 -- org_role 'owner'; every is_platform_admin user becomes an active super_admin staff row.
