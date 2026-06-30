@@ -17,6 +17,7 @@ import {
   NotFoundError,
   type TenantPlanEnvelope,
   ValidationError,
+  usageQuerySchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
@@ -85,13 +86,73 @@ creditsRoutes.get("/me", requireRole("owner", "admin", "member", "viewer"), asyn
   return c.json({ plan });
 });
 
+const USAGE_CSV_HEADER = [
+  "reveal_id",
+  "contact_id",
+  "reveal_type",
+  "data_source",
+  "credits",
+  "revealed_at",
+  "revealed_by",
+] as const;
+
+/** Escape a CSV field: quote on delimiter/quote/newline + neutralize a leading formula char (=,+,-,@) so an
+ *  exported value can't execute in a spreadsheet (mirrors the admin economics/audit-log export guards). */
+function csvField(value: string): string {
+  let s = value;
+  if (s && /^[=+\-@]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// Usage history: a keyset page (?cursor&limit&revealType?&dataSource?&from?&to?) or, with ?format=csv, the
+// filtered set as a bounded CSV download. Workspace-scoped via RLS; PII-free (ids/type/source/cost/timestamp).
 creditsRoutes.get("/usage", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to view usage.");
-  const limit = Math.min(Number(c.req.query("limit") ?? 100) || 100, 500);
-  const reveals = await revealRepository.listByWorkspace(
-    { tenantId: c.get("tenantId"), workspaceId },
-    limit,
-  );
-  return c.json({ reveals });
+  const parsed = usageQuerySchema.safeParse({
+    limit: c.req.query("limit"),
+    cursor: c.req.query("cursor"),
+    revealType: c.req.query("revealType"),
+    dataSource: c.req.query("dataSource"),
+    from: c.req.query("from"),
+    to: c.req.query("to"),
+    format: c.req.query("format"),
+  });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const q = parsed.data;
+  const scope = { tenantId: c.get("tenantId"), workspaceId };
+  const filter = {
+    revealType: q.revealType,
+    dataSource: q.dataSource,
+    from: q.from ? new Date(q.from) : undefined,
+    to: q.to ? new Date(q.to) : undefined,
+  };
+
+  if (q.format === "csv") {
+    const rows = await revealRepository.listUsageForExport(scope, filter);
+    const lines = [USAGE_CSV_HEADER.join(",")];
+    for (const r of rows) {
+      lines.push(
+        [
+          r.id,
+          r.contactId,
+          csvField(r.revealType),
+          csvField(r.dataSource),
+          String(r.creditsConsumed),
+          r.revealedAt.toISOString(),
+          r.revealedByUserId,
+        ].join(","),
+      );
+    }
+    c.header("content-type", "text/csv; charset=utf-8");
+    c.header("content-disposition", 'attachment; filename="credit-usage.csv"');
+    return c.body(lines.join("\r\n"));
+  }
+
+  const { rows, nextCursor } = await revealRepository.listUsagePage(scope, {
+    ...filter,
+    limit: q.limit,
+    cursor: q.cursor,
+  });
+  return c.json({ reveals: rows, nextCursor });
 });

@@ -1,16 +1,15 @@
-// useBilling.ts — view state for the billing surface: loads the credit-pool balance, the usage history, and the
+// useBilling.ts — view state for the billing hub's Plan + Credits tabs: loads the credit-pool balance and the
 // tenant plan envelope together, exposing one loading/error pair and a `reload`, plus a topUp() that begins a
-// Stripe checkout (or reports it isn't wired). Presentation state only; metering + credit accounting happen
-// server-side (07 §3).
+// Stripe checkout (or reports it isn't wired). The Usage tab owns its own paginated/filtered data
+// (useUsageHistory). Presentation state only; metering + credit accounting happen server-side (07 §3).
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchBalance, fetchTenantPlan, fetchUsage, startCheckout } from "../api";
-import type { TenantPlan, UsageReveal } from "../types";
+import { fetchBalance, fetchTenantPlan, startCheckout } from "../api";
+import type { TenantPlan } from "../types";
 
-export function useBilling(limit = 100) {
+export function useBilling() {
   const [balance, setBalance] = useState<number | null>(null);
-  const [usage, setUsage] = useState<UsageReveal[]>([]);
   const [plan, setPlan] = useState<TenantPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,16 +18,15 @@ export function useBilling(limit = 100) {
     setLoading(true);
     setError(null);
     try {
-      const [b, u, p] = await Promise.all([fetchBalance(), fetchUsage(limit), fetchTenantPlan()]);
+      const [b, p] = await Promise.all([fetchBalance(), fetchTenantPlan()]);
       setBalance(b);
-      setUsage(u);
       setPlan(p);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load billing");
     } finally {
       setLoading(false);
     }
-  }, [limit]);
+  }, []);
 
   useEffect(() => {
     void reload();
@@ -40,5 +38,5 @@ export function useBilling(limit = 100) {
     return available ? (checkoutUrl ?? null) : null;
   }, []);
 
-  return { balance, usage, plan, error, loading, reload, topUp };
+  return { balance, plan, error, loading, reload, topUp };
 }

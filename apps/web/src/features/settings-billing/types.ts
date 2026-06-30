@@ -3,9 +3,15 @@
 // billing.ts). The plan envelope follows GET /tenants/me (09 §3.1); when that route isn't built the api layer
 // reports it (null) and the page degrades to disabled/empty states rather than inventing a plan.
 
-import type { RevealType, UsageReveal } from "@leadwolf/types";
+import type { RevealDataSource, RevealType, UsageReveal } from "@leadwolf/types";
 
-export type { RevealType, UsageReveal };
+export type { RevealDataSource, RevealType, UsageReveal };
+
+/** Filters the Usage tab applies to GET /credits/usage (PII-free: type + provider). */
+export interface UsageFilters {
+  revealType?: RevealType;
+  dataSource?: RevealDataSource;
+}
 
 /** GET /credits/me — the tenant's plan tier, seat usage, workspace limit, entitlements, and credit balance. */
 export interface TenantPlan {
@@ -39,6 +45,13 @@ export const REVEAL_LABEL: Record<RevealType, string> = {
   email: "Email",
   phone: "Phone",
   full_profile: "Full profile",
+};
+
+export const REVEAL_DATA_SOURCE_LABEL: Record<RevealDataSource, string> = {
+  apollo: "Apollo",
+  zoominfo: "ZoomInfo",
+  linkedin: "LinkedIn",
+  internal: "Internal",
 };
 
 /** Render a "used / limit" string, treating a null/undefined limit as unlimited (∞). */

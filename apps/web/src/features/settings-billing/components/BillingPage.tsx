@@ -24,7 +24,7 @@ const TAB_ITEMS = [
 ];
 
 export function BillingPage() {
-  const { balance, usage, plan, error, loading, reload, topUp } = useBilling();
+  const { balance, plan, error, loading, reload, topUp } = useBilling();
   // Initial render uses the default (SSR-safe); the effect syncs the deep-linked ?tab= on the client.
   const [tab, setTab] = useState<string>(DEFAULT_BILLING_TAB);
   useEffect(() => setTab(readBillingTabFromUrl()), []);
@@ -64,7 +64,7 @@ export function BillingPage() {
           <StateSwitch loading={loading} error={error} onRetry={reload}>
             {tab === BillingTab.Plan && <PlanTab plan={plan} />}
             {tab === BillingTab.Credits && <CreditsTab balance={balance} topUp={topUp} />}
-            {tab === BillingTab.Usage && <UsageTab usage={usage} />}
+            {tab === BillingTab.Usage && <UsageTab />}
           </StateSwitch>
         )}
       </div>

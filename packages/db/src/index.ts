@@ -131,6 +131,8 @@ export {
   type ContactForReveal,
   type RevealClaimInput,
   type RevealUsageRow,
+  type UsageFilter,
+  type UsageListOptions,
 } from "./repositories/revealRepository.ts";
 export {
   creditRepository,

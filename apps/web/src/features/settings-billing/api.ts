@@ -12,8 +12,8 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { TenantPlanEnvelope } from "@leadwolf/types";
-import type { TenantPlan, UsageReveal } from "./types";
+import type { TenantPlanEnvelope, UsagePage } from "@leadwolf/types";
+import type { TenantPlan, UsageFilters } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -31,11 +31,39 @@ export async function fetchBalance(): Promise<number> {
   return data.balance;
 }
 
-export async function fetchUsage(limit = 100): Promise<UsageReveal[]> {
-  const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/usage?limit=${limit}`);
+function usageParams(opts: UsageFilters & { limit?: number; cursor?: string }): URLSearchParams {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set("limit", String(opts.limit));
+  if (opts.cursor) params.set("cursor", opts.cursor);
+  if (opts.revealType) params.set("revealType", opts.revealType);
+  if (opts.dataSource) params.set("dataSource", opts.dataSource);
+  return params;
+}
+
+/** A keyset page of usage history with optional filters. `nextCursor` null ⇒ last page. */
+export async function fetchUsagePage(
+  opts: UsageFilters & { limit?: number; cursor?: string } = {},
+): Promise<UsagePage> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/usage?${usageParams(opts)}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load usage history"));
-  const data = (await res.json()) as { reveals: UsageReveal[] };
-  return data.reveals;
+  return (await res.json()) as UsagePage;
+}
+
+/** Download the filtered usage history as CSV (auth required, so fetch the blob and trigger a download). */
+export async function exportUsageCsv(opts: UsageFilters = {}): Promise<void> {
+  const params = usageParams(opts);
+  params.set("format", "csv");
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/usage?${params}`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not export usage"));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "credit-usage.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /** Current tenant's plan/seat/limit envelope (GET /credits/me). Maps the server envelope to the view shape.

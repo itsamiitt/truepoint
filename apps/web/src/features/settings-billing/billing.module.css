@@ -68,6 +68,21 @@
   gap: 12px;
 }
 
+/* Usage-tab filter + export controls (right side of the card head). */
+.usageControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* "Load more" affordance under the usage table. */
+.loadMore {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
 /* Card chrome. */
 .cardHead {
   display: flex;

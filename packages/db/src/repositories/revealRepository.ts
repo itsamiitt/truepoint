@@ -3,7 +3,7 @@
 // core — never returned over HTTP unmasked elsewhere), the idempotent reveal claim, and the usage list.
 
 import type { RevealDataSource, RevealType } from "@leadwolf/types";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, lt, lte } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contactReveals } from "../schema/billing.ts";
 import { contacts } from "../schema/contacts.ts";
@@ -34,9 +34,63 @@ export interface RevealUsageRow {
   id: string;
   contactId: string;
   revealType: string;
+  dataSource: string;
   creditsConsumed: number;
   revealedAt: Date;
   revealedByUserId: string;
+}
+
+/** Selected usage columns shared by the list + export reads (PII-free). */
+const USAGE_COLS = {
+  id: contactReveals.id,
+  contactId: contactReveals.contactId,
+  revealType: contactReveals.revealType,
+  dataSource: contactReveals.dataSource,
+  creditsConsumed: contactReveals.creditsConsumed,
+  revealedAt: contactReveals.revealedAt,
+  revealedByUserId: contactReveals.revealedByUserId,
+};
+
+/** Bound the CSV export so one download can't scan the whole reveal history. */
+const USAGE_EXPORT_CAP = 5000;
+
+/** Optional filters for the usage history (all PII-free). */
+export interface UsageFilter {
+  revealType?: RevealType;
+  dataSource?: RevealDataSource;
+  from?: Date;
+  to?: Date;
+}
+
+export interface UsageListOptions extends UsageFilter {
+  limit?: number;
+  cursor?: string;
+}
+
+// Opaque keyset cursor over the time-ordered v7 `id` (uuid_generate_v7 sorts by creation time, so `id DESC` is
+// newest-first and `id < cursor` is the next older page). base64url, never an offset (mirrors platformAdminReads).
+function encodeUsageCursor(id: string): string {
+  return Buffer.from(id, "utf8").toString("base64url");
+}
+function decodeUsageCursor(cursor: string): string | null {
+  try {
+    return Buffer.from(cursor, "base64url").toString("utf8") || null;
+  } catch {
+    return null;
+  }
+}
+
+function usageConditions(scope: TenantScope, filter: UsageFilter, cursorId: string | null) {
+  const conds = [
+    eq(contactReveals.workspaceId, scope.workspaceId ?? ""),
+    eq(contactReveals.tenantId, scope.tenantId),
+  ];
+  if (filter.revealType) conds.push(eq(contactReveals.revealType, filter.revealType));
+  if (filter.dataSource) conds.push(eq(contactReveals.dataSource, filter.dataSource));
+  if (filter.from) conds.push(gte(contactReveals.revealedAt, filter.from));
+  if (filter.to) conds.push(lte(contactReveals.revealedAt, filter.to));
+  if (cursorId) conds.push(lt(contactReveals.id, cursorId));
+  return conds;
 }
 
 export const revealRepository = {
@@ -74,28 +128,62 @@ export const revealRepository = {
 
   /**
    * Usage history for Settings ▸ Billing & Credits (07 §9). Workspace-scoped via RLS. Pass `tx` to compose
-   * this into a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it for a standalone read.
+   * this into a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it for a standalone
+   * read. (Flat, capped — the paginated/filtered surface is listUsagePage.)
    */
   async listByWorkspace(scope: TenantScope, limit = 100, tx?: Tx): Promise<RevealUsageRow[]> {
     const run = (t: Tx): Promise<RevealUsageRow[]> =>
       t
-        .select({
-          id: contactReveals.id,
-          contactId: contactReveals.contactId,
-          revealType: contactReveals.revealType,
-          creditsConsumed: contactReveals.creditsConsumed,
-          revealedAt: contactReveals.revealedAt,
-          revealedByUserId: contactReveals.revealedByUserId,
-        })
+        .select(USAGE_COLS)
         .from(contactReveals)
-        .where(
-          and(
-            eq(contactReveals.workspaceId, scope.workspaceId ?? ""),
-            eq(contactReveals.tenantId, scope.tenantId),
-          ),
-        )
+        .where(and(...usageConditions(scope, {}, null)))
         .orderBy(desc(contactReveals.revealedAt))
-        .limit(limit);
+        .limit(limit) as Promise<RevealUsageRow[]>;
+    return tx ? run(tx) : withTenantTx(scope, run);
+  },
+
+  /**
+   * A keyset page of usage history with optional filters (type/source/date), newest-first over the v7 id. Uses
+   * the limit+1 probe to compute the next cursor; null cursor = last page. Workspace-scoped via RLS.
+   */
+  async listUsagePage(
+    scope: TenantScope,
+    opts: UsageListOptions,
+    tx?: Tx,
+  ): Promise<{ rows: RevealUsageRow[]; nextCursor: string | null }> {
+    const limit = Math.min(Math.max(opts.limit ?? 100, 1), 500);
+    const cursorId = opts.cursor ? decodeUsageCursor(opts.cursor) : null;
+    const run = async (t: Tx): Promise<{ rows: RevealUsageRow[]; nextCursor: string | null }> => {
+      const rows = (await t
+        .select(USAGE_COLS)
+        .from(contactReveals)
+        .where(and(...usageConditions(scope, opts, cursorId)))
+        .orderBy(desc(contactReveals.id))
+        .limit(limit + 1)) as RevealUsageRow[];
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const last = page[page.length - 1];
+      return { rows: page, nextCursor: hasMore && last ? encodeUsageCursor(last.id) : null };
+    };
+    return tx ? run(tx) : withTenantTx(scope, run);
+  },
+
+  /**
+   * The filtered usage set for a CSV export, bounded by USAGE_EXPORT_CAP. Newest-first; no cursor. The route
+   * guards each field against CSV formula injection before writing.
+   */
+  async listUsageForExport(
+    scope: TenantScope,
+    opts: UsageFilter,
+    tx?: Tx,
+  ): Promise<RevealUsageRow[]> {
+    const run = (t: Tx): Promise<RevealUsageRow[]> =>
+      t
+        .select(USAGE_COLS)
+        .from(contactReveals)
+        .where(and(...usageConditions(scope, opts, null)))
+        .orderBy(desc(contactReveals.id))
+        .limit(USAGE_EXPORT_CAP) as Promise<RevealUsageRow[]>;
     return tx ? run(tx) : withTenantTx(scope, run);
   },
 };
