@@ -15,6 +15,7 @@ export function useUsers() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
 
   const load = useCallback(async (q: string, st: string) => {
     setLoading(true);
@@ -49,7 +50,7 @@ export function useUsers() {
   const loadMore = useCallback(async () => {
     if (!nextCursor) return;
     setLoadingMore(true);
-    setError(null);
+    setLoadMoreError(null);
     try {
       const page = await fetchUsers({
         search: search || undefined,
@@ -59,7 +60,8 @@ export function useUsers() {
       setUsers((prev) => [...(prev ?? []), ...page.users]);
       setNextCursor(page.nextCursor);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load more");
+      // A pagination failure must NOT wipe the loaded list (the page `error` drives StateSwitch). Inline it.
+      setLoadMoreError(e instanceof Error ? e.message : "Failed to load more");
     } finally {
       setLoadingMore(false);
     }
@@ -77,6 +79,7 @@ export function useUsers() {
     error,
     loading,
     loadingMore,
+    loadMoreError,
     applySearch,
     applyStatus,
     loadMore,

@@ -35,6 +35,7 @@ export function UsersPage() {
     status,
     loading,
     loadingMore,
+    loadMoreError,
     error,
     applySearch,
     applyStatus,
@@ -198,9 +199,20 @@ export function UsersPage() {
       >
         <DataTable columns={columns} rows={users ?? []} rowKey={(u) => u.id} />
         {nextCursor ? (
-          <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 8,
+              marginTop: 16,
+            }}
+          >
+            {loadMoreError ? (
+              <span style={{ color: "var(--danger)", fontSize: 13 }}>{loadMoreError}</span>
+            ) : null}
             <TpButton variant="secondary" onClick={() => void loadMore()} disabled={loadingMore}>
-              {loadingMore ? "Loading…" : "Load more"}
+              {loadingMore ? "Loading…" : loadMoreError ? "Retry" : "Load more"}
             </TpButton>
           </div>
         ) : null}
