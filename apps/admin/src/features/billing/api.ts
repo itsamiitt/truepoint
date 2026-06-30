@@ -30,3 +30,21 @@ export async function fetchEconomicsByTenant(sinceDays: number): Promise<TenantE
   const body = (await res.json()) as { tenants: TenantEconomicsRow[] };
   return body.tenants;
 }
+
+/** GET /admin/billing/economics/by-tenant/export — download the per-tenant economics as CSV. Authenticated
+ *  (bearer-token blob fetch → client-side download); the export is itself audited server-side. */
+export async function exportEconomicsByTenant(sinceDays: number): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/billing/economics/by-tenant/export?sinceDays=${encodeURIComponent(sinceDays)}`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not export economics"));
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "billing-economics-by-tenant.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

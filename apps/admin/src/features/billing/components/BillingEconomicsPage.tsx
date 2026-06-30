@@ -3,7 +3,17 @@
 // window. Read-only cross-tenant aggregates from the audited api. Renders async state through the State Kit.
 "use client";
 
-import { type Column, DataTable, StatTile, StateSwitch, TpSelect } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  StatTile,
+  StateSwitch,
+  TpButton,
+  TpSelect,
+  useToast,
+} from "@leadwolf/ui";
+import { useState } from "react";
+import { exportEconomicsByTenant } from "../api";
 import { useEconomics } from "../hooks/useEconomics";
 import type { TenantEconomicsRow } from "../types";
 
@@ -68,6 +78,19 @@ const tenantColumns: Column<TenantEconomicsRow>[] = [
 
 export function BillingEconomicsPage() {
   const { summary, tenants, sinceDays, loading, error, setPeriod, reload } = useEconomics();
+  const toast = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  async function onExport() {
+    setExporting(true);
+    try {
+      await exportEconomicsByTenant(sinceDays);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not export economics");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   return (
     <div className="tp-page">
@@ -79,17 +102,26 @@ export function BillingEconomicsPage() {
             margin — across all tenants.
           </p>
         </div>
-        <TpSelect
-          aria-label="Period"
-          value={String(sinceDays)}
-          onChange={(e) => setPeriod(Number(e.currentTarget.value))}
-        >
-          {PERIODS.map((p) => (
-            <option key={p.value} value={p.value}>
-              {p.label}
-            </option>
-          ))}
-        </TpSelect>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <TpSelect
+            aria-label="Period"
+            value={String(sinceDays)}
+            onChange={(e) => setPeriod(Number(e.currentTarget.value))}
+          >
+            {PERIODS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </TpSelect>
+          <TpButton
+            variant="secondary"
+            disabled={exporting || !tenants || tenants.length === 0}
+            onClick={() => void onExport()}
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </TpButton>
+        </div>
       </div>
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>

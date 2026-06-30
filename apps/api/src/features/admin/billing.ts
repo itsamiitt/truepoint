@@ -85,3 +85,60 @@ billingRoutes.get("/economics/by-tenant", async (c) => {
   });
   return c.json({ tenants });
 });
+
+// CSV export of the per-tenant economics for the window — finance pulls it into a sheet. Itself audited
+// ("admin.billing_economics_export", with the window in metadata). Higher row cap than the on-screen table.
+const ECONOMICS_EXPORT_CAP = 1000;
+const ECONOMICS_CSV_HEADER = [
+  "tenant",
+  "tenantId",
+  "revenueUsd",
+  "providerSpendUsd",
+  "marginUsd",
+  "reveals",
+  "chargedReveals",
+  "creditsSold",
+] as const;
+
+/** Escape a CSV field: quote on delimiter/quote/newline + neutralize a leading formula char (=,+,-,@) so an
+ *  exported tenant name can't execute in a spreadsheet (mirrors the audit-log export guard). */
+function csvField(value: string): string {
+  let s = value;
+  if (s && /^[=+\-@]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+billingRoutes.get("/economics/by-tenant/export", async (c) => {
+  const parsed = economicsQuerySchema.safeParse({ sinceDays: c.req.query("sinceDays") });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const { sinceDays } = parsed.data;
+  const since = new Date(Date.now() - sinceDays * 86_400_000);
+
+  const rows = await withPlatformTx(
+    actorOf(c),
+    "admin.billing_economics_export",
+    (tx) => platformBillingReadRepository.economicsByTenant(tx, since, ECONOMICS_EXPORT_CAP),
+    { metadata: { sinceDays } },
+  );
+
+  const usd = (cents: number) => (cents / 100).toFixed(2);
+  const lines = [ECONOMICS_CSV_HEADER.join(",")];
+  for (const r of rows) {
+    const providerSpendCents = Math.round(r.providerSpendMicros / 10_000);
+    lines.push(
+      [
+        csvField(r.tenantName),
+        r.tenantId,
+        usd(r.revenueCents),
+        usd(providerSpendCents),
+        usd(r.revenueCents - providerSpendCents),
+        String(r.reveals),
+        String(r.chargedReveals),
+        String(r.creditsSold),
+      ].join(","),
+    );
+  }
+  c.header("content-type", "text/csv; charset=utf-8");
+  c.header("content-disposition", 'attachment; filename="billing-economics-by-tenant.csv"');
+  return c.body(lines.join("\r\n"));
+});
