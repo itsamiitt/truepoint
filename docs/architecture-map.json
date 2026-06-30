@@ -85,8 +85,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1207,
-  "fileSetHash": "sha256:8b349015c16ed5bc26383791205df161a0e9fa8d712e7f9e2c65dc25ea1b4f75",
+  "fileCount": 1208,
+  "fileSetHash": "sha256:9a968608d9a1db32374f8600ab7f8609f6d18c8e393d8fe6dbc36e703788a6d7",
   "features": {
     "account-search": {
       "web": [],
@@ -1404,6 +1404,7 @@
         "apps/admin/src/features/tenants/components/SupportNotes.tsx",
         "apps/admin/src/features/tenants/components/TenantActions.tsx",
         "apps/admin/src/features/tenants/components/TenantDetailPage.tsx",
+        "apps/admin/src/features/tenants/components/TenantEconomics.tsx",
         "apps/admin/src/features/tenants/components/TenantHolds.tsx",
         "apps/admin/src/features/tenants/components/TenantOverview.tsx",
         "apps/admin/src/features/tenants/components/TenantPurchases.tsx",
