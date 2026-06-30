@@ -2,6 +2,7 @@
 // (key · description · default) that POSTs the audited upsert; rendered by FeatureFlagsPage.
 "use client";
 
+import { featureFlagKey } from "@leadwolf/types";
 import {
   Dialog,
   FieldGroup,
@@ -28,6 +29,9 @@ export function NewFlagDialog({
   const [description, setDescription] = useState("");
   const [defaultEnabled, setDefaultEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Validate the key against the canonical schema so an invalid key is caught here, not by a server 422.
+  const trimmedKey = key.trim();
+  const keyValid = featureFlagKey.safeParse(trimmedKey).success;
 
   async function save() {
     setSaving(true);
@@ -60,7 +64,7 @@ export function NewFlagDialog({
           <TpButton variant="secondary" onClick={onClose}>
             Cancel
           </TpButton>
-          <TpButton loading={saving} disabled={key.trim().length < 2} onClick={() => void save()}>
+          <TpButton loading={saving} disabled={!keyValid} onClick={() => void save()}>
             Save flag
           </TpButton>
         </div>
@@ -78,6 +82,11 @@ export function NewFlagDialog({
             placeholder="bulk_enrich"
             onChange={(e) => setKey(e.currentTarget.value)}
           />
+          {trimmedKey && !keyValid ? (
+            <span style={{ color: "var(--danger)", fontSize: 12 }}>
+              Lowercase letters, digits and . _ - only (2–100 chars).
+            </span>
+          ) : null}
         </FieldGroup>
         <FieldGroup label="Description" htmlFor="ff-desc">
           <TpInput
