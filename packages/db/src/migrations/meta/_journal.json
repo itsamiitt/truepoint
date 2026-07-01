@@ -267,6 +267,13 @@
       "when": 1783100000000,
       "tag": "0037_plan_trial_bonus",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1783200000000,
+      "tag": "0038_notifications",
+      "breakpoints": true
     }
   ]
 }
