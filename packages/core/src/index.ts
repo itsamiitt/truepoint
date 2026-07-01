@@ -386,6 +386,18 @@ export {
   type DeliveryEvent,
   type DeliveryEventType,
 } from "./email/deliveryWebhook.ts";
+export {
+  detectAutoReply,
+  type ReplyClassification,
+  type InboundHeaders,
+} from "./email/detectAutoReply.ts";
+export {
+  recordInboundReply,
+  defaultRecordInboundDeps,
+  type ParsedInboundReply,
+  type RecordInboundDeps,
+  type RecordInboundResult,
+} from "./email/recordInboundReply.ts";
 // P0 (email-sec-001): per-tenant derivation of the webhook/tracking signing keys from the root secret — a
 // holder of one tenant's derived key cannot forge a signed event for another tenant.
 export {

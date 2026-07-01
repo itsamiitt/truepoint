@@ -3,7 +3,7 @@
 // deliberately does not own: the contacts.outreach_status rollup and the ADR-0013 bounce credit-back
 // against the tenant counter. Statuses come back as plain strings; core narrows to the closed enum.
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { outreachLog, outreachSequences } from "../schema/outreach.ts";
 
@@ -111,6 +111,16 @@ export const outreachLogRepository = {
       .update(outreachLog)
       .set({ status, lastEventAt: sql`now()` })
       .where(eq(outreachLog.id, logId));
+  },
+
+  /** Auto-pause on a confirmed HUMAN reply (M12 P3): status → replied + cache last_reply_at (the Sequences
+   *  dashboard reads it without scanning email_message). Idempotent-safe: only transitions an enrollment that is
+   *  still active/enrolled (a terminal state — replied/completed/unsubscribed/bounced — is left untouched). */
+  async setReplied(tx: Tx, logId: string, replyAt: Date): Promise<void> {
+    await tx
+      .update(outreachLog)
+      .set({ status: "replied", lastReplyAt: replyAt, lastEventAt: sql`now()` })
+      .where(and(eq(outreachLog.id, logId), inArray(outreachLog.status, ["enrolled", "active"])));
   },
 
   /** Newest-first enrollment log for a sequence (GET /outreach/sequences/:id/log). RLS-scoped. */
