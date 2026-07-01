@@ -89,8 +89,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1230,
-  "fileSetHash": "sha256:52956db0b81a9b4a8460d3185a0553cef7d8b335de5955ff70c7d866405c15f2",
+  "fileCount": 1231,
+  "fileSetHash": "sha256:6d813bb16a2ec166f91187b6c550bbb92507127d402bc3fcc89a2f22f076b522",
   "features": {
     "account-search": {
       "web": [],
@@ -2052,6 +2052,7 @@
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/bulkEnrichment.ts",
     "apps/workers/src/queues/dedup.ts",
+    "apps/workers/src/queues/erSweep.ts",
     "apps/workers/src/queues/firmographics.ts",
     "apps/workers/src/queues/masterBackfill.test.ts",
     "apps/workers/src/queues/masterBackfill.ts",

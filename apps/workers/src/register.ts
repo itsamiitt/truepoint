@@ -49,6 +49,7 @@ import {
   type ProjectionSweepJobData,
   makeProcessProjectionSweep,
 } from "./queues/projectionSweep.ts";
+import { ER_SWEEP_QUEUE, type ErSweepJobData, makeProcessErSweep } from "./queues/erSweep.ts";
 import { OUTREACH_QUEUE, type OutreachJobData, makeProcessOutreach } from "./queues/outreach.ts";
 import {
   RETENTION_SWEEP_QUEUE,
@@ -131,6 +132,9 @@ export const masterBackfillSweepQueue = new Queue<MasterBackfillSweepJobData>(
 export const projectionSweepQueue = new Queue<ProjectionSweepJobData>(PROJECTION_SWEEP_QUEUE, {
   connection,
 });
+// The scheduled probabilistic-ER shadow sweep (prospect-database-platform I5): scores candidate person pairs and
+// proposes match_links(review_status='pending') for human review. INERT while ER_SHADOW_ENABLED is off.
+export const erSweepQueue = new Queue<ErSweepJobData>(ER_SWEEP_QUEUE, { connection });
 // M12 P4: the leader-locked sequence scheduler (email_sequence_tick). A single repeatable job (stable
 // jobId → deduped) fires every minute; the processor takes the Redis leader lock and claims due enrollments.
 export const sequenceTickQueue = new Queue<SequenceTickJobData>(EMAIL_SEQUENCE_TICK_QUEUE, {
@@ -238,6 +242,12 @@ export async function scheduleProjectionSweep(): Promise<void> {
     {},
     { repeat: { every: 24 * 60 * 60_000 }, jobId: "projection-sweep" },
   );
+}
+
+/** Register the daily probabilistic-ER shadow sweep (prospect-database-platform I5). Stable jobId → exactly one
+ *  repeatable. Additive: the processor returns immediately while ER_SHADOW_ENABLED is off (proposes nothing). */
+export async function scheduleErSweep(): Promise<void> {
+  await erSweepQueue.add("sweep", {}, { repeat: { every: 24 * 60 * 60_000 }, jobId: "er-sweep" });
 }
 
 /** Submit a per-workspace freshness re-verification (ADR-0025; from the sweep or on demand). Idempotent —
@@ -432,6 +442,12 @@ export function startWorkers(): Worker[] {
       ),
       PROJECTION_SWEEP_QUEUE,
     ),
+    // Probabilistic-ER shadow sweep (I5): proposes pending match_links for human review. Leader-locked; INERT
+    // while ER_SHADOW_ENABLED is off (the processor early-returns); never auto-merges/re-points (proposals only).
+    instrument(
+      new Worker<ErSweepJobData>(ER_SWEEP_QUEUE, makeProcessErSweep(connection), { connection }),
+      ER_SWEEP_QUEUE,
+    ),
     // M12 P4: the sequence-tick consumer. Leader-locked; claims due enrollments and enqueues each onto the
     // outreach queue (the existing send path). Best-effort registers the single repeatable job at boot.
     instrument(
@@ -617,6 +633,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleProjectionSweep().catch((e) =>
     log.error("failed to schedule the projection sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleErSweep().catch((e) =>
+    log.error("failed to schedule the er sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );
