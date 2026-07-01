@@ -165,6 +165,8 @@ export {
   type GrantInput,
   type GrantResult,
   type BurnByDayRow,
+  type LedgerEntryType,
+  type LedgerEntryInput,
 } from "./repositories/creditRepository.ts";
 export {
   suppressionRepository,

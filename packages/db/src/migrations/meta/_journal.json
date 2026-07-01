@@ -281,6 +281,13 @@
       "when": 1783300000000,
       "tag": "0039_ai_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1783400000000,
+      "tag": "0040_credit_ledger",
+      "breakpoints": true
     }
   ]
 }
