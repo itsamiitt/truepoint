@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1314,
-  "fileSetHash": "sha256:18737bef2398bab5fa4a5d6de0f0ff667ab1af3cf93dcd83347a1a48336996df",
+  "fileCount": 1316,
+  "fileSetHash": "sha256:302875ff2f9b20f429baefbc5db88de7b700a7f3c825be161b76217b14fbb0e8",
   "features": {
     "account-search": {
       "web": [],
@@ -497,6 +497,8 @@
         "packages/core/src/email/dispatchOutreachSend.ts",
         "packages/core/src/email/dnsAuth.test.ts",
         "packages/core/src/email/dnsAuth.ts",
+        "packages/core/src/email/gmailInbound.test.ts",
+        "packages/core/src/email/gmailInbound.ts",
         "packages/core/src/email/gmailSend.test.ts",
         "packages/core/src/email/gmailSend.ts",
         "packages/core/src/email/googleOAuth.test.ts",
