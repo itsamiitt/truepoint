@@ -394,6 +394,22 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
 
   const errors: ImportRowError[] = [];
   const rejectedRows: RejectedRow[] = [];
+  // A per-import reject breakdown keyed by a STABLE, NON-PII label (never a row value) — one bump per rejected row
+  // (its primary reason), so the histogram sums to the distinct rejected-row count. Surfaced to staff on the import
+  // drill-down (database-management-research G08). Categorized at the SOURCE below so a free-text catch-path message
+  // (which may embed a value) is bucketed as a generic "Processing error", never surfaced verbatim.
+  const rejectHistogram: Record<string, number> = {};
+  const bumpReject = (field: string | null, kind: "validation" | "rule" | "error"): void => {
+    const label =
+      kind === "error"
+        ? "Processing error"
+        : kind === "rule"
+          ? `${field ?? "row"}: failed a rule`
+          : field
+            ? `${field}: invalid value`
+            : "Missing identifier";
+    rejectHistogram[label] = (rejectHistogram[label] ?? 0) + 1;
+  };
   let created = 0;
   let matched = 0;
   let skipped = 0;
@@ -408,6 +424,7 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
     const verdict = validateRow(raw, input.mapping);
     if (!verdict.ok) {
       rejectedRows.push(...rejectedRowsFor(i, raw, verdict.reasons));
+      bumpReject(verdict.reasons[0]?.field ?? null, "validation");
       errors.push({ row: i, message: verdict.reasons[0]?.reason ?? "Row rejected." });
       continue;
     }
@@ -419,6 +436,7 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
       const ruleFailures = runValidationRules(verdict.mapped as Record<string, unknown>, validationRules);
       if (ruleFailures.length > 0) {
         rejectedRows.push(...ruleFailures.map((f) => ({ row: i, field: f.field, reason: f.message, raw })));
+        bumpReject(ruleFailures[0]!.field, "rule");
         errors.push({ row: i, message: ruleFailures[0]!.message });
         continue;
       }
@@ -440,6 +458,7 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
       // A DB/constraint failure after validation passed: surface it as a reject (it did not land).
       const message = err instanceof Error ? err.message : String(err);
       rejectedRows.push({ row: i, field: null, reason: message, raw });
+      bumpReject(null, "error");
       errors.push({ row: i, message });
     }
   }
@@ -473,5 +492,6 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
     addedToList,
     errors,
     rejectedRows,
+    rejectHistogram,
   };
 }

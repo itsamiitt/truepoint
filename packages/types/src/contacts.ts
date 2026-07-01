@@ -211,6 +211,10 @@ export const importSummarySchema = z.object({
   errors: z.array(importRowErrorSchema),
   /** The rejected-rows artifact (G-IMP-1): each reject + reason + raw row, for a downloadable error file. */
   rejectedRows: z.array(rejectedRowSchema),
+  /** Reject breakdown keyed by a STABLE, NON-PII label (e.g. "email: invalid value", "Missing identifier") →
+   *  count; one bump per rejected row (its primary reason), so it sums to `rejected`. A free-text catch-path
+   *  message is bucketed as "Processing error", never surfaced verbatim (database-management-research G08). */
+  rejectHistogram: z.record(z.string(), z.number().int().nonnegative()).default({}),
 });
 export type ImportSummary = z.infer<typeof importSummarySchema>;
 

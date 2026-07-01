@@ -488,6 +488,20 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
               {targetListName ? ` “${targetListName}”` : " the list"}.
             </p>
           )}
+          {Object.keys(summary.rejectHistogram).length > 0 && (
+            <div className="app-muted">
+              <span>Why rows were rejected:</span>
+              <ul className="tp-errors">
+                {Object.entries(summary.rejectHistogram)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([label, count]) => (
+                    <li key={label}>
+                      {label}: {count.toLocaleString()}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
           {summary.rejectedRows.length > 0 && (
             <p>
               <TpButton variant="secondary" type="button" onClick={onDownloadRejected}>

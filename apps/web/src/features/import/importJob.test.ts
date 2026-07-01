@@ -19,6 +19,7 @@ const summary: ImportSummary = {
   addedToList: 0,
   errors: [{ row: 4, message: "bad email" }],
   rejectedRows: [],
+  rejectHistogram: {},
 };
 
 /** A full status envelope (GET /imports/:jobId), defaulting to an in-progress poll with no summary yet. */
