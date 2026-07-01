@@ -17,6 +17,7 @@ const redis = (): Redis =>
 let _ipLimiter: RateLimiterRedis | undefined;
 let _idLimiter: RateLimiterRedis | undefined;
 let _apiLimiter: RateLimiterRedis | undefined;
+let _captureLimiter: RateLimiterRedis | undefined;
 const ipLimiter = (): RateLimiterRedis =>
   // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
   (_ipLimiter ??= new RateLimiterRedis({
@@ -42,11 +43,23 @@ const apiLimiter = (): RateLimiterRedis =>
     points: 120,
     duration: 60,
   }));
+// Per-caller cap for the SCRAPING capture path (chrome_extension ingestion, prospect-database-platform I6). Metered
+// by RECORD VOLUME — one point per captured record — so a records-packing bot is throttled by how much it captures,
+// not just how often it calls. 2,000 records/min per caller: generous for a rep clicking pages, tight for a scraper.
+const captureLimiter = (): RateLimiterRedis =>
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
+  (_captureLimiter ??= new RateLimiterRedis({
+    storeClient: redis(),
+    keyPrefix: "rl:capture",
+    points: 2000,
+    duration: 60,
+  }));
 
-// Throw RateLimitedError if `limiter` is exhausted for `key`; fail OPEN on a Redis outage (shared helper).
-async function consume(limiter: RateLimiterRedis, key: string): Promise<void> {
+// Throw RateLimitedError if `limiter` is exhausted for `key` (consuming `points`, default 1); fail OPEN on a Redis
+// outage (shared helper).
+async function consume(limiter: RateLimiterRedis, key: string, points = 1): Promise<void> {
   try {
-    await limiter.consume(key);
+    await limiter.consume(key, points);
   } catch (e) {
     if (e && typeof e === "object" && "msBeforeNext" in e) {
       throw new RateLimitedError(Math.ceil((e as { msBeforeNext: number }).msBeforeNext / 1000));
@@ -63,6 +76,17 @@ export async function checkIdentifierRate(args: { ip: string; identifier: string
 /** Coarse per-request throttle for the resource API. `key` is the subject (authenticated) or client IP. */
 export async function checkRequestRate(key: string): Promise<void> {
   await consume(apiLimiter(), key);
+}
+
+/**
+ * Throttle a SCRAPING capture (chrome_extension ingestion, I6) by RECORD VOLUME — consumes `recordCount` points
+ * against the caller's per-minute record budget, so a bot packing many records into one envelope is throttled by
+ * total volume, not just call count. `key` is the caller subject. Throws RateLimitedError on exhaustion; fails OPEN
+ * on a Redis outage (a cache blip must not brick a legitimate capture). Additive — separate keyspace from the API
+ * throttle, so it never weakens or duplicates the coarse per-request limit.
+ */
+export async function checkCaptureRate(key: string, recordCount: number): Promise<void> {
+  await consume(captureLimiter(), key, Math.max(1, Math.trunc(recordCount)));
 }
 
 // ── Credential-step brute-force lockout (W7) ───────────────────────────────────────────────────────────

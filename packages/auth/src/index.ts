@@ -55,6 +55,7 @@ export { verifyTurnstile } from "./botCheck.ts";
 export {
   checkIdentifierRate,
   checkRequestRate,
+  checkCaptureRate,
   assertCredentialNotLocked,
   recordCredentialFailure,
   recordCredentialSuccess,

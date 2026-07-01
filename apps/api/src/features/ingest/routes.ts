@@ -4,6 +4,7 @@
 // source-specific validation, and the endpoint returns a job handle. ADDITIVE — a NEW endpoint that does not touch
 // the existing /import path or runImport. The async processing pipeline (evidence -> resolve -> enrich -> land) is
 // wired per connector in later slices (audit P05); v1 validates + accepts.
+import { checkCaptureRate } from "@leadwolf/auth";
 import { getConnector, registerBuiltinConnectors } from "@leadwolf/core";
 import { ForbiddenError, ValidationError, ingestionEnvelope } from "@leadwolf/types";
 import { Hono } from "hono";
@@ -38,6 +39,12 @@ ingestRoutes.post("/", async (c) => {
   const connector = getConnector(parsed.data.source);
   if (!connector) {
     throw new ValidationError(`No connector is registered for source '${parsed.data.source}'.`);
+  }
+  // Capture sources (chrome_extension) are a scraping abuse vector — throttle by RECORD VOLUME per caller (on top
+  // of the coarse /api rate limit) BEFORE the connector validates. Additive: only reached when chrome_extension is
+  // registered (its flag is on); every server-side source is byte-identical. Fails open on a Redis outage.
+  if (parsed.data.source === "chrome_extension") {
+    await checkCaptureRate(`ingest:${c.get("claims").sub}`, parsed.data.records.length);
   }
   // Re-pin the scope to the token (workspaceId from the session when present) before the connector sees it.
   const envelope = {
