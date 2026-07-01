@@ -90,8 +90,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1254,
-  "fileSetHash": "sha256:ce2925bd8dc146f1140ae72adec3b38e6d511a520dffd7edb0075a705cb257a7",
+  "fileCount": 1256,
+  "fileSetHash": "sha256:e162fa61bcc0339e6e305f67812bae3d017b19d2a62784240252a33b941b007c",
   "features": {
     "account-search": {
       "web": [],
@@ -802,7 +802,10 @@
     "notifications": {
       "web": [],
       "admin": [],
-      "api": [],
+      "api": [
+        "apps/api/src/features/notifications/index.ts",
+        "apps/api/src/features/notifications/routes.ts"
+      ],
       "core": [],
       "db": [
         "packages/db/src/repositories/notificationRepository.ts"
