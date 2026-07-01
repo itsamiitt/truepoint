@@ -9,6 +9,7 @@ import {
   accountHoldRepository,
   aiRequestRepository,
   authPolicyRepository,
+  creditRepository,
   featureFlagRepository,
   idempotencyRepository,
   jitElevationRepository,
@@ -319,6 +320,19 @@ adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), a
           `This adjustment would overdraw the balance (current ${res.balanceAfter}).`,
           { balance: res.balanceAfter },
         );
+      // M11 ledger (ADR-0029): the manual adjustment entry, atomic with the counter + audit row. Owner path →
+      // bypasses ENABLE RLS. The key ties to the Idempotency-Key when present (else a fresh uuid — a
+      // header-less retry IS a distinct adjustment, so it must post its own entry, never collide).
+      await creditRepository.insertLedger(tx, {
+        tenantId,
+        entryType: "adjustment",
+        delta,
+        balanceAfter: res.balanceAfter,
+        idempotencyKey: `adjust:${idemKey ?? crypto.randomUUID()}`,
+        actorUserId: actor.userId,
+        reason,
+        metadata: { via: "admin" },
+      });
       // Record the replay row IN-tx so the key commits atomically with the grant + its audit row.
       if (idemKey) {
         await idempotencyRepository.storeOwner(tx, tenantId, idemKey, {
@@ -613,6 +627,21 @@ adminRoutes.post(
         const r = await platformAdminWriteRepository.refundPurchase(tx, tenantId, purchaseId);
         if (!r.found) throw new NotFoundError("Purchase not found.");
         if (r.alreadyRefunded) throw new ValidationError("Purchase is already refunded.");
+        // M11 ledger (ADR-0029): a refund is a DEBIT — reverse the granted credits as an adjustment (owner
+        // path → bypasses ENABLE RLS; one entry per purchase). A 0-reversal moved no balance → no entry.
+        if (r.reversed > 0) {
+          await creditRepository.insertLedger(tx, {
+            tenantId,
+            entryType: "adjustment",
+            delta: -r.reversed,
+            balanceAfter: r.balanceAfter,
+            idempotencyKey: `refund:${purchaseId}`,
+            purchaseId,
+            actorUserId: actorOf(c).userId,
+            reason: `refund: ${reason}`,
+            metadata: { purchaseId, reversed: r.reversed, ...(note ? { note } : {}) },
+          });
+        }
         return { reversed: r.reversed, balanceAfter: r.balanceAfter };
       },
       {
