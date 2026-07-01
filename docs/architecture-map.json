@@ -90,8 +90,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1256,
-  "fileSetHash": "sha256:e162fa61bcc0339e6e305f67812bae3d017b19d2a62784240252a33b941b007c",
+  "fileCount": 1261,
+  "fileSetHash": "sha256:99745e55a5d59ddaf78ccf23d721953d48214d0ee938e9419a94a46523147386",
   "features": {
     "account-search": {
       "web": [],
@@ -800,7 +800,12 @@
       "integrations": []
     },
     "notifications": {
-      "web": [],
+      "web": [
+        "apps/web/src/features/notifications/api.ts",
+        "apps/web/src/features/notifications/components/NotificationsPage.tsx",
+        "apps/web/src/features/notifications/hooks/useNotificationHistory.ts",
+        "apps/web/src/features/notifications/index.ts"
+      ],
       "admin": [],
       "api": [
         "apps/api/src/features/notifications/index.ts",
@@ -1761,6 +1766,7 @@
       "apps/web/src/app/(shell)/layout.tsx",
       "apps/web/src/app/(shell)/lists/[id]/page.tsx",
       "apps/web/src/app/(shell)/lists/page.tsx",
+      "apps/web/src/app/(shell)/notifications/page.tsx",
       "apps/web/src/app/(shell)/prospect/page.tsx",
       "apps/web/src/app/(shell)/reports/page.tsx",
       "apps/web/src/app/(shell)/sales-navigator/page.tsx",
