@@ -51,6 +51,10 @@ export const tenants = pgTable(
       .defaultNow(),
     features: jsonb("features").notNull().default({}),
     status: varchar("status", { length: 50 }).notNull().default("active"),
+    // Why the tenant is suspended (M11 subs, ADR-0041): 'dunning' (auto, unpaid subscription past grace) vs
+    // 'staff' (a human suspension). null when active. ONLY a 'dunning' suspension is auto-lifted when payment
+    // resumes — a staff suspension is never auto-reactivated. Pre-existing suspensions read null (never auto-lifted).
+    suspensionReason: varchar("suspension_reason", { length: 20 }),
     regionDefault: varchar("region_default", { length: 2 }).notNull().default("US"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

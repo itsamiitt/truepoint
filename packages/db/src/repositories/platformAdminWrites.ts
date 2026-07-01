@@ -72,7 +72,13 @@ export const platformAdminWriteRepository = {
   async setTenantStatus(tx: Tx, tenantId: string, status: TenantLifecycleStatus): Promise<number> {
     const updated = await tx
       .update(tenants)
-      .set({ status, updatedAt: new Date() })
+      .set({
+        status,
+        // A STAFF suspension is tagged 'staff' so the dunning auto-reactivation NEVER lifts it; a reactivate
+        // clears the tag (M11 subs, ADR-0041).
+        suspensionReason: status === "suspended" ? "staff" : null,
+        updatedAt: new Date(),
+      })
       .where(eq(tenants.id, tenantId))
       .returning({ id: tenants.id });
     return updated.length;
