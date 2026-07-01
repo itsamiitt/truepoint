@@ -83,7 +83,9 @@ export interface BulkRevealExportResult {
  * contact charges credits; already-revealed ones are free (first-wins). An `InsufficientCreditsError` from a
  * reveal propagates (the export aborts) — estimate first.
  */
-export async function bulkRevealExport(input: BulkRevealExportInput): Promise<BulkRevealExportResult> {
+export async function bulkRevealExport(
+  input: BulkRevealExportInput,
+): Promise<BulkRevealExportResult> {
   if (!EXPORT_ROLES.has(input.role)) {
     throw new ForbiddenError("insufficient_role", "Your role does not allow exporting contacts.");
   }
@@ -96,7 +98,10 @@ export async function bulkRevealExport(input: BulkRevealExportInput): Promise<Bu
 
   // 2) Reveal each visible contact through the gate. A suppressed contact throws → EXCLUDE it from the export
   //    (the suppression invariant). Other errors (e.g. insufficient credits) propagate and abort the export.
-  const revealedById = new Map<string, { email: string | null; phone: string | null; emailStatus: string }>();
+  const revealedById = new Map<
+    string,
+    { email: string | null; phone: string | null; emailStatus: string }
+  >();
   let suppressedExcluded = 0;
   for (const m of masked as Array<{ id: string }>) {
     try {
@@ -106,7 +111,11 @@ export async function bulkRevealExport(input: BulkRevealExportInput): Promise<Bu
         contactId: m.id,
         revealType: "full_profile",
       });
-      revealedById.set(m.id, { email: r.email, phone: r.phone, emailStatus: r.emailStatus });
+      revealedById.set(m.id, {
+        email: r.email ?? null,
+        phone: r.phone ?? null,
+        emailStatus: r.emailStatus ?? "",
+      });
     } catch (err) {
       if (err instanceof SuppressedError) {
         suppressedExcluded++;
@@ -122,7 +131,12 @@ export async function bulkRevealExport(input: BulkRevealExportInput): Promise<Bu
     .filter((m) => revealedById.has(m.id))
     .map((m) => {
       const rev = revealedById.get(m.id);
-      return { ...m, email: rev?.email ?? "", phone: rev?.phone ?? "", emailStatus: rev?.emailStatus };
+      return {
+        ...m,
+        email: rev?.email ?? "",
+        phone: rev?.phone ?? "",
+        emailStatus: rev?.emailStatus,
+      };
     });
   const csv = toCsv(rows, REVEALED_EXPORT_COLUMNS);
 
