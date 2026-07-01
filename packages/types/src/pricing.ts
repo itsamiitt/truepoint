@@ -39,6 +39,12 @@ export type PublicCreditPacksResponse = z.infer<typeof publicCreditPacksResponse
 
 /** Response envelope for `GET /api/v1/pricing/plans`. */
 export const publicPlansResponseSchema = z.object({ plans: z.array(publicPlanSchema) });
+
+/** POST /credits/checkout body — the credit pack the customer wants to buy, by its catalog key (M11, ADR-0041). */
+export const creditCheckoutSchema = z.object({
+  pack: z.string().min(1).max(100),
+});
+export type CreditCheckout = z.infer<typeof creditCheckoutSchema>;
 export type PublicPlansResponse = z.infer<typeof publicPlansResponseSchema>;
 
 /** The authenticated tenant's plan + credits envelope — `GET /api/v1/credits/me`. Reads the tenant counter and

@@ -393,6 +393,7 @@ export {
   type CreditPackRow,
   type UpsertCreditPackInput,
 } from "./repositories/creditPackRepository.ts";
+export { stripeCustomerRepository } from "./repositories/stripeCustomerRepository.ts";
 // Plan/entitlement template catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
 export {
   planTemplateRepository,

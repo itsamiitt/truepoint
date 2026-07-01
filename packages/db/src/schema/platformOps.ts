@@ -161,6 +161,9 @@ export const creditPacks = pgTable("credit_packs", {
   name: text("name").notNull(),
   credits: integer("credits").notNull(),
   priceCents: integer("price_cents").notNull(),
+  // Optional pre-created Stripe Price id (M11 checkout, ADR-0041). Null → checkout uses inline price_data from
+  // priceCents, so a pack sells with zero Stripe-dashboard setup.
+  stripePriceId: text("stripe_price_id"),
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -180,6 +183,8 @@ export const planTemplates = pgTable("plan_templates", {
   workspaceLimit: integer("workspace_limit"), // null = unlimited
   monthlyCreditGrant: integer("monthly_credit_grant"), // null = none
   trialBonusCredits: integer("trial_bonus_credits"), // OD-7 signup-bonus credits seeded on org creation (null = none)
+  // The recurring Stripe Price id (M11 subscriptions, ADR-0041) — REQUIRED to offer this plan as a subscription.
+  stripePriceId: text("stripe_price_id"),
   features: jsonb("features").notNull().default({}),
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),

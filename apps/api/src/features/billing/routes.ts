@@ -3,12 +3,19 @@
 // (balance + usage history for Settings ▸ Billing & Credits). Transport only; grant idempotency and the
 // counter invariants live in core/db.
 
-import { env } from "@leadwolf/config";
-import { grantFromStripe, parseCreditGrantEvent, verifyStripeSignature } from "@leadwolf/core";
+import { appOrigins, env } from "@leadwolf/config";
 import {
+  StripeError,
+  grantFromStripe,
+  parseCreditGrantEvent,
+  verifyStripeSignature,
+} from "@leadwolf/core";
+import {
+  creditPackRepository,
   creditRepository,
   planTemplateRepository,
   revealRepository,
+  stripeCustomerRepository,
   tenantRepository,
   withPlatformReadTx,
 } from "@leadwolf/db";
@@ -17,12 +24,14 @@ import {
   NotFoundError,
   type TenantPlanEnvelope,
   ValidationError,
+  creditCheckoutSchema,
   usageQuerySchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { getStripePort } from "./stripePortProvider.ts";
 
 // ── /api/v1/billing — the webhook (unauthenticated; signature is the trust boundary) ───────────────────
 export const billingRoutes = new Hono();
@@ -84,6 +93,56 @@ creditsRoutes.get("/me", requireRole("owner", "admin", "member", "viewer"), asyn
     features: profile.features,
   };
   return c.json({ plan });
+});
+
+// Paid top-up — start a Stripe Checkout Session for a credit pack (M11, ADR-0041). DARK: needs BOTH the flag
+// AND a secret key; absent → 501 { available:false } so the web hub's existing "coming soon" degrade shows.
+// The credits are granted ONLY by the existing payment_intent.succeeded webhook (metadata stamped here) —
+// idempotent, never client-side. Workspace-admin gated (owner|admin).
+creditsRoutes.post("/checkout", requireRole("owner", "admin"), async (c) => {
+  if (!env.BILLING_CHECKOUT_ENABLED || !env.STRIPE_SECRET_KEY) {
+    return c.json({ available: false }, 501);
+  }
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to buy credits.");
+  const parsed = creditCheckoutSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const tenantId = c.get("tenantId");
+  const scope = { tenantId, workspaceId };
+
+  const pack = await withPlatformReadTx((tx) =>
+    creditPackRepository.getActiveByKey(tx, parsed.data.pack),
+  );
+  if (!pack) throw new NotFoundError("Credit pack not found.");
+
+  try {
+    const stripe = getStripePort();
+    // Reuse the tenant's Stripe customer across purchases; create + link on the first checkout.
+    let customerId = await stripeCustomerRepository.getByTenant(scope);
+    if (!customerId) {
+      customerId = await stripe.createCustomer({ tenantId });
+      await stripeCustomerRepository.link(scope, customerId);
+    }
+    const appOrigin = appOrigins()[0] ?? "";
+    const session = await stripe.createCheckoutSession({
+      mode: "payment",
+      ...(pack.stripePriceId
+        ? { priceId: pack.stripePriceId }
+        : { priceData: { amountCents: pack.priceCents, currency: "usd", productName: pack.name } }),
+      customerId,
+      successUrl: `${appOrigin}/settings/billing?checkout=success`,
+      cancelUrl: `${appOrigin}/settings/billing?checkout=cancelled`,
+      metadata: { tenant_id: tenantId, credit_pack_key: pack.key },
+      // Phase-1 reuse: stamp the PaymentIntent so the EXISTING payment_intent.succeeded webhook grants.
+      paymentIntentMetadata: { tenant_id: tenantId, credits: String(pack.credits) },
+    });
+    return c.json({ available: true, checkoutUrl: session.url });
+  } catch (err) {
+    // Never leak the key or Stripe internals: a config gap degrades to "coming soon", else a 502.
+    if (err instanceof StripeError)
+      return c.json({ available: false }, err.reason === "not_configured" ? 501 : 502);
+    throw err;
+  }
 });
 
 const USAGE_CSV_HEADER = [
