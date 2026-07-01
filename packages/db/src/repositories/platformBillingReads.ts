@@ -49,6 +49,16 @@ export interface LowBalanceTenantRow {
   defaultWorkspaceId: string | null;
 }
 
+/** One tenant whose live counter disagrees with its credit-ledger sum (M11 reconciliation drift, ADR-0029). */
+export interface CreditDriftRow {
+  tenantId: string;
+  tenantName: string;
+  counter: number;
+  ledgerSum: number;
+  drift: number; // counter - ledgerSum (0 for a fully-ledgered tenant)
+  entryCount: number;
+}
+
 /** One tenant's windowed + lifetime economics aggregate — provider spend stays in micros (the api converts to
  *  cents and derives margin / cost-per-reveal). `lastPurchaseAt` = newest completed top-up, or null. */
 export interface TenantEconomicsDetailAggregate {
@@ -323,6 +333,39 @@ export const platformBillingReadRepository = {
       revealCreditBalance: Number(r.reveal_credit_balance),
       ownerUserId: r.owner_user_id,
       defaultWorkspaceId: r.default_workspace_id,
+    }));
+  },
+
+  /** Credit-ledger reconciliation (M11, ADR-0029): active tenants whose live counter DISAGREES with
+   *  SUM(credit_ledger.delta) — the drift the billing-recon sweep flags. `drift = counter - ledgerSum`
+   *  (positive = counter ahead of the ledger). A pre-ledger tenant reads as its whole un-backfilled balance
+   *  until the historical backfill runs; a FULLY-ledgered tenant must read 0 (a non-zero drift there is a real
+   *  bug — a mutation that skipped its entry). Owner read; bounded, largest |drift| first. */
+  async reconcileDrift(tx: Tx, limit: number): Promise<CreditDriftRow[]> {
+    const rows = (await tx.execute(sql`
+      SELECT t.id::text AS tenant_id, t.name AS tenant_name,
+        t.reveal_credit_balance AS counter,
+        COALESCE((SELECT SUM(cl.delta) FROM credit_ledger cl WHERE cl.tenant_id = t.id), 0)::bigint AS ledger_sum,
+        (SELECT COUNT(*) FROM credit_ledger cl WHERE cl.tenant_id = t.id)::bigint AS entry_count
+      FROM tenants t
+      WHERE t.status = 'active'
+        AND t.reveal_credit_balance <> COALESCE((SELECT SUM(cl.delta) FROM credit_ledger cl WHERE cl.tenant_id = t.id), 0)
+      ORDER BY abs(t.reveal_credit_balance - COALESCE((SELECT SUM(cl.delta) FROM credit_ledger cl WHERE cl.tenant_id = t.id), 0)) DESC, t.id
+      LIMIT ${limit}
+    `)) as unknown as Array<{
+      tenant_id: string;
+      tenant_name: string;
+      counter: number;
+      ledger_sum: number;
+      entry_count: number;
+    }>;
+    return rows.map((r) => ({
+      tenantId: r.tenant_id,
+      tenantName: r.tenant_name,
+      counter: Number(r.counter),
+      ledgerSum: Number(r.ledger_sum),
+      drift: Number(r.counter) - Number(r.ledger_sum),
+      entryCount: Number(r.entry_count),
     }));
   },
 
