@@ -11,7 +11,6 @@ import {
   authPolicyRepository,
   creditRepository,
   featureFlagRepository,
-  idempotencyRepository,
   jitElevationRepository,
   planTemplateRepository,
   platformAdminRepository,
@@ -29,17 +28,23 @@ import {
   type AccountHoldView,
   type EconomicsTrendPoint,
   ElevationRequiredError,
+  ForbiddenError,
   LIST_PLATFORM_AUDIT_ACTIONS,
   type LedgerEntryView,
+  MONEY_APPROVAL_OPERATIONS,
   NotFoundError,
   type StaffListOverview,
   type SubscriptionView,
   type SupportNoteView,
   type TenantEconomicsDetail,
   ValidationError,
+  approvalRequestViewSchema,
   capabilitiesForRole,
   createSupportNoteSchema,
+  creditAdjustParamsSchema,
   creditAdjustSchema,
+  creditRefundParamsSchema,
+  decideApprovalSchema,
   economicsQuerySchema,
   featureFlagGlobalToggleSchema,
   featureFlagTenantToggleSchema,
@@ -83,6 +88,27 @@ const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   userId: c.get("claims").sub,
   ip: c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
 });
+
+// Serialize a PlatformApprovalRow to the shared ApprovalRequestView (Date → ISO). Mirrors dataRoutes.ts —
+// the money approvals queue renders the same shape.
+type ApprovalRow = Awaited<ReturnType<typeof platformAdminRepository.listPendingApprovals>>[number];
+function toApprovalView(r: ApprovalRow) {
+  return {
+    id: r.id,
+    operation: r.operation,
+    params: (r.params ?? {}) as Record<string, unknown>,
+    targetTenantId: r.targetTenantId,
+    requestedByUserId: r.requestedByUserId,
+    requestReason: r.requestReason,
+    status: r.status,
+    decidedByUserId: r.decidedByUserId,
+    decisionReason: r.decisionReason,
+    decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
+    expiresAt: r.expiresAt.toISOString(),
+    executedAt: r.executedAt ? r.executedAt.toISOString() : null,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
 
 // ── Who am I (13a F3) — the caller's active staff role + the capabilities it grants. The console fetches this
 // once to hide actions the operator can't perform (defence-in-depth; every endpoint still enforces its own
@@ -280,11 +306,10 @@ adminRoutes.post("/tenants/:id/reactivate", requireCapability("tenants:suspend")
   return c.json({ ok: true, tenantId, status: "active" });
 });
 
-/** Manual credit grant / adjustment (07 §7). super_admin or billing_ops. A positive delta is a "credit.grant",
- *  a negative one a "credit.adjust" — the immutable trail names the actual operation, not a generic "grant".
- *  JIT-gated (13a F1): consumes a live "credit.adjust" elevation for this tenant in-tx; without one → 403
- *  elevation_required. The repo's FOR UPDATE + the DB CHECK(>=0) are the overdraft guards; a would-overdraw
- *  debit is a clean 422 (and rolls the consumed elevation back, so the operator can retry). */
+/** FILE a maker-checker approval request for a manual credit grant/adjustment (M11, ADR-0041 / owner decision
+ *  #4 — ALL staff money actions require peer approval). The MAKER files here (tenants:credits); NO balance moves
+ *  — a filed request is a proposal. A DIFFERENT billing operator approves + EXECUTES it via the billing
+ *  approvals queue (maker != checker enforced server-side). Audited "data.approval.request". */
 adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), async (c) => {
   const tenantId = c.req.param("id");
   if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
@@ -292,62 +317,24 @@ adminRoutes.post("/tenants/:id/credits", requireCapability("tenants:credits"), a
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const { delta, reason } = parsed.data;
   const actor = actorOf(c);
-
-  // Idempotency-Key replay (ADR-0004/0007): a network retry must NOT 403 on the already-consumed JIT
-  // elevation (nor re-grant) — if this (tenant, key) already committed, replay its stored response without
-  // re-running the grant or writing a second audit row. Owner-path read (no tenancy context on this surface).
-  const idemKey = c.req.header("idempotency-key");
-  if (idemKey) {
-    const replay = await idempotencyRepository.findOwner(tenantId, idemKey);
-    if (replay) {
-      return c.json(
-        replay.responseBody as { tenantId: string; delta: number; balanceAfter: number },
-      );
-    }
-  }
-
-  const balanceAfter = await withPlatformTx(
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const view = await withPlatformTx(
     actor,
-    delta > 0 ? "credit.grant" : "credit.adjust",
-    async (tx) => {
-      const elevated = await jitElevationRepository.consume(tx, {
-        staffUserId: actor.userId,
-        action: "credit.adjust",
-        targetTenantId: tenantId,
-      });
-      if (!elevated) throw new ElevationRequiredError("credit.adjust");
-      const res = await platformAdminWriteRepository.adjustCredits(tx, tenantId, delta);
-      if (!res.found) throw new NotFoundError("Tenant not found.");
-      if (res.wouldOverdraw)
-        throw new ValidationError(
-          `This adjustment would overdraw the balance (current ${res.balanceAfter}).`,
-          { balance: res.balanceAfter },
-        );
-      // M11 ledger (ADR-0029): the manual adjustment entry, atomic with the counter + audit row. Owner path →
-      // bypasses ENABLE RLS. The key ties to the Idempotency-Key when present (else a fresh uuid — a
-      // header-less retry IS a distinct adjustment, so it must post its own entry, never collide).
-      await creditRepository.insertLedger(tx, {
-        tenantId,
-        entryType: "adjustment",
-        delta,
-        balanceAfter: res.balanceAfter,
-        idempotencyKey: `adjust:${idemKey ?? crypto.randomUUID()}`,
-        actorUserId: actor.userId,
-        reason,
-        metadata: { via: "admin" },
-      });
-      // Record the replay row IN-tx so the key commits atomically with the grant + its audit row.
-      if (idemKey) {
-        await idempotencyRepository.storeOwner(tx, tenantId, idemKey, {
-          responseStatus: 200,
-          responseBody: { tenantId, delta, balanceAfter: res.balanceAfter },
-        });
-      }
-      return res.balanceAfter;
-    },
-    { targetType: "tenant", targetId: tenantId, tenantId, metadata: { delta, reason } },
+    "data.approval.request",
+    (tx) =>
+      platformAdminWriteRepository
+        .createApproval(tx, {
+          operation: "credit_adjust",
+          params: { tenantId, delta },
+          targetTenantId: tenantId,
+          requestedByUserId: actor.userId,
+          requestReason: reason,
+          expiresAt,
+        })
+        .then(toApprovalView),
+    { targetType: "approval_request", tenantId, metadata: { operation: "credit_adjust", delta } },
   );
-  return c.json({ tenantId, delta, balanceAfter });
+  return c.json({ approval: approvalRequestViewSchema.parse(view) });
 });
 
 // ── Plan override (13a Area 1, 13 §3.1, 07 §5) — apply a plan TEMPLATE's entitlements (plan id / seat &
@@ -669,6 +656,9 @@ adminRoutes.get("/tenants/:id/subscription", requireCapability("billing:read"), 
   return c.json({ subscription: view });
 });
 
+/** FILE a maker-checker approval request for a purchase refund (M11, ADR-0041 / owner decision #4). The MAKER
+ *  files here (tenants:credits); NO balance moves. A DIFFERENT billing operator approves + EXECUTES the reversal
+ *  via the billing approvals queue. Audited "data.approval.request". */
 adminRoutes.post(
   "/tenants/:id/purchases/:purchaseId/refund",
   requireCapability("tenants:credits"),
@@ -680,38 +670,179 @@ adminRoutes.post(
     const parsed = refundRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
     const { reason, note } = parsed.data;
-    const result = await withPlatformTx(
-      actorOf(c),
-      "credit.adjust",
-      async (tx) => {
-        const r = await platformAdminWriteRepository.refundPurchase(tx, tenantId, purchaseId);
-        if (!r.found) throw new NotFoundError("Purchase not found.");
-        if (r.alreadyRefunded) throw new ValidationError("Purchase is already refunded.");
-        // M11 ledger (ADR-0029): a refund is a DEBIT — reverse the granted credits as an adjustment (owner
-        // path → bypasses ENABLE RLS; one entry per purchase). A 0-reversal moved no balance → no entry.
-        if (r.reversed > 0) {
-          await creditRepository.insertLedger(tx, {
-            tenantId,
-            entryType: "adjustment",
-            delta: -r.reversed,
-            balanceAfter: r.balanceAfter,
-            idempotencyKey: `refund:${purchaseId}`,
-            purchaseId,
-            actorUserId: actorOf(c).userId,
-            reason: `refund: ${reason}`,
-            metadata: { purchaseId, reversed: r.reversed, ...(note ? { note } : {}) },
-          });
-        }
-        return { reversed: r.reversed, balanceAfter: r.balanceAfter };
-      },
+    const actor = actorOf(c);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const view = await withPlatformTx(
+      actor,
+      "data.approval.request",
+      (tx) =>
+        platformAdminWriteRepository
+          .createApproval(tx, {
+            operation: "credit_refund",
+            params: { tenantId, purchaseId, refundReason: reason, ...(note ? { note } : {}) },
+            targetTenantId: tenantId,
+            requestedByUserId: actor.userId,
+            requestReason: note ? `${reason}: ${note}` : reason,
+            expiresAt,
+          })
+          .then(toApprovalView),
       {
-        targetType: "tenant",
-        targetId: tenantId,
+        targetType: "approval_request",
         tenantId,
-        metadata: { purchaseId, action: "refund", reason, ...(note ? { note } : {}) },
+        metadata: { operation: "credit_refund", purchaseId },
       },
     );
-    return c.json({ purchaseId, reversed: result.reversed, balanceAfter: result.balanceAfter });
+    return c.json({ approval: approvalRequestViewSchema.parse(view) });
+  },
+);
+
+// ── Billing money-approvals queue (M11, ADR-0041 / owner decision #4) — the maker-checker CHECKER side for the
+// credit_adjust / credit_refund requests filed above. LIST is billing:read; APPROVE/REJECT require tenants:credits
+// AND a DIFFERENT operator than the maker (decideApproval enforces maker != checker server-side + a derived
+// expiry). On approve the money op EXECUTES in the SAME audited tx (adjustCredits/refundPurchase + the M11
+// ledger entry) — decision + effect are atomic. Only the credit_* ops are executable here; a data op filed here
+// can't be approved (the executor refuses it), and a credit op can't be approved via the data queue either.
+
+/** The billing approvals review queue — pending credit_adjust/credit_refund requests, newest-first. billing:read. */
+adminRoutes.get("/billing/approvals", requireCapability("billing:read"), async (c) => {
+  const rows = await withPlatformTx(actorOf(c), "admin.data_approvals", (tx) =>
+    platformAdminRepository.listPendingApprovals(tx, { operations: MONEY_APPROVAL_OPERATIONS }),
+  );
+  return c.json({ approvals: approvalRequestViewSchema.array().parse(rows.map(toApprovalView)) });
+});
+
+/** Approve + EXECUTE a pending money request (the CHECKER; maker != checker enforced). tenants:credits. */
+adminRoutes.post(
+  "/billing/approvals/:id/approve",
+  requireCapability("tenants:credits"),
+  async (c) => {
+    const id = c.req.param("id");
+    if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+    const parsed = decideApprovalSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+    const actor = actorOf(c);
+    const view = await withPlatformTx(
+      actor,
+      "data.approval.approve",
+      async (tx) => {
+        const outcome = await platformAdminWriteRepository.decideApproval(
+          tx,
+          id,
+          actor.userId,
+          "approved",
+          parsed.data.reason,
+        );
+        if (!outcome.found) throw new NotFoundError("Approval request not found.");
+        if (outcome.selfApproval)
+          throw new ForbiddenError(
+            "maker_checker",
+            "You filed this request — a different operator must approve it (separation of duties).",
+          );
+        if (outcome.notPending) throw new ValidationError("This request is no longer pending.");
+        const row = outcome.row!;
+        // EXECUTE the approved money op IN THE SAME tx — a failed run rolls the approval back (atomic). The
+        // ledger entry credits the MAKER as actor (they proposed it); the approver is on the approval row + audit.
+        if (row.operation === "credit_adjust") {
+          const p = creditAdjustParamsSchema.safeParse(row.params);
+          if (!p.success)
+            throw new ValidationError(p.error.issues[0]?.message ?? "Invalid credit_adjust params");
+          const res = await platformAdminWriteRepository.adjustCredits(
+            tx,
+            p.data.tenantId,
+            p.data.delta,
+          );
+          if (!res.found) throw new NotFoundError("Tenant not found.");
+          if (res.wouldOverdraw)
+            throw new ValidationError(
+              `This adjustment would overdraw the balance (current ${res.balanceAfter}).`,
+              { balance: res.balanceAfter },
+            );
+          await creditRepository.insertLedger(tx, {
+            tenantId: p.data.tenantId,
+            entryType: "adjustment",
+            delta: p.data.delta,
+            balanceAfter: res.balanceAfter,
+            idempotencyKey: `approval:${id}`,
+            actorUserId: row.requestedByUserId,
+            reason: row.requestReason,
+            metadata: { approvalId: id, approvedBy: actor.userId, via: "approval" },
+          });
+        } else if (row.operation === "credit_refund") {
+          const p = creditRefundParamsSchema.safeParse(row.params);
+          if (!p.success)
+            throw new ValidationError(p.error.issues[0]?.message ?? "Invalid credit_refund params");
+          const r = await platformAdminWriteRepository.refundPurchase(
+            tx,
+            p.data.tenantId,
+            p.data.purchaseId,
+          );
+          if (!r.found) throw new NotFoundError("Purchase not found.");
+          if (r.alreadyRefunded) throw new ValidationError("Purchase is already refunded.");
+          if (r.reversed > 0) {
+            await creditRepository.insertLedger(tx, {
+              tenantId: p.data.tenantId,
+              entryType: "adjustment",
+              delta: -r.reversed,
+              balanceAfter: r.balanceAfter,
+              idempotencyKey: `approval:${id}`,
+              purchaseId: p.data.purchaseId,
+              actorUserId: row.requestedByUserId,
+              reason: `refund: ${p.data.refundReason}${p.data.note ? `: ${p.data.note}` : ""}`,
+              metadata: {
+                approvalId: id,
+                approvedBy: actor.userId,
+                refundReason: p.data.refundReason,
+                via: "approval",
+              },
+            });
+          }
+        } else {
+          throw new ValidationError(
+            `'${row.operation}' is not a money operation — decide it in its own queue.`,
+          );
+        }
+        await platformAdminWriteRepository.markApprovalExecuted(tx, id);
+        return toApprovalView({ ...row, status: "executed", executedAt: new Date() });
+      },
+      { targetType: "approval_request", targetId: id, metadata: { decision: "approved" } },
+    );
+    return c.json({ approval: approvalRequestViewSchema.parse(view) });
+  },
+);
+
+/** Reject a pending money request (the CHECKER; maker != checker enforced). tenants:credits. */
+adminRoutes.post(
+  "/billing/approvals/:id/reject",
+  requireCapability("tenants:credits"),
+  async (c) => {
+    const id = c.req.param("id");
+    if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+    const parsed = decideApprovalSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+    const actor = actorOf(c);
+    const view = await withPlatformTx(
+      actor,
+      "data.approval.reject",
+      async (tx) => {
+        const outcome = await platformAdminWriteRepository.decideApproval(
+          tx,
+          id,
+          actor.userId,
+          "rejected",
+          parsed.data.reason,
+        );
+        if (!outcome.found) throw new NotFoundError("Approval request not found.");
+        if (outcome.selfApproval)
+          throw new ForbiddenError(
+            "maker_checker",
+            "You filed this request — a different operator must decide it.",
+          );
+        if (outcome.notPending) throw new ValidationError("This request is no longer pending.");
+        return toApprovalView(outcome.row!);
+      },
+      { targetType: "approval_request", targetId: id, metadata: { decision: "rejected" } },
+    );
+    return c.json({ approval: approvalRequestViewSchema.parse(view) });
   },
 );
 

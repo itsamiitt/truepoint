@@ -4,17 +4,30 @@
 // requested_by != decided_by (maker != checker) check; a high-risk op routes through a pending request before
 // it runs. Backed by the platform-owned `approval_requests` table (schema/platformOps.ts, rls/platformOps.sql).
 
-import { retentionDataClass } from "./retention.ts";
 import { z } from "zod";
+import { retentionDataClass } from "./retention.ts";
 
-/** The closed set of high-risk operations that require maker-checker approval. Extend as ops are gated. */
+/** The closed set of high-risk operations that require maker-checker approval. Extend as ops are gated.
+ *  The `credit_*` money operations (M11, ADR-0041 / owner decision #4) are decided under the BILLING capability
+ *  (a different billing operator approves), NOT data:review — see apps/api billing approvals queue. */
 export const dataApprovalOperation = z.enum([
   "bulk_delete", // delete records in bulk (large blast radius)
   "dedup_merge", // merge entities from the dedup / ER review queue
   "retention_enforce", // flip a retention class from shadow to enforce (arms real deletion)
   "bulk_export", // initiate an audited cross-tenant data export (PII egress)
+  "credit_adjust", // manual credit grant/adjustment on a tenant (delta sign = grant vs debit)
+  "credit_refund", // refund a purchase (reverse the granted credits)
 ]);
 export type DataApprovalOperation = z.infer<typeof dataApprovalOperation>;
+
+/** The money operations, split out so each approvals queue only shows its own kind (billing vs data-ops). */
+export const MONEY_APPROVAL_OPERATIONS = ["credit_adjust", "credit_refund"] as const;
+export const DATA_APPROVAL_OPERATIONS = [
+  "bulk_delete",
+  "dedup_merge",
+  "retention_enforce",
+  "bulk_export",
+] as const;
 
 /** The lifecycle of an approval request. */
 export const approvalStatus = z.enum(["pending", "approved", "rejected", "executed", "expired"]);
@@ -71,3 +84,26 @@ export const bulkExportParamsSchema = z.object({
   workspaceId: z.string().uuid(),
 });
 export type BulkExportParams = z.infer<typeof bulkExportParamsSchema>;
+
+/** Params a `credit_adjust` approval carries — the tenant + the SIGNED delta (positive grants, negative
+ *  debits). The executor re-validates before running adjustCredits + posting the ledger entry (M11, decision #4). */
+export const creditAdjustParamsSchema = z.object({
+  tenantId: z.string().uuid(),
+  delta: z
+    .number()
+    .int()
+    .min(-1_000_000)
+    .max(1_000_000)
+    .refine((n) => n !== 0, "delta must be non-zero"),
+});
+export type CreditAdjustParams = z.infer<typeof creditAdjustParamsSchema>;
+
+/** Params a `credit_refund` approval carries — the tenant + the purchase to reverse + the categorical reason
+ *  (audited). The executor re-validates before running refundPurchase + posting the ledger entry (decision #4). */
+export const creditRefundParamsSchema = z.object({
+  tenantId: z.string().uuid(),
+  purchaseId: z.string().uuid(),
+  refundReason: z.enum(["duplicate", "fraud", "billing_error", "goodwill", "other"]),
+  note: z.string().max(500).optional(),
+});
+export type CreditRefundParams = z.infer<typeof creditRefundParamsSchema>;

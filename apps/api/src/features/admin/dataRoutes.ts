@@ -19,6 +19,7 @@ import {
   withPlatformTx,
 } from "@leadwolf/db";
 import {
+  DATA_APPROVAL_OPERATIONS,
   ForbiddenError,
   NotFoundError,
   ValidationError,
@@ -291,7 +292,7 @@ dataRoutes.post("/approvals", requireCapability("data:manage"), async (c) => {
 /** The review queue — pending requests (the CHECKER). data:review. Audited read. */
 dataRoutes.get("/approvals", requireCapability("data:review"), async (c) => {
   const rows = await withPlatformTx(actorOf(c), "admin.data_approvals", (tx) =>
-    platformAdminRepository.listPendingApprovals(tx),
+    platformAdminRepository.listPendingApprovals(tx, { operations: DATA_APPROVAL_OPERATIONS }),
   );
   return c.json({ approvals: approvalRequestViewSchema.array().parse(rows.map(toApprovalView)) });
 });

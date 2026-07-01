@@ -5,7 +5,7 @@
 // (ADR-0032). Read-only: never writes (staff mutations go through their own audited endpoints later).
 
 import type { PlatformListQuery, WorkspaceDataQuality } from "@leadwolf/types";
-import { type SQL, and, asc, desc, eq, gt, ilike, lt, or, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, eq, gt, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenantAuthPolicies, tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
 import { dataQualitySnapshots } from "../schema/dataQualitySnapshots.ts";
@@ -778,7 +778,10 @@ export const platformAdminRepository = {
    * review queue. Newest-first + PLATFORM_READ_LIMIT-bounded. PLATFORM staff data; runs inside the caller's
    * audited withPlatformTx. No tenant PII — `params` are operator-supplied op parameters.
    */
-  async listPendingApprovals(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformApprovalRow[]> {
+  async listPendingApprovals(
+    tx: Tx,
+    opts: { limit?: number; operations?: readonly string[] } = {},
+  ): Promise<PlatformApprovalRow[]> {
     return (
       tx
         .select({
@@ -799,11 +802,18 @@ export const platformAdminRepository = {
         .from(approvalRequests)
         // Only LIVE pending requests: a request past its hard time-box is derived-expired (never a stored 'expired')
         // and is hidden from the review queue — matching decideApproval, which refuses to decide an expired request.
+        // `operations` narrows the queue to one kind (money vs data-ops) so each surface shows only its own.
         .where(
-          and(eq(approvalRequests.status, "pending"), gt(approvalRequests.expiresAt, sql`now()`)),
+          and(
+            eq(approvalRequests.status, "pending"),
+            gt(approvalRequests.expiresAt, sql`now()`),
+            opts.operations && opts.operations.length > 0
+              ? inArray(approvalRequests.operation, [...opts.operations])
+              : undefined,
+          ),
         )
         .orderBy(desc(approvalRequests.id))
-        .limit(Math.min(limit, PLATFORM_READ_LIMIT))
+        .limit(Math.min(opts.limit ?? PLATFORM_READ_LIMIT, PLATFORM_READ_LIMIT))
     );
   },
 
