@@ -172,6 +172,14 @@ export {
   type EstimateInput,
   type ProviderHitStats,
 } from "./enrichment/bulk/estimate.ts";
+// The bulk (existing-contact) re-enrich DRIVE (I3 slice 3a): chunk a CONFIRMED job's contact selection into bands
+// + fan out chunk jobs. FREE (no provider calls); guarded on `running` so it never chunks an unconfirmed job.
+export {
+  runBulkEnrich,
+  type EnqueueEnrichChunk,
+  type RunBulkEnrichInput,
+  type RunBulkEnrichResult,
+} from "./enrichment/bulk/runBulkEnrich.ts";
 
 // Customer-visible enrichment job-status surface (G-ENR-4, 06 §4.1): READ-only list/detail query helpers over
 // the workspace-scoped enrichment-jobs repository → the EnrichmentJobSummary DTO the status UI polls.

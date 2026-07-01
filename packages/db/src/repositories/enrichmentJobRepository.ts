@@ -377,6 +377,23 @@ export const enrichmentJobRepository = {
     });
   },
 
+  /**
+   * Batch-create every chunk band of a job in ONE tx (one INSERT … VALUES) — ATOMIC, so a crashed-then-re-driven
+   * job never sees a PARTIAL chunk set (which the resume path would mistake for "already planned" and skip the
+   * missing bands). Returns the new chunk ids; empty input is a no-op. Mirrors insertJobRows' batch shape.
+   * Workspace-scoped via RLS through the parent job.
+   */
+  async createChunks(scope: TenantScope, values: ChunkCreateValues[]): Promise<string[]> {
+    if (values.length === 0) return [];
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .insert(enrichmentJobChunks)
+        .values(values)
+        .returning({ id: enrichmentJobChunks.id });
+      return rows.map((r) => r.id);
+    });
+  },
+
   /** Sparse chunk patch; `incrementAttempts` bumps `attempts` atomically (retry accounting). */
   async updateChunk(scope: TenantScope, chunkId: string, patch: ChunkUpdate): Promise<void> {
     const set: Record<string, unknown> = definedOnly({

@@ -88,8 +88,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1221,
-  "fileSetHash": "sha256:c0ca1ae0fc8068b29a56810c9b44453dcf203e86cd970aebd27377f04b30c861",
+  "fileCount": 1222,
+  "fileSetHash": "sha256:971c8ba56a0c6c16c1383831afd6bc8c9e142efe4612fb1e7b775b3f226b9c48",
   "features": {
     "account-search": {
       "web": [],
@@ -503,6 +503,7 @@
         "packages/core/src/enrichment/bulk/matchPort.ts",
         "packages/core/src/enrichment/bulk/overlayMatcher.test.ts",
         "packages/core/src/enrichment/bulk/overlayMatcher.ts",
+        "packages/core/src/enrichment/bulk/runBulkEnrich.ts",
         "packages/core/src/enrichment/confirmJob.ts",
         "packages/core/src/enrichment/enrichContact.ts",
         "packages/core/src/enrichment/freemailDomains.test.ts",
