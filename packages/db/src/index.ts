@@ -63,6 +63,12 @@ export {
   type ResolveForImportInput,
   type ResolveForImportResult,
 } from "./repositories/masterGraphRepository.ts";
+// Probabilistic ER (I5) system reads over the master graph — candidate generation via blocking (withErTx; read-only).
+export {
+  erRepository,
+  ER_CANDIDATE_LIMIT,
+  type ErCandidatePerson,
+} from "./repositories/erRepository.ts";
 export {
   customFieldRepository,
   type CustomFieldValue,

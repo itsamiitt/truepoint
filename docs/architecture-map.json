@@ -89,8 +89,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1229,
-  "fileSetHash": "sha256:06203074905e05b13e8b508bb1d12fdc312069efc5a7a70cc2faa5e6aaca07e0",
+  "fileCount": 1230,
+  "fileSetHash": "sha256:52956db0b81a9b4a8460d3185a0553cef7d8b335de5955ff70c7d866405c15f2",
   "features": {
     "account-search": {
       "web": [],
@@ -2074,6 +2074,7 @@
     "packages/db/src/repositories/emailThreadRepository.ts",
     "packages/db/src/repositories/enrichmentJobRepository.ts",
     "packages/db/src/repositories/enrichmentPolicyRepository.ts",
+    "packages/db/src/repositories/erRepository.ts",
     "packages/db/src/repositories/evidenceRepository.ts",
     "packages/db/src/repositories/featureFlagRepository.ts",
     "packages/db/src/repositories/impersonationRepository.ts",
