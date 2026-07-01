@@ -5,7 +5,7 @@
 
 import { and, asc, eq, sql } from "drizzle-orm";
 import { type TenantScope, withTenantTx } from "../client.ts";
-import { users } from "../schema/auth.ts";
+import { tenantMembers, users } from "../schema/auth.ts";
 import { teamMembers, teams } from "../schema/teams.ts";
 
 type WorkspaceScope = TenantScope & { workspaceId: string };
@@ -117,26 +117,41 @@ export const teamRepository = {
     );
   },
 
-  /** Add a user to a team (idempotent). Verifies the team is in THIS workspace first (RLS-scoped select), so a
-   *  foreign team id can't be tagged with the caller's workspace. Returns false when the team isn't found. */
-  async addMember(scope: WorkspaceScope, teamId: string, userId: string): Promise<boolean> {
+  /** Add a workspace member to a team BY EMAIL (idempotent). Verifies the team is in THIS workspace (RLS-scoped)
+   *  and resolves the email to a TENANT member (so only real org members can be grouped). Returns 'no_team'
+   *  (unknown/foreign team), 'not_member' (email isn't a tenant member), or 'ok'. */
+  async addMember(
+    scope: WorkspaceScope,
+    teamId: string,
+    email: string,
+  ): Promise<"ok" | "no_team" | "not_member"> {
     return withTenantTx(scope, async (tx) => {
       const [team] = await tx
         .select({ id: teams.id })
         .from(teams)
         .where(eq(teams.id, teamId))
         .limit(1);
-      if (!team) return false;
+      if (!team) return "no_team";
+      const [user] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .innerJoin(
+          tenantMembers,
+          and(eq(tenantMembers.userId, users.id), eq(tenantMembers.tenantId, scope.tenantId)),
+        )
+        .where(eq(users.email, email))
+        .limit(1);
+      if (!user) return "not_member";
       await tx
         .insert(teamMembers)
         .values({
           tenantId: scope.tenantId,
           workspaceId: scope.workspaceId,
           teamId,
-          userId,
+          userId: user.id,
         })
         .onConflictDoNothing({ target: [teamMembers.teamId, teamMembers.userId] });
-      return true;
+      return "ok";
     });
   },
 

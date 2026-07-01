@@ -103,8 +103,10 @@ teamsRoutes.post("/:id/members", requireRole("owner", "admin"), async (c) => {
   if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
   const parsed = addTeamMemberSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
-  const ok = await teamRepository.addMember(scopeOf(c), id, parsed.data.userId);
-  if (!ok) throw new NotFoundError("Team not found.");
+  const result = await teamRepository.addMember(scopeOf(c), id, parsed.data.email);
+  if (result === "no_team") throw new NotFoundError("Team not found.");
+  if (result === "not_member")
+    throw new ValidationError("That email isn't a member of this organization.");
   return c.json({ ok: true });
 });
 

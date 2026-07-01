@@ -38,8 +38,9 @@ export const updateTeamSchema = z
   .refine((v) => v.name !== undefined || v.description !== undefined, "Provide a field to update");
 export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
 
-/** POST /teams/:id/members body. */
+/** POST /teams/:id/members body — add a workspace member by EMAIL (the roster is per-user; the server resolves
+ *  the email to a tenant member). */
 export const addTeamMemberSchema = z.object({
-  userId: z.string().uuid(),
+  email: z.string().trim().toLowerCase().email(),
 });
 export type AddTeamMemberInput = z.infer<typeof addTeamMemberSchema>;

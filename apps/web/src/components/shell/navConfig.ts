@@ -2,7 +2,16 @@
 // to live in Sidebar.tsx, AppShell.tsx and CommandPalette.tsx — add a destination in exactly one place and the
 // rail, top-bar title, command palette, and settings scope-nav all pick it up.
 import type { IconComponent } from "@leadwolf/ui";
-import { BarChart2, HeartPulse, Home, Inbox, ListChecks, Search, Send, Settings } from "lucide-react";
+import {
+  BarChart2,
+  HeartPulse,
+  Home,
+  Inbox,
+  ListChecks,
+  Search,
+  Send,
+  Settings,
+} from "lucide-react";
 
 export interface NavDestination {
   label: string;
@@ -60,6 +69,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     items: [
       { label: "General", href: "/settings/workspace", match: "/settings/workspace" },
       { label: "Members", href: "/settings/members", match: "/settings/members" },
+      { label: "Teams", href: "/settings/teams", match: "/settings/teams" },
       { label: "Auto-enrich", href: "/settings/auto-enrich", match: "/settings/auto-enrich" },
       { label: "Sessions", href: "/settings/sessions", match: "/settings/sessions" },
       { label: "Custom fields", href: "/settings/custom-fields", match: "/settings/custom-fields" },
