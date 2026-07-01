@@ -3,6 +3,7 @@
 // recorded in platform_audit_log; results are bounded (PLATFORM_READ_LIMIT) — no unbounded cross-tenant
 // scans. Transport only: the bounded read shapes live in @leadwolf/db (platformAdminRepository). This is the
 // highest-privilege surface in the api; nothing reaches it without pa===true.
+import { env } from "@leadwolf/config";
 import { evaluateFlagsForTenant } from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
@@ -28,6 +29,7 @@ import {
   type AccountHoldView,
   type EconomicsTrendPoint,
   ElevationRequiredError,
+  type EnvFeatureGate,
   ForbiddenError,
   LIST_PLATFORM_AUDIT_ACTIONS,
   type LedgerEntryView,
@@ -1182,6 +1184,65 @@ adminRoutes.get("/feature-flags/evaluate/:tenantId", async (c) => {
     evaluateFlagsForTenant(tx, tenantId),
   );
   return c.json({ tenantId, flags });
+});
+
+/** The deploy-time env MASTER-SWITCH states (read-only). These boot-time booleans gate features at the process
+ *  level (kill-switches) and are NOT UI-toggleable — a running process reads them at boot, so the console surfaces
+ *  their STATE so staff see the whole gate picture + the dual-gate pairing (`flagKey`): a feature is live for a
+ *  tenant only when its env master AND its per-tenant flag are both on. Config booleans ONLY — never a secret
+ *  value. platformAdmin-gated by the router middleware; reads no tenant data, so no withPlatformTx/audit. */
+adminRoutes.get("/feature-flags/env-gates", (c) => {
+  const gates: EnvFeatureGate[] = [
+    {
+      key: "BULK_IMPORT_ENABLED",
+      label: "Bulk COPY import",
+      description:
+        "Master kill-switch for the bulk COPY-staging importer. Dual-gated with the bulk_import_enabled per-tenant flag.",
+      enabled: env.BULK_IMPORT_ENABLED,
+      flagKey: "bulk_import_enabled",
+    },
+    {
+      key: "BULK_ENRICHMENT_ENABLED",
+      label: "Bulk CSV enrichment (spend)",
+      description:
+        "Master kill-switch for the confirm-before-spend bulk enrichment path. Env-only today (no per-tenant flag).",
+      enabled: env.BULK_ENRICHMENT_ENABLED,
+      flagKey: null,
+    },
+    {
+      key: "ER_SHADOW_ENABLED",
+      label: "Probabilistic ER (shadow)",
+      description:
+        "Master switch for the Fellegi-Sunter shadow ER proposer. Operates on the cross-tenant master graph; env-only.",
+      enabled: env.ER_SHADOW_ENABLED,
+      flagKey: null,
+    },
+    {
+      key: "CHROME_EXTENSION_ENABLED",
+      label: "Chrome-extension capture",
+      description:
+        "Master switch for the extension scraping-capture connector (dark until legal sign-off). Boot-time global; env-only.",
+      enabled: env.CHROME_EXTENSION_ENABLED,
+      flagKey: null,
+    },
+    {
+      key: "INGESTION_EVIDENCE_ENABLED",
+      label: "Evidence substrate dual-write",
+      description:
+        "Master switch for the source_records + match_links evidence dual-write that backs probabilistic ER. Env-only.",
+      enabled: env.INGESTION_EVIDENCE_ENABLED,
+      flagKey: null,
+    },
+    {
+      key: "AUTH_POLICY_ENFORCEMENT_ENABLED",
+      label: "Auth-policy login enforcement",
+      description:
+        "System-wide master-arm for tenant auth-policy login enforcement. Pairs with each tenant's auth-enforcement switch (Tenants → tenant → Auth enforcement).",
+      enabled: env.AUTH_POLICY_ENFORCEMENT_ENABLED === "true",
+      flagKey: null,
+    },
+  ];
+  return c.json({ gates });
 });
 
 // ── Global retention policies (data-management A2; design 16-retention-engine-design.md) ─────────────────

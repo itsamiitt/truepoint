@@ -21,6 +21,7 @@ import { Plus, Users } from "lucide-react";
 import { useState } from "react";
 import { setGlobalFlag } from "../api";
 import { useFeatureFlags } from "../hooks/useFeatureFlags";
+import { EnvGatesPanel } from "./EnvGatesPanel";
 import { NewFlagDialog } from "./NewFlagDialog";
 import { OverrideDialog } from "./OverrideDialog";
 
@@ -141,6 +142,8 @@ export function FeatureFlagsPage() {
           }
         />
       )}
+
+      <EnvGatesPanel />
 
       <NewFlagDialog
         open={creating}

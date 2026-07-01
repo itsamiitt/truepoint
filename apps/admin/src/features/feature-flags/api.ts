@@ -6,6 +6,7 @@
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
+  EnvFeatureGate,
   FeatureFlagGlobalToggle,
   FeatureFlagTenantToggle,
   FeatureFlagUpsert,
@@ -54,4 +55,12 @@ export async function setTenantOverride(key: string, body: FeatureFlagTenantTogg
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await problemMessage(res, "Could not set the tenant override"));
+}
+
+/** Read the deploy-time env master-switch states (read-only; process-level kill-switches). */
+export async function fetchEnvGates(): Promise<EnvFeatureGate[]> {
+  const res = await adminFetch("/feature-flags/env-gates");
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load master switches"));
+  const body = (await res.json()) as { gates: EnvFeatureGate[] };
+  return body.gates;
 }

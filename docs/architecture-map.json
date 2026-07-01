@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1296,
-  "fileSetHash": "sha256:f6a85e64d1296fa05a5c7cf436547261b4a7cbc023f445a437b14c371cf37e1f",
+  "fileCount": 1298,
+  "fileSetHash": "sha256:391f61d9e0b06208b73006e85c88858fabba42e2ff46c7f94dca8dc8e177b112",
   "features": {
     "account-search": {
       "web": [],
@@ -615,9 +615,11 @@
       "web": [],
       "admin": [
         "apps/admin/src/features/feature-flags/api.ts",
+        "apps/admin/src/features/feature-flags/components/EnvGatesPanel.tsx",
         "apps/admin/src/features/feature-flags/components/FeatureFlagsPage.tsx",
         "apps/admin/src/features/feature-flags/components/NewFlagDialog.tsx",
         "apps/admin/src/features/feature-flags/components/OverrideDialog.tsx",
+        "apps/admin/src/features/feature-flags/hooks/useEnvGates.ts",
         "apps/admin/src/features/feature-flags/hooks/useFeatureFlags.ts",
         "apps/admin/src/features/feature-flags/index.ts"
       ],

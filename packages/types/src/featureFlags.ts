@@ -78,3 +78,20 @@ export const flagEvaluationSchema = z.object({
   source: flagEvaluationSource,
 });
 export type FlagEvaluation = z.infer<typeof flagEvaluationSchema>;
+
+// ── Env master-switch gates (read-only) ──────────────────────────────────────────────────────────────────
+// A deploy-time env boolean that gates a feature at the process level (a master kill-switch). These are NOT
+// UI-toggleable (a running process reads them at boot) — the admin console surfaces their STATE read-only so
+// staff can see the full gate picture. `flagKey` names the per-tenant feature_flags flag it dual-gates with
+// (both must be on for the feature to be live for a tenant), or null when the env switch is the only gate.
+export const envFeatureGateSchema = z.object({
+  key: z.string(), // the env var name, e.g. "BULK_IMPORT_ENABLED"
+  label: z.string(), // human feature name
+  description: z.string(),
+  enabled: z.boolean(), // current process state
+  flagKey: featureFlagKey.nullable(), // the per-tenant flag it pairs with (dual-gate), or null
+});
+export type EnvFeatureGate = z.infer<typeof envFeatureGateSchema>;
+
+export const envFeatureGatesResponseSchema = z.object({ gates: z.array(envFeatureGateSchema) });
+export type EnvFeatureGatesResponse = z.infer<typeof envFeatureGatesResponseSchema>;
