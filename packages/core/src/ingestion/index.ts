@@ -5,3 +5,4 @@ export {
   registerConnector,
   registeredConnectorIds,
 } from "./registry.ts";
+export { registerBuiltinConnectors } from "./registerBuiltins.ts";

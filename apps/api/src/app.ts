@@ -25,6 +25,7 @@ import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
 import { bulkImportRoutes, importRoutes } from "./features/import/index.ts";
+import { ingestRoutes } from "./features/ingest/index.ts";
 import { listsRoutes } from "./features/lists/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
@@ -105,6 +106,8 @@ app.route("/api/v1/search", searchRoutes); // 24/ADR-0035: filtered search, type
 app.route("/api/v1/account-search", accountSearchRoutes); // search/facets/count (POST) + suggest (GET)
 app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + re-apply filter sets
 app.route("/api/v1/lists", listsRoutes); // 24: static prospect lists (bulk add-to-list)
+// Unified ingestion entry (prospect-database-platform Phase 03 / I2) — one idempotent envelope for every source.
+app.route("/api/v1/ingest", ingestRoutes);
 app.route("/api/v1/ai-search", aiSearchRoutes); // 23/ADR-0023: NL → validated filter (for confirmation)
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/custom-fields", customFieldsRoutes); // ADR-0028: field definitions + typed-jsonb values

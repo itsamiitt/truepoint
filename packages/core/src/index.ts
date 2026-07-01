@@ -46,6 +46,7 @@ export {
   getConnector,
   registerConnector,
   registeredConnectorIds,
+  registerBuiltinConnectors,
 } from "./ingestion/index.ts";
 export {
   saveMappingTemplate,
