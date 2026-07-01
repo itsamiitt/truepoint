@@ -24,6 +24,7 @@ import {
 } from "@leadwolf/db";
 import {
   type AccountHoldView,
+  type EconomicsTrendPoint,
   ElevationRequiredError,
   LIST_PLATFORM_AUDIT_ACTIONS,
   NotFoundError,
@@ -550,6 +551,28 @@ adminRoutes.get("/tenants/:id/economics", requireCapability("billing:read"), asy
     lastPurchaseAt: detail.lastPurchaseAt ? detail.lastPurchaseAt.toISOString() : null,
   };
   return c.json({ economics });
+});
+
+// One tenant's economics daily trend — the account-level health sparkline (usage ramping vs going dormant →
+// churn risk). Read = billing:read; audited. Gap-filled series (≤365 points), owner read; PII-free.
+adminRoutes.get("/tenants/:id/economics/trend", requireCapability("billing:read"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const parsed = economicsQuerySchema.safeParse({ sinceDays: c.req.query("sinceDays") });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const since = new Date(Date.now() - parsed.data.sinceDays * 86_400_000);
+  const trend: EconomicsTrendPoint[] = await withPlatformTx(
+    actorOf(c),
+    "admin.tenant_economics_trend",
+    (tx) => platformBillingReadRepository.economicsTrendForTenant(tx, tenantId, since),
+    {
+      targetType: "tenant",
+      targetId: tenantId,
+      tenantId,
+      metadata: { sinceDays: parsed.data.sinceDays },
+    },
+  );
+  return c.json({ trend });
 });
 
 adminRoutes.get("/tenants/:id/purchases", requireCapability("billing:read"), async (c) => {

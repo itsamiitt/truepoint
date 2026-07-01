@@ -4,7 +4,12 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { RefundReason, SetAuthEnforcementInput, TenantEconomicsDetail } from "@leadwolf/types";
+import type {
+  EconomicsTrendPoint,
+  RefundReason,
+  SetAuthEnforcementInput,
+  TenantEconomicsDetail,
+} from "@leadwolf/types";
 import type {
   AccountHold,
   PlanTemplateOption,
@@ -121,6 +126,19 @@ export async function fetchTenantEconomics(
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load economics"));
   const body = (await res.json()) as { economics: TenantEconomicsDetail };
   return body.economics;
+}
+
+/** GET /admin/tenants/:id/economics/trend — the tenant's daily consumption/revenue trend (billing:read). */
+export async function fetchTenantEconomicsTrend(
+  id: string,
+  sinceDays = 30,
+): Promise<EconomicsTrendPoint[]> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/economics/trend?sinceDays=${sinceDays}`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load economics trend"));
+  const body = (await res.json()) as { trend: EconomicsTrendPoint[] };
+  return body.trend;
 }
 
 /** GET /admin/tenants/:id/purchases — the tenant's credit-pack purchases (billing:read). */

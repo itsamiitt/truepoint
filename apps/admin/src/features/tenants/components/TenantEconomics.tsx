@@ -6,14 +6,30 @@
 "use client";
 
 import { useStaffMe } from "@/lib/staffMe";
-import type { TenantEconomicsDetail } from "@leadwolf/types";
+import type { EconomicsTrendPoint, TenantEconomicsDetail } from "@leadwolf/types";
 import { StatTile, StateSwitch, TpSelect } from "@leadwolf/ui";
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
-import { fetchTenantEconomics } from "../api";
+import { fetchTenantEconomics, fetchTenantEconomicsTrend } from "../api";
 import { shortDate } from "../format";
 
 function money(cents: number): string {
   return (cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
+}
+
+const SPARK_W = 320;
+const SPARK_H = 48;
+
+/** Area + line path strings for the consumption sparkline; null when there's nothing to plot. */
+function buildSparkPaths(values: number[], max: number): { line: string; area: string } | null {
+  if (values.length === 0) return null;
+  const stepX = values.length === 1 ? 0 : SPARK_W / (values.length - 1);
+  const pts = values.map((v, i) => {
+    const x = values.length === 1 ? SPARK_W / 2 : i * stepX;
+    const y = SPARK_H - (v / max) * (SPARK_H - 4) - 2;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+  const line = `M${pts.join(" L")}`;
+  return { line, area: `${line} L${SPARK_W},${SPARK_H} L0,${SPARK_H} Z` };
 }
 
 const PERIODS = [
@@ -35,6 +51,7 @@ export function TenantEconomics({ tenantId }: { tenantId: string }) {
 
   const [sinceDays, setSinceDays] = useState(30);
   const [data, setData] = useState<TenantEconomicsDetail | null>(null);
+  const [trend, setTrend] = useState<EconomicsTrendPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +59,12 @@ export function TenantEconomics({ tenantId }: { tenantId: string }) {
     setLoading(true);
     setError(null);
     try {
-      setData(await fetchTenantEconomics(tenantId, sinceDays));
+      const [detail, tr] = await Promise.all([
+        fetchTenantEconomics(tenantId, sinceDays),
+        fetchTenantEconomicsTrend(tenantId, sinceDays),
+      ]);
+      setData(detail);
+      setTrend(tr);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load economics");
     } finally {
@@ -56,6 +78,13 @@ export function TenantEconomics({ tenantId }: { tenantId: string }) {
 
   // Hide the whole section once we know the caller can't view billing (the api also enforces it).
   if (loaded && !canView) return null;
+
+  // Consumption sparkline: the account-level health signal (usage ramping vs going dormant → churn risk).
+  const consumed = trend.map((p) => p.creditsConsumed);
+  const totalConsumed = consumed.reduce((sum, v) => sum + v, 0);
+  const totalReveals = trend.reduce((sum, p) => sum + p.reveals, 0);
+  const sparkPaths = buildSparkPaths(consumed, Math.max(1, ...consumed));
+  const hasSpark = totalConsumed > 0 && sparkPaths !== null;
 
   return (
     <div style={{ marginTop: 28 }}>
@@ -130,6 +159,49 @@ export function TenantEconomics({ tenantId }: { tenantId: string }) {
                 value={data.lastPurchaseAt ? shortDate(data.lastPurchaseAt) : "—"}
                 sublabel={`plan ${data.plan}`}
               />
+            </div>
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  marginBottom: 6,
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--tp-ink-2)" }}>
+                  Daily consumption
+                </span>
+                <span className="app-muted" style={{ fontSize: 12 }}>
+                  {totalConsumed.toLocaleString()} credits · {totalReveals.toLocaleString()} reveals
+                  · {sinceDays}d
+                </span>
+              </div>
+              {hasSpark && sparkPaths ? (
+                <svg
+                  viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+                  preserveAspectRatio="none"
+                  role="img"
+                  aria-label={`Daily credit consumption over the last ${trend.length} days`}
+                  style={{ width: "100%", height: 48, display: "block" }}
+                >
+                  <path d={sparkPaths.area} fill="var(--tp-surface-3)" />
+                  <path
+                    d={sparkPaths.line}
+                    fill="none"
+                    stroke="var(--tp-ink-2)"
+                    strokeWidth={1.5}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+              ) : (
+                <p className="app-muted" style={{ fontSize: 13 }}>
+                  No credit consumption in this window.
+                </p>
+              )}
             </div>
           </div>
         ) : null}

@@ -231,6 +231,61 @@ export const platformBillingReadRepository = {
     }));
   },
 
+  /** ONE tenant's economics daily trend over `[since, now]` — a GAP-FILLED time series (revenue / reveals /
+   *  credits consumed per day, oldest first) for a single tenant: the account-level health signal (usage
+   *  ramping up vs going dormant → churn risk). Same generate_series spine as economicsTrend, but every
+   *  aggregate is filtered to `tenantId`. Bounded by the window (≤365 points). Owner read. */
+  async economicsTrendForTenant(
+    tx: Tx,
+    tenantId: string,
+    since: Date,
+  ): Promise<EconomicsTrendRow[]> {
+    const iso = since.toISOString();
+    const rows = (await tx.execute(sql`
+      WITH days AS (
+        SELECT to_char(d, 'YYYY-MM-DD') AS day
+        FROM generate_series(
+          date_trunc('day', ${iso}::timestamptz),
+          date_trunc('day', now()),
+          interval '1 day'
+        ) AS d
+      ),
+      p AS (
+        SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+          coalesce(sum(amount_cents) FILTER (WHERE status = 'completed'), 0)::bigint AS revenue_cents
+        FROM purchases
+        WHERE tenant_id = ${tenantId} AND created_at >= ${iso}::timestamptz GROUP BY 1
+      ),
+      r AS (
+        SELECT to_char(date_trunc('day', revealed_at), 'YYYY-MM-DD') AS day,
+          count(*)::bigint                            AS reveals,
+          coalesce(sum(credits_consumed), 0)::bigint  AS credits_consumed
+        FROM contact_reveals
+        WHERE tenant_id = ${tenantId} AND revealed_at >= ${iso}::timestamptz GROUP BY 1
+      )
+      SELECT
+        days.day                             AS day,
+        coalesce(p.revenue_cents, 0)::bigint AS revenue_cents,
+        coalesce(r.reveals, 0)::bigint       AS reveals,
+        coalesce(r.credits_consumed, 0)::bigint AS credits_consumed
+      FROM days
+      LEFT JOIN p ON p.day = days.day
+      LEFT JOIN r ON r.day = days.day
+      ORDER BY days.day ASC
+    `)) as unknown as Array<{
+      day: string;
+      revenue_cents: number;
+      reveals: number;
+      credits_consumed: number;
+    }>;
+    return rows.map((row) => ({
+      day: row.day,
+      revenueCents: Number(row.revenue_cents),
+      reveals: Number(row.reveals),
+      creditsConsumed: Number(row.credits_consumed),
+    }));
+  },
+
   /** Active tenants at/under a reveal-credit-balance threshold, lowest first, bounded — the proactive top-up /
    *  churn-risk view (07 §9). Owner read; the balance is the live tenant counter. */
   async lowBalanceTenants(
