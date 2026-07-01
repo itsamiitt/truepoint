@@ -462,6 +462,11 @@ export {
   type NotificationRow,
   type CreateNotificationInput,
 } from "./repositories/notificationRepository.ts";
+export {
+  aiRequestRepository,
+  type CreateAiRequestInput,
+  type AiUsageByTenant,
+} from "./repositories/aiRequestRepository.ts";
 // M12 email subsystem (email-planning/13 P0) — the net-new persistence that EXTENDS the M9 outreach engine
 // (D11): per-tenant sending identity, connected mailboxes (encrypted creds), the raw tracking firehose, and
 // the per-tenant send-quota (the creditRepository lock discipline).
