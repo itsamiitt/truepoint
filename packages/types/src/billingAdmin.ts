@@ -81,6 +81,22 @@ export const lowBalanceTenantSchema = z.object({
 });
 export type LowBalanceTenant = z.infer<typeof lowBalanceTenantSchema>;
 
+/** One credit-ledger entry for the staff per-tenant statement (M11, ADR-0029) — the audited credit history a
+ *  support/finance operator reviews for a dispute. `delta` is signed; `balanceAfter` is the running balance
+ *  after the entry (null on backfilled rows). The reveal/purchase/actor refs link the entry to its cause. */
+export const ledgerEntryViewSchema = z.object({
+  id: z.string().uuid(),
+  entryType: z.string(),
+  delta: z.number().int(),
+  balanceAfter: z.number().int().nullable(),
+  reason: z.string().nullable(),
+  purchaseId: z.string().uuid().nullable(),
+  revealId: z.string().uuid().nullable(),
+  actorUserId: z.string().uuid().nullable(),
+  createdAt: z.string(), // ISO-8601
+});
+export type LedgerEntryView = z.infer<typeof ledgerEntryViewSchema>;
+
 /** One tenant's economics detail — the per-tenant drill-down on the tenant-detail console (complements the
  *  cross-tenant rollup). Windowed (`sinceDays`) + lifetime money picture; PII-free. Money is integer cents;
  *  cost-per-reveal may be fractional. `lastPurchaseAt` is the newest completed top-up (ISO), or null. NOTE:

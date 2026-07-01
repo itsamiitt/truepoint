@@ -4,9 +4,9 @@
 // each filtered to the window — SUM/COUNT only, no row dump. Cost is stored in micro-dollars; the api converts
 // to cents (cost_micros / 10_000), matching providerConfigRepository.
 
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
-import { purchases } from "../schema/billing.ts";
+import { creditLedger, purchases } from "../schema/billing.ts";
 
 /** Raw aggregates over the window — the api derives the cents/margin/cost-per-reveal view from these. */
 export interface EconomicsAggregate {
@@ -57,6 +57,32 @@ export interface CreditDriftRow {
   ledgerSum: number;
   drift: number; // counter - ledgerSum (0 for a fully-ledgered tenant)
   entryCount: number;
+}
+
+/** One credit-ledger entry for the staff per-tenant statement (M11). */
+export interface LedgerEntryRow {
+  id: string;
+  entryType: string;
+  delta: number;
+  balanceAfter: number | null;
+  reason: string | null;
+  purchaseId: string | null;
+  revealId: string | null;
+  actorUserId: string | null;
+  createdAt: Date;
+}
+
+// Opaque keyset cursor over the time-ordered v7 `id` (id DESC = newest-first; id < cursor = next older page).
+// base64url, never an offset (mirrors revealRepository.listUsagePage).
+function encodeLedgerCursor(id: string): string {
+  return Buffer.from(id, "utf8").toString("base64url");
+}
+function decodeLedgerCursor(cursor: string): string | null {
+  try {
+    return Buffer.from(cursor, "base64url").toString("utf8") || null;
+  } catch {
+    return null;
+  }
 }
 
 /** One tenant's windowed + lifetime economics aggregate — provider spend stays in micros (the api converts to
@@ -367,6 +393,42 @@ export const platformBillingReadRepository = {
       drift: Number(r.counter) - Number(r.ledger_sum),
       entryCount: Number(r.entry_count),
     }));
+  },
+
+  /** A keyset page of ONE tenant's credit-ledger entries (M11), newest-first over the v7 id — the staff credit
+   *  statement for dispute/audit. Owner read (RLS-bypassing), so the WHERE tenant_id IS the scope; the route
+   *  audits + bounds it. limit+1 probe → nextCursor; a null cursor means the last page. */
+  async tenantLedger(
+    tx: Tx,
+    tenantId: string,
+    opts: { limit?: number; cursor?: string },
+  ): Promise<{ rows: LedgerEntryRow[]; nextCursor: string | null }> {
+    const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+    const cursorId = opts.cursor ? decodeLedgerCursor(opts.cursor) : null;
+    const rows = await tx
+      .select({
+        id: creditLedger.id,
+        entryType: creditLedger.entryType,
+        delta: creditLedger.delta,
+        balanceAfter: creditLedger.balanceAfter,
+        reason: creditLedger.reason,
+        purchaseId: creditLedger.purchaseId,
+        revealId: creditLedger.revealId,
+        actorUserId: creditLedger.actorUserId,
+        createdAt: creditLedger.createdAt,
+      })
+      .from(creditLedger)
+      .where(
+        cursorId
+          ? and(eq(creditLedger.tenantId, tenantId), lt(creditLedger.id, cursorId))
+          : eq(creditLedger.tenantId, tenantId),
+      )
+      .orderBy(desc(creditLedger.id))
+      .limit(limit + 1);
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const nextCursor = hasMore ? encodeLedgerCursor(page[page.length - 1]!.id) : null;
+    return { rows: page, nextCursor };
   },
 
   /** One tenant's economics detail — the per-tenant drill-down (complements economicsByTenant). Same three

@@ -29,6 +29,7 @@ import {
   type EconomicsTrendPoint,
   ElevationRequiredError,
   LIST_PLATFORM_AUDIT_ACTIONS,
+  type LedgerEntryView,
   NotFoundError,
   type StaffListOverview,
   type SupportNoteView,
@@ -607,6 +608,35 @@ adminRoutes.get("/tenants/:id/purchases", requireCapability("billing:read"), asy
     { targetType: "tenant", targetId: tenantId, tenantId },
   );
   return c.json({ purchases });
+});
+
+// One tenant's credit ledger (M11, ADR-0029) — the audited, keyset-paginated per-tenant credit statement a
+// support/finance operator reviews for a dispute. billing:read; audited "admin.tenant_ledger". PII-free (the
+// ledger stores amounts + refs, never contact rows). Owner read → the repo's WHERE tenant_id is the scope.
+adminRoutes.get("/tenants/:id/ledger", requireCapability("billing:read"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const cursor = c.req.query("cursor") || undefined;
+  const rawLimit = Number(c.req.query("limit") ?? "50");
+  const limit = Number.isInteger(rawLimit) && rawLimit >= 1 && rawLimit <= 200 ? rawLimit : 50;
+  const page = await withPlatformTx(
+    actorOf(c),
+    "admin.tenant_ledger",
+    (tx) => platformBillingReadRepository.tenantLedger(tx, tenantId, { limit, cursor }),
+    { targetType: "tenant", targetId: tenantId, tenantId },
+  );
+  const entries: LedgerEntryView[] = page.rows.map((r) => ({
+    id: r.id,
+    entryType: r.entryType,
+    delta: r.delta,
+    balanceAfter: r.balanceAfter,
+    reason: r.reason,
+    purchaseId: r.purchaseId,
+    revealId: r.revealId,
+    actorUserId: r.actorUserId,
+    createdAt: r.createdAt.toISOString(),
+  }));
+  return c.json({ entries, nextCursor: page.nextCursor });
 });
 
 adminRoutes.post(
