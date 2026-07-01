@@ -398,6 +398,14 @@ export {
   type RecordInboundDeps,
   type RecordInboundResult,
 } from "./email/recordInboundReply.ts";
+export {
+  parseGmailMessage,
+  fetchInboundSince,
+  fetchGmailReadPort,
+  GmailReadError,
+  type GmailReadPort,
+  type ParsedGmailInbound,
+} from "./email/gmailInbound.ts";
 // P0 (email-sec-001): per-tenant derivation of the webhook/tracking signing keys from the root secret — a
 // holder of one tenant's derived key cannot forge a signed event for another tenant.
 export {
