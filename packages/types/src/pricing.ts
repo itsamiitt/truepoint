@@ -46,6 +46,12 @@ export const creditCheckoutSchema = z.object({
 });
 export type CreditCheckout = z.infer<typeof creditCheckoutSchema>;
 
+/** POST /credits/subscribe body — the plan the customer wants to subscribe to, by its template key (M11 subs). */
+export const subscribeSchema = z.object({
+  plan: z.string().min(1).max(100),
+});
+export type Subscribe = z.infer<typeof subscribeSchema>;
+
 /** One entry in the customer's own credit history (M11, ADR-0029) — a signed movement + the running balance
  *  after it. `entryType` is grant | spend | credit_back | adjustment (+ subscription reset/expiry). */
 export const creditLedgerEntrySchema = z.object({

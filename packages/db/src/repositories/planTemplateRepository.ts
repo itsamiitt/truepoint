@@ -13,6 +13,7 @@ export interface PlanTemplateRow {
   workspaceLimit: number | null;
   monthlyCreditGrant: number | null;
   trialBonusCredits: number | null;
+  stripePriceId: string | null;
   features: Record<string, boolean>;
   active: boolean;
   sortOrder: number;
@@ -26,6 +27,7 @@ export interface UpsertPlanTemplateInput {
   workspaceLimit: number | null;
   monthlyCreditGrant: number | null;
   trialBonusCredits: number | null;
+  stripePriceId?: string | null;
   features: Record<string, boolean>;
   sortOrder: number;
 }
@@ -39,6 +41,7 @@ const TEMPLATE_COLS = {
   workspaceLimit: planTemplates.workspaceLimit,
   monthlyCreditGrant: planTemplates.monthlyCreditGrant,
   trialBonusCredits: planTemplates.trialBonusCredits,
+  stripePriceId: planTemplates.stripePriceId,
   features: planTemplates.features,
   active: planTemplates.active,
   sortOrder: planTemplates.sortOrder,
@@ -79,6 +82,7 @@ export const planTemplateRepository = {
       workspaceLimit: input.workspaceLimit,
       monthlyCreditGrant: input.monthlyCreditGrant,
       trialBonusCredits: input.trialBonusCredits,
+      stripePriceId: input.stripePriceId ?? null,
       features: input.features,
       sortOrder: input.sortOrder,
     };
@@ -93,6 +97,7 @@ export const planTemplateRepository = {
           workspaceLimit: input.workspaceLimit,
           monthlyCreditGrant: input.monthlyCreditGrant,
           trialBonusCredits: input.trialBonusCredits,
+          ...(input.stripePriceId !== undefined ? { stripePriceId: input.stripePriceId } : {}),
           features: input.features,
           sortOrder: input.sortOrder,
           updatedAt: sql`now()`,

@@ -82,6 +82,14 @@ export const subscriptionRepository = {
       .returning({ id: subscriptions.id });
     return row!.id;
   },
+
+  /** Set a subscription's status by its Stripe id (owner path) — the dunning `past_due` path + cancels. */
+  async setStatusByStripeId(tx: Tx, stripeSubscriptionId: string, status: string): Promise<void> {
+    await tx
+      .update(subscriptions)
+      .set({ status, updatedAt: sql`now()` })
+      .where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId));
+  },
 };
 
 /** One billing cycle the monthly-grant worker still owes a grant. */

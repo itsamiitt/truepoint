@@ -7,7 +7,9 @@ import { appOrigins, env } from "@leadwolf/config";
 import {
   StripeError,
   grantFromStripe,
+  handleSubscriptionEvent,
   parseCreditGrantEvent,
+  parseSubscriptionEvent,
   verifyStripeSignature,
 } from "@leadwolf/core";
 import {
@@ -26,6 +28,7 @@ import {
   type TenantPlanEnvelope,
   ValidationError,
   creditCheckoutSchema,
+  subscribeSchema,
   usageQuerySchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
@@ -55,10 +58,20 @@ billingRoutes.post("/webhook", async (c) => {
   }
 
   const grant = parseCreditGrantEvent(event);
-  if (!grant) return c.json({ received: true, granted: false }); // ignored event type → 200 so Stripe stops retrying
+  if (grant) {
+    const result = await grantFromStripe(grant);
+    return c.json({ received: true, granted: result.granted });
+  }
 
-  const result = await grantFromStripe(grant);
-  return c.json({ received: true, granted: result.granted });
+  // Subscription lifecycle (M11 subs, ADR-0041) — the webhook is the source of truth for subscription state.
+  // Gated: only act when subscriptions are enabled, else 200-ignore so Stripe stops retrying.
+  const subEvent = parseSubscriptionEvent(event);
+  if (subEvent && env.BILLING_SUBSCRIPTIONS_ENABLED) {
+    await handleSubscriptionEvent(subEvent);
+    return c.json({ received: true, subscription: true });
+  }
+
+  return c.json({ received: true, granted: false }); // ignored event type → 200 so Stripe stops retrying
 });
 
 // ── /api/v1/credits — authenticated balance + usage (the top-bar pill + Settings ▸ Billing) ────────────
@@ -140,6 +153,53 @@ creditsRoutes.post("/checkout", requireRole("owner", "admin"), async (c) => {
     return c.json({ available: true, checkoutUrl: session.url });
   } catch (err) {
     // Never leak the key or Stripe internals: a config gap degrades to "coming soon", else a 502.
+    if (err instanceof StripeError)
+      return c.json({ available: false }, err.reason === "not_configured" ? 501 : 502);
+    throw err;
+  }
+});
+
+// Start a subscription checkout (M11 subs, ADR-0041). DARK: BILLING_SUBSCRIPTIONS_ENABLED + a secret key, else
+// 501 { available:false } → the hub's "coming soon" degrade. The subscription is created + reconciled by the
+// customer.subscription.* webhook (the metadata stamped here carries tenant_id + plan_template_key); credits
+// are granted by the monthly-grant worker, never here. Workspace-admin gated (owner|admin).
+creditsRoutes.post("/subscribe", requireRole("owner", "admin"), async (c) => {
+  if (!env.BILLING_SUBSCRIPTIONS_ENABLED || !env.STRIPE_SECRET_KEY) {
+    return c.json({ available: false }, 501);
+  }
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to subscribe.");
+  const parsed = subscribeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const tenantId = c.get("tenantId");
+  const scope = { tenantId, workspaceId };
+
+  const template = await withPlatformReadTx((tx) =>
+    planTemplateRepository.getByKey(tx, parsed.data.plan),
+  );
+  if (!template) throw new NotFoundError("Plan not found.");
+  if (!template.stripePriceId)
+    throw new ValidationError("This plan isn't available for self-serve subscription yet.");
+
+  try {
+    const stripe = getStripePort();
+    let customerId = await stripeCustomerRepository.getByTenant(scope);
+    if (!customerId) {
+      customerId = await stripe.createCustomer({ tenantId });
+      await stripeCustomerRepository.link(scope, customerId);
+    }
+    const appOrigin = appOrigins()[0] ?? "";
+    const session = await stripe.createCheckoutSession({
+      mode: "subscription",
+      priceId: template.stripePriceId,
+      customerId,
+      successUrl: `${appOrigin}/settings/billing?tab=subscription&checkout=success`,
+      cancelUrl: `${appOrigin}/settings/billing?tab=subscription&checkout=cancelled`,
+      // Stamped on the session AND (adapter) subscription_data → the webhook reads tenant_id + plan_template_key.
+      metadata: { tenant_id: tenantId, plan_template_key: template.key },
+    });
+    return c.json({ available: true, checkoutUrl: session.url });
+  } catch (err) {
     if (err instanceof StripeError)
       return c.json({ available: false }, err.reason === "not_configured" ? 501 : 502);
     throw err;
