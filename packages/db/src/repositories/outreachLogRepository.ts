@@ -154,9 +154,14 @@ export const outreachLogRepository = {
   },
 
   /**
-   * ADR-0013/H13 credit-back: if this workspace copy holds a CHARGED email reveal for the contact, refund
-   * that amount onto the tenant counter (the documented counter-adjustment path) and return it; 0 when the
-   * reveal was free/absent. Caller audits `credit.adjust` in the same tx.
+   * ADR-0013/H13 credit-back: if this workspace copy holds a CHARGED reveal that BILLED FOR THE EMAIL field
+   * for the contact, refund that amount onto the tenant counter (the documented counter-adjustment path) and
+   * return it; 0 when the reveal was free/absent. Caller audits `credit.adjust` in the same tx.
+   *
+   * The email charge lives on whichever claim first uncovered the email: an `email`-type reveal, OR a
+   * `full_profile` reveal (whose whole cost is email-driven per chargeFor). We prefer a charged `email` claim,
+   * else fall back to the earliest charged `full_profile` claim — the cross-reveal-type dedup guarantees only
+   * ONE of them carries the email charge, so this never double-counts, and it never refunds a `phone` reveal.
    */
   async creditBackForBounce(
     tx: Tx,
@@ -165,7 +170,8 @@ export const outreachLogRepository = {
     const rows = (await tx.execute(
       sql`SELECT credits_consumed AS credits FROM contact_reveals
           WHERE workspace_id = ${args.workspaceId} AND contact_id = ${args.contactId}
-            AND reveal_type = 'email' AND credits_consumed > 0
+            AND reveal_type IN ('email', 'full_profile') AND credits_consumed > 0
+          ORDER BY (reveal_type = 'email') DESC, revealed_at ASC
           LIMIT 1`,
     )) as unknown as Array<{ credits: number }>;
     const amount = rows.length > 0 ? Number(rows[0]!.credits) : 0;

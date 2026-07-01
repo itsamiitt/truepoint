@@ -10,9 +10,9 @@
 import { env } from "@leadwolf/config";
 import type { PhoneLineType, PhoneStatus } from "@leadwolf/types";
 import {
-  formatOnlyPhoneVerifier,
   type PhoneVerifierPort,
   type PhoneVerifyResult,
+  formatOnlyPhoneVerifier,
 } from "./phoneVerifier.ts";
 import { validatePhone } from "./validatePhone.ts";
 
@@ -23,8 +23,20 @@ export type PhoneLookupFetch = (
 ) => Promise<{ status: number; json: unknown }>;
 
 const defaultLookupFetch: PhoneLookupFetch = async (url, init) => {
-  const res = await fetch(url, { method: "GET", headers: init.headers });
-  return { status: res.status, json: await res.json().catch(() => null) };
+  // Bound the Lookup call so a hung Twilio endpoint can't hang the synchronous reveal request. On timeout the
+  // abort throws → twilioLookupVerifier.verify's catch degrades to the E.164 format floor (the verifier "didn't run").
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), env.REVEAL_VERIFY_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: init.headers,
+      signal: controller.signal,
+    });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 /** Map Twilio Lookup `valid` → PhoneStatus. `true`→`valid`, `false`→`invalid`; missing → null (caller falls back). */
@@ -73,11 +85,15 @@ export function twilioLookupVerifier(opts: TwilioPhoneVerifierOptions): PhoneVer
   const auth = `Basic ${Buffer.from(`${opts.accountSid}:${opts.authToken}`).toString("base64")}`;
   return {
     name: "twilio_lookup",
-    async verify(phoneE164: string, _currentStatus: PhoneStatus | null): Promise<PhoneVerifyResult> {
+    async verify(
+      phoneE164: string,
+      _currentStatus: PhoneStatus | null,
+    ): Promise<PhoneVerifyResult> {
       try {
         const url = `${base}/v2/PhoneNumbers/${encodeURIComponent(phoneE164)}?Fields=line_type_intelligence`;
         const { status, json } = await fetchJson(url, { headers: { authorization: auth } });
-        if (status < 200 || status >= 300) return { status: validatePhone(phoneE164), lineType: null };
+        if (status < 200 || status >= 300)
+          return { status: validatePhone(phoneE164), lineType: null };
         const s = twilioStatusFrom(json) ?? validatePhone(phoneE164);
         // Trust a line type only for a carrier-valid number; an invalid / format-fallback number has none.
         const lineType = s === "valid" ? twilioLineTypeFrom(json) : null;

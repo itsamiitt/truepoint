@@ -174,6 +174,33 @@ export const revealRepository = {
   },
 
   /**
+   * Which contact fields this workspace already owns a reveal claim for (ANY reveal_type, ANY prior cost).
+   * Drives the cross-reveal-type dedup in revealContact so a field is never charged twice: email ⇐ an
+   * email|full_profile claim; phone ⇐ a phone|full_profile claim. RLS scopes contact_reveals to the workspace;
+   * the explicit predicate is defence-in-depth (mirrors usageConditions). Read inside the reveal tx, BEFORE
+   * the current claim insert, so it reflects only PRIOR ownership.
+   */
+  async ownedRevealFields(
+    tx: Tx,
+    workspaceId: string,
+    contactId: string,
+  ): Promise<{ email: boolean; phone: boolean }> {
+    const rows = (await tx
+      .select({ revealType: contactReveals.revealType })
+      .from(contactReveals)
+      .where(
+        and(eq(contactReveals.workspaceId, workspaceId), eq(contactReveals.contactId, contactId)),
+      )) as Array<{ revealType: string }>;
+    let email = false;
+    let phone = false;
+    for (const r of rows) {
+      if (r.revealType === "email" || r.revealType === "full_profile") email = true;
+      if (r.revealType === "phone" || r.revealType === "full_profile") phone = true;
+    }
+    return { email, phone };
+  },
+
+  /**
    * The idempotent reveal claim: INSERT … ON CONFLICT (workspace_id, contact_id, reveal_type) DO NOTHING.
    * Returns the new claim's `{ id }` when THIS call claimed the reveal (→ charge), or null when the workspace
    * copy already owned it (→ free re-reveal). The id backs the M11 credit-ledger `spend` entry (reveal_id +

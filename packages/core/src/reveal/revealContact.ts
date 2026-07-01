@@ -26,11 +26,11 @@ import {
 } from "@leadwolf/types";
 import { assertNotSuppressed } from "../compliance/assertNotSuppressed.ts";
 import { writeAudit } from "../compliance/writeAudit.ts";
-import { chargeFor } from "../data-health/chargeFor.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "../data-health/emailVerifier.ts";
 import type { PhoneVerifierPort } from "../data-health/phoneVerifier.ts";
 import { defaultPhoneVerifier } from "../data-health/twilioPhoneVerifier.ts";
 import { decryptPii } from "../import/encryptPii.ts";
+import { revealCharge } from "./revealCharge.ts";
 
 export interface RevealInput {
   scope: TenantScope & { workspaceId: string };
@@ -100,7 +100,6 @@ async function verifyForReveal(
 export async function revealContact(input: RevealInput): Promise<RevealResponse> {
   const verifier = input.verifier ?? passThroughVerifier;
   const phoneVerifier = input.phoneVerifier ?? defaultPhoneVerifier();
-  const baseCost = revealCostFor(input.revealType);
 
   // Pre-read the contact (fast scoped tx), then verify with no transaction open.
   const contact = await withTenantTx(input.scope, (tx) =>
@@ -108,15 +107,6 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
   );
   if (!contact) throw new NotFoundError("Contact not found in this workspace.");
   const verified = await verifyForReveal(contact, input.revealType, verifier, phoneVerifier);
-
-  // ADR-0013: the verified result sets the charge; an unusable result still returns (cost 0).
-  const cost = chargeFor({
-    revealType: input.revealType,
-    baseCost,
-    emailStatus: verified.emailStatus,
-    phoneStatus: verified.phoneStatus,
-    chargeRisky: env.REVEAL_CHARGE_RISKY,
-  });
 
   const buildResponse = (
     creditsCharged: number,
@@ -151,6 +141,32 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
         ...(verified.phoneLineType ? { phoneLineType: verified.phoneLineType } : {}),
         lastVerifiedAt: new Date(),
       });
+
+      // Cross-reveal-type dedup (07 §3): read what this workspace already owns, then charge ONLY for the
+      // field(s) this reveal NEWLY uncovers — a prior email reveal is never re-billed by a later full_profile
+      // (and vice-versa). Read before the claim insert so it reflects prior ownership only. ADR-0013 grading
+      // still applies to each new field (an unusable new field charges 0).
+      const owned = await revealRepository.ownedRevealFields(
+        tx,
+        input.scope.workspaceId,
+        contact.id,
+      );
+      const charge = revealCharge({
+        revealType: input.revealType,
+        hasEmail: contact.emailEnc != null,
+        hasPhone: contact.phoneEnc != null,
+        ownedEmail: owned.email,
+        ownedPhone: owned.phone,
+        emailStatus: verified.emailStatus,
+        phoneStatus: verified.phoneStatus,
+        costs: {
+          email: env.REVEAL_COST_EMAIL,
+          phone: env.REVEAL_COST_PHONE,
+          full: env.REVEAL_COST_FULL_PROFILE,
+        },
+        chargeRisky: env.REVEAL_CHARGE_RISKY,
+      });
+      const cost = charge.cost;
 
       // 1) idempotent reveal claim (per workspace copy, per reveal_type) — records the charged amount.
       const claimed = await revealRepository.claimReveal(tx, {
@@ -216,12 +232,15 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
           emailStatus: verified.emailStatus,
           verifier: verifier.name,
           fields: revealedFieldsFor(input.revealType, contact),
+          newFields: charge.newFields,
         },
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,
       });
 
-      return buildResponse(cost, balanceAfter, false);
+      // alreadyOwned is true only when the reveal exposed NO new field (a redundant full_profile over an
+      // already-owned email+phone still records the type claim but charges 0).
+      return buildResponse(cost, balanceAfter, charge.alreadyOwned);
     });
   } catch (err) {
     // The suppression throw rolled the reveal tx back — record the blocked attempt in its OWN tx so the
