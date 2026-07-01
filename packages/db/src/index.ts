@@ -402,6 +402,11 @@ export {
   type UpsertSubscriptionInput,
   type DueCycleRow,
 } from "./repositories/subscriptionRepository.ts";
+export {
+  teamRepository,
+  type TeamRow,
+  type TeamMemberRow,
+} from "./repositories/teamRepository.ts";
 // Plan/entitlement template catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
 export {
   planTemplateRepository,

@@ -330,6 +330,13 @@
       "when": 1784000000000,
       "tag": "0046_seed_reverification_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1784100000000,
+      "tag": "0047_teams",
+      "breakpoints": true
     }
   ]
 }
