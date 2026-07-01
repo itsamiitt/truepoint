@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1283,
-  "fileSetHash": "sha256:3c5d248ca5221d84ed1da871adcab30a1cd70b95322ec7e2610e3642b1063503",
+  "fileCount": 1284,
+  "fileSetHash": "sha256:766da0a924e3652cb7c0dda9e12c9e1c93d9d42a09d2455bedb64a0be92274d3",
   "features": {
     "account-search": {
       "web": [],
@@ -256,7 +256,8 @@
       ],
       "db": [
         "packages/db/src/repositories/creditRepository.ts",
-        "packages/db/src/repositories/idempotencyRepository.ts"
+        "packages/db/src/repositories/idempotencyRepository.ts",
+        "packages/db/src/repositories/stripeCustomerRepository.ts"
       ],
       "workers": [
         "apps/workers/src/queues/billingReconSweep.ts",
