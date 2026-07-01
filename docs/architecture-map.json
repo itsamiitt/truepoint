@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1298,
-  "fileSetHash": "sha256:391f61d9e0b06208b73006e85c88858fabba42e2ff46c7f94dca8dc8e177b112",
+  "fileCount": 1299,
+  "fileSetHash": "sha256:8b36171aa5e265149c9dea3b786fd338b7175fab0be54ef9b8c679b230fb58dd",
   "features": {
     "account-search": {
       "web": [],
@@ -1302,6 +1302,7 @@
         "apps/web/src/features/settings-billing/components/UsageTable.tsx",
         "apps/web/src/features/settings-billing/components/tabs/CreditsTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/HistoryTab.tsx",
+        "apps/web/src/features/settings-billing/components/tabs/InvoicesTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/PlaceholderTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/PlanTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/SubscriptionTab.tsx",
