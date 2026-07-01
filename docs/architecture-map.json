@@ -93,8 +93,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1301,
-  "fileSetHash": "sha256:53ba055555ca75b38570af296e1b8066577612560ddf0b96dbf2bc5128f01ffa",
+  "fileCount": 1304,
+  "fileSetHash": "sha256:34ffb8b590e2c0b2e91448624f4ef6f80e41abdf882e7a3b6786684118d51ccf",
   "features": {
     "account-search": {
       "web": [],
@@ -1542,7 +1542,10 @@
     "teams": {
       "web": [],
       "admin": [],
-      "api": [],
+      "api": [
+        "apps/api/src/features/teams/index.ts",
+        "apps/api/src/features/teams/routes.ts"
+      ],
       "core": [],
       "db": [
         "packages/db/src/repositories/teamRepository.ts"
@@ -2139,6 +2142,7 @@
       "packages/types/src/staffCapability.ts",
       "packages/types/src/supportNote.ts",
       "packages/types/src/tags.ts",
+      "packages/types/src/teams.ts",
       "packages/types/src/tenantAdmin.ts",
       "packages/types/src/userAdmin.ts",
       "packages/types/src/validation.ts",
