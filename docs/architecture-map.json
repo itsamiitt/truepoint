@@ -17,6 +17,7 @@
     "admin",
     "admin-settings",
     "ai",
+    "ai-usage",
     "alerts",
     "announcements",
     "api-public",
@@ -90,8 +91,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1264,
-  "fileSetHash": "sha256:8f34eb238d75dda0c3dc2c9e1373d56b682abc9e745405cb19bdaa0f55613a30",
+  "fileCount": 1270,
+  "fileSetHash": "sha256:580e2c6222d141bcd246bd07fa8b1b6e44a344f2e95c585a806b4a396ce00fdb",
   "features": {
     "account-search": {
       "web": [],
@@ -165,6 +166,21 @@
       "db": [
         "packages/db/src/repositories/aiRequestRepository.ts"
       ],
+      "workers": [],
+      "integrations": []
+    },
+    "ai-usage": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/ai-usage/api.ts",
+        "apps/admin/src/features/ai-usage/components/AiUsagePage.tsx",
+        "apps/admin/src/features/ai-usage/hooks/useAiUsage.ts",
+        "apps/admin/src/features/ai-usage/index.ts",
+        "apps/admin/src/features/ai-usage/types.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
       "workers": [],
       "integrations": []
     },
@@ -1597,6 +1613,7 @@
   },
   "shared": {
     "apps/admin/app": [
+      "apps/admin/src/app/(shell)/ai-usage/page.tsx",
       "apps/admin/src/app/(shell)/audit-log/page.tsx",
       "apps/admin/src/app/(shell)/billing/page.tsx",
       "apps/admin/src/app/(shell)/compliance/page.tsx",

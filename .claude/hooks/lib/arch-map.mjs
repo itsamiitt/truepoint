@@ -39,6 +39,7 @@ export const CANONICAL_DOMAINS = [
   "crm-sync",
   "api-public",
   "ai",
+  "ai-usage",
   "alerts",
   "compliance",
   "admin-settings",
