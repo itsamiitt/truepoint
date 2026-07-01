@@ -26,6 +26,7 @@ export interface CreateAiRequestInput {
 /** One tenant's AI usage rollup over the window (platform observability). */
 export interface AiUsageByTenant {
   tenantId: string;
+  tenantName: string;
   requests: number;
   /** Non-"ok" outcomes (guard rejections + model/system failures). */
   failures: number;
@@ -66,20 +67,22 @@ export const aiRequestRepository = {
    */
   async usageSince(tx: Tx, sinceDays: number, limit: number): Promise<AiUsageByTenant[]> {
     const rows = (await tx.execute(sql`
-      SELECT tenant_id::text AS tenant_id,
-        COUNT(*)::int                                   AS requests,
-        COUNT(*) FILTER (WHERE outcome <> 'ok')::int    AS failures,
-        COUNT(*) FILTER (WHERE used_repair)::int        AS repairs,
-        AVG(latency_ms)::float                          AS avg_latency_ms,
-        COALESCE(SUM(input_tokens), 0)::int             AS input_tokens,
-        COALESCE(SUM(output_tokens), 0)::int            AS output_tokens
-      FROM ai_requests
-      WHERE created_at >= now() - make_interval(days => ${sinceDays})
-      GROUP BY tenant_id
-      ORDER BY requests DESC, tenant_id
+      SELECT t.id::text AS tenant_id, t.name AS tenant_name,
+        COUNT(r.*)::int                                   AS requests,
+        COUNT(r.*) FILTER (WHERE r.outcome <> 'ok')::int  AS failures,
+        COUNT(r.*) FILTER (WHERE r.used_repair)::int      AS repairs,
+        AVG(r.latency_ms)::float                          AS avg_latency_ms,
+        COALESCE(SUM(r.input_tokens), 0)::int             AS input_tokens,
+        COALESCE(SUM(r.output_tokens), 0)::int            AS output_tokens
+      FROM ai_requests r
+      JOIN tenants t ON t.id = r.tenant_id
+      WHERE r.created_at >= now() - make_interval(days => ${sinceDays})
+      GROUP BY t.id, t.name
+      ORDER BY requests DESC, t.id
       LIMIT ${limit}
     `)) as unknown as Array<{
       tenant_id: string;
+      tenant_name: string;
       requests: number;
       failures: number;
       repairs: number;
@@ -89,6 +92,7 @@ export const aiRequestRepository = {
     }>;
     return rows.map((r) => ({
       tenantId: r.tenant_id,
+      tenantName: r.tenant_name,
       requests: Number(r.requests),
       failures: Number(r.failures),
       repairs: Number(r.repairs),

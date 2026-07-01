@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Siren,
+  Sparkles,
   Tag,
   Timer,
   Users,
@@ -51,6 +52,7 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Bulk imports", href: "/imports", match: "/imports", icon: FileUp },
   { label: "Data quality", href: "/data-quality", match: "/data-quality", icon: Gauge },
   { label: "Trust & abuse", href: "/trust-abuse", match: "/trust-abuse", icon: Siren },
+  { label: "AI usage", href: "/ai-usage", match: "/ai-usage", icon: Sparkles },
   { label: "System health", href: "/system-health", match: "/system-health", icon: Activity },
 ];
 

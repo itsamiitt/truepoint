@@ -7,6 +7,7 @@ import { evaluateFlagsForTenant } from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
   accountHoldRepository,
+  aiRequestRepository,
   authPolicyRepository,
   featureFlagRepository,
   idempotencyRepository,
@@ -806,6 +807,23 @@ adminRoutes.get(
       return { signals, holds, tenantStatus };
     });
     return c.json(data);
+  },
+);
+
+// ── AI usage (M14 / 13a Area 14) — cross-tenant AI-request metering: per-tenant request volume, non-ok
+// outcomes, repair rate, average latency + token totals over a trailing window (default 30d, ≤365). Read-only,
+// coarse-gated (any staff, like /data-quality + /trust-abuse); `admin.ai_usage` is a plain withPlatformTx read
+// string, NOT in the mutation enum. NON-PII — call metadata only (the NL query text is never stored). ──
+adminRoutes.get(
+  "/ai-usage",
+  requireStaffRole("support", "billing_ops", "compliance_officer", "read_only"),
+  async (c) => {
+    const rawDays = Number(c.req.query("days") ?? "30");
+    const days = Number.isInteger(rawDays) && rawDays >= 1 && rawDays <= 365 ? rawDays : 30;
+    const tenants = await withPlatformTx(actorOf(c), "admin.ai_usage", (tx) =>
+      aiRequestRepository.usageSince(tx, days, PLATFORM_READ_LIMIT),
+    );
+    return c.json({ windowDays: days, tenants });
   },
 );
 

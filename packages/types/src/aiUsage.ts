@@ -18,6 +18,7 @@ export type AiRequestOutcome = z.infer<typeof aiRequestOutcome>;
 /** One tenant's AI usage rollup over a window (platform observability). */
 export const aiUsageByTenant = z.object({
   tenantId: z.string().uuid(),
+  tenantName: z.string(),
   requests: z.number().int().nonnegative(),
   failures: z.number().int().nonnegative(),
   repairs: z.number().int().nonnegative(),
