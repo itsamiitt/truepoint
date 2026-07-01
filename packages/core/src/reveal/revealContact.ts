@@ -146,6 +146,13 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
       // field(s) this reveal NEWLY uncovers — a prior email reveal is never re-billed by a later full_profile
       // (and vice-versa). Read before the claim insert so it reflects prior ownership only. ADR-0013 grading
       // still applies to each new field (an unusable new field charges 0).
+      //
+      // CONCURRENCY (load-bearing): the `contactRepository.update` above row-locks THIS contact FOR UPDATE, so
+      // two concurrent reveals of the SAME contact serialize here — the second blocks until the first commits
+      // and therefore reads the first's claim in `ownedRevealFields` below. Do NOT move this ownership read
+      // before that update, or make the update conditional, without another lock: it would reopen the
+      // cross-type double-charge under concurrency (the per-(ws,contact,reveal_type) unique index only guards
+      // the SAME reveal_type).
       const owned = await revealRepository.ownedRevealFields(
         tx,
         input.scope.workspaceId,
