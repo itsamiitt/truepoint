@@ -75,6 +75,30 @@ export const notificationRepository = {
     return row?.id ?? "";
   },
 
+  /** Does the user already have an UNREAD notification of this type in this workspace? Producers use this to
+   *  dedup (don't re-notify a still-unacknowledged condition, e.g. daily low-credits). Takes an explicit tx +
+   *  workspace/user — the owner-connection producer path has no GUC, so the predicates ARE the scope. */
+  async existsUnreadOfType(
+    tx: Tx,
+    workspaceId: string,
+    userId: string,
+    type: NotificationType,
+  ): Promise<boolean> {
+    const [row] = await tx
+      .select({ one: sql<number>`1` })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.workspaceId, workspaceId),
+          eq(notifications.userId, userId),
+          eq(notifications.type, type),
+          isNull(notifications.readAt),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  },
+
   /** A keyset page of the caller's OWN notifications (newest-first), workspace + user scoped. */
   async listForUser(
     scope: TenantScope,

@@ -1,15 +1,20 @@
-// lowBalanceNotifierSweep.ts — the scheduled, leader-locked low-balance notifier sweep (plans-pricing-credits,
-// 07 §9 proactive top-up / churn-risk). Once daily, a single worker reads the active tenants at/under the
-// credit threshold (an owner-connection, non-PII aggregate) and emits ONE structured ops signal per low tenant.
-//
-// SCAFFOLD: this is the detector; the customer-facing delivery channel (email / in-app via the ADR-0027 event
-// backbone) is the next wiring step. It is READ-ONLY — it CHARGES and DELETES nothing. DARK by default:
-// register.ts only constructs + schedules it when LOW_BALANCE_NOTIFIER_ENABLED is true, so it is inert in prod
-// until a channel lands. Leader-locked (mirrors the data-quality / retention sweeps) so exactly one worker runs
-// per tick. Logs ids only (tenantId/plan/balance) — never a tenant name or any PII.
+// lowBalanceNotifierSweep.ts — the scheduled, leader-locked low-balance notifier (plans-pricing-credits 07 §9;
+// G-NTF-1 producer). Once daily, a single worker reads the active tenants at/under the credit threshold (an
+// owner-connection, non-PII aggregate) and creates ONE in-app `low_credits` notification for each tenant's
+// OWNER — the customer-facing delivery channel the detector was waiting for. DEDUPED: a tenant whose owner
+// still has an UNREAD low-credits note is skipped (no daily spam). READ-ONLY on money — it CHARGES and DELETES
+// nothing. DARK by default: register.ts only constructs + schedules it when LOW_BALANCE_NOTIFIER_ENABLED is
+// true. Leader-locked (mirrors the data-quality / retention sweeps) so exactly one worker runs per tick. The
+// notification insert runs on the base owner connection (BYPASSRLS), like the Stripe grant path; best-effort
+// per tenant — one failure never aborts the sweep.
 
 import { env } from "@leadwolf/config";
-import { platformBillingReadRepository, withPlatformReadTx } from "@leadwolf/db";
+import {
+  db,
+  notificationRepository,
+  platformBillingReadRepository,
+  withPlatformReadTx,
+} from "@leadwolf/db";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
 import { withLeaderLock } from "../leaderLock.ts";
@@ -24,9 +29,9 @@ const MAX_TENANTS_PER_SWEEP = 1000;
 export type LowBalanceNotifierSweepJobData = Record<string, never>;
 
 /**
- * Build the sweep processor. Takes the Redis leader lock, reads the active tenants at/under the credit
- * threshold (system-level, non-PII owner read; no audit row — it is automation, not a privileged staff read),
- * and emits one ops signal per low tenant. No customer is charged or notified yet (scaffold).
+ * Build the sweep processor. Takes the Redis leader lock, reads the active low-balance tenants (system-level,
+ * non-PII owner read; no audit row — automation, not a privileged staff read), and creates a deduped
+ * `low_credits` notification for each tenant's owner. Best-effort per tenant.
  */
 export function makeProcessLowBalanceNotifierSweep(redis: IORedis) {
   return async function processLowBalanceNotifierSweep(
@@ -37,19 +42,46 @@ export function makeProcessLowBalanceNotifierSweep(redis: IORedis) {
       const tenants = await withPlatformReadTx((tx) =>
         platformBillingReadRepository.lowBalanceTenants(tx, threshold, MAX_TENANTS_PER_SWEEP),
       );
-      // SCAFFOLD: one structured ops signal per low tenant. Replace with the customer-facing channel (email /
-      // in-app event, ADR-0027) when it lands. Ids only — never the tenant name or any PII.
+      let notified = 0;
       for (const t of tenants) {
-        log.info("low-balance notifier: tenant at/under threshold", {
-          tenantId: t.tenantId,
-          plan: t.plan,
-          balance: t.revealCreditBalance,
-          threshold,
-        });
+        // Notify the tenant OWNER in the default workspace; skip tenants missing either target.
+        const ownerUserId = t.ownerUserId;
+        const workspaceId = t.defaultWorkspaceId;
+        if (!ownerUserId || !workspaceId) continue;
+        try {
+          const created = await db.transaction(async (tx) => {
+            // Dedup: skip while a prior low-credits note is still unread (avoids daily spam).
+            if (
+              await notificationRepository.existsUnreadOfType(
+                tx,
+                workspaceId,
+                ownerUserId,
+                "low_credits",
+              )
+            ) {
+              return false;
+            }
+            await notificationRepository.create(tx, {
+              tenantId: t.tenantId,
+              workspaceId,
+              userId: ownerUserId,
+              type: "low_credits",
+              title: "Credits running low",
+              body: `${t.revealCreditBalance.toLocaleString()} credits left — top up to keep revealing.`,
+            });
+            return true;
+          });
+          if (created) notified += 1;
+        } catch (e) {
+          log.error("low-balance notifier: per-tenant notify failed", {
+            tenantId: t.tenantId,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
       }
-      if (tenants.length > 0) {
-        log.info("low-balance notifier sweep: low-balance tenants flagged", {
-          count: tenants.length,
+      if (notified > 0) {
+        log.info("low-balance notifier sweep: low_credits notifications created", {
+          count: notified,
           threshold,
         });
       }

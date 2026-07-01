@@ -38,12 +38,15 @@ export interface EconomicsTrendRow {
   creditsConsumed: number;
 }
 
-/** One active tenant at/under a credit-balance threshold (the proactive top-up / churn-risk view). */
+/** One active tenant at/under a credit-balance threshold (the proactive top-up / churn-risk view). The owner +
+ *  default-workspace target are for the low-balance notifier producer (G-NTF-1); the admin read ignores them. */
 export interface LowBalanceTenantRow {
   tenantId: string;
   tenantName: string;
   plan: string;
   revealCreditBalance: number;
+  ownerUserId: string | null;
+  defaultWorkspaceId: string | null;
 }
 
 /** One tenant's windowed + lifetime economics aggregate — provider spend stays in micros (the api converts to
@@ -294,22 +297,32 @@ export const platformBillingReadRepository = {
     limit: number,
   ): Promise<LowBalanceTenantRow[]> {
     const rows = (await tx.execute(sql`
-      SELECT id::text AS tenant_id, name AS tenant_name, plan, reveal_credit_balance
-      FROM tenants
-      WHERE status = 'active' AND reveal_credit_balance <= ${threshold}
-      ORDER BY reveal_credit_balance ASC, id
+      SELECT t.id::text AS tenant_id, t.name AS tenant_name, t.plan, t.reveal_credit_balance,
+        (SELECT tm.user_id::text FROM tenant_members tm
+           WHERE tm.tenant_id = t.id AND tm.is_tenant_owner = true AND tm.status = 'active'
+           ORDER BY tm.user_id LIMIT 1)                                   AS owner_user_id,
+        (SELECT w.id::text FROM workspaces w
+           WHERE w.tenant_id = t.id AND w.is_default = true
+           ORDER BY w.id LIMIT 1)                                          AS default_workspace_id
+      FROM tenants t
+      WHERE t.status = 'active' AND t.reveal_credit_balance <= ${threshold}
+      ORDER BY t.reveal_credit_balance ASC, t.id
       LIMIT ${limit}
     `)) as unknown as Array<{
       tenant_id: string;
       tenant_name: string;
       plan: string;
       reveal_credit_balance: number;
+      owner_user_id: string | null;
+      default_workspace_id: string | null;
     }>;
     return rows.map((r) => ({
       tenantId: r.tenant_id,
       tenantName: r.tenant_name,
       plan: r.plan,
       revealCreditBalance: Number(r.reveal_credit_balance),
+      ownerUserId: r.owner_user_id,
+      defaultWorkspaceId: r.default_workspace_id,
     }));
   },
 
