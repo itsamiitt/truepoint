@@ -73,9 +73,9 @@ export { buildImportPreview, type PreviewOptions } from "./import/preview.ts";
 export { rejectedRowsToCsv } from "./import/rejectedRowsCsv.ts";
 
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
-// No-charge "view already-revealed data" read (Phase 1 read primitive): decrypts ONLY the fields this
-// workspace owns a reveal claim for, so an already-revealed contact shows instantly without re-charging.
-export { getRevealedContact } from "./reveal/getRevealedContact.ts";
+// No-charge "view already-revealed data" reads (Phase 1 single + Phase 2 batch): decrypt ONLY the fields this
+// workspace owns a reveal claim for, so already-revealed contacts show instantly without re-charging.
+export { getRevealedContact, getRevealedContactsBatch } from "./reveal/getRevealedContact.ts";
 // Customer own-workspace REVEALED CSV export (doc 12; audit A1, Phase 1) — reveals each contact THROUGH the gate
 // (suppression-checked, charged, audited), excludes suppressed, writes the CSV through the FileStore port.
 export {

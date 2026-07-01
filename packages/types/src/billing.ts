@@ -54,6 +54,22 @@ export const revealedContactSchema = z.object({
 });
 export type RevealedContact = z.infer<typeof revealedContactSchema>;
 
+/** POST /contacts/revealed/batch — hydrate already-owned reveal data for a page of ids (visible-scoped, no
+ *  charge). Bounded to a page's worth of ids so one call can't scan the workspace. */
+export const revealedBatchRequestSchema = z.object({
+  contactIds: z.array(z.string().uuid()).min(1).max(500),
+});
+export type RevealedBatchRequest = z.infer<typeof revealedBatchRequestSchema>;
+
+/** GET /credits/reveal-costs — the per-reveal_type credit cost, so the client can show "Reveal email · N cr"
+ *  BEFORE a reveal (the single-reveal parity with the bulk estimate). Costs are config placeholders (07 §1). */
+export const revealCostsSchema = z.object({
+  email: z.number().int().min(0),
+  phone: z.number().int().min(0),
+  full_profile: z.number().int().min(0),
+});
+export type RevealCosts = z.infer<typeof revealCostsSchema>;
+
 /** One metered reveal from GET /credits/usage — the usage-history row (07 §9, 09 §3, 12 §4). PII-free: the
  *  reveal's id/contact/type/cost/timestamp plus the member who ran it (the Reports "member" dimension).
  *  Single source of truth for apps/api (the /credits/usage payload) and apps/web (Settings ▸ Billing, Reports). */

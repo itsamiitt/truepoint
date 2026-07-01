@@ -203,6 +203,15 @@ const MASKED = {
   locationCity: contacts.locationCity,
   outreachStatus: contacts.outreachStatus,
   isRevealed: contacts.isRevealed,
+  // Which reveal_types THIS workspace owns a claim for (non-PII). A correlated subquery keeps the row
+  // cardinality 1:1 (no GROUP BY over every masked column). contact_reveals has FORCE RLS scoped to
+  // app.current_workspace_id (set by this repo's withTenantTx), so the subquery is auto-workspace-scoped —
+  // mirrors the ownership derivation in revealRepository.ownedRevealFields. Empty array when nothing owned.
+  revealedTypes: sql<string[]>`coalesce((
+    SELECT array_agg(DISTINCT cr.reveal_type)
+    FROM contact_reveals cr
+    WHERE cr.contact_id = ${contacts.id}
+  ), '{}')`,
   ownerUserId: sql<string | null>`coalesce(${contacts.ownerUserId}, ${contacts.revealedByUserId})`,
   priorityScore: contacts.priorityScore,
   createdAt: contacts.createdAt,
@@ -236,6 +245,7 @@ function toMasked(r: MaskedRow): MaskedContact {
     locationCity: r.locationCity as string | null,
     outreachStatus: r.outreachStatus as MaskedContact["outreachStatus"],
     isRevealed: r.isRevealed as boolean,
+    revealedTypes: r.revealedTypes as string[] as MaskedContact["revealedTypes"],
     ownerUserId: r.ownerUserId as string | null,
     createdAt: (r.createdAt as Date).toISOString(),
     lastVerifiedAt: (r.lastVerifiedAt as Date | null)?.toISOString() ?? null,

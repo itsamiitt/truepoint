@@ -3,6 +3,7 @@
 // packages/core. Enums mirror the 03 §5 CHECK constraints exactly. Validation lives here; logic does not.
 
 import { z } from "zod";
+import { revealType } from "./billing.ts";
 import { freshnessStatus } from "./intel.ts";
 
 // ── Enums (mirror 03 §5 CHECK constraints) ─────────────────────────────────────────────────────────────
@@ -401,5 +402,10 @@ export const maskedContactSchema = z.object({
   // it (the list-detail members table). Absent on surfaces that don't render the column. Never trusted as
   // input (read-side only); the server is the single computer of record (list-plan/06 §3.3).
   dataHealth: contactDataHealthSchema.optional(),
+  // Which reveal_types THIS workspace already owns a claim for (non-PII: just the set email|phone|full_profile,
+  // never the values). Optional — populated only by the search projection that computes it (like dataHealth /
+  // phoneLineType). Drives the grid's per-row reveal affordance + "revealed" badge without decrypting the
+  // dataset; the actual PII is fetched separately (GET/POST revealed) only for owned rows.
+  revealedTypes: z.array(revealType).optional(),
 });
 export type MaskedContact = z.infer<typeof maskedContactSchema>;

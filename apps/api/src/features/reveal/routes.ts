@@ -8,6 +8,7 @@ import {
   defaultPhoneVerifier,
   editContactFields,
   getRevealedContact,
+  getRevealedContactsBatch,
   revealContact,
 } from "@leadwolf/core";
 import { contactRepository } from "@leadwolf/db";
@@ -17,6 +18,7 @@ import {
   ValidationError,
   contactFieldEditSchema,
   revealRequestSchema,
+  revealedBatchRequestSchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
@@ -90,6 +92,23 @@ revealRoutes.get("/:id/revealed", async (c) => {
   );
   if (!result) throw new NotFoundError("Contact not found in this workspace.");
   return c.json(result, 200);
+});
+
+// POST /revealed/batch — hydrate already-owned reveal data for a page of contact ids (the grid's visible rows).
+// NO charge; returns decrypted email/phone ONLY for the reveal_types this workspace owns, only for rows it owns
+// something for. Same security boundary as GET /:id/revealed (ownership + RLS in core). Distinct path from
+// POST /:id/reveal (segment "revealed" ≠ "reveal", and this has no `/reveal` suffix), so no route collision.
+revealRoutes.post("/revealed/batch", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace to view contacts.");
+  const parsed = revealedBatchRequestSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError("Body must be { contactIds: string[] (1-500) }.");
+  const revealed = await getRevealedContactsBatch(
+    { tenantId: c.get("tenantId"), workspaceId },
+    parsed.data.contactIds,
+  );
+  return c.json({ revealed }, 200);
 });
 
 // Hand-edit a contact's scalar profile fields, PINNING each against future enrichment overwrite (PLAN_03 §1.4).

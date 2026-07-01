@@ -3,7 +3,7 @@
 // core — never returned over HTTP unmasked elsewhere), the idempotent reveal claim, and the usage list.
 
 import type { RevealDataSource, RevealType } from "@leadwolf/types";
-import { and, desc, eq, gte, isNull, lt, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, lte } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contactReveals } from "../schema/billing.ts";
 import { contacts } from "../schema/contacts.ts";
@@ -262,6 +262,76 @@ export const revealRepository = {
         and(eq(contactReveals.workspaceId, workspaceId), eq(contactReveals.contactId, contactId)),
       )
       .orderBy(desc(contactReveals.revealedAt))) as Array<{
+      revealType: string;
+      dataSource: string;
+      creditsConsumed: number;
+      revealedAt: Date;
+      revealedByUserId: string;
+    }>;
+  },
+
+  /** Batched getRevealView for a page of ids (grid hydration). Each row carries its `id` for grouping. */
+  async getRevealViewByIds(
+    tx: Tx,
+    ids: string[],
+  ): Promise<
+    Array<{
+      id: string;
+      emailEnc: Uint8Array | null;
+      phoneEnc: Uint8Array | null;
+      emailStatus: string;
+      phoneStatus: string | null;
+      phoneLineType: string | null;
+      linkedinUrl: string | null;
+    }>
+  > {
+    if (ids.length === 0) return [];
+    return tx
+      .select({
+        id: contacts.id,
+        emailEnc: contacts.emailEnc,
+        phoneEnc: contacts.phoneEnc,
+        emailStatus: contacts.emailStatus,
+        phoneStatus: contacts.phoneStatus,
+        phoneLineType: contacts.phoneLineType,
+        linkedinUrl: contacts.linkedinUrl,
+      })
+      .from(contacts)
+      .where(and(inArray(contacts.id, ids), isNull(contacts.deletedAt)));
+  },
+
+  /** Batched listContactClaims for a page of ids — each row carries its `contactId` for grouping. RLS scopes
+   *  contact_reveals to the workspace; the explicit workspace predicate is defence-in-depth. */
+  async listClaimsByContactIds(
+    tx: Tx,
+    workspaceId: string,
+    ids: string[],
+  ): Promise<
+    Array<{
+      contactId: string;
+      revealType: string;
+      dataSource: string;
+      creditsConsumed: number;
+      revealedAt: Date;
+      revealedByUserId: string;
+    }>
+  > {
+    if (ids.length === 0) return [];
+    return (await tx
+      .select({
+        contactId: contactReveals.contactId,
+        revealType: contactReveals.revealType,
+        dataSource: contactReveals.dataSource,
+        creditsConsumed: contactReveals.creditsConsumed,
+        revealedAt: contactReveals.revealedAt,
+        revealedByUserId: contactReveals.revealedByUserId,
+      })
+      .from(contactReveals)
+      .where(
+        and(eq(contactReveals.workspaceId, workspaceId), inArray(contactReveals.contactId, ids)),
+      )
+      .orderBy(desc(contactReveals.revealedAt))) as Array<{
+      contactId: string;
       revealType: string;
       dataSource: string;
       creditsConsumed: number;

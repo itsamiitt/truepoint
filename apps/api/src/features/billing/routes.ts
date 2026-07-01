@@ -87,6 +87,16 @@ creditsRoutes.get("/balance", requireRole("owner", "admin", "member", "viewer"),
   return c.json({ balance });
 });
 
+// Per-reveal_type credit cost (config placeholders, 07 §1) so the client can show "Reveal email · N cr" BEFORE
+// a reveal — single-reveal parity with the bulk estimate. Non-PII, tenant-agnostic pricing; readable by any member.
+creditsRoutes.get("/reveal-costs", requireRole("owner", "admin", "member", "viewer"), (c) =>
+  c.json({
+    email: env.REVEAL_COST_EMAIL,
+    phone: env.REVEAL_COST_PHONE,
+    full_profile: env.REVEAL_COST_FULL_PROFILE,
+  }),
+);
+
 // The tenant's plan + credits + live seat/workspace usage — the web billing hub plan tiles (replaces the
 // null-tolerant GET /tenants/me the web client used to probe). RLS-scoped read of the tenant's own row; the
 // plan display NAME is resolved against the owner-only plan-template catalog (non-PII), incl. grandfathered keys.
