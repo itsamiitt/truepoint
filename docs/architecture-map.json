@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1326,
-  "fileSetHash": "sha256:31137bdadf905c83543b6c8d5f355948f752da42436b2ac8568437aa45e82210",
+  "fileCount": 1328,
+  "fileSetHash": "sha256:d6e38ccb81f6ef73d3950250f92b20a34f651e47a453181730fb8c9be628eda4",
   "features": {
     "account-search": {
       "web": [],
@@ -993,6 +993,7 @@
         "apps/web/src/features/prospect/components/RecentSearches.tsx",
         "apps/web/src/features/prospect/components/RecomputeScoreButton.tsx",
         "apps/web/src/features/prospect/components/RecordDetail.tsx",
+        "apps/web/src/features/prospect/components/RevealCell.tsx",
         "apps/web/src/features/prospect/components/RevealDialog.tsx",
         "apps/web/src/features/prospect/components/RowActions.tsx",
         "apps/web/src/features/prospect/components/SaveSearchPanel.tsx",
@@ -1017,6 +1018,7 @@
         "apps/web/src/features/prospect/hooks/useRecentSearches.test.ts",
         "apps/web/src/features/prospect/hooks/useRecentSearches.ts",
         "apps/web/src/features/prospect/hooks/useReveal.ts",
+        "apps/web/src/features/prospect/hooks/useRevealStore.tsx",
         "apps/web/src/features/prospect/hooks/useRevealedContact.ts",
         "apps/web/src/features/prospect/hooks/useSavedSearches.ts",
         "apps/web/src/features/prospect/hooks/useScores.ts",
