@@ -95,8 +95,14 @@ export const platformAdminWriteRepository = {
     const next = current + delta;
     if (next < 0) return { found: true, wouldOverdraw: true, balanceAfter: current };
 
+    // Clamp the subscription bucket to the new total (M11/ADR-0041): a debit that drops the total below the
+    // perishable bucket trims the bucket to match; a credit leaves it unchanged (LEAST keeps sub ≤ total).
     await tx.execute(
-      sql`UPDATE tenants SET reveal_credit_balance = ${next}, updated_at = now() WHERE id = ${tenantId}::uuid`,
+      sql`UPDATE tenants
+          SET reveal_credit_balance = ${next},
+              subscription_credit_balance = LEAST(subscription_credit_balance, ${next}),
+              updated_at = now()
+          WHERE id = ${tenantId}::uuid`,
     );
     return { found: true, wouldOverdraw: false, balanceAfter: next };
   },
@@ -186,8 +192,13 @@ export const platformAdminWriteRepository = {
     const reversed = Math.min(credits, balance);
     const balanceAfter = balance - reversed;
 
+    // A refund is a debit — clamp the subscription bucket to the reduced total (M11/ADR-0041).
     await tx.execute(
-      sql`UPDATE tenants SET reveal_credit_balance = ${balanceAfter}, updated_at = now() WHERE id = ${tenantId}::uuid`,
+      sql`UPDATE tenants
+          SET reveal_credit_balance = ${balanceAfter},
+              subscription_credit_balance = LEAST(subscription_credit_balance, ${balanceAfter}),
+              updated_at = now()
+          WHERE id = ${tenantId}::uuid`,
     );
     await tx.execute(sql`UPDATE purchases SET status = 'refunded' WHERE id = ${purchaseId}::uuid`);
     return { found: true, alreadyRefunded: false, reversed, balanceAfter };
@@ -279,8 +290,7 @@ export const platformAdminWriteRepository = {
     // DERIVED EXPIRY (database-management-research 09 follow-up): a pending request past its hard time-box can no
     // longer be decided. Expiry is derived from expires_at (never a stored 'expired' — the jit_elevations posture),
     // evaluated on the DB clock inside the FOR UPDATE lock, so a request can't be approved the instant it lapses.
-    if (current.expired)
-      return { found: true, notPending: true, selfApproval: false, row: null };
+    if (current.expired) return { found: true, notPending: true, selfApproval: false, row: null };
     // Maker != checker: a request can never be decided by the staff member who filed it.
     if (current.requester === deciderUserId)
       return { found: true, notPending: false, selfApproval: true, row: null };

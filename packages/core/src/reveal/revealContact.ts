@@ -174,9 +174,15 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
       // result is unusable (cost 0): the claim row stays, recording the 0-credit outcome (07 §3).
       let balanceAfter: number;
       if (cost > 0) {
-        const balance = await creditRepository.lockBalance(tx, input.scope.tenantId);
+        const { balance, subscriptionBalance } = await creditRepository.lockBalance(
+          tx,
+          input.scope.tenantId,
+        );
         if (balance < cost) throw new InsufficientCreditsError(balance, cost);
-        await creditRepository.decrement(tx, input.scope.tenantId, cost);
+        // Subscription-first (M11/ADR-0041): burn the perishable (resetting) bucket before purchased credits.
+        const fromSubscription = Math.min(cost, subscriptionBalance);
+        const fromPurchased = cost - fromSubscription;
+        await creditRepository.decrement(tx, input.scope.tenantId, cost, fromSubscription);
         balanceAfter = balance - cost;
         // M11 ledger (ADR-0029): the paired `spend` entry, atomic with the counter decrement + INSIDE the
         // reveal's withTenantTx (app.current_tenant_id set → the ENABLE-RLS WITH CHECK passes). Idempotent on
@@ -191,7 +197,7 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
           revealId: claimed.id,
           actorUserId: input.userId,
           reason: "reveal",
-          metadata: { revealType: input.revealType },
+          metadata: { revealType: input.revealType, fromSubscription, fromPurchased },
         });
       } else {
         balanceAfter = await creditRepository.currentBalance(tx, input.scope.tenantId);

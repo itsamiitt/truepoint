@@ -74,19 +74,30 @@ export interface LedgerEntryInput {
 }
 
 export const creditRepository = {
-  /** Serialize concurrent reveals for one tenant: SELECT … FOR UPDATE on the counter row (07 §3). */
-  async lockBalance(tx: Tx, tenantId: string): Promise<number> {
+  /** Serialize concurrent reveals for one tenant: SELECT … FOR UPDATE on the counter row (07 §3). Returns the
+   *  total balance AND the perishable subscription portion (M11 buckets, ADR-0041) so the caller can split the
+   *  spend subscription-first. */
+  async lockBalance(
+    tx: Tx,
+    tenantId: string,
+  ): Promise<{ balance: number; subscriptionBalance: number }> {
     const rows = (await tx.execute(
-      sql`SELECT reveal_credit_balance AS balance FROM tenants WHERE id = ${tenantId} FOR UPDATE`,
-    )) as unknown as Array<{ balance: number }>;
+      sql`SELECT reveal_credit_balance AS balance, subscription_credit_balance AS sub
+          FROM tenants WHERE id = ${tenantId} FOR UPDATE`,
+    )) as unknown as Array<{ balance: number; sub: number }>;
     if (rows.length === 0) throw new Error("tenant row not visible in scoped transaction");
-    return Number(rows[0]!.balance);
+    return { balance: Number(rows[0]!.balance), subscriptionBalance: Number(rows[0]!.sub) };
   },
 
-  /** Decrement under the lock taken by lockBalance. The CHECK constraint makes overdraft impossible. */
-  async decrement(tx: Tx, tenantId: string, cost: number): Promise<void> {
+  /** Decrement under the lock taken by lockBalance — subscription-first (M11/ADR-0041): `fromSubscription`
+   *  (= min(cost, subscription balance)) comes off the perishable bucket, the rest off purchased credits. Both
+   *  CHECKs hold — total ≥ 0 (existing), and 0 ≤ sub ≤ total because cost ≥ fromSubscription ≥ 0. */
+  async decrement(tx: Tx, tenantId: string, cost: number, fromSubscription: number): Promise<void> {
     await tx.execute(
-      sql`UPDATE tenants SET reveal_credit_balance = reveal_credit_balance - ${cost} WHERE id = ${tenantId}`,
+      sql`UPDATE tenants
+          SET reveal_credit_balance = reveal_credit_balance - ${cost},
+              subscription_credit_balance = subscription_credit_balance - ${fromSubscription}
+          WHERE id = ${tenantId}`,
     );
   },
 
