@@ -77,6 +77,7 @@
     "settings-enrichment",
     "settings-mailboxes",
     "settings-shell",
+    "settings-teams",
     "settings-tenant",
     "settings-user",
     "settings-workspace",
@@ -93,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1304,
-  "fileSetHash": "sha256:34ffb8b590e2c0b2e91448624f4ef6f80e41abdf882e7a3b6786684118d51ccf",
+  "fileCount": 1308,
+  "fileSetHash": "sha256:edf9911c0e4e9f87c1d7f5b932f8fa53d7a8971631b4ab37fb268c69666e07ff",
   "features": {
     "account-search": {
       "web": [],
@@ -1422,6 +1423,19 @@
       "workers": [],
       "integrations": []
     },
+    "settings-teams": {
+      "web": [
+        "apps/web/src/features/settings-teams/api.ts",
+        "apps/web/src/features/settings-teams/components/TeamsPanel.tsx",
+        "apps/web/src/features/settings-teams/index.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
     "settings-tenant": {
       "web": [
         "apps/web/src/features/settings-tenant/api.ts",
@@ -1857,6 +1871,7 @@
       "apps/web/src/app/(shell)/settings/security/page.tsx",
       "apps/web/src/app/(shell)/settings/sessions/page.tsx",
       "apps/web/src/app/(shell)/settings/sso/page.tsx",
+      "apps/web/src/app/(shell)/settings/teams/page.tsx",
       "apps/web/src/app/(shell)/settings/workspace/page.tsx",
       "apps/web/src/app/auth/callback/page.tsx",
       "apps/web/src/app/import/page.tsx",
@@ -2272,6 +2287,7 @@
     "undeclared domain 'settings-enrichment' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-mailboxes' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-shell' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'settings-teams' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-tenant' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-user' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-workspace' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
