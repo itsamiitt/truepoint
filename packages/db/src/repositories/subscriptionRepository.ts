@@ -90,6 +90,32 @@ export const subscriptionRepository = {
       .set({ status, updatedAt: sql`now()` })
       .where(eq(subscriptions.stripeSubscriptionId, stripeSubscriptionId));
   },
+
+  /** Subscriptions past_due whose period ended more than `graceDays` ago — the dunning sweep's delinquency
+   *  signal (owner read across tenants). Stripe drives the actual retry/cancel; this only surfaces the ones a
+   *  human may want to look at. Bounded; oldest-delinquent first. */
+  async pastDueBeyondGrace(
+    tx: Tx,
+    graceDays: number,
+    limit: number,
+  ): Promise<Array<{ id: string; tenantId: string; currentPeriodEnd: Date | null }>> {
+    return tx
+      .select({
+        id: subscriptions.id,
+        tenantId: subscriptions.tenantId,
+        currentPeriodEnd: subscriptions.currentPeriodEnd,
+      })
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.status, "past_due"),
+          sql`${subscriptions.currentPeriodEnd} IS NOT NULL`,
+          sql`${subscriptions.currentPeriodEnd} < now() - make_interval(days => ${graceDays})`,
+        ),
+      )
+      .orderBy(subscriptions.currentPeriodEnd)
+      .limit(limit);
+  },
 };
 
 /** One billing cycle the monthly-grant worker still owes a grant. */

@@ -113,6 +113,11 @@ import {
   makeProcessSequenceTick,
 } from "./queues/sequenceTick.ts";
 import {
+  SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
+  type SubscriptionDunningSweepJobData,
+  makeProcessSubscriptionDunningSweep,
+} from "./queues/subscriptionDunningSweep.ts";
+import {
   SUBSCRIPTION_GRANT_SWEEP_QUEUE,
   type SubscriptionGrantSweepJobData,
   makeProcessSubscriptionGrantSweep,
@@ -740,6 +745,35 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "subscription-grant-sweep" })
       .catch((e) =>
         log.error("failed to schedule the subscription-grant sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+
+    // Subscription dunning SIGNAL (M11 subs, ADR-0041) — READ-ONLY: surfaces subscriptions past_due beyond the
+    // grace window as an ops signal. Stripe drives the real dunning (retry → deleted → revert-to-free via the
+    // webhook); the suspend policy is a flagged owner decision, so this suspends nothing. Leader-locked daily.
+    const subscriptionDunningQueue = new Queue<SubscriptionDunningSweepJobData>(
+      SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<SubscriptionDunningSweepJobData>(
+          SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
+          makeProcessSubscriptionDunningSweep(connection),
+          { connection },
+        ),
+        SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
+      ),
+    );
+    void subscriptionDunningQueue
+      .add(
+        "sweep",
+        {},
+        { repeat: { every: 24 * 60 * 60_000 }, jobId: "subscription-dunning-sweep" },
+      )
+      .catch((e) =>
+        log.error("failed to schedule the subscription-dunning sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );
