@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1320,
-  "fileSetHash": "sha256:bbf62ea22fa30e68efacc0e8ac4af1d86d2111b1f0070670cfb9e3f8bc5782c9",
+  "fileCount": 1326,
+  "fileSetHash": "sha256:31137bdadf905c83543b6c8d5f355948f752da42436b2ac8568437aa45e82210",
   "features": {
     "account-search": {
       "web": [],
@@ -525,6 +525,7 @@
         "packages/core/src/email/registerProviders.ts",
         "packages/core/src/email/renderTemplate.test.ts",
         "packages/core/src/email/renderTemplate.ts",
+        "packages/core/src/email/replyClassifier.ts",
         "packages/core/src/email/resolveSendingIdentity.ts",
         "packages/core/src/email/secretStore.ts",
         "packages/core/src/email/sendingDomains.ts",
@@ -981,6 +982,7 @@
         "apps/web/src/features/prospect/components/AiSearchBox.tsx",
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
+        "apps/web/src/features/prospect/components/CopyButton.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
         "apps/web/src/features/prospect/components/FilterPanel.tsx",
         "apps/web/src/features/prospect/components/FilterRail.tsx",
@@ -1015,6 +1017,7 @@
         "apps/web/src/features/prospect/hooks/useRecentSearches.test.ts",
         "apps/web/src/features/prospect/hooks/useRecentSearches.ts",
         "apps/web/src/features/prospect/hooks/useReveal.ts",
+        "apps/web/src/features/prospect/hooks/useRevealedContact.ts",
         "apps/web/src/features/prospect/hooks/useSavedSearches.ts",
         "apps/web/src/features/prospect/hooks/useScores.ts",
         "apps/web/src/features/prospect/hooks/useStages.ts",
@@ -1146,6 +1149,7 @@
       ],
       "core": [
         "packages/core/src/reveal/bulkRevealExport.ts",
+        "packages/core/src/reveal/getRevealedContact.ts",
         "packages/core/src/reveal/revealCharge.test.ts",
         "packages/core/src/reveal/revealCharge.ts",
         "packages/core/src/reveal/revealContact.ts",
@@ -2093,6 +2097,8 @@
     "packages/integrations": [
       "packages/integrations/src/anthropic/nlSearchAdapter.test.ts",
       "packages/integrations/src/anthropic/nlSearchAdapter.ts",
+      "packages/integrations/src/anthropic/replyClassifierAdapter.test.ts",
+      "packages/integrations/src/anthropic/replyClassifierAdapter.ts",
       "packages/integrations/src/enrichment/httpProvider.ts",
       "packages/integrations/src/enrichment/providers.test.ts",
       "packages/integrations/src/enrichment/providers.ts",
