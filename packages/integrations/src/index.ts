@@ -22,6 +22,11 @@ export {
   defaultFetchJson as defaultAiFetchJson,
 } from "./anthropic/nlSearchAdapter.ts";
 export {
+  anthropicReplyClassifierAdapter,
+  ReplyClassifierError,
+  type ReplyClassifierAdapterOptions,
+} from "./anthropic/replyClassifierAdapter.ts";
+export {
   stripeAdapter,
   type StripeAdapterOptions,
   type FetchStripe,

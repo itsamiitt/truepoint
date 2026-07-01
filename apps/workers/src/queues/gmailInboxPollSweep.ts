@@ -7,6 +7,7 @@
 
 import {
   GmailReadError,
+  classifyReplyIfEnabled,
   encryptSecret,
   fetchGmailReadPort,
   fetchInboundSince,
@@ -15,6 +16,7 @@ import {
   recordInboundReply,
 } from "@leadwolf/core";
 import { mailboxRepository, withTenantTx } from "@leadwolf/db";
+import { anthropicReplyClassifierAdapter } from "@leadwolf/integrations";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
 import { withLeaderLock } from "../leaderLock.ts";
@@ -34,6 +36,9 @@ export function makeProcessGmailInboxPoll(redis: IORedis) {
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
       const mailboxes = await mailboxRepository.listConnectedGoogleForPoll(MAX_MAILBOXES);
       const port = fetchGmailReadPort;
+      // The opt-in AI classifier (Part C) — used only for tenants with reply_classification_enabled; a missing
+      // key fails closed per call and classifyReplyIfEnabled falls back to the header heuristic.
+      const replyPort = anthropicReplyClassifierAdapter();
       let recorded = 0;
       let reauth = 0;
       let failures = 0;
@@ -59,12 +64,16 @@ export function makeProcessGmailInboxPoll(redis: IORedis) {
           );
           for (const m of messages) {
             const { bodyText, ...rest } = m;
+            // Opt-in AI refinement of the header heuristic (Part C); null (opt-out / failure) keeps the heuristic.
+            const classificationOverride = bodyText
+              ? await classifyReplyIfEnabled(scope, { userId: null, bodyText }, { port: replyPort })
+              : null;
             const bodyEnc = bodyText ? encryptSecret(bodyText) : null;
             await withTenantTx(scope, (tx) =>
               recordInboundReply(
                 tx,
                 { ...scope, mailboxIntegrationId: mb.id },
-                { ...rest, bodyEnc },
+                { ...rest, bodyEnc, classificationOverride },
               ),
             );
             recorded += 1;

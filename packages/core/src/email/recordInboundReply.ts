@@ -32,6 +32,8 @@ export interface ParsedInboundReply {
   bodyEnc: Uint8Array | null;
   occurredAt: Date;
   headers: InboundHeaders;
+  /** Optional AI-refined classification (Part C, opt-in) — overrides the header heuristic when present. */
+  classificationOverride?: ReplyClassification | null;
 }
 
 export interface RecordInboundDeps {
@@ -74,8 +76,11 @@ export async function recordInboundReply(
   );
   if (!match) return { matched: false, classification: "unknown", autoPaused: false };
 
-  // 2. Classify (header heuristic; the AI classifier — Part C — refines the 'human' bucket when enabled).
-  const { isAuto, classification } = detectAutoReply(parsed.headers);
+  // 2. Classify: the header heuristic, refined by the opt-in AI classifier (Part C) when the caller supplies an
+  // override. isAuto follows the FINAL classification (an override can flip human↔auto).
+  const classification =
+    parsed.classificationOverride ?? detectAutoReply(parsed.headers).classification;
+  const isAuto = classification !== "human";
 
   // 3. Record the inbound message (deduped by the DB unique index on (mailbox, provider_message_id)).
   const messageId = await deps.emailMessageRepository.insert(tx, {

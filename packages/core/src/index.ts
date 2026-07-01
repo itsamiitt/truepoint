@@ -73,6 +73,9 @@ export { buildImportPreview, type PreviewOptions } from "./import/preview.ts";
 export { rejectedRowsToCsv } from "./import/rejectedRowsCsv.ts";
 
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
+// No-charge "view already-revealed data" read (Phase 1 read primitive): decrypts ONLY the fields this
+// workspace owns a reveal claim for, so an already-revealed contact shows instantly without re-charging.
+export { getRevealedContact } from "./reveal/getRevealedContact.ts";
 // Customer own-workspace REVEALED CSV export (doc 12; audit A1, Phase 1) — reveals each contact THROUGH the gate
 // (suppression-checked, charged, audited), excludes suppressed, writes the CSV through the FileStore port.
 export {
@@ -407,6 +410,13 @@ export {
   type GmailReadPort,
   type ParsedGmailInbound,
 } from "./email/gmailInbound.ts";
+export {
+  classifyReplyIfEnabled,
+  REPLY_CLASSIFICATION_FLAG_KEY,
+  type ReplyClassifierPort,
+  type ReplyClassifierResult,
+  type ClassifyReplyDeps,
+} from "./email/replyClassifier.ts";
 // P0 (email-sec-001): per-tenant derivation of the webhook/tracking signing keys from the root secret — a
 // holder of one tenant's derived key cannot forge a signed event for another tenant.
 export {
