@@ -12,6 +12,7 @@ import type {
   MaskedContact,
   RevealResponse,
   RevealType,
+  RevealedContact,
   Tag,
   TagColor,
   TaggableEntity,
@@ -129,6 +130,18 @@ export async function revealContact(id: string, revealType: RevealType): Promise
   });
   if (!res.ok) throw await toApiError(res, "Reveal failed");
   return (await res.json()) as RevealResponse;
+}
+
+/**
+ * GET /contacts/:id/revealed — the NO-CHARGE view of a contact's ALREADY-OWNED reveal data (Phase 1). Returns
+ * decrypted email/phone ONLY for the reveal_types this workspace owns, plus statuses, LinkedIn, and the reveal
+ * history. Never spends credits. The record detail calls this on open for a revealed contact so the PII shows
+ * instantly and persistently — no re-confirm, no re-charge.
+ */
+export async function fetchRevealedContact(id: string): Promise<RevealedContact> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${id}/revealed`);
+  if (!res.ok) throw await toApiError(res, "Could not load revealed data");
+  return (await res.json()) as RevealedContact;
 }
 
 // ── Tags (ADR-0028, G-REV-6): workspace tag definitions + record assignments + filter-by-tag. ───────────

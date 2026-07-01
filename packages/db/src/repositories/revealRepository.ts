@@ -201,6 +201,76 @@ export const revealRepository = {
   },
 
   /**
+   * The ciphertext + verified statuses a no-charge "view revealed data" read needs (Phase 1 read primitive).
+   * Ciphertext is decrypted IN core (never returned over HTTP raw); linkedinUrl is clear-text (a public
+   * profile URL, not encrypted). RLS scopes the row to the workspace. Returns null when the contact is gone.
+   */
+  async getRevealView(
+    tx: Tx,
+    contactId: string,
+  ): Promise<{
+    emailEnc: Uint8Array | null;
+    phoneEnc: Uint8Array | null;
+    emailStatus: string;
+    phoneStatus: string | null;
+    phoneLineType: string | null;
+    linkedinUrl: string | null;
+  } | null> {
+    const rows = await tx
+      .select({
+        emailEnc: contacts.emailEnc,
+        phoneEnc: contacts.phoneEnc,
+        emailStatus: contacts.emailStatus,
+        phoneStatus: contacts.phoneStatus,
+        phoneLineType: contacts.phoneLineType,
+        linkedinUrl: contacts.linkedinUrl,
+      })
+      .from(contacts)
+      .where(and(eq(contacts.id, contactId), isNull(contacts.deletedAt)))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  /**
+   * This workspace's reveal claims for a contact, newest-first — the reveal-history + ownership source for the
+   * no-charge view read. PII-free (type/source/cost/timestamp/member). RLS scopes contact_reveals to the
+   * workspace; the explicit predicate is defence-in-depth.
+   */
+  async listContactClaims(
+    tx: Tx,
+    workspaceId: string,
+    contactId: string,
+  ): Promise<
+    Array<{
+      revealType: string;
+      dataSource: string;
+      creditsConsumed: number;
+      revealedAt: Date;
+      revealedByUserId: string;
+    }>
+  > {
+    return (await tx
+      .select({
+        revealType: contactReveals.revealType,
+        dataSource: contactReveals.dataSource,
+        creditsConsumed: contactReveals.creditsConsumed,
+        revealedAt: contactReveals.revealedAt,
+        revealedByUserId: contactReveals.revealedByUserId,
+      })
+      .from(contactReveals)
+      .where(
+        and(eq(contactReveals.workspaceId, workspaceId), eq(contactReveals.contactId, contactId)),
+      )
+      .orderBy(desc(contactReveals.revealedAt))) as Array<{
+      revealType: string;
+      dataSource: string;
+      creditsConsumed: number;
+      revealedAt: Date;
+      revealedByUserId: string;
+    }>;
+  },
+
+  /**
    * The idempotent reveal claim: INSERT … ON CONFLICT (workspace_id, contact_id, reveal_type) DO NOTHING.
    * Returns the new claim's `{ id }` when THIS call claimed the reveal (→ charge), or null when the workspace
    * copy already owned it (→ free re-reveal). The id backs the M11 credit-ledger `spend` entry (reveal_id +

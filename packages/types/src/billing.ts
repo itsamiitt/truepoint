@@ -25,6 +25,35 @@ export const revealResponseSchema = z.object({
 });
 export type RevealResponse = z.infer<typeof revealResponseSchema>;
 
+/** One reveal-history entry for the record detail (PII-free: type/source/cost/timestamp/member). */
+export const revealHistoryEntrySchema = z.object({
+  revealType: revealType,
+  dataSource: revealDataSource,
+  creditsConsumed: z.number().int().min(0),
+  revealedAt: z.string().datetime({ offset: true }),
+  revealedByUserId: z.string(),
+});
+export type RevealHistoryEntry = z.infer<typeof revealHistoryEntrySchema>;
+
+/** GET /contacts/:id/revealed — the NO-CHARGE view of a contact's ALREADY-OWNED reveal data (Phase 1 read
+ *  primitive). `email`/`phone` are decrypted ONLY for the reveal_types this workspace owns (null otherwise);
+ *  statuses/line-type mirror that ownership; `linkedinUrl` is a clear-text public URL. Never charges credits. */
+export const revealedContactSchema = z.object({
+  contactId: z.string().uuid(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  linkedinUrl: z.string().nullable(),
+  emailStatus: z.string().nullable(),
+  phoneStatus: z.string().nullable(),
+  phoneLineType: z.string().nullable(),
+  /** Which reveal_types this workspace owns (drives the "reveal more" affordance + status). */
+  ownedTypes: z.array(revealType),
+  /** Which PII fields resolved to a value (email/phone) — the record actually holds + owns them. */
+  revealedFields: z.array(z.string()),
+  history: z.array(revealHistoryEntrySchema),
+});
+export type RevealedContact = z.infer<typeof revealedContactSchema>;
+
 /** One metered reveal from GET /credits/usage — the usage-history row (07 §9, 09 §3, 12 §4). PII-free: the
  *  reveal's id/contact/type/cost/timestamp plus the member who ran it (the Reports "member" dimension).
  *  Single source of truth for apps/api (the /credits/usage payload) and apps/web (Settings ▸ Billing, Reports). */

@@ -7,11 +7,13 @@ import {
   defaultEmailVerifier,
   defaultPhoneVerifier,
   editContactFields,
+  getRevealedContact,
   revealContact,
 } from "@leadwolf/core";
 import { contactRepository } from "@leadwolf/db";
 import {
   ForbiddenError,
+  NotFoundError,
   ValidationError,
   contactFieldEditSchema,
   revealRequestSchema,
@@ -73,6 +75,22 @@ revealRoutes.post(
     return c.json(result, 200);
   },
 );
+
+// GET /:id/revealed — the NO-CHARGE view of a contact's ALREADY-OWNED reveal data (Phase 1 read primitive).
+// Returns decrypted email/phone ONLY for the reveal_types this workspace owns; never charges, never re-reveals.
+// Any workspace member may view data the workspace already owns (visibility is workspace-wide, soft-owner
+// model); the ownership + RLS check in core is the security boundary. No role gate (read, no spend).
+revealRoutes.get("/:id/revealed", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace to view contacts.");
+  const result = await getRevealedContact(
+    { tenantId: c.get("tenantId"), workspaceId },
+    c.req.param("id"),
+  );
+  if (!result) throw new NotFoundError("Contact not found in this workspace.");
+  return c.json(result, 200);
+});
 
 // Hand-edit a contact's scalar profile fields, PINNING each against future enrichment overwrite (PLAN_03 §1.4).
 // Transport only: scope comes from the verified token (never the body), and the pin + RLS-scoped, idempotent
