@@ -17,6 +17,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "../schema/auth.ts";
+import { notifications } from "../schema/notifications.ts";
 import { planTemplates } from "../schema/platformOps.ts";
 
 // ── Workspaces (RLS-scoped) ──────────────────────────────────────────────────────────────────────────
@@ -610,7 +611,7 @@ export const tenantRepository = {
     workspaceName: string;
     workspaceSlug: string;
   }): Promise<{ tenantId: string; workspaceId: string }> {
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // OD-7 MVP trial: seed the new org with its plan's signup-bonus credits (the default 'free' plan). Read on
       // the owner connection (plan_templates is owner-owned); atomic with creation → granted exactly once per
       // org. No template / null bonus → 0 (the prior behavior), so onboarding is unchanged until staff set it.
@@ -653,6 +654,21 @@ export const tenantRepository = {
       });
       return { tenantId: t!.id, workspaceId: ws!.id };
     });
+    // G-NTF-1: a one-time welcome notification for the founder (best-effort — a note failure must NEVER break
+    // sign-up). Runs on the owner connection AFTER the creation commits, so the row references the committed org.
+    try {
+      await db.insert(notifications).values({
+        tenantId: result.tenantId,
+        workspaceId: result.workspaceId,
+        userId: input.ownerUserId,
+        type: "system",
+        title: "Welcome to TruePoint",
+        body: "Your workspace is ready — find prospects and reveal verified contacts to get started.",
+      });
+    } catch {
+      // best-effort — never fail sign-up on a welcome note
+    }
+    return result;
   },
 };
 
