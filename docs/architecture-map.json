@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1274,
-  "fileSetHash": "sha256:7052ec2d5d988427a92e56983705dc0500d24e4a367909fe8a264693b532efe4",
+  "fileCount": 1275,
+  "fileSetHash": "sha256:74104aa6638d6947e7b288c5063ccd30a5f5ba743b5847e21d5d0ee1c9e27fca",
   "features": {
     "account-search": {
       "web": [],
@@ -256,7 +256,10 @@
         "packages/db/src/repositories/creditRepository.ts",
         "packages/db/src/repositories/idempotencyRepository.ts"
       ],
-      "workers": [],
+      "workers": [
+        "apps/workers/src/queues/billingReconSweep.ts",
+        "apps/workers/src/queues/lowBalanceNotifierSweep.ts"
+      ],
       "integrations": []
     },
     "compliance": {
@@ -2143,7 +2146,6 @@
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/erSweep.ts",
     "apps/workers/src/queues/firmographics.ts",
-    "apps/workers/src/queues/lowBalanceNotifierSweep.ts",
     "apps/workers/src/queues/masterBackfill.test.ts",
     "apps/workers/src/queues/masterBackfill.ts",
     "apps/workers/src/queues/masterBackfillSweep.ts",

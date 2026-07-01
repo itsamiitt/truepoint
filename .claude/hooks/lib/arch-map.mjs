@@ -75,6 +75,8 @@ export const QUEUE_DOMAIN = {
   reverification: "data-health",
   reverificationSweep: "data-health",
   dataQualitySnapshotSweep: "data-health",
+  lowBalanceNotifierSweep: "billing",
+  billingReconSweep: "billing",
 };
 export const REPO_DOMAIN = {
   contact: "reveal",
