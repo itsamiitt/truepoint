@@ -181,15 +181,15 @@ export async function fetchTenantSubscription(id: string): Promise<SubscriptionV
 
 /** POST /admin/tenants/:id/purchases/:purchaseId/refund — reverse a purchase (tenants:credits). A structured
  *  reason is mandatory (recorded in the refund's audit metadata); a note is optional (required for `other`). */
-/** POST /admin/tenants/:id/purchases/:purchaseId/refund — FILE a maker-checker request for a refund (Part B /
- *  decision #4). No balance moves; a DIFFERENT billing operator approves + executes it. Returns the pending
- *  approval. */
+/** POST /admin/tenants/:id/purchases/:purchaseId/refund — a purchase refund. Discriminated by
+ *  BILLING_APPROVALS_ENABLED (Part B): `approval` set ⇒ a request was FILED (a different operator must approve);
+ *  `approval` null ⇒ it executed directly (returns `reversed` + `balanceAfter`). */
 export async function refundPurchase(
   id: string,
   purchaseId: string,
   reason: RefundReason,
   note?: string,
-): Promise<ApprovalRequestView> {
+): Promise<{ approval: ApprovalRequestView | null; reversed?: number; balanceAfter?: number }> {
   const res = await fetchWithAuth(
     `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/purchases/${encodeURIComponent(purchaseId)}/refund`,
     {
@@ -198,9 +198,12 @@ export async function refundPurchase(
       body: JSON.stringify({ reason, ...(note ? { note } : {}) }),
     },
   );
-  if (!res.ok) throw new Error(await problemMessage(res, "Could not request the refund"));
-  const body = (await res.json()) as { approval: ApprovalRequestView };
-  return body.approval;
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not refund the purchase"));
+  return (await res.json()) as {
+    approval: ApprovalRequestView | null;
+    reversed?: number;
+    balanceAfter?: number;
+  };
 }
 
 /** GET /admin/tenants/:id/overview — the customer-360 usage/health aggregate for a tenant. */
@@ -294,14 +297,14 @@ export async function requestElevation(
   if (!res.ok) throw new Error(await problemMessage(res, "Could not obtain elevation"));
 }
 
-/** POST /admin/tenants/:id/credits — FILE a maker-checker request for a manual signed credit adjustment
- *  (Part B / decision #4). No balance moves; a DIFFERENT billing operator approves + executes it. Returns the
- *  filed (pending) approval. A positive delta grants, a negative one debits; the reason is audited. */
+/** POST /admin/tenants/:id/credits — a manual signed credit adjustment. Discriminated by BILLING_APPROVALS_ENABLED
+ *  (Part B / decision #4): `approval` set ⇒ a maker-checker request was FILED (a different operator must approve);
+ *  `approval` null ⇒ it executed directly (returns the new `balanceAfter`). */
 export async function adjustTenantCredits(
   id: string,
   delta: number,
   reason: string,
-): Promise<ApprovalRequestView> {
+): Promise<{ approval: ApprovalRequestView | null; balanceAfter?: number }> {
   const res = await fetchWithAuth(
     `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/credits`,
     {
@@ -310,9 +313,8 @@ export async function adjustTenantCredits(
       body: JSON.stringify({ delta, reason }),
     },
   );
-  if (!res.ok) throw new Error(await problemMessage(res, "Could not request a credit adjustment"));
-  const body = (await res.json()) as { approval: ApprovalRequestView };
-  return body.approval;
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not adjust credits"));
+  return (await res.json()) as { approval: ApprovalRequestView | null; balanceAfter?: number };
 }
 
 /** GET /admin/billing/approvals — pending money-approval requests (billing:read). */

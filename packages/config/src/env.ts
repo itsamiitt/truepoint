@@ -110,6 +110,19 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Teams (Part D, grouping-only). Dark by default — the /api/v1/teams routes 404 + the settings tab hides
+    // until enabled.
+    TEAMS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Peer-approval (maker-checker) for staff money actions (Part B, decision #4). Dark by default: OFF ⇒ credit
+    // adjust/refund execute DIRECTLY (the pre-Part-B path); ON ⇒ they file a request a DIFFERENT operator must
+    // approve. Flip ON in production to enforce separation of duties (the stronger control).
+    BILLING_APPROVALS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
 
     // Charge policy for `risky` verification results — ADR-0013: charged-but-flagged by default.
     REVEAL_CHARGE_RISKY: z
