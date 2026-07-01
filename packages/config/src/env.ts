@@ -105,12 +105,29 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // M12 P3 inbound-reply polling (the Gmail-history sweep). Dark by default — nothing polls until enabled.
+    EMAIL_INBOX_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
 
     // Charge policy for `risky` verification results — ADR-0013: charged-but-flagged by default.
     REVEAL_CHARGE_RISKY: z
       .string()
       .optional()
       .transform((v) => v !== "false"),
+
+    // Per-verifier network timeout (ms) for the reveal path (Reacher email + Twilio phone). Verification is
+    // network I/O that runs OUTSIDE the charging tx (14 §3.5), but with no timeout a hung provider hangs the
+    // synchronous reveal request. On abort the adapter degrades to the stored status / E.164 format floor (it
+    // "didn't run") — never worse than today. Default 5s.
+    REVEAL_VERIFY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
+    // Reveal-specific per-caller burst cap (reveals/min, keyed by the verified subject). A dedicated abuse
+    // guard on the money endpoint on TOP of the coarse /api throttle — a runaway script or compromised token
+    // is bounded by request velocity, not only by the credit balance CHECK. Generous for a human clicking
+    // rows, tight for automation. Default 60/min.
+    REVEAL_RATE_PER_MIN: z.coerce.number().int().positive().default(60),
 
     // Enrichment provider keys (06 §3). Absent → that adapter reports `miss` and the waterfall skips it.
     APOLLO_API_KEY: z.string().optional(),

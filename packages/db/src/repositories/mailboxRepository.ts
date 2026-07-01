@@ -15,6 +15,14 @@ export interface MailboxDueRow {
   workspaceId: string;
 }
 
+/** The inbound-poll worklist row (M12 P3) — ids + scope + the history cursor, never a credential. */
+export interface MailboxPollRow {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  gmailHistoryId: string | null;
+}
+
 export interface MailboxInsert {
   tenantId: string;
   workspaceId: string;
@@ -187,6 +195,38 @@ export const mailboxRepository = {
       )
       .orderBy(asc(mailboxIntegration.oauthExpiresAt))
       .limit(limit);
+  },
+
+  /** Connected GOOGLE mailboxes for the inbound-poll sweep (M12 P3) — the owner-path cross-tenant worklist
+   *  (BYPASSRLS, like listDueForRefresh); ids + scope + the history cursor ONLY, never a credential. Only
+   *  status='connected' google mailboxes with a token and no pending reauth. */
+  async listConnectedGoogleForPoll(limit: number): Promise<MailboxPollRow[]> {
+    return db
+      .select({
+        id: mailboxIntegration.id,
+        tenantId: mailboxIntegration.tenantId,
+        workspaceId: mailboxIntegration.workspaceId,
+        gmailHistoryId: mailboxIntegration.gmailHistoryId,
+      })
+      .from(mailboxIntegration)
+      .where(
+        and(
+          eq(mailboxIntegration.provider, "google"),
+          eq(mailboxIntegration.status, "connected"),
+          eq(mailboxIntegration.reauthRequired, false),
+          isNotNull(mailboxIntegration.oauthTokenEnc),
+        ),
+      )
+      .orderBy(asc(mailboxIntegration.createdAt))
+      .limit(limit);
+  },
+
+  /** Advance the inbound-poll history cursor after a successful poll (M12 P3). */
+  async updateGmailHistoryId(tx: Tx, mailboxId: string, historyId: string): Promise<void> {
+    await tx
+      .update(mailboxIntegration)
+      .set({ gmailHistoryId: historyId })
+      .where(eq(mailboxIntegration.id, mailboxId));
   },
 
   /** Record a connect/refresh failure (status='error') without touching the credential columns. */

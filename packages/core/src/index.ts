@@ -401,6 +401,7 @@ export {
 export {
   parseGmailMessage,
   fetchInboundSince,
+  fetchProfileHistoryId,
   fetchGmailReadPort,
   GmailReadError,
   type GmailReadPort,

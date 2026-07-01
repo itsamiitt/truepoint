@@ -59,6 +59,11 @@ import {
   processFirmographics,
 } from "./queues/firmographics.ts";
 import {
+  GMAIL_INBOX_POLL_QUEUE,
+  type GmailInboxPollJobData,
+  makeProcessGmailInboxPoll,
+} from "./queues/gmailInboxPollSweep.ts";
+import {
   IMPORTS_DLQ,
   IMPORTS_QUEUE,
   type ImportJobData,
@@ -774,6 +779,31 @@ export function startWorkers(): Worker[] {
       )
       .catch((e) =>
         log.error("failed to schedule the subscription-dunning sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // M12 P3 inbound-reply poller (Gmail history sweep) — DARK by default (EMAIL_INBOX_ENABLED=false). Purely
+  // additive: when off, nothing is built. Per connected Google mailbox it polls new replies, records them, and
+  // auto-pauses the sequence on a confirmed human reply. Leader-locked; every 5 min.
+  if (env.EMAIL_INBOX_ENABLED) {
+    const gmailInboxQueue = new Queue<GmailInboxPollJobData>(GMAIL_INBOX_POLL_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        new Worker<GmailInboxPollJobData>(
+          GMAIL_INBOX_POLL_QUEUE,
+          makeProcessGmailInboxPoll(connection),
+          { connection },
+        ),
+        GMAIL_INBOX_POLL_QUEUE,
+      ),
+    );
+    void gmailInboxQueue
+      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "gmail-inbox-poll" })
+      .catch((e) =>
+        log.error("failed to schedule the gmail-inbox poll", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

@@ -109,6 +109,8 @@ export const mailboxIntegration = pgTable(
     // WITHOUT decrypting the bundle. The access+refresh tokens themselves stay in oauth_token_enc (D7).
     oauthExpiresAt: timestamp("oauth_expires_at", { withTimezone: true }), // proactive-refresh cursor
     oauthScopes: text("oauth_scopes").array(), // the granted scopes (display + downgrade detection)
+    // M12 P3 inbound-poll cursor: the Gmail users.history id to resume from (null until the first poll seeds it).
+    gmailHistoryId: varchar("gmail_history_id", { length: 255 }),
     providerAccountId: varchar("provider_account_id", { length: 255 }), // Gmail emailAddress / Graph user id
     reauthRequired: boolean("reauth_required").notNull().default(false), // invalid_grant → "Reconnect" UX
     reauthReason: varchar("reauth_reason", { length: 120 }),

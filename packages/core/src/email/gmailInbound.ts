@@ -151,6 +151,18 @@ export async function fetchInboundSince(
   return { messages, newHistoryId: histBody?.historyId ?? null };
 }
 
+/** The mailbox's CURRENT historyId (users.getProfile) — the baseline to seed the poll cursor on the first tick,
+ *  so the next tick fetches only messages that arrive after now (no historical backfill). */
+export async function fetchProfileHistoryId(
+  port: GmailReadPort,
+  accessToken: string,
+): Promise<string | null> {
+  const res = await port.getJson(`${GMAIL_API}/profile`, accessToken);
+  if (res.status === 401 || res.status === 403) throw new GmailReadError("unauthorized", true);
+  if (res.status !== 200) return null;
+  return (res.body as { historyId?: string } | null)?.historyId ?? null;
+}
+
 /** A Gmail read failure. `reauth` true ⇒ the credential is the problem (401/403) → mark reauth_required. */
 export class GmailReadError extends Error {
   constructor(
