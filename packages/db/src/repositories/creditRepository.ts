@@ -177,4 +177,65 @@ export const creditRepository = {
       })
       .onConflictDoNothing({ target: [creditLedger.tenantId, creditLedger.idempotencyKey] });
   },
+
+  /**
+   * Active tenants that have NOT yet been ledger-backfilled — i.e. carry no `opening_balance:<id>` marker
+   * entry. The self-terminating work-list for the one-time backfill sweep (M11). Owner read; bounded.
+   */
+  async tenantsNeedingLedgerBackfill(tx: Tx, limit: number): Promise<string[]> {
+    const rows = (await tx.execute(sql`
+      SELECT t.id::text AS tenant_id
+      FROM tenants t
+      WHERE t.status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM credit_ledger cl
+          WHERE cl.tenant_id = t.id AND cl.idempotency_key = 'opening_balance:' || t.id::text
+        )
+      ORDER BY t.id
+      LIMIT ${limit}
+    `)) as unknown as Array<{ tenant_id: string }>;
+    return rows.map((r) => r.tenant_id);
+  },
+
+  /**
+   * One-time historical ledger backfill for ONE tenant (M11, ADR-0029) — idempotent, composed into a
+   * per-tenant tx. (1) Reconstruct `grant` entries from purchases (key grant:<stripe_event_id>, historical
+   * created_at) + `spend` entries from charged reveals (key reveal:<reveal_id>), both ON CONFLICT DO NOTHING
+   * so any LIVE post-ledger entries are left untouched — the backfill only fills the PRE-ledger gap. (2) Lock
+   * the counter, compute residual = counter − SUM(delta), and post ONE `opening_balance` adjustment (key
+   * opening_balance:<tenant_id>) that absorbs everything not reconstructed (old admin adjusts, signup bonuses,
+   * refund reversals, credit-backs). After it, SUM(delta) == counter exactly. The opening_balance row is posted
+   * even at residual 0 so it doubles as the "backfilled" marker (→ the sweep is self-terminating). Returns the
+   * residual it absorbed.
+   */
+  async backfillTenantLedger(tx: Tx, tenantId: string): Promise<{ residual: number }> {
+    await tx.execute(sql`
+      INSERT INTO credit_ledger (tenant_id, entry_type, delta, idempotency_key, purchase_id, reason, created_at)
+      SELECT p.tenant_id, 'grant', p.credits, 'grant:' || p.stripe_event_id, p.id, 'stripe_purchase', p.created_at
+      FROM purchases p
+      WHERE p.tenant_id = ${tenantId}::uuid
+      ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+    `);
+    await tx.execute(sql`
+      INSERT INTO credit_ledger (tenant_id, workspace_id, entry_type, delta, idempotency_key, reveal_id, reason, created_at)
+      SELECT cr.tenant_id, cr.workspace_id, 'spend', -cr.credits_consumed, 'reveal:' || cr.id::text, cr.id, 'reveal', cr.revealed_at
+      FROM contact_reveals cr
+      WHERE cr.tenant_id = ${tenantId}::uuid AND cr.credits_consumed > 0
+      ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+    `);
+    const brows = (await tx.execute(
+      sql`SELECT reveal_credit_balance AS c FROM tenants WHERE id = ${tenantId}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ c: number }>;
+    const counter = brows.length > 0 ? Number(brows[0]!.c) : 0;
+    const srows = (await tx.execute(
+      sql`SELECT COALESCE(SUM(delta), 0)::bigint AS s FROM credit_ledger WHERE tenant_id = ${tenantId}::uuid`,
+    )) as unknown as Array<{ s: number }>;
+    const residual = counter - Number(srows[0]?.s ?? 0);
+    await tx.execute(sql`
+      INSERT INTO credit_ledger (tenant_id, entry_type, delta, idempotency_key, reason)
+      VALUES (${tenantId}::uuid, 'adjustment', ${residual}, ${`opening_balance:${tenantId}`}, 'opening_balance')
+      ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
+    `);
+    return { residual };
+  },
 };

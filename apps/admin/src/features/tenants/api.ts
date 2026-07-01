@@ -6,6 +6,7 @@ import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   EconomicsTrendPoint,
+  LedgerEntryView,
   RefundReason,
   SetAuthEnforcementInput,
   TenantEconomicsDetail,
@@ -149,6 +150,21 @@ export async function fetchTenantPurchases(id: string): Promise<Purchase[]> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load purchases"));
   const body = (await res.json()) as { purchases: Purchase[] };
   return body.purchases;
+}
+
+export interface TenantLedgerPage {
+  entries: LedgerEntryView[];
+  nextCursor: string | null;
+}
+
+/** GET /admin/tenants/:id/ledger — a keyset page of the tenant's credit-ledger entries (billing:read). */
+export async function fetchTenantLedger(id: string, cursor?: string): Promise<TenantLedgerPage> {
+  const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/ledger${qs}`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the credit ledger"));
+  return (await res.json()) as TenantLedgerPage;
 }
 
 /** POST /admin/tenants/:id/purchases/:purchaseId/refund — reverse a purchase (tenants:credits). A structured

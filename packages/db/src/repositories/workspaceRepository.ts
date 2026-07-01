@@ -19,6 +19,7 @@ import {
 } from "../schema/auth.ts";
 import { notifications } from "../schema/notifications.ts";
 import { planTemplates } from "../schema/platformOps.ts";
+import { creditRepository } from "./creditRepository.ts";
 
 // ── Workspaces (RLS-scoped) ──────────────────────────────────────────────────────────────────────────
 export interface WorkspaceSummary {
@@ -629,6 +630,19 @@ export const tenantRepository = {
           revealCreditBalance: signupBonus,
         })
         .returning({ id: tenants.id });
+      // M11 ledger (ADR-0029): the signup bonus is a `grant` — post it in the SAME creation tx so SUM(delta)
+      // equals the seeded counter from the tenant's first instant (else billing-recon flags drift). Owner
+      // connection → bypasses ENABLE RLS. A 0 bonus moves no balance → no entry.
+      if (signupBonus > 0) {
+        await creditRepository.insertLedger(tx, {
+          tenantId: t!.id,
+          entryType: "grant",
+          delta: signupBonus,
+          balanceAfter: signupBonus,
+          idempotencyKey: `grant:signup:${t!.id}`,
+          reason: "signup_bonus",
+        });
+      }
       await tx.insert(tenantMembers).values({
         tenantId: t!.id,
         userId: input.ownerUserId,

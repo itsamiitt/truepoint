@@ -17,6 +17,11 @@ import IORedis from "ioredis";
 import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
 import {
+  BILLING_RECON_SWEEP_QUEUE,
+  type BillingReconSweepJobData,
+  makeProcessBillingReconSweep,
+} from "./queues/billingReconSweep.ts";
+import {
   BULK_ENRICHMENT_DLQ,
   BULK_ENRICHMENT_QUEUE,
   type BulkEnrichmentJobData,
@@ -60,6 +65,11 @@ import {
   deadLetterFailedImport,
   processImport,
 } from "./queues/imports.ts";
+import {
+  LEDGER_BACKFILL_SWEEP_QUEUE,
+  type LedgerBackfillSweepJobData,
+  makeProcessLedgerBackfillSweep,
+} from "./queues/ledgerBackfillSweep.ts";
 import {
   LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
   type LowBalanceNotifierSweepJobData,
@@ -672,6 +682,58 @@ export function startWorkers(): Worker[] {
       )
       .catch((e) =>
         log.error("failed to schedule the low-balance notifier sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // Credit-ledger reconciliation sweep (M11, ADR-0029) — DARK by default (BILLING_RECON_ENABLED=false). Purely
+  // additive: when off, the queue/worker/schedule are never constructed and nothing is scanned. READ-ONLY —
+  // asserts SUM(credit_ledger.delta) == counter per tenant and logs drift; corrects nothing. Enable only after
+  // the historical backfill. Leader-locked daily (a stable jobId → exactly one repeatable).
+  if (env.BILLING_RECON_ENABLED) {
+    const billingReconQueue = new Queue<BillingReconSweepJobData>(BILLING_RECON_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        new Worker<BillingReconSweepJobData>(
+          BILLING_RECON_SWEEP_QUEUE,
+          makeProcessBillingReconSweep(connection),
+          { connection },
+        ),
+        BILLING_RECON_SWEEP_QUEUE,
+      ),
+    );
+    void billingReconQueue
+      .add("sweep", {}, { repeat: { every: 24 * 60 * 60_000 }, jobId: "billing-recon-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the billing-recon sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // One-time credit-ledger backfill sweep (M11, ADR-0029) — DARK by default (BILLING_LEDGER_BACKFILL_ENABLED=
+  // false). Purely additive: when off, nothing is built. Self-terminating (no-ops once every active tenant
+  // carries an opening_balance marker), so it is safe to leave scheduled; the operator enables it, watches it
+  // drain, then turns it off. Leader-locked; fires every 5 min while enabled to drain the fleet promptly.
+  if (env.BILLING_LEDGER_BACKFILL_ENABLED) {
+    const ledgerBackfillQueue = new Queue<LedgerBackfillSweepJobData>(LEDGER_BACKFILL_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        new Worker<LedgerBackfillSweepJobData>(
+          LEDGER_BACKFILL_SWEEP_QUEUE,
+          makeProcessLedgerBackfillSweep(connection),
+          { connection },
+        ),
+        LEDGER_BACKFILL_SWEEP_QUEUE,
+      ),
+    );
+    void ledgerBackfillQueue
+      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "ledger-backfill-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the ledger-backfill sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

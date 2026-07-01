@@ -6,6 +6,7 @@
 
 import {
   type TenantScope,
+  creditRepository,
   outreachLogRepository,
   revealRepository,
   suppressionRepository,
@@ -72,6 +73,18 @@ export async function handleBounce(input: HandleBounceInput): Promise<HandleBoun
         entityType: "tenant",
         entityId: input.scope.tenantId,
         metadata: { reason: "bounce_credit_back", amount: creditedBack, contactId: contact.id },
+      });
+      // M11 ledger (ADR-0029): the credit-back is a `credit_back` entry, atomic with the counter refund +
+      // audit, inside handleBounce's withTenantTx (tenant GUC set → WITH CHECK passes). Idempotent on
+      // (tenant, credit_back:<logId>) — the already-bounced early-return guarantees one credit-back per log.
+      await creditRepository.insertLedger(tx, {
+        tenantId: input.scope.tenantId,
+        workspaceId: input.scope.workspaceId,
+        entryType: "credit_back",
+        delta: creditedBack,
+        idempotencyKey: `credit_back:${log.id}`,
+        reason: "bounce",
+        metadata: { logId: log.id, contactId: contact.id },
       });
     }
     return { bounced: true, creditedBack };

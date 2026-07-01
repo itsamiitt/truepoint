@@ -239,6 +239,21 @@ export const appEnvSchema = z
     // The reveal-credit-balance threshold (credits) at/under which the notifier flags a tenant. Mirrors the
     // admin /billing/low-balance default; a sensible default until tuned.
     LOW_BALANCE_NOTIFIER_THRESHOLD: z.coerce.number().int().min(0).default(100),
+    // Credit-ledger reconciliation sweep (M11, ADR-0029). HARD GATE, default FALSE: DARK until the historical
+    // backfill has brought pre-ledger tenants to 0 drift (before it, every old tenant reads as drifted — noise,
+    // not a bug). While off, the apps/workers consumer is not registered and nothing is scanned. The sweep is
+    // READ-ONLY — it corrects nothing; a real drift is a bug to investigate. Only an explicit "true" enables it.
+    BILLING_RECON_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // One-time credit-ledger historical backfill sweep (M11, ADR-0029). HARD GATE, default FALSE. Enable it to
+    // reconstruct the ledger for pre-ledger tenants (idempotent + self-terminating via the opening_balance
+    // marker); once billing-recon reports 0 drift it can go back off. While off, the consumer is not registered.
+    BILLING_LEDGER_BACKFILL_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
   })
   .superRefine((val, ctx) => {
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.
