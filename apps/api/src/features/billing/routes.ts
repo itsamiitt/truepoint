@@ -208,6 +208,34 @@ creditsRoutes.post("/subscribe", requireRole("owner", "admin"), async (c) => {
   }
 });
 
+// Stripe billing portal (Phase 3, M11 / ADR-0041) — the self-serve manage/cancel/payment-method surface. DARK
+// behind a secret key; requires an existing Stripe customer (the tenant has checked out at least once), else a
+// clean 404. Workspace-admin gated. Returns the hosted portal URL for the client to redirect to.
+creditsRoutes.post("/billing-portal", requireRole("owner", "admin"), async (c) => {
+  if (!env.STRIPE_SECRET_KEY) return c.json({ available: false }, 501);
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace to manage billing.");
+  const customerId = await stripeCustomerRepository.getByTenant({
+    tenantId: c.get("tenantId"),
+    workspaceId,
+  });
+  if (!customerId)
+    throw new NotFoundError("No billing account yet — make a purchase or subscribe first.");
+  try {
+    const appOrigin = appOrigins()[0] ?? "";
+    const session = await getStripePort().createBillingPortalSession({
+      customerId,
+      returnUrl: `${appOrigin}/settings/billing?tab=subscription`,
+    });
+    return c.json({ available: true, portalUrl: session.url });
+  } catch (err) {
+    if (err instanceof StripeError)
+      return c.json({ available: false }, err.reason === "not_configured" ? 501 : 502);
+    throw err;
+  }
+});
+
 // The tenant's current subscription for the billing hub (M11 subs, ADR-0041) — the read behind the Subscription
 // tab. Tenant-scoped (RLS-isolated getForTenant); null = month-to-month (no active subscription). The plan
 // display NAME is resolved against the owner-only plan-template catalog (non-PII). Read-only mirror of Stripe.

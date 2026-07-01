@@ -1,13 +1,14 @@
 // SubscriptionTab.tsx — the billing hub's Subscription tab (M11 subs, ADR-0041): the tenant's current
 // subscription (plan, status, renew/end date), or the month-to-month default when there's none. Read-only
 // mirror of Stripe state; owns its own data so it's independent of the Plan/Credits load. Replaces the former
-// placeholder. Cancel/manage controls arrive with the Stripe billing portal (Phase 3).
+// placeholder. A "Manage billing" button opens the Stripe billing portal (Phase 3) for self-serve
+// payment-method / cancel / invoices.
 "use client";
 
 import type { SubscriptionView } from "@leadwolf/types";
-import { Card, StateSwitch, StatusBadge, type StatusTone } from "@leadwolf/ui";
+import { Card, StateSwitch, StatusBadge, type StatusTone, TpButton, useToast } from "@leadwolf/ui";
 import { useCallback, useEffect, useState } from "react";
-import { fetchSubscription } from "../../api";
+import { fetchSubscription, openBillingPortal } from "../../api";
 import styles from "../../billing.module.css";
 
 function statusTone(s: string): StatusTone {
@@ -27,6 +28,8 @@ export function SubscriptionTab() {
   const [sub, setSub] = useState<SubscriptionView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -43,6 +46,25 @@ export function SubscriptionTab() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const manage = useCallback(async () => {
+    setBusy(true);
+    try {
+      const url = await openBillingPortal();
+      if (url) window.location.assign(url);
+      else toast.error("Billing management isn't available yet.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not open the billing portal");
+    } finally {
+      setBusy(false);
+    }
+  }, [toast]);
+
+  const manageButton = (
+    <TpButton variant="secondary" size="sm" loading={busy} onClick={() => void manage()}>
+      Manage billing
+    </TpButton>
+  );
 
   return (
     <StateSwitch loading={loading} error={error} onRetry={reload}>
@@ -75,6 +97,7 @@ export function SubscriptionTab() {
                 ? "We couldn't process your last payment. Update your payment method to keep your plan active."
                 : "Your monthly credit allotment refreshes each period; unused allotment doesn't carry over. Purchased credits never expire."}
           </p>
+          <div style={{ marginTop: 16 }}>{manageButton}</div>
         </Card>
       ) : (
         <Card style={{ padding: 24 }}>
@@ -85,6 +108,7 @@ export function SubscriptionTab() {
             You're on month-to-month — no auto-renewal, no lock-in, and your credits never expire.
             Choose a plan on the Plan tab to subscribe for a recurring monthly credit allotment.
           </p>
+          <div style={{ marginTop: 16 }}>{manageButton}</div>
         </Card>
       )}
     </StateSwitch>
