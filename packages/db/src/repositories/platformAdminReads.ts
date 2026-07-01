@@ -716,6 +716,48 @@ export const platformAdminRepository = {
   },
 
   /**
+   * The LATEST data-quality snapshot PER WORKSPACE across all tenants (database-management-research 10, gap G18
+   * follow-up — the fleet view should show each workspace's CURRENT quality, ONE row per workspace, not a mixed
+   * recent series). DISTINCT ON (workspace_id) keeps the newest snapshot per workspace (reusing the pattern in
+   * platformDataQualityReads.rollup); the outer LIMIT bounds it by workspace cardinality. Same non-PII shape as
+   * recentDataQualitySnapshots (counts + statuses joined to the tenant name; never a contact row). Owner read.
+   */
+  async latestDataQualityPerWorkspace(
+    tx: Tx,
+    limit = PLATFORM_READ_LIMIT,
+  ): Promise<PlatformDataQualitySnapshotRow[]> {
+    const capped = Math.min(limit, PLATFORM_READ_LIMIT);
+    const rows = (await tx.execute(sql`
+      WITH latest AS (
+        SELECT DISTINCT ON (workspace_id) id, tenant_id, workspace_id, metrics, created_at
+        FROM data_quality_snapshots
+        ORDER BY workspace_id, created_at DESC
+      )
+      SELECT l.id::text AS snapshot_id, l.tenant_id::text AS tenant_id, t.name AS tenant_name,
+             l.workspace_id::text AS workspace_id, l.metrics AS metrics, l.created_at AS created_at
+      FROM latest l
+      INNER JOIN tenants t ON t.id = l.tenant_id
+      ORDER BY l.created_at DESC
+      LIMIT ${capped}
+    `)) as unknown as Array<{
+      snapshot_id: string;
+      tenant_id: string;
+      tenant_name: string;
+      workspace_id: string;
+      metrics: unknown;
+      created_at: string;
+    }>;
+    return rows.map((r) => ({
+      snapshotId: r.snapshot_id,
+      tenantId: r.tenant_id,
+      tenantName: r.tenant_name,
+      workspaceId: r.workspace_id,
+      metrics: r.metrics as WorkspaceDataQuality,
+      createdAt: new Date(r.created_at),
+    }));
+  },
+
+  /**
    * Pending maker-checker approval requests ACROSS all tenants (database-management-research 09) — the staff
    * review queue. Newest-first + PLATFORM_READ_LIMIT-bounded. PLATFORM staff data; runs inside the caller's
    * audited withPlatformTx. No tenant PII — `params` are operator-supplied op parameters.
