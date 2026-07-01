@@ -560,6 +560,29 @@ export const contactRepository = {
   },
 
   /**
+   * The contact's current SCALAR overlay values (the CONTACT_PROVENANCE_FIELDS subset), for cross-source conflict
+   * detection at import-merge time (data-management #8). RLS-scoped via the caller's tx like getFieldProvenance;
+   * a foreign/absent id → {}. Non-PII scalar profile fields ONLY (never email/phone). Used on the SYNC import
+   * overwrite path (small files) — the dark high-volume bulk path does not compute conflicts per row.
+   */
+  async getScalarValues(tx: Tx, contactId: string): Promise<Record<string, unknown>> {
+    const rows = await tx
+      .select({
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        jobTitle: contacts.jobTitle,
+        seniorityLevel: contacts.seniorityLevel,
+        department: contacts.department,
+        locationCountry: contacts.locationCountry,
+        locationCity: contacts.locationCity,
+      })
+      .from(contacts)
+      .where(eq(contacts.id, contactId))
+      .limit(1);
+    return (rows[0] as Record<string, unknown> | undefined) ?? {};
+  },
+
+  /**
    * Batched mirror of getFieldProvenance: one IN-list SELECT for a whole chunk's matched contacts, RLS-scoped via
    * the caller's tx (isolation rides the GUC — no explicit workspace predicate, like getFieldProvenance). Returns
    * a map of contactId → provenance for the rows that exist+are visible; a null field_provenance maps to {} (the
@@ -681,6 +704,29 @@ export const contactRepository = {
           ) >= 2
       `)) as unknown as Array<Record<string, number>>;
       return r?.multi_source ?? 0;
+    });
+  },
+
+  /**
+   * TRUE cross-source conflict count (data-management #8): LIVE contacts whose `field_provenance` carries at least
+   * one field flagged `cf:true` — a field overwritten by a DIFFERENT source with a DIFFERENT normalized value
+   * (set at import-merge time by markConflicts). Unlike multiSourceContactCount (mere corroboration breadth), this
+   * is real DISAGREEMENT. Same periodic-only posture: the per-row jsonb scan runs ONLY in the daily snapshot, never
+   * the live read. Workspace-scoped via RLS (own withTenantTx), LIVE contacts only (deleted_at IS NULL).
+   */
+  async conflictContactCount(scope: TenantScope): Promise<number> {
+    return withTenantTx(scope, async (tx) => {
+      const [r] = (await tx.execute(sql`
+        SELECT count(*)::int AS conflicts
+        FROM contacts
+        WHERE deleted_at IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM jsonb_each(contacts.field_provenance) AS e(k, v)
+            WHERE (v ->> 'cf') = 'true'
+          )
+      `)) as unknown as Array<Record<string, number>>;
+      return r?.conflicts ?? 0;
     });
   },
 

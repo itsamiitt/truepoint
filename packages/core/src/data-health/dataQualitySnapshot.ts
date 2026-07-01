@@ -11,9 +11,11 @@ export async function captureDataQualitySnapshot(scope: {
   workspaceId: string;
 }): Promise<void> {
   const metrics = await contactRepository.dataQualitySummary(scope);
-  // Multi-source COVERAGE (data-management #8) — the heavy per-contact field_provenance jsonb scan runs HERE, in
-  // the daily sweep ONLY (never on the live per-request read), then rides the persisted snapshot + trend series.
+  // Multi-source COVERAGE + TRUE conflict count (data-management #8) — the heavy per-contact field_provenance jsonb
+  // scans run HERE, in the daily sweep ONLY (never on the live per-request read), then ride the persisted snapshot
+  // + trend series. Coverage = fields from ≥2 sources; conflicts = a field where sources actually DISAGREED.
   metrics.multiSourceContacts = await contactRepository.multiSourceContactCount(scope);
+  metrics.conflictContacts = await contactRepository.conflictContactCount(scope);
   await withTenantTx(scope, (tx) =>
     dataQualitySnapshotRepository.record(tx, {
       tenantId: scope.tenantId,

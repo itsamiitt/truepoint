@@ -33,6 +33,7 @@ import type {
 import { CONTACT_PROVENANCE_FIELDS, DEFAULT_CONFLICT_POLICY } from "@leadwolf/types";
 import { writeAudit } from "../compliance/writeAudit.ts";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
+import { markConflicts } from "../prospect/conflictDetect.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import { assertListInWorkspace } from "../prospect/lists.ts";
 import { type ValidationRuleSpec, runValidationRules } from "../validation/index.ts";
@@ -316,7 +317,23 @@ async function importOneRow(
     for (const f of scalarFields) {
       if (!writableFields.has(f)) delete (values as unknown as Record<string, unknown>)[f];
     }
-    values.fieldProvenance = provenance;
+    // data-management #8 — flag TRUE cross-source conflicts on the scalars we overwrite. ADDITIVE + fully GUARDED:
+    // any failure falls back to the plain provenance, so conflict detection can NEVER fail or alter the import.
+    let mergedProvenance = provenance;
+    try {
+      const existingValues = await contactRepository.getScalarValues(tx, match.id);
+      mergedProvenance = markConflicts({
+        provenance,
+        existingProvenance: existingProv,
+        existingValues,
+        incomingValues: prepared.values as unknown as Record<string, unknown>,
+        writtenFields: writableFields,
+        incomingSrc: `import:${input.sourceName}`,
+      });
+    } catch (err) {
+      console.error("[import] conflict detection failed (non-fatal)", err);
+    }
+    values.fieldProvenance = mergedProvenance;
     await contactRepository.update(tx, match.id, values);
     contactId = match.id;
     outcome = "matched";

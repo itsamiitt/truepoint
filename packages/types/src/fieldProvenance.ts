@@ -33,6 +33,9 @@ export const fieldProvenanceDescriptorSchema = z.object({
   by: z.string().optional(),
   /** pin timestamp (ISO string) — present iff pin=true. */
   at: z.string().optional(),
+  /** conflict flag (data-management #8): true when this field was overwritten by a DIFFERENT source with a
+   *  DIFFERENT (normalized) value — a true cross-source disagreement. STICKY (never cleared). Non-PII. */
+  cf: z.boolean().optional(),
 });
 export type FieldProvenanceDescriptor = z.infer<typeof fieldProvenanceDescriptorSchema>;
 

@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1308,
-  "fileSetHash": "sha256:edf9911c0e4e9f87c1d7f5b932f8fa53d7a8971631b4ab37fb268c69666e07ff",
+  "fileCount": 1310,
+  "fileSetHash": "sha256:7789dae442339609ac316575048d6b69e48c3c2c62495d8e8a6cb986e1872ccb",
   "features": {
     "account-search": {
       "web": [],
@@ -1028,6 +1028,8 @@
         "packages/core/src/prospect/accountSearch.ts",
         "packages/core/src/prospect/backfillMaster.ts",
         "packages/core/src/prospect/bulkActions.ts",
+        "packages/core/src/prospect/conflictDetect.test.ts",
+        "packages/core/src/prospect/conflictDetect.ts",
         "packages/core/src/prospect/dedup.test.ts",
         "packages/core/src/prospect/dedup.ts",
         "packages/core/src/prospect/dedupReview.ts",

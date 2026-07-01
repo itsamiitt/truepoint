@@ -307,9 +307,11 @@ export type ContactDataHealth = z.infer<typeof contactDataHealthSchema>;
  *  `multiSourceContacts` is a COVERAGE proxy (data-management #8): contacts whose field_provenance attributes
  *  fields to ≥2 distinct data sources (user_edit excluded — a human correction is not a source). It is OPTIONAL
  *  and computed ONLY in the daily snapshot (the per-contact jsonb scan is too heavy for the live per-request read),
- *  so the live GET /home/data-quality omits it and the persisted snapshots / trend carry it. NOTE: this is
- *  multi-source COVERAGE, not a true conflict rate — real "sources DISAGREE" needs disagreement recorded at
- *  import-merge time (field_provenance keeps only the winner today), which is a separate forward-only follow-up. */
+ *  so the live GET /home/data-quality omits it and the persisted snapshots / trend carry it. `conflictContacts`
+ *  is the TRUE "sources DISAGREE" count (distinct from coverage): the import merge now stamps a `cf` flag on
+ *  field_provenance when a field is overwritten by a different source with a different normalized value
+ *  (markConflicts), and this counts contacts carrying any such flag. Forward-only — only imports landing after it
+ *  shipped record the disagreement. Also periodic-only + optional. */
 export const workspaceDataQualitySchema = z.object({
   total: z.number().int().min(0),
   withName: z.number().int().min(0),
@@ -335,6 +337,10 @@ export const workspaceDataQualitySchema = z.object({
   neverVerified: z.number().int().min(0),
   // Multi-source coverage (data-management #8) — OPTIONAL, periodic-only (see the doc comment above).
   multiSourceContacts: z.number().int().min(0).optional(),
+  // TRUE cross-source conflict count (data-management #8) — OPTIONAL, periodic-only. Contacts with ≥1 field where
+  // two sources actually DISAGREED on the value (flagged at import-merge by markConflicts). Distinct from coverage
+  // (mere breadth); forward-only — a contact only counts once a conflicting import lands after this shipped.
+  conflictContacts: z.number().int().min(0).optional(),
 });
 export type WorkspaceDataQuality = z.infer<typeof workspaceDataQualitySchema>;
 

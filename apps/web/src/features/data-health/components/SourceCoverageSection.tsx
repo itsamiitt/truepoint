@@ -32,6 +32,7 @@ export function SourceCoverageSection({
 }) {
   const latest = trend?.[0]?.metrics;
   const multi = latest?.multiSourceContacts;
+  const conflicts = latest?.conflictContacts;
   const total = latest?.total ?? 0;
   // Empty when there is no snapshot yet OR the latest snapshot predates this metric (older rows omit it).
   const noData = multi === undefined || total === 0;
@@ -61,6 +62,14 @@ export function SourceCoverageSection({
           value={pct(multi ?? 0, total)}
           sublabel={`${(multi ?? 0).toLocaleString()} of ${total.toLocaleString()} contacts built from 2+ sources · updated daily`}
         />
+        {conflicts !== undefined ? (
+          <StatTile
+            style={KPI_CARD}
+            label={<span className={styles.kpiLabel}>Source conflicts</span>}
+            value={pct(conflicts, total)}
+            sublabel={`${conflicts.toLocaleString()} of ${total.toLocaleString()} contacts where sources disagreed · updated daily`}
+          />
+        ) : null}
       </div>
     </StateSwitch>
   );
