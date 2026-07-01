@@ -99,7 +99,9 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <StatusBadge tone={statusTone(detail.tenant.status)}>
-                  {detail.tenant.status}
+                  {detail.tenant.status === "suspended" && detail.tenant.suspensionReason
+                    ? `suspended (${detail.tenant.suspensionReason === "dunning" ? "non-payment" : detail.tenant.suspensionReason})`
+                    : detail.tenant.status}
                 </StatusBadge>
                 <TenantActions tenant={detail.tenant} onChanged={reload} />
               </div>

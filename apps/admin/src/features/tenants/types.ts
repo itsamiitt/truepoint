@@ -8,6 +8,8 @@ export interface TenantRow {
   slug: string;
   plan: string;
   status: string;
+  /** Why suspended (M11 subs): 'dunning' (auto, unpaid) | 'staff' (human) | null. */
+  suspensionReason: string | null;
   seatLimit: number;
   workspaceLimit: number | null;
   revealCreditBalance: number;

@@ -54,6 +54,9 @@ export interface PlatformTenantRow {
   slug: string;
   plan: string;
   status: string;
+  // Why suspended (M11 subs, ADR-0041): 'dunning' (auto, unpaid) vs 'staff' (human) vs null. Lets the console
+  // show WHY, and signals that a 'dunning' suspension self-heals on payment (never manually reactivate it).
+  suspensionReason: string | null;
   seatLimit: number;
   workspaceLimit: number | null;
   revealCreditBalance: number;
@@ -320,6 +323,7 @@ const tenantCols = {
   slug: tenants.slug,
   plan: tenants.plan,
   status: tenants.status,
+  suspensionReason: tenants.suspensionReason,
   seatLimit: tenants.seatLimit,
   workspaceLimit: tenants.workspaceLimit,
   revealCreditBalance: tenants.revealCreditBalance,

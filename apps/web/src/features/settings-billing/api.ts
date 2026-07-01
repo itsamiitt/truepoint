@@ -115,6 +115,16 @@ export async function fetchSubscription(): Promise<SubscriptionView | null> {
   return subscription;
 }
 
+/** POST /credits/billing-portal — start a Stripe billing-portal session (self-serve manage/cancel/payment).
+ *  Returns the URL to redirect to, or null when unavailable (Stripe not wired, or no billing account yet). */
+export async function openBillingPortal(): Promise<string | null> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/billing-portal`, { method: "POST" });
+  if (notBuilt(res.status) || res.status === 404) return null;
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not open the billing portal"));
+  const data = (await res.json()) as { portalUrl?: string };
+  return data.portalUrl ?? null;
+}
+
 export interface CreditLedgerPage {
   entries: CreditLedgerEntry[];
   nextCursor: string | null;

@@ -40,6 +40,7 @@ import { scoringRoutes } from "./features/scoring/index.ts";
 import { searchRoutes } from "./features/search/index.ts";
 import { settingsRoutes } from "./features/settings/index.ts";
 import { tagsRoutes } from "./features/tags/index.ts";
+import { teamsRoutes } from "./features/teams/index.ts";
 import { webhooksRoutes } from "./features/webhooks/index.ts";
 import {
   workspaceMembersRoutes,
@@ -84,6 +85,7 @@ app.route("/api/v1/admin", adminRoutes);
 app.route("/api/v1/announcements", announcementsRoutes); // 13a Area 10 — customer banner read
 app.route("/api/v1/notifications", notificationsRoutes); // G-NTF-1 — per-user in-app notification feed
 app.route("/api/v1/workspaces", workspacesRoutes);
+app.route("/api/v1/teams", teamsRoutes); // Part D — workspace grouping (org-chart, not an access boundary)
 // Workspace-admin session management (G-AUTH-2): /security/sessions + revoke/force-reauth. The /security/*
 // paths don't overlap workspacesRoutes' GET / (same shared-prefix pattern as /api/v1/contacts).
 app.route("/api/v1/workspaces", workspaceSecurityRoutes);

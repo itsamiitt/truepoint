@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1296 source files · 73 code-bearing domains · 21 shared areas · 45 domain-vocabulary warnings · 57
+> **1308 source files · 74 code-bearing domains · 21 shared areas · 45 domain-vocabulary warnings · 57
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
