@@ -364,6 +364,29 @@ export const enrichmentJobRepository = {
     });
   },
 
+  /**
+   * Atomically add `deltaMicros` to the run's `credit_spent_micros` and RETURN the new total. This is the primitive
+   * the bulk-enrich worker's PER-RUN CAP is enforced on: after each paid contact the worker adds the cost here and
+   * reads back the LIVE run total (including sibling chunks' concurrent spend), so it can stop the run the moment
+   * the confirmed ceiling would be exceeded. `SET x = x + delta` is a single atomic UPDATE — never a
+   * read-modify-write — so concurrent chunk workers can't clobber the tally. Non-positive deltas are a pure read.
+   */
+  async addRunSpendReturningTotal(
+    scope: TenantScope,
+    jobId: string,
+    deltaMicros: number,
+  ): Promise<number> {
+    const delta = Math.max(0, Math.trunc(deltaMicros));
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .update(enrichmentJobs)
+        .set({ creditSpentMicros: sql`${enrichmentJobs.creditSpentMicros} + ${delta}` })
+        .where(eq(enrichmentJobs.id, jobId))
+        .returning({ total: enrichmentJobs.creditSpentMicros });
+      return rows[0]?.total ?? 0;
+    });
+  },
+
   // ── Chunks ─────────────────────────────────────────────────────────────────────────────────────────
 
   /** Create a chunk (the runner's claimable work band). Returns its id. Workspace-scoped via the parent job. */
@@ -391,6 +414,29 @@ export const enrichmentJobRepository = {
         .values(values)
         .returning({ id: enrichmentJobChunks.id });
       return rows.map((r) => r.id);
+    });
+  },
+
+  /** Read ONE chunk by id (the band a worker was handed). Null when not visible (RLS) or absent. */
+  async getChunk(scope: TenantScope, chunkId: string): Promise<ChunkRecord | null> {
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select({
+          id: enrichmentJobChunks.id,
+          jobId: enrichmentJobChunks.jobId,
+          chunkIndex: enrichmentJobChunks.chunkIndex,
+          rowStart: enrichmentJobChunks.rowStart,
+          rowEnd: enrichmentJobChunks.rowEnd,
+          status: enrichmentJobChunks.status,
+          attempts: enrichmentJobChunks.attempts,
+          processedRows: enrichmentJobChunks.processedRows,
+          createdAt: enrichmentJobChunks.createdAt,
+          completedAt: enrichmentJobChunks.completedAt,
+        })
+        .from(enrichmentJobChunks)
+        .where(eq(enrichmentJobChunks.id, chunkId))
+        .limit(1);
+      return rows[0] ?? null;
     });
   },
 

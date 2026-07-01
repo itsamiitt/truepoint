@@ -4,6 +4,7 @@
 
 import { env } from "@leadwolf/config";
 import { diskFileStore, registerEmailProviders } from "@leadwolf/core";
+import { defaultProviders } from "@leadwolf/integrations";
 import type {
   BulkEnrichmentDeadLetter,
   BulkImportDeadLetter,
@@ -582,6 +583,8 @@ export function startWorkers(): Worker[] {
           enqueueChunk: async (jobId, scope, chunkId) => {
             await bulkEnrichmentQueue.add("chunk", { kind: "chunk", jobId, scope, chunkId });
           },
+          // The chunk phase feeds these vendor adapters to enrichContact — the SAME set processEnrichment uses.
+          providers: defaultProviders(),
         }),
         { connection },
       ),

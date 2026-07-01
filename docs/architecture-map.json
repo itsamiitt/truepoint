@@ -88,8 +88,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1222,
-  "fileSetHash": "sha256:971c8ba56a0c6c16c1383831afd6bc8c9e142efe4612fb1e7b775b3f226b9c48",
+  "fileCount": 1223,
+  "fileSetHash": "sha256:9d1cce083fd447fdbbe10c1a8346470c3d913de389e1fe86586e1751b895fbb2",
   "features": {
     "account-search": {
       "web": [],
@@ -497,6 +497,7 @@
         "apps/api/src/features/enrichment/routes.ts"
       ],
       "core": [
+        "packages/core/src/enrichment/bulk/bulkProcessEnrichChunk.ts",
         "packages/core/src/enrichment/bulk/estimate.test.ts",
         "packages/core/src/enrichment/bulk/estimate.ts",
         "packages/core/src/enrichment/bulk/masterGraphMatcher.ts",

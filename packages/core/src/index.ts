@@ -180,6 +180,13 @@ export {
   type RunBulkEnrichInput,
   type RunBulkEnrichResult,
 } from "./enrichment/bulk/runBulkEnrich.ts";
+// The bulk re-enrich CHUNK step (I3 slice 3b): re-enrich a band of existing contacts via enrichContact, braked by
+// the per-run cap (the confirmed ceiling) + the inherited daily breaker. The only bulk slice that spends.
+export {
+  bulkProcessEnrichChunk,
+  type BulkProcessEnrichChunkInput,
+  type BulkProcessEnrichChunkResult,
+} from "./enrichment/bulk/bulkProcessEnrichChunk.ts";
 
 // Customer-visible enrichment job-status surface (G-ENR-4, 06 §4.1): READ-only list/detail query helpers over
 // the workspace-scoped enrichment-jobs repository → the EnrichmentJobSummary DTO the status UI polls.

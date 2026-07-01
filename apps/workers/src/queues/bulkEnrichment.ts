@@ -2,12 +2,17 @@
 // re-enrich money path (prospect-database-platform I3 / audit A3/P08). The sibling of enrichment.ts, following
 // bulkImports.ts's drive→chunk shape (one implementation shape, two pipelines — 16 §3.2). DARK until
 // BULK_ENRICHMENT_ENABLED is on: the apps/api producer enqueues nothing while the flag is off, so this consumer
-// never runs in prod. SLICE 3a wires the real `drive` (runBulkEnrich — chunk a CONFIRMED job's contact selection
-// into bands, FREE/zero provider calls); the `chunk` body is still a NO-OP STUB (validates + returns, ZERO spend).
-// The real match-first/reuse-first spend + the maxProviderCostMicros per-run cap + the daily budget breaker land
-// in slice 3b, which will only ever process CONFIRMED `running` jobs.
+// never runs in prod. The real `drive` (runBulkEnrich — chunk a CONFIRMED job's contact selection into bands,
+// FREE/zero provider calls, slice 3a) and the real `chunk` (bulkProcessEnrichChunk — re-enrich the band via the
+// shipped enrichContact, braked by the per-run cap = the confirmed ceiling AND the inherited daily breaker, slice
+// 3b) are both wired here. Nothing spends until BULK_ENRICHMENT_ENABLED is on AND a job has passed the confirm gate.
 
-import { type EnqueueEnrichChunk, runBulkEnrich } from "@leadwolf/core";
+import {
+  type EnqueueEnrichChunk,
+  type EnrichmentProvider,
+  bulkProcessEnrichChunk,
+  runBulkEnrich,
+} from "@leadwolf/core";
 import {
   type BulkEnrichmentDeadLetter,
   type BulkEnrichmentJobData,
@@ -20,10 +25,12 @@ import type { Job, Queue } from "bullmq";
 export { BULK_ENRICHMENT_QUEUE, BULK_ENRICHMENT_DLQ } from "@leadwolf/types";
 export type { BulkEnrichmentJobData } from "@leadwolf/types";
 
-/** The dependencies the composition root injects so core never imports BullMQ/Redis directly (mirror bulkImports). */
+/** The dependencies the composition root injects so core never imports BullMQ/Redis or a vendor SDK directly. */
 export interface BulkEnrichmentProcessDeps {
   /** Fan out one `chunk` job per band onto the bulk-enrichment queue (the drive phase calls this per band). */
   enqueueChunk: EnqueueEnrichChunk;
+  /** The vendor adapters (defaultProviders) the chunk phase feeds to enrichContact — mirrors processEnrichment. */
+  providers: EnrichmentProvider[];
 }
 
 /** A non-PII summary of what a single bulk-enrich job step did (per-queue observability; never the rows). */
@@ -42,17 +49,22 @@ export type BulkEnrichmentProcessResult =
       kind: "chunk";
       jobId: string;
       processed: boolean;
-      /** SLICE 3a: always true — the chunk body is still a no-op stub. Removed when slice 3b lands. */
-      stub: boolean;
+      processedRows: number;
+      matched: number;
+      enriched: number;
+      charged: number;
+      costMicros: number;
+      /** true when a brake (per-run cap OR the daily breaker) stopped the run before the band was fully processed. */
+      braked: boolean;
     };
 
 /**
  * Build the bulk-enrichment processor with its injected deps (mirrors makeProcessBulkImport). A `drive` job chunks
  * a CONFIRMED (`running`) job into row bands + fans out `chunk` jobs — FREE, zero provider calls (runBulkEnrich
- * guards on `running`, so an unconfirmed job is never chunked). A `chunk` job will re-enrich its band of contact
- * ids through the shipped enrichContact waterfall under a per-run cap + the daily breaker — that SPENDING body is
- * SLICE 3b; here it is still a NO-OP STUB (validates + returns, ZERO spend) so the queue is wired end-to-end while
- * the feature is dark.
+ * guards on `running`, so an unconfirmed job is never chunked). A `chunk` job re-enriches its band of contact ids
+ * through the shipped enrichContact waterfall (bulkProcessEnrichChunk), braked by the per-run cap (the confirmed
+ * ceiling) AND the inherited daily breaker — this is the only bulk step that spends, and it spends nothing until
+ * BULK_ENRICHMENT_ENABLED is on and a job has been confirmed.
  */
 export function makeProcessBulkEnrichment(deps: BulkEnrichmentProcessDeps) {
   return async function processBulkEnrichment(
@@ -79,9 +91,23 @@ export function makeProcessBulkEnrichment(deps: BulkEnrichmentProcessDeps) {
       };
     }
 
-    // SLICE 3b fills this in: read the band of contact ids (options.contactIds[rowStart:rowEnd]) + re-enrich each
-    // via enrichContact under the per-run cap + daily breaker. Until then it is inert — no provider call, no spend.
-    return { kind: "chunk", jobId: data.jobId, processed: false, stub: true };
+    const r = await bulkProcessEnrichChunk({
+      scope: data.scope,
+      jobId: data.jobId,
+      chunkId: data.chunkId,
+      providers: deps.providers,
+    });
+    return {
+      kind: "chunk",
+      jobId: data.jobId,
+      processed: r.processed,
+      processedRows: r.processedRows,
+      matched: r.matched,
+      enriched: r.enriched,
+      charged: r.charged,
+      costMicros: r.costMicros,
+      braked: r.braked,
+    };
   };
 }
 
