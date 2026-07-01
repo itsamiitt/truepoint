@@ -5,6 +5,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import type { DuplicatePairView } from "@leadwolf/types";
 import type {
   DataQualityTrendPoint,
   RetentionRun,
@@ -72,4 +73,20 @@ export async function triggerReverification(): Promise<ReverifyTriggerResult> {
   }
   const message = await problemMessage(res, "Could not start re-verification");
   return { ok: false, reason: "error", message };
+}
+
+/** Load the workspace's auto-flagged duplicate contact pairs for review (GET /contacts/duplicates). */
+export async function fetchDuplicatePairs(): Promise<DuplicatePairView[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/duplicates`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load your duplicate contacts"));
+  const body = (await res.json()) as { pairs: DuplicatePairView[] };
+  return body.pairs;
+}
+
+/** Override a wrong auto-dedup call ("this is not a duplicate") — POST /contacts/duplicates/:id/unmark. */
+export async function unmarkDuplicate(contactId: string): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/duplicates/${contactId}/unmark`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not update this contact"));
 }

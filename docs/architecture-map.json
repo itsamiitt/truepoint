@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1274,
-  "fileSetHash": "sha256:7052ec2d5d988427a92e56983705dc0500d24e4a367909fe8a264693b532efe4",
+  "fileCount": 1276,
+  "fileSetHash": "sha256:f18a890a0d5a864043423b2a3a8f8696bdd95bfe81a00e757ca7e083d8f40bb5",
   "features": {
     "account-search": {
       "web": [],
@@ -367,6 +367,7 @@
       "web": [
         "apps/web/src/features/data-health/api.ts",
         "apps/web/src/features/data-health/components/DataHealthPage.tsx",
+        "apps/web/src/features/data-health/components/DuplicatesSection.tsx",
         "apps/web/src/features/data-health/components/FreshnessTrend.tsx",
         "apps/web/src/features/data-health/components/MetricsSection.tsx",
         "apps/web/src/features/data-health/components/PerFieldFill.tsx",
@@ -377,6 +378,7 @@
         "apps/web/src/features/data-health/components/VerificationBreakdown.tsx",
         "apps/web/src/features/data-health/hooks/useDataHealthMetrics.ts",
         "apps/web/src/features/data-health/hooks/useDataHealthTrend.ts",
+        "apps/web/src/features/data-health/hooks/useDuplicatePairs.ts",
         "apps/web/src/features/data-health/hooks/useRetentionRuns.ts",
         "apps/web/src/features/data-health/hooks/useReverificationRuns.ts",
         "apps/web/src/features/data-health/hooks/useSessionRole.ts",

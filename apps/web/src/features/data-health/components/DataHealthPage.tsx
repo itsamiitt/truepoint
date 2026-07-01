@@ -12,9 +12,11 @@ import { useState } from "react";
 import styles from "../data-health.module.css";
 import { useDataHealthMetrics } from "../hooks/useDataHealthMetrics";
 import { useDataHealthTrend } from "../hooks/useDataHealthTrend";
+import { useDuplicatePairs } from "../hooks/useDuplicatePairs";
 import { useRetentionRuns } from "../hooks/useRetentionRuns";
 import { useReverificationRuns } from "../hooks/useReverificationRuns";
 import { useSessionRole } from "../hooks/useSessionRole";
+import { DuplicatesSection } from "./DuplicatesSection";
 import { FreshnessTrend } from "./FreshnessTrend";
 import { MetricsSection } from "./MetricsSection";
 import { PerFieldFill } from "./PerFieldFill";
@@ -24,12 +26,13 @@ import { ReverifyNowButton } from "./ReverifyNowButton";
 import { SectionCard } from "./SectionCard";
 import { VerificationBreakdown } from "./VerificationBreakdown";
 
-type TabId = "overview" | "activity" | "retention";
+type TabId = "overview" | "activity" | "retention" | "duplicates";
 
 const TABS: { value: TabId; label: string }[] = [
   { value: "overview", label: "Overview" },
   { value: "activity", label: "Re-verification activity" },
   { value: "retention", label: "Retention" },
+  { value: "duplicates", label: "Duplicates" },
 ];
 
 export function DataHealthPage() {
@@ -37,16 +40,19 @@ export function DataHealthPage() {
   const trend = useDataHealthTrend();
   const runs = useReverificationRuns();
   const retention = useRetentionRuns();
+  const duplicates = useDuplicatePairs();
   const role = useSessionRole();
   const canReverify = role === "owner" || role === "admin";
   const [tab, setTab] = useState<TabId>("overview");
 
-  const refreshing = metrics.loading || trend.loading || runs.loading || retention.loading;
+  const refreshing =
+    metrics.loading || trend.loading || runs.loading || retention.loading || duplicates.loading;
   const reloadAll = () => {
     void metrics.reload();
     void trend.reload();
     void runs.reload();
     void retention.reload();
+    void duplicates.reload();
   };
 
   return (
@@ -138,6 +144,21 @@ export function DataHealthPage() {
               loading={retention.loading}
               error={retention.error}
               onRetry={retention.reload}
+            />
+          </SectionCard>
+        </div>
+      ) : null}
+
+      {tab === "duplicates" ? (
+        <div className={styles.sections}>
+          <SectionCard title="Duplicate contacts" hint="Auto-detected — review & override">
+            <DuplicatesSection
+              pairs={duplicates.pairs}
+              loading={duplicates.loading}
+              error={duplicates.error}
+              unmarking={duplicates.unmarking}
+              onRetry={duplicates.reload}
+              onUnmark={duplicates.unmark}
             />
           </SectionCard>
         </div>
