@@ -191,6 +191,16 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Bulk CSV enrichment v2 (prospect-database-platform I3 / audit A3/P08): the confirm-before-spend money path —
+    // the POST /enrichment/jobs/:jobId/confirm gate, the apps/api producer onto BULK_ENRICHMENT_QUEUE, and the
+    // apps/workers consumer. DEFAULT-OFF: while off the confirm endpoint 403s, the producer enqueues NOTHING, and
+    // the consumer is not registered — so NO bulk run can EVER spend. Turning it on is a SEPARATE, CI-parity-gated
+    // step (the worst-case ceiling + per-run cap + daily budget breaker must all be wired first). Same explicit-
+    // "true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy.
+    BULK_ENRICHMENT_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
   })
   .superRefine((val, ctx) => {
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.

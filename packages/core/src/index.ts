@@ -183,6 +183,13 @@ export {
   type GetEnrichmentJobInput,
 } from "./enrichment/jobStatus.ts";
 
+// The human confirm-before-spend gate (I3 / audit A3/P08): the guarded awaiting_confirmation → running mutation
+// that releases a bulk-enrich run only after a workspace admin accepts the persisted worst-case credit ceiling.
+export {
+  confirmBulkEnrichmentJob,
+  type ConfirmBulkEnrichmentResult,
+} from "./enrichment/confirmJob.ts";
+
 export {
   passThroughVerifier,
   staticVerifier,
