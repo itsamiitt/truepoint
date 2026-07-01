@@ -38,6 +38,11 @@ import {
   type MasterBackfillSweepJobData,
   makeProcessMasterBackfillSweep,
 } from "./queues/masterBackfillSweep.ts";
+import {
+  PROJECTION_SWEEP_QUEUE,
+  type ProjectionSweepJobData,
+  makeProcessProjectionSweep,
+} from "./queues/projectionSweep.ts";
 import { OUTREACH_QUEUE, type OutreachJobData, makeProcessOutreach } from "./queues/outreach.ts";
 import {
   RETENTION_SWEEP_QUEUE,
@@ -108,6 +113,11 @@ export const masterBackfillSweepQueue = new Queue<MasterBackfillSweepJobData>(
   MASTER_BACKFILL_SWEEP_QUEUE,
   { connection },
 );
+// The scheduled survivorship-projection sweep (prospect-database-platform I1 / Phase 05): one repeatable daily job
+// drains projection_outbox + rebuilds each dirty cluster's SHADOW quality/freshness seams from the evidence log.
+export const projectionSweepQueue = new Queue<ProjectionSweepJobData>(PROJECTION_SWEEP_QUEUE, {
+  connection,
+});
 // M12 P4: the leader-locked sequence scheduler (email_sequence_tick). A single repeatable job (stable
 // jobId → deduped) fires every minute; the processor takes the Redis leader lock and claims due enrollments.
 export const sequenceTickQueue = new Queue<SequenceTickJobData>(EMAIL_SEQUENCE_TICK_QUEUE, {
@@ -204,6 +214,16 @@ export async function scheduleMasterBackfillSweep(): Promise<void> {
     "sweep",
     {},
     { repeat: { every: 24 * 60 * 60_000 }, jobId: "master-backfill-sweep" },
+  );
+}
+
+/** Register the daily survivorship-projection sweep (prospect-database-platform I1). Stable jobId → exactly one
+ *  repeatable. Additive: a no-op while INGESTION_EVIDENCE_ENABLED is off (the outbox stays empty). */
+export async function scheduleProjectionSweep(): Promise<void> {
+  await projectionSweepQueue.add(
+    "sweep",
+    {},
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "projection-sweep" },
   );
 }
 
@@ -388,6 +408,17 @@ export function startWorkers(): Worker[] {
       ),
       MASTER_BACKFILL_SWEEP_QUEUE,
     ),
+    // Survivorship-projection SWEEP consumer (prospect-database-platform I1 / Phase 05): leader-locked; drains
+    // projection_outbox + writes each dirty cluster's SHADOW quality/freshness seams. No-op while the evidence
+    // flag is off (empty outbox); never writes the authoritative scalar columns (that flip is CI-parity-gated).
+    instrument(
+      new Worker<ProjectionSweepJobData>(
+        PROJECTION_SWEEP_QUEUE,
+        makeProcessProjectionSweep(connection),
+        { connection },
+      ),
+      PROJECTION_SWEEP_QUEUE,
+    ),
     // M12 P4: the sequence-tick consumer. Leader-locked; claims due enrollments and enqueues each onto the
     // outreach queue (the existing send path). Best-effort registers the single repeatable job at boot.
     instrument(
@@ -529,6 +560,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleMasterBackfillSweep().catch((e) =>
     log.error("failed to schedule the master-backfill sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleProjectionSweep().catch((e) =>
+    log.error("failed to schedule the projection sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );
