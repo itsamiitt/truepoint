@@ -178,6 +178,21 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
         if (balance < cost) throw new InsufficientCreditsError(balance, cost);
         await creditRepository.decrement(tx, input.scope.tenantId, cost);
         balanceAfter = balance - cost;
+        // M11 ledger (ADR-0029): the paired `spend` entry, atomic with the counter decrement + INSIDE the
+        // reveal's withTenantTx (app.current_tenant_id set → the ENABLE-RLS WITH CHECK passes). Idempotent on
+        // (tenant, reveal:<reveal_id>); the reveal claim itself already prevents a double-charge (first-wins).
+        await creditRepository.insertLedger(tx, {
+          tenantId: input.scope.tenantId,
+          workspaceId: input.scope.workspaceId,
+          entryType: "spend",
+          delta: -cost,
+          balanceAfter,
+          idempotencyKey: `reveal:${claimed.id}`,
+          revealId: claimed.id,
+          actorUserId: input.userId,
+          reason: "reveal",
+          metadata: { revealType: input.revealType },
+        });
       } else {
         balanceAfter = await creditRepository.currentBalance(tx, input.scope.tenantId);
       }
