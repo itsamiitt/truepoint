@@ -14,6 +14,7 @@ import { authRoutes } from "./features/auth/index.ts";
 import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
 import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
+import { contactsDedupRoutes } from "./features/contacts-dedup/index.ts";
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
 import {
   emailConnectRoutes,
@@ -99,6 +100,9 @@ app.route("/api/v1/imports", importRoutes);
 // Bulk actions BEFORE the reveal router: the literal `bulk` segment must register before reveal's `/:id/reveal`
 // so a bulk path is never captured as a contact id (same first-match pattern as imports/mapping-templates).
 app.route("/api/v1/contacts/bulk", contactsBulkRoutes); // 24 Phase-3: owner/tags/status/archive/enrich/export
+// Within-workspace dedup review (database-management-research G09) — the literal `duplicates` segment registers
+// BEFORE the reveal router so it is never captured as a contact `:id` (same first-match pattern as /contacts/bulk).
+app.route("/api/v1/contacts/duplicates", contactsDedupRoutes);
 app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal
 app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path overlap either

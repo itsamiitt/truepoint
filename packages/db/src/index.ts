@@ -83,6 +83,7 @@ export {
   type ContactWriteValues,
   type DedupContactRow,
   type DedupKeys,
+  type DuplicatePairRow,
   type EnrichEstimateSignal,
   type HotLeadRow,
   type UnresolvedContactRow,

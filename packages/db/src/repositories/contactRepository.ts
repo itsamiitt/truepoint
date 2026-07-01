@@ -13,8 +13,21 @@ import {
   type WorkspaceDataQuality,
 } from "@leadwolf/types";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
+
+/** A within-workspace duplicate contact + the canonical it was auto-pointed at (dedup review, G09). NAMES ONLY —
+ *  no encrypted email/phone; both sides are same-workspace (RLS-scoped). */
+export interface DuplicatePairRow {
+  duplicateId: string;
+  duplicateFirstName: string | null;
+  duplicateLastName: string | null;
+  duplicateCreatedAt: Date;
+  canonicalId: string;
+  canonicalFirstName: string | null;
+  canonicalLastName: string | null;
+}
 
 /** A top-priority lead for the Home dashboard — FACETS ONLY (no encrypted email/phone). Mirrors HotLead. */
 export interface HotLeadRow {
@@ -805,6 +818,47 @@ export const contactRepository = {
       .where(inArray(contacts.id, duplicateIds))
       .returning({ id: contacts.id });
     return rows.length;
+  },
+
+  /**
+   * List the workspace's DUPLICATE contacts (duplicate_of_contact_id set) paired with the canonical each was
+   * auto-pointed at — the within-workspace dedup REVIEW read (database-management-research G09). RLS scopes BOTH
+   * sides to the caller's workspace (the alias is the same RLS-scoped `contacts` table, so no cross-workspace
+   * leak). NAMES ONLY — never the encrypted email/phone (the review identifies the pair; reveal is separate).
+   * Newest duplicate first, bounded.
+   */
+  async listDuplicatePairs(tx: Tx, limit = 200): Promise<DuplicatePairRow[]> {
+    const canonical = alias(contacts, "dedup_canonical");
+    return tx
+      .select({
+        duplicateId: contacts.id,
+        duplicateFirstName: contacts.firstName,
+        duplicateLastName: contacts.lastName,
+        duplicateCreatedAt: contacts.createdAt,
+        canonicalId: canonical.id,
+        canonicalFirstName: canonical.firstName,
+        canonicalLastName: canonical.lastName,
+      })
+      .from(contacts)
+      .innerJoin(canonical, eq(contacts.duplicateOfContactId, canonical.id))
+      .where(isNotNull(contacts.duplicateOfContactId))
+      .orderBy(desc(contacts.createdAt))
+      .limit(Math.max(1, Math.min(500, Math.trunc(limit))));
+  },
+
+  /**
+   * OVERRIDE one auto-dedup decision: clear a single contact's duplicate pointer so it surfaces as its own record
+   * again (the customer's "this is NOT a duplicate" action). RLS-scoped to the workspace; only clears a row that is
+   * currently flagged. duplicate_of_contact_id is a derived annotation, so updatedAt is intentionally not bumped
+   * (matches clearDuplicateFlags). Returns true iff a flag was cleared.
+   */
+  async unmarkDuplicate(tx: Tx, contactId: string): Promise<boolean> {
+    const rows = await tx
+      .update(contacts)
+      .set({ duplicateOfContactId: null })
+      .where(and(eq(contacts.id, contactId), isNotNull(contacts.duplicateOfContactId)))
+      .returning({ id: contacts.id });
+    return rows.length > 0;
   },
 
   /**
