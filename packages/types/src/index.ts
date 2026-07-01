@@ -50,6 +50,7 @@ export * from "./announcementAdmin.ts";
 export * from "./retentionAdmin.ts";
 export * from "./listGovernance.ts";
 export * from "./dataApproval.ts";
+export * from "./teams.ts";
 export * from "./validation.ts";
 export * from "./ingestion.ts";
 export * from "./dedupReview.ts";
