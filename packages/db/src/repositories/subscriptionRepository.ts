@@ -147,8 +147,8 @@ export const billingCycleRepository = {
   },
 
   /** Mark a cycle granted (worker) — set granted_at + the grant ledger link + status. Allowed only while
-   *  un-granted (the immutability trigger blocks a re-grant). */
-  async markGranted(tx: Tx, cycleId: string, grantLedgerId: string): Promise<void> {
+   *  un-granted (the immutability trigger blocks a re-grant). grantLedgerId may be null (a zero-grant cycle). */
+  async markGranted(tx: Tx, cycleId: string, grantLedgerId: string | null): Promise<void> {
     await tx
       .update(billingCycles)
       .set({ grantedAt: sql`now()`, grantLedgerId, status: "granted" })

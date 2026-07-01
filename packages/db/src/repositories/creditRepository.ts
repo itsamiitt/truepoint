@@ -5,6 +5,7 @@
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { contactReveals, creditLedger, purchases } from "../schema/billing.ts";
+import { computeMonthlyReset } from "./subscriptionResetMath.ts";
 
 /** One credit-ledger entry for the CUSTOMER's own statement (M11) — the movement + running balance, no
  *  internal refs. */
@@ -210,6 +211,74 @@ export const creditRepository = {
         metadata: entry.metadata ?? {},
       })
       .onConflictDoNothing({ target: [creditLedger.tenantId, creditLedger.idempotencyKey] });
+  },
+
+  /**
+   * The subscription monthly reset (M11 buckets, ADR-0041) — run in the caller's per-tenant tx, atomic under the
+   * tenant row lock. Expires the unused perishable allotment (the subscription bucket), grants the new monthly
+   * allotment, and resets the bucket — all ledgered so SUM(delta) still equals the counter (recon stays green).
+   * PURCHASED credits (total − subscription) are never touched. Idempotent per cycle via the ledger idempotency
+   * keys, and the caller marks the cycle granted in the SAME tx (so a due cycle is processed exactly once).
+   * Returns the amounts + the grant ledger id (for the billing_cycle link). Missing tenant → a zero no-op.
+   */
+  async applyMonthlyReset(
+    tx: Tx,
+    tenantId: string,
+    cycleId: string,
+    grantCredits: number,
+  ): Promise<{ expired: number; granted: number; grantLedgerId: string | null }> {
+    const rows = (await tx.execute(
+      sql`SELECT reveal_credit_balance AS balance, subscription_credit_balance AS sub
+          FROM tenants WHERE id = ${tenantId}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ balance: number; sub: number }>;
+    if (rows.length === 0) return { expired: 0, granted: 0, grantLedgerId: null };
+    const math = computeMonthlyReset(Number(rows[0]!.balance), Number(rows[0]!.sub), grantCredits);
+    const expire = math.expired;
+
+    // 1) Expire the unused perishable allotment: total -= expire (purchased credits untouched). Ledger adjustment.
+    if (expire > 0) {
+      await tx.execute(
+        sql`UPDATE tenants SET reveal_credit_balance = reveal_credit_balance - ${expire} WHERE id = ${tenantId}::uuid`,
+      );
+      await this.insertLedger(tx, {
+        tenantId,
+        entryType: "adjustment",
+        delta: -expire,
+        balanceAfter: math.afterExpiry,
+        idempotencyKey: `sub_reset_expiry:${cycleId}`,
+        reason: "subscription_reset_expiry",
+        metadata: { cycleId },
+      });
+    }
+
+    // 2) Grant the new monthly allotment: total += grant. Ledger 'grant'; capture its id for the cycle link.
+    let grantLedgerId: string | null = null;
+    if (grantCredits > 0) {
+      await tx.execute(
+        sql`UPDATE tenants SET reveal_credit_balance = reveal_credit_balance + ${grantCredits} WHERE id = ${tenantId}::uuid`,
+      );
+      const [grantRow] = await tx
+        .insert(creditLedger)
+        .values({
+          tenantId,
+          entryType: "grant",
+          delta: grantCredits,
+          balanceAfter: math.afterGrant,
+          idempotencyKey: `sub_grant:${cycleId}`,
+          reason: "subscription_grant",
+          metadata: { cycleId },
+        })
+        .onConflictDoNothing({ target: [creditLedger.tenantId, creditLedger.idempotencyKey] })
+        .returning({ id: creditLedger.id });
+      grantLedgerId = grantRow?.id ?? null;
+    }
+
+    // 3) Reset the perishable bucket to the new allotment (≤ total → the sub-bucket CHECK holds).
+    await tx.execute(
+      sql`UPDATE tenants SET subscription_credit_balance = ${grantCredits} WHERE id = ${tenantId}::uuid`,
+    );
+
+    return { expired: expire, granted: grantCredits, grantLedgerId };
   },
 
   /**
