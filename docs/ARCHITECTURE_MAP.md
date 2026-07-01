@@ -25,11 +25,12 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1209 source files · 65 code-bearing domains · 21 shared areas · 39 domain-vocabulary warnings · 51
+> **1254 source files · 71 code-bearing domains · 21 shared areas · 44 domain-vocabulary warnings · 58
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
-> `REPO_DOMAIN`, plus the net-new `pricing` (api) / `public-pricing` (web) commercial domains not yet in the
-> canonical list — see the generated [`architecture-map.json`](./architecture-map.json) `unassigned[]` /
-> `warnings[]` for the current set). Design refs: [04](./planning/04-ui-ux-design.md),
+> `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
+> [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
+> reflect the merged tree including the parallel `feat/data-mgmt` work; its new domains' prose is owned by that
+> track). Design refs: [04](./planning/04-ui-ux-design.md),
 > [10-roadmap.md](./planning/10-roadmap.md), [11 §6](./planning/11-information-architecture.md),
 > [16 §5](./planning/16-code-organization.md), ADR-0006/0007/0008/0009/0011/0013/0016/0018/0019/0021/0023/0028/0035/0037/0040.
 
@@ -336,6 +337,11 @@ apps/                           # deployable processes (thin transport adapters)
 - **workers:** `lowBalanceNotifierSweep.ts` (dark, read-only low-balance detector — env-gated off)
 - **types:** `pricing.ts` (public catalog + plan envelope), `billing.ts` (+usage page/query/`dataSource`), `planTemplateAdmin.ts` (+`trialBonusCredits`)
 - *(generator flags two net-new domains — `pricing` (api) + `public-pricing` (web) — distinct commercial concerns not yet in the canonical list; folded here for readability)*
+
+#### notifications — *in-app feed (G-NTF-1); FOUNDATION shipped, API+bell UI pending*
+- **db:** `schema/notifications.ts` (`notifications` table — workspace/user-scoped, `read_at`; mig 0038 + rls/notifications.sql),
+  `notificationRepository.ts` (create/listForUser keyset/unreadCount/markRead/markAllRead — RLS bounds the workspace, repo enforces per-user)
+- **types:** `notifications.ts` (`notificationType` enum + `Notification` + `NotificationsPage`) · **api/web:** pending (routes + shell bell/feed)
 
 #### compliance — *M3 gate + audit; M5 DSAR/consent* ([08](./planning/08-compliance.md), ADR-0011)
 - **core:** `compliance/` — `assertNotSuppressed.ts` (unbypassable in-tx DNC gate), `writeAudit.ts` (same-tx append),

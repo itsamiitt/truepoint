@@ -90,8 +90,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1251,
-  "fileSetHash": "sha256:e06fed3a82d36682f4f25207944751913aa94f9c6910ff3fbb5f111dfe4ce2f5",
+  "fileCount": 1254,
+  "fileSetHash": "sha256:ce2925bd8dc146f1140ae72adec3b38e6d511a520dffd7edb0075a705cb257a7",
   "features": {
     "account-search": {
       "web": [],
@@ -795,6 +795,17 @@
       "core": [],
       "db": [
         "packages/db/src/repositories/listRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
+    "notifications": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [
+        "packages/db/src/repositories/notificationRepository.ts"
       ],
       "workers": [],
       "integrations": []
@@ -1901,6 +1912,7 @@
       "packages/db/src/schema/intel.ts",
       "packages/db/src/schema/lists.ts",
       "packages/db/src/schema/masterGraph.ts",
+      "packages/db/src/schema/notifications.ts",
       "packages/db/src/schema/outreach.ts",
       "packages/db/src/schema/pipelineStages.ts",
       "packages/db/src/schema/platformOps.ts",
@@ -2019,6 +2031,7 @@
       "packages/types/src/jitElevation.ts",
       "packages/types/src/listGovernance.ts",
       "packages/types/src/lists.ts",
+      "packages/types/src/notifications.ts",
       "packages/types/src/outreach.ts",
       "packages/types/src/pipelineStages.ts",
       "packages/types/src/planTemplateAdmin.ts",
