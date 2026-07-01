@@ -313,6 +313,57 @@ export const enrichmentJobRepository = {
     });
   },
 
+  // ── Spend gate (confirm-before-spend) ────────────────────────────────────────────────────────────────
+  // The bulk-enrich money path (prospect-database-platform I3 / audit A3/P08) is GUARDED by two one-way status
+  // transitions. Unlike updateJobStatus (which sets whatever patch it is given), these pin the CURRENT status in
+  // the WHERE clause, so a job can only advance along estimating → awaiting_confirmation → running. There is NO
+  // path from queued/estimating straight to running: no bulk run can ever start (and therefore spend) without a
+  // human first confirming the persisted worst-case ceiling. Both are workspace-scoped via RLS (withTenantTx).
+
+  /**
+   * Persist the WORST-CASE credit CEILING and ARM the confirm gate. GUARDED transition
+   * `estimating → awaiting_confirmation`: the WHERE pins `estimating`, so a job can only be armed straight off
+   * estimation — never re-armed from running/completed, never skipping the estimate. `creditEstimateMicros` is the
+   * ceiling (`worstCaseBulkEnrichMicros`, core) the human confirms and the per-run cap later enforces; it is
+   * truncated to a non-negative integer. Returns true iff a row transitioned (0 rows ⇒ the job was not in
+   * `estimating`; the caller reports a conflict rather than silently arming nothing).
+   */
+  async setEstimateAwaitingConfirmation(
+    scope: TenantScope,
+    jobId: string,
+    creditEstimateMicros: number,
+  ): Promise<boolean> {
+    const ceiling = Math.max(0, Math.trunc(creditEstimateMicros));
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .update(enrichmentJobs)
+        .set({ creditEstimateMicros: ceiling, status: "awaiting_confirmation" })
+        .where(and(eq(enrichmentJobs.id, jobId), eq(enrichmentJobs.status, "estimating")))
+        .returning({ id: enrichmentJobs.id });
+      return rows.length > 0;
+    });
+  },
+
+  /**
+   * The HUMAN confirm — the only door to a spending run. GUARDED transition `awaiting_confirmation → running`,
+   * stamping `started_at`. The WHERE pins `awaiting_confirmation`, so a run can ONLY begin after the ceiling was
+   * shown and confirmed; a job that never armed the gate can never reach `running` through this method. Idempotent
+   * and race-safe: a duplicate/concurrent confirm finds no `awaiting_confirmation` row and returns false (only one
+   * caller wins the transition). Returns true iff THIS call promoted the job to `running`.
+   */
+  async confirmAwaitingJob(scope: TenantScope, jobId: string): Promise<boolean> {
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .update(enrichmentJobs)
+        .set({ status: "running", startedAt: sql`now()` })
+        .where(
+          and(eq(enrichmentJobs.id, jobId), eq(enrichmentJobs.status, "awaiting_confirmation")),
+        )
+        .returning({ id: enrichmentJobs.id });
+      return rows.length > 0;
+    });
+  },
+
   // ── Chunks ─────────────────────────────────────────────────────────────────────────────────────────
 
   /** Create a chunk (the runner's claimable work band). Returns its id. Workspace-scoped via the parent job. */
