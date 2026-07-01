@@ -15,6 +15,7 @@ import { SupportNotes } from "./SupportNotes";
 import { TenantActions } from "./TenantActions";
 import { TenantEconomics } from "./TenantEconomics";
 import { TenantHolds } from "./TenantHolds";
+import { TenantLedger } from "./TenantLedger";
 import { TenantOverview } from "./TenantOverview";
 import { TenantPurchases } from "./TenantPurchases";
 
@@ -154,6 +155,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
             />
 
             <TenantPurchases tenantId={tenantId} onRefunded={reload} />
+            <TenantLedger tenantId={tenantId} />
             <TenantHolds tenantId={tenantId} />
             <SupportNotes tenantId={tenantId} />
           </>
