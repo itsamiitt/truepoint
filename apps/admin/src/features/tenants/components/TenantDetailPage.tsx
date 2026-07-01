@@ -18,6 +18,7 @@ import { TenantHolds } from "./TenantHolds";
 import { TenantLedger } from "./TenantLedger";
 import { TenantOverview } from "./TenantOverview";
 import { TenantPurchases } from "./TenantPurchases";
+import { TenantSubscription } from "./TenantSubscription";
 
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
@@ -155,6 +156,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
             />
 
             <TenantPurchases tenantId={tenantId} onRefunded={reload} />
+            <TenantSubscription tenantId={tenantId} />
             <TenantLedger tenantId={tenantId} />
             <TenantHolds tenantId={tenantId} />
             <SupportNotes tenantId={tenantId} />
