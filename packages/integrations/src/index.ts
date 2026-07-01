@@ -21,3 +21,9 @@ export {
   type FetchJson as AiFetchJson,
   defaultFetchJson as defaultAiFetchJson,
 } from "./anthropic/nlSearchAdapter.ts";
+export {
+  stripeAdapter,
+  type StripeAdapterOptions,
+  type FetchStripe,
+  defaultFetchStripe,
+} from "./stripe/stripeAdapter.ts";

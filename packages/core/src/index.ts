@@ -550,6 +550,13 @@ export {
   parseCreditGrantEvent,
   type CreditGrantEvent,
 } from "./billing/stripeWebhook.ts";
+export {
+  StripeError,
+  type StripePort,
+  type CheckoutSession,
+  type CreateCheckoutInput,
+  type StripeSubscription,
+} from "./billing/stripePort.ts";
 export { buildHomeSummary, type BuildHomeSummaryInput } from "./home/buildHomeSummary.ts";
 
 // Workspace pipeline-stage layer (G-REV-7, ADR-0028): author/edit stages mapping to a canonical
