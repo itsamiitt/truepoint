@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1310,
-  "fileSetHash": "sha256:7789dae442339609ac316575048d6b69e48c3c2c62495d8e8a6cb986e1872ccb",
+  "fileCount": 1314,
+  "fileSetHash": "sha256:18737bef2398bab5fa4a5d6de0f0ff667ab1af3cf93dcd83347a1a48336996df",
   "features": {
     "account-search": {
       "web": [],
@@ -492,6 +492,8 @@
         "packages/core/src/email/deliverabilityAnalytics.ts",
         "packages/core/src/email/deliveryWebhook.test.ts",
         "packages/core/src/email/deliveryWebhook.ts",
+        "packages/core/src/email/detectAutoReply.test.ts",
+        "packages/core/src/email/detectAutoReply.ts",
         "packages/core/src/email/dispatchOutreachSend.ts",
         "packages/core/src/email/dnsAuth.test.ts",
         "packages/core/src/email/dnsAuth.ts",
@@ -512,6 +514,8 @@
         "packages/core/src/email/pkce.test.ts",
         "packages/core/src/email/pkce.ts",
         "packages/core/src/email/providerAdapter.ts",
+        "packages/core/src/email/recordInboundReply.test.ts",
+        "packages/core/src/email/recordInboundReply.ts",
         "packages/core/src/email/recordOutboundMessage.test.ts",
         "packages/core/src/email/recordOutboundMessage.ts",
         "packages/core/src/email/refreshDueMailboxTokens.test.ts",

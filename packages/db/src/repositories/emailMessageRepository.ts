@@ -3,8 +3,17 @@
 // projected into an API response (D7). The rfc822_message_id we set on an outbound send is the threading key a
 // later inbound reply matches via In-Reply-To/References. Run inside the caller's withTenantTx.
 
+import { and, eq, inArray } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { emailMessage } from "../schema/email.ts";
+
+/** The outbound message a reply threads back to — the enrollment + thread it belongs to (M12 P3). */
+export interface ThreadMatch {
+  threadId: string;
+  outreachLogId: string | null;
+  contactId: string | null;
+  mailboxIntegrationId: string | null;
+}
 
 export interface MessageInsert {
   tenantId: string;
@@ -56,5 +65,33 @@ export const emailMessageRepository = {
       })
       .returning({ id: emailMessage.id });
     return inserted[0]!.id;
+  },
+
+  /** Resolve the OUTBOUND message a reply threads back to (M12 P3): match any of the reply's In-Reply-To /
+   *  References ids against our stored rfc822_message_id (workspace-scoped via RLS + the explicit filter). Returns
+   *  the thread + enrollment so the caller can auto-pause; null when the reply matches nothing we sent. */
+  async findOutboundByRfc822MessageId(
+    tx: Tx,
+    workspaceId: string,
+    messageIds: string[],
+  ): Promise<ThreadMatch | null> {
+    if (messageIds.length === 0) return null;
+    const rows = await tx
+      .select({
+        threadId: emailMessage.threadId,
+        outreachLogId: emailMessage.outreachLogId,
+        contactId: emailMessage.contactId,
+        mailboxIntegrationId: emailMessage.mailboxIntegrationId,
+      })
+      .from(emailMessage)
+      .where(
+        and(
+          eq(emailMessage.workspaceId, workspaceId),
+          eq(emailMessage.direction, "outbound"),
+          inArray(emailMessage.rfc822MessageId, messageIds),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
   },
 };
