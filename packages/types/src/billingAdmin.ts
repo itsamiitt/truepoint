@@ -32,6 +32,24 @@ export const refundResultSchema = z.object({
 });
 export type RefundResult = z.infer<typeof refundResultSchema>;
 
+/** The finance/compliance taxonomy a staff member must pick when refunding a purchase, so the audit trail
+ *  explains WHY (not just that) a refund happened. `other` requires a free-text note. */
+export const refundReason = z.enum(["duplicate", "fraud", "billing_error", "goodwill", "other"]);
+export type RefundReason = z.infer<typeof refundReason>;
+
+/** The refund request body — a mandatory structured reason plus an optional operator note (required for
+ *  `other`). Recorded in the platform_audit_log metadata of the refund's `credit.adjust` row (no new column). */
+export const refundRequestSchema = z
+  .object({
+    reason: refundReason,
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((v) => v.reason !== "other" || !!v.note, {
+    message: "A note is required when the reason is 'other'.",
+    path: ["note"],
+  });
+export type RefundRequest = z.infer<typeof refundRequestSchema>;
+
 /** One tenant's slice of the economics window — the per-tenant drill-down behind the rollup (which tenants
  *  actually drive the revenue and the metered provider spend). Money is integer cents; the rest are counts. */
 export const tenantEconomicsRowSchema = z.object({

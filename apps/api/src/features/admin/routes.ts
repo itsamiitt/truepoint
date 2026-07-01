@@ -41,6 +41,7 @@ import {
   placeAccountHoldSchema,
   planOverrideSchema,
   platformListQuerySchema,
+  refundRequestSchema,
   retentionPolicySchema,
   retentionPolicyUpdateSchema,
   setAuthEnforcementSchema,
@@ -578,6 +579,9 @@ adminRoutes.post(
     const purchaseId = c.req.param("purchaseId");
     if (!UUID_RE.test(tenantId) || !UUID_RE.test(purchaseId))
       throw new ValidationError("id must be a UUID");
+    const parsed = refundRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+    const { reason, note } = parsed.data;
     const result = await withPlatformTx(
       actorOf(c),
       "credit.adjust",
@@ -591,7 +595,7 @@ adminRoutes.post(
         targetType: "tenant",
         targetId: tenantId,
         tenantId,
-        metadata: { purchaseId, action: "refund" },
+        metadata: { purchaseId, action: "refund", reason, ...(note ? { note } : {}) },
       },
     );
     return c.json({ purchaseId, reversed: result.reversed, balanceAfter: result.balanceAfter });

@@ -4,7 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { SetAuthEnforcementInput, TenantEconomicsDetail } from "@leadwolf/types";
+import type { RefundReason, SetAuthEnforcementInput, TenantEconomicsDetail } from "@leadwolf/types";
 import type {
   AccountHold,
   PlanTemplateOption,
@@ -133,14 +133,21 @@ export async function fetchTenantPurchases(id: string): Promise<Purchase[]> {
   return body.purchases;
 }
 
-/** POST /admin/tenants/:id/purchases/:purchaseId/refund — reverse a purchase (tenants:credits). */
+/** POST /admin/tenants/:id/purchases/:purchaseId/refund — reverse a purchase (tenants:credits). A structured
+ *  reason is mandatory (recorded in the refund's audit metadata); a note is optional (required for `other`). */
 export async function refundPurchase(
   id: string,
   purchaseId: string,
+  reason: RefundReason,
+  note?: string,
 ): Promise<{ reversed: number; balanceAfter: number }> {
   const res = await fetchWithAuth(
     `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/purchases/${encodeURIComponent(purchaseId)}/refund`,
-    { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason, ...(note ? { note } : {}) }),
+    },
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not refund the purchase"));
   const body = (await res.json()) as { reversed: number; balanceAfter: number };
