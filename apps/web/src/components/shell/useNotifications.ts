@@ -59,6 +59,7 @@ interface NotificationsState {
   items: AppNotification[];
   unreadCount: number;
   dismiss: (id: string) => void;
+  markAll: () => void;
   loading: boolean;
 }
 
@@ -107,7 +108,18 @@ export function useNotifications(): NotificationsState {
     [raw],
   );
 
+  const markAll = useCallback(() => {
+    // Optimistic: zero the badge + mark every loaded row read (so a later dismiss won't double-decrement).
+    setRaw((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })));
+    setUnreadCount(0);
+    void fetchWithAuth(`${API_BASE}/api/v1/notifications/read-all`, { method: "POST" }).catch(
+      () => {
+        // If it fails, the next poll re-syncs the true unread count.
+      },
+    );
+  }, []);
+
   const items = useMemo(() => raw.map(toApp), [raw]);
 
-  return { items, unreadCount, dismiss, loading };
+  return { items, unreadCount, dismiss, markAll, loading };
 }
