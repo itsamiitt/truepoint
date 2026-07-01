@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1261 source files · 71 code-bearing domains · 21 shared areas · 44 domain-vocabulary warnings · 58
+> **1264 source files · 71 code-bearing domains · 21 shared areas · 44 domain-vocabulary warnings · 58
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
@@ -281,6 +281,7 @@ apps/                           # deployable processes (thin transport adapters)
   cheap `looksLikeInjection` no-spend gate), `budgetGuard.ts` (per-tenant daily ceiling, reserve-before-call + refund-on-failure)
 - **integrations:** `anthropic/nlSearchAdapter.ts` (the provider adapter behind the port)
 - **api:** `features/ai/` — POST `/ai-search` (returns a validated `query` + notes; human confirms before applying), `aiPortProvider.ts`
+- **metering (M14 / 13a Area 14):** `ai_requests` table (mig 0039 + rls/aiRequests.sql) + `aiRequestRepository` (append + `usageSince` platform rollup); `/ai-search` logs each call best-effort (task/model/outcome/latency — NL text never stored) · **types:** `aiUsage.ts` (`aiRequestOutcome`). Staff `/admin/ai/usage` read + card = next slice.
 
 #### home — *the cockpit destination* (web + api + core)
 - **core:** `home/buildHomeSummary.ts` (fan-out over domain repos in one `withTenantTx`) + `data-health/dataQualitySummary.ts`/`dataQualitySnapshot.ts` · **api:** `features/home/*` (GET `/home/summary`, `/home/data-quality`, `/data-quality/history`, `/data-quality/reverification-runs`)

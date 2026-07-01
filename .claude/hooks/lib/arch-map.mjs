@@ -101,6 +101,7 @@ export const REPO_DOMAIN = {
   apiKey: "api-public",
   purchase: "billing",
   notification: "notifications",
+  aiRequest: "ai",
   activity: "activity",
   intentSignal: "scoring",
   intent_signal: "scoring",

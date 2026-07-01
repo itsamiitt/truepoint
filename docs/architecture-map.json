@@ -90,8 +90,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1261,
-  "fileSetHash": "sha256:99745e55a5d59ddaf78ccf23d721953d48214d0ee938e9419a94a46523147386",
+  "fileCount": 1264,
+  "fileSetHash": "sha256:8f34eb238d75dda0c3dc2c9e1373d56b682abc9e745405cb19bdaa0f55613a30",
   "features": {
     "account-search": {
       "web": [],
@@ -162,7 +162,9 @@
         "packages/core/src/ai/promptGuard.test.ts",
         "packages/core/src/ai/promptGuard.ts"
       ],
-      "db": [],
+      "db": [
+        "packages/db/src/repositories/aiRequestRepository.ts"
+      ],
       "workers": [],
       "integrations": []
     },
@@ -1905,6 +1907,7 @@
       "packages/db/src/repositories/platformDataQualityReads.ts",
       "packages/db/src/repositories/platformTrustReads.ts",
       "packages/db/src/schema/activity.ts",
+      "packages/db/src/schema/aiRequests.ts",
       "packages/db/src/schema/auth.ts",
       "packages/db/src/schema/billing.ts",
       "packages/db/src/schema/compliance.ts",
@@ -2007,6 +2010,7 @@
       "packages/types/src/accountsSearch.ts",
       "packages/types/src/activity.ts",
       "packages/types/src/aiSearch.ts",
+      "packages/types/src/aiUsage.ts",
       "packages/types/src/announcementAdmin.ts",
       "packages/types/src/auditCoverage.test.ts",
       "packages/types/src/auth.ts",
