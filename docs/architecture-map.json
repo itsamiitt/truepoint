@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1316,
-  "fileSetHash": "sha256:302875ff2f9b20f429baefbc5db88de7b700a7f3c825be161b76217b14fbb0e8",
+  "fileCount": 1320,
+  "fileSetHash": "sha256:bbf62ea22fa30e68efacc0e8ac4af1d86d2111b1f0070670cfb9e3f8bc5782c9",
   "features": {
     "account-search": {
       "web": [],
@@ -892,6 +892,7 @@
         "packages/db/src/repositories/sequenceRepository.ts"
       ],
       "workers": [
+        "apps/workers/src/queues/gmailInboxPollSweep.ts",
         "apps/workers/src/queues/outreach.ts"
       ],
       "integrations": []
@@ -1145,6 +1146,8 @@
       ],
       "core": [
         "packages/core/src/reveal/bulkRevealExport.ts",
+        "packages/core/src/reveal/revealCharge.test.ts",
+        "packages/core/src/reveal/revealCharge.ts",
         "packages/core/src/reveal/revealContact.ts",
         "packages/core/src/reveal/staffWorkspaceExport.ts"
       ],
@@ -1753,6 +1756,7 @@
       "apps/api/src/middleware/requireOrgRole.ts",
       "apps/api/src/middleware/requireRole.ts",
       "apps/api/src/middleware/requireStaffRole.ts",
+      "apps/api/src/middleware/revealRateLimit.ts",
       "apps/api/src/middleware/roleGuards.test.ts",
       "apps/api/src/middleware/tenancy.ts"
     ],

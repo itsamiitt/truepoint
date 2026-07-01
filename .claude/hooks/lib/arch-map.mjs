@@ -81,6 +81,8 @@ export const QUEUE_DOMAIN = {
   ledgerBackfillSweep: "billing",
   subscriptionGrantSweep: "billing",
   subscriptionDunningSweep: "billing",
+  gmailInboxPoll: "outreach",
+  gmailInboxPollSweep: "outreach",
 };
 export const REPO_DOMAIN = {
   contact: "reveal",
