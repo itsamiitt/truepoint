@@ -77,6 +77,7 @@ export const QUEUE_DOMAIN = {
   dataQualitySnapshotSweep: "data-health",
   lowBalanceNotifierSweep: "billing",
   billingReconSweep: "billing",
+  ledgerBackfillSweep: "billing",
 };
 export const REPO_DOMAIN = {
   contact: "reveal",
