@@ -168,6 +168,7 @@ export {
   type BurnByDayRow,
   type LedgerEntryType,
   type LedgerEntryInput,
+  type CustomerLedgerRow,
 } from "./repositories/creditRepository.ts";
 export {
   suppressionRepository,
@@ -393,6 +394,14 @@ export {
   type CreditPackRow,
   type UpsertCreditPackInput,
 } from "./repositories/creditPackRepository.ts";
+export { stripeCustomerRepository } from "./repositories/stripeCustomerRepository.ts";
+export {
+  subscriptionRepository,
+  billingCycleRepository,
+  type SubscriptionRow,
+  type UpsertSubscriptionInput,
+  type DueCycleRow,
+} from "./repositories/subscriptionRepository.ts";
 // Plan/entitlement template catalog (13a Area 5) — staff-authored config; owner-connection, audited writes.
 export {
   planTemplateRepository,

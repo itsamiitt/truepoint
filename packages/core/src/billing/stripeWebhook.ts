@@ -91,3 +91,82 @@ export function parseCreditGrantEvent(rawEvent: unknown): CreditGrantEvent | nul
     amountCents: typeof intent?.amount === "number" ? intent.amount : null,
   };
 }
+
+/** A normalized subscription-lifecycle event (M11 subscriptions, ADR-0041). `upsert` = created/updated (mirror
+ *  the state + open the cycle); `deleted` = canceled; `past_due` = a failed renewal payment (dunning). */
+export interface SubscriptionEvent {
+  stripeEventId: string;
+  kind: "upsert" | "deleted" | "past_due";
+  stripeSubscriptionId: string;
+  /** From subscription metadata; empty for past_due (the handler resolves the tenant by stripe id). */
+  tenantId: string;
+  planTemplateKey: string | null;
+  status: string;
+  currentPeriodStart: number | null; // unix seconds
+  currentPeriodEnd: number | null;
+  cancelAtPeriodEnd: boolean;
+}
+
+/**
+ * Parse a verified subscription webhook into a normalized event, or null for types we ignore.
+ * customer.subscription.created/updated/deleted carry the Subscription (with metadata.tenant_id +
+ * metadata.plan_template_key stamped at checkout); invoice.payment_failed carries only the subscription id.
+ */
+export function parseSubscriptionEvent(rawEvent: unknown): SubscriptionEvent | null {
+  if (typeof rawEvent !== "object" || rawEvent === null) return null;
+  const event = rawEvent as { id?: unknown; type?: unknown; data?: { object?: unknown } };
+  if (typeof event.id !== "string" || typeof event.type !== "string") return null;
+  const type = event.type;
+
+  if (
+    type === "customer.subscription.created" ||
+    type === "customer.subscription.updated" ||
+    type === "customer.subscription.deleted"
+  ) {
+    const sub = (event.data?.object ?? {}) as {
+      id?: unknown;
+      status?: unknown;
+      current_period_start?: unknown;
+      current_period_end?: unknown;
+      cancel_at_period_end?: unknown;
+      metadata?: Record<string, unknown>;
+    };
+    const stripeSubscriptionId = typeof sub.id === "string" ? sub.id : null;
+    const metadata = sub.metadata ?? {};
+    const tenantId = typeof metadata.tenant_id === "string" ? metadata.tenant_id : null;
+    if (!stripeSubscriptionId || !tenantId) return null;
+    const deleted = type === "customer.subscription.deleted";
+    return {
+      stripeEventId: event.id,
+      kind: deleted ? "deleted" : "upsert",
+      stripeSubscriptionId,
+      tenantId,
+      planTemplateKey:
+        typeof metadata.plan_template_key === "string" ? metadata.plan_template_key : null,
+      status: deleted ? "canceled" : typeof sub.status === "string" ? sub.status : "active",
+      currentPeriodStart:
+        typeof sub.current_period_start === "number" ? sub.current_period_start : null,
+      currentPeriodEnd: typeof sub.current_period_end === "number" ? sub.current_period_end : null,
+      cancelAtPeriodEnd: sub.cancel_at_period_end === true,
+    };
+  }
+
+  if (type === "invoice.payment_failed") {
+    const inv = (event.data?.object ?? {}) as { subscription?: unknown };
+    const stripeSubscriptionId = typeof inv.subscription === "string" ? inv.subscription : null;
+    if (!stripeSubscriptionId) return null;
+    return {
+      stripeEventId: event.id,
+      kind: "past_due",
+      stripeSubscriptionId,
+      tenantId: "",
+      planTemplateKey: null,
+      status: "past_due",
+      currentPeriodStart: null,
+      currentPeriodEnd: null,
+      cancelAtPeriodEnd: false,
+    };
+  }
+
+  return null;
+}

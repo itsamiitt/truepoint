@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1284,
-  "fileSetHash": "sha256:8dd990494864561d2a7d3e1257af5d9c6272c5f04f7655bb7e8f61c4a87dbe3f",
+  "fileCount": 1295,
+  "fileSetHash": "sha256:72dc0a0b800743b51bda88941af2d1c935a1a1859fa5fd0651b40483cf8266cd",
   "features": {
     "account-search": {
       "web": [],
@@ -250,18 +250,23 @@
       ],
       "core": [
         "packages/core/src/billing/grantFromStripe.ts",
+        "packages/core/src/billing/handleSubscriptionEvent.ts",
         "packages/core/src/billing/stripePort.ts",
         "packages/core/src/billing/stripeWebhook.test.ts",
         "packages/core/src/billing/stripeWebhook.ts"
       ],
       "db": [
         "packages/db/src/repositories/creditRepository.ts",
-        "packages/db/src/repositories/idempotencyRepository.ts"
+        "packages/db/src/repositories/idempotencyRepository.ts",
+        "packages/db/src/repositories/stripeCustomerRepository.ts",
+        "packages/db/src/repositories/subscriptionRepository.ts"
       ],
       "workers": [
         "apps/workers/src/queues/billingReconSweep.ts",
         "apps/workers/src/queues/ledgerBackfillSweep.ts",
-        "apps/workers/src/queues/lowBalanceNotifierSweep.ts"
+        "apps/workers/src/queues/lowBalanceNotifierSweep.ts",
+        "apps/workers/src/queues/subscriptionDunningSweep.ts",
+        "apps/workers/src/queues/subscriptionGrantSweep.ts"
       ],
       "integrations": []
     },
@@ -1294,8 +1299,10 @@
         "apps/web/src/features/settings-billing/components/BillingPage.tsx",
         "apps/web/src/features/settings-billing/components/UsageTable.tsx",
         "apps/web/src/features/settings-billing/components/tabs/CreditsTab.tsx",
+        "apps/web/src/features/settings-billing/components/tabs/HistoryTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/PlaceholderTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/PlanTab.tsx",
+        "apps/web/src/features/settings-billing/components/tabs/SubscriptionTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/UsageTab.tsx",
         "apps/web/src/features/settings-billing/hooks/useBilling.ts",
         "apps/web/src/features/settings-billing/hooks/useUsageHistory.ts",
@@ -1541,6 +1548,7 @@
         "apps/admin/src/features/tenants/components/TenantLedger.tsx",
         "apps/admin/src/features/tenants/components/TenantOverview.tsx",
         "apps/admin/src/features/tenants/components/TenantPurchases.tsx",
+        "apps/admin/src/features/tenants/components/TenantSubscription.tsx",
         "apps/admin/src/features/tenants/components/TenantsPage.tsx",
         "apps/admin/src/features/tenants/format.test.ts",
         "apps/admin/src/features/tenants/format.ts",
@@ -1947,6 +1955,8 @@
       "packages/db/src/repositories/platformComplianceReads.ts",
       "packages/db/src/repositories/platformDataQualityReads.ts",
       "packages/db/src/repositories/platformTrustReads.ts",
+      "packages/db/src/repositories/subscriptionResetMath.test.ts",
+      "packages/db/src/repositories/subscriptionResetMath.ts",
       "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/aiRequests.ts",
       "packages/db/src/schema/auth.ts",
@@ -1974,6 +1984,7 @@
       "packages/db/src/schema/salesnav.ts",
       "packages/db/src/schema/savedSearches.ts",
       "packages/db/src/schema/scim.ts",
+      "packages/db/src/schema/subscriptions.ts",
       "packages/db/src/schema/tags.ts",
       "packages/db/src/schema/validationRules.ts",
       "packages/db/src/schema/verificationJobs.ts",

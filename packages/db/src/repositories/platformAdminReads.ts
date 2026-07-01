@@ -630,7 +630,13 @@ export const platformAdminRepository = {
       .where(eq(importJobChunks.jobId, jobId))
       .groupBy(importJobChunks.status);
 
-    return { ...job, chunkTally };
+    // rejectHistogram is a jsonb column → drizzle types it `unknown`; the stored value is the reason→count map
+    // (ImportSummary), so coerce it to the declared shape (merge-fallout from feat/data-mgmt's reject histogram).
+    return {
+      ...job,
+      rejectHistogram: (job.rejectHistogram ?? {}) as Record<string, number>,
+      chunkTally,
+    };
   },
 
   /**
@@ -641,7 +647,10 @@ export const platformAdminRepository = {
    * `enrichment_job_rows` row — so no enriched contact PII (no `input`/`enriched_fields`) leaves the boundary
    * (mirrors the recentImportJobs privacy-first idiom).
    */
-  async recentEnrichmentJobs(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformEnrichmentJobRow[]> {
+  async recentEnrichmentJobs(
+    tx: Tx,
+    limit = PLATFORM_READ_LIMIT,
+  ): Promise<PlatformEnrichmentJobRow[]> {
     return tx
       .select({
         jobId: enrichmentJobs.id,
@@ -671,7 +680,10 @@ export const platformAdminRepository = {
    * caller's audited withPlatformTx; verification_jobs is COUNTS-only (no contact rows / PII), so nothing
    * sensitive leaves the boundary (mirrors the recentRetentionRuns / recentImportJobs privacy-first idioms).
    */
-  async recentVerificationJobs(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformVerificationJobRow[]> {
+  async recentVerificationJobs(
+    tx: Tx,
+    limit = PLATFORM_READ_LIMIT,
+  ): Promise<PlatformVerificationJobRow[]> {
     return tx
       .select({
         jobId: verificationJobs.id,
@@ -767,28 +779,32 @@ export const platformAdminRepository = {
    * audited withPlatformTx. No tenant PII — `params` are operator-supplied op parameters.
    */
   async listPendingApprovals(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformApprovalRow[]> {
-    return tx
-      .select({
-        id: approvalRequests.id,
-        operation: approvalRequests.operation,
-        params: approvalRequests.params,
-        targetTenantId: approvalRequests.targetTenantId,
-        requestedByUserId: approvalRequests.requestedByUserId,
-        requestReason: approvalRequests.requestReason,
-        status: approvalRequests.status,
-        decidedByUserId: approvalRequests.decidedByUserId,
-        decisionReason: approvalRequests.decisionReason,
-        decidedAt: approvalRequests.decidedAt,
-        expiresAt: approvalRequests.expiresAt,
-        executedAt: approvalRequests.executedAt,
-        createdAt: approvalRequests.createdAt,
-      })
-      .from(approvalRequests)
-      // Only LIVE pending requests: a request past its hard time-box is derived-expired (never a stored 'expired')
-      // and is hidden from the review queue — matching decideApproval, which refuses to decide an expired request.
-      .where(and(eq(approvalRequests.status, "pending"), gt(approvalRequests.expiresAt, sql`now()`)))
-      .orderBy(desc(approvalRequests.id))
-      .limit(Math.min(limit, PLATFORM_READ_LIMIT));
+    return (
+      tx
+        .select({
+          id: approvalRequests.id,
+          operation: approvalRequests.operation,
+          params: approvalRequests.params,
+          targetTenantId: approvalRequests.targetTenantId,
+          requestedByUserId: approvalRequests.requestedByUserId,
+          requestReason: approvalRequests.requestReason,
+          status: approvalRequests.status,
+          decidedByUserId: approvalRequests.decidedByUserId,
+          decisionReason: approvalRequests.decisionReason,
+          decidedAt: approvalRequests.decidedAt,
+          expiresAt: approvalRequests.expiresAt,
+          executedAt: approvalRequests.executedAt,
+          createdAt: approvalRequests.createdAt,
+        })
+        .from(approvalRequests)
+        // Only LIVE pending requests: a request past its hard time-box is derived-expired (never a stored 'expired')
+        // and is hidden from the review queue — matching decideApproval, which refuses to decide an expired request.
+        .where(
+          and(eq(approvalRequests.status, "pending"), gt(approvalRequests.expiresAt, sql`now()`)),
+        )
+        .orderBy(desc(approvalRequests.id))
+        .limit(Math.min(limit, PLATFORM_READ_LIMIT))
+    );
   },
 
   /**
@@ -819,7 +835,10 @@ export const platformAdminRepository = {
    * no grant). `pending` review_status is the human-decision queue (fed by probabilistic ER, a later phase);
    * `auto` rows are the deterministic resolutions, shown for oversight.
    */
-  async listMatchLinksForReview(tx: Tx, limit = PLATFORM_READ_LIMIT): Promise<PlatformMatchLinkRow[]> {
+  async listMatchLinksForReview(
+    tx: Tx,
+    limit = PLATFORM_READ_LIMIT,
+  ): Promise<PlatformMatchLinkRow[]> {
     return tx
       .select({
         id: matchLinks.id,

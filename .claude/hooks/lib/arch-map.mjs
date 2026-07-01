@@ -78,6 +78,8 @@ export const QUEUE_DOMAIN = {
   lowBalanceNotifierSweep: "billing",
   billingReconSweep: "billing",
   ledgerBackfillSweep: "billing",
+  subscriptionGrantSweep: "billing",
+  subscriptionDunningSweep: "billing",
 };
 export const REPO_DOMAIN = {
   contact: "reveal",
@@ -113,6 +115,8 @@ export const REPO_DOMAIN = {
   provider_call: "enrichment",
   reveal: "reveal",
   credit: "billing",
+  stripeCustomer: "billing",
+  subscription: "billing",
   audit: "compliance",
   idempotency: "billing",
   consent: "compliance",

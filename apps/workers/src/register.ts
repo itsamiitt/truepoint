@@ -113,6 +113,16 @@ import {
   makeProcessSequenceTick,
 } from "./queues/sequenceTick.ts";
 import {
+  SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
+  type SubscriptionDunningSweepJobData,
+  makeProcessSubscriptionDunningSweep,
+} from "./queues/subscriptionDunningSweep.ts";
+import {
+  SUBSCRIPTION_GRANT_SWEEP_QUEUE,
+  type SubscriptionGrantSweepJobData,
+  makeProcessSubscriptionGrantSweep,
+} from "./queues/subscriptionGrantSweep.ts";
+import {
   EMAIL_TOKEN_REFRESH_QUEUE,
   type TokenRefreshJobData,
   makeProcessTokenRefresh,
@@ -708,6 +718,62 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 24 * 60 * 60_000 }, jobId: "billing-recon-sweep" })
       .catch((e) =>
         log.error("failed to schedule the billing-recon sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // Subscription monthly-grant/reset sweep (M11 subs, ADR-0041) — DARK by default
+  // (BILLING_SUBSCRIPTIONS_ENABLED=false). Purely additive: when off, nothing is built. Grants due
+  // billing_cycles (expire the perishable allotment + grant the monthly one, ledger-consistent → recon stays
+  // green). Leader-locked; every 15 min so a new subscription's first grant + each renewal land promptly.
+  if (env.BILLING_SUBSCRIPTIONS_ENABLED) {
+    const subscriptionGrantQueue = new Queue<SubscriptionGrantSweepJobData>(
+      SUBSCRIPTION_GRANT_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<SubscriptionGrantSweepJobData>(
+          SUBSCRIPTION_GRANT_SWEEP_QUEUE,
+          makeProcessSubscriptionGrantSweep(connection),
+          { connection },
+        ),
+        SUBSCRIPTION_GRANT_SWEEP_QUEUE,
+      ),
+    );
+    void subscriptionGrantQueue
+      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "subscription-grant-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the subscription-grant sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+
+    // Subscription dunning SIGNAL (M11 subs, ADR-0041) — READ-ONLY: surfaces subscriptions past_due beyond the
+    // grace window as an ops signal. Stripe drives the real dunning (retry → deleted → revert-to-free via the
+    // webhook); the suspend policy is a flagged owner decision, so this suspends nothing. Leader-locked daily.
+    const subscriptionDunningQueue = new Queue<SubscriptionDunningSweepJobData>(
+      SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<SubscriptionDunningSweepJobData>(
+          SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
+          makeProcessSubscriptionDunningSweep(connection),
+          { connection },
+        ),
+        SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
+      ),
+    );
+    void subscriptionDunningQueue
+      .add(
+        "sweep",
+        {},
+        { repeat: { every: 24 * 60 * 60_000 }, jobId: "subscription-dunning-sweep" },
+      )
+      .catch((e) =>
+        log.error("failed to schedule the subscription-dunning sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

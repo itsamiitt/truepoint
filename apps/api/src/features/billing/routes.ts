@@ -3,26 +3,41 @@
 // (balance + usage history for Settings ▸ Billing & Credits). Transport only; grant idempotency and the
 // counter invariants live in core/db.
 
-import { env } from "@leadwolf/config";
-import { grantFromStripe, parseCreditGrantEvent, verifyStripeSignature } from "@leadwolf/core";
+import { appOrigins, env } from "@leadwolf/config";
 import {
+  StripeError,
+  grantFromStripe,
+  handleSubscriptionEvent,
+  parseCreditGrantEvent,
+  parseSubscriptionEvent,
+  verifyStripeSignature,
+} from "@leadwolf/core";
+import {
+  creditPackRepository,
   creditRepository,
   planTemplateRepository,
   revealRepository,
+  stripeCustomerRepository,
+  subscriptionRepository,
   tenantRepository,
   withPlatformReadTx,
 } from "@leadwolf/db";
 import {
+  type CreditLedgerEntry,
   ForbiddenError,
   NotFoundError,
+  type SubscriptionView,
   type TenantPlanEnvelope,
   ValidationError,
+  creditCheckoutSchema,
+  subscribeSchema,
   usageQuerySchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { getStripePort } from "./stripePortProvider.ts";
 
 // ── /api/v1/billing — the webhook (unauthenticated; signature is the trust boundary) ───────────────────
 export const billingRoutes = new Hono();
@@ -45,10 +60,20 @@ billingRoutes.post("/webhook", async (c) => {
   }
 
   const grant = parseCreditGrantEvent(event);
-  if (!grant) return c.json({ received: true, granted: false }); // ignored event type → 200 so Stripe stops retrying
+  if (grant) {
+    const result = await grantFromStripe(grant);
+    return c.json({ received: true, granted: result.granted });
+  }
 
-  const result = await grantFromStripe(grant);
-  return c.json({ received: true, granted: result.granted });
+  // Subscription lifecycle (M11 subs, ADR-0041) — the webhook is the source of truth for subscription state.
+  // Gated: only act when subscriptions are enabled, else 200-ignore so Stripe stops retrying.
+  const subEvent = parseSubscriptionEvent(event);
+  if (subEvent && env.BILLING_SUBSCRIPTIONS_ENABLED) {
+    await handleSubscriptionEvent(subEvent);
+    return c.json({ received: true, subscription: true });
+  }
+
+  return c.json({ received: true, granted: false }); // ignored event type → 200 so Stripe stops retrying
 });
 
 // ── /api/v1/credits — authenticated balance + usage (the top-bar pill + Settings ▸ Billing) ────────────
@@ -84,6 +109,149 @@ creditsRoutes.get("/me", requireRole("owner", "admin", "member", "viewer"), asyn
     features: profile.features,
   };
   return c.json({ plan });
+});
+
+// Paid top-up — start a Stripe Checkout Session for a credit pack (M11, ADR-0041). DARK: needs BOTH the flag
+// AND a secret key; absent → 501 { available:false } so the web hub's existing "coming soon" degrade shows.
+// The credits are granted ONLY by the existing payment_intent.succeeded webhook (metadata stamped here) —
+// idempotent, never client-side. Workspace-admin gated (owner|admin).
+creditsRoutes.post("/checkout", requireRole("owner", "admin"), async (c) => {
+  if (!env.BILLING_CHECKOUT_ENABLED || !env.STRIPE_SECRET_KEY) {
+    return c.json({ available: false }, 501);
+  }
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to buy credits.");
+  const parsed = creditCheckoutSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const tenantId = c.get("tenantId");
+  const scope = { tenantId, workspaceId };
+
+  const pack = await withPlatformReadTx((tx) =>
+    creditPackRepository.getActiveByKey(tx, parsed.data.pack),
+  );
+  if (!pack) throw new NotFoundError("Credit pack not found.");
+
+  try {
+    const stripe = getStripePort();
+    // Reuse the tenant's Stripe customer across purchases; create + link on the first checkout.
+    let customerId = await stripeCustomerRepository.getByTenant(scope);
+    if (!customerId) {
+      customerId = await stripe.createCustomer({ tenantId });
+      await stripeCustomerRepository.link(scope, customerId);
+    }
+    const appOrigin = appOrigins()[0] ?? "";
+    const session = await stripe.createCheckoutSession({
+      mode: "payment",
+      ...(pack.stripePriceId
+        ? { priceId: pack.stripePriceId }
+        : { priceData: { amountCents: pack.priceCents, currency: "usd", productName: pack.name } }),
+      customerId,
+      successUrl: `${appOrigin}/settings/billing?checkout=success`,
+      cancelUrl: `${appOrigin}/settings/billing?checkout=cancelled`,
+      metadata: { tenant_id: tenantId, credit_pack_key: pack.key },
+      // Phase-1 reuse: stamp the PaymentIntent so the EXISTING payment_intent.succeeded webhook grants.
+      paymentIntentMetadata: { tenant_id: tenantId, credits: String(pack.credits) },
+    });
+    return c.json({ available: true, checkoutUrl: session.url });
+  } catch (err) {
+    // Never leak the key or Stripe internals: a config gap degrades to "coming soon", else a 502.
+    if (err instanceof StripeError)
+      return c.json({ available: false }, err.reason === "not_configured" ? 501 : 502);
+    throw err;
+  }
+});
+
+// Start a subscription checkout (M11 subs, ADR-0041). DARK: BILLING_SUBSCRIPTIONS_ENABLED + a secret key, else
+// 501 { available:false } → the hub's "coming soon" degrade. The subscription is created + reconciled by the
+// customer.subscription.* webhook (the metadata stamped here carries tenant_id + plan_template_key); credits
+// are granted by the monthly-grant worker, never here. Workspace-admin gated (owner|admin).
+creditsRoutes.post("/subscribe", requireRole("owner", "admin"), async (c) => {
+  if (!env.BILLING_SUBSCRIPTIONS_ENABLED || !env.STRIPE_SECRET_KEY) {
+    return c.json({ available: false }, 501);
+  }
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to subscribe.");
+  const parsed = subscribeSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const tenantId = c.get("tenantId");
+  const scope = { tenantId, workspaceId };
+
+  const template = await withPlatformReadTx((tx) =>
+    planTemplateRepository.getByKey(tx, parsed.data.plan),
+  );
+  if (!template) throw new NotFoundError("Plan not found.");
+  if (!template.stripePriceId)
+    throw new ValidationError("This plan isn't available for self-serve subscription yet.");
+
+  try {
+    const stripe = getStripePort();
+    let customerId = await stripeCustomerRepository.getByTenant(scope);
+    if (!customerId) {
+      customerId = await stripe.createCustomer({ tenantId });
+      await stripeCustomerRepository.link(scope, customerId);
+    }
+    const appOrigin = appOrigins()[0] ?? "";
+    const session = await stripe.createCheckoutSession({
+      mode: "subscription",
+      priceId: template.stripePriceId,
+      customerId,
+      successUrl: `${appOrigin}/settings/billing?tab=subscription&checkout=success`,
+      cancelUrl: `${appOrigin}/settings/billing?tab=subscription&checkout=cancelled`,
+      // Stamped on the session AND (adapter) subscription_data → the webhook reads tenant_id + plan_template_key.
+      metadata: { tenant_id: tenantId, plan_template_key: template.key },
+    });
+    return c.json({ available: true, checkoutUrl: session.url });
+  } catch (err) {
+    if (err instanceof StripeError)
+      return c.json({ available: false }, err.reason === "not_configured" ? 501 : 502);
+    throw err;
+  }
+});
+
+// The tenant's current subscription for the billing hub (M11 subs, ADR-0041) — the read behind the Subscription
+// tab. Tenant-scoped (RLS-isolated getForTenant); null = month-to-month (no active subscription). The plan
+// display NAME is resolved against the owner-only plan-template catalog (non-PII). Read-only mirror of Stripe.
+creditsRoutes.get("/subscription", requireRole("owner", "admin", "member", "viewer"), async (c) => {
+  const sub = await subscriptionRepository.getForTenant({ tenantId: c.get("tenantId") });
+  if (!sub) return c.json({ subscription: null });
+  const planName = await withPlatformReadTx(async (tx) => {
+    const tpl = await planTemplateRepository.getByKey(tx, sub.planTemplateKey);
+    return tpl?.name ?? null;
+  });
+  const view: SubscriptionView = {
+    plan: sub.planTemplateKey,
+    planName,
+    status: sub.status,
+    term: sub.term,
+    currentPeriodEnd: sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null,
+    cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+    autoRenew: sub.autoRenew,
+  };
+  return c.json({ subscription: view });
+});
+
+// The customer's own credit history (M11, ADR-0029) — a keyset page of every ledger movement (grants, spends,
+// adjustments, subscription resets), newest-first. Tenant-scoped: RLS-isolated under withTenantTx, so a caller
+// only ever sees their own tenant's rows. The unified statement behind the billing hub's "Credit history"; for
+// a pre-ledger tenant it covers movements from the ledger's introduction onward until the reconciliation
+// backfill runs (the UI notes this). PII-free — amounts + reason only.
+creditsRoutes.get("/ledger", requireRole("owner", "admin", "member", "viewer"), async (c) => {
+  const cursor = c.req.query("cursor") || undefined;
+  const rawLimit = Number(c.req.query("limit") ?? "30");
+  const limit = Number.isInteger(rawLimit) && rawLimit >= 1 && rawLimit <= 100 ? rawLimit : 30;
+  const page = await creditRepository.ledgerPage(
+    { tenantId: c.get("tenantId") },
+    { limit, cursor },
+  );
+  const entries: CreditLedgerEntry[] = page.rows.map((r) => ({
+    id: r.id,
+    entryType: r.entryType,
+    delta: r.delta,
+    balanceAfter: r.balanceAfter,
+    reason: r.reason,
+    createdAt: r.createdAt.toISOString(),
+  }));
+  return c.json({ entries, nextCursor: page.nextCursor });
 });
 
 const USAGE_CSV_HEADER = [

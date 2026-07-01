@@ -36,6 +36,10 @@ export const tenants = pgTable(
     seatLimit: integer("seat_limit").notNull().default(1),
     workspaceLimit: integer("workspace_limit"),
     revealCreditBalance: integer("reveal_credit_balance").notNull().default(0),
+    // The perishable (subscription-granted) portion of reveal_credit_balance (M11 buckets, ADR-0041): resets
+    // each subscription cycle; purchased = reveal_credit_balance − subscription_credit_balance never expires.
+    // Spend consumes this first. The CHECK (0 ≤ sub ≤ total) lives in rls/billing.sql. 0 until a plan grants.
+    subscriptionCreditBalance: integer("subscription_credit_balance").notNull().default(0),
     // Per-tenant email send-quota (M12 — email-planning/13 P0, 15 §A.6): the metered-spend / abuse cap,
     // mirroring revealCreditBalance. `email_send_quota` null = unlimited. The no-overdraft CHECK below + a
     // SELECT…FOR UPDATE in sendQuotaRepository make an over-quota send impossible (the creditRepository

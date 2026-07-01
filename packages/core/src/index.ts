@@ -544,11 +544,14 @@ export {
   type AddGlobalSuppressionInput,
 } from "./email/governance.ts";
 export { grantFromStripe } from "./billing/grantFromStripe.ts";
+export { handleSubscriptionEvent } from "./billing/handleSubscriptionEvent.ts";
 export {
   verifyStripeSignature,
   signStripePayload,
   parseCreditGrantEvent,
   type CreditGrantEvent,
+  parseSubscriptionEvent,
+  type SubscriptionEvent,
 } from "./billing/stripeWebhook.ts";
 export {
   StripeError,

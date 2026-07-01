@@ -16,6 +16,12 @@ CREATE POLICY tenants_self ON tenants
 ALTER TABLE tenants DROP CONSTRAINT IF EXISTS tenants_credit_nonnegative;
 ALTER TABLE tenants ADD CONSTRAINT tenants_credit_nonnegative CHECK (reveal_credit_balance >= 0);
 
+-- The subscription bucket (M11/ADR-0041) is a sub-portion of the total: never negative, never exceeding the
+-- total. Every mutation (subscription-first spend, the admin-debit clamp, the monthly reset) preserves this.
+ALTER TABLE tenants DROP CONSTRAINT IF EXISTS tenants_subscription_bucket;
+ALTER TABLE tenants ADD CONSTRAINT tenants_subscription_bucket
+  CHECK (subscription_credit_balance >= 0 AND subscription_credit_balance <= reveal_credit_balance);
+
 -- ── contact_reveals — workspace-scoped like contacts ────────────────────────────────────────────────────
 ALTER TABLE contact_reveals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contact_reveals FORCE ROW LEVEL SECURITY;

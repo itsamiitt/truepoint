@@ -295,6 +295,27 @@
       "when": 1783500000000,
       "tag": "0041_import_reject_histogram",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1783600000000,
+      "tag": "0042_stripe_price_ids",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1783700000000,
+      "tag": "0043_subscription_credit_bucket",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1783800000000,
+      "tag": "0044_subscriptions_billing_cycles",
+      "breakpoints": true
     }
   ]
 }

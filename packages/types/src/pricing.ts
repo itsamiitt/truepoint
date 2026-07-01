@@ -39,6 +39,43 @@ export type PublicCreditPacksResponse = z.infer<typeof publicCreditPacksResponse
 
 /** Response envelope for `GET /api/v1/pricing/plans`. */
 export const publicPlansResponseSchema = z.object({ plans: z.array(publicPlanSchema) });
+
+/** POST /credits/checkout body — the credit pack the customer wants to buy, by its catalog key (M11, ADR-0041). */
+export const creditCheckoutSchema = z.object({
+  pack: z.string().min(1).max(100),
+});
+export type CreditCheckout = z.infer<typeof creditCheckoutSchema>;
+
+/** POST /credits/subscribe body — the plan the customer wants to subscribe to, by its template key (M11 subs). */
+export const subscribeSchema = z.object({
+  plan: z.string().min(1).max(100),
+});
+export type Subscribe = z.infer<typeof subscribeSchema>;
+
+/** GET /credits/subscription — the tenant's current subscription for the billing hub, or null (month-to-month).
+ *  Read-only mirror of Stripe state (M11 subs, ADR-0041). */
+export const subscriptionViewSchema = z.object({
+  plan: z.string(),
+  planName: z.string().nullable(),
+  status: z.string(),
+  term: z.string(),
+  currentPeriodEnd: z.string().nullable(), // ISO-8601
+  cancelAtPeriodEnd: z.boolean(),
+  autoRenew: z.boolean(),
+});
+export type SubscriptionView = z.infer<typeof subscriptionViewSchema>;
+
+/** One entry in the customer's own credit history (M11, ADR-0029) — a signed movement + the running balance
+ *  after it. `entryType` is grant | spend | credit_back | adjustment (+ subscription reset/expiry). */
+export const creditLedgerEntrySchema = z.object({
+  id: z.string().uuid(),
+  entryType: z.string(),
+  delta: z.number().int(),
+  balanceAfter: z.number().int().nullable(),
+  reason: z.string().nullable(),
+  createdAt: z.string(), // ISO-8601
+});
+export type CreditLedgerEntry = z.infer<typeof creditLedgerEntrySchema>;
 export type PublicPlansResponse = z.infer<typeof publicPlansResponseSchema>;
 
 /** The authenticated tenant's plan + credits envelope — `GET /api/v1/credits/me`. Reads the tenant counter and

@@ -21,6 +21,7 @@ import {
   platformStaffRepository,
   platformTrustReadRepository,
   retentionClassPolicyRepository,
+  subscriptionRepository,
   supportNoteRepository,
   withPlatformTx,
 } from "@leadwolf/db";
@@ -32,6 +33,7 @@ import {
   type LedgerEntryView,
   NotFoundError,
   type StaffListOverview,
+  type SubscriptionView,
   type SupportNoteView,
   type TenantEconomicsDetail,
   ValidationError,
@@ -637,6 +639,34 @@ adminRoutes.get("/tenants/:id/ledger", requireCapability("billing:read"), async 
     createdAt: r.createdAt.toISOString(),
   }));
   return c.json({ entries, nextCursor: page.nextCursor });
+});
+
+// One tenant's current subscription (M11 subs, ADR-0041) — the staff view on the tenant-detail page, sibling to
+// the ledger. billing:read; audited "admin.tenant_subscription". Owner read (getForTenant's WHERE tenant_id is
+// the scope, no RLS GUC needed). null = month-to-month. Read-only mirror of Stripe state.
+adminRoutes.get("/tenants/:id/subscription", requireCapability("billing:read"), async (c) => {
+  const tenantId = c.req.param("id");
+  if (!UUID_RE.test(tenantId)) throw new ValidationError("id must be a UUID");
+  const view = await withPlatformTx(
+    actorOf(c),
+    "admin.tenant_subscription",
+    async (tx): Promise<SubscriptionView | null> => {
+      const sub = await subscriptionRepository.getForTenant({ tenantId }, tx);
+      if (!sub) return null;
+      const tpl = await planTemplateRepository.getByKey(tx, sub.planTemplateKey);
+      return {
+        plan: sub.planTemplateKey,
+        planName: tpl?.name ?? null,
+        status: sub.status,
+        term: sub.term,
+        currentPeriodEnd: sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+        autoRenew: sub.autoRenew,
+      };
+    },
+    { targetType: "tenant", targetId: tenantId, tenantId },
+  );
+  return c.json({ subscription: view });
 });
 
 adminRoutes.post(

@@ -12,14 +12,17 @@ import styles from "../billing.module.css";
 import { useBilling } from "../hooks/useBilling";
 import { BillingTab, DEFAULT_BILLING_TAB, readBillingTabFromUrl } from "../tabs";
 import { CreditsTab } from "./tabs/CreditsTab";
+import { HistoryTab } from "./tabs/HistoryTab";
 import { PlaceholderTab } from "./tabs/PlaceholderTab";
 import { PlanTab } from "./tabs/PlanTab";
+import { SubscriptionTab } from "./tabs/SubscriptionTab";
 import { UsageTab } from "./tabs/UsageTab";
 
 const TAB_ITEMS = [
   { value: BillingTab.Plan, label: "Plan" },
   { value: BillingTab.Credits, label: "Credits" },
   { value: BillingTab.Usage, label: "Usage" },
+  { value: BillingTab.History, label: "Credit history" },
   { value: BillingTab.Invoices, label: "Invoices" },
   { value: BillingTab.Subscription, label: "Subscription" },
 ];
@@ -60,10 +63,9 @@ export function BillingPage() {
             description="Itemized invoices and receipts will appear here once card billing is enabled."
           />
         ) : tab === BillingTab.Subscription ? (
-          <PlaceholderTab
-            title="You're on month-to-month"
-            description="No auto-renewal, no lock-in — credits never expire. Subscription and cancel controls arrive with recurring billing."
-          />
+          <SubscriptionTab />
+        ) : tab === BillingTab.History ? (
+          <HistoryTab />
         ) : (
           <StateSwitch loading={loading} error={error} onRetry={reload}>
             {tab === BillingTab.Plan && <PlanTab plan={plan} />}

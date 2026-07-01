@@ -6,6 +6,7 @@ export const BillingTab = {
   Plan: "plan",
   Credits: "credits",
   Usage: "usage",
+  History: "history",
   Invoices: "invoices",
   Subscription: "subscription",
 } as const;

@@ -9,6 +9,7 @@ import type {
   LedgerEntryView,
   RefundReason,
   SetAuthEnforcementInput,
+  SubscriptionView,
   TenantEconomicsDetail,
 } from "@leadwolf/types";
 import type {
@@ -165,6 +166,16 @@ export async function fetchTenantLedger(id: string, cursor?: string): Promise<Te
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load the credit ledger"));
   return (await res.json()) as TenantLedgerPage;
+}
+
+/** GET /admin/tenants/:id/subscription — the tenant's current subscription, or null (billing:read). */
+export async function fetchTenantSubscription(id: string): Promise<SubscriptionView | null> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/subscription`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load the subscription"));
+  const body = (await res.json()) as { subscription: SubscriptionView | null };
+  return body.subscription;
 }
 
 /** POST /admin/tenants/:id/purchases/:purchaseId/refund — reverse a purchase (tenants:credits). A structured

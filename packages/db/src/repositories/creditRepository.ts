@@ -2,9 +2,33 @@
 // 07 §2/§4, ADR-0007). The counter mutations are tx-aware (composed inside the reveal tx / webhook tx);
 // the FOR UPDATE lock + the DB CHECK (reveal_credit_balance >= 0) are the double-spend/overdraft guards.
 
-import { gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { contactReveals, creditLedger, purchases } from "../schema/billing.ts";
+import { computeMonthlyReset } from "./subscriptionResetMath.ts";
+
+/** One credit-ledger entry for the CUSTOMER's own statement (M11) — the movement + running balance, no
+ *  internal refs. */
+export interface CustomerLedgerRow {
+  id: string;
+  entryType: string;
+  delta: number;
+  balanceAfter: number | null;
+  reason: string | null;
+  createdAt: Date;
+}
+
+// Opaque keyset cursor over the time-ordered v7 id (id DESC = newest-first; id < cursor = next older page).
+function encodeLedgerCursor(id: string): string {
+  return Buffer.from(id, "utf8").toString("base64url");
+}
+function decodeLedgerCursor(cursor: string): string | null {
+  try {
+    return Buffer.from(cursor, "base64url").toString("utf8") || null;
+  } catch {
+    return null;
+  }
+}
 
 /** One day of credit burn for the Home sparkline (07 §2). */
 export interface BurnByDayRow {
@@ -51,19 +75,30 @@ export interface LedgerEntryInput {
 }
 
 export const creditRepository = {
-  /** Serialize concurrent reveals for one tenant: SELECT … FOR UPDATE on the counter row (07 §3). */
-  async lockBalance(tx: Tx, tenantId: string): Promise<number> {
+  /** Serialize concurrent reveals for one tenant: SELECT … FOR UPDATE on the counter row (07 §3). Returns the
+   *  total balance AND the perishable subscription portion (M11 buckets, ADR-0041) so the caller can split the
+   *  spend subscription-first. */
+  async lockBalance(
+    tx: Tx,
+    tenantId: string,
+  ): Promise<{ balance: number; subscriptionBalance: number }> {
     const rows = (await tx.execute(
-      sql`SELECT reveal_credit_balance AS balance FROM tenants WHERE id = ${tenantId} FOR UPDATE`,
-    )) as unknown as Array<{ balance: number }>;
+      sql`SELECT reveal_credit_balance AS balance, subscription_credit_balance AS sub
+          FROM tenants WHERE id = ${tenantId} FOR UPDATE`,
+    )) as unknown as Array<{ balance: number; sub: number }>;
     if (rows.length === 0) throw new Error("tenant row not visible in scoped transaction");
-    return Number(rows[0]!.balance);
+    return { balance: Number(rows[0]!.balance), subscriptionBalance: Number(rows[0]!.sub) };
   },
 
-  /** Decrement under the lock taken by lockBalance. The CHECK constraint makes overdraft impossible. */
-  async decrement(tx: Tx, tenantId: string, cost: number): Promise<void> {
+  /** Decrement under the lock taken by lockBalance — subscription-first (M11/ADR-0041): `fromSubscription`
+   *  (= min(cost, subscription balance)) comes off the perishable bucket, the rest off purchased credits. Both
+   *  CHECKs hold — total ≥ 0 (existing), and 0 ≤ sub ≤ total because cost ≥ fromSubscription ≥ 0. */
+  async decrement(tx: Tx, tenantId: string, cost: number, fromSubscription: number): Promise<void> {
     await tx.execute(
-      sql`UPDATE tenants SET reveal_credit_balance = reveal_credit_balance - ${cost} WHERE id = ${tenantId}`,
+      sql`UPDATE tenants
+          SET reveal_credit_balance = reveal_credit_balance - ${cost},
+              subscription_credit_balance = subscription_credit_balance - ${fromSubscription}
+          WHERE id = ${tenantId}`,
     );
   },
 
@@ -179,6 +214,74 @@ export const creditRepository = {
   },
 
   /**
+   * The subscription monthly reset (M11 buckets, ADR-0041) — run in the caller's per-tenant tx, atomic under the
+   * tenant row lock. Expires the unused perishable allotment (the subscription bucket), grants the new monthly
+   * allotment, and resets the bucket — all ledgered so SUM(delta) still equals the counter (recon stays green).
+   * PURCHASED credits (total − subscription) are never touched. Idempotent per cycle via the ledger idempotency
+   * keys, and the caller marks the cycle granted in the SAME tx (so a due cycle is processed exactly once).
+   * Returns the amounts + the grant ledger id (for the billing_cycle link). Missing tenant → a zero no-op.
+   */
+  async applyMonthlyReset(
+    tx: Tx,
+    tenantId: string,
+    cycleId: string,
+    grantCredits: number,
+  ): Promise<{ expired: number; granted: number; grantLedgerId: string | null }> {
+    const rows = (await tx.execute(
+      sql`SELECT reveal_credit_balance AS balance, subscription_credit_balance AS sub
+          FROM tenants WHERE id = ${tenantId}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ balance: number; sub: number }>;
+    if (rows.length === 0) return { expired: 0, granted: 0, grantLedgerId: null };
+    const math = computeMonthlyReset(Number(rows[0]!.balance), Number(rows[0]!.sub), grantCredits);
+    const expire = math.expired;
+
+    // 1) Expire the unused perishable allotment: total -= expire (purchased credits untouched). Ledger adjustment.
+    if (expire > 0) {
+      await tx.execute(
+        sql`UPDATE tenants SET reveal_credit_balance = reveal_credit_balance - ${expire} WHERE id = ${tenantId}::uuid`,
+      );
+      await this.insertLedger(tx, {
+        tenantId,
+        entryType: "adjustment",
+        delta: -expire,
+        balanceAfter: math.afterExpiry,
+        idempotencyKey: `sub_reset_expiry:${cycleId}`,
+        reason: "subscription_reset_expiry",
+        metadata: { cycleId },
+      });
+    }
+
+    // 2) Grant the new monthly allotment: total += grant. Ledger 'grant'; capture its id for the cycle link.
+    let grantLedgerId: string | null = null;
+    if (grantCredits > 0) {
+      await tx.execute(
+        sql`UPDATE tenants SET reveal_credit_balance = reveal_credit_balance + ${grantCredits} WHERE id = ${tenantId}::uuid`,
+      );
+      const [grantRow] = await tx
+        .insert(creditLedger)
+        .values({
+          tenantId,
+          entryType: "grant",
+          delta: grantCredits,
+          balanceAfter: math.afterGrant,
+          idempotencyKey: `sub_grant:${cycleId}`,
+          reason: "subscription_grant",
+          metadata: { cycleId },
+        })
+        .onConflictDoNothing({ target: [creditLedger.tenantId, creditLedger.idempotencyKey] })
+        .returning({ id: creditLedger.id });
+      grantLedgerId = grantRow?.id ?? null;
+    }
+
+    // 3) Reset the perishable bucket to the new allotment (≤ total → the sub-bucket CHECK holds).
+    await tx.execute(
+      sql`UPDATE tenants SET subscription_credit_balance = ${grantCredits} WHERE id = ${tenantId}::uuid`,
+    );
+
+    return { expired: expire, granted: grantCredits, grantLedgerId };
+  },
+
+  /**
    * Active tenants that have NOT yet been ledger-backfilled — i.e. carry no `opening_balance:<id>` marker
    * entry. The self-terminating work-list for the one-time backfill sweep (M11). Owner read; bounded.
    */
@@ -237,5 +340,44 @@ export const creditRepository = {
       ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
     `);
     return { residual };
+  },
+
+  /**
+   * The CUSTOMER's own credit ledger (M11) — a keyset page of every balance movement (grants, spends,
+   * adjustments, subscription resets, the opening-balance backfill), newest-first over the v7 id. Tenant-scoped:
+   * runs under withTenantTx so the ENABLE-RLS policy (tenant_id = app.current_tenant_id) isolates it to the
+   * caller's tenant (the explicit tenant_id predicate is belt-and-suspenders + an index prefix). limit+1 probe
+   * → nextCursor; null cursor = last page. NOTE: complete only once the ledger backfill has run for a pre-ledger
+   * tenant — the api surfaces `backfilled` so the UI can note it.
+   */
+  async ledgerPage(
+    scope: TenantScope,
+    opts: { limit?: number; cursor?: string },
+  ): Promise<{ rows: CustomerLedgerRow[]; nextCursor: string | null }> {
+    const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+    const cursorId = opts.cursor ? decodeLedgerCursor(opts.cursor) : null;
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select({
+          id: creditLedger.id,
+          entryType: creditLedger.entryType,
+          delta: creditLedger.delta,
+          balanceAfter: creditLedger.balanceAfter,
+          reason: creditLedger.reason,
+          createdAt: creditLedger.createdAt,
+        })
+        .from(creditLedger)
+        .where(
+          cursorId
+            ? and(eq(creditLedger.tenantId, scope.tenantId), lt(creditLedger.id, cursorId))
+            : eq(creditLedger.tenantId, scope.tenantId),
+        )
+        .orderBy(desc(creditLedger.id))
+        .limit(limit + 1);
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const nextCursor = hasMore ? encodeLedgerCursor(page[page.length - 1]!.id) : null;
+      return { rows: page, nextCursor };
+    });
   },
 };

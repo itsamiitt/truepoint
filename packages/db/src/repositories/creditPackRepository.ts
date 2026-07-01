@@ -2,7 +2,7 @@
 // transaction handed by withPlatformTx (owner connection, audited). Upsert is keyed on the natural `key`, so
 // re-authoring a pack is idempotent. Reads are bounded — no unbounded scans (ADR-0032).
 
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { creditPacks } from "../schema/platformOps.ts";
 
@@ -11,6 +11,7 @@ export interface CreditPackRow {
   name: string;
   credits: number;
   priceCents: number;
+  stripePriceId: string | null;
   active: boolean;
   sortOrder: number;
   updatedAt: Date;
@@ -21,6 +22,7 @@ export interface UpsertCreditPackInput {
   name: string;
   credits: number;
   priceCents: number;
+  stripePriceId?: string | null;
   sortOrder: number;
 }
 
@@ -31,6 +33,7 @@ const PACK_COLS = {
   name: creditPacks.name,
   credits: creditPacks.credits,
   priceCents: creditPacks.priceCents,
+  stripePriceId: creditPacks.stripePriceId,
   active: creditPacks.active,
   sortOrder: creditPacks.sortOrder,
   updatedAt: creditPacks.updatedAt,
@@ -57,8 +60,18 @@ export const creditPackRepository = {
       .limit(PACK_LIMIT);
   },
 
+  /** One ACTIVE pack by key — the checkout lookup (M11, ADR-0041). Owner read; null when unknown/retired. */
+  async getActiveByKey(tx: Tx, key: string): Promise<CreditPackRow | null> {
+    const [row] = await tx
+      .select(PACK_COLS)
+      .from(creditPacks)
+      .where(and(eq(creditPacks.key, key), eq(creditPacks.active, true)))
+      .limit(1);
+    return (row as CreditPackRow) ?? null;
+  },
+
   /** Create or update a pack (idempotent on `key`). An update keeps `active` (toggled separately) but bumps
-   *  updated_at; an insert defaults active=true. Returns the resulting row. */
+   *  updated_at; an insert defaults active=true. `stripePriceId` is set only when provided. Returns the row. */
   async upsert(tx: Tx, input: UpsertCreditPackInput): Promise<CreditPackRow> {
     const [row] = await tx
       .insert(creditPacks)
@@ -67,6 +80,7 @@ export const creditPackRepository = {
         name: input.name,
         credits: input.credits,
         priceCents: input.priceCents,
+        stripePriceId: input.stripePriceId ?? null,
         sortOrder: input.sortOrder,
       })
       .onConflictDoUpdate({
@@ -75,6 +89,7 @@ export const creditPackRepository = {
           name: input.name,
           credits: input.credits,
           priceCents: input.priceCents,
+          ...(input.stripePriceId !== undefined ? { stripePriceId: input.stripePriceId } : {}),
           sortOrder: input.sortOrder,
           updatedAt: sql`now()`,
         },
