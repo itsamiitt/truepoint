@@ -85,8 +85,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1208,
-  "fileSetHash": "sha256:9a968608d9a1db32374f8600ab7f8609f6d18c8e393d8fe6dbc36e703788a6d7",
+  "fileCount": 1209,
+  "fileSetHash": "sha256:b02812d2767dc32d35bf7f1dae18f5dd09dd74499755f040d26ab67e4a07aed9",
   "features": {
     "account-search": {
       "web": [],
@@ -214,6 +214,7 @@
       "admin": [
         "apps/admin/src/features/billing/api.ts",
         "apps/admin/src/features/billing/components/BillingEconomicsPage.tsx",
+        "apps/admin/src/features/billing/components/EconomicsTrend.tsx",
         "apps/admin/src/features/billing/hooks/useEconomics.ts",
         "apps/admin/src/features/billing/index.ts",
         "apps/admin/src/features/billing/types.ts"
