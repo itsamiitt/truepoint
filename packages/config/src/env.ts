@@ -218,6 +218,16 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Chrome-extension capture connector (prospect-database-platform I6 / audit P07): a SCRAPING ingestion source
+    // (a rep's browser extension submits observations captured from a page). DEFAULT-OFF and DARK until LEGAL
+    // SIGN-OFF (ToS/BrowserGate, 06/09): while off the connector is not registered, so POST /api/v1/ingest returns
+    // 400 'no connector' for chrome_extension and NOTHING is captured. When on, the connector HARD-GATES every
+    // envelope on a valid consent/ToS context before any observation is produced; suppression-block-before-surface
+    // + the async land pipeline are separate later slices. Same explicit-"true"-only posture as BULK_IMPORT_ENABLED.
+    CHROME_EXTENSION_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
   })
   .superRefine((val, ctx) => {
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.

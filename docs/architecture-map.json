@@ -89,8 +89,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1231,
-  "fileSetHash": "sha256:6d813bb16a2ec166f91187b6c550bbb92507127d402bc3fcc89a2f22f076b522",
+  "fileCount": 1233,
+  "fileSetHash": "sha256:a5f743e82a1ce11f37d4a643bc7daa44399a375d0e79132543d72441d5ee4298",
   "features": {
     "account-search": {
       "web": [],
@@ -762,6 +762,8 @@
       "api": [],
       "core": [
         "packages/core/src/ingestion/connectors/adminUpload.ts",
+        "packages/core/src/ingestion/connectors/chromeExtension.test.ts",
+        "packages/core/src/ingestion/connectors/chromeExtension.ts",
         "packages/core/src/ingestion/index.ts",
         "packages/core/src/ingestion/registerBuiltins.ts",
         "packages/core/src/ingestion/registry.ts"
