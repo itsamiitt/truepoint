@@ -11,7 +11,7 @@ import styles from "./NotificationsBell.module.css";
 import { useNotifications } from "./useNotifications";
 
 export function NotificationsBell() {
-  const { items, unreadCount, dismiss, loading } = useNotifications();
+  const { items, unreadCount, dismiss, markAll, loading } = useNotifications();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -52,7 +52,33 @@ export function NotificationsBell() {
 
       {open && (
         <section className={styles.menu} aria-label="Notifications">
-          <div className={styles.head}>Notifications</div>
+          <div
+            className={styles.head}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+            }}
+          >
+            <span>Notifications</span>
+            {unreadCount > 0 ? (
+              <button
+                type="button"
+                onClick={markAll}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  color: "var(--tp-accent, #2563c9)",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                Mark all read
+              </button>
+            ) : null}
+          </div>
           {items.length === 0 ? (
             <p className={styles.empty}>{loading ? "Checking…" : "You're all caught up."}</p>
           ) : (
@@ -77,6 +103,20 @@ export function NotificationsBell() {
               ))}
             </ul>
           )}
+          <Link
+            href="/notifications"
+            onClick={() => setOpen(false)}
+            style={{
+              display: "block",
+              padding: "10px 14px",
+              fontSize: 12,
+              color: "var(--tp-accent, #2563c9)",
+              textDecoration: "none",
+              borderTop: "1px solid var(--tp-hairline)",
+            }}
+          >
+            See all notifications
+          </Link>
         </section>
       )}
     </div>

@@ -256,5 +256,10 @@ contactsBulkRoutes.get("/export/revealed/:exportId", async (c) => {
   }
   c.header("content-type", "text/csv; charset=utf-8");
   c.header("content-disposition", `attachment; filename="contacts-revealed-${exportId}.csv"`);
-  return c.body(bytes, 200);
+  // Merged-types fallout: c.body's Data type rejects a Buffer/Uint8Array here — hand it a fresh ArrayBuffer
+  // slice (exact bytes; runtime behavior unchanged).
+  return c.body(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+    200,
+  );
 });

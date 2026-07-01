@@ -124,6 +124,15 @@ function extractJsonObject(json: unknown): unknown {
   return null;
 }
 
+/** Pull `usage.{input,output}_tokens` out of a Messages API response (M14 metering); 0s when absent. */
+function extractUsage(json: unknown): { inputTokens: number; outputTokens: number } {
+  const u = (json as { usage?: { input_tokens?: unknown; output_tokens?: unknown } } | null)?.usage;
+  return {
+    inputTokens: typeof u?.input_tokens === "number" ? u.input_tokens : 0,
+    outputTokens: typeof u?.output_tokens === "number" ? u.output_tokens : 0,
+  };
+}
+
 /** Validate the model's object against `contactQuery`; returns the parsed filter + optional notes, or null. */
 function validate(raw: unknown): { query: AiParsedQuery; notes?: string } | null {
   if (typeof raw !== "object" || raw === null) return null;
@@ -148,7 +157,7 @@ export function anthropicNlSearchAdapter(options: NlSearchAdapterOptions = {}): 
     nl: string,
     schema: SearchSchemaContext,
     repairNote: string | null,
-  ): Promise<unknown> {
+  ): Promise<{ obj: unknown; usage: { inputTokens: number; outputTokens: number } }> {
     const userContent = repairNote
       ? `${repairNote}\n\nSearch description: ${nl}`
       : `Search description: ${nl}`;
@@ -174,7 +183,7 @@ export function anthropicNlSearchAdapter(options: NlSearchAdapterOptions = {}): 
     if (status >= 400) {
       throw new AiParseError("ai_unavailable", `AI provider error (${status}).`);
     }
-    return extractJsonObject(json);
+    return { obj: extractJsonObject(json), usage: extractUsage(json) };
   }
 
   return {
@@ -185,18 +194,34 @@ export function anthropicNlSearchAdapter(options: NlSearchAdapterOptions = {}): 
       }
 
       // First attempt.
-      const first = validate(await callModel(nl, schema, null));
-      if (first) return { query: first.query, notes: first.notes, usedRepair: false };
+      const firstCall = await callModel(nl, schema, null);
+      const first = validate(firstCall.obj);
+      if (first)
+        return {
+          query: first.query,
+          notes: first.notes,
+          usedRepair: false,
+          usage: firstCall.usage,
+        };
 
       // One repair pass: tell the model its previous output was invalid and ask for a conforming object.
-      const repaired = validate(
-        await callModel(
-          nl,
-          schema,
-          "Your previous output was not a valid filter object. Return ONLY the JSON object matching the schema, with no other text.",
-        ),
+      const repairCall = await callModel(
+        nl,
+        schema,
+        "Your previous output was not a valid filter object. Return ONLY the JSON object matching the schema, with no other text.",
       );
-      if (repaired) return { query: repaired.query, notes: repaired.notes, usedRepair: true };
+      const repaired = validate(repairCall.obj);
+      if (repaired)
+        return {
+          query: repaired.query,
+          notes: repaired.notes,
+          usedRepair: true,
+          // Bill both calls — the tenant paid for the failed attempt + the repair.
+          usage: {
+            inputTokens: firstCall.usage.inputTokens + repairCall.usage.inputTokens,
+            outputTokens: firstCall.usage.outputTokens + repairCall.usage.outputTokens,
+          },
+        };
 
       throw new AiParseError(
         "ai_invalid_output",

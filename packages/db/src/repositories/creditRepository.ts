@@ -4,7 +4,7 @@
 
 import { gte, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
-import { contactReveals, purchases } from "../schema/billing.ts";
+import { contactReveals, creditLedger, purchases } from "../schema/billing.ts";
 
 /** One day of credit burn for the Home sparkline (07 §2). */
 export interface BurnByDayRow {
@@ -23,6 +23,31 @@ export interface GrantInput {
 export interface GrantResult {
   granted: boolean; // false when the event was already processed (duplicate webhook)
   balanceAfter: number;
+}
+
+/** The credit-ledger entry_type vocabulary (M11 + M12-reserved). Mirrors credit_ledger.entry_type CHECK. */
+export type LedgerEntryType =
+  | "grant"
+  | "spend"
+  | "credit_back"
+  | "adjustment"
+  | "lease"
+  | "settle"
+  | "release";
+
+/** One append to the credit ledger (ADR-0029). `delta` is SIGNED per the entry_type (the DB CHECK enforces it). */
+export interface LedgerEntryInput {
+  tenantId: string;
+  workspaceId?: string | null;
+  entryType: LedgerEntryType;
+  delta: number;
+  balanceAfter?: number | null;
+  idempotencyKey: string;
+  revealId?: string | null;
+  purchaseId?: string | null;
+  actorUserId?: string | null;
+  reason?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export const creditRepository = {
@@ -84,7 +109,9 @@ export const creditRepository = {
   /**
    * Idempotent Stripe grant (07 §4): credits land ONLY when the purchases insert wins; a duplicate
    * `stripe_event_id` is a no-op. SYSTEM path — runs on the base connection (no tenant GUC: the webhook
-   * carries no session), trusted because the event signature was verified at the route.
+   * carries no session), trusted because the event signature was verified at the route. M11 (ADR-0029): on a
+   * real grant, post the paired `grant` ledger entry in the SAME tx as the counter update (atomic; idempotent
+   * on (tenant, grant:<stripe_event_id>)). The insert runs on the owner connection → bypasses ENABLE RLS.
    */
   async grantFromEvent(input: GrantInput): Promise<GrantResult> {
     return db.transaction(async (tx) => {
@@ -109,7 +136,45 @@ export const creditRepository = {
       const rows = (await tx.execute(
         sql`SELECT reveal_credit_balance AS balance FROM tenants WHERE id = ${input.tenantId}`,
       )) as unknown as Array<{ balance: number }>;
-      return { granted, balanceAfter: rows.length > 0 ? Number(rows[0]!.balance) : 0 };
+      const balanceAfter = rows.length > 0 ? Number(rows[0]!.balance) : 0;
+      if (granted) {
+        await creditRepository.insertLedger(tx, {
+          tenantId: input.tenantId,
+          entryType: "grant",
+          delta: input.credits,
+          balanceAfter,
+          idempotencyKey: `grant:${input.stripeEventId}`,
+          purchaseId: inserted[0]!.id,
+          reason: "stripe_purchase",
+          metadata: input.amountCents != null ? { amountCents: input.amountCents } : {},
+        });
+      }
+      return { granted, balanceAfter };
     });
+  },
+
+  /**
+   * Append one immutable credit-ledger entry (M11, ADR-0029). Composed into the caller's tx so the entry and
+   * the counter mutation commit atomically. Idempotent on (tenant_id, idempotency_key): a replayed grant /
+   * reveal / adjustment re-posts nothing (ON CONFLICT DO NOTHING) — the ledger never double-counts. The
+   * entry_type ↔ delta sign is enforced by the DB CHECK; callers pass the correct sign per ADR-0029.
+   */
+  async insertLedger(tx: Tx, entry: LedgerEntryInput): Promise<void> {
+    await tx
+      .insert(creditLedger)
+      .values({
+        tenantId: entry.tenantId,
+        workspaceId: entry.workspaceId ?? null,
+        entryType: entry.entryType,
+        delta: entry.delta,
+        balanceAfter: entry.balanceAfter ?? null,
+        idempotencyKey: entry.idempotencyKey,
+        revealId: entry.revealId ?? null,
+        purchaseId: entry.purchaseId ?? null,
+        actorUserId: entry.actorUserId ?? null,
+        reason: entry.reason ?? null,
+        metadata: entry.metadata ?? {},
+      })
+      .onConflictDoNothing({ target: [creditLedger.tenantId, creditLedger.idempotencyKey] });
   },
 };

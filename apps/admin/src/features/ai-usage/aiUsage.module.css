@@ -1,0 +1,64 @@
+/*
+ * aiUsage.module.css — the AI-usage cockpit's window selector + per-tenant table (M14 / Area 14). Structure
+ * only; colours from --tp-* tokens. StatTile / StatusBadge carry their own styling.
+ */
+
+.window {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+.window select {
+  padding: 6px 10px;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--tp-radius, 6px);
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+  font-size: 13px;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--tp-hairline);
+  border-radius: var(--tp-radius, 8px);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table th,
+.table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--tp-hairline);
+  white-space: nowrap;
+}
+
+.table th {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--tp-ink-3);
+  background: var(--tp-surface-2, transparent);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.warn {
+  color: var(--tp-warning, #b45309);
+  font-weight: 600;
+}

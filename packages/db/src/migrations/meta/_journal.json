@@ -267,6 +267,27 @@
       "when": 1783100000000,
       "tag": "0037_plan_trial_bonus",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1783200000000,
+      "tag": "0038_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1783300000000,
+      "tag": "0039_ai_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1783400000000,
+      "tag": "0040_credit_ledger",
+      "breakpoints": true
     }
   ]
 }

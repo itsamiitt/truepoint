@@ -17,6 +17,7 @@
     "admin",
     "admin-settings",
     "ai",
+    "ai-usage",
     "alerts",
     "announcements",
     "api-public",
@@ -91,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1255,
-  "fileSetHash": "sha256:f6b095e0525159a3a443fc193ce5eff21a09512933923ff2424a1b9279afbea7",
+  "fileCount": 1274,
+  "fileSetHash": "sha256:7052ec2d5d988427a92e56983705dc0500d24e4a367909fe8a264693b532efe4",
   "features": {
     "account-search": {
       "web": [],
@@ -163,6 +164,23 @@
         "packages/core/src/ai/promptGuard.test.ts",
         "packages/core/src/ai/promptGuard.ts"
       ],
+      "db": [
+        "packages/db/src/repositories/aiRequestRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
+    "ai-usage": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/ai-usage/api.ts",
+        "apps/admin/src/features/ai-usage/components/AiUsagePage.tsx",
+        "apps/admin/src/features/ai-usage/hooks/useAiUsage.ts",
+        "apps/admin/src/features/ai-usage/index.ts",
+        "apps/admin/src/features/ai-usage/types.ts"
+      ],
+      "api": [],
+      "core": [],
       "db": [],
       "workers": [],
       "integrations": []
@@ -808,6 +826,25 @@
       "core": [],
       "db": [
         "packages/db/src/repositories/listRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
+    "notifications": {
+      "web": [
+        "apps/web/src/features/notifications/api.ts",
+        "apps/web/src/features/notifications/components/NotificationsPage.tsx",
+        "apps/web/src/features/notifications/hooks/useNotificationHistory.ts",
+        "apps/web/src/features/notifications/index.ts"
+      ],
+      "admin": [],
+      "api": [
+        "apps/api/src/features/notifications/index.ts",
+        "apps/api/src/features/notifications/routes.ts"
+      ],
+      "core": [],
+      "db": [
+        "packages/db/src/repositories/notificationRepository.ts"
       ],
       "workers": [],
       "integrations": []
@@ -1590,6 +1627,7 @@
   },
   "shared": {
     "apps/admin/app": [
+      "apps/admin/src/app/(shell)/ai-usage/page.tsx",
       "apps/admin/src/app/(shell)/audit-log/page.tsx",
       "apps/admin/src/app/(shell)/billing/page.tsx",
       "apps/admin/src/app/(shell)/compliance/page.tsx",
@@ -1761,6 +1799,7 @@
       "apps/web/src/app/(shell)/layout.tsx",
       "apps/web/src/app/(shell)/lists/[id]/page.tsx",
       "apps/web/src/app/(shell)/lists/page.tsx",
+      "apps/web/src/app/(shell)/notifications/page.tsx",
       "apps/web/src/app/(shell)/prospect/page.tsx",
       "apps/web/src/app/(shell)/reports/page.tsx",
       "apps/web/src/app/(shell)/sales-navigator/page.tsx",
@@ -1899,6 +1938,7 @@
       "packages/db/src/repositories/platformDataQualityReads.ts",
       "packages/db/src/repositories/platformTrustReads.ts",
       "packages/db/src/schema/activity.ts",
+      "packages/db/src/schema/aiRequests.ts",
       "packages/db/src/schema/auth.ts",
       "packages/db/src/schema/billing.ts",
       "packages/db/src/schema/compliance.ts",
@@ -1915,6 +1955,7 @@
       "packages/db/src/schema/intel.ts",
       "packages/db/src/schema/lists.ts",
       "packages/db/src/schema/masterGraph.ts",
+      "packages/db/src/schema/notifications.ts",
       "packages/db/src/schema/outreach.ts",
       "packages/db/src/schema/pipelineStages.ts",
       "packages/db/src/schema/platformOps.ts",
@@ -2000,6 +2041,7 @@
       "packages/types/src/accountsSearch.ts",
       "packages/types/src/activity.ts",
       "packages/types/src/aiSearch.ts",
+      "packages/types/src/aiUsage.ts",
       "packages/types/src/announcementAdmin.ts",
       "packages/types/src/auditCoverage.test.ts",
       "packages/types/src/auth.ts",
@@ -2034,6 +2076,7 @@
       "packages/types/src/jitElevation.ts",
       "packages/types/src/listGovernance.ts",
       "packages/types/src/lists.ts",
+      "packages/types/src/notifications.ts",
       "packages/types/src/outreach.ts",
       "packages/types/src/pipelineStages.ts",
       "packages/types/src/planTemplateAdmin.ts",

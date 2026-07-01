@@ -166,6 +166,8 @@ export {
   type GrantInput,
   type GrantResult,
   type BurnByDayRow,
+  type LedgerEntryType,
+  type LedgerEntryInput,
 } from "./repositories/creditRepository.ts";
 export {
   suppressionRepository,
@@ -456,6 +458,18 @@ export {
   type TenantFeatureFlagRecord,
   type FeatureFlagUpsertValues,
 } from "./repositories/featureFlagRepository.ts";
+// In-app notifications (G-NTF-1) — the workspace-scoped, per-user notification feed. Producers create; the
+// recipient lists/marks-read. RLS bounds the workspace; the repo enforces per-user visibility.
+export {
+  notificationRepository,
+  type NotificationRow,
+  type CreateNotificationInput,
+} from "./repositories/notificationRepository.ts";
+export {
+  aiRequestRepository,
+  type CreateAiRequestInput,
+  type AiUsageByTenant,
+} from "./repositories/aiRequestRepository.ts";
 // M12 email subsystem (email-planning/13 P0) — the net-new persistence that EXTENDS the M9 outreach engine
 // (D11): per-tenant sending identity, connected mailboxes (encrypted creds), the raw tracking firehose, and
 // the per-tenant send-quota (the creditRepository lock discipline).

@@ -27,3 +27,5 @@ export * from "./dataQualitySnapshots.ts";
 export * from "./retention.ts";
 export * from "./validationRules.ts";
 export * from "./projectionOutbox.ts";
+export * from "./notifications.ts";
+export * from "./aiRequests.ts";

@@ -4,6 +4,7 @@
 
 import { env } from "@leadwolf/config";
 import { diskFileStore, registerEmailProviders } from "@leadwolf/core";
+import { db, notificationRepository } from "@leadwolf/db";
 import { defaultProviders } from "@leadwolf/integrations";
 import type {
   BulkEnrichmentDeadLetter,
@@ -15,6 +16,13 @@ import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
+import {
+  BULK_ENRICHMENT_DLQ,
+  BULK_ENRICHMENT_QUEUE,
+  type BulkEnrichmentJobData,
+  deadLetterFailedBulkEnrichment,
+  makeProcessBulkEnrichment,
+} from "./queues/bulkEnrichment.ts";
 import {
   BULK_IMPORTS_DLQ,
   BULK_IMPORTS_QUEUE,
@@ -39,6 +47,7 @@ import {
   type EnrichmentJobData,
   processEnrichment,
 } from "./queues/enrichment.ts";
+import { ER_SWEEP_QUEUE, type ErSweepJobData, makeProcessErSweep } from "./queues/erSweep.ts";
 import {
   FIRMOGRAPHICS_QUEUE,
   type FirmographicsJobData,
@@ -66,13 +75,12 @@ import {
   type MasterBackfillSweepJobData,
   makeProcessMasterBackfillSweep,
 } from "./queues/masterBackfillSweep.ts";
+import { OUTREACH_QUEUE, type OutreachJobData, makeProcessOutreach } from "./queues/outreach.ts";
 import {
   PROJECTION_SWEEP_QUEUE,
   type ProjectionSweepJobData,
   makeProcessProjectionSweep,
 } from "./queues/projectionSweep.ts";
-import { ER_SWEEP_QUEUE, type ErSweepJobData, makeProcessErSweep } from "./queues/erSweep.ts";
-import { OUTREACH_QUEUE, type OutreachJobData, makeProcessOutreach } from "./queues/outreach.ts";
 import {
   RETENTION_SWEEP_QUEUE,
   type RetentionSweepJobData,
@@ -94,13 +102,6 @@ import {
   type SequenceTickJobData,
   makeProcessSequenceTick,
 } from "./queues/sequenceTick.ts";
-import {
-  BULK_ENRICHMENT_DLQ,
-  BULK_ENRICHMENT_QUEUE,
-  type BulkEnrichmentJobData,
-  deadLetterFailedBulkEnrichment,
-  makeProcessBulkEnrichment,
-} from "./queues/bulkEnrichment.ts";
 import {
   EMAIL_TOKEN_REFRESH_QUEUE,
   type TokenRefreshJobData,
@@ -387,6 +388,27 @@ export function startWorkers(): Worker[] {
         error: e instanceof Error ? e.message : String(e),
       }),
     );
+    // G-NTF-1 producer: tell the importer their import finished (best-effort — a note failure never affects the
+    // import). The notification insert runs on the base owner connection (BYPASSRLS), like the Stripe grant path.
+    const importedBy = job?.data?.importedByUserId;
+    if (importedBy) {
+      void db
+        .transaction((tx) =>
+          notificationRepository.create(tx, {
+            tenantId: scope.tenantId,
+            workspaceId: scope.workspaceId,
+            userId: importedBy,
+            type: "import_complete",
+            title: "Import finished",
+            body: `Your ${job.data.sourceName} import is ready — contacts are in your workspace.`,
+          }),
+        )
+        .catch((e) =>
+          log.error("imports: import-complete notification failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+    }
   });
   // Typed as Worker[] (not the inferred per-generic union) so the gated bulk worker — a Worker<BulkImportJobData> —
   // can be pushed below without a generic-mismatch error. Same element type the function already returns.

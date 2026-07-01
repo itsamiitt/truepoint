@@ -68,7 +68,9 @@ function toApprovalView(r: ApprovalRow) {
 }
 
 // One custom validation_rules row → the shared ValidationRule view (builtin=false; ISO dates).
-type ValidationRuleRow = Awaited<ReturnType<typeof platformAdminRepository.listValidationRules>>[number];
+type ValidationRuleRow = Awaited<
+  ReturnType<typeof platformAdminRepository.listValidationRules>
+>[number];
 
 function toValidationRuleView(r: ValidationRuleRow) {
   return {
@@ -325,7 +327,9 @@ dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), asyn
       if (row.operation === "retention_enforce") {
         const p = retentionEnforceParamsSchema.safeParse(row.params);
         if (!p.success)
-          throw new ValidationError(p.error.issues[0]?.message ?? "Invalid retention_enforce params");
+          throw new ValidationError(
+            p.error.issues[0]?.message ?? "Invalid retention_enforce params",
+          );
         // Arm real deletion for the class (the per-tenant retention_engine_enabled flag is still the outer gate).
         await retentionClassPolicyRepository.upsertPolicy(tx, {
           dataClass: p.data.dataClass,
@@ -395,7 +399,10 @@ dataRoutes.post("/validation/rules", requireCapability("data:manage"), async (c)
           enabled: parsed.data.enabled,
         })
         .then(toValidationRuleView),
-    { targetType: "validation_rule", metadata: { field: parsed.data.field, checkType: parsed.data.checkType } },
+    {
+      targetType: "validation_rule",
+      metadata: { field: parsed.data.field, checkType: parsed.data.checkType },
+    },
   );
   return c.json({ rule: validationRuleSchema.parse(view) });
 });
@@ -403,7 +410,8 @@ dataRoutes.post("/validation/rules", requireCapability("data:manage"), async (c)
 /** Update a custom rule. data:manage. Audited. Built-in ids (builtin:*) are not UUIDs → a clean 422. */
 dataRoutes.put("/validation/rules/:id", requireCapability("data:manage"), async (c) => {
   const id = c.req.param("id");
-  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID (built-in rules cannot be edited)");
+  if (!UUID_RE.test(id))
+    throw new ValidationError("id must be a UUID (built-in rules cannot be edited)");
   const parsed = upsertValidationRuleSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   await withPlatformTx(
@@ -434,7 +442,11 @@ dataRoutes.post("/validation/rules/:id/toggle", requireCapability("data:manage")
     actorOf(c),
     "data.validation_rule.toggle",
     async (tx) => {
-      const n = await platformAdminWriteRepository.setValidationRuleEnabled(tx, id, parsed.data.enabled);
+      const n = await platformAdminWriteRepository.setValidationRuleEnabled(
+        tx,
+        id,
+        parsed.data.enabled,
+      );
       if (n === 0) throw new NotFoundError("Validation rule not found.");
     },
     { targetType: "validation_rule", targetId: id, metadata: { enabled: parsed.data.enabled } },
@@ -445,7 +457,8 @@ dataRoutes.post("/validation/rules/:id/toggle", requireCapability("data:manage")
 /** Delete a custom rule (built-ins can't be deleted — they're code constants). data:manage. Audited. */
 dataRoutes.delete("/validation/rules/:id", requireCapability("data:manage"), async (c) => {
   const id = c.req.param("id");
-  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID (built-in rules cannot be deleted)");
+  if (!UUID_RE.test(id))
+    throw new ValidationError("id must be a UUID (built-in rules cannot be deleted)");
   await withPlatformTx(
     actorOf(c),
     "data.validation_rule.delete",
@@ -464,7 +477,9 @@ dataRoutes.delete("/validation/rules/:id", requireCapability("data:manage"), asy
 // graph via withErTx) land next behind maker-checker approval. `pending` rows are the human-decision queue (fed by
 // probabilistic ER, a later phase); `auto` rows are the deterministic resolutions, shown for oversight.
 
-type MatchLinkRow = Awaited<ReturnType<typeof platformAdminRepository.listMatchLinksForReview>>[number];
+type MatchLinkRow = Awaited<
+  ReturnType<typeof platformAdminRepository.listMatchLinksForReview>
+>[number];
 
 function toMatchLinkView(r: MatchLinkRow) {
   return {
@@ -508,5 +523,10 @@ dataRoutes.get("/approvals/:id/export", requireCapability("data:export"), async 
   }
   c.header("content-type", "text/csv; charset=utf-8");
   c.header("content-disposition", `attachment; filename="staff-export-${id}.csv"`);
-  return c.body(bytes, 200);
+  // Merged-types fallout: c.body's Data type rejects a Buffer/Uint8Array here — hand it a fresh ArrayBuffer
+  // slice (exact bytes; runtime behavior unchanged). See contacts-bulk export for the same shape.
+  return c.body(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+    200,
+  );
 });

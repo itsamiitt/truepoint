@@ -39,7 +39,10 @@ export {
   type ValidationRuleSpec,
 } from "./validation/index.ts";
 // Knowledge-DB survivorship quality score (prospect-database-platform I1 / Phase 05) — pure cluster-quality v1.
-export { computeClusterQualityScore, type ClusterQualityInput } from "./projection/computeQuality.ts";
+export {
+  computeClusterQualityScore,
+  type ClusterQualityInput,
+} from "./projection/computeQuality.ts";
 // Unified ingestion connector framework (prospect-database-platform Phase 03 / I2) — the Connector port + registry.
 export {
   type Connector,
@@ -563,7 +566,7 @@ export {
 // AI intelligence layer (23, ADR-0023): the AiPort seam + NL→structured-search compilation with the
 // prompt-injection guard + per-tenant budget guard. DI-only — core OWNS the port; the Anthropic adapter
 // (packages/integrations) implements it; core never imports integrations.
-export type { AiPort, SearchSchemaContext, ParseSearchResult } from "./ai/aiPort.ts";
+export type { AiPort, SearchSchemaContext, ParseSearchResult, AiCallUsage } from "./ai/aiPort.ts";
 export { AiParseError } from "./ai/aiPort.ts";
 export {
   compileSearchQuery,

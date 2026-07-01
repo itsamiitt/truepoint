@@ -107,6 +107,51 @@ export const purchases = pgTable(
   }),
 );
 
+// ── credit_ledger — the append-only credit audit trail (M11, ADR-0029). One immutable, tenant-scoped entry
+// per balance mutation: signed `delta` + entry_type + idempotency_key (dedups retries). The counter
+// tenants.reveal_credit_balance stays the fast read cache; SUM(delta) per tenant must equal it (the
+// billing-recon worker asserts this). RLS + the UPDATE/DELETE-blocking trigger live in rls/creditLedger.sql.
+// The lease/settle/release entry types + budget scoping are reserved for the M12 bulk/team-budget work.
+export const creditLedger = pgTable(
+  "credit_ledger",
+  {
+    id: id(),
+    tenantId: tenantId(),
+    // Optional workspace scoping (null on tenant-level entries like Stripe grants).
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
+    entryType: varchar("entry_type", { length: 20 }).notNull(),
+    // SIGNED: grant/credit_back/release ≥ 0; spend/lease/settle ≤ 0; adjustment ±. Guarded by the sign CHECK.
+    delta: integer("delta").notNull(),
+    // Materialized running balance AFTER this entry (read from inside the mutation tx) — a read convenience.
+    balanceAfter: integer("balance_after"),
+    // Dedup key: exactly one entry per (tenant, key). grant:<stripe_event_id> / reveal:<reveal_id> / adjust:<key>.
+    idempotencyKey: varchar("idempotency_key", { length: 255 }).notNull(),
+    revealId: uuid("reveal_id").references(() => contactReveals.id, { onDelete: "set null" }),
+    purchaseId: uuid("purchase_id").references(() => purchases.id, { onDelete: "set null" }),
+    actorUserId: uuid("actor_user_id").references(() => users.id), // null = system/automation
+    reason: varchar("reason", { length: 255 }),
+    metadata: jsonb("metadata").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    // Exactly one entry per (tenant, idempotency_key) — a replayed grant/reveal re-posts nothing.
+    uniqTenantIdem: uniqueIndex("uniq_credit_ledger_tenant_idem").on(t.tenantId, t.idempotencyKey),
+    // The tenant credit-history read (newest-first) + the recon SUM scan.
+    tenantCreatedIdx: index("idx_credit_ledger_tenant_created").on(t.tenantId, t.createdAt.desc()),
+    entryTypeEnum: check(
+      "credit_ledger_entry_type_enum",
+      sql`${t.entryType} IN ('grant','spend','credit_back','adjustment','lease','settle','release')`,
+    ),
+    // Sign discipline per ADR-0029 — a generator can never post a wrong-signed entry.
+    deltaSign: check(
+      "credit_ledger_delta_sign",
+      sql`(${t.entryType} IN ('grant','credit_back','release') AND ${t.delta} >= 0)
+       OR (${t.entryType} IN ('spend','lease','settle') AND ${t.delta} <= 0)
+       OR (${t.entryType} = 'adjustment')`,
+    ),
+  }),
+);
+
 // ── suppression_list — gates reveal AND send, checked IN-TX (08 §3; scopes global|tenant|workspace) ────
 export const suppressionList = pgTable(
   "suppression_list",
