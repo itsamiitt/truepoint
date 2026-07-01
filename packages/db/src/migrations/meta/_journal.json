@@ -288,6 +288,13 @@
       "when": 1783400000000,
       "tag": "0040_credit_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1783500000000,
+      "tag": "0041_import_reject_histogram",
+      "breakpoints": true
     }
   ]
 }

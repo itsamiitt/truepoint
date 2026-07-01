@@ -199,7 +199,8 @@ dataRoutes.get("/overview", requireCapability("data:read"), async (c) => {
 // ── Import-job drill-down (database-management-research Phase 1D) — one bulk-import job's control-row metadata +
 // denormalized outcome tallies + a per-status CHUNK tally, so an operator can see WHERE a job stalled or failed.
 // METADATA + counts ONLY (import_jobs / import_job_chunks; NEVER import_job_rows) — no raw CSV `input` and no
-// free-text `reject_reason` cross the boundary. data:read-gated; the read runs on the audited withPlatformTx
+// free-text `reject_reason` cross the boundary (the reject breakdown is the NON-PII `reject_histogram` column of
+// stable labels, not reject_reason). data:read-gated; the read runs on the audited withPlatformTx
 // (targets the job). The jobId is UUID-validated BEFORE the tx (a malformed id is a clean 422, no Postgres 22P02
 // 500); an unknown id is a clean 404 after the tx (the lookup-attempt audit row is kept, matching /tenants/:id).
 dataRoutes.get("/imports/:jobId", requireCapability("data:read"), async (c) => {

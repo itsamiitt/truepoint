@@ -15,7 +15,7 @@ import type { FileStore } from "../storage/fileStore.ts";
 import { contentHash } from "./contentHash.ts";
 import { type PreparedContact, prepareContact } from "./prepareContact.ts";
 import { streamParseCsv } from "./streamParse.ts";
-import { rejectedRowsFor, validateRow } from "./validateRow.ts";
+import { rejectLabel, rejectedRowsFor, validateRow } from "./validateRow.ts";
 
 export interface BulkStageInput {
   scope: BulkImportScope;
@@ -35,6 +35,8 @@ export interface BulkStageResult {
   dedupedInFile: number;
   /** The rejected-rows artifact entries (one per offending field) — the drive phase writes them to the FileStore. */
   rejectedRows: RejectedRow[];
+  /** NON-PII reject breakdown: stable label → count (G08). Persisted on import_jobs for the staff drill-down. */
+  rejectHistogram: Record<string, number>;
 }
 
 /** The findByDedupKeys precedence, frozen into a single text key for SQL within-file dedup: email (hex of the
@@ -98,6 +100,12 @@ export async function bulkStage(input: BulkStageInput): Promise<BulkStageResult>
 
   const source = await fileStore.getObjectStream(job.sourceFile);
   const rejectedRows: RejectedRow[] = [];
+  // NON-PII reject breakdown (G08) — one bump per rejected row (primary reason), identical labels to runImport.
+  const rejectHistogram: Record<string, number> = {};
+  const bumpReject = (field: string | null, kind: "validation" | "error"): void => {
+    const label = rejectLabel(field, kind);
+    rejectHistogram[label] = (rejectHistogram[label] ?? 0) + 1;
+  };
   let total = 0;
   let staged = 0;
 
@@ -111,6 +119,7 @@ export async function bulkStage(input: BulkStageInput): Promise<BulkStageResult>
       const verdict = validateRow(raw, mapping);
       if (!verdict.ok) {
         rejectedRows.push(...rejectedRowsFor(rowIndex, raw, verdict.reasons));
+        bumpReject(verdict.reasons[0]?.field ?? null, "validation");
         continue;
       }
       let prepared: PreparedContact;
@@ -121,6 +130,7 @@ export async function bulkStage(input: BulkStageInput): Promise<BulkStageResult>
         // validateRow already guarantees an identity key, so this is defensive — surface it as a reject, not a throw.
         const reason = err instanceof Error ? err.message : String(err);
         rejectedRows.push({ row: rowIndex, field: null, reason, raw });
+        bumpReject(null, "error");
         continue;
       }
       const hash = contentHash({ mapped: verdict.mapped, sourceName });
@@ -133,5 +143,5 @@ export async function bulkStage(input: BulkStageInput): Promise<BulkStageResult>
   const dedupedInFile = await importStagingRepository.dedupWithinFile(job.id);
 
   const rejected = new Set(rejectedRows.map((r) => r.row)).size;
-  return { total, staged, rejected, dedupedInFile, rejectedRows };
+  return { total, staged, rejected, dedupedInFile, rejectedRows, rejectHistogram };
 }

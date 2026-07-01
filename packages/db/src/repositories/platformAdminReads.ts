@@ -165,6 +165,8 @@ export interface PlatformImportJobDetail {
   completedAt: Date | null;
   failedReason: string | null;
   chunkTally: { status: string; count: number }[];
+  /** NON-PII reject breakdown: stable label → count (G08). Safe to surface (never a row value) — see rejectLabel. */
+  rejectHistogram: Record<string, number>;
 }
 
 /**
@@ -586,7 +588,8 @@ export const platformAdminRepository = {
    * import_job_chunks ONLY — NEVER import_job_rows — so neither the raw CSV `input` nor a free-text
    * `reject_reason` (which may embed a row value) leaves the boundary: METADATA + counts only. Audited via the
    * caller's withPlatformTx. Returns null when the job id is unknown (the route turns that into a clean 404).
-   * The reject-reason histogram is deferred until reject_reason is confirmed a non-PII code.
+   * The reject breakdown IS surfaced — but via the dedicated `reject_histogram` column (stable NON-PII labels
+   * bucketed at import time by rejectLabel), NEVER the free-text `reject_reason`, which stays server-side.
    */
   async importJobDetail(tx: Tx, jobId: string): Promise<PlatformImportJobDetail | null> {
     const [job] = await tx
@@ -613,6 +616,7 @@ export const platformAdminRepository = {
         startedAt: importJobs.startedAt,
         completedAt: importJobs.completedAt,
         failedReason: importJobs.failedReason,
+        rejectHistogram: importJobs.rejectHistogram,
       })
       .from(importJobs)
       .innerJoin(tenants, eq(tenants.id, importJobs.tenantId))

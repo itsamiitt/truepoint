@@ -30,6 +30,23 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
     },
   ];
 
+  // The non-PII reject breakdown (stable label → count). Labels are safe to render verbatim (never a row value).
+  const rejectColumns: Column<{ label: string; count: number }>[] = [
+    {
+      key: "label",
+      header: "Reason",
+      sortValue: (r) => r.label,
+      cell: (r) => r.label,
+    },
+    {
+      key: "count",
+      header: "Rows",
+      align: "right",
+      sortValue: (r) => r.count,
+      cell: (r) => formatInt(r.count),
+    },
+  ];
+
   return (
     <div className="tp-page">
       <div className="tp-page-head">
@@ -84,6 +101,29 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
               </div>
               <DataTable columns={chunkColumns} rows={detail.chunkTally} rowKey={(r) => r.status} />
             </div>
+
+            {Object.keys(detail.rejectHistogram).length > 0 ? (
+              <div>
+                <div
+                  style={{
+                    color: "var(--tp-ink)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    marginBottom: 8,
+                  }}
+                >
+                  Why rows were rejected
+                </div>
+                <DataTable
+                  columns={rejectColumns}
+                  rows={Object.entries(detail.rejectHistogram).map(([label, count]) => ({
+                    label,
+                    count,
+                  }))}
+                  rowKey={(r) => r.label}
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
       </StateSwitch>

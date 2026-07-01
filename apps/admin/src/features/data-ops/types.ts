@@ -55,6 +55,8 @@ export interface DataImportDetail {
   completedAt: string | null;
   failedReason: string | null;
   chunkTally: ImportChunkTally[];
+  /** NON-PII reject breakdown: stable label → count (never a row value). Empty {} when nothing was rejected. */
+  rejectHistogram: Record<string, number>;
 }
 
 /** One row of the cross-tenant enrichment-run monitor, mirroring GET /admin/data/enrichment/runs. METADATA +

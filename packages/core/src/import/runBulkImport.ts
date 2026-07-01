@@ -148,6 +148,7 @@ export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkI
       status: "staged",
       stagingTable,
       totalChunks: bands.length,
+      rejectHistogram: stage.rejectHistogram,
     });
     await importJobRepository.updateJobProgress(tx, jobId, {
       rowsTotal: stage.total,

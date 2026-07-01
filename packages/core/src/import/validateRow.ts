@@ -74,6 +74,19 @@ export function rejectedRowsFor(
   return reasons.map((r) => ({ row, field: r.field, reason: r.reason, raw }));
 }
 
+/**
+ * A STABLE, NON-PII label for a row rejection, keyed by the offending field + the KIND of failure (never a row
+ * value) — the histogram bucket both the sync (runImport) and bulk (bulkStage) import paths tally (G08). A
+ * free-text catch-path message (which may embed a value) is deliberately collapsed to "Processing error", so no
+ * value is ever surfaced. Shared so the customer and staff breakdowns show identical labels.
+ */
+export function rejectLabel(field: string | null, kind: "validation" | "rule" | "error"): string {
+  if (kind === "error") return "Processing error";
+  const f = field ?? "row";
+  if (kind === "rule") return `${f}: failed a rule`;
+  return field ? `${field}: invalid value` : "Missing identifier";
+}
+
 /** A stable signature for a row's identity (within-file dedup key). Undefined when the row has no key. */
 export function identitySignature(identity: RowIdentity): string | undefined {
   if (identity.emailKey) return `e:${identity.emailKey}`;

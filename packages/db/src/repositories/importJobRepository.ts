@@ -61,6 +61,9 @@ export interface ImportJobStatusUpdate {
   stagingTable?: string | null;
   totalChunks?: number;
   byteOffset?: number;
+  /** NON-PII reject breakdown (stable label → count) — a full SET (not a counter delta), so it rides this
+   *  lifecycle patch rather than updateJobProgress. The drive phase writes it once, on the `staged` transition. */
+  rejectHistogram?: Record<string, number>;
 }
 
 /** Row-accounting deltas applied ATOMICALLY (added to the current value) as a chunk finishes. All optional. */

@@ -65,6 +65,9 @@ export const importJobs = pgTable(
     rowsDeduped: integer("rows_deduped").notNull().default(0),
     rowsUnprocessed: integer("rows_unprocessed").notNull().default(0),
     rejectedArtifactKey: varchar("rejected_artifact_key", { length: 1024 }), // object-store key of rejects
+    // NON-PII reject breakdown (G08): stable label → count (e.g. {"email: invalid value": 12}). Never a row
+    // value — see import/validateRow.rejectLabel. Powers the staff drill-down's "why rows were rejected" block.
+    rejectHistogram: jsonb("reject_histogram").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),

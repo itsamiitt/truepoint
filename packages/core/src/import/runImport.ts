@@ -39,7 +39,7 @@ import { type ValidationRuleSpec, runValidationRules } from "../validation/index
 import { type RawRow, mapRow } from "./columnMap.ts";
 import { contentHash } from "./contentHash.ts";
 import { prepareContact, type PreparedContact } from "./prepareContact.ts";
-import { rejectedRowsFor, validateRow } from "./validateRow.ts";
+import { rejectLabel, rejectedRowsFor, validateRow } from "./validateRow.ts";
 
 export interface RunImportInput {
   scope: { tenantId: string; workspaceId: string };
@@ -400,14 +400,7 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
   // (which may embed a value) is bucketed as a generic "Processing error", never surfaced verbatim.
   const rejectHistogram: Record<string, number> = {};
   const bumpReject = (field: string | null, kind: "validation" | "rule" | "error"): void => {
-    const label =
-      kind === "error"
-        ? "Processing error"
-        : kind === "rule"
-          ? `${field ?? "row"}: failed a rule`
-          : field
-            ? `${field}: invalid value`
-            : "Missing identifier";
+    const label = rejectLabel(field, kind);
     rejectHistogram[label] = (rejectHistogram[label] ?? 0) + 1;
   };
   let created = 0;
