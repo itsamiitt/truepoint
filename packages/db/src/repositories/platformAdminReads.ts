@@ -5,7 +5,7 @@
 // (ADR-0032). Read-only: never writes (staff mutations go through their own audited endpoints later).
 
 import type { PlatformListQuery, WorkspaceDataQuality } from "@leadwolf/types";
-import { type SQL, and, asc, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
+import { type SQL, and, asc, desc, eq, gt, ilike, lt, or, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenantAuthPolicies, tenantMembers, tenants, users, workspaces } from "../schema/auth.ts";
 import { dataQualitySnapshots } from "../schema/dataQualitySnapshots.ts";
@@ -780,7 +780,9 @@ export const platformAdminRepository = {
         createdAt: approvalRequests.createdAt,
       })
       .from(approvalRequests)
-      .where(eq(approvalRequests.status, "pending"))
+      // Only LIVE pending requests: a request past its hard time-box is derived-expired (never a stored 'expired')
+      // and is hidden from the review queue — matching decideApproval, which refuses to decide an expired request.
+      .where(and(eq(approvalRequests.status, "pending"), gt(approvalRequests.expiresAt, sql`now()`)))
       .orderBy(desc(approvalRequests.id))
       .limit(Math.min(limit, PLATFORM_READ_LIMIT));
   },

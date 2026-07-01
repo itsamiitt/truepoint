@@ -268,13 +268,18 @@ export const platformAdminWriteRepository = {
     reason: string,
   ): Promise<ApprovalDecisionOutcome> {
     const locked = (await tx.execute(
-      sql`SELECT status, requested_by_user_id AS requester FROM approval_requests
-          WHERE id = ${id}::uuid FOR UPDATE`,
-    )) as unknown as Array<{ status: string; requester: string }>;
+      sql`SELECT status, requested_by_user_id AS requester, (expires_at <= now()) AS expired
+          FROM approval_requests WHERE id = ${id}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ status: string; requester: string; expired: boolean }>;
     if (locked.length === 0)
       return { found: false, notPending: false, selfApproval: false, row: null };
     const current = locked[0]!;
     if (current.status !== "pending")
+      return { found: true, notPending: true, selfApproval: false, row: null };
+    // DERIVED EXPIRY (database-management-research 09 follow-up): a pending request past its hard time-box can no
+    // longer be decided. Expiry is derived from expires_at (never a stored 'expired' — the jit_elevations posture),
+    // evaluated on the DB clock inside the FOR UPDATE lock, so a request can't be approved the instant it lapses.
+    if (current.expired)
       return { found: true, notPending: true, selfApproval: false, row: null };
     // Maker != checker: a request can never be decided by the staff member who filed it.
     if (current.requester === deciderUserId)
