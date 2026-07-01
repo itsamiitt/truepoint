@@ -24,6 +24,7 @@ import { RetentionActivity } from "./RetentionActivity";
 import { ReverificationActivity } from "./ReverificationActivity";
 import { ReverifyNowButton } from "./ReverifyNowButton";
 import { SectionCard } from "./SectionCard";
+import { SourceCoverageSection } from "./SourceCoverageSection";
 import { VerificationBreakdown } from "./VerificationBreakdown";
 
 type TabId = "overview" | "activity" | "retention" | "duplicates";
@@ -98,6 +99,14 @@ export function DataHealthPage() {
               loading={metrics.loading}
               error={metrics.error}
               onRetry={metrics.reload}
+            />
+          </SectionCard>
+          <SectionCard title="Source coverage" hint="Corroboration across sources">
+            <SourceCoverageSection
+              trend={trend.trend}
+              loading={trend.loading}
+              error={trend.error}
+              onRetry={trend.reload}
             />
           </SectionCard>
           <SectionCard title="Freshness trend" hint="Verified within SLA">

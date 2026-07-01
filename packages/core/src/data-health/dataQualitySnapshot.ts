@@ -11,6 +11,9 @@ export async function captureDataQualitySnapshot(scope: {
   workspaceId: string;
 }): Promise<void> {
   const metrics = await contactRepository.dataQualitySummary(scope);
+  // Multi-source COVERAGE (data-management #8) — the heavy per-contact field_provenance jsonb scan runs HERE, in
+  // the daily sweep ONLY (never on the live per-request read), then rides the persisted snapshot + trend series.
+  metrics.multiSourceContacts = await contactRepository.multiSourceContactCount(scope);
   await withTenantTx(scope, (tx) =>
     dataQualitySnapshotRepository.record(tx, {
       tenantId: scope.tenantId,

@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1283,
-  "fileSetHash": "sha256:3c5d248ca5221d84ed1da871adcab30a1cd70b95322ec7e2610e3642b1063503",
+  "fileCount": 1284,
+  "fileSetHash": "sha256:8dd990494864561d2a7d3e1257af5d9c6272c5f04f7655bb7e8f61c4a87dbe3f",
   "features": {
     "account-search": {
       "web": [],
@@ -381,6 +381,7 @@
         "apps/web/src/features/data-health/components/ReverificationActivity.tsx",
         "apps/web/src/features/data-health/components/ReverifyNowButton.tsx",
         "apps/web/src/features/data-health/components/SectionCard.tsx",
+        "apps/web/src/features/data-health/components/SourceCoverageSection.tsx",
         "apps/web/src/features/data-health/components/VerificationBreakdown.tsx",
         "apps/web/src/features/data-health/hooks/useDataHealthMetrics.ts",
         "apps/web/src/features/data-health/hooks/useDataHealthTrend.ts",

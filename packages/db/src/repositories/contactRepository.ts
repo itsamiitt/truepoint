@@ -661,6 +661,30 @@ export const contactRepository = {
   },
 
   /**
+   * Multi-source COVERAGE count (data-management #8): LIVE contacts whose `field_provenance` attributes fields to
+   * ≥2 DISTINCT data sources — `user_edit` excluded (a human correction is provenance, not a data source). A
+   * COVERAGE proxy (how many records are corroborated by multiple sources), NOT a true value-conflict rate (that
+   * would need disagreement recorded at merge time — field_provenance keeps only the winner). The per-row
+   * `jsonb_each` scan is DELIBERATELY off the live dashboard read (dataQualitySummary): this runs ONLY in the daily
+   * snapshot sweep. Workspace-scoped via RLS (own withTenantTx), LIVE contacts only (deleted_at IS NULL).
+   */
+  async multiSourceContactCount(scope: TenantScope): Promise<number> {
+    return withTenantTx(scope, async (tx) => {
+      const [r] = (await tx.execute(sql`
+        SELECT count(*)::int AS multi_source
+        FROM contacts
+        WHERE deleted_at IS NULL
+          AND (
+            SELECT count(DISTINCT (v ->> 'src'))
+            FROM jsonb_each(contacts.field_provenance) AS e(k, v)
+            WHERE (v ->> 'src') <> 'user_edit'
+          ) >= 2
+      `)) as unknown as Array<Record<string, number>>;
+      return r?.multi_source ?? 0;
+    });
+  },
+
+  /**
    * The subset of `ids` that are LIVE (non-tombstoned) contacts visible in the caller's workspace (RLS). This
    * is the cross-workspace guard every bulk mutation runs first — only these ids may be touched, mirroring
    * listRepository.visibleContactIds. tx-aware so a bulk op composes it inside ONE withTenantTx as the mutation.

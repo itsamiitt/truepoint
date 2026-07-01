@@ -302,8 +302,14 @@ export type ContactDataHealth = z.infer<typeof contactDataHealthSchema>;
 
 /** Per-workspace data-quality rollup (10 §5 / 22) — the live aggregate the Data Health dashboard reads: raw
  *  counts (the UI derives fill / bounce / freshness RATES) over the workspace's LIVE contacts. Non-PII (counts +
- *  present-flags + statuses), workspace-scoped by RLS. Conflict rate (field_provenance disagreement) is a
- *  follow-up; freshness uses the record-level email-SLA proxy (ADR-0025). */
+ *  present-flags + statuses), workspace-scoped by RLS. Freshness uses the record-level email-SLA proxy (ADR-0025).
+ *
+ *  `multiSourceContacts` is a COVERAGE proxy (data-management #8): contacts whose field_provenance attributes
+ *  fields to ≥2 distinct data sources (user_edit excluded — a human correction is not a source). It is OPTIONAL
+ *  and computed ONLY in the daily snapshot (the per-contact jsonb scan is too heavy for the live per-request read),
+ *  so the live GET /home/data-quality omits it and the persisted snapshots / trend carry it. NOTE: this is
+ *  multi-source COVERAGE, not a true conflict rate — real "sources DISAGREE" needs disagreement recorded at
+ *  import-merge time (field_provenance keeps only the winner today), which is a separate forward-only follow-up. */
 export const workspaceDataQualitySchema = z.object({
   total: z.number().int().min(0),
   withName: z.number().int().min(0),
@@ -327,6 +333,8 @@ export const workspaceDataQualitySchema = z.object({
   fresh: z.number().int().min(0),
   stale: z.number().int().min(0),
   neverVerified: z.number().int().min(0),
+  // Multi-source coverage (data-management #8) — OPTIONAL, periodic-only (see the doc comment above).
+  multiSourceContacts: z.number().int().min(0).optional(),
 });
 export type WorkspaceDataQuality = z.infer<typeof workspaceDataQualitySchema>;
 
