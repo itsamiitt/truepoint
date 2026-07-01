@@ -13,7 +13,7 @@
 // Pure composition + DI: no HTTP, no provider SDK, no DB. core OWNS the port; integrations IMPLEMENTS it.
 
 import { type AiSearchResponse, aiParsedQuery, contactQuery, facetKey } from "@leadwolf/types";
-import { AiParseError, type AiPort, type SearchSchemaContext } from "./aiPort.ts";
+import { type AiCallUsage, AiParseError, type AiPort, type SearchSchemaContext } from "./aiPort.ts";
 import { type AiBudgetStore, releaseAiBudget, reserveAiBudget } from "./budgetGuard.ts";
 import { looksLikeInjection, sanitizeNlQuery } from "./promptGuard.ts";
 
@@ -77,7 +77,7 @@ export interface CompileSearchQueryInput {
  */
 export async function compileSearchQuery(
   input: CompileSearchQueryInput,
-): Promise<AiSearchResponse> {
+): Promise<AiSearchResponse & { usage?: AiCallUsage }> {
   const { nl, tenantId, ai, budgetStore, dailyBudget, now } = input;
 
   // 1. Reject blatant injection/jailbreak attempts before spending anything (23 §6).
@@ -110,6 +110,8 @@ export async function compileSearchQuery(
       query: validated.data,
       notes: result.notes,
       usedRepair: result.usedRepair,
+      // Internal metering field (M14) — the api logs it, then returns only the client-facing shape.
+      usage: result.usage,
     };
   } catch (err) {
     await releaseAiBudget(budgetStore, tenantId, now);

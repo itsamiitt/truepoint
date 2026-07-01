@@ -72,7 +72,7 @@ export function AiUsagePage() {
                 }
               />
               <StatTile label="Repairs" value={totals.repairs} sublabel="needed a repair pass" />
-              <StatTile label="Tokens" value={totals.tokens} sublabel="in + out (0 until wired)" />
+              <StatTile label="Tokens" value={totals.tokens} sublabel="in + out" />
             </div>
 
             <h3 className="tp-section-title">By tenant</h3>

@@ -20,6 +20,12 @@ export interface SearchSchemaContext {
   instructions: string;
 }
 
+/** Model token usage for one compile (M14 metering). Summed across the initial + any repair call. */
+export interface AiCallUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 /** The outcome of asking the model to parse one NL query into a structured filter. */
 export interface ParseSearchResult {
   /** The VALIDATED filter — guaranteed to satisfy the `contactQuery` schema. */
@@ -28,6 +34,8 @@ export interface ParseSearchResult {
   notes?: string;
   /** True when the first model output failed validation and a single repair pass produced this result. */
   usedRepair: boolean;
+  /** Token usage for metering (M14) — optional; adapters that can't report it omit it (logged as null). */
+  usage?: AiCallUsage;
 }
 
 /**

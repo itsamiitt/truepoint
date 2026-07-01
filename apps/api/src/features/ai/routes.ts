@@ -50,6 +50,8 @@ aiSearchRoutes.post("/", requireRole("owner", "admin", "member", "viewer"), asyn
   const startedAt = Date.now();
   let outcome: AiRequestOutcome = "ok";
   let usedRepair = false;
+  let inputTokens: number | null = null;
+  let outputTokens: number | null = null;
   try {
     const result = await compileSearchQuery({
       nl: parsed.data.text,
@@ -59,7 +61,10 @@ aiSearchRoutes.post("/", requireRole("owner", "admin", "member", "viewer"), asyn
       dailyBudget: env.AI_NL_SEARCH_DAILY_BUDGET,
     });
     usedRepair = result.usedRepair;
-    return c.json(result, 200);
+    inputTokens = result.usage?.inputTokens ?? null;
+    outputTokens = result.usage?.outputTokens ?? null;
+    // Return ONLY the client-facing shape — `usage` is internal metering, not part of the /ai-search contract.
+    return c.json({ query: result.query, notes: result.notes, usedRepair: result.usedRepair }, 200);
   } catch (err) {
     // Classify for the usage log, then map core's transport-agnostic errors onto RFC-9457 Problem Details
     // (09 §6). The model/prompt are never surfaced — only the stable code + a safe message.
@@ -98,6 +103,8 @@ aiSearchRoutes.post("/", requireRole("owner", "admin", "member", "viewer"), asyn
           outcome,
           usedRepair,
           latencyMs: Date.now() - startedAt,
+          inputTokens,
+          outputTokens,
         },
       )
       .catch(() => {
