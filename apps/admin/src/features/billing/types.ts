@@ -28,6 +28,15 @@ export interface TenantEconomicsRow {
   marginCents: number;
 }
 
+/** One day of the economics trend — gap-filled daily revenue / reveals / credits over the window. Mirrors the
+ *  api `/admin/billing/economics/trend` payload. `day` is UTC `YYYY-MM-DD`; money is integer cents. */
+export interface EconomicsTrendPoint {
+  day: string;
+  revenueCents: number;
+  reveals: number;
+  creditsConsumed: number;
+}
+
 /** One active tenant at/under a credit-balance threshold (the proactive top-up / churn-risk list). Mirrors
  *  the api `/admin/billing/low-balance` payload. */
 export interface LowBalanceTenant {
