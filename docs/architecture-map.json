@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1291,
-  "fileSetHash": "sha256:946c8e9319c199fa3b08c48ff5d9ca0503a9764f640c84abaefb66f4724e850b",
+  "fileCount": 1294,
+  "fileSetHash": "sha256:41131132581cfc2939cab2a7d0624410c755e23b389c6c18b957506d7735f6c4",
   "features": {
     "account-search": {
       "web": [],
@@ -265,6 +265,7 @@
         "apps/workers/src/queues/billingReconSweep.ts",
         "apps/workers/src/queues/ledgerBackfillSweep.ts",
         "apps/workers/src/queues/lowBalanceNotifierSweep.ts",
+        "apps/workers/src/queues/subscriptionDunningSweep.ts",
         "apps/workers/src/queues/subscriptionGrantSweep.ts"
       ],
       "integrations": []
@@ -1300,6 +1301,7 @@
         "apps/web/src/features/settings-billing/components/tabs/HistoryTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/PlaceholderTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/PlanTab.tsx",
+        "apps/web/src/features/settings-billing/components/tabs/SubscriptionTab.tsx",
         "apps/web/src/features/settings-billing/components/tabs/UsageTab.tsx",
         "apps/web/src/features/settings-billing/hooks/useBilling.ts",
         "apps/web/src/features/settings-billing/hooks/useUsageHistory.ts",
@@ -1545,6 +1547,7 @@
         "apps/admin/src/features/tenants/components/TenantLedger.tsx",
         "apps/admin/src/features/tenants/components/TenantOverview.tsx",
         "apps/admin/src/features/tenants/components/TenantPurchases.tsx",
+        "apps/admin/src/features/tenants/components/TenantSubscription.tsx",
         "apps/admin/src/features/tenants/components/TenantsPage.tsx",
         "apps/admin/src/features/tenants/format.test.ts",
         "apps/admin/src/features/tenants/format.ts",

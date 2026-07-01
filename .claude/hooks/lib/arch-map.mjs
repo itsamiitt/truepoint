@@ -79,6 +79,7 @@ export const QUEUE_DOMAIN = {
   billingReconSweep: "billing",
   ledgerBackfillSweep: "billing",
   subscriptionGrantSweep: "billing",
+  subscriptionDunningSweep: "billing",
 };
 export const REPO_DOMAIN = {
   contact: "reveal",
