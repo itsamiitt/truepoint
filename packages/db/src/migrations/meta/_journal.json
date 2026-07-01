@@ -309,6 +309,13 @@
       "when": 1783700000000,
       "tag": "0043_subscription_credit_bucket",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1783800000000,
+      "tag": "0044_subscriptions_billing_cycles",
+      "breakpoints": true
     }
   ]
 }
