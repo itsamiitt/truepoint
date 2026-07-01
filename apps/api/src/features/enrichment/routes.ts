@@ -3,8 +3,9 @@
 // same core fn). Customer status surface (G-ENR-4, 06 §4.1): GET /enrichment/jobs[/:jobId] return the
 // workspace's enrichment jobs with live status/progress/counts/failure-reason for the polling UI — READ-only.
 // The one mutation on the /jobs surface is POST /jobs/:jobId/confirm — the confirm-before-spend gate (I3 / audit
-// A3/P08) that releases a bulk-enrich run only after an admin accepts the worst-case ceiling; DARK behind
-// BULK_ENRICHMENT_ENABLED. Transport only — cache, budget breaker, waterfall, persistence, and the status query
+// A3/P08) that releases a bulk-enrich run only after an admin accepts the worst-case ceiling; DARK behind a
+// TWO-LAYER gate (the env BULK_ENRICHMENT_ENABLED master kill-switch + the bulk_enrichment_enabled per-tenant
+// rollout flag). Transport only — cache, budget breaker, waterfall, persistence, and the status query
 // live in core/db. The workspace is taken from the VERIFIED token via tenancy, never the request body (16 §7).
 
 import { env } from "@leadwolf/config";
@@ -12,11 +13,14 @@ import {
   confirmBulkEnrichmentJob,
   enrichContact,
   getEnrichmentJobStatus,
+  isFlagEnabledForTenant,
   listEnrichmentJobs,
 } from "@leadwolf/core";
+import { withTenantTx } from "@leadwolf/db";
 import { defaultProviders } from "@leadwolf/integrations";
 import {
   AppError,
+  BULK_ENRICHMENT_FLAG_KEY,
   type EnrichmentJobDetailResponse,
   type EnrichmentJobListResponse,
   ForbiddenError,
@@ -76,16 +80,26 @@ enrichmentRoutes.get(
 // POST /:entity/:id (the literal `jobs` segment is never captured as an `:entity`). Spend authority is
 // owner/admin only — members/viewers may watch a job (GET) but may not release its spend.
 enrichmentRoutes.post("/jobs/:jobId/confirm", requireRole("owner", "admin"), async (c) => {
-  // GLOBAL kill-switch: while BULK_ENRICHMENT_ENABLED is false the confirm-before-spend pipeline is DARK for
-  // everyone — the endpoint 403s, so no job can be promoted to `running` (and thus never reaches the worker/spend).
+  // LAYER 1 — GLOBAL kill-switch: while BULK_ENRICHMENT_ENABLED is false the confirm-before-spend pipeline is DARK
+  // for everyone — the endpoint 403s, so no job can be promoted to `running` (and thus never reaches the worker/spend).
   if (!env.BULK_ENRICHMENT_ENABLED) {
     throw new ForbiddenError("bulk_enrichment_disabled", "Bulk enrichment is not enabled.");
   }
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace to confirm enrichment.");
+  const scope = { tenantId: c.get("tenantId"), workspaceId };
+  // LAYER 2 — per-tenant rollout flag (bulk_enrichment_enabled): with the global switch on, a run is released ONLY
+  // for a tenant explicitly enrolled via the feature-flag console. Fail-closed (default off) and checked BEFORE
+  // confirm promotes the job to `running`, so a non-enrolled tenant can never release spend. Mirrors bulk import.
+  const tenantEnabled = await withTenantTx(scope, (tx) =>
+    isFlagEnabledForTenant(tx, scope.tenantId, BULK_ENRICHMENT_FLAG_KEY),
+  );
+  if (!tenantEnabled) {
+    throw new ForbiddenError("bulk_enrichment_disabled", "Bulk enrichment is not enabled.");
+  }
   const result = await confirmBulkEnrichmentJob({
-    scope: { tenantId: c.get("tenantId"), workspaceId },
+    scope,
     jobId: c.req.param("jobId"),
   });
   if (result.outcome === "not_found") throw new NotFoundError("Enrichment job not found.");
@@ -105,7 +119,7 @@ enrichmentRoutes.post("/jobs/:jobId/confirm", requireRole("owner", "admin"), asy
   await enqueueBulkEnrichmentDrive({
     kind: "drive",
     jobId: c.req.param("jobId"),
-    scope: { tenantId: c.get("tenantId"), workspaceId },
+    scope,
   });
   const body: EnrichmentJobDetailResponse = result.job;
   return c.json(enrichmentJobDetailResponseSchema.parse(body), 200);

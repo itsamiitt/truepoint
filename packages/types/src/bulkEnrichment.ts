@@ -17,6 +17,13 @@ export const BULK_ENRICHMENT_QUEUE = "bulk-enrichment";
 /** Dead-letter queue name for bulk-enrichment jobs that exhaust their retries. Shared producer/consumer. */
 export const BULK_ENRICHMENT_DLQ = "bulk-enrichment-dlq";
 
+// ── Rollout gate ─────────────────────────────────────────────────────────────────────────────────────────
+/** Per-tenant feature-flag key for the bulk CSV enrichment pipeline (existing feature-flag system; default
+ *  false → fail-closed). The TWO-LAYER gate: the global env.BULK_ENRICHMENT_ENABLED kill-switch must be on AND
+ *  this per-tenant flag must be enabled for the caller's tenant before a confirmed bulk-enrich run releases its
+ *  spend. Mirrors BULK_IMPORT_FLAG_KEY (bulkImport.ts) — the shared key lives here so api/workers never drift. */
+export const BULK_ENRICHMENT_FLAG_KEY = "bulk_enrichment_enabled";
+
 // ── Queue message (producer/consumer contract) ──────────────────────────────────────────────────────────
 /** The workspace scope every bulk-enrichment job carries (the worker re-enters withTenantTx with it). */
 export const bulkEnrichmentScopeSchema = z.object({

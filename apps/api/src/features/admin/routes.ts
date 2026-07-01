@@ -1205,9 +1205,9 @@ adminRoutes.get("/feature-flags/env-gates", (c) => {
       key: "BULK_ENRICHMENT_ENABLED",
       label: "Bulk CSV enrichment (spend)",
       description:
-        "Master kill-switch for the confirm-before-spend bulk enrichment path. Env-only today (no per-tenant flag).",
+        "Master kill-switch for the confirm-before-spend bulk enrichment path. Dual-gated with the bulk_enrichment_enabled per-tenant flag.",
       enabled: env.BULK_ENRICHMENT_ENABLED,
-      flagKey: null,
+      flagKey: "bulk_enrichment_enabled",
     },
     {
       key: "ER_SHADOW_ENABLED",
