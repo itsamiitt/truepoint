@@ -119,10 +119,12 @@ export function TenantActions({
     }
     setBusy(true);
     try {
-      // Credit moves are JIT-gated (13a F1): mint the elevation, then perform the action that consumes it.
-      await requestElevation("credit.adjust", r, tenant.id);
-      const { balanceAfter } = await adjustTenantCredits(tenant.id, n, r);
-      toast.success(`Credits ${n > 0 ? "granted" : "debited"} — new balance ${balanceAfter}.`);
+      // Money moves require peer approval (Part B / decision #4): FILE a request — a DIFFERENT billing operator
+      // approves + executes it. No balance change happens here.
+      await adjustTenantCredits(tenant.id, n, r);
+      toast.success(
+        `Credit ${n > 0 ? "grant" : "debit"} requested — a different operator must approve it before it applies.`,
+      );
       setCreditOpen(false);
       await onChanged();
     } catch (e) {

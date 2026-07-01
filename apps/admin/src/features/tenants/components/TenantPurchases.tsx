@@ -84,15 +84,11 @@ export function TenantPurchases({
     }
     setBusy(true);
     try {
-      const { reversed } = await refundPurchase(
-        tenantId,
-        confirm.id,
-        reason,
-        note.trim() || undefined,
-      );
-      toast.success(`Refunded — ${reversed} credit${reversed === 1 ? "" : "s"} reversed.`);
+      // Money moves require peer approval (Part B / decision #4): FILE a request — a different operator approves
+      // + executes the reversal. The purchase stays un-refunded until then.
+      await refundPurchase(tenantId, confirm.id, reason, note.trim() || undefined);
+      toast.success("Refund requested — a different operator must approve it before it applies.");
       setConfirm(null);
-      await reload();
       await onRefunded();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Refund failed");

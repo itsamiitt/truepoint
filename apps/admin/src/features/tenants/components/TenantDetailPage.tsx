@@ -16,6 +16,7 @@ import { TenantActions } from "./TenantActions";
 import { TenantEconomics } from "./TenantEconomics";
 import { TenantHolds } from "./TenantHolds";
 import { TenantLedger } from "./TenantLedger";
+import { TenantMoneyApprovals } from "./TenantMoneyApprovals";
 import { TenantOverview } from "./TenantOverview";
 import { TenantPurchases } from "./TenantPurchases";
 import { TenantSubscription } from "./TenantSubscription";
@@ -156,6 +157,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
             />
 
             <TenantPurchases tenantId={tenantId} onRefunded={reload} />
+            <TenantMoneyApprovals tenantId={tenantId} onDecided={reload} />
             <TenantSubscription tenantId={tenantId} />
             <TenantLedger tenantId={tenantId} />
             <TenantHolds tenantId={tenantId} />

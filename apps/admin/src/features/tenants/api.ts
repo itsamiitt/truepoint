@@ -5,6 +5,7 @@
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
+  ApprovalRequestView,
   EconomicsTrendPoint,
   LedgerEntryView,
   RefundReason,
@@ -180,12 +181,15 @@ export async function fetchTenantSubscription(id: string): Promise<SubscriptionV
 
 /** POST /admin/tenants/:id/purchases/:purchaseId/refund — reverse a purchase (tenants:credits). A structured
  *  reason is mandatory (recorded in the refund's audit metadata); a note is optional (required for `other`). */
+/** POST /admin/tenants/:id/purchases/:purchaseId/refund — FILE a maker-checker request for a refund (Part B /
+ *  decision #4). No balance moves; a DIFFERENT billing operator approves + executes it. Returns the pending
+ *  approval. */
 export async function refundPurchase(
   id: string,
   purchaseId: string,
   reason: RefundReason,
   note?: string,
-): Promise<{ reversed: number; balanceAfter: number }> {
+): Promise<ApprovalRequestView> {
   const res = await fetchWithAuth(
     `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/purchases/${encodeURIComponent(purchaseId)}/refund`,
     {
@@ -194,9 +198,9 @@ export async function refundPurchase(
       body: JSON.stringify({ reason, ...(note ? { note } : {}) }),
     },
   );
-  if (!res.ok) throw new Error(await problemMessage(res, "Could not refund the purchase"));
-  const body = (await res.json()) as { reversed: number; balanceAfter: number };
-  return { reversed: body.reversed, balanceAfter: body.balanceAfter };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not request the refund"));
+  const body = (await res.json()) as { approval: ApprovalRequestView };
+  return body.approval;
 }
 
 /** GET /admin/tenants/:id/overview — the customer-360 usage/health aggregate for a tenant. */
@@ -290,24 +294,58 @@ export async function requestElevation(
   if (!res.ok) throw new Error(await problemMessage(res, "Could not obtain elevation"));
 }
 
-/** POST /admin/tenants/:id/credits — manual signed credit adjustment (super_admin|billing_ops). Returns the
- *  new authoritative balance. A positive delta grants, a negative one debits; both are audited with a reason. */
+/** POST /admin/tenants/:id/credits — FILE a maker-checker request for a manual signed credit adjustment
+ *  (Part B / decision #4). No balance moves; a DIFFERENT billing operator approves + executes it. Returns the
+ *  filed (pending) approval. A positive delta grants, a negative one debits; the reason is audited. */
 export async function adjustTenantCredits(
   id: string,
   delta: number,
   reason: string,
-): Promise<{ balanceAfter: number }> {
+): Promise<ApprovalRequestView> {
   const res = await fetchWithAuth(
     `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/credits`,
     {
       method: "POST",
-      // A per-submit Idempotency-Key so a transport retry replays the committed grant instead of 403-ing on
-      // the already-consumed JIT elevation; the api keys the replay on (tenant, key).
-      headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ delta, reason }),
     },
   );
-  if (!res.ok) throw new Error(await problemMessage(res, "Could not adjust credits"));
-  const body = (await res.json()) as { balanceAfter: number };
-  return { balanceAfter: body.balanceAfter };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not request a credit adjustment"));
+  const body = (await res.json()) as { approval: ApprovalRequestView };
+  return body.approval;
+}
+
+/** GET /admin/billing/approvals — pending money-approval requests (billing:read). */
+export async function fetchBillingApprovals(): Promise<ApprovalRequestView[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/admin/billing/approvals`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load billing approvals"));
+  const body = (await res.json()) as { approvals: ApprovalRequestView[] };
+  return body.approvals;
+}
+
+/** POST /admin/billing/approvals/:id/approve — approve + execute a money request (tenants:credits; a different
+ *  operator than the maker — the server enforces separation of duties). */
+export async function approveBillingRequest(id: string, reason: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/billing/approvals/${encodeURIComponent(id)}/approve`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not approve the request"));
+}
+
+/** POST /admin/billing/approvals/:id/reject — reject a money request (tenants:credits). */
+export async function rejectBillingRequest(id: string, reason: string): Promise<void> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/billing/approvals/${encodeURIComponent(id)}/reject`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not reject the request"));
 }
