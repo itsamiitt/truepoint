@@ -43,6 +43,7 @@
     "import-mapping-templates",
     "imports",
     "inbox",
+    "ingestion",
     "lists",
     "notifications",
     "outreach",
@@ -86,8 +87,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1211,
-  "fileSetHash": "sha256:1bf79fae84b2d1aacad753168baa501f7b65b9b84627c2bdf67c12ef7cec1387",
+  "fileCount": 1214,
+  "fileSetHash": "sha256:8074bd5fe5b38069c52f984d0dacf962fde23b3cba1ff2514bbaed74efd84f04",
   "features": {
     "account-search": {
       "web": [],
@@ -717,6 +718,18 @@
       "admin": [],
       "api": [],
       "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "ingestion": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/ingestion/index.ts",
+        "packages/core/src/ingestion/registry.ts"
+      ],
       "db": [],
       "workers": [],
       "integrations": []
@@ -1935,6 +1948,7 @@
       "packages/types/src/identityProvisioning.ts",
       "packages/types/src/importTemplates.ts",
       "packages/types/src/index.ts",
+      "packages/types/src/ingestion.ts",
       "packages/types/src/intel.ts",
       "packages/types/src/jitElevation.ts",
       "packages/types/src/listGovernance.ts",
@@ -2067,6 +2081,7 @@
     "undeclared domain 'feature-flags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'featureFlags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'import-mapping-templates' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'ingestion' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pipeline-stages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pipelineStages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'plans' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

@@ -40,6 +40,13 @@ export {
 } from "./validation/index.ts";
 // Knowledge-DB survivorship quality score (prospect-database-platform I1 / Phase 05) — pure cluster-quality v1.
 export { computeClusterQualityScore, type ClusterQualityInput } from "./projection/computeQuality.ts";
+// Unified ingestion connector framework (prospect-database-platform Phase 03 / I2) — the Connector port + registry.
+export {
+  type Connector,
+  getConnector,
+  registerConnector,
+  registeredConnectorIds,
+} from "./ingestion/index.ts";
 export {
   saveMappingTemplate,
   listMappingTemplates,
