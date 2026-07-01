@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1287,
-  "fileSetHash": "sha256:1297e2b8195284224beed29f6dbf5b9936232b273c841c70929b02d05ac68714",
+  "fileCount": 1288,
+  "fileSetHash": "sha256:d6170aa18726496fb9bbaa5cd1c558273831e42e56f5c6c821932d26351f22ba",
   "features": {
     "account-search": {
       "web": [],
@@ -250,6 +250,7 @@
       ],
       "core": [
         "packages/core/src/billing/grantFromStripe.ts",
+        "packages/core/src/billing/handleSubscriptionEvent.ts",
         "packages/core/src/billing/stripePort.ts",
         "packages/core/src/billing/stripeWebhook.test.ts",
         "packages/core/src/billing/stripeWebhook.ts"
