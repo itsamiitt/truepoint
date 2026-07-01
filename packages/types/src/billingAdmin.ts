@@ -124,3 +124,13 @@ export const economicsSummarySchema = z.object({
   marginCents: z.number().int(), // revenueCents - providerSpendCents
 });
 export type EconomicsSummary = z.infer<typeof economicsSummarySchema>;
+
+/** One day of the economics trend — the gap-filled daily time series behind the rollup sparkline (revenue-ops
+ *  "is the business trending up?"). `day` is UTC `YYYY-MM-DD`; money is integer cents; counts are integers. */
+export const economicsTrendPointSchema = z.object({
+  day: z.string(), // YYYY-MM-DD (UTC)
+  revenueCents: z.number().int(),
+  reveals: z.number().int(),
+  creditsConsumed: z.number().int(),
+});
+export type EconomicsTrendPoint = z.infer<typeof economicsTrendPointSchema>;

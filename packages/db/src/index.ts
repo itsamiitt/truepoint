@@ -323,6 +323,7 @@ export {
 export {
   platformBillingReadRepository,
   type EconomicsAggregate,
+  type EconomicsTrendRow,
   type TenantEconomicsDetailAggregate,
   type PlatformPurchaseRow,
 } from "./repositories/platformBillingReads.ts";

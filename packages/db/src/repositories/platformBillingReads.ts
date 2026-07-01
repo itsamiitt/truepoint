@@ -30,6 +30,14 @@ export interface TenantEconomicsAggregate {
   providerSpendMicros: number;
 }
 
+/** One day of the economics trend — gap-filled daily revenue + reveals + credits consumed over the window. */
+export interface EconomicsTrendRow {
+  day: string; // YYYY-MM-DD (UTC)
+  revenueCents: number;
+  reveals: number;
+  creditsConsumed: number;
+}
+
 /** One active tenant at/under a credit-balance threshold (the proactive top-up / churn-risk view). */
 export interface LowBalanceTenantRow {
   tenantId: string;
@@ -171,6 +179,55 @@ export const platformBillingReadRepository = {
       reveals: Number(row.reveals),
       chargedReveals: Number(row.charged_reveals),
       providerSpendMicros: Number(row.provider_spend_micros),
+    }));
+  },
+
+  /** The economics daily trend over `[since, now]` — a GAP-FILLED time series (every day present, zeros where
+   *  no activity) of revenue, reveals and credits consumed, oldest first. `generate_series` builds the day
+   *  spine (UTC) and the purchases/reveals daily aggregates LEFT JOIN onto it. Bounded by the window (≤365 d).
+   *  Owner read (cross-tenant). */
+  async economicsTrend(tx: Tx, since: Date): Promise<EconomicsTrendRow[]> {
+    const iso = since.toISOString();
+    const rows = (await tx.execute(sql`
+      WITH days AS (
+        SELECT to_char(d, 'YYYY-MM-DD') AS day
+        FROM generate_series(
+          date_trunc('day', ${iso}::timestamptz),
+          date_trunc('day', now()),
+          interval '1 day'
+        ) AS d
+      ),
+      p AS (
+        SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+          coalesce(sum(amount_cents) FILTER (WHERE status = 'completed'), 0)::bigint AS revenue_cents
+        FROM purchases WHERE created_at >= ${iso}::timestamptz GROUP BY 1
+      ),
+      r AS (
+        SELECT to_char(date_trunc('day', revealed_at), 'YYYY-MM-DD') AS day,
+          count(*)::bigint                            AS reveals,
+          coalesce(sum(credits_consumed), 0)::bigint  AS credits_consumed
+        FROM contact_reveals WHERE revealed_at >= ${iso}::timestamptz GROUP BY 1
+      )
+      SELECT
+        days.day                             AS day,
+        coalesce(p.revenue_cents, 0)::bigint AS revenue_cents,
+        coalesce(r.reveals, 0)::bigint       AS reveals,
+        coalesce(r.credits_consumed, 0)::bigint AS credits_consumed
+      FROM days
+      LEFT JOIN p ON p.day = days.day
+      LEFT JOIN r ON r.day = days.day
+      ORDER BY days.day ASC
+    `)) as unknown as Array<{
+      day: string;
+      revenue_cents: number;
+      reveals: number;
+      credits_consumed: number;
+    }>;
+    return rows.map((row) => ({
+      day: row.day,
+      revenueCents: Number(row.revenue_cents),
+      reveals: Number(row.reveals),
+      creditsConsumed: Number(row.credits_consumed),
     }));
   },
 
