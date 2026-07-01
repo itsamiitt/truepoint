@@ -188,6 +188,19 @@ export {
   type BulkProcessEnrichChunkResult,
 } from "./enrichment/bulk/bulkProcessEnrichChunk.ts";
 
+// Probabilistic entity resolution (I5): the pure Fellegi-Sunter scorer — comparison vector → match probability →
+// review disposition. The candidate generator (blocking) + the SHADOW writer (match_links pending) are later slices.
+export {
+  scoreFellegiSunter,
+  DEFAULT_FELLEGI_SUNTER_CONFIG,
+  type FieldComparison,
+  type FieldWeights,
+  type FieldObservation,
+  type MatchDisposition,
+  type FellegiSunterConfig,
+  type FellegiSunterResult,
+} from "./er/fellegiSunter.ts";
+
 // Customer-visible enrichment job-status surface (G-ENR-4, 06 §4.1): READ-only list/detail query helpers over
 // the workspace-scoped enrichment-jobs repository → the EnrichmentJobSummary DTO the status UI polls.
 export {

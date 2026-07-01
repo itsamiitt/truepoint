@@ -35,6 +35,7 @@
     "email",
     "enrichment",
     "enrichment-jobs",
+    "er",
     "export",
     "feature-flags",
     "featureFlags",
@@ -88,8 +89,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1223,
-  "fileSetHash": "sha256:9d1cce083fd447fdbbe10c1a8346470c3d913de389e1fe86586e1751b895fbb2",
+  "fileCount": 1225,
+  "fileSetHash": "sha256:9f4f41131e175a920949f04f6f5f3ca3d67f66008f2e176dda7da9132572a69d",
   "features": {
     "account-search": {
       "web": [],
@@ -543,6 +544,18 @@
       "admin": [],
       "api": [],
       "core": [],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "er": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/er/fellegiSunter.test.ts",
+        "packages/core/src/er/fellegiSunter.ts"
+      ],
       "db": [],
       "workers": [],
       "integrations": []
@@ -2098,6 +2111,7 @@
     "undeclared domain 'data-quality' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'email' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'enrichment-jobs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'er' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'feature-flags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'featureFlags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'import-mapping-templates' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
