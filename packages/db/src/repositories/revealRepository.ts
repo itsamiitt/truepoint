@@ -175,16 +175,17 @@ export const revealRepository = {
 
   /**
    * The idempotent reveal claim: INSERT … ON CONFLICT (workspace_id, contact_id, reveal_type) DO NOTHING.
-   * Returns true when THIS call claimed the reveal (→ charge), false when the workspace copy already owned
-   * it (→ free re-reveal). The AFTER INSERT trigger flips contact ownership, first-wins (03 §10).
+   * Returns the new claim's `{ id }` when THIS call claimed the reveal (→ charge), or null when the workspace
+   * copy already owned it (→ free re-reveal). The id backs the M11 credit-ledger `spend` entry (reveal_id +
+   * idempotency_key reveal:<id>). The AFTER INSERT trigger flips contact ownership, first-wins (03 §10).
    */
-  async claimReveal(tx: Tx, input: RevealClaimInput): Promise<boolean> {
+  async claimReveal(tx: Tx, input: RevealClaimInput): Promise<{ id: string } | null> {
     const rows = await tx
       .insert(contactReveals)
       .values({ ...input, revealedFields: input.revealedFields })
       .onConflictDoNothing()
       .returning({ id: contactReveals.id });
-    return rows.length > 0;
+    return rows[0] ?? null;
   },
 
   /**
