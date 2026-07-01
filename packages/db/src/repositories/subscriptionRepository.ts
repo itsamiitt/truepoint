@@ -5,6 +5,7 @@
 
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
+import { tenants } from "../schema/auth.ts";
 import { billingCycles, subscriptions } from "../schema/subscriptions.ts";
 
 export interface SubscriptionRow {
@@ -115,6 +116,36 @@ export const subscriptionRepository = {
       )
       .orderBy(subscriptions.currentPeriodEnd)
       .limit(limit);
+  },
+
+  /** Suspend a tenant for DUNNING (M11 subs, ADR-0041) — ONLY if it is currently ACTIVE, so a staff suspension
+   *  is never clobbered and an already-suspended tenant is untouched. Tagged suspension_reason='dunning' so it
+   *  can be auto-lifted when payment resumes. Returns rows touched (0 = it wasn't active). */
+  async suspendForDunning(tx: Tx, tenantId: string): Promise<number> {
+    const updated = await tx
+      .update(tenants)
+      .set({ status: "suspended", suspensionReason: "dunning", updatedAt: new Date() })
+      .where(and(eq(tenants.id, tenantId), eq(tenants.status, "active")))
+      .returning({ id: tenants.id });
+    return updated.length;
+  },
+
+  /** Lift a DUNNING suspension when payment resumes (or the subscription cancels to free) — ONLY a 'dunning'
+   *  suspension is auto-lifted; a 'staff' (or legacy null) suspension is left for a human (M11 subs, ADR-0041).
+   *  Returns rows touched (0 = it wasn't a dunning suspension). */
+  async reactivateFromDunning(tx: Tx, tenantId: string): Promise<number> {
+    const updated = await tx
+      .update(tenants)
+      .set({ status: "active", suspensionReason: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(tenants.id, tenantId),
+          eq(tenants.status, "suspended"),
+          eq(tenants.suspensionReason, "dunning"),
+        ),
+      )
+      .returning({ id: tenants.id });
+    return updated.length;
   },
 };
 

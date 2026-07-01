@@ -56,6 +56,13 @@ export async function handleSubscriptionEvent(
       });
     }
 
+    // Auto-lift a DUNNING suspension (M11 subs, ADR-0041): payment resumed (status back to active) or the
+    // subscription cancelled to free — either way the tenant is no longer delinquent. Only a 'dunning'
+    // suspension is lifted; a staff suspension is left for a human (the repo WHERE-guards it).
+    if (event.kind === "deleted" || event.status === "active") {
+      await subscriptionRepository.reactivateFromDunning(tx, event.tenantId);
+    }
+
     // An active subscription with a period → open the cycle so the grant worker can grant it (idempotent on
     // (subscription_id, period_start)). grant_credits snapshots the plan's monthly grant.
     if (
