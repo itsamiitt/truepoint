@@ -84,6 +84,7 @@
     "storage",
     "system-health",
     "tags",
+    "teams",
     "templates",
     "tenants",
     "trust-abuse",
@@ -92,8 +93,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1299,
-  "fileSetHash": "sha256:8b36171aa5e265149c9dea3b786fd338b7175fab0be54ef9b8c679b230fb58dd",
+  "fileCount": 1301,
+  "fileSetHash": "sha256:53ba055555ca75b38570af296e1b8066577612560ddf0b96dbf2bc5128f01ffa",
   "features": {
     "account-search": {
       "web": [],
@@ -1538,6 +1539,17 @@
       "workers": [],
       "integrations": []
     },
+    "teams": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [],
+      "db": [
+        "packages/db/src/repositories/teamRepository.ts"
+      ],
+      "workers": [],
+      "integrations": []
+    },
     "tenants": {
       "web": [],
       "admin": [
@@ -1990,6 +2002,7 @@
       "packages/db/src/schema/scim.ts",
       "packages/db/src/schema/subscriptions.ts",
       "packages/db/src/schema/tags.ts",
+      "packages/db/src/schema/teams.ts",
       "packages/db/src/schema/validationRules.ts",
       "packages/db/src/schema/verificationJobs.ts",
       "packages/db/src/schema/webhooks.ts",

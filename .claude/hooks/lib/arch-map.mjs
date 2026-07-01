@@ -58,6 +58,7 @@ export const CANONICAL_DOMAINS = [
   // Settings destination is composed of per-area web slices (12 §1–§5).
   "settings-billing",
   "settings-compliance",
+  "teams",
 ];
 
 // Declared maps for the cases where the domain is NOT encoded in the path (extend as code grows).
@@ -117,6 +118,7 @@ export const REPO_DOMAIN = {
   credit: "billing",
   stripeCustomer: "billing",
   subscription: "billing",
+  team: "teams",
   audit: "compliance",
   idempotency: "billing",
   consent: "compliance",
