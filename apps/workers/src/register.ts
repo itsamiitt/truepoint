@@ -4,7 +4,12 @@
 
 import { env } from "@leadwolf/config";
 import { diskFileStore, registerEmailProviders } from "@leadwolf/core";
-import type { BulkImportDeadLetter, BulkImportScope, ImportDeadLetter } from "@leadwolf/types";
+import type {
+  BulkEnrichmentDeadLetter,
+  BulkImportDeadLetter,
+  BulkImportScope,
+  ImportDeadLetter,
+} from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { log } from "./logger.ts";
@@ -82,6 +87,13 @@ import {
   deadLetterFailedBulkImport,
   makeProcessBulkImport,
 } from "./queues/bulkImports.ts";
+import {
+  BULK_ENRICHMENT_DLQ,
+  BULK_ENRICHMENT_QUEUE,
+  type BulkEnrichmentJobData,
+  deadLetterFailedBulkEnrichment,
+  processBulkEnrichment,
+} from "./queues/bulkEnrichment.ts";
 import {
   EMAIL_TOKEN_REFRESH_QUEUE,
   type TokenRefreshJobData,
@@ -547,6 +559,34 @@ export function startWorkers(): Worker[] {
       );
     });
     workers.push(bulkImportsWorker);
+  }
+  // Bulk CSV enrichment money path (prospect-database-platform I3 / audit A3/P08) — GATED DARK behind
+  // BULK_ENRICHMENT_ENABLED (default false). Purely ADDITIVE: when off, the queue/worker are never constructed and
+  // the apps/api producer enqueues nothing, so the path is inert in prod until the per-run cap + daily budget
+  // breaker (slice 3) land and the flag is flipped in a CI-gated step. When on: a `drive` job chunks a CONFIRMED
+  // (`running`) job + fans out `chunk` jobs. SLICE 2 registers the queue + DLQ + a NO-OP STUB worker (ZERO spend —
+  // it validates the payload and returns); slice 3 fills in the real spend-capped body. The confirm gate (slice
+  // 1b) is what promotes a job to `running`, so nothing here can run until a human has accepted the ceiling.
+  if (env.BULK_ENRICHMENT_ENABLED) {
+    const bulkEnrichmentDeadLetterQueue = new Queue<BulkEnrichmentDeadLetter>(BULK_ENRICHMENT_DLQ, {
+      connection,
+    });
+    // The Worker consumes by queue NAME (no main-queue instance needed until slice 3's chunk fan-out).
+    const bulkEnrichmentWorker = instrument(
+      new Worker<BulkEnrichmentJobData>(BULK_ENRICHMENT_QUEUE, processBulkEnrichment, {
+        connection,
+      }),
+      BULK_ENRICHMENT_QUEUE,
+    );
+    // Bulk-enrich jobs that exhaust their retries are dead-lettered (PII-free) for ops triage instead of lost.
+    bulkEnrichmentWorker.on("failed", (job, err) => {
+      void deadLetterFailedBulkEnrichment(bulkEnrichmentDeadLetterQueue, job, err).catch((e) =>
+        log.error("bulk-enrichment: dead-letter routing failed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    });
+    workers.push(bulkEnrichmentWorker);
   }
   void scheduleSequenceTick().catch((e) =>
     log.error("failed to schedule the sequence tick", {

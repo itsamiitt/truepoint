@@ -88,8 +88,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1219,
-  "fileSetHash": "sha256:ada3ba9fed30afd61029b250a7ce64408015f34ae7305f564717a9104ab89d87",
+  "fileCount": 1221,
+  "fileSetHash": "sha256:c0ca1ae0fc8068b29a56810c9b44453dcf203e86cd970aebd27377f04b30c861",
   "features": {
     "account-search": {
       "web": [],
@@ -492,6 +492,7 @@
       "web": [],
       "admin": [],
       "api": [
+        "apps/api/src/features/enrichment/bulkEnrichQueue.ts",
         "apps/api/src/features/enrichment/index.ts",
         "apps/api/src/features/enrichment/routes.ts"
       ],
@@ -2030,6 +2031,7 @@
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
+    "apps/workers/src/queues/bulkEnrichment.ts",
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/firmographics.ts",
     "apps/workers/src/queues/masterBackfill.test.ts",

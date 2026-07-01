@@ -17,6 +17,44 @@ export const BULK_ENRICHMENT_QUEUE = "bulk-enrichment";
 /** Dead-letter queue name for bulk-enrichment jobs that exhaust their retries. Shared producer/consumer. */
 export const BULK_ENRICHMENT_DLQ = "bulk-enrichment-dlq";
 
+// ── Queue message (producer/consumer contract) ──────────────────────────────────────────────────────────
+/** The workspace scope every bulk-enrichment job carries (the worker re-enters withTenantTx with it). */
+export const bulkEnrichmentScopeSchema = z.object({
+  tenantId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+});
+export type BulkEnrichmentScope = z.infer<typeof bulkEnrichmentScopeSchema>;
+
+/**
+ * The discriminated queue payload — jobId + scope ONLY (NEVER the rows; the source file lives in the FileStore
+ * and the per-row ledger in the DB). A `drive` job chunks a CONFIRMED job + fans out `chunk` jobs; a `chunk` job
+ * enriches one staged band. Mirrors bulkImportJobDataSchema exactly (one implementation shape, two pipelines) so
+ * the apps/api producer and the apps/workers consumer can never drift. The producer only ever enqueues `drive`.
+ */
+export const bulkEnrichmentJobDataSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("drive"), jobId: z.string().uuid(), scope: bulkEnrichmentScopeSchema }),
+  z.object({
+    kind: z.literal("chunk"),
+    jobId: z.string().uuid(),
+    scope: bulkEnrichmentScopeSchema,
+    chunkId: z.string().uuid(),
+  }),
+]);
+export type BulkEnrichmentJobData = z.infer<typeof bulkEnrichmentJobDataSchema>;
+
+/**
+ * The PII-FREE dead-letter record for a bulk-enrich job that EXHAUSTED its retries (ops triage). Scope + job id +
+ * kind + reason only — never rows/PII (the queue payload is already PII-free). Mirrors bulkImportDeadLetterSchema.
+ */
+export const bulkEnrichmentDeadLetterSchema = z.object({
+  jobId: z.string(),
+  tenantId: z.string(),
+  workspaceId: z.string(),
+  kind: z.string(),
+  reason: z.string(),
+});
+export type BulkEnrichmentDeadLetter = z.infer<typeof bulkEnrichmentDeadLetterSchema>;
+
 // ── Enums ────────────────────────────────────────────────────────────────────────────────────────────────
 /**
  * Lifecycle of a bulk-enrichment job. `queued` is what the 202 accept-response reports at enqueue time;
