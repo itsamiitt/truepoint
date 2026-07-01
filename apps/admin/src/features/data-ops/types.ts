@@ -5,10 +5,9 @@
 import type { WorkspaceDataQuality } from "@leadwolf/types";
 
 export interface DataOpsOverview {
-  /** Overall pipeline-job status tally (the historical queue-depth / dead-letter proxy), over a bounded sample. */
+  /** Overall pipeline-job status tally (the queue-depth / dead-letter proxy) — EXACT counts (COUNT(*) GROUP BY). */
   jobs: {
-    sampleSize: number;
-    truncated: boolean;
+    total: number;
     byStatus: Record<string, number>;
     queueDepth: number;
     deadLetter: number;

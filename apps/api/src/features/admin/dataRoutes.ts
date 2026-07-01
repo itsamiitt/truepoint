@@ -137,24 +137,29 @@ async function decideApprovalRoute(
 }
 
 // ── Data-Ops Overview (database-management-research 04 §UI / 14 Phase 0) — the cross-tenant data-operations
-// rollup the new "Data management" area opens on. One audited withPlatformTx runs three bounded reads in
-// parallel and tallies them in-process: the overall job-status sample (the historical queue-depth / dead-letter
-// proxy, same source /system-health uses), recent bulk-import jobs (status mix + rejected-row sum), and recent
-// retention RUNS (the shadow-mode evidence count operators review before any `enforce` flip). Tallies are over
-// the bounded recent sample (the `truncated` flag says so) — a dedicated COUNT(*) GROUP BY aggregate is a
-// follow-up; the bounded recent view is honest and matches the existing /system-health pattern. data:read-gated.
+// rollup the new "Data management" area opens on. One audited withPlatformTx runs three reads in parallel: the
+// overall enrichment job-status counts (an EXACT COUNT(*) GROUP BY — queue-depth / dead-letter proxy), recent
+// bulk-import jobs (status mix + rejected-row sum, a bounded recent sample), and recent retention RUNS (the
+// shadow-mode evidence count operators review before any `enforce` flip, a bounded recent sample). The job-status
+// tally is now exact (the earlier COUNT(*) GROUP BY follow-up); imports/retention stay bounded-recent (the
+// `truncated` flag says so), matching the /system-health pattern. data:read-gated.
 dataRoutes.get("/overview", requireCapability("data:read"), async (c) => {
   const overview = await withPlatformTx(actorOf(c), "admin.data_overview", async (tx) => {
-    const [statuses, importJobs, retentionRuns] = await Promise.all([
-      platformAdminRepository.sampleJobStatuses(tx),
+    const [statusCounts, importJobs, retentionRuns] = await Promise.all([
+      platformAdminRepository.enrichmentJobStatusCounts(tx),
       platformAdminRepository.recentImportJobs(tx),
       platformAdminRepository.recentRetentionRuns(tx),
     ]);
 
-    // Overall job-status tally (same shape /system-health derives): queue depth = queued+running+estimating,
-    // dead-letter = failed. A bounded sample, so `truncated` is true once it hits the platform read cap.
+    // Overall job-status tally — EXACT counts across all tenants (queue depth = queued+running+estimating,
+    // dead-letter = failed). No longer a bounded sample: enrichmentJobStatusCounts is a COUNT(*) GROUP BY, so
+    // the numbers are exact and there is no truncation flag to carry.
     const jobsByStatus: Record<string, number> = {};
-    for (const s of statuses) jobsByStatus[s] = (jobsByStatus[s] ?? 0) + 1;
+    let jobsTotal = 0;
+    for (const { status, count } of statusCounts) {
+      jobsByStatus[status] = count;
+      jobsTotal += count;
+    }
     const queueDepth =
       (jobsByStatus.queued ?? 0) + (jobsByStatus.running ?? 0) + (jobsByStatus.estimating ?? 0);
 
@@ -168,8 +173,7 @@ dataRoutes.get("/overview", requireCapability("data:read"), async (c) => {
 
     return {
       jobs: {
-        sampleSize: statuses.length,
-        truncated: statuses.length >= PLATFORM_READ_LIMIT,
+        total: jobsTotal,
         byStatus: jobsByStatus,
         queueDepth,
         deadLetter: jobsByStatus.failed ?? 0,

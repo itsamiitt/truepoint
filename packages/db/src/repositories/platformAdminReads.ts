@@ -534,6 +534,20 @@ export const platformAdminRepository = {
   },
 
   /**
+   * EXACT per-status counts over ALL enrichment_jobs (database-management-research Phase-1 follow-up — replaces the
+   * bounded-sample tally in the Data-Ops Overview so the fleet numbers are exact, not capped). This is an
+   * AGGREGATE: it returns one row per distinct status (≤ the closed status set), so the result is inherently
+   * bounded even though the count scans the control table — no PLATFORM_READ_LIMIT truncation is needed, and no
+   * per-job row is returned. Counts only (non-PII). Owner read (withPlatformTx).
+   */
+  async enrichmentJobStatusCounts(tx: Tx): Promise<{ status: string; count: number }[]> {
+    return tx
+      .select({ status: enrichmentJobs.status, count: sql<number>`count(*)::int` })
+      .from(enrichmentJobs)
+      .groupBy(enrichmentJobs.status);
+  },
+
+  /**
    * Recent bulk-import jobs ACROSS all tenants (data-management A4) — the staff rollout-monitoring feed for the
    * COPY-staging import pipeline (15-bulk-import-design, ADR-0036). Each control row is joined to its tenant
    * NAME and returns the genuinely useful monitoring columns (status / av-scan / row tallies / failure
