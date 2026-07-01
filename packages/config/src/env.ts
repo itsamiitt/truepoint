@@ -102,6 +102,12 @@ export const appEnvSchema = z
 
     // Global daily enrichment cost budget in micro-dollars (06 §6); exhaustion trips the budget breaker.
     ENRICH_DAILY_BUDGET_MICROS: z.coerce.number().int().positive().default(50_000_000),
+    // Placeholder per-match provider unit cost in micro-dollars (07 §1), used ONLY to size the bulk re-enrich
+    // WORST-CASE ceiling the confirm gate shows (contactIds.length × this). Same unit as ENRICH_DAILY_BUDGET_MICROS
+    // and provider_calls.cost_micros, so the per-run cap compares like-for-like. Default $0.10/match; calibrate when
+    // the real credit model lands. Never a hard spend limit itself — the confirm gate, per-run cap, and daily
+    // breaker are the actual brakes; this only forecasts the ceiling a human confirms.
+    ENRICH_COST_MICROS_PER_MATCH: z.coerce.number().int().positive().default(100_000),
 
     // Email-verification backend (06 §9, 01 §5.2): a self-hosted Reacher (check-if-email-exists) or the
     // hosted Reacher API BASE ORIGIN (e.g. https://api.reacher.email). Absent → the reveal path keeps

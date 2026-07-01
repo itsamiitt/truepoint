@@ -30,6 +30,7 @@ import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
+import { enqueueBulkEnrichmentDrive } from "./bulkEnrichQueue.ts";
 
 export const enrichmentRoutes = new Hono<{ Variables: RoleVariables }>();
 
@@ -98,6 +99,14 @@ enrichmentRoutes.post("/jobs/:jobId/confirm", requireRole("owner", "admin"), asy
       detail: `Job is '${result.job.status}', not awaiting confirmation.`,
     });
   }
+  // CONFIRMED → release the run to the workers: enqueue the drive (chunk fan-out). This is the ONLY point real bulk
+  // spend is released, and only AFTER an explicit human confirm — the drive guards on `running`, and each chunk's
+  // spend is capped by THIS job's confirmed ceiling + the daily breaker. The producer self-gates on the flag too.
+  await enqueueBulkEnrichmentDrive({
+    kind: "drive",
+    jobId: c.req.param("jobId"),
+    scope: { tenantId: c.get("tenantId"), workspaceId },
+  });
   const body: EnrichmentJobDetailResponse = result.job;
   return c.json(enrichmentJobDetailResponseSchema.parse(body), 200);
 });
