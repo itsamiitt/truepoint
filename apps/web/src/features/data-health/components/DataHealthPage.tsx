@@ -103,7 +103,7 @@ export function DataHealthPage() {
           </SectionCard>
           <SectionCard title="Source coverage" hint="Corroboration across sources">
             <SourceCoverageSection
-              trend={trend.trend}
+              trend={trend.trend ?? []}
               loading={trend.loading}
               error={trend.error}
               onRetry={trend.reload}
