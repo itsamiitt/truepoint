@@ -78,6 +78,7 @@ export const QUEUE_DOMAIN = {
   lowBalanceNotifierSweep: "billing",
   billingReconSweep: "billing",
   ledgerBackfillSweep: "billing",
+  subscriptionGrantSweep: "billing",
 };
 export const REPO_DOMAIN = {
   contact: "reveal",

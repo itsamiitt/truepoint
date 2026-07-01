@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1288,
-  "fileSetHash": "sha256:d6170aa18726496fb9bbaa5cd1c558273831e42e56f5c6c821932d26351f22ba",
+  "fileCount": 1291,
+  "fileSetHash": "sha256:946c8e9319c199fa3b08c48ff5d9ca0503a9764f640c84abaefb66f4724e850b",
   "features": {
     "account-search": {
       "web": [],
@@ -264,7 +264,8 @@
       "workers": [
         "apps/workers/src/queues/billingReconSweep.ts",
         "apps/workers/src/queues/ledgerBackfillSweep.ts",
-        "apps/workers/src/queues/lowBalanceNotifierSweep.ts"
+        "apps/workers/src/queues/lowBalanceNotifierSweep.ts",
+        "apps/workers/src/queues/subscriptionGrantSweep.ts"
       ],
       "integrations": []
     },
@@ -1950,6 +1951,8 @@
       "packages/db/src/repositories/platformComplianceReads.ts",
       "packages/db/src/repositories/platformDataQualityReads.ts",
       "packages/db/src/repositories/platformTrustReads.ts",
+      "packages/db/src/repositories/subscriptionResetMath.test.ts",
+      "packages/db/src/repositories/subscriptionResetMath.ts",
       "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/aiRequests.ts",
       "packages/db/src/schema/auth.ts",
