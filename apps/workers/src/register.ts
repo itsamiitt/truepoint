@@ -15,6 +15,23 @@ import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
+import {
+  BULK_IMPORTS_DLQ,
+  BULK_IMPORTS_QUEUE,
+  type BulkImportJobData,
+  deadLetterFailedBulkImport,
+  makeProcessBulkImport,
+} from "./queues/bulkImports.ts";
+import {
+  DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
+  type DataQualitySnapshotSweepJobData,
+  makeProcessDataQualitySnapshotSweep,
+} from "./queues/dataQualitySnapshotSweep.ts";
+import {
+  DATA_RETENTION_SWEEP_QUEUE,
+  type DataRetentionSweepJobData,
+  makeProcessDataRetentionSweep,
+} from "./queues/dataRetentionSweep.ts";
 import { DEDUP_QUEUE, type DedupJobData, processDedup } from "./queues/dedup.ts";
 import { DSAR_QUEUE, type DsarJobData, processDsar } from "./queues/dsar.ts";
 import {
@@ -34,6 +51,11 @@ import {
   deadLetterFailedImport,
   processImport,
 } from "./queues/imports.ts";
+import {
+  LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
+  type LowBalanceNotifierSweepJobData,
+  makeProcessLowBalanceNotifierSweep,
+} from "./queues/lowBalanceNotifierSweep.ts";
 import {
   MASTER_BACKFILL_QUEUE,
   type MasterBackfillJobData,
@@ -56,12 +78,6 @@ import {
   type RetentionSweepJobData,
   makeProcessRetentionSweep,
 } from "./queues/retentionSweep.ts";
-import { SCORING_QUEUE, type ScoringJobData, processScoring } from "./queues/scoring.ts";
-import {
-  EMAIL_SEQUENCE_TICK_QUEUE,
-  type SequenceTickJobData,
-  makeProcessSequenceTick,
-} from "./queues/sequenceTick.ts";
 import {
   REVERIFICATION_QUEUE,
   type ReverificationJobData,
@@ -72,23 +88,12 @@ import {
   type ReverificationSweepJobData,
   makeProcessReverificationSweep,
 } from "./queues/reverificationSweep.ts";
+import { SCORING_QUEUE, type ScoringJobData, processScoring } from "./queues/scoring.ts";
 import {
-  DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
-  type DataQualitySnapshotSweepJobData,
-  makeProcessDataQualitySnapshotSweep,
-} from "./queues/dataQualitySnapshotSweep.ts";
-import {
-  DATA_RETENTION_SWEEP_QUEUE,
-  type DataRetentionSweepJobData,
-  makeProcessDataRetentionSweep,
-} from "./queues/dataRetentionSweep.ts";
-import {
-  BULK_IMPORTS_DLQ,
-  BULK_IMPORTS_QUEUE,
-  type BulkImportJobData,
-  deadLetterFailedBulkImport,
-  makeProcessBulkImport,
-} from "./queues/bulkImports.ts";
+  EMAIL_SEQUENCE_TICK_QUEUE,
+  type SequenceTickJobData,
+  makeProcessSequenceTick,
+} from "./queues/sequenceTick.ts";
 import {
   BULK_ENRICHMENT_DLQ,
   BULK_ENRICHMENT_QUEUE,
@@ -477,7 +482,9 @@ export function startWorkers(): Worker[] {
     ),
     // Freshness re-verification per-workspace consumer (ADR-0025): re-grades stale revealed contacts.
     instrument(
-      new Worker<ReverificationJobData>(REVERIFICATION_QUEUE, processReverification, { connection }),
+      new Worker<ReverificationJobData>(REVERIFICATION_QUEUE, processReverification, {
+        connection,
+      }),
       REVERIFICATION_QUEUE,
     ),
     // Freshness re-verification SWEEP consumer: leader-locked daily fan-out enqueuing a per-workspace
@@ -615,6 +622,37 @@ export function startWorkers(): Worker[] {
       );
     });
     workers.push(bulkEnrichmentWorker);
+  }
+  // Low-balance notifier sweep (plans-pricing-credits) — DARK by default (LOW_BALANCE_NOTIFIER_ENABLED=false).
+  // Purely additive: when off, the queue/worker/schedule are never constructed and nothing is scanned. READ-ONLY
+  // — charges and deletes nothing; the customer-facing delivery channel (email / in-app, ADR-0027) is the next
+  // wiring step. Leader-locked daily (a stable jobId → exactly one repeatable).
+  if (env.LOW_BALANCE_NOTIFIER_ENABLED) {
+    const lowBalanceNotifierQueue = new Queue<LowBalanceNotifierSweepJobData>(
+      LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<LowBalanceNotifierSweepJobData>(
+          LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
+          makeProcessLowBalanceNotifierSweep(connection),
+          { connection },
+        ),
+        LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
+      ),
+    );
+    void lowBalanceNotifierQueue
+      .add(
+        "sweep",
+        {},
+        { repeat: { every: 24 * 60 * 60_000 }, jobId: "low-balance-notifier-sweep" },
+      )
+      .catch((e) =>
+        log.error("failed to schedule the low-balance notifier sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
   }
   void scheduleSequenceTick().catch((e) =>
     log.error("failed to schedule the sequence tick", {

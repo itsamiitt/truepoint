@@ -12,6 +12,7 @@ export interface PlanTemplateRow {
   seatLimit: number;
   workspaceLimit: number | null;
   monthlyCreditGrant: number | null;
+  trialBonusCredits: number | null;
   features: Record<string, boolean>;
   active: boolean;
   sortOrder: number;
@@ -24,6 +25,7 @@ export interface UpsertPlanTemplateInput {
   seatLimit: number;
   workspaceLimit: number | null;
   monthlyCreditGrant: number | null;
+  trialBonusCredits: number | null;
   features: Record<string, boolean>;
   sortOrder: number;
 }
@@ -36,6 +38,7 @@ const TEMPLATE_COLS = {
   seatLimit: planTemplates.seatLimit,
   workspaceLimit: planTemplates.workspaceLimit,
   monthlyCreditGrant: planTemplates.monthlyCreditGrant,
+  trialBonusCredits: planTemplates.trialBonusCredits,
   features: planTemplates.features,
   active: planTemplates.active,
   sortOrder: planTemplates.sortOrder,
@@ -53,6 +56,19 @@ export const planTemplateRepository = {
     return rows as PlanTemplateRow[];
   },
 
+  /** ACTIVE templates only, ordered for display — the public plan tiers (ADR-0012 transparent pricing) and the
+   *  resolver behind the tenant plan envelope. Read on the owner connection via withPlatformReadTx; never
+   *  exposes retired templates. */
+  async listActive(tx: Tx): Promise<PlanTemplateRow[]> {
+    const rows = await tx
+      .select(TEMPLATE_COLS)
+      .from(planTemplates)
+      .where(eq(planTemplates.active, true))
+      .orderBy(asc(planTemplates.sortOrder), asc(planTemplates.name))
+      .limit(TEMPLATE_LIMIT);
+    return rows as PlanTemplateRow[];
+  },
+
   /** Create or update a template (idempotent on `key`); keeps `active` (toggled separately) but bumps
    *  updated_at. Returns the resulting row. */
   async upsert(tx: Tx, input: UpsertPlanTemplateInput): Promise<PlanTemplateRow> {
@@ -62,6 +78,7 @@ export const planTemplateRepository = {
       seatLimit: input.seatLimit,
       workspaceLimit: input.workspaceLimit,
       monthlyCreditGrant: input.monthlyCreditGrant,
+      trialBonusCredits: input.trialBonusCredits,
       features: input.features,
       sortOrder: input.sortOrder,
     };
@@ -75,6 +92,7 @@ export const planTemplateRepository = {
           seatLimit: input.seatLimit,
           workspaceLimit: input.workspaceLimit,
           monthlyCreditGrant: input.monthlyCreditGrant,
+          trialBonusCredits: input.trialBonusCredits,
           features: input.features,
           sortOrder: input.sortOrder,
           updatedAt: sql`now()`,

@@ -6,6 +6,7 @@
 import { platformBillingReadRepository, withPlatformTx } from "@leadwolf/db";
 import {
   type EconomicsSummary,
+  type EconomicsTrendPoint,
   type LowBalanceTenant,
   type TenantEconomicsRow,
   ValidationError,
@@ -57,6 +58,21 @@ billingRoutes.get("/economics", async (c) => {
     marginCents: agg.revenueCents - providerSpendCents,
   };
   return c.json({ summary });
+});
+
+// The economics daily trend over the window — a gap-filled time series (revenue / reveals / credits consumed
+// per day) behind the rollup sparkline. Same audited owner read; the type `EconomicsTrendPoint` mirrors the
+// repo row (revenue already in cents, no conversion). Bounded by the window (≤365 points).
+billingRoutes.get("/economics/trend", async (c) => {
+  const parsed = economicsQuerySchema.safeParse({ sinceDays: c.req.query("sinceDays") });
+  if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const since = new Date(Date.now() - parsed.data.sinceDays * 86_400_000);
+  const trend: EconomicsTrendPoint[] = await withPlatformTx(
+    actorOf(c),
+    "admin.billing_economics_trend",
+    (tx) => platformBillingReadRepository.economicsTrend(tx, since),
+  );
+  return c.json({ trend });
 });
 
 // Top tenants by provider spend over the window — the drill-down behind the rollup (which orgs drive revenue

@@ -32,6 +32,24 @@ export const refundResultSchema = z.object({
 });
 export type RefundResult = z.infer<typeof refundResultSchema>;
 
+/** The finance/compliance taxonomy a staff member must pick when refunding a purchase, so the audit trail
+ *  explains WHY (not just that) a refund happened. `other` requires a free-text note. */
+export const refundReason = z.enum(["duplicate", "fraud", "billing_error", "goodwill", "other"]);
+export type RefundReason = z.infer<typeof refundReason>;
+
+/** The refund request body — a mandatory structured reason plus an optional operator note (required for
+ *  `other`). Recorded in the platform_audit_log metadata of the refund's `credit.adjust` row (no new column). */
+export const refundRequestSchema = z
+  .object({
+    reason: refundReason,
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((v) => v.reason !== "other" || !!v.note, {
+    message: "A note is required when the reason is 'other'.",
+    path: ["note"],
+  });
+export type RefundRequest = z.infer<typeof refundRequestSchema>;
+
 /** One tenant's slice of the economics window — the per-tenant drill-down behind the rollup (which tenants
  *  actually drive the revenue and the metered provider spend). Money is integer cents; the rest are counts. */
 export const tenantEconomicsRowSchema = z.object({
@@ -63,6 +81,35 @@ export const lowBalanceTenantSchema = z.object({
 });
 export type LowBalanceTenant = z.infer<typeof lowBalanceTenantSchema>;
 
+/** One tenant's economics detail — the per-tenant drill-down on the tenant-detail console (complements the
+ *  cross-tenant rollup). Windowed (`sinceDays`) + lifetime money picture; PII-free. Money is integer cents;
+ *  cost-per-reveal may be fractional. `lastPurchaseAt` is the newest completed top-up (ISO), or null. NOTE:
+ *  packs-not-subscriptions — there is NO MRR/ARR here (that is decision-gated on OD-1), only realized spend. */
+export const tenantEconomicsDetailSchema = z.object({
+  tenantId: z.string().uuid(),
+  tenantName: z.string(),
+  plan: z.string(),
+  revealCreditBalance: z.number().int(),
+  sinceDays: z.number().int(),
+  // window [since, now]
+  revenueCents: z.number().int(),
+  refundedCents: z.number().int(),
+  creditsSold: z.number().int(),
+  creditsConsumed: z.number().int(),
+  reveals: z.number().int(),
+  chargedReveals: z.number().int(),
+  providerSpendCents: z.number().int(),
+  costPerRevealCents: z.number(), // providerSpendCents / chargedReveals (0 when none)
+  marginCents: z.number().int(), // revenueCents - providerSpendCents
+  // lifetime (all-time)
+  lifetimeRevenueCents: z.number().int(),
+  lifetimeRefundedCents: z.number().int(),
+  lifetimeCreditsSold: z.number().int(),
+  lifetimeCreditsConsumed: z.number().int(),
+  lastPurchaseAt: z.string().nullable(), // ISO-8601 or null
+});
+export type TenantEconomicsDetail = z.infer<typeof tenantEconomicsDetailSchema>;
+
 /** The economics summary for the window (07 §9 "internal reporting"). */
 export const economicsSummarySchema = z.object({
   sinceDays: z.number().int(),
@@ -77,3 +124,13 @@ export const economicsSummarySchema = z.object({
   marginCents: z.number().int(), // revenueCents - providerSpendCents
 });
 export type EconomicsSummary = z.infer<typeof economicsSummarySchema>;
+
+/** One day of the economics trend — the gap-filled daily time series behind the rollup sparkline (revenue-ops
+ *  "is the business trending up?"). `day` is UTC `YYYY-MM-DD`; money is integer cents; counts are integers. */
+export const economicsTrendPointSchema = z.object({
+  day: z.string(), // YYYY-MM-DD (UTC)
+  revenueCents: z.number().int(),
+  reveals: z.number().int(),
+  creditsConsumed: z.number().int(),
+});
+export type EconomicsTrendPoint = z.infer<typeof economicsTrendPointSchema>;

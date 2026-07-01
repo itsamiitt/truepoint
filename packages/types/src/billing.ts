@@ -32,11 +32,32 @@ export const usageRevealSchema = z.object({
   id: z.string().uuid(),
   contactId: z.string().uuid(),
   revealType: revealType,
+  dataSource: revealDataSource, // contact_reveals.data_source — the provider the reveal drew from
   creditsConsumed: z.number().int().min(0),
   revealedAt: z.string().datetime({ offset: true }),
   revealedByUserId: z.string(), // contact_reveals.revealed_by_user_id (NOT NULL) — the member who revealed.
 });
 export type UsageReveal = z.infer<typeof usageRevealSchema>;
+
+/** Query for GET /credits/usage — keyset pagination (opaque `cursor`) + optional filters. `format=csv` streams
+ *  the filtered set (bounded) as a download instead of a JSON page. Money/PII-free: filters by type/source/date. */
+export const usageQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  cursor: z.string().min(1).optional(),
+  revealType: revealType.optional(),
+  dataSource: revealDataSource.optional(),
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+  format: z.enum(["json", "csv"]).default("json"),
+});
+export type UsageQuery = z.infer<typeof usageQuerySchema>;
+
+/** A keyset page of usage history: the reveals plus the cursor for the next (older) page (null at the end). */
+export const usagePageSchema = z.object({
+  reveals: z.array(usageRevealSchema),
+  nextCursor: z.string().nullable(),
+});
+export type UsagePage = z.infer<typeof usagePageSchema>;
 
 // ── Suppression / DNC (08 §3) ──────────────────────────────────────────────────────────────────────────
 export const suppressionScope = z.enum(["global", "tenant", "workspace"]);

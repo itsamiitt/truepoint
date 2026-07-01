@@ -46,6 +46,17 @@ export const creditPackRepository = {
       .limit(PACK_LIMIT);
   },
 
+  /** ACTIVE packs only, ordered for display — the public, transparent pricing catalog (ADR-0012). Read on the
+   *  owner connection via withPlatformReadTx for the unauthenticated pricing page; never exposes retired packs. */
+  async listActive(tx: Tx): Promise<CreditPackRow[]> {
+    return tx
+      .select(PACK_COLS)
+      .from(creditPacks)
+      .where(eq(creditPacks.active, true))
+      .orderBy(asc(creditPacks.sortOrder), asc(creditPacks.name))
+      .limit(PACK_LIMIT);
+  },
+
   /** Create or update a pack (idempotent on `key`). An update keeps `active` (toggled separately) but bumps
    *  updated_at; an insert defaults active=true. Returns the resulting row. */
   async upsert(tx: Tx, input: UpsertCreditPackInput): Promise<CreditPackRow> {

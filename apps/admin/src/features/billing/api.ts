@@ -4,7 +4,12 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { EconomicsSummary, LowBalanceTenant, TenantEconomicsRow } from "./types";
+import type {
+  EconomicsSummary,
+  EconomicsTrendPoint,
+  LowBalanceTenant,
+  TenantEconomicsRow,
+} from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
@@ -19,6 +24,16 @@ export async function fetchEconomics(sinceDays: number): Promise<EconomicsSummar
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load economics"));
   const body = (await res.json()) as { summary: EconomicsSummary };
   return body.summary;
+}
+
+/** GET /admin/billing/economics/trend?sinceDays=N — the gap-filled daily revenue/reveals time series. */
+export async function fetchEconomicsTrend(sinceDays: number): Promise<EconomicsTrendPoint[]> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/billing/economics/trend?sinceDays=${encodeURIComponent(sinceDays)}`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load economics trend"));
+  const body = (await res.json()) as { trend: EconomicsTrendPoint[] };
+  return body.trend;
 }
 
 /** GET /admin/billing/economics/by-tenant?sinceDays=N — the top tenants by provider spend for the window. */

@@ -16,6 +16,7 @@ import { useState } from "react";
 import { exportEconomicsByTenant } from "../api";
 import { useEconomics } from "../hooks/useEconomics";
 import type { LowBalanceTenant, TenantEconomicsRow } from "../types";
+import { EconomicsTrend } from "./EconomicsTrend";
 
 const PERIODS = [
   { value: 7, label: "Last 7 days" },
@@ -94,7 +95,7 @@ const lowBalanceColumns: Column<LowBalanceTenant>[] = [
 ];
 
 export function BillingEconomicsPage() {
-  const { summary, tenants, lowBalance, sinceDays, loading, error, setPeriod, reload } =
+  const { summary, tenants, trend, lowBalance, sinceDays, loading, error, setPeriod, reload } =
     useEconomics();
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
@@ -181,6 +182,7 @@ export function BillingEconomicsPage() {
                 sublabel={`${count(summary.chargedReveals)} charged`}
               />
             </div>
+            {trend ? <EconomicsTrend trend={trend} /> : null}
             {tenants && tenants.length > 0 ? (
               <div style={{ marginTop: 24 }}>
                 <h3 className="tp-section-title">Top tenants by provider spend</h3>

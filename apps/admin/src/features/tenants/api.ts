@@ -4,7 +4,12 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { SetAuthEnforcementInput } from "@leadwolf/types";
+import type {
+  EconomicsTrendPoint,
+  RefundReason,
+  SetAuthEnforcementInput,
+  TenantEconomicsDetail,
+} from "@leadwolf/types";
 import type {
   AccountHold,
   PlanTemplateOption,
@@ -110,6 +115,32 @@ export async function applyTenantPlan(id: string, templateKey: string): Promise<
   if (!res.ok) throw new Error(await problemMessage(res, "Could not apply the plan"));
 }
 
+/** GET /admin/tenants/:id/economics — the tenant's windowed + lifetime economics detail (billing:read). */
+export async function fetchTenantEconomics(
+  id: string,
+  sinceDays = 30,
+): Promise<TenantEconomicsDetail> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/economics?sinceDays=${sinceDays}`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load economics"));
+  const body = (await res.json()) as { economics: TenantEconomicsDetail };
+  return body.economics;
+}
+
+/** GET /admin/tenants/:id/economics/trend — the tenant's daily consumption/revenue trend (billing:read). */
+export async function fetchTenantEconomicsTrend(
+  id: string,
+  sinceDays = 30,
+): Promise<EconomicsTrendPoint[]> {
+  const res = await fetchWithAuth(
+    `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/economics/trend?sinceDays=${sinceDays}`,
+  );
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load economics trend"));
+  const body = (await res.json()) as { trend: EconomicsTrendPoint[] };
+  return body.trend;
+}
+
 /** GET /admin/tenants/:id/purchases — the tenant's credit-pack purchases (billing:read). */
 export async function fetchTenantPurchases(id: string): Promise<Purchase[]> {
   const res = await fetchWithAuth(
@@ -120,14 +151,21 @@ export async function fetchTenantPurchases(id: string): Promise<Purchase[]> {
   return body.purchases;
 }
 
-/** POST /admin/tenants/:id/purchases/:purchaseId/refund — reverse a purchase (tenants:credits). */
+/** POST /admin/tenants/:id/purchases/:purchaseId/refund — reverse a purchase (tenants:credits). A structured
+ *  reason is mandatory (recorded in the refund's audit metadata); a note is optional (required for `other`). */
 export async function refundPurchase(
   id: string,
   purchaseId: string,
+  reason: RefundReason,
+  note?: string,
 ): Promise<{ reversed: number; balanceAfter: number }> {
   const res = await fetchWithAuth(
     `${API_BASE}/api/v1/admin/tenants/${encodeURIComponent(id)}/purchases/${encodeURIComponent(purchaseId)}/refund`,
-    { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason, ...(note ? { note } : {}) }),
+    },
   );
   if (!res.ok) throw new Error(await problemMessage(res, "Could not refund the purchase"));
   const body = (await res.json()) as { reversed: number; balanceAfter: number };

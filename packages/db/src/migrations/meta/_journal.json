@@ -260,6 +260,13 @@
       "when": 1783000000000,
       "tag": "0036_announcement_type",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1783100000000,
+      "tag": "0037_plan_trial_bonus",
+      "breakpoints": true
     }
   ]
 }

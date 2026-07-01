@@ -5,8 +5,8 @@
 
 import { type Column, DataTable, EmptyState, StatusBadge } from "@leadwolf/ui";
 import { Receipt } from "lucide-react";
-import { REVEAL_LABEL, type UsageReveal } from "../types";
 import styles from "../billing.module.css";
+import { REVEAL_DATA_SOURCE_LABEL, REVEAL_LABEL, type UsageReveal } from "../types";
 
 function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
@@ -35,7 +35,19 @@ const columns: Column<UsageReveal>[] = [
     key: "type",
     header: "Type",
     sortValue: (r) => r.revealType,
-    cell: (r) => <StatusBadge tone="muted">{REVEAL_LABEL[r.revealType] ?? r.revealType}</StatusBadge>,
+    cell: (r) => (
+      <StatusBadge tone="muted">{REVEAL_LABEL[r.revealType] ?? r.revealType}</StatusBadge>
+    ),
+  },
+  {
+    key: "source",
+    header: "Source",
+    sortValue: (r) => r.dataSource,
+    cell: (r) => (
+      <StatusBadge tone="muted">
+        {REVEAL_DATA_SOURCE_LABEL[r.dataSource] ?? r.dataSource}
+      </StatusBadge>
+    ),
   },
   {
     key: "credits",

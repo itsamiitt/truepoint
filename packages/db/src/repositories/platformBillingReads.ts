@@ -30,12 +30,43 @@ export interface TenantEconomicsAggregate {
   providerSpendMicros: number;
 }
 
+/** One day of the economics trend — gap-filled daily revenue + reveals + credits consumed over the window. */
+export interface EconomicsTrendRow {
+  day: string; // YYYY-MM-DD (UTC)
+  revenueCents: number;
+  reveals: number;
+  creditsConsumed: number;
+}
+
 /** One active tenant at/under a credit-balance threshold (the proactive top-up / churn-risk view). */
 export interface LowBalanceTenantRow {
   tenantId: string;
   tenantName: string;
   plan: string;
   revealCreditBalance: number;
+}
+
+/** One tenant's windowed + lifetime economics aggregate — provider spend stays in micros (the api converts to
+ *  cents and derives margin / cost-per-reveal). `lastPurchaseAt` = newest completed top-up, or null. */
+export interface TenantEconomicsDetailAggregate {
+  tenantId: string;
+  tenantName: string;
+  plan: string;
+  revealCreditBalance: number;
+  // window [since, now]
+  revenueCents: number;
+  refundedCents: number;
+  creditsSold: number;
+  creditsConsumed: number;
+  reveals: number;
+  chargedReveals: number;
+  providerSpendMicros: number;
+  // lifetime (all-time)
+  lifetimeRevenueCents: number;
+  lifetimeRefundedCents: number;
+  lifetimeCreditsSold: number;
+  lifetimeCreditsConsumed: number;
+  lastPurchaseAt: Date | null;
 }
 
 /** One credit-pack purchase row (no Stripe ids). */
@@ -151,6 +182,110 @@ export const platformBillingReadRepository = {
     }));
   },
 
+  /** The economics daily trend over `[since, now]` — a GAP-FILLED time series (every day present, zeros where
+   *  no activity) of revenue, reveals and credits consumed, oldest first. `generate_series` builds the day
+   *  spine (UTC) and the purchases/reveals daily aggregates LEFT JOIN onto it. Bounded by the window (≤365 d).
+   *  Owner read (cross-tenant). */
+  async economicsTrend(tx: Tx, since: Date): Promise<EconomicsTrendRow[]> {
+    const iso = since.toISOString();
+    const rows = (await tx.execute(sql`
+      WITH days AS (
+        SELECT to_char(d, 'YYYY-MM-DD') AS day
+        FROM generate_series(
+          date_trunc('day', ${iso}::timestamptz),
+          date_trunc('day', now()),
+          interval '1 day'
+        ) AS d
+      ),
+      p AS (
+        SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+          coalesce(sum(amount_cents) FILTER (WHERE status = 'completed'), 0)::bigint AS revenue_cents
+        FROM purchases WHERE created_at >= ${iso}::timestamptz GROUP BY 1
+      ),
+      r AS (
+        SELECT to_char(date_trunc('day', revealed_at), 'YYYY-MM-DD') AS day,
+          count(*)::bigint                            AS reveals,
+          coalesce(sum(credits_consumed), 0)::bigint  AS credits_consumed
+        FROM contact_reveals WHERE revealed_at >= ${iso}::timestamptz GROUP BY 1
+      )
+      SELECT
+        days.day                             AS day,
+        coalesce(p.revenue_cents, 0)::bigint AS revenue_cents,
+        coalesce(r.reveals, 0)::bigint       AS reveals,
+        coalesce(r.credits_consumed, 0)::bigint AS credits_consumed
+      FROM days
+      LEFT JOIN p ON p.day = days.day
+      LEFT JOIN r ON r.day = days.day
+      ORDER BY days.day ASC
+    `)) as unknown as Array<{
+      day: string;
+      revenue_cents: number;
+      reveals: number;
+      credits_consumed: number;
+    }>;
+    return rows.map((row) => ({
+      day: row.day,
+      revenueCents: Number(row.revenue_cents),
+      reveals: Number(row.reveals),
+      creditsConsumed: Number(row.credits_consumed),
+    }));
+  },
+
+  /** ONE tenant's economics daily trend over `[since, now]` — a GAP-FILLED time series (revenue / reveals /
+   *  credits consumed per day, oldest first) for a single tenant: the account-level health signal (usage
+   *  ramping up vs going dormant → churn risk). Same generate_series spine as economicsTrend, but every
+   *  aggregate is filtered to `tenantId`. Bounded by the window (≤365 points). Owner read. */
+  async economicsTrendForTenant(
+    tx: Tx,
+    tenantId: string,
+    since: Date,
+  ): Promise<EconomicsTrendRow[]> {
+    const iso = since.toISOString();
+    const rows = (await tx.execute(sql`
+      WITH days AS (
+        SELECT to_char(d, 'YYYY-MM-DD') AS day
+        FROM generate_series(
+          date_trunc('day', ${iso}::timestamptz),
+          date_trunc('day', now()),
+          interval '1 day'
+        ) AS d
+      ),
+      p AS (
+        SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day,
+          coalesce(sum(amount_cents) FILTER (WHERE status = 'completed'), 0)::bigint AS revenue_cents
+        FROM purchases
+        WHERE tenant_id = ${tenantId} AND created_at >= ${iso}::timestamptz GROUP BY 1
+      ),
+      r AS (
+        SELECT to_char(date_trunc('day', revealed_at), 'YYYY-MM-DD') AS day,
+          count(*)::bigint                            AS reveals,
+          coalesce(sum(credits_consumed), 0)::bigint  AS credits_consumed
+        FROM contact_reveals
+        WHERE tenant_id = ${tenantId} AND revealed_at >= ${iso}::timestamptz GROUP BY 1
+      )
+      SELECT
+        days.day                             AS day,
+        coalesce(p.revenue_cents, 0)::bigint AS revenue_cents,
+        coalesce(r.reveals, 0)::bigint       AS reveals,
+        coalesce(r.credits_consumed, 0)::bigint AS credits_consumed
+      FROM days
+      LEFT JOIN p ON p.day = days.day
+      LEFT JOIN r ON r.day = days.day
+      ORDER BY days.day ASC
+    `)) as unknown as Array<{
+      day: string;
+      revenue_cents: number;
+      reveals: number;
+      credits_consumed: number;
+    }>;
+    return rows.map((row) => ({
+      day: row.day,
+      revenueCents: Number(row.revenue_cents),
+      reveals: Number(row.reveals),
+      creditsConsumed: Number(row.credits_consumed),
+    }));
+  },
+
   /** Active tenants at/under a reveal-credit-balance threshold, lowest first, bounded — the proactive top-up /
    *  churn-risk view (07 §9). Owner read; the balance is the live tenant counter. */
   async lowBalanceTenants(
@@ -176,6 +311,88 @@ export const platformBillingReadRepository = {
       plan: r.plan,
       revealCreditBalance: Number(r.reveal_credit_balance),
     }));
+  },
+
+  /** One tenant's economics detail — the per-tenant drill-down (complements economicsByTenant). Same three
+   *  money sources (purchases, reveals, provider spend), filtered to ONE tenant, returning BOTH the windowed
+   *  `[since, now]` slice and the lifetime totals, plus the live balance/plan and the last completed top-up.
+   *  Four bounded aggregate scans (each filtered by tenant_id + indexed time column). Returns null if the
+   *  tenant id does not exist. Owner read (cross-tenant bypass), so the route audits + bounds it. */
+  async economicsForTenant(
+    tx: Tx,
+    tenantId: string,
+    since: Date,
+  ): Promise<TenantEconomicsDetailAggregate | null> {
+    const iso = since.toISOString();
+
+    const [t] = (await tx.execute(sql`
+      SELECT id::text AS tenant_id, name AS tenant_name, plan, reveal_credit_balance
+      FROM tenants WHERE id = ${tenantId}
+    `)) as unknown as Array<{
+      tenant_id: string;
+      tenant_name: string;
+      plan: string;
+      reveal_credit_balance: number;
+    }>;
+    if (!t) return null;
+
+    const [p] = (await tx.execute(sql`
+      SELECT
+        coalesce(sum(credits)      FILTER (WHERE status='completed' AND created_at >= ${iso}::timestamptz), 0)::bigint AS w_credits_sold,
+        coalesce(sum(amount_cents) FILTER (WHERE status='completed' AND created_at >= ${iso}::timestamptz), 0)::bigint AS w_revenue_cents,
+        coalesce(sum(amount_cents) FILTER (WHERE status='refunded'  AND created_at >= ${iso}::timestamptz), 0)::bigint AS w_refunded_cents,
+        coalesce(sum(credits)      FILTER (WHERE status='completed'), 0)::bigint AS l_credits_sold,
+        coalesce(sum(amount_cents) FILTER (WHERE status='completed'), 0)::bigint AS l_revenue_cents,
+        coalesce(sum(amount_cents) FILTER (WHERE status='refunded'),  0)::bigint AS l_refunded_cents,
+        max(created_at) FILTER (WHERE status='completed')                        AS last_purchase_at
+      FROM purchases WHERE tenant_id = ${tenantId}
+    `)) as unknown as Array<{
+      w_credits_sold: number;
+      w_revenue_cents: number;
+      w_refunded_cents: number;
+      l_credits_sold: number;
+      l_revenue_cents: number;
+      l_refunded_cents: number;
+      last_purchase_at: string | Date | null;
+    }>;
+
+    const [r] = (await tx.execute(sql`
+      SELECT
+        coalesce(sum(credits_consumed) FILTER (WHERE revealed_at >= ${iso}::timestamptz), 0)::bigint AS w_consumed,
+        (count(*) FILTER (WHERE revealed_at >= ${iso}::timestamptz))::bigint                         AS w_reveals,
+        (count(*) FILTER (WHERE revealed_at >= ${iso}::timestamptz AND credits_consumed > 0))::bigint AS w_charged,
+        coalesce(sum(credits_consumed), 0)::bigint                                                   AS l_consumed
+      FROM contact_reveals WHERE tenant_id = ${tenantId}
+    `)) as unknown as Array<{
+      w_consumed: number;
+      w_reveals: number;
+      w_charged: number;
+      l_consumed: number;
+    }>;
+
+    const [s] = (await tx.execute(sql`
+      SELECT coalesce(sum(cost_micros), 0)::bigint AS w_provider_micros
+      FROM provider_calls WHERE tenant_id = ${tenantId} AND called_at >= ${iso}::timestamptz
+    `)) as unknown as Array<{ w_provider_micros: number }>;
+
+    return {
+      tenantId: t.tenant_id,
+      tenantName: t.tenant_name,
+      plan: t.plan,
+      revealCreditBalance: Number(t.reveal_credit_balance),
+      revenueCents: Number(p?.w_revenue_cents ?? 0),
+      refundedCents: Number(p?.w_refunded_cents ?? 0),
+      creditsSold: Number(p?.w_credits_sold ?? 0),
+      creditsConsumed: Number(r?.w_consumed ?? 0),
+      reveals: Number(r?.w_reveals ?? 0),
+      chargedReveals: Number(r?.w_charged ?? 0),
+      providerSpendMicros: Number(s?.w_provider_micros ?? 0),
+      lifetimeRevenueCents: Number(p?.l_revenue_cents ?? 0),
+      lifetimeRefundedCents: Number(p?.l_refunded_cents ?? 0),
+      lifetimeCreditsSold: Number(p?.l_credits_sold ?? 0),
+      lifetimeCreditsConsumed: Number(r?.l_consumed ?? 0),
+      lastPurchaseAt: p?.last_purchase_at ? new Date(p.last_purchase_at) : null,
+    };
   },
 
   /** One tenant's credit-pack purchases, newest first, bounded (13a Area 4). Stripe ids are not projected. */

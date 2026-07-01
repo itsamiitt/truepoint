@@ -18,6 +18,7 @@ export interface PlanTemplateInput {
   seatLimit: number;
   workspaceLimit: number | null;
   monthlyCreditGrant: number | null;
+  trialBonusCredits: number | null;
   features: Record<string, boolean>;
   sortOrder: number;
 }

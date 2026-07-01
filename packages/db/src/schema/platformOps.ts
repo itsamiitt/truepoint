@@ -179,6 +179,7 @@ export const planTemplates = pgTable("plan_templates", {
   seatLimit: integer("seat_limit").notNull(),
   workspaceLimit: integer("workspace_limit"), // null = unlimited
   monthlyCreditGrant: integer("monthly_credit_grant"), // null = none
+  trialBonusCredits: integer("trial_bonus_credits"), // OD-7 signup-bonus credits seeded on org creation (null = none)
   features: jsonb("features").notNull().default({}),
   active: boolean("active").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),

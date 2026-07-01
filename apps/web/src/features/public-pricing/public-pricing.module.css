@@ -1,0 +1,246 @@
+/*
+ * public-pricing.module.css — the unauthenticated pricing page (ADR-0012 transparent self-serve). Calm,
+ * Linear/Vercel-flat: hairline borders, generous spacing, no shadows. Color comes from --tp-* tokens
+ * (packages/ui/src/tokens.css); the Card primitive carries its own chrome. Centered, responsive, single-column
+ * on narrow viewports.
+ */
+
+.page {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 56px 24px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.hero {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--tp-ink);
+  margin: 0;
+}
+
+.lede {
+  font-size: 15px;
+  color: var(--tp-ink-3);
+  margin: 0;
+  max-width: 60ch;
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-3);
+  margin: 0 0 16px;
+}
+
+.sectionLede {
+  font-size: 14px;
+  color: var(--tp-ink-3);
+  margin: -8px 0 16px;
+  max-width: 60ch;
+}
+
+/* ── Plan tiers ──────────────────────────────────────────────────────────────────────────────────── */
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.planCard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.planName {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--tp-ink);
+  margin: 0 0 4px;
+}
+
+.planMeta {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  margin: 0 0 16px;
+}
+
+.featureList {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.featureItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--tp-ink);
+}
+
+.featureCheck {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--success);
+}
+
+.featureMuted {
+  font-size: 14px;
+  color: var(--tp-ink-3);
+}
+
+/* ── Credit packs ────────────────────────────────────────────────────────────────────────────────── */
+.packGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.packCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  text-align: left;
+}
+
+.packCredits {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--tp-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.packCreditsUnit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-3);
+  margin-left: 6px;
+}
+
+.packName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.packPrice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tp-ink);
+  margin-bottom: 12px;
+}
+
+/* ── CTAs (anchors styled as buttons — accessible navigation, no JS) ───────────────────────────────── */
+.cta,
+.ctaGhost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: var(--tp-radius, 8px);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.cta {
+  background: var(--tp-accent, #2563c9);
+  color: #fff;
+  border: 1px solid var(--tp-accent, #2563c9);
+}
+
+.cta:hover {
+  background: var(--tp-accent-strong, #1d4ed8);
+}
+
+.ctaGhost {
+  background: transparent;
+  color: var(--tp-ink);
+  border: 1px solid var(--tp-hairline);
+}
+
+.ctaGhost:hover {
+  border-color: var(--tp-ink-3);
+}
+
+.cta:focus-visible,
+.ctaGhost:focus-visible {
+  outline: 2px solid var(--tp-accent, #2563c9);
+  outline-offset: 2px;
+}
+
+/* ── Transparency footer (ADR-0012) ────────────────────────────────────────────────────────────────── */
+.footer {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 24px;
+  border-top: 1px solid var(--tp-hairline);
+  font-size: 13px;
+  color: var(--tp-ink-3);
+  max-width: 70ch;
+  margin: 0 auto;
+}
+
+.footer a {
+  color: var(--tp-accent, #2563c9);
+  text-decoration: none;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+.footDot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 32px 16px 56px;
+  }
+  .title {
+    font-size: 28px;
+  }
+}

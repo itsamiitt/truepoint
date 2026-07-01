@@ -6,6 +6,7 @@ export {
   withPrivilegedTx,
   withErTx,
   withPlatformTx,
+  withPlatformReadTx,
   recordPlatformEvent,
   type PlatformEventInput,
   closeDb,
@@ -39,6 +40,7 @@ export {
   tenantMemberRepository,
   tenantDomainRepository,
   tenantRepository,
+  type TenantBillingProfile,
   tenantSsoConfigRepository,
   invitationRepository,
   type WorkspaceSummary,
@@ -155,6 +157,8 @@ export {
   type ContactForReveal,
   type RevealClaimInput,
   type RevealUsageRow,
+  type UsageFilter,
+  type UsageListOptions,
 } from "./repositories/revealRepository.ts";
 export {
   creditRepository,
@@ -345,6 +349,8 @@ export {
 export {
   platformBillingReadRepository,
   type EconomicsAggregate,
+  type EconomicsTrendRow,
+  type TenantEconomicsDetailAggregate,
   type PlatformPurchaseRow,
 } from "./repositories/platformBillingReads.ts";
 // Platform data-quality reads (P5 cockpit) — cross-tenant DQ rollup + re-verification ledger, within withPlatformTx.

@@ -17,6 +17,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "../schema/auth.ts";
+import { planTemplates } from "../schema/platformOps.ts";
 
 // ── Workspaces (RLS-scoped) ──────────────────────────────────────────────────────────────────────────
 export interface WorkspaceSummary {
@@ -103,10 +104,7 @@ export const workspaceRepository = {
         .from(workspaceMembers)
         .innerJoin(users, eq(users.id, workspaceMembers.userId))
         .where(
-          and(
-            eq(workspaceMembers.workspaceId, workspaceId),
-            eq(workspaceMembers.status, "active"),
-          ),
+          and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.status, "active")),
         )
         .orderBy(asc(workspaceMembers.joinedAt), asc(workspaceMembers.id))
         .limit(limit);
@@ -119,9 +117,7 @@ export const workspaceRepository = {
           createdAt: invitations.createdAt,
         })
         .from(invitations)
-        .where(
-          and(eq(invitations.workspaceId, workspaceId), isNull(invitations.acceptedAt)),
-        )
+        .where(and(eq(invitations.workspaceId, workspaceId), isNull(invitations.acceptedAt)))
         .orderBy(asc(invitations.createdAt), asc(invitations.id))
         .limit(limit);
 
@@ -552,7 +548,61 @@ export const tenantMemberRepository = {
 // Runs on the privileged global client (the tenant does not exist yet, so RLS/withTenantTx cannot apply).
 // One transaction creates the tenant, its owner membership, the default workspace, and the owner's
 // workspace membership — the same shape db:seed builds for the seeded orgs.
+/** The current tenant's plan + credits + live seat/workspace usage — backs GET /api/v1/credits/me (the web
+ *  billing hub plan tiles). The plan NAME is resolved separately against the owner-only plan_templates catalog
+ *  (not readable on the app role). */
+export interface TenantBillingProfile {
+  plan: string; // tenants.plan = plan_templates.key (denormalized, no FK)
+  seatLimit: number;
+  workspaceLimit: number | null; // null = unlimited
+  revealCreditBalance: number;
+  features: Record<string, boolean>;
+  seatsUsed: number; // active tenant members
+  workspacesUsed: number;
+}
+
 export const tenantRepository = {
+  /**
+   * Read the tenant's plan/credits/entitlement envelope + its active member and workspace counts. RLS-scoped:
+   * reads the tenant's OWN row and its own membership/workspace rows (the tenant GUC bounds every table).
+   * Pass `tx` to compose into a caller's scoped transaction; omit it for a standalone read. Returns null if the
+   * tenant row is not visible in scope. The plan display NAME is resolved by the route against the owner catalog.
+   */
+  async getBillingProfile(tenantId: string, tx?: Tx): Promise<TenantBillingProfile | null> {
+    const run = async (t: Tx): Promise<TenantBillingProfile | null> => {
+      const [row] = await t
+        .select({
+          plan: tenants.plan,
+          seatLimit: tenants.seatLimit,
+          workspaceLimit: tenants.workspaceLimit,
+          revealCreditBalance: tenants.revealCreditBalance,
+          features: tenants.features,
+        })
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
+      if (!row) return null;
+      const [seats] = await t
+        .select({ value: count() })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.status, "active")));
+      const [ws] = await t
+        .select({ value: count() })
+        .from(workspaces)
+        .where(eq(workspaces.tenantId, tenantId));
+      return {
+        plan: row.plan,
+        seatLimit: row.seatLimit,
+        workspaceLimit: row.workspaceLimit,
+        revealCreditBalance: row.revealCreditBalance,
+        features: (row.features ?? {}) as Record<string, boolean>,
+        seatsUsed: Number(seats?.value ?? 0),
+        workspacesUsed: Number(ws?.value ?? 0),
+      };
+    };
+    return tx ? run(tx) : withTenantTx({ tenantId }, run);
+  },
+
   async provisionNewOrg(input: {
     tenantName: string;
     tenantSlug: string;
@@ -561,9 +611,22 @@ export const tenantRepository = {
     workspaceSlug: string;
   }): Promise<{ tenantId: string; workspaceId: string }> {
     return db.transaction(async (tx) => {
+      // OD-7 MVP trial: seed the new org with its plan's signup-bonus credits (the default 'free' plan). Read on
+      // the owner connection (plan_templates is owner-owned); atomic with creation → granted exactly once per
+      // org. No template / null bonus → 0 (the prior behavior), so onboarding is unchanged until staff set it.
+      const [freeTpl] = await tx
+        .select({ bonus: planTemplates.trialBonusCredits })
+        .from(planTemplates)
+        .where(eq(planTemplates.key, "free"))
+        .limit(1);
+      const signupBonus = freeTpl?.bonus ?? 0;
       const [t] = await tx
         .insert(tenants)
-        .values({ name: input.tenantName, slug: input.tenantSlug })
+        .values({
+          name: input.tenantName,
+          slug: input.tenantSlug,
+          revealCreditBalance: signupBonus,
+        })
         .returning({ id: tenants.id });
       await tx.insert(tenantMembers).values({
         tenantId: t!.id,

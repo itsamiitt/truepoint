@@ -12,6 +12,48 @@
   max-width: 880px;
 }
 
+/* Tab bar spacing under the page title. */
+.tabBar {
+  margin-bottom: 20px;
+}
+
+/* Vertical stack within a tab panel (e.g. tiles + included features). */
+.tabStack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Read-only hint shown to non-purchasers (OD-8 workspace-admin gate). */
+.mutedHint {
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+
+/* Plan entitlements list. */
+.featureList {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.featureItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--tp-ink);
+}
+
+.featureCheck {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--success);
+}
+
 .lede {
   font-size: 14px;
   color: var(--tp-ink-3);
@@ -24,6 +66,21 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+/* Usage-tab filter + export controls (right side of the card head). */
+.usageControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* "Load more" affordance under the usage table. */
+.loadMore {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
 }
 
 /* Card chrome. */

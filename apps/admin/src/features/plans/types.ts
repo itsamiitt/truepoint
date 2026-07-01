@@ -8,6 +8,7 @@ export interface PlanTemplate {
   seatLimit: number;
   workspaceLimit: number | null;
   monthlyCreditGrant: number | null;
+  trialBonusCredits: number | null;
   features: Record<string, boolean>;
   active: boolean;
   sortOrder: number;

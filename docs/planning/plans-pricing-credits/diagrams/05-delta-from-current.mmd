@@ -1,0 +1,59 @@
+%% 05-delta-from-current.mmd — What is NEW vs the as-built schema (delta-from-current)
+%% SOLID box subgraph = [exists] today. DASHED/tagged = proposed additive tables (gated).
+graph TB
+    subgraph EXISTS["AS-BUILT [exists] — packages/db/src/schema"]
+        T["tenants<br/>reveal_credit_balance (counter)<br/>plan / seat_limit / workspace_limit / features"]
+        CR["contact_reveals (reveal log)"]
+        P["purchases (Stripe top-ups)"]
+        SC["stripe_customers"]
+        IK["idempotency_keys"]
+        AL["audit_log (append-only)"]
+        CP["credit_packs (platform)"]
+        PT["plan_templates (platform)"]
+        AH["account_holds (platform)"]
+    end
+
+    subgraph M11["PROPOSED [M11-ledger] — Phase 3 keystone (ADR-0029)"]
+        CL["credit_ledger<br/>append-only signed delta<br/>balance == SUM(delta)"]
+    end
+
+    subgraph SUBS["PROPOSED [decision-gated][Stripe] — ADR-0041 (OD-1)"]
+        S["subscriptions (auto_renew DEFAULT false)"]
+        BC["billing_cycles (monthly-grant anchor)"]
+        TR["trials (signup-bonus = MVP, OD-7)"]
+    end
+
+    subgraph INV["PROPOSED [Stripe][flag] — OD-5"]
+        I["invoices (mirror)"]
+        ILI["invoice_line_items (immutable)"]
+        PM["payment_methods (token only)"]
+    end
+
+    subgraph PLAT["PROPOSED [platform] — reuse 04/05 audits"]
+        CPP["credit_pack_prices (history+ccy, 05 §7.1/7.2)"]
+        PF["plan_features (registry, 04 §7.1)"]
+        PTV["plan_template_versions (04 §7.2)"]
+        PTVAR["plan_template_variants (04 §7.3)"]
+        PROMO["promotions (05 §8.2)"]
+    end
+
+    subgraph M12["PROPOSED [M12-lease][decision-gated] — ADR-0042 (OD-2)"]
+        CB["credit_budgets (workspace/team)"]
+        UCL["user_credit_limits (soft)"]
+    end
+
+    T -. "becomes derived cache" .-> CL
+    CR -. "spend entry" .-> CL
+    P  -. "grant entry" .-> CL
+    S --> BC --> CL
+    CB --> CL
+    CP --> CPP
+    PT --> PF
+    PT --> PTV
+    PT --> PTVAR
+    S --> I --> ILI
+
+    classDef exists fill:#e6f4ea,stroke:#137333;
+    classDef proposed fill:#fef7e0,stroke:#b06000,stroke-dasharray:5 3;
+    class T,CR,P,SC,IK,AL,CP,PT,AH exists;
+    class CL,S,BC,TR,I,ILI,PM,CPP,PF,PTV,PTVAR,PROMO,CB,UCL proposed;

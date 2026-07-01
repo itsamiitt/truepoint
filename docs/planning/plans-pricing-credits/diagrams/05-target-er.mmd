@@ -1,0 +1,66 @@
+%% 05-target-er.mmd — Target ER for plans-pricing-credits (owned by 05_Backend_Architecture.md)
+%% [exists] = shipped today · [M11]/[M12]/[Stripe]/[flag]/[gated] = proposed/gated. Never built-today unless [exists].
+erDiagram
+    tenants ||--o{ contact_reveals         : "logs (ws-scoped) [exists]"
+    tenants ||--o{ purchases               : "tops-up (Stripe) [exists]"
+    tenants ||--|| stripe_customers        : "maps [exists]"
+    tenants ||--o{ credit_ledger           : "balance==SUM(delta) [M11]"
+    tenants ||--o{ subscriptions           : "opt-in recurring [gated][Stripe]"
+    tenants ||--o{ billing_cycles          : "monthly-grant anchor [gated][Stripe]"
+    tenants ||--o{ invoices                : "receipts mirror [Stripe][flag]"
+    tenants ||--o{ payment_methods         : "Stripe token only [Stripe]"
+    tenants ||--o{ trials                  : "signup-bonus [gated]"
+    tenants ||--o{ credit_budgets          : "subdivides pool [M12][gated]"
+    tenants ||--o{ user_credit_limits      : "soft caps [M12][gated]"
+    subscriptions ||--o{ billing_cycles    : "bills per term [gated]"
+    subscriptions ||--o{ invoices          : "invoiced [Stripe][flag]"
+    invoices ||--o{ invoice_line_items     : "immutable lines [Stripe][flag]"
+    billing_cycles }o--|| credit_ledger    : "grant entry [M11]"
+    credit_budgets ||--o{ credit_ledger    : "lease/settle scope [M12]"
+    credit_budgets ||--o{ user_credit_limits : "scopes [M12]"
+    contact_reveals }o--|| credit_ledger   : "spend entry [M11]"
+    purchases }o--|| credit_ledger         : "grant entry [M11]"
+    plan_templates ||--o{ plan_template_versions : "history (G4) [platform]"
+    plan_templates ||--o{ plan_template_variants : "currency/region (G7) [platform][gated]"
+    plan_templates }o--o{ plan_features    : "entitlement registry (G1) [platform]"
+    credit_packs ||--o{ credit_pack_prices : "immutable price book (G,multi-ccy) [platform]"
+    promotions ||--o{ trials               : "applies bonus [gated]"
+
+    tenants {
+        uuid id PK
+        int  reveal_credit_balance "counter; derived cache post-M11"
+        varchar plan "plan_templates.key"
+        int  seat_limit
+        int  workspace_limit
+        jsonb features "entitlements"
+    }
+    credit_ledger {
+        uuid id PK
+        uuid tenant_id FK
+        uuid budget_id FK "M12 scope (nullable)"
+        varchar entry_type "grant|spend|credit_back|adjustment|lease|settle|release"
+        int delta "signed"
+        varchar idempotency_key "UNIQUE per tenant"
+    }
+    subscriptions {
+        uuid id PK
+        uuid tenant_id FK
+        text plan_template_key
+        varchar term "month_to_month(default)|annual"
+        bool auto_renew "DEFAULT false (ADR-0012)"
+        varchar status
+    }
+    credit_budgets {
+        uuid id PK
+        uuid tenant_id FK
+        varchar scope "workspace|team"
+        int allocation
+        bool hard_cap
+    }
+    invoices {
+        uuid id PK
+        uuid tenant_id FK
+        varchar stripe_invoice_id "dedupe"
+        varchar status
+        int total_cents
+    }

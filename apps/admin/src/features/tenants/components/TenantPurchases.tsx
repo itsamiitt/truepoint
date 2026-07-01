@@ -6,6 +6,7 @@
 "use client";
 
 import { useStaffMe } from "@/lib/staffMe";
+import type { RefundReason } from "@leadwolf/types";
 import {
   type Column,
   DataTable,
@@ -13,6 +14,8 @@ import {
   StateSwitch,
   StatusBadge,
   TpButton,
+  TpInput,
+  TpSelect,
   useToast,
 } from "@leadwolf/ui";
 import { useCallback, useEffect, useState } from "react";
@@ -25,6 +28,14 @@ function money(cents: number | null): string {
     ? "—"
     : (cents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
+
+const REFUND_REASONS: { value: RefundReason; label: string }[] = [
+  { value: "duplicate", label: "Duplicate charge" },
+  { value: "fraud", label: "Fraud" },
+  { value: "billing_error", label: "Billing error" },
+  { value: "goodwill", label: "Goodwill" },
+  { value: "other", label: "Other" },
+];
 
 export function TenantPurchases({
   tenantId,
@@ -42,6 +53,8 @@ export function TenantPurchases({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirm, setConfirm] = useState<Purchase | null>(null);
+  const [reason, setReason] = useState<RefundReason>("duplicate");
+  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
 
   const reload = useCallback(async () => {
@@ -65,9 +78,18 @@ export function TenantPurchases({
 
   async function onConfirmRefund() {
     if (!confirm) return;
+    if (reason === "other" && !note.trim()) {
+      toast.error("Add a note explaining the refund.");
+      return;
+    }
     setBusy(true);
     try {
-      const { reversed } = await refundPurchase(tenantId, confirm.id);
+      const { reversed } = await refundPurchase(
+        tenantId,
+        confirm.id,
+        reason,
+        note.trim() || undefined,
+      );
       toast.success(`Refunded — ${reversed} credit${reversed === 1 ? "" : "s"} reversed.`);
       setConfirm(null);
       await reload();
@@ -114,7 +136,15 @@ export function TenantPurchases({
       align: "right",
       cell: (p) =>
         canRefund && p.status !== "refunded" ? (
-          <TpButton variant="ghost" size="sm" onClick={() => setConfirm(p)}>
+          <TpButton
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setReason("duplicate");
+              setNote("");
+              setConfirm(p);
+            }}
+          >
             Refund
           </TpButton>
         ) : null,
@@ -157,7 +187,40 @@ export function TenantPurchases({
             </TpButton>
           </div>
         }
-      />
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <label
+            htmlFor="refund-reason"
+            style={{ display: "flex", flexDirection: "column", gap: 4 }}
+          >
+            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason</span>
+            <TpSelect
+              id="refund-reason"
+              value={reason}
+              disabled={busy}
+              onChange={(e) => setReason(e.target.value as RefundReason)}
+            >
+              {REFUND_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </TpSelect>
+          </label>
+          <label htmlFor="refund-note" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>
+              Note {reason === "other" ? "(required)" : "(optional)"}
+            </span>
+            <TpInput
+              id="refund-note"
+              value={note}
+              placeholder="Context for the audit trail"
+              disabled={busy}
+              onChange={(e) => setNote(e.currentTarget.value)}
+            />
+          </label>
+        </div>
+      </Dialog>
     </div>
   );
 }

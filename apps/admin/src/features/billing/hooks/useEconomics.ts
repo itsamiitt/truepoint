@@ -3,12 +3,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchEconomics, fetchEconomicsByTenant, fetchLowBalance } from "../api";
-import type { EconomicsSummary, LowBalanceTenant, TenantEconomicsRow } from "../types";
+import {
+  fetchEconomics,
+  fetchEconomicsByTenant,
+  fetchEconomicsTrend,
+  fetchLowBalance,
+} from "../api";
+import type {
+  EconomicsSummary,
+  EconomicsTrendPoint,
+  LowBalanceTenant,
+  TenantEconomicsRow,
+} from "../types";
 
 export function useEconomics(initialDays = 30) {
   const [summary, setSummary] = useState<EconomicsSummary | null>(null);
   const [tenants, setTenants] = useState<TenantEconomicsRow[] | null>(null);
+  const [trend, setTrend] = useState<EconomicsTrendPoint[] | null>(null);
   const [lowBalance, setLowBalance] = useState<LowBalanceTenant[] | null>(null);
   const [sinceDays, setSinceDays] = useState(initialDays);
   const [error, setError] = useState<string | null>(null);
@@ -18,15 +29,17 @@ export function useEconomics(initialDays = 30) {
     setLoading(true);
     setError(null);
     try {
-      // The rollup + drill-down share the window; the low-balance list is current-state (window-independent)
-      // but loaded in the same cycle so the page is one fetch.
-      const [s, t, lb] = await Promise.all([
+      // The rollup + trend + drill-down share the window; the low-balance list is current-state (window-
+      // independent) but loaded in the same cycle so the page is one fetch.
+      const [s, t, tr, lb] = await Promise.all([
         fetchEconomics(days),
         fetchEconomicsByTenant(days),
+        fetchEconomicsTrend(days),
         fetchLowBalance(),
       ]);
       setSummary(s);
       setTenants(t);
+      setTrend(tr);
       setLowBalance(lb);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load economics");
@@ -50,6 +63,7 @@ export function useEconomics(initialDays = 30) {
   return {
     summary,
     tenants,
+    trend,
     lowBalance,
     sinceDays,
     loading,

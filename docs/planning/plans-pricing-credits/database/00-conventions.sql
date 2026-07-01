@@ -1,0 +1,42 @@
+-- ============================================================================
+-- plans-pricing-credits / database / 00-conventions.sql
+-- DRAFT — planning artifact, NOT an applied migration. Do NOT run against a DB.
+-- ============================================================================
+-- Owned by: docs/planning/plans-pricing-credits/05_Backend_Architecture.md
+-- Status: target-state DDL SKETCHES for the proposed additive tables. Every
+--         table is gated; never present a non-[exists] table as built.
+--
+-- HOST CONSTRAINT — HAND-AUTHORED MIGRATIONS ONLY (no `drizzle-kit generate`):
+--   This host has NO docker. `drizzle-kit generate` produces stale-snapshot
+--   drift (re-adds existing tables/columns, fails on apply — see MEMORY:
+--   "Drizzle snapshot drift blocks generate"). Every new table below ships as
+--   a HAND-AUTHORED migration in packages/db/migrations/NNNN_*.sql, verified by
+--   CI/docker, NEVER generated. The Drizzle schema object in
+--   packages/db/src/schema/{billing,platformOps}.ts is authored to MATCH the
+--   hand-written SQL, not the other way round.
+--
+-- TWO RLS POSTURES IN THIS PACKAGE (do not mix them):
+--   (A) TENANT DATA  — carries tenant_id; RLS policy in rls/billing.sql scopes
+--       every row to current_setting('app.tenant_id'); readable/writable by the
+--       leadwolf_app role under the tenant predicate. Tables: credit_ledger,
+--       subscriptions, billing_cycles, invoices, invoice_line_items,
+--       payment_methods, trials, team/workspace/user budgets.
+--   (B) PLATFORM CONFIG — NO tenant_id; owner-connection-only (withPlatformTx);
+--       deny-all to leadwolf_app via rls/platformOps.sql + `REVOKE ALL ... FROM
+--       leadwolf_app` in applyMigrations.ts. Tables: credit_pack_prices,
+--       plan_features, plan_template_versions, promotions.
+--
+-- APPEND-ONLY tables (credit_ledger, invoice_line_items snapshots, *_versions,
+-- credit_pack_prices, trials events) get an UPDATE/DELETE-blocking trigger
+-- exactly like audit_log (see rls/billing.sql `block_mutations`). Money history
+-- is immutable.
+--
+-- Gating legend: [exists] [exists-partial] [M11-ledger] [M12-lease] [Stripe]
+--                [flag] [capability] [decision-gated]
+-- ============================================================================
+
+-- Shared helpers assumed present from the as-built schema (DO NOT redefine):
+--   uuid_generate_v7()           -- id default (billing.ts)
+--   citext / bytea / inet        -- customType domains (billing.ts)
+--   block_mutations()            -- append-only trigger fn (rls/billing.sql, audit_log)
+--   app.tenant_id GUC            -- RLS tenant predicate (set per request)

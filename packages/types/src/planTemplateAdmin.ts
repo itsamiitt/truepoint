@@ -19,6 +19,9 @@ export const planTemplateUpsertSchema = z.object({
   seatLimit: z.number().int().min(0).max(1_000_000),
   workspaceLimit: z.number().int().min(0).max(1_000_000).nullable(),
   monthlyCreditGrant: z.number().int().min(0).max(100_000_000).nullable(),
+  // OD-7 MVP trial — signup-bonus credits seeded once on org creation. null = none. Default null keeps the
+  // contract backward-compatible for any caller that doesn't send it.
+  trialBonusCredits: z.number().int().min(0).max(100_000_000).nullable().default(null),
   features: z.record(z.boolean()).default({}),
   sortOrder: z.number().int().min(0).max(1000).default(0),
 });
@@ -35,6 +38,7 @@ export const planTemplateViewSchema = z.object({
   seatLimit: z.number().int(),
   workspaceLimit: z.number().int().nullable(),
   monthlyCreditGrant: z.number().int().nullable(),
+  trialBonusCredits: z.number().int().nullable(),
   features: z.record(z.boolean()),
   active: z.boolean(),
   sortOrder: z.number().int(),

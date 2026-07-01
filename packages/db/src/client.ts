@@ -136,6 +136,18 @@ export async function withPlatformTx<T>(
   });
 }
 
+/**
+ * Run `fn` as the DB owner WITHOUT writing an audit row — for UNAUTHENTICATED / high-volume reads of
+ * SYSTEM-OWNED, NON-PII platform config ONLY (today: the public pricing catalog — `credit_packs`,
+ * `plan_templates`, ADR-0012 transparent self-serve). The base connection is the owner (BYPASSRLS), so this
+ * MUST NEVER touch tenant PII — that is `withTenantTx` (drops to leadwolf_app, RLS enforced). There is no
+ * actor and no audit: an anonymous catalog read is not an auditable privileged action. Contrast
+ * `withPlatformTx`, the audited staff cross-tenant path — never use this where that one is required.
+ */
+export async function withPlatformReadTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.transaction(fn);
+}
+
 /** One platform_audit_log row for a tenant-less / platform-scoped event (ADR-0031 §3, ADR-0032). Unlike
  * withPlatformTx (the staff path, which writes the audit row in the SAME tx as a privileged action), this is
  * a standalone best-effort sink for observational identity events (e.g. password.reset.*): own transaction on
