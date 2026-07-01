@@ -89,6 +89,23 @@ export const appEnvSchema = z
     // `stripe listen`); the webhook route fails closed when it is absent.
     STRIPE_WEBHOOK_SECRET: z.string().optional(),
 
+    // Stripe secret key (sk_…) for server-side Checkout Session + subscription creation (M11 commercial,
+    // ADR-0041). Optional: absent → the checkout/subscribe endpoints fail closed (503 "billing not configured"),
+    // so the paid flow stays dark until a key is set. The webhook (grant) path does not need this key.
+    STRIPE_SECRET_KEY: z.string().optional(),
+    // Stripe REST API base (overridable for tests/mocks); prod default is the live host.
+    STRIPE_API_BASE: z.string().url().default("https://api.stripe.com"),
+    // HARD GATES (default FALSE) — the paid flows stay inert until explicitly enabled AND a secret key is set.
+    // Checkout = one-off credit-pack purchases (Phase 1); Subscriptions = recurring plans (Phase 2).
+    BILLING_CHECKOUT_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    BILLING_SUBSCRIPTIONS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+
     // Charge policy for `risky` verification results — ADR-0013: charged-but-flagged by default.
     REVEAL_CHARGE_RISKY: z
       .string()
