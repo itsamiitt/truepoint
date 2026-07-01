@@ -89,8 +89,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1225,
-  "fileSetHash": "sha256:9f4f41131e175a920949f04f6f5f3ca3d67f66008f2e176dda7da9132572a69d",
+  "fileCount": 1229,
+  "fileSetHash": "sha256:06203074905e05b13e8b508bb1d12fdc312069efc5a7a70cc2faa5e6aaca07e0",
   "features": {
     "account-search": {
       "web": [],
@@ -553,8 +553,12 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/er/compareRecords.test.ts",
+        "packages/core/src/er/compareRecords.ts",
         "packages/core/src/er/fellegiSunter.test.ts",
-        "packages/core/src/er/fellegiSunter.ts"
+        "packages/core/src/er/fellegiSunter.ts",
+        "packages/core/src/er/stringSimilarity.test.ts",
+        "packages/core/src/er/stringSimilarity.ts"
       ],
       "db": [],
       "workers": [],

@@ -200,6 +200,13 @@ export {
   type FellegiSunterConfig,
   type FellegiSunterResult,
 } from "./er/fellegiSunter.ts";
+export { jaro, jaroWinkler } from "./er/stringSimilarity.ts";
+// The pure comparison layer (I5 slice 2): a candidate person PAIR → the Fellegi-Sunter observation vector.
+export {
+  compareRecords,
+  DEFAULT_FIELD_WEIGHTS,
+  type ComparablePerson,
+} from "./er/compareRecords.ts";
 
 // Customer-visible enrichment job-status surface (G-ENR-4, 06 §4.1): READ-only list/detail query helpers over
 // the workspace-scoped enrichment-jobs repository → the EnrichmentJobSummary DTO the status UI polls.
