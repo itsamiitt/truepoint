@@ -66,6 +66,11 @@ import {
   processImport,
 } from "./queues/imports.ts";
 import {
+  LEDGER_BACKFILL_SWEEP_QUEUE,
+  type LedgerBackfillSweepJobData,
+  makeProcessLedgerBackfillSweep,
+} from "./queues/ledgerBackfillSweep.ts";
+import {
   LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
   type LowBalanceNotifierSweepJobData,
   makeProcessLowBalanceNotifierSweep,
@@ -703,6 +708,32 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 24 * 60 * 60_000 }, jobId: "billing-recon-sweep" })
       .catch((e) =>
         log.error("failed to schedule the billing-recon sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // One-time credit-ledger backfill sweep (M11, ADR-0029) — DARK by default (BILLING_LEDGER_BACKFILL_ENABLED=
+  // false). Purely additive: when off, nothing is built. Self-terminating (no-ops once every active tenant
+  // carries an opening_balance marker), so it is safe to leave scheduled; the operator enables it, watches it
+  // drain, then turns it off. Leader-locked; fires every 5 min while enabled to drain the fleet promptly.
+  if (env.BILLING_LEDGER_BACKFILL_ENABLED) {
+    const ledgerBackfillQueue = new Queue<LedgerBackfillSweepJobData>(LEDGER_BACKFILL_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        new Worker<LedgerBackfillSweepJobData>(
+          LEDGER_BACKFILL_SWEEP_QUEUE,
+          makeProcessLedgerBackfillSweep(connection),
+          { connection },
+        ),
+        LEDGER_BACKFILL_SWEEP_QUEUE,
+      ),
+    );
+    void ledgerBackfillQueue
+      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "ledger-backfill-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the ledger-backfill sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

@@ -247,6 +247,13 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // One-time credit-ledger historical backfill sweep (M11, ADR-0029). HARD GATE, default FALSE. Enable it to
+    // reconstruct the ledger for pre-ledger tenants (idempotent + self-terminating via the opening_balance
+    // marker); once billing-recon reports 0 drift it can go back off. While off, the consumer is not registered.
+    BILLING_LEDGER_BACKFILL_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
   })
   .superRefine((val, ctx) => {
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.
