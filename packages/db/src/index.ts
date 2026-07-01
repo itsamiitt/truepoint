@@ -168,6 +168,7 @@ export {
   type BurnByDayRow,
   type LedgerEntryType,
   type LedgerEntryInput,
+  type CustomerLedgerRow,
 } from "./repositories/creditRepository.ts";
 export {
   suppressionRepository,

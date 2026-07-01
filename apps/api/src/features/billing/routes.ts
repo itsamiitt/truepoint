@@ -20,6 +20,7 @@ import {
   withPlatformReadTx,
 } from "@leadwolf/db";
 import {
+  type CreditLedgerEntry,
   ForbiddenError,
   NotFoundError,
   type TenantPlanEnvelope,
@@ -143,6 +144,30 @@ creditsRoutes.post("/checkout", requireRole("owner", "admin"), async (c) => {
       return c.json({ available: false }, err.reason === "not_configured" ? 501 : 502);
     throw err;
   }
+});
+
+// The customer's own credit history (M11, ADR-0029) — a keyset page of every ledger movement (grants, spends,
+// adjustments, subscription resets), newest-first. Tenant-scoped: RLS-isolated under withTenantTx, so a caller
+// only ever sees their own tenant's rows. The unified statement behind the billing hub's "Credit history"; for
+// a pre-ledger tenant it covers movements from the ledger's introduction onward until the reconciliation
+// backfill runs (the UI notes this). PII-free — amounts + reason only.
+creditsRoutes.get("/ledger", requireRole("owner", "admin", "member", "viewer"), async (c) => {
+  const cursor = c.req.query("cursor") || undefined;
+  const rawLimit = Number(c.req.query("limit") ?? "30");
+  const limit = Number.isInteger(rawLimit) && rawLimit >= 1 && rawLimit <= 100 ? rawLimit : 30;
+  const page = await creditRepository.ledgerPage(
+    { tenantId: c.get("tenantId") },
+    { limit, cursor },
+  );
+  const entries: CreditLedgerEntry[] = page.rows.map((r) => ({
+    id: r.id,
+    entryType: r.entryType,
+    delta: r.delta,
+    balanceAfter: r.balanceAfter,
+    reason: r.reason,
+    createdAt: r.createdAt.toISOString(),
+  }));
+  return c.json({ entries, nextCursor: page.nextCursor });
 });
 
 const USAGE_CSV_HEADER = [

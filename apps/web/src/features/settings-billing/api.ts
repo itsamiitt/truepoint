@@ -12,7 +12,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { TenantPlanEnvelope, UsagePage } from "@leadwolf/types";
+import type { CreditLedgerEntry, TenantPlanEnvelope, UsagePage } from "@leadwolf/types";
 import type { TenantPlan, UsageFilters } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
@@ -99,4 +99,19 @@ export async function startCheckout(
   if (!res.ok) throw new Error(await problemMessage(res, "Could not start checkout"));
   const data = (await res.json()) as { checkoutUrl?: string };
   return { available: true, checkoutUrl: data.checkoutUrl };
+}
+
+export interface CreditLedgerPage {
+  entries: CreditLedgerEntry[];
+  nextCursor: string | null;
+}
+
+/** GET /credits/ledger — a keyset page of the tenant's unified credit history (the ledger statement). A 404/501
+ *  degrades to an empty page (pre-ledger environments), never an error. */
+export async function fetchCreditLedger(cursor?: string): Promise<CreditLedgerPage> {
+  const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/ledger${qs}`);
+  if (notBuilt(res.status)) return { entries: [], nextCursor: null };
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load credit history"));
+  return (await res.json()) as CreditLedgerPage;
 }

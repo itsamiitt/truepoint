@@ -2,9 +2,32 @@
 // 07 §2/§4, ADR-0007). The counter mutations are tx-aware (composed inside the reveal tx / webhook tx);
 // the FOR UPDATE lock + the DB CHECK (reveal_credit_balance >= 0) are the double-spend/overdraft guards.
 
-import { gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { contactReveals, creditLedger, purchases } from "../schema/billing.ts";
+
+/** One credit-ledger entry for the CUSTOMER's own statement (M11) — the movement + running balance, no
+ *  internal refs. */
+export interface CustomerLedgerRow {
+  id: string;
+  entryType: string;
+  delta: number;
+  balanceAfter: number | null;
+  reason: string | null;
+  createdAt: Date;
+}
+
+// Opaque keyset cursor over the time-ordered v7 id (id DESC = newest-first; id < cursor = next older page).
+function encodeLedgerCursor(id: string): string {
+  return Buffer.from(id, "utf8").toString("base64url");
+}
+function decodeLedgerCursor(cursor: string): string | null {
+  try {
+    return Buffer.from(cursor, "base64url").toString("utf8") || null;
+  } catch {
+    return null;
+  }
+}
 
 /** One day of credit burn for the Home sparkline (07 §2). */
 export interface BurnByDayRow {
@@ -237,5 +260,44 @@ export const creditRepository = {
       ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
     `);
     return { residual };
+  },
+
+  /**
+   * The CUSTOMER's own credit ledger (M11) — a keyset page of every balance movement (grants, spends,
+   * adjustments, subscription resets, the opening-balance backfill), newest-first over the v7 id. Tenant-scoped:
+   * runs under withTenantTx so the ENABLE-RLS policy (tenant_id = app.current_tenant_id) isolates it to the
+   * caller's tenant (the explicit tenant_id predicate is belt-and-suspenders + an index prefix). limit+1 probe
+   * → nextCursor; null cursor = last page. NOTE: complete only once the ledger backfill has run for a pre-ledger
+   * tenant — the api surfaces `backfilled` so the UI can note it.
+   */
+  async ledgerPage(
+    scope: TenantScope,
+    opts: { limit?: number; cursor?: string },
+  ): Promise<{ rows: CustomerLedgerRow[]; nextCursor: string | null }> {
+    const limit = Math.min(Math.max(opts.limit ?? 30, 1), 100);
+    const cursorId = opts.cursor ? decodeLedgerCursor(opts.cursor) : null;
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select({
+          id: creditLedger.id,
+          entryType: creditLedger.entryType,
+          delta: creditLedger.delta,
+          balanceAfter: creditLedger.balanceAfter,
+          reason: creditLedger.reason,
+          createdAt: creditLedger.createdAt,
+        })
+        .from(creditLedger)
+        .where(
+          cursorId
+            ? and(eq(creditLedger.tenantId, scope.tenantId), lt(creditLedger.id, cursorId))
+            : eq(creditLedger.tenantId, scope.tenantId),
+        )
+        .orderBy(desc(creditLedger.id))
+        .limit(limit + 1);
+      const hasMore = rows.length > limit;
+      const page = hasMore ? rows.slice(0, limit) : rows;
+      const nextCursor = hasMore ? encodeLedgerCursor(page[page.length - 1]!.id) : null;
+      return { rows: page, nextCursor };
+    });
   },
 };

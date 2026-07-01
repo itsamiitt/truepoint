@@ -45,6 +45,18 @@ export const creditCheckoutSchema = z.object({
   pack: z.string().min(1).max(100),
 });
 export type CreditCheckout = z.infer<typeof creditCheckoutSchema>;
+
+/** One entry in the customer's own credit history (M11, ADR-0029) — a signed movement + the running balance
+ *  after it. `entryType` is grant | spend | credit_back | adjustment (+ subscription reset/expiry). */
+export const creditLedgerEntrySchema = z.object({
+  id: z.string().uuid(),
+  entryType: z.string(),
+  delta: z.number().int(),
+  balanceAfter: z.number().int().nullable(),
+  reason: z.string().nullable(),
+  createdAt: z.string(), // ISO-8601
+});
+export type CreditLedgerEntry = z.infer<typeof creditLedgerEntrySchema>;
 export type PublicPlansResponse = z.infer<typeof publicPlansResponseSchema>;
 
 /** The authenticated tenant's plan + credits envelope — `GET /api/v1/credits/me`. Reads the tenant counter and
