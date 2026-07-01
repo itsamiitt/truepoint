@@ -73,3 +73,39 @@ export async function estimateBulkEnrich(input: EstimateInput): Promise<BulkEnri
 
   return { rowCount, estimatedMatchRate, estimatedCreditMicros };
 }
+
+/**
+ * The WORST-CASE credit CEILING for a bulk run (prospect-database-platform I3 / audit A3/P08). Unlike
+ * estimateBulkEnrich (EXPECTED value = residual × the provider's expected valid rate), this assumes EVERY
+ * internally-unmatched row reaches a provider AND charges — the absolute upper bound the confirm gate + the
+ * per-run cap enforce, so a bulk run can NEVER exceed the confirmed budget. Reuses the sample-measured internal
+ * match-rate to size the residual; with no sample it assumes every row could charge (the true, conservative
+ * ceiling). Pure logic; the matcher is injected; pricing-per-match is passed in (07 §1), never hardcoded.
+ */
+export async function worstCaseBulkEnrichMicros(input: EstimateInput): Promise<BulkEnrichEstimate> {
+  const sampleSize = input.sample.length;
+  const rowCount = Math.max(0, Math.trunc(input.totalRowCount));
+
+  if (sampleSize === 0) {
+    // No sample measured → the ceiling is EVERY row charging (conservative — the gate must never under-estimate).
+    const worst = Math.max(0, Math.round(rowCount * input.providerStats.creditMicrosPerMatch));
+    return { rowCount, estimatedMatchRate: 0, estimatedCreditMicros: worst };
+  }
+
+  let internalMatches = 0;
+  for (const row of input.sample) {
+    const result = await input.matcher.matchRow(buildMatchKeys(row), input.ctx);
+    if (isInternalMatch(result.outcome)) internalMatches += 1;
+  }
+
+  const estimatedMatchRate = clamp01(internalMatches / sampleSize);
+  const matchedRows = Math.round(estimatedMatchRate * rowCount);
+  const residualRows = Math.max(0, rowCount - matchedRows);
+  // WORST case: the whole residual charges (expectedValidRate pinned to 1) — the ceiling, not the mean.
+  const estimatedCreditMicros = Math.max(
+    0,
+    Math.round(residualRows * input.providerStats.creditMicrosPerMatch),
+  );
+
+  return { rowCount, estimatedMatchRate, estimatedCreditMicros };
+}

@@ -168,6 +168,7 @@ export {
 export { createMasterGraphMatcher } from "./enrichment/bulk/masterGraphMatcher.ts";
 export {
   estimateBulkEnrich,
+  worstCaseBulkEnrichMicros,
   type EstimateInput,
   type ProviderHitStats,
 } from "./enrichment/bulk/estimate.ts";
