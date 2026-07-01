@@ -25,12 +25,12 @@ export function SourceCoverageSection({
   error,
   onRetry,
 }: {
-  trend: DataQualityTrendPoint[];
+  trend: DataQualityTrendPoint[] | null;
   loading: boolean;
   error: string | null;
   onRetry: () => void;
 }) {
-  const latest = trend[0]?.metrics;
+  const latest = trend?.[0]?.metrics;
   const multi = latest?.multiSourceContacts;
   const total = latest?.total ?? 0;
   // Empty when there is no snapshot yet OR the latest snapshot predates this metric (older rows omit it).
