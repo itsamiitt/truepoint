@@ -10,6 +10,7 @@ import type {
   CustomFieldValueDto,
   CustomFieldValueInput,
   MaskedContact,
+  RevealCosts,
   RevealResponse,
   RevealType,
   RevealedContact,
@@ -142,6 +143,30 @@ export async function fetchRevealedContact(id: string): Promise<RevealedContact>
   const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${id}/revealed`);
   if (!res.ok) throw await toApiError(res, "Could not load revealed data");
   return (await res.json()) as RevealedContact;
+}
+
+/**
+ * POST /contacts/revealed/batch — hydrate already-owned reveal data for a page of contact ids (no charge).
+ * Only the rows the workspace owns something for come back. Used to fill the grid's inline values for
+ * previously-revealed rows on page load.
+ */
+export async function batchRevealedContacts(contactIds: string[]): Promise<RevealedContact[]> {
+  if (contactIds.length === 0) return [];
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/revealed/batch`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ contactIds }),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not load revealed data");
+  const data = (await res.json()) as { revealed: RevealedContact[] };
+  return data.revealed;
+}
+
+/** GET /credits/reveal-costs — per-reveal_type credit cost so the UI can show "Reveal email · N cr" up front. */
+export async function getRevealCosts(): Promise<RevealCosts> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/reveal-costs`);
+  if (!res.ok) throw await toApiError(res, "Could not load reveal costs");
+  return (await res.json()) as RevealCosts;
 }
 
 // ── Tags (ADR-0028, G-REV-6): workspace tag definitions + record assignments + filter-by-tag. ───────────

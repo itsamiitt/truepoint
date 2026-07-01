@@ -9,9 +9,11 @@ import type { MaskedContact, RevealType } from "@leadwolf/types";
 import { Dialog, StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import Link from "next/link";
 import { useEffect } from "react";
+import { useCreditBalance } from "../hooks/useCreditBalance";
 import { useReveal } from "../hooks/useReveal";
+import { useRevealStore } from "../hooks/useRevealStore";
 import styles from "../prospect.module.css";
-import { displayName } from "../types";
+import { displayName, emailStatusTone } from "../types";
 
 const REVEAL_LABELS: Record<RevealType, string> = {
   email: "email",
@@ -35,6 +37,10 @@ export function RevealDialog({
 }) {
   const toast = useToast();
   const { result, failure, busy, run, reset } = useReveal();
+  // Show the credit cost + current balance BEFORE the user confirms (single-reveal parity with the bulk estimate).
+  const { costs } = useRevealStore();
+  const { balance } = useCreditBalance();
+  const cost = costs ? costs[revealType] : null;
 
   // Reset the hook state whenever the dialog opens so nothing stale shows from a prior contact/run.
   useEffect(() => {
@@ -89,6 +95,18 @@ export function RevealDialog({
             Spends tenant credits; you only pay for valid data. Re-revealing this contact in this
             workspace is free.
           </p>
+          {cost != null && (
+            <p className={styles.revealMeta}>
+              Up to <strong>{cost}</strong> credit{cost === 1 ? "" : "s"} for{" "}
+              {REVEAL_LABELS[revealType]}.
+              {balance != null ? (
+                <>
+                  {" "}
+                  Balance: <strong>{balance.toLocaleString()}</strong>.
+                </>
+              ) : null}
+            </p>
+          )}
           {insufficient && (
             <div className={styles.inlineAlert}>
               <p className={styles.inlineAlertMsg}>{failure?.message}</p>
@@ -116,7 +134,9 @@ export function RevealDialog({
                 <dd className={styles.revealValue}>
                   {result.email}
                   {result.emailStatus && (
-                    <StatusBadge tone="muted">{result.emailStatus}</StatusBadge>
+                    <StatusBadge tone={emailStatusTone(result.emailStatus)}>
+                      {result.emailStatus}
+                    </StatusBadge>
                   )}
                 </dd>
               </div>

@@ -35,9 +35,10 @@ import { useBulkSelection } from "../hooks/useBulkSelection";
 import { useFacetCounts } from "../hooks/useFacetCounts";
 import { useProspectSearch } from "../hooks/useProspectSearch";
 import { useRecentSearches } from "../hooks/useRecentSearches";
+import { RevealStoreProvider, useRevealStore } from "../hooks/useRevealStore";
 import { useTags } from "../hooks/useTags";
 import styles from "../prospect.module.css";
-import { type ResultScope, displayName, emailGlyphFor, maskedEmail } from "../types";
+import { type ResultScope, displayName, emailGlyphFor } from "../types";
 import { AccountDetailDrawer } from "./AccountDetailDrawer";
 import { AccountFilterPanel } from "./AccountFilterPanel";
 import { AccountsTable } from "./AccountsTable";
@@ -48,6 +49,7 @@ import { ProspectToolbar } from "./ProspectToolbar";
 import { QuickViewDrawer } from "./QuickViewDrawer";
 import { RecentSearches } from "./RecentSearches";
 import { RecordDetail } from "./RecordDetail";
+import { RevealCell } from "./RevealCell";
 import { RowActions } from "./RowActions";
 import { SaveSearchPanel } from "./SaveSearchPanel";
 
@@ -80,12 +82,21 @@ const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
 ];
 const DEFAULT_VISIBLE = TOGGLEABLE_COLUMNS.map((c) => c.key);
 
-export function ProspectPage() {
+function ProspectPageInner() {
   const search = useProspectSearch();
   const { query, setQuery, hits, loading, error, hasMore, loadMore, reload, markRevealed } = search;
   const counts = useFacetCounts(query, COUNT_FIELDS);
   const recent = useRecentSearches();
   const { tags } = useTags();
+
+  // Bulk-hydrate the already-owned reveal data for the visible rows so the grid shows real email/phone inline
+  // (idempotent per id). Owned rows are those the search projection marked with a non-empty revealedTypes.
+  const revealStore = useRevealStore();
+  const { hydrate: hydrateRevealed } = revealStore;
+  useEffect(() => {
+    const ownedIds = hits.filter((h) => (h.revealedTypes?.length ?? 0) > 0).map((h) => h.id);
+    if (ownedIds.length > 0) hydrateRevealed(ownedIds);
+  }, [hits, hydrateRevealed]);
 
   // Company-level (accounts) scope engine — independent of the contacts query, its own URL params (aq/asort/af).
   const accountSearch = useAccountSearch();
@@ -258,25 +269,14 @@ export function ProspectPage() {
       },
       {
         key: "address",
-        header: "Address",
-        cell: (c) => <span className={styles.mono}>{maskedEmail(c)}</span>,
+        header: "Email",
+        cell: (c) => <RevealCell contact={c} field="email" onRevealed={markRevealed} />,
       },
       {
         key: "phone",
         header: "Phone",
-        align: "center",
-        width: 64,
         sortValue: (c) => (c.hasPhone ? 1 : 0),
-        cell: (c) =>
-          c.hasPhone ? (
-            <Tooltip label="Phone hidden until reveal">
-              <span className={styles.lock} aria-label="Phone hidden until reveal">
-                🔒
-              </span>
-            </Tooltip>
-          ) : (
-            <span className={styles.glyphNone}>—</span>
-          ),
+        cell: (c) => <RevealCell contact={c} field="phone" onRevealed={markRevealed} />,
       },
       {
         key: "actions",
@@ -300,7 +300,7 @@ export function ProspectPage() {
         ),
       },
     ],
-    [allShownSelected, shownIds, bulk, startRowAction],
+    [allShownSelected, shownIds, bulk, startRowAction, markRevealed],
   );
 
   // Filter the toggleable columns by the chooser; the always-on select + actions columns stay.
@@ -489,7 +489,11 @@ export function ProspectPage() {
       <RecordDetail
         contact={selected}
         onClose={() => setSelectedId(null)}
-        onRevealed={(id) => markRevealed(id)}
+        onRevealed={(id) => {
+          markRevealed(id);
+          // Keep the grid row in sync with a reveal done inside the drawer.
+          revealStore.refresh(id);
+        }}
       />
 
       {/* Read-only company preview; "View N contacts" pins the contacts query to this account + switches scope. */}
@@ -509,7 +513,11 @@ export function ProspectPage() {
           requestedAction={rowAction}
           onRequestHandled={() => setRowAction(null)}
           onRevealed={(ids) => {
-            for (const id of ids) markRevealed(id);
+            for (const id of ids) {
+              markRevealed(id);
+              // Hydrate each newly-revealed row so the grid shows its value inline (Phase 3 will batch this).
+              revealStore.refresh(id);
+            }
             bulk.clear();
           }}
           onMutated={() => {
@@ -518,5 +526,14 @@ export function ProspectPage() {
         />
       )}
     </div>
+  );
+}
+
+/** Public entry: wraps the surface in the RevealStore so the grid + detail derive reveal state from one source. */
+export function ProspectPage() {
+  return (
+    <RevealStoreProvider>
+      <ProspectPageInner />
+    </RevealStoreProvider>
   );
 }
