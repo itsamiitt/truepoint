@@ -103,6 +103,20 @@ export function NotificationsBell() {
               ))}
             </ul>
           )}
+          <Link
+            href="/notifications"
+            onClick={() => setOpen(false)}
+            style={{
+              display: "block",
+              padding: "10px 14px",
+              fontSize: 12,
+              color: "var(--tp-accent, #2563c9)",
+              textDecoration: "none",
+              borderTop: "1px solid var(--tp-hairline)",
+            }}
+          >
+            See all notifications
+          </Link>
         </section>
       )}
     </div>
