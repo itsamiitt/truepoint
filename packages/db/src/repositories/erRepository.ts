@@ -1,7 +1,8 @@
 // erRepository.ts — system-owned reads for I5 probabilistic entity resolution (Layer-0 master graph). Every method
 // takes the transaction handed by withErTx (the leadwolf_er role — master_* tables only, non-BYPASSRLS), so ER
 // reads never touch the tenant overlay and never expose cross-tenant PII to a user: this is a background SYSTEM
-// process, not a user-facing surface. READ-ONLY (the flag-gated shadow writer lands in a later slice).
+// process, not a user-facing surface. Reads generate candidates; the one WRITE (proposePendingMatch) only ever
+// inserts a PENDING/splink review proposal — provably inert in the authoritative graph, never a merge/re-point.
 //
 // Candidate generation uses BLOCKING to avoid the O(n²) full cross product: v1 blocks on the shared
 // current-company pointer (idx_master_persons_company — the one populated + indexed, selective key: colleagues are
@@ -13,7 +14,7 @@
 
 import { type SQL, and, asc, eq, gt, ne } from "drizzle-orm";
 import type { Tx } from "../client.ts";
-import { masterPersons } from "../schema/masterGraph.ts";
+import { masterPersons, matchLinks, sourceRecords } from "../schema/masterGraph.ts";
 
 /** The cap on rows any ER read returns per call — a hard bound on every master-graph scan. */
 export const ER_CANDIDATE_LIMIT = 100;
@@ -82,5 +83,61 @@ export const erRepository = {
       ne(masterPersons.id, seed.id),
     );
     return tx.select(CANDIDATE_COLUMNS).from(masterPersons).where(predicate).limit(cap(limit));
+  },
+
+  /**
+   * The source_record ids currently resolved to a person cluster — the LOSER's evidence the shadow proposer
+   * re-proposes for the survivor cluster. Bounded; read-only; system-scoped.
+   */
+  async listSourceRecordIdsForPerson(
+    tx: Tx,
+    personId: string,
+    limit = ER_CANDIDATE_LIMIT,
+  ): Promise<string[]> {
+    const rows = await tx
+      .select({ id: sourceRecords.id })
+      .from(sourceRecords)
+      .where(eq(sourceRecords.resolvedPersonId, personId))
+      .limit(cap(limit));
+    return rows.map((r) => r.id);
+  },
+
+  /**
+   * SHADOW-ONLY PROPOSAL (I5): insert a PENDING, splink match_links row proposing that `sourceRecordId` (a loser's
+   * evidence) belongs to the survivor `clusterId` — filling ONLY the human-review queue the DB-Ops surface reads.
+   * It NEVER sets is_duplicate_of, NEVER writes 'confirmed'/'auto', NEVER re-points a cluster or mutates an existing
+   * row. A pending splink row is provably inert in the authoritative paths (the deterministic resolve ignores
+   * review_status/is_duplicate_of; the projector counts source_records, not match_links). IDEMPOTENT: if a pending
+   * splink link for this (sourceRecordId, clusterId) already exists it is a no-op — the leader-locked ER sweep is a
+   * single writer, so the pre-check is race-safe without a unique index. Returns true iff a NEW proposal was
+   * inserted. System-owned via withErTx. Acting on the proposal (confirm/merge) is a SEPARATE human + executor step.
+   */
+  async proposePendingMatch(
+    tx: Tx,
+    input: { sourceRecordId: string; clusterId: string; matchProbability: number },
+  ): Promise<boolean> {
+    const existing = await tx
+      .select({ id: matchLinks.id })
+      .from(matchLinks)
+      .where(
+        and(
+          eq(matchLinks.sourceRecordId, input.sourceRecordId),
+          eq(matchLinks.clusterId, input.clusterId),
+          eq(matchLinks.matchMethod, "splink"),
+        ),
+      )
+      .limit(1);
+    if (existing[0]) return false; // already proposed — idempotent no-op
+    const prob = Math.max(0, Math.min(1, input.matchProbability));
+    await tx.insert(matchLinks).values({
+      entityType: "person",
+      clusterId: input.clusterId,
+      sourceRecordId: input.sourceRecordId,
+      matchMethod: "splink",
+      matchProbability: String(prob),
+      reviewStatus: "pending",
+      // isDuplicateOf intentionally left NULL — a PROPOSAL for review, never a re-point/merge.
+    });
+    return true;
   },
 };

@@ -207,6 +207,17 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Probabilistic ER shadow mode (prospect-database-platform I5 / audit P02, A10): when ON, the leader-locked ER
+    // sweep scores candidate person pairs (Fellegi-Sunter) and PROPOSES dups as match_links rows with
+    // review_status='pending' + match_method='splink' — the human-review queue the DB-Ops surface reads. SHADOW-ONLY:
+    // it NEVER auto-confirms/merges/re-points and a pending row is provably inert (the deterministic resolve ignores
+    // review_status; the projector counts source_records, not match_links). DEFAULT-OFF: while off the sweep is not
+    // registered and NOTHING is proposed. Turning it on is safe (read-only effect: it only fills a review queue);
+    // acting on a proposal (confirm/merge) is a SEPARATE human + executor step. Same explicit-"true"-only posture.
+    ER_SHADOW_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
   })
   .superRefine((val, ctx) => {
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.
