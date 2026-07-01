@@ -114,6 +114,7 @@ export const REPO_DOMAIN = {
   reveal: "reveal",
   credit: "billing",
   stripeCustomer: "billing",
+  subscription: "billing",
   audit: "compliance",
   idempotency: "billing",
   consent: "compliance",

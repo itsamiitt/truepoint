@@ -92,8 +92,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1285,
-  "fileSetHash": "sha256:5cfa34061bd464c15c255b9862b99ac3720367744ca5de6a8bd3da2f658f57b2",
+  "fileCount": 1287,
+  "fileSetHash": "sha256:1297e2b8195284224beed29f6dbf5b9936232b273c841c70929b02d05ac68714",
   "features": {
     "account-search": {
       "web": [],
@@ -257,7 +257,8 @@
       "db": [
         "packages/db/src/repositories/creditRepository.ts",
         "packages/db/src/repositories/idempotencyRepository.ts",
-        "packages/db/src/repositories/stripeCustomerRepository.ts"
+        "packages/db/src/repositories/stripeCustomerRepository.ts",
+        "packages/db/src/repositories/subscriptionRepository.ts"
       ],
       "workers": [
         "apps/workers/src/queues/billingReconSweep.ts",
@@ -1975,6 +1976,7 @@
       "packages/db/src/schema/salesnav.ts",
       "packages/db/src/schema/savedSearches.ts",
       "packages/db/src/schema/scim.ts",
+      "packages/db/src/schema/subscriptions.ts",
       "packages/db/src/schema/tags.ts",
       "packages/db/src/schema/validationRules.ts",
       "packages/db/src/schema/verificationJobs.ts",
