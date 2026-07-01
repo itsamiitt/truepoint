@@ -52,6 +52,19 @@ export const subscribeSchema = z.object({
 });
 export type Subscribe = z.infer<typeof subscribeSchema>;
 
+/** GET /credits/subscription — the tenant's current subscription for the billing hub, or null (month-to-month).
+ *  Read-only mirror of Stripe state (M11 subs, ADR-0041). */
+export const subscriptionViewSchema = z.object({
+  plan: z.string(),
+  planName: z.string().nullable(),
+  status: z.string(),
+  term: z.string(),
+  currentPeriodEnd: z.string().nullable(), // ISO-8601
+  cancelAtPeriodEnd: z.boolean(),
+  autoRenew: z.boolean(),
+});
+export type SubscriptionView = z.infer<typeof subscriptionViewSchema>;
+
 /** One entry in the customer's own credit history (M11, ADR-0029) — a signed movement + the running balance
  *  after it. `entryType` is grant | spend | credit_back | adjustment (+ subscription reset/expiry). */
 export const creditLedgerEntrySchema = z.object({

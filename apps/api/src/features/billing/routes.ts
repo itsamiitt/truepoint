@@ -18,6 +18,7 @@ import {
   planTemplateRepository,
   revealRepository,
   stripeCustomerRepository,
+  subscriptionRepository,
   tenantRepository,
   withPlatformReadTx,
 } from "@leadwolf/db";
@@ -25,6 +26,7 @@ import {
   type CreditLedgerEntry,
   ForbiddenError,
   NotFoundError,
+  type SubscriptionView,
   type TenantPlanEnvelope,
   ValidationError,
   creditCheckoutSchema,
@@ -204,6 +206,28 @@ creditsRoutes.post("/subscribe", requireRole("owner", "admin"), async (c) => {
       return c.json({ available: false }, err.reason === "not_configured" ? 501 : 502);
     throw err;
   }
+});
+
+// The tenant's current subscription for the billing hub (M11 subs, ADR-0041) — the read behind the Subscription
+// tab. Tenant-scoped (RLS-isolated getForTenant); null = month-to-month (no active subscription). The plan
+// display NAME is resolved against the owner-only plan-template catalog (non-PII). Read-only mirror of Stripe.
+creditsRoutes.get("/subscription", requireRole("owner", "admin", "member", "viewer"), async (c) => {
+  const sub = await subscriptionRepository.getForTenant({ tenantId: c.get("tenantId") });
+  if (!sub) return c.json({ subscription: null });
+  const planName = await withPlatformReadTx(async (tx) => {
+    const tpl = await planTemplateRepository.getByKey(tx, sub.planTemplateKey);
+    return tpl?.name ?? null;
+  });
+  const view: SubscriptionView = {
+    plan: sub.planTemplateKey,
+    planName,
+    status: sub.status,
+    term: sub.term,
+    currentPeriodEnd: sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString() : null,
+    cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+    autoRenew: sub.autoRenew,
+  };
+  return c.json({ subscription: view });
 });
 
 // The customer's own credit history (M11, ADR-0029) — a keyset page of every ledger movement (grants, spends,

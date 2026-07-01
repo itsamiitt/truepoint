@@ -12,7 +12,12 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { CreditLedgerEntry, TenantPlanEnvelope, UsagePage } from "@leadwolf/types";
+import type {
+  CreditLedgerEntry,
+  SubscriptionView,
+  TenantPlanEnvelope,
+  UsagePage,
+} from "@leadwolf/types";
 import type { TenantPlan, UsageFilters } from "./types";
 
 async function problemMessage(res: Response, fallback: string): Promise<string> {
@@ -99,6 +104,15 @@ export async function startCheckout(
   if (!res.ok) throw new Error(await problemMessage(res, "Could not start checkout"));
   const data = (await res.json()) as { checkoutUrl?: string };
   return { available: true, checkoutUrl: data.checkoutUrl };
+}
+
+/** GET /credits/subscription — the tenant's current subscription, or null (month-to-month). 404/501 → null. */
+export async function fetchSubscription(): Promise<SubscriptionView | null> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/subscription`);
+  if (notBuilt(res.status)) return null;
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load subscription"));
+  const { subscription } = (await res.json()) as { subscription: SubscriptionView | null };
+  return subscription;
 }
 
 export interface CreditLedgerPage {
