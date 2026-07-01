@@ -13,7 +13,7 @@ import { useBilling } from "../hooks/useBilling";
 import { BillingTab, DEFAULT_BILLING_TAB, readBillingTabFromUrl } from "../tabs";
 import { CreditsTab } from "./tabs/CreditsTab";
 import { HistoryTab } from "./tabs/HistoryTab";
-import { PlaceholderTab } from "./tabs/PlaceholderTab";
+import { InvoicesTab } from "./tabs/InvoicesTab";
 import { PlanTab } from "./tabs/PlanTab";
 import { SubscriptionTab } from "./tabs/SubscriptionTab";
 import { UsageTab } from "./tabs/UsageTab";
@@ -58,10 +58,7 @@ export function BillingPage() {
 
       <div className={styles.page}>
         {tab === BillingTab.Invoices ? (
-          <PlaceholderTab
-            title="Invoices coming with billing"
-            description="Itemized invoices and receipts will appear here once card billing is enabled."
-          />
+          <InvoicesTab />
         ) : tab === BillingTab.Subscription ? (
           <SubscriptionTab />
         ) : tab === BillingTab.History ? (
