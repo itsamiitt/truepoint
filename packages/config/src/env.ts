@@ -254,6 +254,16 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Async BULK REVEAL job (reveal-experience Phase 3, ADR-0029/0036): the confirm-before-spend money path —
+    // POST /contacts/reveal-jobs/:id/confirm leases the worst-case ceiling, the apps/api producer enqueues the
+    // drive onto BULK_REVEAL_QUEUE, and the apps/workers consumer reveals each contact + releases the unspent
+    // remainder. DEFAULT-OFF: while off the confirm endpoint 403s, the producer enqueues NOTHING, and the
+    // consumer is not registered — so NO bulk-reveal job can EVER spend. Turning it on is a SEPARATE,
+    // CI-parity-gated step. Same explicit-"true"-only posture as BULK_ENRICHMENT_ENABLED.
+    BULK_REVEAL_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Probabilistic ER shadow mode (prospect-database-platform I5 / audit P02, A10): when ON, the leader-locked ER
     // sweep scores candidate person pairs (Fellegi-Sunter) and PROPOSES dups as match_links rows with
     // review_status='pending' + match_method='splink' — the human-review queue the DB-Ops surface reads. SHADOW-ONLY:
