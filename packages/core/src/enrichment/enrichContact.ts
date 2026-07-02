@@ -122,7 +122,11 @@ export async function enrichContact(input: EnrichContactInput): Promise<EnrichCo
     if (cached)
       return { status: "cache_hit", provider: cached.providerName, filled: [], costMicros: 0 };
 
-    // 2) Daily budget breaker (06 §6) — checked before any paid call.
+    // 2) Daily budget breaker (06 §6) — checked before any paid call. ATOMIC (re-audit F3): the advisory
+    // xact lock serializes the check-through-record window per workspace, so concurrent enrichments can no
+    // longer all read a stale under-budget total and collectively overshoot the daily cap. The lock rides
+    // this tx (released at commit/rollback); cross-workspace concurrency is unaffected.
+    await providerCallRepository.lockDailyBudget(tx, input.scope.workspaceId);
     const spent = await providerCallRepository.spendSince(
       tx,
       input.scope.workspaceId,

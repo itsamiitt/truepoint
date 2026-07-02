@@ -11,6 +11,7 @@ import { env } from "@leadwolf/config";
 import { BULK_IMPORTS_QUEUE, type BulkImportJobData } from "@leadwolf/types";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { assertQueueCapacity } from "./queueBackpressure.ts";
 
 /** Only the API enqueues the DRIVE variant; the worker enqueues the chunk variant onto the same queue. */
 type BulkImportDriveJobData = Extract<BulkImportJobData, { kind: "drive" }>;
@@ -39,9 +40,16 @@ function bulkImportQueue(): Queue<BulkImportJobData> {
   return queue;
 }
 
-/** Enqueue the DRIVE job for a freshly-created bulk import; the worker stages the file + fans out the chunks. */
+/** Above this many already-waiting drives, new bulk imports shed with a typed 503 (Phase 5 backpressure).
+ *  Each drive fans out a whole job's chunks, so the drive queue saturates far earlier than the row queue. */
+const MAX_WAITING_DRIVES = 1_000;
+
+/** Enqueue the DRIVE job for a freshly-created bulk import; the worker stages the file + fans out the chunks.
+ *  Sheds with a typed 503 (queue_backpressure) when the drive queue is already saturated (plan 15 §7). */
 export async function enqueueBulkImportDrive(data: BulkImportDriveJobData): Promise<string> {
-  const job = await bulkImportQueue().add("drive", data);
+  const q = bulkImportQueue();
+  await assertQueueCapacity(q, BULK_IMPORTS_QUEUE, MAX_WAITING_DRIVES);
+  const job = await q.add("drive", data);
   return String(job.id);
 }
 
