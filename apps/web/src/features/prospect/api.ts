@@ -7,10 +7,13 @@ import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   ActivityRow,
+  ContactQuery,
   CustomFieldValueDto,
   CustomFieldValueInput,
   MaskedContact,
   RevealCosts,
+  RevealJobEstimate,
+  RevealJobSummary,
   RevealResponse,
   RevealType,
   RevealedContact,
@@ -167,6 +170,58 @@ export async function getRevealCosts(): Promise<RevealCosts> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/reveal-costs`);
   if (!res.ok) throw await toApiError(res, "Could not load reveal costs");
   return (await res.json()) as RevealCosts;
+}
+
+// ── Async bulk-reveal jobs (Phase 3) — the path that works across an ENTIRE search result (select-all). ──
+/** POST /contacts/reveal-jobs — create a job over explicit ids OR a select-all criteria. Arms the confirm gate;
+ *  spends nothing. Returns the worst-case estimate + whether the balance covers it. */
+export async function createBulkRevealJob(body: {
+  revealType: RevealType;
+  contactIds?: string[];
+  criteria?: ContactQuery;
+}): Promise<RevealJobEstimate> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/reveal-jobs`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw await toApiError(res, "Could not create bulk reveal job");
+  return (await res.json()) as RevealJobEstimate;
+}
+
+/** GET /contacts/reveal-jobs/:id — poll a job's status/progress. */
+export async function fetchRevealJob(jobId: string): Promise<RevealJobSummary> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/reveal-jobs/${jobId}`);
+  if (!res.ok) throw await toApiError(res, "Could not load reveal job");
+  return (await res.json()) as RevealJobSummary;
+}
+
+/** POST /contacts/reveal-jobs/:id/confirm — the money gate (leases the ceiling + starts the run). 402 =
+ *  insufficient, 403 = feature not enabled (dark), 409 = not awaiting confirmation. */
+export async function confirmBulkRevealJob(
+  jobId: string,
+): Promise<{ ok: boolean; status: string }> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/reveal-jobs/${jobId}/confirm`, {
+    method: "POST",
+  });
+  if (!res.ok) throw await toApiError(res, "Could not confirm reveal job");
+  return (await res.json()) as { ok: boolean; status: string };
+}
+
+/** POST /contacts/reveal-jobs/:id/cancel — cancel + release the unspent lease. */
+export async function cancelBulkRevealJob(jobId: string): Promise<{ ok: boolean; status: string }> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/reveal-jobs/${jobId}/cancel`, {
+    method: "POST",
+  });
+  if (!res.ok) throw await toApiError(res, "Could not cancel reveal job");
+  return (await res.json()) as { ok: boolean; status: string };
+}
+
+/** GET /contacts/reveal-jobs/:id/download — a signed URL for the revealed CSV (terminal jobs only). */
+export async function fetchBulkRevealDownloadUrl(jobId: string): Promise<string> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/reveal-jobs/${jobId}/download`);
+  if (!res.ok) throw await toApiError(res, "Could not get the download");
+  return ((await res.json()) as { downloadUrl: string }).downloadUrl;
 }
 
 // ── Tags (ADR-0028, G-REV-6): workspace tag definitions + record assignments + filter-by-tag. ───────────

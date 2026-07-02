@@ -64,6 +64,7 @@ import { useCreditBalance } from "../hooks/useCreditBalance";
 import styles from "../prospect.module.css";
 import { OUTREACH_STATUS_OPTIONS } from "../types";
 import { BulkRevealDialog } from "./BulkRevealDialog";
+import { BulkRevealJobDialog } from "./BulkRevealJobDialog";
 
 /** The resolved server selection (never null inside `run`, which guards it). */
 type BulkSelectionResolved = BulkSelection;
@@ -127,6 +128,7 @@ export function BulkActionBar({
   const toast = useToast();
   const { balance } = useCreditBalance();
   const [revealing, setRevealing] = useState(false);
+  const [revealingAll, setRevealingAll] = useState(false); // the async job path (select-all-matching)
   const [dialog, setDialog] = useState<ActiveDialog>(null);
   const [busy, setBusy] = useState(false);
 
@@ -314,17 +316,17 @@ export function BulkActionBar({
           <TpButton
             variant="primary"
             size="sm"
-            onClick={() => setRevealing(true)}
-            disabled={revealable === 0 || allMatching}
+            onClick={() => (allMatching ? setRevealingAll(true) : setRevealing(true))}
+            disabled={!allMatching && revealable === 0}
             title={
               allMatching
-                ? "Reveal works on an explicit selection — select specific rows first"
+                ? "Reveal every matching contact (runs in the background)"
                 : revealable === 0
-                  ? "No selected contacts need an email reveal"
+                  ? "No selected contacts need a reveal"
                   : undefined
             }
           >
-            Reveal {allMatching ? "" : revealable}
+            Reveal {allMatching ? "all" : revealable}
           </TpButton>
           <TpButton
             variant="ghost"
@@ -366,6 +368,19 @@ export function BulkActionBar({
         onRevealed={(ids) => {
           onRevealed(ids);
           setRevealing(false);
+        }}
+      />
+
+      {/* Async job path — reveal EVERY matching contact (select-all). Degrades gracefully while the feature
+          is dark (confirm 403 → "rolling out"). */}
+      <BulkRevealJobDialog
+        open={revealingAll}
+        onClose={() => setRevealingAll(false)}
+        criteria={query}
+        onDone={() => {
+          onMutated?.();
+          clear();
+          setRevealingAll(false);
         }}
       />
 
