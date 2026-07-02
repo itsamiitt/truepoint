@@ -5,10 +5,11 @@
 // tables, and a write that throws rolls the audit row back with it. The api layer owns the role gate
 // (requireStaffRole) and the audit action string; this file owns only the SQL.
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { tenants, users } from "../schema/auth.ts";
 import { dsarRequests } from "../schema/compliance.ts";
+import { contacts } from "../schema/contacts.ts";
 import { approvalRequests } from "../schema/platformOps.ts";
 import { validationRules } from "../schema/validationRules.ts";
 import type { PlatformApprovalRow, PlatformValidationRuleRow } from "./platformAdminReads.ts";
@@ -61,6 +62,14 @@ export interface ApprovalDecisionOutcome {
 export interface DsarTransitionOutcome {
   found: boolean;
   invalidFrom: string | null;
+}
+
+/** Outcome of a `dedup_merge` execution (grain A overlay merge), mapped IN-tx so a refusal rolls the audit row
+ *  back: both contacts not proven LIVE rows of the DECLARED tenant+workspace → found:false; the survivor is
+ *  itself marked a duplicate of the loser (an A↔B cycle) → cycle:true; else applied. */
+export interface DedupMergeOutcome {
+  found: boolean;
+  cycle: boolean;
 }
 
 export const platformAdminWriteRepository = {
@@ -316,6 +325,70 @@ export const platformAdminWriteRepository = {
       selfApproval: false,
       row: (row ?? null) as PlatformApprovalRow | null,
     };
+  },
+
+  /**
+   * Execute an approved `dedup_merge` (GRAIN A overlay merge — pending/dedup-merge-design.md v1): set the
+   * loser's `duplicate_of_contact_id` to the survivor, the SAME marker-only annotation the automated dedup
+   * sweep (prospect/dedup.ts) writes — reversible via the customer unmark. EXPLICIT-SCOPE DISCIPLINE (threat
+   * model §4.1, the findMatchExplicit lesson): this runs on the owner path, which BYPASSES RLS, so both
+   * contacts are first proven LIVE rows of the DECLARED tenant+workspace under FOR UPDATE — a foreign or
+   * cross-tenant id can never be read or written. Idempotent (re-setting the same marker changes nothing).
+   * NO master-graph write — grain B (cluster merge/split) remains security-review-gated.
+   */
+  async execDedupMerge(
+    tx: Tx,
+    p: { tenantId: string; workspaceId: string; survivorContactId: string; loserContactId: string },
+  ): Promise<DedupMergeOutcome> {
+    const rows = (await tx.execute(
+      sql`SELECT id, duplicate_of_contact_id AS dup_of FROM contacts
+          WHERE id IN (${p.survivorContactId}::uuid, ${p.loserContactId}::uuid)
+            AND tenant_id = ${p.tenantId}::uuid
+            AND workspace_id = ${p.workspaceId}::uuid
+            AND deleted_at IS NULL
+          FOR UPDATE`,
+    )) as unknown as Array<{ id: string; dup_of: string | null }>;
+    if (rows.length !== 2) return { found: false, cycle: false };
+    // Cycle guard: A→B while B→A would make both rows "duplicates" with no canonical — refuse, don't untangle.
+    const survivor = rows.find((r) => r.id === p.survivorContactId);
+    if (survivor?.dup_of === p.loserContactId) return { found: true, cycle: true };
+    // updated_at deliberately not bumped — duplicate_of_contact_id is a derived/system annotation (the same
+    // posture as contactRepository.markDuplicates / unmarkDuplicate).
+    await tx.execute(
+      sql`UPDATE contacts SET duplicate_of_contact_id = ${p.survivorContactId}::uuid
+          WHERE id = ${p.loserContactId}::uuid
+            AND tenant_id = ${p.tenantId}::uuid
+            AND workspace_id = ${p.workspaceId}::uuid`,
+    );
+    return { found: true, cycle: false };
+  },
+
+  /**
+   * Execute an approved `bulk_delete` (design §2 v1): SOFT-delete (deleted_at tombstone) a bounded explicit id
+   * set — the customer-grade delete; PII nulling stays the DSAR/retention path's job, and hard deletion stays
+   * retention-enforce's. EXPLICIT-SCOPE predicates (owner path bypasses RLS — §4.1) + LIVE-rows-only, so a
+   * foreign, cross-tenant, or already-deleted id is SKIPPED, never touched; the returned count is the true
+   * blast radius for the audit metadata. The schema caps the set at 1000 (§4.4); idempotent on retry (the
+   * deleted_at IS NULL predicate makes a re-run a no-op).
+   */
+  async execBulkDelete(
+    tx: Tx,
+    p: { tenantId: string; workspaceId: string; contactIds: string[] },
+  ): Promise<number> {
+    if (p.contactIds.length === 0) return 0;
+    const updated = await tx
+      .update(contacts)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          inArray(contacts.id, p.contactIds),
+          eq(contacts.tenantId, p.tenantId),
+          eq(contacts.workspaceId, p.workspaceId),
+          isNull(contacts.deletedAt),
+        ),
+      )
+      .returning({ id: contacts.id });
+    return updated.length;
   },
 
   /**

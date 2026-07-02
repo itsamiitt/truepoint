@@ -24,9 +24,11 @@ import {
   NotFoundError,
   ValidationError,
   approvalRequestViewSchema,
+  bulkDeleteParamsSchema,
   bulkExportParamsSchema,
   createApprovalSchema,
   decideApprovalSchema,
+  dedupMergeParamsSchema,
   retentionEnforceParamsSchema,
   toggleValidationRuleSchema,
   upsertValidationRuleSchema,
@@ -324,8 +326,9 @@ dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), asyn
       if (outcome.notPending) throw new ValidationError("This request is no longer pending.");
       const row = outcome.row!;
       // EXECUTE the approved op IMMEDIATELY, in the SAME audited tx — a failed run rolls the approval back so the
-      // decision and the effect are atomic. Only retention_enforce is wired today; a filed request for an unwired
-      // op can't be approved until its feature ships (the throw rolls back). Bulk ops add a row-cap here.
+      // decision and the effect are atomic. All four data ops are wired (retention_enforce, bulk_export,
+      // dedup_merge grain A, bulk_delete soft-only); a refusal inside an executor throws → the decision AND the
+      // audit row roll back ("no trace for an action that did not happen").
       if (row.operation === "retention_enforce") {
         const p = retentionEnforceParamsSchema.safeParse(row.params);
         if (!p.success)
@@ -352,6 +355,37 @@ dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), asyn
           fileStore: bulkFileStore(),
           exportKey: `exports/staff/${id}.csv`,
         });
+      } else if (row.operation === "dedup_merge") {
+        const p = dedupMergeParamsSchema.safeParse(row.params);
+        if (!p.success)
+          throw new ValidationError(p.error.issues[0]?.message ?? "Invalid dedup_merge params");
+        // GRAIN A overlay merge (pending/dedup-merge-design.md v1): ONE pair, ONE declared tenant+workspace,
+        // marker-only (duplicate_of_contact_id = survivor — the same annotation the automated dedup sweep
+        // writes), so it is REVERSIBLE via the customer "not a duplicate" unmark. The repo proves BOTH ids are
+        // live rows of the declared scope under FOR UPDATE (the owner path bypasses RLS — explicit-scope
+        // discipline). NO master-graph write — grain B (cluster merge/split) stays security-review-gated.
+        const outcome = await platformAdminWriteRepository.execDedupMerge(tx, p.data);
+        if (!outcome.found)
+          throw new ValidationError(
+            "Both contacts must be live records of the declared tenant + workspace.",
+          );
+        if (outcome.cycle)
+          throw new ValidationError(
+            "The survivor is itself marked a duplicate of the loser — unmark it first or swap the pair.",
+          );
+      } else if (row.operation === "bulk_delete") {
+        const p = bulkDeleteParamsSchema.safeParse(row.params);
+        if (!p.success)
+          throw new ValidationError(p.error.issues[0]?.message ?? "Invalid bulk_delete params");
+        // SOFT delete of a bounded explicit id set (≤1000, schema-enforced) in ONE declared tenant+workspace —
+        // tombstone only (PII nulling stays the DSAR/retention path). Foreign/cross-tenant/already-deleted ids
+        // are SKIPPED by the explicit-scope predicate; 0 matches is a refusal (rolls the approval + audit row
+        // back) so an all-stale request leaves no executed trace. The real count rides the audit metadata.
+        const deleted = await platformAdminWriteRepository.execBulkDelete(tx, p.data);
+        if (deleted === 0)
+          throw new ValidationError(
+            "No live contacts matched the declared tenant + workspace — nothing was deleted.",
+          );
       } else {
         throw new ValidationError(
           `No executor is wired for '${row.operation}' yet — it can be filed but not approved until its feature ships.`,

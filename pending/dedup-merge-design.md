@@ -1,8 +1,11 @@
 # Design + Threat Model — `dedup_merge` / `bulk_delete` executors
 
-> **Status:** DESIGN — awaiting **security review** before any code lands. This is the document that review reads.
-> **Scope:** wire the two unwired maker-checker approval operations so they can be *executed*, not just *filed*.
-> **Author:** agent · **Date:** 2026-07-01
+> **Status (2026-07-02):** **GRAIN A IMPLEMENTED** on the user's go-ahead, with this doc's recommended defaults —
+> overlay-only marker merge (one pair, reversible via unmark) + soft-only `bulk_delete` (cap 1000), both with
+> EXPLICIT tenant+workspace predicates under FOR UPDATE (`platformAdminWrites.execDedupMerge` /
+> `execBulkDelete`, wired in `dataRoutes.ts`'s approve executor). **GRAIN B (master-graph cluster merge/split)
+> remains DESIGN-ONLY, security-review-gated** — §4's threat model and §5's grain-B decisions still stand for it.
+> **Author:** agent · **Date:** 2026-07-01 (design) / 2026-07-02 (grain A shipped)
 
 ## 1. Where this plugs in (already built)
 

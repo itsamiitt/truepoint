@@ -85,6 +85,30 @@ export const bulkExportParamsSchema = z.object({
 });
 export type BulkExportParams = z.infer<typeof bulkExportParamsSchema>;
 
+/** Params a `dedup_merge` approval carries — GRAIN A overlay merge (pending/dedup-merge-design.md v1): mark
+ *  `loser` a duplicate of `survivor` in ONE declared tenant+workspace. Marker-only (the same annotation the
+ *  automated dedup sweep writes), so it is REVERSIBLE via the customer "not a duplicate" unmark. ONE pair per
+ *  request (blast-radius rule §4.4). NO master-graph write — grain B remains security-review-gated. */
+export const dedupMergeParamsSchema = z
+  .object({
+    tenantId: z.string().uuid(),
+    workspaceId: z.string().uuid(),
+    survivorContactId: z.string().uuid(),
+    loserContactId: z.string().uuid(),
+  })
+  .refine((p) => p.survivorContactId !== p.loserContactId, "survivor and loser must differ");
+export type DedupMergeParams = z.infer<typeof dedupMergeParamsSchema>;
+
+/** Params a `bulk_delete` approval carries — a BOUNDED explicit id set (≤1000, design §4.4) in ONE declared
+ *  tenant+workspace. SOFT delete only (deleted_at tombstone — the customer-grade delete; PII nulling stays the
+ *  DSAR/retention path's job). Ids, never record values (audit-trail PII rule §4.6). */
+export const bulkDeleteParamsSchema = z.object({
+  tenantId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  contactIds: z.array(z.string().uuid()).min(1).max(1000),
+});
+export type BulkDeleteParams = z.infer<typeof bulkDeleteParamsSchema>;
+
 /** Params a `credit_adjust` approval carries — the tenant + the SIGNED delta (positive grants, negative
  *  debits). The executor re-validates before running adjustCredits + posting the ledger entry (M11, decision #4). */
 export const creditAdjustParamsSchema = z.object({

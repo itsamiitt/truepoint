@@ -57,7 +57,18 @@ package.json/lock mismatch fails the deploy's `--frozen-lockfile`.)
 
 ## 2. Pending BUILD items
 
-### 2.1 `dedup_merge` / `bulk_delete` executors  🔒 security review
+### 2.1 `dedup_merge` / `bulk_delete` executors  ✅ GRAIN A SHIPPED (2026-07-02) · grain B still 🔒
+- **Shipped on the user's go-ahead, per the design doc's recommended v1 defaults:** overlay-only `dedup_merge`
+  (one pair, marker-only = reversible via the customer unmark) + soft-only `bulk_delete` (≤1000 cap), both with
+  EXPLICIT tenant+workspace predicates under FOR UPDATE (`platformAdminWrites.execDedupMerge`/`execBulkDelete`),
+  executed atomically inside the approve tx. All four data-approval ops now execute.
+- **Still gated (grain B):** the master-graph cluster merge/split (re-point `match_links`/`source_records`,
+  survivorship re-projection) — the security review in `dedup-merge-design.md` §4/§5 applies to THAT.
+- **CI note:** the new executors need the standard CI pass + ideally a cross-tenant isolation itest
+  (a merge/delete filed for tenant A must not touch identical ids planted in tenant B).
+
+<details><summary>Original blocker text (pre-2026-07-02, for context)</summary>
+
 - **What:** the approval operations exist (`DATA_APPROVAL_OPERATIONS` in `packages/types/src/dataApproval.ts`)
   and can be **filed**, but the executor throws *"no executor is wired"* (`apps/api/src/features/admin/dataRoutes.ts:357`).
   Only `retention_enforce` + `bulk_export` execute today.
@@ -69,6 +80,8 @@ package.json/lock mismatch fails the deploy's `--frozen-lockfile`.)
   the overlay-bridge re-point (loser→survivor), a survivorship re-projection via `projection_outbox` + worker,
   wired into the existing maker-checker executor branch. Reuse `erRepository.ts`, `schema/masterGraph.ts`.
 - **Prep doable now (no gate):** write the design + threat-model doc so the review is fast (see §5).
+
+</details>
 
 ### 2.2 I6 chrome-extension landing pipeline  ⚖️ legal + security
 - **What:** the capture connector exists (dark behind `CHROME_EXTENSION_ENABLED`); the async
