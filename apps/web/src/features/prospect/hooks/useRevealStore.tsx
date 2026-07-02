@@ -150,6 +150,17 @@ export function RevealStoreProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
+  // Realtime (Phase 4): a reveal committed elsewhere (a teammate / another tab) arrives as a `reveal:changed`
+  // window event from the SSE bridge → refresh that row so this tab's grid converges without a manual reload.
+  useEffect(() => {
+    const onReveal = (e: Event) => {
+      const detail = (e as CustomEvent<{ contactId?: string }>).detail;
+      if (detail?.contactId) refresh(detail.contactId);
+    };
+    window.addEventListener("reveal:changed", onReveal);
+    return () => window.removeEventListener("reveal:changed", onReveal);
+  }, [refresh]);
+
   const reveal = useCallback(
     async (contactId: string, revealType: RevealType): Promise<RevealAttempt> => {
       const key = `${contactId}:${revealType}`;
