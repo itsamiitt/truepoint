@@ -11,10 +11,12 @@ import {
   type TenantScope,
   contactRepository,
   creditRepository,
+  eventOutboxRepository,
   revealRepository,
   withTenantTx,
 } from "@leadwolf/db";
 import {
+  EVENT_REVEAL_COMPLETED,
   type EmailStatus,
   InsufficientCreditsError,
   NotFoundError,
@@ -255,6 +257,25 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,
       });
+
+      // Realtime (ADR-0027): append the `reveal.completed` domain event IN this tx — crash-safe (commit ⇒
+      // event enqueued). Only the single-reveal path (counter settle-mode) emits per-reveal; the bulk path
+      // emits coalesced progress/credit events. Dark until REALTIME_SSE_ENABLED — while off nothing is appended
+      // (no outbox accumulation). Skip a redundant already-owned re-reveal (nothing changed). PII-free payload.
+      if (env.REALTIME_SSE_ENABLED && settleMode === "counter" && !charge.alreadyOwned) {
+        await eventOutboxRepository.append(tx, {
+          tenantId: input.scope.tenantId,
+          workspaceId: input.scope.workspaceId,
+          eventType: EVENT_REVEAL_COMPLETED,
+          payload: {
+            contactId: contact.id,
+            revealType: input.revealType,
+            creditsCharged: cost,
+            alreadyOwned: charge.alreadyOwned,
+            balanceAfter,
+          },
+        });
+      }
 
       // alreadyOwned is true only when the reveal exposed NO new field (a redundant full_profile over an
       // already-owned email+phone still records the type claim but charges 0).

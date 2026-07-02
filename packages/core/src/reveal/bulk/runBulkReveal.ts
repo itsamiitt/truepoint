@@ -5,13 +5,20 @@
 // bumps the job counters atomically. When the last queued row is drained it writes the revealed CSV and calls
 // finalizeAndRelease (status-pinned → exactly-once), returning the unspent lease remainder to the tenant.
 
-import { type TenantScope, revealJobRepository } from "@leadwolf/db";
-import { type RevealType, SuppressedError } from "@leadwolf/types";
+import { type TenantScope, creditRepository, revealJobRepository } from "@leadwolf/db";
+import {
+  EVENT_CREDITS_CHANGED,
+  EVENT_REVEAL_JOB_COMPLETED,
+  EVENT_REVEAL_JOB_PROGRESS,
+  type RevealType,
+  SuppressedError,
+} from "@leadwolf/types";
 import type { EmailVerifierPort } from "../../data-health/emailVerifier.ts";
 import type { PhoneVerifierPort } from "../../data-health/phoneVerifier.ts";
 import type { FileStore } from "../../storage/fileStore.ts";
 import { getRevealedContactsBatch } from "../getRevealedContact.ts";
 import { revealContact } from "../revealContact.ts";
+import { emitRevealEvent, realtimeEnabled } from "./emitRevealEvent.ts";
 
 type WsScope = TenantScope & { workspaceId: string };
 
@@ -140,6 +147,21 @@ export async function bulkProcessRevealChunk(
     creditSpent: tally.spent,
   });
 
+  // Realtime (best-effort, coalesced): stream the cumulative progress for the live bar. Dark until
+  // REALTIME_SSE_ENABLED (the getJob is skipped entirely while off).
+  if (realtimeEnabled()) {
+    const after = await revealJobRepository.getJob(input.scope, input.jobId);
+    if (after) {
+      await emitRevealEvent(input.scope, EVENT_REVEAL_JOB_PROGRESS, {
+        jobId: input.jobId,
+        status: after.status,
+        processedContacts: after.processedContacts,
+        totalContacts: after.totalContacts,
+        revealedContacts: after.revealedContacts,
+      });
+    }
+  }
+
   // Finalize iff this band drained the last queued row. finalizeAndRelease is status-pinned → exactly-once, so a
   // concurrent sibling chunk that also sees 0 remaining just re-writes the same CSV and loses the release race.
   const remaining = await revealJobRepository.countQueuedRows(input.scope, input.jobId);
@@ -152,6 +174,24 @@ export async function bulkProcessRevealChunk(
     resultKey,
     userId || null,
   );
+
+  // Realtime (best-effort): on the finalizing chunk, emit the completion + the released-balance change.
+  if (finalized && realtimeEnabled()) {
+    const done = await revealJobRepository.getJob(input.scope, input.jobId);
+    if (done) {
+      await emitRevealEvent(input.scope, EVENT_REVEAL_JOB_COMPLETED, {
+        jobId: input.jobId,
+        status: done.status,
+        processedContacts: done.processedContacts,
+        totalContacts: done.totalContacts,
+        revealedContacts: done.revealedContacts,
+      });
+    }
+    await emitRevealEvent(input.scope, EVENT_CREDITS_CHANGED, {
+      balanceAfter: await creditRepository.getBalance(input.scope),
+    });
+  }
+
   return { processed: tally.processed, finalized };
 }
 

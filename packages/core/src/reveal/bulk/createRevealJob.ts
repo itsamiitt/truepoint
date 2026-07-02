@@ -8,12 +8,14 @@ import {
   type ConfirmRevealJobResult,
   type TenantScope,
   contactRepository,
+  creditRepository,
   revealJobRepository,
   revealRepository,
   withTenantTx,
 } from "@leadwolf/db";
-import type { RevealType } from "@leadwolf/types";
+import { EVENT_CREDITS_CHANGED, type RevealType } from "@leadwolf/types";
 import { revealCostFor } from "../revealContact.ts";
+import { emitRevealEvent, realtimeEnabled } from "./emitRevealEvent.ts";
 import { type RevealCandidate, type RevealEstimate, projectRevealEstimate } from "./estimate.ts";
 
 type WsScope = TenantScope & { workspaceId: string };
@@ -89,11 +91,18 @@ export async function createRevealJob(input: CreateRevealJobInput): Promise<Crea
   return { jobId: job.id, created: job.created, estimate };
 }
 
-/** The confirm money gate — leases the worst-case ceiling + flips awaiting_confirmation → running, atomically. */
+/** The confirm money gate — leases the worst-case ceiling + flips awaiting_confirmation → running, atomically.
+ *  On a successful lease, best-effort emits `credits.changed` (the reserved balance moved). */
 export async function confirmRevealJob(
   scope: WsScope,
   jobId: string,
   userId: string,
 ): Promise<ConfirmRevealJobResult> {
-  return revealJobRepository.confirmAndLease(scope, jobId, userId);
+  const result = await revealJobRepository.confirmAndLease(scope, jobId, userId);
+  if (result.result === "confirmed" && realtimeEnabled()) {
+    await emitRevealEvent(scope, EVENT_CREDITS_CHANGED, {
+      balanceAfter: await creditRepository.getBalance(scope),
+    });
+  }
+  return result;
 }
