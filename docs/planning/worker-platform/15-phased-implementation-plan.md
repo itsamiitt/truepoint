@@ -1,10 +1,22 @@
-# Phased Implementation Plan (deferred — no code yet)
+# Phased Implementation Plan
 
-> **Status: PLAN ONLY. No code is written by this document.** This is the sequenced, verified
-> work-breakdown for the *next green-lit phase* of hardening the TruePoint (`@leadwolf/*`) worker
-> platform. Every phase below is a proposal awaiting a go decision; nothing here has been
-> implemented. When a phase is approved, its "Representative files" section names where the change
-> lands and the "Verify / Regression / Perf / Rollback / Exit" sections define done.
+> **Status: Phases 0–1 IMPLEMENTED** on `feat/data-mgmt-01-research-brief`
+> (Phase 0 @ `5c3c8cc`, Phase 1 @ `c681629`) — **pending CI gates** (typecheck/biome/tests; no
+> local bun) **and the staging fault-injection drills** in §2.4/§3.3. Phase 0.0 (confirm-on-live,
+> [03-live-inspection-runbook.md](03-live-inspection-runbook.md)) is **still owed by the operator**.
+> Phases 2+ remain proposals awaiting a go decision.
+>
+> **In-phase deviations (deliberate, documented):**
+> - **Outreach retry is `attempts: 2`, not 3** — the implementation-time check confirmed `sendStep`
+>   recomputes the step from the uncommitted log row (no per-(logId, step) send-idempotency guard),
+>   so a post-send/pre-commit retry re-sends the same step; 2 bounds the worst case to one duplicate
+>   (`apps/workers/src/retryPolicies.ts` OUTREACH_RETRY documents the raise condition).
+> - **Circuit breakers (Phase 1 §3.1) are deferred** — they need per-provider state design in
+>   `packages/integrations`; the processor-level deadlines (`withDeadline.ts`) cover the
+>   queue-wedge risk meanwhile.
+> - **Stall-exhausted failures dead-letter immediately** (an addition): BullMQ's terminal stall
+>   failure bypasses the attempts machinery, so `deadLetter.ts` matches it explicitly — without
+>   this, the stall tuning would have created invisible failures.
 
 **Audience:** staff engineers + eng leadership.
 **Companion docs:** this plan operationalizes the fixes catalogued in

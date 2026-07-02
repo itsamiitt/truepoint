@@ -1,5 +1,25 @@
 # Issue Resolution Plan
 
+> **Implementation status (Phases 0–1 of [15-phased-implementation-plan.md](15-phased-implementation-plan.md),
+> on `feat/data-mgmt-01-research-brief`, Phase 0 @ `5c3c8cc` / Phase 1 @ `c681629` — validation
+> pending: CI gates + staging fault-injection):**
+>
+> - **I-06** (no-retry queues) — **fix implemented**: retry + exponential backoff + jitter on all six
+>   producers (`apps/workers/src/retryPolicies.ts`); jitter also added to the five already-retrying
+>   producers. Outreach capped at `attempts: 2` (double-send bound — see plan 15's deviations note).
+> - **I-07** (partial DLQ) — **fix implemented**: 8 new per-queue PII-free DLQs via
+>   `apps/workers/src/deadLetter.ts`; stall-exhausted failures dead-letter immediately.
+> - **I-08** (stall/lock/timeouts) — **implemented except circuit breakers** (deferred to a
+>   provider-level pass): explicit lock/stall tuning + per-queue processor deadlines
+>   (`apps/workers/src/tuning.ts`, `withDeadline.ts`).
+> - **I-09** (concurrency-1) — **partially implemented**: safe IO-bound queues raised (spend path
+>   pinned serial per re-audit F3); single-Redis / single-replica SPOF remains later-phase work.
+> - **I-10** (readiness/healthcheck) — **fix implemented**: bounded Redis probe with a
+>   consecutive-failure threshold in `/ready` + a prod `workers` compose healthcheck.
+> - **I-15** (unbounded drain) — **fix implemented**: 30s bounded drain + forced close.
+> - I-01/I-02 (by-design), I-03/I-04/I-05/I-11/I-12/I-13/I-14 — unchanged; later phases / operator
+>   steps per plan 15.
+
 > **Scope.** This document turns the findings of the worker-system audit into a concrete,
 > per-issue resolution plan. Each issue is written to a fixed schema —
 > **Root cause · Impact · Dependencies · Proposed fix · Rollback · Validation** — and is tagged
