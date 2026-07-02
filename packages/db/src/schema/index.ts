@@ -12,6 +12,7 @@ export * from "./salesnav.ts";
 export * from "./outreach.ts";
 export * from "./email.ts";
 export * from "./enrichmentJobs.ts";
+export * from "./revealJobs.ts";
 export * from "./importJobs.ts";
 export * from "./pipelineStages.ts";
 export * from "./savedSearches.ts";

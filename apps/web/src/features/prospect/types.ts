@@ -302,3 +302,60 @@ export function dataHealthTone(c: MaskedContact): "success" | "warning" | "dange
       return "muted";
   }
 }
+
+export type StatusTone = "success" | "warning" | "danger" | "muted";
+
+/** Color-coded StatusBadge tone for a revealed email verification status (green valid / amber risky-etc /
+ *  red invalid / muted). Takes a raw status string (the revealed view carries it as a string). */
+export function emailStatusTone(status: string | null): StatusTone {
+  switch (status) {
+    case "valid":
+      return "success";
+    case "invalid":
+      return "danger";
+    case "risky":
+    case "catch_all":
+    case "unverified":
+    case "unknown":
+      return "warning";
+    default:
+      return "muted";
+  }
+}
+
+/** Human label for a raw email status string (falls back to the raw value for anything unmapped). */
+export function emailStatusLabel(status: string | null): string {
+  if (!status) return "—";
+  return EMAIL_STATUS_LABELS[status as EmailStatus] ?? status;
+}
+
+/** Color-coded StatusBadge tone for a revealed phone verification status. */
+export function phoneStatusTone(status: string | null): StatusTone {
+  switch (status) {
+    case "valid":
+    case "mobile":
+    case "direct":
+    case "hq":
+      return "success";
+    case "invalid":
+      return "danger";
+    default:
+      return "muted";
+  }
+}
+
+/** Human label for a phone carrier line type (Twilio line_type_intelligence). */
+export const PHONE_LINE_TYPE_LABELS: Record<string, string> = {
+  mobile: "Mobile",
+  landline: "Landline",
+  voip: "VoIP",
+  direct: "Direct dial",
+  hq: "HQ line",
+  unknown: "Unknown line",
+};
+
+/** Human label for a phone line type string, falling back to a title-cased raw value. */
+export function phoneLineTypeLabel(lineType: string | null): string | null {
+  if (!lineType) return null;
+  return PHONE_LINE_TYPE_LABELS[lineType] ?? lineType;
+}

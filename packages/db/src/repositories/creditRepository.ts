@@ -5,6 +5,7 @@
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { contactReveals, creditLedger, purchases } from "../schema/billing.ts";
+import { computeReleaseSplit } from "./leaseAccounting.ts";
 import { computeMonthlyReset } from "./subscriptionResetMath.ts";
 
 /** One credit-ledger entry for the CUSTOMER's own statement (M11) — the movement + running balance, no
@@ -100,6 +101,96 @@ export const creditRepository = {
               subscription_credit_balance = subscription_credit_balance - ${fromSubscription}
           WHERE id = ${tenantId}`,
     );
+  },
+
+  /** Increment the counter under a held lock — the inverse of decrement (release a lease remainder, returning
+   *  `toSubscription` of it to the perishable bucket). The caller keeps 0 ≤ sub ≤ total (see releaseForJob). */
+  async increment(tx: Tx, tenantId: string, amount: number, toSubscription: number): Promise<void> {
+    await tx.execute(
+      sql`UPDATE tenants
+          SET reveal_credit_balance = reveal_credit_balance + ${amount},
+              subscription_credit_balance = subscription_credit_balance + ${toSubscription}
+          WHERE id = ${tenantId}`,
+    );
+  },
+
+  /**
+   * ADR-0029 LEASE — reserve a bulk-reveal job's worst-case `ceiling` in ONE locked step (never a per-row
+   * hot-lock). Subscription-first (min(ceiling, sub) off the perishable bucket). Returns ok:false when the
+   * balance can't cover the worst case (the confirm is then blocked; nothing is charged). Posts the paired
+   * `lease` ledger entry (delta -ceiling, idempotent on lease:<jobId>). Composed inside the confirm tx.
+   */
+  async leaseForJob(
+    tx: Tx,
+    args: {
+      tenantId: string;
+      workspaceId: string;
+      jobId: string;
+      ceiling: number;
+      actorUserId: string | null;
+    },
+  ): Promise<{ ok: boolean; balance: number; leasedFromSubscription: number }> {
+    const ceiling = Math.max(0, Math.trunc(args.ceiling));
+    const { balance, subscriptionBalance } = await creditRepository.lockBalance(tx, args.tenantId);
+    if (balance < ceiling) return { ok: false, balance, leasedFromSubscription: 0 };
+    if (ceiling === 0) return { ok: true, balance, leasedFromSubscription: 0 };
+    const fromSubscription = Math.min(ceiling, subscriptionBalance);
+    await creditRepository.decrement(tx, args.tenantId, ceiling, fromSubscription);
+    const balanceAfter = balance - ceiling;
+    await creditRepository.insertLedger(tx, {
+      tenantId: args.tenantId,
+      workspaceId: args.workspaceId,
+      entryType: "lease",
+      delta: -ceiling,
+      balanceAfter,
+      idempotencyKey: `lease:${args.jobId}`,
+      actorUserId: args.actorUserId,
+      reason: "bulk_reveal_lease",
+      metadata: { jobId: args.jobId, fromSubscription },
+    });
+    return { ok: true, balance: balanceAfter, leasedFromSubscription: fromSubscription };
+  },
+
+  /**
+   * ADR-0029 RELEASE — at job finalize/cancel return the UNSPENT remainder (leased − spent ≥ 0) to the counter,
+   * restoring the subscription portion that wasn't consumed (spend attributed subscription-first). Ledger-
+   * idempotent on release:<jobId>; the CALLER must gate this behind a status-pinned one-way transition so the
+   * counter increment runs exactly once. Net counter movement across lease+release is exactly −spent (recon-safe).
+   */
+  async releaseForJob(
+    tx: Tx,
+    args: {
+      tenantId: string;
+      workspaceId: string;
+      jobId: string;
+      leased: number;
+      leasedFromSubscription: number;
+      spent: number;
+      actorUserId: string | null;
+    },
+  ): Promise<number> {
+    const { remainder, subRestore } = computeReleaseSplit(
+      args.leased,
+      args.leasedFromSubscription,
+      args.spent,
+    );
+    if (remainder <= 0) return creditRepository.currentBalance(tx, args.tenantId);
+    const leased = Math.max(0, Math.trunc(args.leased));
+    const spent = Math.max(0, Math.min(leased, Math.trunc(args.spent)));
+    await creditRepository.increment(tx, args.tenantId, remainder, subRestore);
+    const balanceAfter = await creditRepository.currentBalance(tx, args.tenantId);
+    await creditRepository.insertLedger(tx, {
+      tenantId: args.tenantId,
+      workspaceId: args.workspaceId,
+      entryType: "release",
+      delta: remainder,
+      balanceAfter,
+      idempotencyKey: `release:${args.jobId}`,
+      actorUserId: args.actorUserId,
+      reason: "bulk_reveal_release",
+      metadata: { jobId: args.jobId, leased, spent, subRestore },
+    });
+    return balanceAfter;
   },
 
   /** Read the balance without locking (free re-reveal path + GET /credits/balance). */

@@ -20,12 +20,21 @@ export type VerifierFetch = (
 ) => Promise<{ status: number; json: unknown }>;
 
 const defaultVerifierFetch: VerifierFetch = async (url, init) => {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...init.headers },
-    body: JSON.stringify(init.body),
-  });
-  return { status: res.status, json: await res.json().catch(() => null) };
+  // Bound the SMTP-probe call so a hung Reacher backend can't hang the synchronous reveal request. On timeout
+  // the abort throws → reacherVerifier.verify's catch degrades to the stored status (the verifier "didn't run").
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), env.REVEAL_VERIFY_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...init.headers },
+      body: JSON.stringify(init.body),
+      signal: controller.signal,
+    });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  } finally {
+    clearTimeout(timer);
+  }
 };
 
 /**
@@ -37,9 +46,10 @@ const defaultVerifierFetch: VerifierFetch = async (url, init) => {
 export function reacherStatusFrom(json: unknown, currentStatus: EmailStatus): EmailStatus {
   if (typeof json !== "object" || json === null) return currentStatus;
   const obj = json as Record<string, unknown>;
-  const smtp = (
-    typeof obj.smtp === "object" && obj.smtp !== null ? obj.smtp : {}
-  ) as Record<string, unknown>;
+  const smtp = (typeof obj.smtp === "object" && obj.smtp !== null ? obj.smtp : {}) as Record<
+    string,
+    unknown
+  >;
   switch (obj.is_reachable) {
     case "safe":
       return "valid";

@@ -105,12 +105,42 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // M12 P3 inbound-reply polling (the Gmail-history sweep). Dark by default — nothing polls until enabled.
+    EMAIL_INBOX_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Teams (Part D, grouping-only). Dark by default — the /api/v1/teams routes 404 + the settings tab hides
+    // until enabled.
+    TEAMS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Peer-approval (maker-checker) for staff money actions (Part B, decision #4). Dark by default: OFF ⇒ credit
+    // adjust/refund execute DIRECTLY (the pre-Part-B path); ON ⇒ they file a request a DIFFERENT operator must
+    // approve. Flip ON in production to enforce separation of duties (the stronger control).
+    BILLING_APPROVALS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
 
     // Charge policy for `risky` verification results — ADR-0013: charged-but-flagged by default.
     REVEAL_CHARGE_RISKY: z
       .string()
       .optional()
       .transform((v) => v !== "false"),
+
+    // Per-verifier network timeout (ms) for the reveal path (Reacher email + Twilio phone). Verification is
+    // network I/O that runs OUTSIDE the charging tx (14 §3.5), but with no timeout a hung provider hangs the
+    // synchronous reveal request. On abort the adapter degrades to the stored status / E.164 format floor (it
+    // "didn't run") — never worse than today. Default 5s.
+    REVEAL_VERIFY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
+    // Reveal-specific per-caller burst cap (reveals/min, keyed by the verified subject). A dedicated abuse
+    // guard on the money endpoint on TOP of the coarse /api throttle — a runaway script or compromised token
+    // is bounded by request velocity, not only by the credit balance CHECK. Generous for a human clicking
+    // rows, tight for automation. Default 60/min.
+    REVEAL_RATE_PER_MIN: z.coerce.number().int().positive().default(60),
 
     // Enrichment provider keys (06 §3). Absent → that adapter reports `miss` and the waterfall skips it.
     APOLLO_API_KEY: z.string().optional(),
@@ -221,6 +251,16 @@ export const appEnvSchema = z
     // step (the worst-case ceiling + per-run cap + daily budget breaker must all be wired first). Same explicit-
     // "true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy.
     BULK_ENRICHMENT_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Async BULK REVEAL job (reveal-experience Phase 3, ADR-0029/0036): the confirm-before-spend money path —
+    // POST /contacts/reveal-jobs/:id/confirm leases the worst-case ceiling, the apps/api producer enqueues the
+    // drive onto BULK_REVEAL_QUEUE, and the apps/workers consumer reveals each contact + releases the unspent
+    // remainder. DEFAULT-OFF: while off the confirm endpoint 403s, the producer enqueues NOTHING, and the
+    // consumer is not registered — so NO bulk-reveal job can EVER spend. Turning it on is a SEPARATE,
+    // CI-parity-gated step. Same explicit-"true"-only posture as BULK_ENRICHMENT_ENABLED.
+    BULK_REVEAL_ENABLED: z
       .string()
       .optional()
       .transform((v) => v === "true"),

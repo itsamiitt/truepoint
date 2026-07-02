@@ -10,8 +10,10 @@ async function problemMessage(res: Response, fallback: string): Promise<string> 
   return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
 }
 
-export async function fetchTeams(): Promise<TeamView[]> {
+/** null = the feature is off (TEAMS_ENABLED false → 404) — the panel degrades to a "not available" note. */
+export async function fetchTeams(): Promise<TeamView[] | null> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/teams`);
+  if (res.status === 404) return null;
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load teams"));
   return ((await res.json()) as { teams: TeamView[] }).teams;
 }

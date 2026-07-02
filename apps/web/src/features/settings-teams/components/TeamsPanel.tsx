@@ -135,6 +135,7 @@ export function TeamsPanel() {
   const canManage = isWorkspaceAdmin(useSessionRole());
 
   const [teams, setTeams] = useState<TeamView[]>([]);
+  const [available, setAvailable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -146,7 +147,14 @@ export function TeamsPanel() {
     setLoading(true);
     setError(null);
     try {
-      setTeams(await fetchTeams());
+      const list = await fetchTeams();
+      if (list === null) {
+        setAvailable(false);
+        setTeams([]);
+      } else {
+        setAvailable(true);
+        setTeams(list);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load teams");
     } finally {
@@ -199,7 +207,7 @@ export function TeamsPanel() {
         workspace still sees the same records.
       </p>
 
-      {canManage && (
+      {canManage && available && (
         <Card style={{ padding: 16, marginBottom: 20 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-start" }}>
             <TpInput
@@ -228,8 +236,12 @@ export function TeamsPanel() {
         empty={!loading && teams.length === 0}
         emptyState={
           <EmptyState
-            title="No teams yet"
-            description="Create a team to group members of this workspace."
+            title={available ? "No teams yet" : "Teams aren't enabled"}
+            description={
+              available
+                ? "Create a team to group members of this workspace."
+                : "Teams aren't enabled for your workspace yet."
+            }
           />
         }
       >

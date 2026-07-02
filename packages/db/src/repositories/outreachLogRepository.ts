@@ -154,9 +154,19 @@ export const outreachLogRepository = {
   },
 
   /**
-   * ADR-0013/H13 credit-back: if this workspace copy holds a CHARGED email reveal for the contact, refund
-   * that amount onto the tenant counter (the documented counter-adjustment path) and return it; 0 when the
-   * reveal was free/absent. Caller audits `credit.adjust` in the same tx.
+   * ADR-0013/H13 credit-back: refund the amount that was charged FOR THE EMAIL field of this contact (0 when
+   * the email reveal was free/absent) onto the tenant counter, and return it. Caller audits `credit.adjust`.
+   *
+   * The email charge lives on whichever claim FIRST uncovered the email — an `email` reveal or an email-first
+   * `full_profile` (whose whole cost is email-driven per chargeFor). We take the EARLIEST email-covering claim
+   * by revealed_at: with the cross-reveal-type dedup, a LATER `full_profile` that charged phone-only (email
+   * already owned) can never be the earliest, so it is never matched — this refunds the email charge exactly
+   * (including 0 for a free/invalid email) and NEVER refunds a phone charge. We deliberately do NOT filter on
+   * `credits_consumed > 0` (a free email claim must win over a later phone-charging claim → refund 0).
+   *
+   * KNOWN LIMITATION (pre-existing, tracked separately): this is not idempotent across MULTIPLE bounce logs
+   * for the same contact — two sequences that both hard-bounce would each refund. handleBounce dedups per-log,
+   * not per-reveal; a per-reveal `refunded` marker is the real fix (needs a schema change).
    */
   async creditBackForBounce(
     tx: Tx,
@@ -165,7 +175,8 @@ export const outreachLogRepository = {
     const rows = (await tx.execute(
       sql`SELECT credits_consumed AS credits FROM contact_reveals
           WHERE workspace_id = ${args.workspaceId} AND contact_id = ${args.contactId}
-            AND reveal_type = 'email' AND credits_consumed > 0
+            AND reveal_type IN ('email', 'full_profile')
+          ORDER BY revealed_at ASC
           LIMIT 1`,
     )) as unknown as Array<{ credits: number }>;
     const amount = rows.length > 0 ? Number(rows[0]!.credits) : 0;

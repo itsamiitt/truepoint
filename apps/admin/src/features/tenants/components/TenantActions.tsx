@@ -119,11 +119,13 @@ export function TenantActions({
     }
     setBusy(true);
     try {
-      // Money moves require peer approval (Part B / decision #4): FILE a request — a DIFFERENT billing operator
-      // approves + executes it. No balance change happens here.
-      await adjustTenantCredits(tenant.id, n, r);
+      // Peer-approval (Part B / decision #4) may be enabled: a FILED request (approval set) awaits a different
+      // operator; otherwise the adjustment applied directly and returns the new balance.
+      const result = await adjustTenantCredits(tenant.id, n, r);
       toast.success(
-        `Credit ${n > 0 ? "grant" : "debit"} requested — a different operator must approve it before it applies.`,
+        result.approval
+          ? `Credit ${n > 0 ? "grant" : "debit"} requested — a different operator must approve it before it applies.`
+          : `Credits ${n > 0 ? "granted" : "debited"} — new balance ${result.balanceAfter}.`,
       );
       setCreditOpen(false);
       await onChanged();

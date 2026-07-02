@@ -26,11 +26,12 @@ import {
   useToast,
 } from "@leadwolf/ui";
 import { Activity, Download, ListPlus, Pencil, Send, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { type RecordTag, enrollContacts, fetchRecordTags } from "../api";
 import { exportMaskedCsv } from "../export";
 import { useActivities } from "../hooks/useActivities";
 import { useCustomFields } from "../hooks/useCustomFields";
+import { useRevealedContact } from "../hooks/useRevealedContact";
 import { useScores } from "../hooks/useScores";
 import styles from "../prospect.module.css";
 import {
@@ -39,18 +40,39 @@ import {
   SENIORITY_LABELS,
   dataHealthTone,
   displayName,
+  emailStatusLabel,
+  emailStatusTone,
+  phoneLineTypeLabel,
+  phoneStatusTone,
 } from "../types";
 import { AddToListDialog } from "./AddToListDialog";
+import { CopyButton } from "./CopyButton";
 import { RecomputeScoreButton } from "./RecomputeScoreButton";
 import { RevealDialog } from "./RevealDialog";
 import { StageSelector } from "./StageSelector";
 import { TagPicker } from "./TagPicker";
+
+const REVEAL_TYPE_LABELS: Record<RevealType, string> = {
+  email: "Email",
+  phone: "Phone",
+  full_profile: "Full profile",
+};
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className={styles.field}>
       <span className={styles.fieldLabel}>{label}</span>
       <span className={styles.fieldValue}>{value}</span>
+    </div>
+  );
+}
+
+/** A field whose value is rich JSX (a revealed value + verification badge + copy control). */
+function ContactField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className={styles.field}>
+      <span className={styles.fieldLabel}>{label}</span>
+      <div className={styles.revealedValueRow}>{children}</div>
     </div>
   );
 }
@@ -382,6 +404,12 @@ export function RecordDetail({
     status: OutreachStatus;
   } | null>(null);
 
+  // No-charge view of already-owned reveal data (Phase 1): loads on open for a revealed contact so the PII
+  // shows inline instantly — no "View revealed" re-confirm, no re-charge. Reloaded after a fresh reveal so a
+  // newly-uncovered field (e.g. phone after email) appears without reopening.
+  const revealed = useRevealedContact(contact?.id ?? null, contact?.isRevealed ?? false);
+  const rd = revealed.data;
+
   const open = contact != null;
   const outreachStatus =
     (statusOverride?.id === contact?.id ? statusOverride?.status : undefined) ??
@@ -410,9 +438,45 @@ export function RecordDetail({
     }
   };
 
+  // A successful reveal: flip the row upstream (grid/list) AND re-pull the drawer's revealed data so the newly
+  // uncovered field renders inline immediately.
+  const handleRevealed = (id: string) => {
+    onRevealed(id);
+    void revealed.reload();
+  };
+
   const location = contact
     ? [contact.locationCity, contact.locationCountry].filter(Boolean).join(", ") || "—"
     : "—";
+
+  // Which fields are already owned (from the loaded reveal data; fall back to the coarse isRevealed flag while
+  // it loads so an already-revealed contact doesn't briefly offer a redundant reveal). Drives the footer action.
+  const ownedEmail = rd
+    ? rd.ownedTypes.some((t) => t === "email" || t === "full_profile")
+    : (contact?.isRevealed ?? false);
+  const ownedPhone = rd
+    ? rd.ownedTypes.some((t) => t === "phone" || t === "full_profile")
+    : (contact?.isRevealed ?? false);
+  const canRevealEmail = (contact?.hasEmail ?? false) && !ownedEmail;
+  const canRevealPhone = (contact?.hasPhone ?? false) && !ownedPhone;
+  const revealTarget: RevealType = !contact?.isRevealed
+    ? "full_profile"
+    : canRevealEmail && canRevealPhone
+      ? "full_profile"
+      : canRevealPhone
+        ? "phone"
+        : "email";
+  const revealLabel: string | null = !contact
+    ? null
+    : !contact.isRevealed
+      ? "Reveal"
+      : canRevealEmail && canRevealPhone
+        ? "Reveal more"
+        : canRevealEmail
+          ? "Reveal email"
+          : canRevealPhone
+            ? "Reveal phone"
+            : null;
 
   return (
     <Drawer
@@ -423,14 +487,16 @@ export function RecordDetail({
       footer={
         contact ? (
           <div className={styles.drawerActions}>
-            <TpButton
-              variant="primary"
-              size="sm"
-              leftIcon={<Sparkles size={15} />}
-              onClick={() => setRevealType("full_profile")}
-            >
-              {contact.isRevealed ? "View revealed" : "Reveal"}
-            </TpButton>
+            {revealLabel ? (
+              <TpButton
+                variant="primary"
+                size="sm"
+                leftIcon={<Sparkles size={15} />}
+                onClick={() => setRevealType(revealTarget)}
+              >
+                {revealLabel}
+              </TpButton>
+            ) : null}
             <TpButton
               variant="ghost"
               size="sm"
@@ -470,8 +536,14 @@ export function RecordDetail({
           <section className={styles.section}>
             <div className={styles.sectionHead}>
               <h3 className={styles.sectionTitle}>Identity</h3>
-              <StatusBadge tone={dataHealthTone(contact)}>
-                {contact.hasEmail ? EMAIL_STATUS_LABELS[contact.emailStatus] : "No email"}
+              <StatusBadge
+                tone={rd?.emailStatus ? emailStatusTone(rd.emailStatus) : dataHealthTone(contact)}
+              >
+                {contact.hasEmail
+                  ? rd?.emailStatus
+                    ? emailStatusLabel(rd.emailStatus)
+                    : EMAIL_STATUS_LABELS[contact.emailStatus]
+                  : "No email"}
               </StatusBadge>
             </div>
             <div className={styles.fieldGrid}>
@@ -482,17 +554,57 @@ export function RecordDetail({
               <Field label="Department" value={contact.department ?? "—"} />
               <Field label="Location" value={location} />
               <Field label="Outreach" value={outreachStatus.replace(/_/g, " ")} />
-              <Field
-                label="Email"
-                value={
-                  contact.hasEmail
-                    ? contact.emailDomain
-                      ? `•••@${contact.emailDomain}`
-                      : "•••"
-                    : "—"
-                }
-              />
-              <Field label="Phone" value={contact.hasPhone ? "Locked — reveal" : "—"} />
+              <ContactField label="Email">
+                {rd?.email ? (
+                  <>
+                    <span className={styles.revealedValueText}>{rd.email}</span>
+                    {rd.emailStatus ? (
+                      <StatusBadge tone={emailStatusTone(rd.emailStatus)}>
+                        {emailStatusLabel(rd.emailStatus)}
+                      </StatusBadge>
+                    ) : null}
+                    <CopyButton value={rd.email} label="Email" />
+                  </>
+                ) : (
+                  <span className={styles.fieldValue}>
+                    {contact.hasEmail
+                      ? contact.emailDomain
+                        ? `•••@${contact.emailDomain}`
+                        : "•••"
+                      : "—"}
+                  </span>
+                )}
+              </ContactField>
+              <ContactField label="Phone">
+                {rd?.phone ? (
+                  <>
+                    <span className={styles.revealedValueText}>{rd.phone}</span>
+                    {phoneLineTypeLabel(rd.phoneLineType) ? (
+                      <StatusBadge tone={phoneStatusTone(rd.phoneStatus)}>
+                        {phoneLineTypeLabel(rd.phoneLineType)}
+                      </StatusBadge>
+                    ) : null}
+                    <CopyButton value={rd.phone} label="Phone" />
+                  </>
+                ) : (
+                  <span className={styles.fieldValue}>
+                    {contact.hasPhone ? "Locked — reveal" : "—"}
+                  </span>
+                )}
+              </ContactField>
+              {rd?.linkedinUrl ? (
+                <ContactField label="LinkedIn">
+                  <a
+                    className={styles.revealLink}
+                    href={rd.linkedinUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    Profile
+                  </a>
+                  <CopyButton value={rd.linkedinUrl} label="LinkedIn" />
+                </ContactField>
+              ) : null}
             </div>
           </section>
 
@@ -529,6 +641,23 @@ export function RecordDetail({
               />
               <Field label="Added" value={new Date(contact.createdAt).toLocaleDateString()} />
             </div>
+            {rd && rd.history.length > 0 ? (
+              <ul className={styles.revealHistory}>
+                {rd.history.map((h, i) => (
+                  <li
+                    className={styles.revealHistoryItem}
+                    key={`${h.revealType}-${h.revealedAt}-${i}`}
+                  >
+                    <span>
+                      {REVEAL_TYPE_LABELS[h.revealType]} · {h.dataSource}
+                    </span>
+                    <span className={styles.revealHistoryMeta}>
+                      {h.creditsConsumed} cr · {new Date(h.revealedAt).toLocaleDateString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </section>
 
           <section className={styles.section}>
@@ -550,7 +679,7 @@ export function RecordDetail({
             revealType={revealType ?? "full_profile"}
             open={revealType !== null}
             onClose={() => setRevealType(null)}
-            onRevealed={onRevealed}
+            onRevealed={handleRevealed}
           />
 
           <AddToListDialog

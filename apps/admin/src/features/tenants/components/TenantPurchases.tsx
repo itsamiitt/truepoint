@@ -84,10 +84,14 @@ export function TenantPurchases({
     }
     setBusy(true);
     try {
-      // Money moves require peer approval (Part B / decision #4): FILE a request — a different operator approves
-      // + executes the reversal. The purchase stays un-refunded until then.
-      await refundPurchase(tenantId, confirm.id, reason, note.trim() || undefined);
-      toast.success("Refund requested — a different operator must approve it before it applies.");
+      // Peer-approval (Part B / decision #4) may be enabled: a FILED request awaits a different operator (the
+      // purchase stays un-refunded until approved); otherwise the reversal applied directly.
+      const result = await refundPurchase(tenantId, confirm.id, reason, note.trim() || undefined);
+      toast.success(
+        result.approval
+          ? "Refund requested — a different operator must approve it before it applies."
+          : `Refunded — ${result.reversed} credit${result.reversed === 1 ? "" : "s"} reversed.`,
+      );
       setConfirm(null);
       await onRefunded();
     } catch (e) {

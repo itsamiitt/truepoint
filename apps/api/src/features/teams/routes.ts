@@ -3,6 +3,7 @@
 // derived from the VERIFIED claims, never the body); reads are open to the workspace, writes are workspace-admin
 // gated (owner|admin). The repo runs under withTenantTx so the workspace-isolation RLS is the boundary.
 
+import { env } from "@leadwolf/config";
 import { teamRepository } from "@leadwolf/db";
 import {
   ForbiddenError,
@@ -23,6 +24,11 @@ import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const teamsRoutes = new Hono<{ Variables: TenancyVariables }>();
+// DARK behind TEAMS_ENABLED (Part D): every route 404s until enabled, so the web Teams tab degrades cleanly.
+teamsRoutes.use("*", async (c, next) => {
+  if (!env.TEAMS_ENABLED) return c.json({ available: false }, 404);
+  await next();
+});
 teamsRoutes.use("*", authn);
 teamsRoutes.use("*", tenancy);
 

@@ -18,6 +18,7 @@ let _ipLimiter: RateLimiterRedis | undefined;
 let _idLimiter: RateLimiterRedis | undefined;
 let _apiLimiter: RateLimiterRedis | undefined;
 let _captureLimiter: RateLimiterRedis | undefined;
+let _revealLimiter: RateLimiterRedis | undefined;
 const ipLimiter = (): RateLimiterRedis =>
   // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
   (_ipLimiter ??= new RateLimiterRedis({
@@ -54,6 +55,18 @@ const captureLimiter = (): RateLimiterRedis =>
     points: 2000,
     duration: 60,
   }));
+// Reveal-specific per-caller burst cap (the MONEY endpoint). A dedicated guard on TOP of the coarse rl:api
+// throttle so a runaway script / compromised token is bounded by request velocity, not only the credit-balance
+// CHECK. Keyed by the verified subject; config-driven (REVEAL_RATE_PER_MIN, default 60/min). Separate keyspace,
+// so it never weakens the coarse limit.
+const revealLimiter = (): RateLimiterRedis =>
+  // biome-ignore lint/suspicious/noAssignInExpressions: intentional lazy-singleton memoization (defer the socket).
+  (_revealLimiter ??= new RateLimiterRedis({
+    storeClient: redis(),
+    keyPrefix: "rl:reveal",
+    points: env.REVEAL_RATE_PER_MIN,
+    duration: 60,
+  }));
 
 // Throw RateLimitedError if `limiter` is exhausted for `key` (consuming `points`, default 1); fail OPEN on a Redis
 // outage (shared helper).
@@ -87,6 +100,16 @@ export async function checkRequestRate(key: string): Promise<void> {
  */
 export async function checkCaptureRate(key: string, recordCount: number): Promise<void> {
   await consume(captureLimiter(), key, Math.max(1, Math.trunc(recordCount)));
+}
+
+/**
+ * Per-caller burst throttle for the reveal MONEY endpoint (`key` = the verified subject). Consumes one point
+ * per reveal request against REVEAL_RATE_PER_MIN/min. Throws RateLimitedError (→ 429) on exhaustion; fails OPEN
+ * on a Redis outage (a cache blip must not brick legitimate reveals — the credit-balance CHECK is the hard cap).
+ * Additive: a separate keyspace from the coarse rl:api throttle, so it never weakens it.
+ */
+export async function checkRevealRate(key: string): Promise<void> {
+  await consume(revealLimiter(), key);
 }
 
 // ── Credential-step brute-force lockout (W7) ───────────────────────────────────────────────────────────

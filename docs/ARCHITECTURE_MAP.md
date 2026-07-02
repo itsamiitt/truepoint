@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1312 source files · 74 code-bearing domains · 21 shared areas · 45 domain-vocabulary warnings · 57
+> **1328 source files · 75 code-bearing domains · 21 shared areas · 46 domain-vocabulary warnings · 57
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
@@ -132,11 +132,20 @@ apps/                           # deployable processes (thin transport adapters)
   `verificationJobRepository` record/listRecent; migration 0022) — written by `runReverification` (PLAN_06);
   `data_quality_snapshots` (the Data Health TREND store — `dataQualitySnapshotRepository`; migration 0023)
 
-#### reveal — *M1 masked reads + M3 money loop* ([07 §3](./planning/07-billing-credits.md), ADR-0007)
-- **core:** `reveal/revealContact.ts` — the monetized tx: in-tx suppression gate → idempotent claim (unique
-  `(workspace, contact, reveal_type)`) → `FOR UPDATE` charge against `tenants.reveal_credit_balance` → same-tx audit
-- **db:** `{account,contact}Repository.ts` (overlay reads/writes, masked list); `revealRepository.ts` (claim + usage)
-- **api:** `features/reveal/*` (masked `/contacts` list; POST `/contacts/:id/reveal` behind Idempotency-Key replay)
+#### reveal — *M1 masked reads + M3 money loop + no-charge revealed reads + in-list reveal* ([07 §3](./planning/07-billing-credits.md), ADR-0007/0013)
+- **core:** `reveal/revealContact.ts` — the monetized tx: in-tx suppression gate → cross-`reveal_type` dedup
+  (`revealCharge.ts` — charge only the NEWLY-uncovered field(s)) → idempotent claim (unique
+  `(workspace, contact, reveal_type)`) → `FOR UPDATE` charge against `tenants.reveal_credit_balance` → same-tx
+  audit; `reveal/getRevealedContact.ts` — the NO-CHARGE, ownership-checked read (single + batch) that decrypts
+  ONLY the fields the workspace owns a claim for
+- **db:** `{account,contact}Repository.ts` (overlay reads/writes, masked list — `searchRepository` projects
+  `revealedTypes`); `revealRepository.ts` (claim + usage + owned-field / claim reads + batched hydration)
+- **api:** `features/reveal/*` (masked `/contacts` list; POST `/contacts/:id/reveal` behind Idempotency-Key
+  replay, role-gated + burst-limited; GET `/contacts/:id/revealed` + POST `/contacts/revealed/batch` no-charge
+  reads; `/credits/reveal-costs`)
+- **web (prospect):** `RevealCell.tsx` in-grid reveal (value + copy + badge, or a cost-labelled reveal button) +
+  `useRevealStore.tsx` (optimistic single source of truth) + `useRevealedContact.ts` / `CopyButton.tsx` in the
+  detail drawer
 
 ### B. Prospect & account data surface
 

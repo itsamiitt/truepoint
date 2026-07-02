@@ -255,6 +255,16 @@ export {
   type ContactMatchKeys,
   type ContactMatchCandidate,
 } from "./repositories/enrichmentJobRepository.ts";
+// Async bulk-reveal job control plane (reveal-experience Phase 3) — reveal_jobs / reveal_job_rows lifecycle:
+// idempotent create, atomic counters, the status-pinned confirm gate, band reads, retry-failed re-queue.
+export {
+  revealJobRepository,
+  type RevealJobCreateValues,
+  type RevealJobRecord,
+  type RevealJobStatusUpdate,
+  type RevealJobProgressDelta,
+  type RevealBandRow,
+} from "./repositories/revealJobRepository.ts";
 // Bulk COPY-staging import control plane (15-bulk-import-design, backlog #2) — the import_jobs / _chunks / _rows
 // lifecycle CRUD; tx-aware, composed inside withTenantTx (RLS workspace isolation; chunks inherit via parent).
 export {

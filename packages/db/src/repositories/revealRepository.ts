@@ -3,7 +3,7 @@
 // core — never returned over HTTP unmasked elsewhere), the idempotent reveal claim, and the usage list.
 
 import type { RevealDataSource, RevealType } from "@leadwolf/types";
-import { and, desc, eq, gte, isNull, lt, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, lte } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { contactReveals } from "../schema/billing.ts";
 import { contacts } from "../schema/contacts.ts";
@@ -171,6 +171,173 @@ export const revealRepository = {
       )
       .orderBy(contacts.id)
       .limit(limit);
+  },
+
+  /**
+   * Which contact fields this workspace already owns a reveal claim for (ANY reveal_type, ANY prior cost).
+   * Drives the cross-reveal-type dedup in revealContact so a field is never charged twice: email ⇐ an
+   * email|full_profile claim; phone ⇐ a phone|full_profile claim. RLS scopes contact_reveals to the workspace;
+   * the explicit predicate is defence-in-depth (mirrors usageConditions). Read inside the reveal tx, BEFORE
+   * the current claim insert, so it reflects only PRIOR ownership.
+   */
+  async ownedRevealFields(
+    tx: Tx,
+    workspaceId: string,
+    contactId: string,
+  ): Promise<{ email: boolean; phone: boolean }> {
+    const rows = (await tx
+      .select({ revealType: contactReveals.revealType })
+      .from(contactReveals)
+      .where(
+        and(eq(contactReveals.workspaceId, workspaceId), eq(contactReveals.contactId, contactId)),
+      )) as Array<{ revealType: string }>;
+    let email = false;
+    let phone = false;
+    for (const r of rows) {
+      if (r.revealType === "email" || r.revealType === "full_profile") email = true;
+      if (r.revealType === "phone" || r.revealType === "full_profile") phone = true;
+    }
+    return { email, phone };
+  },
+
+  /**
+   * The ciphertext + verified statuses a no-charge "view revealed data" read needs (Phase 1 read primitive).
+   * Ciphertext is decrypted IN core (never returned over HTTP raw); linkedinUrl is clear-text (a public
+   * profile URL, not encrypted). RLS scopes the row to the workspace. Returns null when the contact is gone.
+   */
+  async getRevealView(
+    tx: Tx,
+    contactId: string,
+  ): Promise<{
+    emailEnc: Uint8Array | null;
+    phoneEnc: Uint8Array | null;
+    emailStatus: string;
+    phoneStatus: string | null;
+    phoneLineType: string | null;
+    linkedinUrl: string | null;
+  } | null> {
+    const rows = await tx
+      .select({
+        emailEnc: contacts.emailEnc,
+        phoneEnc: contacts.phoneEnc,
+        emailStatus: contacts.emailStatus,
+        phoneStatus: contacts.phoneStatus,
+        phoneLineType: contacts.phoneLineType,
+        linkedinUrl: contacts.linkedinUrl,
+      })
+      .from(contacts)
+      .where(and(eq(contacts.id, contactId), isNull(contacts.deletedAt)))
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  /**
+   * This workspace's reveal claims for a contact, newest-first — the reveal-history + ownership source for the
+   * no-charge view read. PII-free (type/source/cost/timestamp/member). RLS scopes contact_reveals to the
+   * workspace; the explicit predicate is defence-in-depth.
+   */
+  async listContactClaims(
+    tx: Tx,
+    workspaceId: string,
+    contactId: string,
+  ): Promise<
+    Array<{
+      revealType: string;
+      dataSource: string;
+      creditsConsumed: number;
+      revealedAt: Date;
+      revealedByUserId: string;
+    }>
+  > {
+    return (await tx
+      .select({
+        revealType: contactReveals.revealType,
+        dataSource: contactReveals.dataSource,
+        creditsConsumed: contactReveals.creditsConsumed,
+        revealedAt: contactReveals.revealedAt,
+        revealedByUserId: contactReveals.revealedByUserId,
+      })
+      .from(contactReveals)
+      .where(
+        and(eq(contactReveals.workspaceId, workspaceId), eq(contactReveals.contactId, contactId)),
+      )
+      .orderBy(desc(contactReveals.revealedAt))) as Array<{
+      revealType: string;
+      dataSource: string;
+      creditsConsumed: number;
+      revealedAt: Date;
+      revealedByUserId: string;
+    }>;
+  },
+
+  /** Batched getRevealView for a page of ids (grid hydration). Each row carries its `id` for grouping. */
+  async getRevealViewByIds(
+    tx: Tx,
+    ids: string[],
+  ): Promise<
+    Array<{
+      id: string;
+      emailEnc: Uint8Array | null;
+      phoneEnc: Uint8Array | null;
+      emailStatus: string;
+      phoneStatus: string | null;
+      phoneLineType: string | null;
+      linkedinUrl: string | null;
+    }>
+  > {
+    if (ids.length === 0) return [];
+    return tx
+      .select({
+        id: contacts.id,
+        emailEnc: contacts.emailEnc,
+        phoneEnc: contacts.phoneEnc,
+        emailStatus: contacts.emailStatus,
+        phoneStatus: contacts.phoneStatus,
+        phoneLineType: contacts.phoneLineType,
+        linkedinUrl: contacts.linkedinUrl,
+      })
+      .from(contacts)
+      .where(and(inArray(contacts.id, ids), isNull(contacts.deletedAt)));
+  },
+
+  /** Batched listContactClaims for a page of ids — each row carries its `contactId` for grouping. RLS scopes
+   *  contact_reveals to the workspace; the explicit workspace predicate is defence-in-depth. */
+  async listClaimsByContactIds(
+    tx: Tx,
+    workspaceId: string,
+    ids: string[],
+  ): Promise<
+    Array<{
+      contactId: string;
+      revealType: string;
+      dataSource: string;
+      creditsConsumed: number;
+      revealedAt: Date;
+      revealedByUserId: string;
+    }>
+  > {
+    if (ids.length === 0) return [];
+    return (await tx
+      .select({
+        contactId: contactReveals.contactId,
+        revealType: contactReveals.revealType,
+        dataSource: contactReveals.dataSource,
+        creditsConsumed: contactReveals.creditsConsumed,
+        revealedAt: contactReveals.revealedAt,
+        revealedByUserId: contactReveals.revealedByUserId,
+      })
+      .from(contactReveals)
+      .where(
+        and(eq(contactReveals.workspaceId, workspaceId), inArray(contactReveals.contactId, ids)),
+      )
+      .orderBy(desc(contactReveals.revealedAt))) as Array<{
+      contactId: string;
+      revealType: string;
+      dataSource: string;
+      creditsConsumed: number;
+      revealedAt: Date;
+      revealedByUserId: string;
+    }>;
   },
 
   /**

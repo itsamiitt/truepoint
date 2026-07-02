@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1314,
-  "fileSetHash": "sha256:18737bef2398bab5fa4a5d6de0f0ff667ab1af3cf93dcd83347a1a48336996df",
+  "fileCount": 1328,
+  "fileSetHash": "sha256:d6e38ccb81f6ef73d3950250f92b20a34f651e47a453181730fb8c9be628eda4",
   "features": {
     "account-search": {
       "web": [],
@@ -497,6 +497,8 @@
         "packages/core/src/email/dispatchOutreachSend.ts",
         "packages/core/src/email/dnsAuth.test.ts",
         "packages/core/src/email/dnsAuth.ts",
+        "packages/core/src/email/gmailInbound.test.ts",
+        "packages/core/src/email/gmailInbound.ts",
         "packages/core/src/email/gmailSend.test.ts",
         "packages/core/src/email/gmailSend.ts",
         "packages/core/src/email/googleOAuth.test.ts",
@@ -523,6 +525,7 @@
         "packages/core/src/email/registerProviders.ts",
         "packages/core/src/email/renderTemplate.test.ts",
         "packages/core/src/email/renderTemplate.ts",
+        "packages/core/src/email/replyClassifier.ts",
         "packages/core/src/email/resolveSendingIdentity.ts",
         "packages/core/src/email/secretStore.ts",
         "packages/core/src/email/sendingDomains.ts",
@@ -890,6 +893,7 @@
         "packages/db/src/repositories/sequenceRepository.ts"
       ],
       "workers": [
+        "apps/workers/src/queues/gmailInboxPollSweep.ts",
         "apps/workers/src/queues/outreach.ts"
       ],
       "integrations": []
@@ -978,6 +982,7 @@
         "apps/web/src/features/prospect/components/AiSearchBox.tsx",
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
+        "apps/web/src/features/prospect/components/CopyButton.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
         "apps/web/src/features/prospect/components/FilterPanel.tsx",
         "apps/web/src/features/prospect/components/FilterRail.tsx",
@@ -988,6 +993,7 @@
         "apps/web/src/features/prospect/components/RecentSearches.tsx",
         "apps/web/src/features/prospect/components/RecomputeScoreButton.tsx",
         "apps/web/src/features/prospect/components/RecordDetail.tsx",
+        "apps/web/src/features/prospect/components/RevealCell.tsx",
         "apps/web/src/features/prospect/components/RevealDialog.tsx",
         "apps/web/src/features/prospect/components/RowActions.tsx",
         "apps/web/src/features/prospect/components/SaveSearchPanel.tsx",
@@ -1012,6 +1018,8 @@
         "apps/web/src/features/prospect/hooks/useRecentSearches.test.ts",
         "apps/web/src/features/prospect/hooks/useRecentSearches.ts",
         "apps/web/src/features/prospect/hooks/useReveal.ts",
+        "apps/web/src/features/prospect/hooks/useRevealStore.tsx",
+        "apps/web/src/features/prospect/hooks/useRevealedContact.ts",
         "apps/web/src/features/prospect/hooks/useSavedSearches.ts",
         "apps/web/src/features/prospect/hooks/useScores.ts",
         "apps/web/src/features/prospect/hooks/useStages.ts",
@@ -1143,6 +1151,9 @@
       ],
       "core": [
         "packages/core/src/reveal/bulkRevealExport.ts",
+        "packages/core/src/reveal/getRevealedContact.ts",
+        "packages/core/src/reveal/revealCharge.test.ts",
+        "packages/core/src/reveal/revealCharge.ts",
         "packages/core/src/reveal/revealContact.ts",
         "packages/core/src/reveal/staffWorkspaceExport.ts"
       ],
@@ -1751,6 +1762,7 @@
       "apps/api/src/middleware/requireOrgRole.ts",
       "apps/api/src/middleware/requireRole.ts",
       "apps/api/src/middleware/requireStaffRole.ts",
+      "apps/api/src/middleware/revealRateLimit.ts",
       "apps/api/src/middleware/roleGuards.test.ts",
       "apps/api/src/middleware/tenancy.ts"
     ],
@@ -2087,6 +2099,8 @@
     "packages/integrations": [
       "packages/integrations/src/anthropic/nlSearchAdapter.test.ts",
       "packages/integrations/src/anthropic/nlSearchAdapter.ts",
+      "packages/integrations/src/anthropic/replyClassifierAdapter.test.ts",
+      "packages/integrations/src/anthropic/replyClassifierAdapter.ts",
       "packages/integrations/src/enrichment/httpProvider.ts",
       "packages/integrations/src/enrichment/providers.test.ts",
       "packages/integrations/src/enrichment/providers.ts",
