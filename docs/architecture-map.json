@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1342,
-  "fileSetHash": "sha256:e0f970a55966e8c340775848fe1bfec69a4af587427dcf53efe59e8e8304a079",
+  "fileCount": 1347,
+  "fileSetHash": "sha256:44c1a2d1d48fd98843f13c18fc9b91755ead866f345139908bcb809e3ba03e0b",
   "features": {
     "account-search": {
       "web": [],
@@ -1150,6 +1150,10 @@
         "apps/api/src/features/reveal/routes.ts"
       ],
       "core": [
+        "packages/core/src/reveal/bulk/createRevealJob.ts",
+        "packages/core/src/reveal/bulk/estimate.test.ts",
+        "packages/core/src/reveal/bulk/estimate.ts",
+        "packages/core/src/reveal/bulk/runBulkReveal.ts",
         "packages/core/src/reveal/bulkRevealExport.ts",
         "packages/core/src/reveal/getRevealedContact.ts",
         "packages/core/src/reveal/revealCharge.test.ts",
@@ -2054,6 +2058,7 @@
       "packages/db/src/schema/validationRules.ts",
       "packages/db/src/schema/verificationJobs.ts",
       "packages/db/src/schema/webhooks.ts",
+      "packages/db/src/schema/workerOutbox.ts",
       "packages/db/src/seed.ts",
       "packages/db/test/accountSearch.itest.ts",
       "packages/db/test/activity.itest.ts",
