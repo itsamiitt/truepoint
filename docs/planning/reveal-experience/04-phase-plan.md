@@ -35,10 +35,15 @@ locally gate-verifiable; Phases 3–4 add migrations/RLS/integration verified in
 - **On main, dark behind `BULK_REVEAL_ENABLED`.** Enable = a separate CI-parity-gated step (verify the
   migration applies, RLS/integration tests pass, then flip the flag).
 
-## Phase 4 — Realtime sync (outbox + SSE) ⏳ planned — fixes #10 fully
-- Emit `reveal.completed` + credit-change on the transactional outbox in the reveal tx (ADR-0027).
-- Authenticated SSE stream per user/workspace (Redis pub/sub, RLS-scoped); frontend reconciles `RevealStore` +
-  balance + bulk progress live; replace the `credits:changed` window event + 60s polling. CI-verified.
+## Phase 4 — Realtime sync (outbox + SSE) ✅ shipped (dark) — fixes #10 fully
+- `event_outbox` (migration 0051) + `eventOutboxRepository`; `reveal.completed` appended IN the reveal tx
+  (crash-safe); best-effort `reveal.job.progress`/`.completed` + `credits.changed` on the bulk path.
+- Leaderless relay (`apps/workers/realtimeRelay.ts`, FOR UPDATE SKIP LOCKED) → Redis pub/sub.
+- Authenticated, workspace-scoped SSE gateway (`GET /api/v1/events/stream`, streamSSE, mounted before compress).
+- Web `lib/eventStream` fetch-reader (Bearer token → not native EventSource) + shell `RealtimeBridge` →
+  reconciles balance + reveal state onto the existing window-event bus; polling stays as the fallback.
+- **On main, dark behind `REALTIME_SSE_ENABLED`.** Enable = CI-verify migration 0051 + RLS + the
+  outbox→relay→SSE integration, then flip the flag (the relay registers, the stream opens, the client connects).
 
 ## Phase 5 — Performance, accessibility & QA polish ⏳ planned
 - Redis cache for revealed-data reads (invalidated by `reveal.completed`); virtualized table; skeletons;
