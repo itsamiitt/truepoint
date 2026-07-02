@@ -17,8 +17,18 @@
 > - **I-10** (readiness/healthcheck) — **fix implemented**: bounded Redis probe with a
 >   consecutive-failure threshold in `/ready` + a prod `workers` compose healthcheck.
 > - **I-15** (unbounded drain) — **fix implemented**: 30s bounded drain + forced close.
-> - I-01/I-02 (by-design), I-03/I-04/I-05/I-11/I-12/I-13/I-14 — unchanged; later phases / operator
->   steps per plan 15.
+> - **I-03** (non-atomic confirm→running enqueue gap) — **fix implemented** (Phase 3 @ `d7c1ebf`):
+>   transactional outbox + leaderless relay; "DB commit ⇒ event published" now holds.
+> - **I-11** (whole-app env schema couples worker boot) — **fix implemented** (Phase 2 @ `d9111c7`):
+>   surface-aware schema relaxes web/auth-only keys under `LEADWOLF_SURFACE=worker`, throw-on-access.
+> - **I-14** (absent observability) — **partially implemented** (Phase 4 subset @ `b6e5e67`):
+>   worker /metrics + all-queue admin probes + tenant log tags; traces/shipper/SLO tooling deferred
+>   to a CI-capable deps pass.
+> - Also landed (Phase 5 subset @ `d41ed52`): the F3 atomic daily budget breaker + producer
+>   backpressure — the spend-path concurrency-raise entry gate from 14-re-audit-and-risks.md.
+> - I-01/I-02 (by-design), I-04/I-05 (dead/trap states — needs a state-machine decision),
+>   I-12 (producer-less consumers), I-13 (dev-Redis persistence) — unchanged; later phases /
+>   operator steps per plan 15.
 
 > **Scope.** This document turns the findings of the worker-system audit into a concrete,
 > per-issue resolution plan. Each issue is written to a fixed schema —
