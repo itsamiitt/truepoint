@@ -14,6 +14,7 @@ import type {
 } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
+import { type WorkerDeadLetter, makeDeadLetterHandler } from "./deadLetter.ts";
 import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
 import {
@@ -45,15 +46,17 @@ import {
   type DataRetentionSweepJobData,
   makeProcessDataRetentionSweep,
 } from "./queues/dataRetentionSweep.ts";
-import { DEDUP_QUEUE, type DedupJobData, processDedup } from "./queues/dedup.ts";
-import { DSAR_QUEUE, type DsarJobData, processDsar } from "./queues/dsar.ts";
+import { DEDUP_DLQ, DEDUP_QUEUE, type DedupJobData, processDedup } from "./queues/dedup.ts";
+import { DSAR_DLQ, DSAR_QUEUE, type DsarJobData, processDsar } from "./queues/dsar.ts";
 import {
+  ENRICHMENT_DLQ,
   ENRICHMENT_QUEUE,
   type EnrichmentJobData,
   processEnrichment,
 } from "./queues/enrichment.ts";
 import { ER_SWEEP_QUEUE, type ErSweepJobData, makeProcessErSweep } from "./queues/erSweep.ts";
 import {
+  FIRMOGRAPHICS_DLQ,
   FIRMOGRAPHICS_QUEUE,
   type FirmographicsJobData,
   processFirmographics,
@@ -76,6 +79,7 @@ import {
   makeProcessLowBalanceNotifierSweep,
 } from "./queues/lowBalanceNotifierSweep.ts";
 import {
+  MASTER_BACKFILL_DLQ,
   MASTER_BACKFILL_QUEUE,
   type MasterBackfillJobData,
   processMasterBackfill,
@@ -85,7 +89,12 @@ import {
   type MasterBackfillSweepJobData,
   makeProcessMasterBackfillSweep,
 } from "./queues/masterBackfillSweep.ts";
-import { OUTREACH_QUEUE, type OutreachJobData, makeProcessOutreach } from "./queues/outreach.ts";
+import {
+  OUTREACH_DLQ,
+  OUTREACH_QUEUE,
+  type OutreachJobData,
+  makeProcessOutreach,
+} from "./queues/outreach.ts";
 import {
   PROJECTION_SWEEP_QUEUE,
   type ProjectionSweepJobData,
@@ -97,6 +106,7 @@ import {
   makeProcessRetentionSweep,
 } from "./queues/retentionSweep.ts";
 import {
+  REVERIFICATION_DLQ,
   REVERIFICATION_QUEUE,
   type ReverificationJobData,
   processReverification,
@@ -106,7 +116,12 @@ import {
   type ReverificationSweepJobData,
   makeProcessReverificationSweep,
 } from "./queues/reverificationSweep.ts";
-import { SCORING_QUEUE, type ScoringJobData, processScoring } from "./queues/scoring.ts";
+import {
+  SCORING_DLQ,
+  SCORING_QUEUE,
+  type ScoringJobData,
+  processScoring,
+} from "./queues/scoring.ts";
 import {
   EMAIL_SEQUENCE_TICK_QUEUE,
   type SequenceTickJobData,
@@ -127,9 +142,42 @@ import {
   type TokenRefreshJobData,
   makeProcessTokenRefresh,
 } from "./queues/tokenRefresh.ts";
+import {
+  DEDUP_RETRY,
+  DSAR_RETRY,
+  ENRICHMENT_RETRY,
+  FIRMOGRAPHICS_RETRY,
+  MASTER_BACKFILL_RETRY,
+  OUTREACH_RETRY,
+  REVERIFICATION_RETRY,
+  SCORING_RETRY,
+} from "./retryPolicies.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
+
+/** Bounded Redis readiness probe (worker-platform plan 15 §2.2 item 0.3 / re-audit F14). With
+ *  maxRetriesPerRequest: null (required by BullMQ, above) a wedged Redis makes ioredis reconnect forever and
+ *  BUFFER commands instead of erroring — a bare PING would hang, so racing it against a timeout is the only
+ *  reliable detection. Never throws; the health server gates it behind a consecutive-failure threshold.
+ *  Caveat (F14): BullMQ duplicates blocking-consumer clients internally, so this probes the shared connection
+ *  as a same-endpoint proxy; probing the blocking client directly comes with the per-role connection split. */
+export async function redisReadinessProbe(timeoutMs = 500): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const pong = await Promise.race([
+      connection.ping(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("redis ping timed out")), timeoutMs);
+      }),
+    ]);
+    return pong === "PONG";
+  } catch {
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 export const importQueue = new Queue<ImportJobData>(IMPORTS_QUEUE, { connection });
 /** Dead-letter holding queue for import jobs that exhaust their retries (PII-free records). */
@@ -195,6 +243,28 @@ export const tokenRefreshQueue = new Queue<TokenRefreshJobData>(EMAIL_TOKEN_REFR
   connection,
 });
 
+// ── Dead-letter holding queues (worker-platform plan 15 §2.2, item 0.2) ────────────────────────────────────
+// One per retryable event queue, mirroring importDeadLetterQueue above: a job that exhausts its retry budget
+// is recorded as a PII-FREE record (deadLetter.ts — scope + provenance + reason, never the payload) for ops
+// triage instead of sitting invisibly in the BullMQ failed set. Sweeps get none: leader-gated, idempotent,
+// re-run on schedule.
+export const enrichmentDeadLetterQueue = new Queue<WorkerDeadLetter>(ENRICHMENT_DLQ, {
+  connection,
+});
+export const scoringDeadLetterQueue = new Queue<WorkerDeadLetter>(SCORING_DLQ, { connection });
+export const dsarDeadLetterQueue = new Queue<WorkerDeadLetter>(DSAR_DLQ, { connection });
+export const outreachDeadLetterQueue = new Queue<WorkerDeadLetter>(OUTREACH_DLQ, { connection });
+export const dedupDeadLetterQueue = new Queue<WorkerDeadLetter>(DEDUP_DLQ, { connection });
+export const firmographicsDeadLetterQueue = new Queue<WorkerDeadLetter>(FIRMOGRAPHICS_DLQ, {
+  connection,
+});
+export const masterBackfillDeadLetterQueue = new Queue<WorkerDeadLetter>(MASTER_BACKFILL_DLQ, {
+  connection,
+});
+export const reverificationDeadLetterQueue = new Queue<WorkerDeadLetter>(REVERIFICATION_DLQ, {
+  connection,
+});
+
 /** Submit a parsed import for background processing (the async alternative to the inline api path). */
 export async function enqueueImport(data: ImportJobData): Promise<void> {
   await importQueue.add("import", data);
@@ -202,25 +272,30 @@ export async function enqueueImport(data: ImportJobData): Promise<void> {
 
 /** Submit an on-demand enrichment (09 §2: POST /enrichment/:entity/:id returns a job ref). */
 export async function enqueueEnrichment(data: EnrichmentJobData): Promise<string> {
-  const job = await enrichmentQueue.add("enrich", data);
+  const job = await enrichmentQueue.add("enrich", data, ENRICHMENT_RETRY);
   return String(job.id);
 }
 
 /** Submit a re-score; the appended scores row syncs contacts.priority_score via trigger. */
 export async function enqueueScoring(data: ScoringJobData): Promise<string> {
-  const job = await scoringQueue.add("score", data);
+  const job = await scoringQueue.add("score", data, SCORING_RETRY);
   return String(job.id);
 }
 
 /** Submit a VERIFIED DSAR for privileged processing (08 §4; the staff workflow enqueues this). */
 export async function enqueueDsar(data: DsarJobData): Promise<string> {
-  const job = await dsarQueue.add("dsar", data);
+  const job = await dsarQueue.add("dsar", data, DSAR_RETRY);
   return String(job.id);
 }
 
-/** Submit one enrollment-step delivery (05 §13; step delays arrive as BullMQ job delays). */
+/** Submit one enrollment-step delivery (05 §13; step delays arrive as BullMQ job delays). Retry is capped at
+ *  attempts=2 — the double-send bound; see OUTREACH_RETRY in retryPolicies.ts before raising it. */
 export async function enqueueOutreach(data: OutreachJobData, delayMs = 0): Promise<string> {
-  const job = await outreachQueue.add("send", data, delayMs > 0 ? { delay: delayMs } : undefined);
+  const job = await outreachQueue.add(
+    "send",
+    data,
+    delayMs > 0 ? { ...OUTREACH_RETRY, delay: delayMs } : OUTREACH_RETRY,
+  );
   return String(job.id);
 }
 
@@ -285,7 +360,7 @@ export async function enqueueReverification(
   const job = await reverificationQueue.add(
     "reverify",
     { scope, batchSize: opts?.batchSize },
-    { attempts: 3, backoff: { type: "exponential", delay: 60_000 } },
+    REVERIFICATION_RETRY,
   );
   return String(job.id);
 }
@@ -342,13 +417,19 @@ export async function enqueueMasterBackfill(
     // Self-heal: if the processor throws (a row errored — see processMasterBackfill) BullMQ retries from a fresh
     // scan with exponential backoff. The job is idempotent (only still-NULL rows are re-resolved), so a retry
     // never double-mints; a keyless-only leftover succeeds (no throw) and never burns the retry budget.
-    { attempts: 4, backoff: { type: "exponential", delay: 30_000 } },
+    MASTER_BACKFILL_RETRY,
   );
   return String(job.id);
 }
 
-/** Attach structured completed/failed logging to a worker (per-queue observability). Never logs payloads. */
-function instrument<T = unknown>(worker: Worker<T>, queue: string): Worker<T> {
+/** Attach structured completed/failed logging to a worker (per-queue observability), plus — when a dead-letter
+ *  queue is provided (0.2) — routing of retry-exhausted jobs onto it as PII-free records (deadLetter.ts).
+ *  Never logs payloads. */
+function instrument<T = unknown>(
+  worker: Worker<T>,
+  queue: string,
+  deadLetterQueue?: Queue<WorkerDeadLetter>,
+): Worker<T> {
   worker.on("completed", (job) => log.info("job completed", { queue, jobId: job.id }));
   worker.on("failed", (job, err) =>
     log.error("job failed", {
@@ -358,6 +439,7 @@ function instrument<T = unknown>(worker: Worker<T>, queue: string): Worker<T> {
       error: err.message,
     }),
   );
+  if (deadLetterQueue) worker.on("failed", makeDeadLetterHandler<T>(queue, deadLetterQueue));
   return worker;
 }
 
@@ -437,12 +519,18 @@ export function startWorkers(): Worker[] {
     instrument(
       new Worker<EnrichmentJobData>(ENRICHMENT_QUEUE, processEnrichment, { connection }),
       ENRICHMENT_QUEUE,
+      enrichmentDeadLetterQueue,
     ),
     instrument(
       new Worker<ScoringJobData>(SCORING_QUEUE, processScoring, { connection }),
       SCORING_QUEUE,
+      scoringDeadLetterQueue,
     ),
-    instrument(new Worker<DsarJobData>(DSAR_QUEUE, processDsar, { connection }), DSAR_QUEUE),
+    instrument(
+      new Worker<DsarJobData>(DSAR_QUEUE, processDsar, { connection }),
+      DSAR_QUEUE,
+      dsarDeadLetterQueue,
+    ),
     instrument(
       new Worker<OutreachJobData>(
         OUTREACH_QUEUE,
@@ -455,11 +543,17 @@ export function startWorkers(): Worker[] {
         { connection },
       ),
       OUTREACH_QUEUE,
+      outreachDeadLetterQueue,
     ),
-    instrument(new Worker<DedupJobData>(DEDUP_QUEUE, processDedup, { connection }), DEDUP_QUEUE),
+    instrument(
+      new Worker<DedupJobData>(DEDUP_QUEUE, processDedup, { connection }),
+      DEDUP_QUEUE,
+      dedupDeadLetterQueue,
+    ),
     instrument(
       new Worker<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, processFirmographics, { connection }),
       FIRMOGRAPHICS_QUEUE,
+      firmographicsDeadLetterQueue,
     ),
     // Master-link backfill consumer: per-workspace, idempotent re-resolution of NULL master_* bridges.
     instrument(
@@ -467,6 +561,7 @@ export function startWorkers(): Worker[] {
         connection,
       }),
       MASTER_BACKFILL_QUEUE,
+      masterBackfillDeadLetterQueue,
     ),
     // Master-link backfill SWEEP consumer (PLAN_07 Stage B): the leader-locked daily fan-out that enqueues a
     // per-workspace backfill for every workspace with unresolved contacts. enqueueMasterBackfill is injected.
@@ -503,10 +598,11 @@ export function startWorkers(): Worker[] {
         makeProcessSequenceTick(connection, async (e) => {
           // A per-(enrollment, target-step) jobId dedupes a re-claim across ticks: if a still-pending send for
           // this exact step is already queued, BullMQ keeps one — so a step is never advanced twice (P4 §A.4).
+          // Same bounded retry budget as enqueueOutreach (0.1): attempts=2 is the double-send bound.
           await outreachQueue.add(
             "send",
             { tenantId: e.tenantId, workspaceId: e.workspaceId, logId: e.logId },
-            { jobId: `seqstep:${e.logId}:${e.currentStep + 1}` },
+            { ...OUTREACH_RETRY, jobId: `seqstep:${e.logId}:${e.currentStep + 1}` },
           );
         }),
         { connection },
@@ -528,6 +624,7 @@ export function startWorkers(): Worker[] {
         connection,
       }),
       REVERIFICATION_QUEUE,
+      reverificationDeadLetterQueue,
     ),
     // Freshness re-verification SWEEP consumer: leader-locked daily fan-out enqueuing a per-workspace
     // re-verification for every workspace with stale revealed contacts. enqueueReverification is injected.

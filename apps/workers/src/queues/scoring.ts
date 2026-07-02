@@ -5,6 +5,8 @@ import { type ComputeScoreResult, computeScore } from "@leadwolf/core";
 import type { Job } from "bullmq";
 
 export const SCORING_QUEUE = "scoring";
+/** Dead-letter holding queue for scoring jobs that exhaust their retries (PII-free records). */
+export const SCORING_DLQ = "scoring-dlq";
 
 export interface ScoringJobData {
   tenantId: string;

@@ -10,10 +10,14 @@
 // worker code) keep importing them from this module unchanged — an additive, behavior-preserving move.
 
 import { type ReverificationResult, runReverification } from "@leadwolf/core";
-import { REVERIFICATION_QUEUE, type ReverificationJobData } from "@leadwolf/types";
+import {
+  REVERIFICATION_DLQ,
+  REVERIFICATION_QUEUE,
+  type ReverificationJobData,
+} from "@leadwolf/types";
 import type { Job } from "bullmq";
 
-export { REVERIFICATION_QUEUE };
+export { REVERIFICATION_DLQ, REVERIFICATION_QUEUE };
 export type { ReverificationJobData };
 
 export async function processReverification(

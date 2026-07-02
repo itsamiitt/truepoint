@@ -22,9 +22,10 @@ function importQueue(): Queue<ImportJobData> {
     queue = new Queue<ImportJobData>(IMPORTS_QUEUE, {
       connection,
       defaultJobOptions: {
-        // Retry transient/systemic failures with exponential backoff; the worker dead-letters on exhaustion.
+        // Retry transient/systemic failures with exponential backoff + jitter (de-correlates retries under a
+        // shared outage — 0.1); the worker dead-letters on exhaustion.
         attempts: 3,
-        backoff: { type: "exponential", delay: 2000 },
+        backoff: { type: "exponential", delay: 2000, jitter: 0.5 },
         // Retain terminal jobs briefly so the status endpoint can be polled after the job settles.
         removeOnComplete: { age: 24 * 3600, count: 1000 },
         removeOnFail: false,

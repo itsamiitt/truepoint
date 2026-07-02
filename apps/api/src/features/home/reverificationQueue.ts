@@ -28,7 +28,7 @@ function reverificationQueue(): Queue<ReverificationJobData> {
         // Idempotent (only still-stale rows are touched) → a couple of backoff retries cover a transient verifier
         // outage; mirrors the worker's enqueueReverification options so on-demand + swept jobs behave identically.
         attempts: 3,
-        backoff: { type: "exponential", delay: 60_000 },
+        backoff: { type: "exponential", delay: 60_000, jitter: 0.5 },
         removeOnComplete: { age: 24 * 3600, count: 1000 },
         removeOnFail: false,
       },

@@ -21,6 +21,9 @@ import type { Job } from "bullmq";
 import { log } from "../logger.ts";
 
 export const OUTREACH_QUEUE = "outreach";
+/** Dead-letter holding queue for outreach sends that exhaust their retries (PII-free records). A throttle
+ *  deferral is a re-enqueue, never a failure, so it can never land here. */
+export const OUTREACH_DLQ = "outreach-dlq";
 
 export interface OutreachJobData {
   tenantId: string;

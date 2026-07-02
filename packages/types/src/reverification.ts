@@ -11,6 +11,9 @@ import { z } from "zod";
 // ── Queue name (shared producer/consumer) ──────────────────────────────────────────────────────────────────
 /** The BullMQ queue for per-workspace freshness re-verification (ADR-0025). Shared producer/consumer. */
 export const REVERIFICATION_QUEUE = "reverification";
+/** Dead-letter holding queue for re-verification jobs that exhaust their retries (PII-free records). Lives
+ *  here beside the queue name it belongs to (mirrors IMPORTS_DLQ in contacts.ts). */
+export const REVERIFICATION_DLQ = "reverification-dlq";
 
 // ── Job payload (queue) ─────────────────────────────────────────────────────────────────────────────────────
 /** The workspace scope a re-verification job carries (the worker re-enters withTenantTx with it). */

@@ -8,6 +8,8 @@ import type { EnrichField } from "@leadwolf/types";
 import type { Job } from "bullmq";
 
 export const ENRICHMENT_QUEUE = "enrichment";
+/** Dead-letter holding queue for enrichment jobs that exhaust their retries (PII-free records). */
+export const ENRICHMENT_DLQ = "enrichment-dlq";
 
 export interface EnrichmentJobData {
   tenantId: string;

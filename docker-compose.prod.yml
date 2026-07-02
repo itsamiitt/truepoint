@@ -115,6 +115,19 @@ services:
   workers:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/workers", "start"]
+    # Probe the workers health server (health.ts, :3002): /ready is drain-aware AND Redis-aware (a bounded
+    # PING behind a consecutive-failure threshold — worker-platform plan 15 §2.2 items 0.3/0.4, re-audit F14),
+    # so a wedged Redis marks the container unhealthy while a transient blip rides out (~90s combined:
+    # 3 in-process probe failures + 6 healthcheck retries) instead of flapping the fleet. NOTE: docker-compose
+    # only MARKS unhealthy (restart: unless-stopped covers exits, not health) — the signal feeds `docker ps`,
+    # monitoring, and depends_on gating; restart-on-unhealthy is an orchestrator (ECS/K8s/autoheal) concern.
+    healthcheck:
+      # bun -e fetch with r.ok semantics (mirrors the api check above; the image has no wget/curl).
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3002/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
 
   web:
     <<: *app

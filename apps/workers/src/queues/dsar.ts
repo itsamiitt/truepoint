@@ -5,6 +5,9 @@ import { assembleAccessReport, deleteFanout } from "@leadwolf/core";
 import type { Job } from "bullmq";
 
 export const DSAR_QUEUE = "dsar";
+/** Dead-letter holding queue for DSAR jobs that exhaust their retries. PII-free: the record must NEVER carry
+ *  subjectEmail (see the DsarJobData comment) — deadLetter.ts records scope/provenance/reason only. */
+export const DSAR_DLQ = "dsar-dlq";
 
 export interface DsarJobData {
   requestId: string;

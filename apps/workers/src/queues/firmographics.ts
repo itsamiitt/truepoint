@@ -7,6 +7,8 @@ import { type RunFirmographicRollupResult, runFirmographicRollup } from "@leadwo
 import type { Job } from "bullmq";
 
 export const FIRMOGRAPHICS_QUEUE = "firmographics";
+/** Dead-letter holding queue for firmographics jobs that exhaust their retries (PII-free records). */
+export const FIRMOGRAPHICS_DLQ = "firmographics-dlq";
 
 export interface FirmographicsJobData {
   tenantId: string;

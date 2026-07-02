@@ -7,6 +7,8 @@ import { type RunDedupResult, runDedup } from "@leadwolf/core";
 import type { Job } from "bullmq";
 
 export const DEDUP_QUEUE = "dedup";
+/** Dead-letter holding queue for dedup jobs that exhaust their retries (PII-free records). */
+export const DEDUP_DLQ = "dedup-dlq";
 
 export interface DedupJobData {
   tenantId: string;
