@@ -41,6 +41,7 @@ export interface RevealJobCreateValues {
 
 export interface RevealJobRecord {
   id: string;
+  createdByUserId: string | null;
   revealType: string;
   status: string;
   totalContacts: number;
@@ -85,6 +86,7 @@ export interface RevealBandRow {
 
 const JOB_COLS = {
   id: revealJobs.id,
+  createdByUserId: revealJobs.createdByUserId,
   revealType: revealJobs.revealType,
   status: revealJobs.status,
   totalContacts: revealJobs.totalContacts,
