@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1328,
-  "fileSetHash": "sha256:d6e38ccb81f6ef73d3950250f92b20a34f651e47a453181730fb8c9be628eda4",
+  "fileCount": 1341,
+  "fileSetHash": "sha256:fed657243502a4a4f9b41131801851569792fca1e18c8d56efe72dbdb444918e",
   "features": {
     "account-search": {
       "web": [],
@@ -1923,6 +1923,8 @@
       "apps/web/src/lib/useSessionRole.ts"
     ],
     "apps/workers": [
+      "apps/workers/src/deadLetter.test.ts",
+      "apps/workers/src/deadLetter.ts",
       "apps/workers/src/health.test.ts",
       "apps/workers/src/health.ts",
       "apps/workers/src/index.ts",
@@ -1931,6 +1933,12 @@
       "apps/workers/src/logger.ts",
       "apps/workers/src/mailboxThrottle.ts",
       "apps/workers/src/register.ts",
+      "apps/workers/src/retryPolicies.test.ts",
+      "apps/workers/src/retryPolicies.ts",
+      "apps/workers/src/tuning.test.ts",
+      "apps/workers/src/tuning.ts",
+      "apps/workers/src/withDeadline.test.ts",
+      "apps/workers/src/withDeadline.ts",
       "apps/workers/test/imports.conflict.itest.ts",
       "apps/workers/test/imports.queue.itest.ts",
       "apps/workers/test/imports.resilience.itest.ts"
@@ -2000,6 +2008,8 @@
       "packages/db/src/client.ts",
       "packages/db/src/index.ts",
       "packages/db/src/migrate.ts",
+      "packages/db/src/repositories/leaseAccounting.test.ts",
+      "packages/db/src/repositories/leaseAccounting.ts",
       "packages/db/src/repositories/platformAdminReads.ts",
       "packages/db/src/repositories/platformAdminWrites.ts",
       "packages/db/src/repositories/platformAuditReads.ts",
@@ -2033,6 +2043,7 @@
       "packages/db/src/schema/platformOps.ts",
       "packages/db/src/schema/projectionOutbox.ts",
       "packages/db/src/schema/retention.ts",
+      "packages/db/src/schema/revealJobs.ts",
       "packages/db/src/schema/salesnav.ts",
       "packages/db/src/schema/savedSearches.ts",
       "packages/db/src/schema/scim.ts",
@@ -2130,6 +2141,7 @@
       "packages/types/src/bulkEnrichment.test.ts",
       "packages/types/src/bulkEnrichment.ts",
       "packages/types/src/bulkImport.ts",
+      "packages/types/src/bulkReveal.ts",
       "packages/types/src/compliance.ts",
       "packages/types/src/complianceAdmin.ts",
       "packages/types/src/contacts.test.ts",
@@ -2258,6 +2270,7 @@
     "packages/db/src/repositories/projectorRepository.ts",
     "packages/db/src/repositories/providerConfigRepository.ts",
     "packages/db/src/repositories/retentionClassPolicyRepository.ts",
+    "packages/db/src/repositories/revealJobRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
     "packages/db/src/repositories/schedulerRepository.ts",
     "packages/db/src/repositories/scimTokenRepository.ts",
