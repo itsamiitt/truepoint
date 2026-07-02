@@ -2,6 +2,7 @@
 // endpoint for the orchestrator, and drains in-flight jobs on SIGINT/SIGTERM before exit. Run with
 // `bun run dev` (against the docker-compose Redis).
 
+import { envSurfaceReport } from "@leadwolf/config";
 import { WORKERS_HEALTH_PORT, startHealthServer } from "./health.ts";
 import { log } from "./logger.ts";
 import { redisReadinessProbe, startWorkers } from "./register.ts";
@@ -11,7 +12,14 @@ let ready = true;
 // /ready = booted AND not draining AND (0.3/F14) Redis reachable — via the bounded PING with a
 // consecutive-failure threshold, so a wedged Redis fails readiness but a blip doesn't flap the fleet.
 const health = startHealthServer(() => ready, WORKERS_HEALTH_PORT, redisReadinessProbe);
-log.info("workers: started", { processors: workers.length, healthPort: health.port });
+// Boot self-test (plan 15 §4.1): make "did the worker boot, and with what env surface?" answerable at a
+// glance. relaxedMissing lists web/auth-only keys absent under LEADWOLF_SURFACE=worker (access-guarded).
+log.info("workers: started", {
+  processors: workers.length,
+  healthPort: health.port,
+  envSurface: envSurfaceReport.surface,
+  relaxedMissing: envSurfaceReport.relaxedMissing,
+});
 
 /** Bound the graceful drain (plan 15 §3.1): with a hung job the un-bounded close() waited forever, so
  *  SIGTERM hung until the orchestrator SIGKILLed us. 30s comfortably exceeds a healthy in-flight job's

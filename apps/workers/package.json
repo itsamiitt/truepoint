@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run --hot src/index.ts",
-    "start": "bun run src/index.ts",
+    "dev": "LEADWOLF_SURFACE=worker bun run --hot src/index.ts",
+    "start": "LEADWOLF_SURFACE=worker bun run src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

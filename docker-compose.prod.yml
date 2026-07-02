@@ -115,6 +115,11 @@ services:
   workers:
     <<: *app
     command: ["bun", "run", "--filter", "@leadwolf/workers", "start"]
+    # Phase 2 boot isolation (worker-platform plan 15 §4): the worker validates only its OWN required env keys;
+    # a missing web/auth-only key (cookie domain, JWT kid) no longer keeps the worker dark. A literal value —
+    # never a ${VAR:-} interpolation (see the anchor's env_file note) — and it composes with env_file per-key.
+    environment:
+      LEADWOLF_SURFACE: worker
     # Probe the workers health server (health.ts, :3002): /ready is drain-aware AND Redis-aware (a bounded
     # PING behind a consecutive-failure threshold — worker-platform plan 15 §2.2 items 0.3/0.4, re-audit F14),
     # so a wedged Redis marks the container unhealthy while a transient blip rides out (~90s combined:

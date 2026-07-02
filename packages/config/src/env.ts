@@ -365,8 +365,65 @@ export function decodeKeyMaterial(raw: string, b64: string): string {
   return Buffer.from(b64, "base64").toString("utf8");
 }
 
-function loadEnv(): AppEnv {
-  const parsed = appEnvSchema.safeParse(process.env);
+// ── Surface-aware boot (worker-platform plan 15 §4 — Phase 2, boot isolation) ───────────────────────────────
+// The whole-app schema used to be a worker single-point-of-failure: because loadEnv() validates EVERY required
+// key and crashes on any miss, a missing web/auth-ONLY key (a cookie domain, a JWT kid) kept the WORKER dark —
+// presenting exactly like the by-design stuck-jobs state (a diagnosed false-positive; see
+// docs/planning/worker-platform/02-root-cause-analysis.md). Under `LEADWOLF_SURFACE=worker` the keys below are
+// relaxed: a missing one is backed by a schema-valid sentinel at parse time, and any RUNTIME ACCESS to that key
+// throws loudly (fail-closed per key — the coupling is removed, the discipline is kept). Worker-required keys
+// (REDIS_URL, DATABASE_URL, BLIND_INDEX_KEY, APP_ORIGINS — the send footer reads it) still crash boot when
+// missing, on every surface.
+
+/** The value `LEADWOLF_SURFACE` must hold for the worker relaxation to apply. Any other value (or unset) keeps
+ *  today's strict whole-app validation. */
+export const WORKER_SURFACE = "worker";
+
+/** Required keys that are WEB/AUTH-ONLY — no packages/core, packages/db, or apps/workers code path reads them
+ *  on the worker surface. Grow this list only with a grep proving the worker never touches the key. */
+const WORKER_RELAXED_KEYS = ["AUTH_ORIGIN", "AUTH_COOKIE_DOMAIN", "JWT_SIGNING_KID"] as const;
+type WorkerRelaxedKey = (typeof WORKER_RELAXED_KEYS)[number];
+
+/** Schema-valid placeholders for missing relaxed keys. The `.invalid` TLD is reserved (RFC 2606) — these can
+ *  never resolve, and the cookie-domain sentinel equals the origin sentinel's host so the production
+ *  superRefine holds. They are never observable: the access proxy throws before a caller can read one. */
+const WORKER_SENTINELS: Record<WorkerRelaxedKey, string> = {
+  AUTH_ORIGIN: "http://worker-surface.invalid",
+  AUTH_COOKIE_DOMAIN: "worker-surface.invalid",
+  JWT_SIGNING_KID: "worker-surface-unused",
+};
+
+/** Boot self-test data: which surface parsed the env, and which relaxed keys were absent (backed by throwing
+ *  sentinels). The workers entrypoint logs this so "did the worker boot, and with what?" is answerable at a
+ *  glance (plan 15 §4.1). */
+export interface SurfaceReport {
+  surface: string;
+  relaxedMissing: readonly string[];
+}
+
+/**
+ * Pure, testable core of loadEnv (mirrors the decodeKeyMaterial pattern: unit tests pass constructed sources
+ * and never mutate process.env). Parses `source` against the whole-app schema; under the worker surface,
+ * missing relaxed keys are sentinel-backed at parse time and access-guarded afterwards.
+ */
+export function resolveAppEnv(
+  source: Record<string, string | undefined>,
+  surface: string | undefined,
+): { env: AppEnv; report: SurfaceReport } {
+  const relaxedMissing: string[] = [];
+  let effective = source;
+  if (surface === WORKER_SURFACE) {
+    const injected = { ...source };
+    for (const key of WORKER_RELAXED_KEYS) {
+      if (injected[key] === undefined || injected[key] === "") {
+        injected[key] = WORKER_SENTINELS[key];
+        relaxedMissing.push(key);
+      }
+    }
+    effective = injected;
+  }
+
+  const parsed = appEnvSchema.safeParse(effective);
   if (!parsed.success) {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
@@ -386,10 +443,35 @@ function loadEnv(): AppEnv {
       parsed.data.JWT_PUBLIC_KEY_PEM_B64,
     ),
   };
-  return Object.freeze(resolved);
+  const frozen = Object.freeze(resolved);
+
+  // Fail-loud access guard: reading a sentinel-backed key is a bug (a worker path touching web/auth config),
+  // surfaced at the exact call site instead of as a silently-wrong sentinel value. Throwing from a `get` trap
+  // is proxy-invariant-safe on a frozen target (invariants constrain returned values, not throws).
+  const guarded: AppEnv =
+    relaxedMissing.length === 0
+      ? frozen
+      : new Proxy(frozen, {
+          get(target, prop, receiver) {
+            if (typeof prop === "string" && relaxedMissing.includes(prop)) {
+              throw new Error(
+                `env.${prop} was accessed on the worker surface but is not set. This key is web/auth-only ` +
+                  "and was relaxed at boot (LEADWOLF_SURFACE=worker). If a worker path genuinely needs it, " +
+                  "set it in the worker environment — or remove it from WORKER_RELAXED_KEYS in env.ts.",
+              );
+            }
+            return Reflect.get(target, prop, receiver);
+          },
+        });
+
+  return { env: guarded, report: { surface: surface ?? "app", relaxedMissing } };
 }
 
-export const env: AppEnv = loadEnv();
+const loaded = resolveAppEnv(process.env, process.env.LEADWOLF_SURFACE);
+
+export const env: AppEnv = loaded.env;
+/** The surface report for THIS process (see SurfaceReport). Workers log it at boot. */
+export const envSurfaceReport: SurfaceReport = loaded.report;
 
 /** Origins allowed to exchange/refresh tokens (CORS allow-list; never a wildcard). */
 export const appOrigins = (): readonly string[] => env.APP_ORIGINS;
