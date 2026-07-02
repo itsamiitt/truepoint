@@ -9,6 +9,7 @@ export * from "./importTemplates.ts";
 export * from "./tags.ts";
 export * from "./bulkEnrichment.ts";
 export * from "./bulkReveal.ts";
+export * from "./realtimeEvents.ts";
 export * from "./bulkImport.ts";
 export * from "./billing.ts";
 export * from "./platformAudit.ts";

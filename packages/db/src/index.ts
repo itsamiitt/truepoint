@@ -266,6 +266,13 @@ export {
   type RevealBandRow,
   type ConfirmRevealJobResult,
 } from "./repositories/revealJobRepository.ts";
+// Domain-event transactional outbox (reveal-experience Phase 4, ADR-0027) — append in the state-change tx;
+// the relay drains + publishes to Redis pub/sub for the SSE gateway.
+export {
+  eventOutboxRepository,
+  type OutboxEventInput,
+  type OutboxEventRow,
+} from "./repositories/eventOutboxRepository.ts";
 // Bulk COPY-staging import control plane (15-bulk-import-design, backlog #2) — the import_jobs / _chunks / _rows
 // lifecycle CRUD; tx-aware, composed inside withTenantTx (RLS workspace isolation; chunks inherit via parent).
 export {

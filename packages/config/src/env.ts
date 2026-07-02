@@ -264,6 +264,15 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Realtime SSE backbone (reveal-experience Phase 4, ADR-0027): the transactional event outbox + the relay
+    // (outbox → Redis pub/sub) + the authenticated SSE stream. DEFAULT-OFF: while off, writers append NO outbox
+    // rows, the relay is not registered, and GET /events/stream 404s — so the whole realtime path is inert and
+    // the frontend's existing polling/refetch stays the source of truth. Turning it on is a SEPARATE,
+    // CI-parity-gated step. Same explicit-"true"-only posture as BULK_REVEAL_ENABLED.
+    REALTIME_SSE_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Probabilistic ER shadow mode (prospect-database-platform I5 / audit P02, A10): when ON, the leader-locked ER
     // sweep scores candidate person pairs (Fellegi-Sunter) and PROPOSES dups as match_links rows with
     // review_status='pending' + match_method='splink' — the human-review queue the DB-Ops surface reads. SHADOW-ONLY:
