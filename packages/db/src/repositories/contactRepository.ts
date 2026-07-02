@@ -583,6 +583,35 @@ export const contactRepository = {
   },
 
   /**
+   * Batched mirror of getScalarValues: one IN-list SELECT of the scalar overlay values for a whole chunk's
+   * matched contacts (the BULK-path conflict detection read, data-management #8 — mirrors
+   * getFieldProvenanceBatch). RLS-scoped via the caller's tx; a foreign/absent id is simply ABSENT from the
+   * map — callers resolve it with `?? {}`, reproducing the single-row "no visible row → {}" contract.
+   */
+  async getScalarValuesBatch(
+    tx: Tx,
+    contactIds: string[],
+  ): Promise<Map<string, Record<string, unknown>>> {
+    const out = new Map<string, Record<string, unknown>>();
+    if (contactIds.length === 0) return out;
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        jobTitle: contacts.jobTitle,
+        seniorityLevel: contacts.seniorityLevel,
+        department: contacts.department,
+        locationCountry: contacts.locationCountry,
+        locationCity: contacts.locationCity,
+      })
+      .from(contacts)
+      .where(inArray(contacts.id, contactIds));
+    for (const { id, ...scalars } of rows) out.set(id, scalars);
+    return out;
+  },
+
+  /**
    * Batched mirror of getFieldProvenance: one IN-list SELECT for a whole chunk's matched contacts, RLS-scoped via
    * the caller's tx (isolation rides the GUC — no explicit workspace predicate, like getFieldProvenance). Returns
    * a map of contactId → provenance for the rows that exist+are visible; a null field_provenance maps to {} (the

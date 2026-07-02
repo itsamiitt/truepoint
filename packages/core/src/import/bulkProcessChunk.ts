@@ -13,6 +13,8 @@
 //  • account upsert — upsertByDomainBatch is the batched mirror of upsertByDomain (same bridge-null + name rules).
 //  • pin-aware overwrite — getFieldProvenanceBatch + planFieldWrite, the SAME canonical pin rule + the SAME
 //    `import:<source>` provenance stamp; pinned scalars are dropped from the update exactly as importOneRow does.
+//  • conflict marking — getScalarValuesBatch + markConflicts (data-management #8), the SAME sticky `cf` rule as
+//    importOneRow (different src + different NORMALIZED value); guarded so it can never fail or alter the merge.
 //  • provenance — appendBatch writes one source_imports row per landing row, idempotent via ON CONFLICT
 //    (workspace_id, content_hash) DO NOTHING (the bulk equivalent of runImport's content-hash idempotency).
 //  • list membership — every contact a row RESOLVES to (created + matched + held-back duplicate) is added to the
@@ -62,6 +64,7 @@ import {
   CONTACT_PROVENANCE_FIELDS,
 } from "@leadwolf/types";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
+import { markConflicts } from "../prospect/conflictDetect.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import type { PreparedValues } from "./prepareContact.ts";
 
@@ -245,6 +248,17 @@ export async function bulkProcessChunk(
     const provMap = matchedIds.length
       ? await contactRepository.getFieldProvenanceBatch(tx, matchedIds)
       : new Map<string, FieldProvenanceMap>();
+    // 5b) Existing scalar VALUES for the matched rows — the TRUE cross-source conflict-detection read
+    //     (data-management #8; the batched mirror of runImport's markConflicts wiring). GUARDED: a read failure
+    //     degrades to "no conflicts detected this chunk" (empty map) — it can never fail or alter the merge.
+    let scalarsMap = new Map<string, Record<string, unknown>>();
+    try {
+      if (matchedIds.length) {
+        scalarsMap = await contactRepository.getScalarValuesBatch(tx, matchedIds);
+      }
+    } catch (err) {
+      console.error("[bulk-import] conflict-detect scalar read failed (non-fatal)", err);
+    }
 
     // 6) Build inserts + updates exactly like importOneRow's landing branch.
     const insertValues: ContactWriteValues[] = [];
@@ -271,13 +285,23 @@ export async function bulkProcessChunk(
         insertIdx.push(i);
       } else {
         const matchId = matches[i]!.id;
-        const { writableFields, provenance } = planFieldWrite(provMap.get(matchId) ?? {}, scalarFields, {
+        const existingProv = provMap.get(matchId) ?? {};
+        const { writableFields, provenance } = planFieldWrite(existingProv, scalarFields, {
           src,
         });
         for (const f of scalarFields) {
           if (!writableFields.has(f)) delete (values as unknown as Record<string, unknown>)[f];
         }
-        values.fieldProvenance = provenance;
+        // data-management #8 — flag TRUE cross-source conflicts on the scalars this overwrite stamps (the SAME
+        // markConflicts rule as importOneRow: different src + different NORMALIZED value; sticky; pure).
+        values.fieldProvenance = markConflicts({
+          provenance,
+          existingProvenance: existingProv,
+          existingValues: scalarsMap.get(matchId) ?? {},
+          incomingValues: baseValues as unknown as Record<string, unknown>,
+          writtenFields: writableFields,
+          incomingSrc: src,
+        });
         updates.push({ id: matchId, values });
       }
     }
