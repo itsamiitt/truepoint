@@ -7,7 +7,11 @@
 // closed enums (EnrichmentJobStatus / MatchMethod / MatchOutcome) come from @leadwolf/types and narrow at
 // the edge. PII never leaves the DB — the candidate lookup returns only non-PII facets + which key matched.
 
-import type { EnrichmentJobStatus, MatchMethod } from "@leadwolf/types";
+import {
+  BULK_ENRICHMENT_DRIVE_TOPIC,
+  type EnrichmentJobStatus,
+  type MatchMethod,
+} from "@leadwolf/types";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { type TenantScope, withTenantTx } from "../client.ts";
 import { contacts } from "../schema/contacts.ts";
@@ -16,6 +20,7 @@ import {
   enrichmentJobRows,
   enrichmentJobs,
 } from "../schema/enrichmentJobs.ts";
+import { outboxRepository } from "./outboxRepository.ts";
 
 // ── Job lifecycle ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -352,6 +357,10 @@ export const enrichmentJobRepository = {
    * caller wins the transition). Returns true iff THIS call promoted the job to `running`.
    */
   async confirmAwaitingJob(scope: TenantScope, jobId: string): Promise<boolean> {
+    // Workspace-scoped table: without a workspace GUC the RLS-isolated UPDATE below can never match, so an
+    // unscoped call is a guaranteed no-win — return early (and give TS the non-null workspaceId it needs).
+    const workspaceId = scope.workspaceId;
+    if (!workspaceId) return false;
     return withTenantTx(scope, async (tx) => {
       const rows = await tx
         .update(enrichmentJobs)
@@ -360,7 +369,24 @@ export const enrichmentJobRepository = {
           and(eq(enrichmentJobs.id, jobId), eq(enrichmentJobs.status, "awaiting_confirmation")),
         )
         .returning({ id: enrichmentJobs.id });
-      return rows.length > 0;
+      if (rows.length === 0) return false;
+      // ADR-0027 TRANSACTIONAL OUTBOX (worker-platform Phase 3): the drive-publish intent commits ATOMICALLY
+      // with the awaiting_confirmation → running transition — "DB commit ⇒ event published". The old shape
+      // (commit here, then the HTTP handler enqueues to Redis) could crash between the two and strand a
+      // `running` job with NO drive job — not self-healing (02-root-cause-analysis §6). The workers-side
+      // relay (leaderless, SKIP LOCKED, continuous) publishes this at-least-once; the consumer dedupes by
+      // stable jobId. The payload is the SAME PII-free queue DTO the producer used to enqueue directly.
+      await outboxRepository.enqueueInTx(tx, {
+        tenantId: scope.tenantId,
+        workspaceId,
+        topic: BULK_ENRICHMENT_DRIVE_TOPIC,
+        payload: {
+          kind: "drive",
+          jobId,
+          scope: { tenantId: scope.tenantId, workspaceId },
+        },
+      });
+      return true;
     });
   },
 

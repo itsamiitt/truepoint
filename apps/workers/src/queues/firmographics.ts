@@ -4,11 +4,11 @@
 // rows bring new signals) or on a schedule; idempotent, so a re-run is always safe.
 
 import { type RunFirmographicRollupResult, runFirmographicRollup } from "@leadwolf/core";
+import { FIRMOGRAPHICS_DLQ, FIRMOGRAPHICS_QUEUE } from "@leadwolf/types";
 import type { Job } from "bullmq";
 
-export const FIRMOGRAPHICS_QUEUE = "firmographics";
-/** Dead-letter holding queue for firmographics jobs that exhaust their retries (PII-free records). */
-export const FIRMOGRAPHICS_DLQ = "firmographics-dlq";
+// Queue + DLQ names live in @leadwolf/types (workerQueues.ts — the admin probe reads them too); re-exported.
+export { FIRMOGRAPHICS_DLQ, FIRMOGRAPHICS_QUEUE };
 
 export interface FirmographicsJobData {
   tenantId: string;

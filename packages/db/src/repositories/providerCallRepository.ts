@@ -62,6 +62,21 @@ export const providerCallRepository = {
       .onConflictDoNothing();
   },
 
+  /** Serialize the daily-budget evaluation per workspace (re-audit F3 — worker-platform Phase 5 entry gate).
+   *  The breaker used to be a racy read-check-act: N concurrent workers could each read `spendSince` below
+   *  the budget before any of their costs committed, overshooting the daily cap by up to N paid calls. A
+   *  TRANSACTION-scoped advisory lock taken before the read closes the race: the cost is recorded in the
+   *  SAME tx (enrichContact), so the next holder sees every prior spend committed before its own check.
+   *  Trade-off (documented in enrichContact): paid enrichment serializes per workspace — the effective
+   *  posture anyway while the spend path runs concurrency 1 (tuning.ts F3); the ADR-0029 reservation-lease
+   *  shape supersedes this when per-workspace parallel spend is actually wanted. xact-scoped ⇒ safe under
+   *  transaction pooling; hashtext's int4 widens to the single-bigint-arg lock form. */
+  async lockDailyBudget(tx: Tx, workspaceId: string): Promise<void> {
+    await tx.execute(
+      dsql`SELECT pg_advisory_xact_lock(hashtext(${`enrich_budget:${workspaceId}`}))`,
+    );
+  },
+
   /** Workspace spend since `since` — the input to the daily budget breaker (06 §6). */
   async spendSince(tx: Tx, workspaceId: string, since: Date): Promise<number> {
     const rows = await tx

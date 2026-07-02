@@ -6,12 +6,11 @@
 // dedup/firmographics per-workspace job idiom.
 
 import { type MasterBackfillResult, runMasterBackfill } from "@leadwolf/core";
+import { MASTER_BACKFILL_DLQ, MASTER_BACKFILL_QUEUE } from "@leadwolf/types";
 import type { Job } from "bullmq";
 
-export const MASTER_BACKFILL_QUEUE = "master-backfill";
-/** Dead-letter holding queue for backfill jobs that exhaust their retries (PII-free records). Before this,
- *  an exhausted attempts:4 job silently sat in the BullMQ failed set with no ops signal. */
-export const MASTER_BACKFILL_DLQ = "master-backfill-dlq";
+// Queue + DLQ names live in @leadwolf/types (workerQueues.ts — the admin probe reads them too); re-exported.
+export { MASTER_BACKFILL_DLQ, MASTER_BACKFILL_QUEUE };
 
 /** The job payload: the workspace scope to backfill + an optional keyset batch size (defaults in core). */
 export interface MasterBackfillJobData {

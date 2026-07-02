@@ -9,20 +9,29 @@ import {
   diskFileStore,
   registerEmailProviders,
 } from "@leadwolf/core";
-import { db, notificationRepository } from "@leadwolf/db";
+import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
 import { defaultProviders } from "@leadwolf/integrations";
-import type {
-  BulkEnrichmentDeadLetter,
-  BulkImportDeadLetter,
-  BulkImportScope,
-  BulkRevealDeadLetter,
-  ImportDeadLetter,
+import {
+  BULK_ENRICHMENT_DRIVE_TOPIC,
+  type BulkEnrichmentDeadLetter,
+  type BulkImportDeadLetter,
+  type BulkImportScope,
+  type BulkRevealDeadLetter,
+  type ImportDeadLetter,
+  bulkEnrichmentJobDataSchema,
 } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
-import { type WorkerDeadLetter, makeDeadLetterHandler } from "./deadLetter.ts";
+import { type WorkerDeadLetter, extractScope, makeDeadLetterHandler } from "./deadLetter.ts";
 import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
+import {
+  type QueueDepth,
+  recordCompleted,
+  recordFailed,
+  renderPromMetrics,
+} from "./metrics.ts";
+import { type OutboxRelayHandle, startOutboxRelay } from "./outboxRelay.ts";
 import {
   BILLING_RECON_SWEEP_QUEUE,
   type BillingReconSweepJobData,
@@ -262,6 +271,88 @@ export const tokenRefreshQueue = new Queue<TokenRefreshJobData>(EMAIL_TOKEN_REFR
   connection,
 });
 
+// ── /metrics collection (worker-platform plan 15 §6 — Phase 4) ─────────────────────────────────────────────
+
+/** Bound a Redis read so a wedged connection (maxRetriesPerRequest: null buffers forever) can never hang the
+ *  /metrics scrape. Rejects on expiry; the caller's allSettled turns that into an omitted row. */
+function bounded<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("metrics read timed out")), timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+/**
+ * Gather live queue depths + the outbox relay-lag and render the Prometheus text served on GET /metrics
+ * (health.ts). Reads the module-level producer handles (every always-on queue, DLQ, and sweep). Each read is
+ * individually bounded and a failed read is OMITTED — honest-unknown, never a fabricated zero row (the
+ * systemHealthProbes contract). The per-queue completed/failed counters are fed by instrument().
+ */
+export async function collectWorkerMetricsText(): Promise<string> {
+  const specs: ReadonlyArray<{ name: string; queue: Pick<Queue, "getJobCounts"> }> = [
+    { name: IMPORTS_QUEUE, queue: importQueue },
+    { name: IMPORTS_DLQ, queue: importDeadLetterQueue },
+    { name: ENRICHMENT_QUEUE, queue: enrichmentQueue },
+    { name: ENRICHMENT_DLQ, queue: enrichmentDeadLetterQueue },
+    { name: SCORING_QUEUE, queue: scoringQueue },
+    { name: SCORING_DLQ, queue: scoringDeadLetterQueue },
+    { name: DSAR_QUEUE, queue: dsarQueue },
+    { name: DSAR_DLQ, queue: dsarDeadLetterQueue },
+    { name: OUTREACH_QUEUE, queue: outreachQueue },
+    { name: OUTREACH_DLQ, queue: outreachDeadLetterQueue },
+    { name: DEDUP_QUEUE, queue: dedupQueue },
+    { name: DEDUP_DLQ, queue: dedupDeadLetterQueue },
+    { name: FIRMOGRAPHICS_QUEUE, queue: firmographicsQueue },
+    { name: FIRMOGRAPHICS_DLQ, queue: firmographicsDeadLetterQueue },
+    { name: MASTER_BACKFILL_QUEUE, queue: masterBackfillQueue },
+    { name: MASTER_BACKFILL_DLQ, queue: masterBackfillDeadLetterQueue },
+    { name: REVERIFICATION_QUEUE, queue: reverificationQueue },
+    { name: REVERIFICATION_DLQ, queue: reverificationDeadLetterQueue },
+    // Sweeps: depth is ~1 repeatable by design, but the failed count + reachability matter.
+    { name: MASTER_BACKFILL_SWEEP_QUEUE, queue: masterBackfillSweepQueue },
+    { name: PROJECTION_SWEEP_QUEUE, queue: projectionSweepQueue },
+    { name: ER_SWEEP_QUEUE, queue: erSweepQueue },
+    { name: EMAIL_SEQUENCE_TICK_QUEUE, queue: sequenceTickQueue },
+    { name: RETENTION_SWEEP_QUEUE, queue: retentionSweepQueue },
+    { name: REVERIFICATION_SWEEP_QUEUE, queue: reverificationSweepQueue },
+    { name: DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE, queue: dataQualitySnapshotSweepQueue },
+    { name: DATA_RETENTION_SWEEP_QUEUE, queue: dataRetentionSweepQueue },
+    { name: EMAIL_TOKEN_REFRESH_QUEUE, queue: tokenRefreshQueue },
+  ];
+
+  const settled = await Promise.allSettled(
+    specs.map(async (s) => {
+      const counts = await bounded(
+        s.queue.getJobCounts("waiting", "active", "failed", "delayed"),
+        1_500,
+      );
+      return {
+        queue: s.name,
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        failed: counts.failed ?? 0,
+        delayed: counts.delayed ?? 0,
+      } satisfies QueueDepth;
+    }),
+  );
+  const depths = settled
+    .filter((r): r is PromiseFulfilledResult<QueueDepth> => r.status === "fulfilled")
+    .map((r) => r.value);
+
+  // Relay lag (re-audit F1): the outbox's oldest unpublished row. A DB blip reads as null (omitted gauge).
+  const outboxOldestPendingSeconds = await bounded(
+    outboxRepository.oldestPendingAgeSeconds(),
+    1_500,
+  ).catch(() => null);
+
+  return renderPromMetrics({ depths, outboxOldestPendingSeconds });
+}
+
 // ── Dead-letter holding queues (worker-platform plan 15 §2.2, item 0.2) ────────────────────────────────────
 // One per retryable event queue, mirroring importDeadLetterQueue above: a job that exhausts its retry budget
 // is recorded as a PII-FREE record (deadLetter.ts — scope + provenance + reason, never the payload) for ops
@@ -441,23 +532,41 @@ export async function enqueueMasterBackfill(
   return String(job.id);
 }
 
-/** Attach structured completed/failed logging to a worker (per-queue observability), plus — when a dead-letter
- *  queue is provided (0.2) — routing of retry-exhausted jobs onto it as PII-free records (deadLetter.ts).
- *  Never logs payloads. */
+// Phase 3 (ADR-0027): the outbox relay handle, set by startWorkers when the bulk-enrichment block runs.
+let outboxRelay: OutboxRelayHandle | undefined;
+
+/** Stop background relays (Phase 3): halts the outbox relay's schedule and awaits its in-flight tick. The
+ *  entrypoint calls this FIRST in the drain so no new drive publish races the worker close. No-op when the
+ *  bulk-enrichment block never started a relay (flag off). Safe to call more than once. */
+export async function stopBackgroundRelays(): Promise<void> {
+  const relay = outboxRelay;
+  outboxRelay = undefined;
+  await relay?.stop();
+}
+
+/** Attach structured completed/failed logging + metrics counters to a worker (per-queue observability), plus
+ *  — when a dead-letter queue is provided (0.2) — routing of retry-exhausted jobs onto it as PII-free records
+ *  (deadLetter.ts). Log lines carry the tenant/workspace scope when the payload exposes it (Phase 4, doc 19
+ *  §1 tenant tags — UUIDs only via extractScope, never payload fields). Never logs payloads. */
 function instrument<T = unknown>(
   worker: Worker<T>,
   queue: string,
   deadLetterQueue?: Queue<WorkerDeadLetter>,
 ): Worker<T> {
-  worker.on("completed", (job) => log.info("job completed", { queue, jobId: job.id }));
-  worker.on("failed", (job, err) =>
+  worker.on("completed", (job) => {
+    recordCompleted(queue);
+    log.info("job completed", { queue, jobId: job.id, ...extractScope(job.data) });
+  });
+  worker.on("failed", (job, err) => {
+    recordFailed(queue);
     log.error("job failed", {
       queue,
       jobId: job?.id,
       attemptsMade: job?.attemptsMade,
       error: err.message,
-    }),
-  );
+      ...extractScope(job?.data),
+    });
+  });
   if (deadLetterQueue) worker.on("failed", makeDeadLetterHandler<T>(queue, deadLetterQueue));
   return worker;
 }
@@ -808,9 +917,15 @@ export function startWorkers(): Worker[] {
       new Worker<BulkEnrichmentJobData>(
         BULK_ENRICHMENT_QUEUE,
         makeProcessBulkEnrichment({
-          // The drive phase fans out one chunk job per band onto the SAME bulk-enrichment queue.
+          // The drive phase fans out one chunk job per band onto the SAME bulk-enrichment queue. STABLE jobId
+          // (Phase 3): a duplicate drive delivery (at-least-once outbox re-publish) re-fans the same chunk ids
+          // and BullMQ keeps exactly one of each — idempotent fan-out, no duplicate chunk work.
           enqueueChunk: async (jobId, scope, chunkId) => {
-            await bulkEnrichmentQueue.add("chunk", { kind: "chunk", jobId, scope, chunkId });
+            await bulkEnrichmentQueue.add(
+              "chunk",
+              { kind: "chunk", jobId, scope, chunkId },
+              { jobId: `bulkenrich:chunk:${jobId}:${chunkId}` },
+            );
           },
           // The chunk phase feeds these vendor adapters to enrichContact — the SAME set processEnrichment uses.
           providers: defaultProviders(),
@@ -830,6 +945,28 @@ export function startWorkers(): Worker[] {
       );
     });
     workers.push(bulkEnrichmentWorker);
+
+    // Phase 3 (ADR-0027): the LEADERLESS outbox relay. The confirm endpoint no longer enqueues to Redis —
+    // the awaiting_confirmation → running transition commits its drive-publish intent into worker_outbox in
+    // the SAME tx (enrichmentJobRepository.confirmAwaitingJob), and every worker replica drains it here with
+    // FOR UPDATE SKIP LOCKED on a continuous 1s poll (re-audit F1: no leader lock, no daily cadence — only
+    // the SKIP LOCKED drain idea is shared with projection_sweep, F2). At-least-once by design: the STABLE
+    // drive jobId dedupes a re-publish at the queue, and runBulkEnrich additionally guards on `running`.
+    // Payload is validated against the shared schema before publish; a malformed row burns its attempts cap
+    // (bounded) and fails out via the repository, loudly logged each claim. Gated with the consumer: when
+    // the kill-switch is off no relay runs and committed intents simply wait, exactly like the dark queue.
+    outboxRelay = startOutboxRelay({
+      publishers: {
+        [BULK_ENRICHMENT_DRIVE_TOPIC]: async (payload) => {
+          const data = bulkEnrichmentJobDataSchema.parse(payload);
+          await bulkEnrichmentQueue.add("drive", data, {
+            jobId: `bulkenrich:drive:${data.jobId}`,
+            attempts: 3,
+            backoff: { type: "exponential", delay: 2000, jitter: 0.5 },
+          });
+        },
+      },
+    });
   }
   // Async BULK REVEAL consumer — DARK by default (BULK_REVEAL_ENABLED=false; the apps/api producer enqueues
   // nothing while off, so this never runs in prod until the flag is flipped in a CI-gated step). A `drive` job

@@ -5,13 +5,25 @@
 import { envSurfaceReport } from "@leadwolf/config";
 import { WORKERS_HEALTH_PORT, startHealthServer } from "./health.ts";
 import { log } from "./logger.ts";
-import { redisReadinessProbe, startWorkers } from "./register.ts";
+import {
+  collectWorkerMetricsText,
+  redisReadinessProbe,
+  startWorkers,
+  stopBackgroundRelays,
+} from "./register.ts";
 
 const workers = startWorkers();
 let ready = true;
 // /ready = booted AND not draining AND (0.3/F14) Redis reachable — via the bounded PING with a
 // consecutive-failure threshold, so a wedged Redis fails readiness but a blip doesn't flap the fleet.
-const health = startHealthServer(() => ready, WORKERS_HEALTH_PORT, redisReadinessProbe);
+// /metrics (Phase 4) serves the zero-dep Prometheus text: per-queue counters + depths + outbox relay lag.
+const health = startHealthServer(
+  () => ready,
+  WORKERS_HEALTH_PORT,
+  redisReadinessProbe,
+  undefined, // failure threshold: keep the F14 default
+  collectWorkerMetricsText,
+);
 // Boot self-test (plan 15 §4.1): make "did the worker boot, and with what env surface?" answerable at a
 // glance. relaxedMissing lists web/auth-only keys absent under LEADWOLF_SURFACE=worker (access-guarded).
 log.info("workers: started", {
@@ -33,6 +45,9 @@ async function shutdown(signal: string): Promise<void> {
   draining = true;
   ready = false; // fail readiness so the orchestrator stops considering us live while we drain
   log.info("workers: draining", { signal });
+  // Stop the outbox relay FIRST (Phase 3): no new drive publish may race the worker close below; unclaimed
+  // intents stay pending in worker_outbox and the next boot's relay resumes them (at-least-once).
+  await stopBackgroundRelays().catch(() => {});
   const drained = await Promise.race([
     Promise.all(workers.map((w) => w.close())).then(() => true),
     new Promise<boolean>((resolve) => setTimeout(() => resolve(false), DRAIN_TIMEOUT_MS)),

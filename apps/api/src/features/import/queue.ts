@@ -9,6 +9,7 @@ import type { RunImportInput } from "@leadwolf/core";
 import { IMPORTS_QUEUE } from "@leadwolf/types";
 import { type Job, Queue } from "bullmq";
 import IORedis from "ioredis";
+import { assertQueueCapacity } from "./queueBackpressure.ts";
 
 /** The job payload IS a RunImportInput — rows are parsed on the API before enqueue (parse stays API-side, M1). */
 export type ImportJobData = RunImportInput;
@@ -35,9 +36,17 @@ function importQueue(): Queue<ImportJobData> {
   return queue;
 }
 
-/** Enqueue a parsed import for background processing; returns the BullMQ job id the importer can poll. */
+/** Above this many already-waiting imports, new submissions shed with a typed 503 (Phase 5 backpressure).
+ *  Each job carries its parsed rows in the payload, so an unbounded backlog is also a Redis-memory risk. */
+const MAX_WAITING_IMPORTS = 10_000;
+
+/** Enqueue a parsed import for background processing; returns the BullMQ job id the importer can poll.
+ *  Sheds with a typed 503 (queue_backpressure) when the queue is already saturated — degrade at the door,
+ *  never cascade (worker-platform plan 15 §7; doc 18 §9). */
 export async function enqueueImport(data: ImportJobData): Promise<string> {
-  const job = await importQueue().add("import", data);
+  const q = importQueue();
+  await assertQueueCapacity(q, IMPORTS_QUEUE, MAX_WAITING_IMPORTS);
+  const job = await q.add("import", data);
   return String(job.id);
 }
 

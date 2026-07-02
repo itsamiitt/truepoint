@@ -21,13 +21,19 @@ export type ReadinessProbe = () => Promise<boolean>;
  *  compose healthcheck probing every 10s, 3 consecutive failures ≈ 30s of sustained Redis outage. */
 export const DEFAULT_PROBE_FAILURE_THRESHOLD = 3;
 
+/** Renders the Prometheus text exposition for GET /metrics (register.ts's collectWorkerMetricsText). */
+export type MetricsTextProvider = () => Promise<string>;
+
 /** Start the health server. `isReady` is polled per /ready request so it reflects live drain state; `probe`
- *  (optional) is additionally consulted per /ready request with the consecutive-failure threshold above. */
+ *  (optional) is additionally consulted per /ready request with the consecutive-failure threshold above;
+ *  `metricsText` (optional, Phase 4) serves GET /metrics in Prometheus text format — a failing collection
+ *  answers 503 and never affects /health or /ready. */
 export function startHealthServer(
   isReady: () => boolean,
   port: number = WORKERS_HEALTH_PORT,
   probe?: ReadinessProbe,
   failureThreshold: number = DEFAULT_PROBE_FAILURE_THRESHOLD,
+  metricsText?: MetricsTextProvider,
 ) {
   let consecutiveProbeFailures = 0;
   return Bun.serve({
@@ -35,6 +41,16 @@ export function startHealthServer(
     async fetch(req): Promise<Response> {
       const { pathname } = new URL(req.url);
       if (pathname === "/health") return new Response("ok", { status: 200 });
+      if (pathname === "/metrics" && metricsText) {
+        try {
+          return new Response(await metricsText(), {
+            status: 200,
+            headers: { "content-type": "text/plain; version=0.0.4; charset=utf-8" },
+          });
+        } catch {
+          return new Response("metrics collection failed", { status: 503 });
+        }
+      }
       if (pathname === "/ready") {
         if (!isReady()) return new Response("draining", { status: 503 });
         if (probe) {

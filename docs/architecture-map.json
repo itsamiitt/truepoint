@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1359,
-  "fileSetHash": "sha256:66f102ec53a0d14cd05120a7cb3b5dfbadeed65f76c3b0efc7506364e1278baf",
+  "fileCount": 1366,
+  "fileSetHash": "sha256:a61f3a87e097172f78dbc3fa029f4c7cebfce57a1562ab0a59d9dbf018b4d12d",
   "features": {
     "account-search": {
       "web": [],
@@ -140,6 +140,7 @@
         "apps/api/src/features/admin/index.ts",
         "apps/api/src/features/admin/pricing.ts",
         "apps/api/src/features/admin/providerConfigs.ts",
+        "apps/api/src/features/admin/queueProbes.ts",
         "apps/api/src/features/admin/routes.ts",
         "apps/api/src/features/admin/staff.ts",
         "apps/api/src/features/admin/systemHealthProbes.test.ts",
@@ -550,7 +551,6 @@
       "web": [],
       "admin": [],
       "api": [
-        "apps/api/src/features/enrichment/bulkEnrichQueue.ts",
         "apps/api/src/features/enrichment/index.ts",
         "apps/api/src/features/enrichment/routes.ts"
       ],
@@ -580,6 +580,7 @@
         "packages/core/src/enrichment/waterfallBulk.test.ts"
       ],
       "db": [
+        "packages/db/src/repositories/outboxRepository.ts",
         "packages/db/src/repositories/providerCallRepository.ts"
       ],
       "workers": [
@@ -727,6 +728,7 @@
         "apps/api/src/features/import/bulkStore.ts",
         "apps/api/src/features/import/index.ts",
         "apps/api/src/features/import/queue.ts",
+        "apps/api/src/features/import/queueBackpressure.ts",
         "apps/api/src/features/import/routes.ts"
       ],
       "core": [
@@ -1954,6 +1956,10 @@
       "apps/workers/src/logger.test.ts",
       "apps/workers/src/logger.ts",
       "apps/workers/src/mailboxThrottle.ts",
+      "apps/workers/src/metrics.test.ts",
+      "apps/workers/src/metrics.ts",
+      "apps/workers/src/outboxRelay.test.ts",
+      "apps/workers/src/outboxRelay.ts",
       "apps/workers/src/realtimeRelay.ts",
       "apps/workers/src/register.ts",
       "apps/workers/src/retryPolicies.test.ts",
@@ -2220,7 +2226,8 @@
       "packages/types/src/tenantAdmin.ts",
       "packages/types/src/userAdmin.ts",
       "packages/types/src/validation.ts",
-      "packages/types/src/webhooks.ts"
+      "packages/types/src/webhooks.ts",
+      "packages/types/src/workerQueues.ts"
     ],
     "packages/ui": [
       "packages/ui/src/cn.ts",

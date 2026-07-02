@@ -17,6 +17,12 @@ export const BULK_ENRICHMENT_QUEUE = "bulk-enrichment";
 /** Dead-letter queue name for bulk-enrichment jobs that exhaust their retries. Shared producer/consumer. */
 export const BULK_ENRICHMENT_DLQ = "bulk-enrichment-dlq";
 
+/** Worker-outbox topic for the confirm→drive publish (ADR-0027 transactional outbox — worker-platform
+ *  Phase 3). The confirm transition inserts a `worker_outbox` row with this topic in the SAME tx as the
+ *  awaiting_confirmation → running flip ("DB commit ⇒ event published"); the workers-side relay publishes it
+ *  onto BULK_ENRICHMENT_QUEUE. Lives here so the db-side writer and the workers-side relay can never drift. */
+export const BULK_ENRICHMENT_DRIVE_TOPIC = "bulk_enrichment.drive";
+
 // ── Rollout gate ─────────────────────────────────────────────────────────────────────────────────────────
 /** Per-tenant feature-flag key for the bulk CSV enrichment pipeline (existing feature-flag system; default
  *  false → fail-closed). The TWO-LAYER gate: the global env.BULK_ENRICHMENT_ENABLED kill-switch must be on AND

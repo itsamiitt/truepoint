@@ -1,10 +1,30 @@
 # Phased Implementation Plan
 
-> **Status: Phases 0–1 IMPLEMENTED** on `feat/data-mgmt-01-research-brief`
-> (Phase 0 @ `5c3c8cc`, Phase 1 @ `c681629`) — **pending CI gates** (typecheck/biome/tests; no
-> local bun) **and the staging fault-injection drills** in §2.4/§3.3. Phase 0.0 (confirm-on-live,
+> **Status: Phases 0–5 IMPLEMENTED (Phases 4–5 as their in-repo subsets)** on
+> `feat/data-mgmt-01-research-brief` — **pending CI gates** (typecheck/biome/tests + itests with
+> the new migration; no local bun) **and the staging fault-injection drills** in each phase's
+> Verify section. Phase 0.0 (confirm-on-live,
 > [03-live-inspection-runbook.md](03-live-inspection-runbook.md)) is **still owed by the operator**.
-> Phases 2+ remain proposals awaiting a go decision.
+> - **Phase 0** @ `5c3c8cc` — retry+jitter, 8 DLQs, Redis-aware `/ready` (F14), prod healthcheck.
+> - **Phase 1** @ `c681629` — processor deadlines, stall/lock tuning + stall-exhaustion DLQ,
+>   concurrency (spend path pinned — F3 tripwire test), 30s bounded drain.
+> - **Phase 2** @ `d9111c7` — surface-aware env schema (`LEADWOLF_SURFACE=worker`): missing
+>   web/auth-only keys no longer block worker boot; access to a relaxed key throws; boot self-test log.
+> - **Phase 3** @ `d7c1ebf` — transactional outbox (`worker_outbox`, migration 0052 — renumbered from
+>   0051 at the main merge; main's 0051 is the realtime `event_outbox`): the confirm
+>   transition commits its drive-publish intent atomically; a leaderless SKIP-LOCKED relay
+>   (continuous 1s poll — F1/F2) publishes with stable jobIds; the api's direct producer is deleted.
+> - **Phase 4 subset** @ `b6e5e67` — zero-dep worker `/metrics` (Prometheus text: counters, depths,
+>   outbox relay-lag gauge), admin probes extended 3 → all event queues + every DLQ, tenant log tags.
+>   **Deferred (needs a CI-capable deps pass):** OTel traces, log shipper, SLO/burn-rate tooling.
+> - **Phase 5 subset** @ `d41ed52` — **F3 entry gate closed**: atomic per-workspace daily budget
+>   breaker (advisory xact lock; the racy read-check-act is gone) + producer backpressure (typed 503
+>   sheds on saturated import/bulk-drive queues). **Deferred (infra + Phase-4-metrics-in-prod
+>   gated):** ECS/KEDA autoscaling on depth+age, priority fleets, per-tenant WFQ fairness caps.
+> - **Phase 6 (multi-region / DR)** — **not implementable in-repo** (pure infra: cross-region warm
+>   standby, regional failover); the design + runbooks live in [07](07-target-architecture.md) §9 /
+>   [09](09-reliability-fault-tolerance.md) / [13](13-operational-runbooks.md); execution is an
+>   infrastructure engagement with drills, per ADR-0024's availability target.
 >
 > **In-phase deviations (deliberate, documented):**
 > - **Outreach retry is `attempts: 2`, not 3** — the implementation-time check confirmed `sendStep`

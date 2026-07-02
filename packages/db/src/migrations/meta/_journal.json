@@ -365,6 +365,13 @@
       "when": 1784500000000,
       "tag": "0051_event_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1784600000000,
+      "tag": "0052_worker_outbox",
+      "breakpoints": true
     }
   ]
 }

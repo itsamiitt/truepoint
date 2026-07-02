@@ -2,11 +2,11 @@
 // scores row via core's computeScore; the DB trigger syncs contacts.priority_score.
 
 import { type ComputeScoreResult, computeScore } from "@leadwolf/core";
+import { SCORING_DLQ, SCORING_QUEUE } from "@leadwolf/types";
 import type { Job } from "bullmq";
 
-export const SCORING_QUEUE = "scoring";
-/** Dead-letter holding queue for scoring jobs that exhaust their retries (PII-free records). */
-export const SCORING_DLQ = "scoring-dlq";
+// Queue + DLQ names live in @leadwolf/types (workerQueues.ts — the admin probe reads them too); re-exported.
+export { SCORING_DLQ, SCORING_QUEUE };
 
 export interface ScoringJobData {
   tenantId: string;
