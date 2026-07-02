@@ -43,8 +43,14 @@ bunx drizzle-kit generate   # regenerates snapshots for 0041, 0046, 0048 (hand-w
 bun test **/*.itest.ts
 ```
 **Owner:** user (no `bun`/Docker in the agent sandbox — see memory `sandbox-no-push-creds`).
-**Migrations awaiting snapshot regen:** `0041_import_reject_histogram`, `0046_seed_reverification_flag`,
-`0048_seed_bulk_enrichment_flag`.
+**Migrations awaiting snapshot regen:** ALL hand-written migrations `0029`–`0050` (the last committed Drizzle
+snapshot is `meta/0028_snapshot.json`). This does NOT affect `drizzle-kit migrate` (journal-driven, verified
+consistent 0–50 by the 2026-07-02 audit) — only a future `drizzle-kit generate` diff needs the regen.
+**Also in this CI pass (30-second fix):** move `@leadwolf/db` from `devDependencies` → `dependencies` in
+`apps/workers/package.json` (+ `bun install` to update `bun.lock`). It's imported at runtime by `register.ts`
+and 12 sweeps; currently mitigated only because the Dockerfile installs devDeps — a `--production` install
+would break the workers. (Not editable in the agent sandbox: the lockfile can't be regenerated there, and a
+package.json/lock mismatch fails the deploy's `--frozen-lockfile`.)
 **If anything fails:** paste the output — the agent fixes it (as it did the `next build` nullable-prop break).
 
 ---
@@ -102,8 +108,20 @@ bun test **/*.itest.ts
 - **The fix (agent can do, low risk):** batch-load existing scalar values per chunk (mirror
   `getFieldProvenanceBatch`), call `markConflicts` per row, stamp `cf`. Bulk is dark anyway, so no urgency.
 
-### 2.6 Teams / RBAC (#4)  ✅ handled elsewhere
-- Being built by a concurrent workstream (`0047_teams` on `main`). No action here beyond letting it land + CI.
+### 2.6 Teams (#4)  ✅ LANDED (dark) — by a concurrent workstream
+- The full vertical slice is on `main`: migration `0047_teams`, `schema/teams.ts`, `teamRepository`,
+  `types/teams.ts`, `rls/teams.sql`, mounted at `/api/v1/teams` — dark behind `TEAMS_ENABLED`.
+- **Scope note:** it is an **org-chart, not an access boundary** (`app.ts` says so explicitly) — the original
+  #4 ask (a `scopeFor` RBAC/visibility model) is still open policy work on top of this.
+
+### 2.7 Bulk reveal — NEW workstream, half-landed (tracked here as of the 2026-07-02 audit)
+- **Landed:** the data layer — migration `0050_reveal_jobs` (`reveal_jobs` + `reveal_job_rows`),
+  `revealJobRepository`, `types/bulkReveal.ts` (`BULK_REVEAL_FLAG_KEY = "bulk_reveal_enabled"`),
+  `rls/revealJobs.sql`, env gate `BULK_REVEAL_ENABLED`.
+- **NOT built:** the API route and the queue producer/worker (env.ts's comment describes them; zero matches in
+  `apps/`). Also the `bulk_reveal_enabled` per-tenant flag has **no seed migration** (unlike its siblings
+  `0046`/`0048`) — whoever builds the API slice should seed it fail-closed then.
+- Owned by the reveal workstream — listed here so the plan reflects reality, not to claim it.
 
 ---
 
@@ -123,6 +141,12 @@ in the admin **Feature flags** page.
 | Retention (delete) | — | + class → `enforce` (Retention policies) | **legal periods + sign-off** | 🗑️ destructive |
 | Chrome capture | `CHROME_EXTENSION_ENABLED` | — | **legal** (§2.2) | ⚖️ scraping |
 | Auth enforcement | `AUTH_POLICY_ENFORCEMENT_ENABLED` | tenant Auth-enforcement toggle | — | 🔒 lockout risk |
+| Teams (org-chart) | `TEAMS_ENABLED` | — | none (dark, additive) | low |
+| Gmail inbox poll (M12 P3) | `EMAIL_INBOX_ENABLED` | — | Gmail OAuth configured | low |
+| Bulk reveal | `BULK_REVEAL_ENABLED` | `bulk_reveal_enabled` (⚠ unseeded) | **API + worker not built yet** (§2.7) | — |
+
+> The billing/ops track has its own switches (`BILLING_CHECKOUT/SUBSCRIPTIONS/APPROVALS/RECON/LEDGER_BACKFILL`,
+> `LOW_BALANCE_NOTIFIER`) — owned by that workstream, listed for completeness only.
 
 ---
 
@@ -155,7 +179,8 @@ _Do the needful in the two docs above (run the review, run the `bun add`), and t
 - **Flag keys:** `bulk_import_enabled`, `bulk_enrichment_enabled`, `retention_engine_enabled`,
   `data_health.reverification`. **Flag system:** two layers (env kill-switch + per-tenant `feature_flags`,
   dual-gate); admin control plane is generic — seed a flag and it appears. (memory: `feature-flag-control-plane`)
-- **Migrations awaiting CI snapshot regen:** `0041`, `0046`, `0048`.
+- **Migrations awaiting CI snapshot regen:** all hand-written `0029`–`0050` (last snapshot on disk = `0028`;
+  journal verified consistent 0–50 on 2026-07-02).
 - **Key files:** `apps/api/src/features/admin/dataRoutes.ts` (approval executor seam),
   `packages/core/src/storage/fileStore.ts` (FileStore port), `apps/api/src/features/import/bulkStore.ts`
   (S3 injection point), `packages/core/src/prospect/conflictDetect.ts` (conflict marker),
