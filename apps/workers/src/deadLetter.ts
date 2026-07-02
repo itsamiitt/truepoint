@@ -42,16 +42,25 @@ export function extractScope(data: unknown): {
   };
 }
 
+/** BullMQ's terminal stall failure (a job reclaimed more than maxStalledCount times — the worker process
+ *  died repeatedly mid-job). It bypasses the attempts/backoff machinery, so attemptsMade can be below the
+ *  budget when it fires; without this match a stall-exhausted job would silently skip the DLQ (plan 15 §3,
+ *  stalled/lock tuning). Message text per bullmq's scripts (v5): "job stalled more than allowable limit". */
+const STALL_EXHAUSTED = /stalled more than/i;
+
 /** Build the dead-letter record for an exhausted job, or null while retries remain (mirrors
  *  deadLetterFailedImport's guard: in the `failed` event attemptsMade already counts the attempt that just
- *  failed, and an options-less job has a budget of exactly 1). */
+ *  failed, and an options-less job has a budget of exactly 1). Stall-exhausted failures are terminal
+ *  regardless of remaining attempts, so they are dead-lettered immediately. */
 export function buildDeadLetter(
   queueName: string,
   job: Pick<Job, "id" | "name" | "data" | "opts" | "attemptsMade">,
   err: Error,
 ): WorkerDeadLetter | null {
   const maxAttempts = job.opts.attempts ?? 1;
-  if (job.attemptsMade < maxAttempts) return null; // retries remain — not dead yet
+  if (job.attemptsMade < maxAttempts && !STALL_EXHAUSTED.test(err.message)) {
+    return null; // retries remain — not dead yet
+  }
   const { tenantId, workspaceId } = extractScope(job.data);
   return {
     queue: queueName,

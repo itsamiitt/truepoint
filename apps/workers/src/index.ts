@@ -13,13 +13,27 @@ let ready = true;
 const health = startHealthServer(() => ready, WORKERS_HEALTH_PORT, redisReadinessProbe);
 log.info("workers: started", { processors: workers.length, healthPort: health.port });
 
+/** Bound the graceful drain (plan 15 §3.1): with a hung job the un-bounded close() waited forever, so
+ *  SIGTERM hung until the orchestrator SIGKILLed us. 30s comfortably exceeds a healthy in-flight job's
+ *  remaining work; a genuinely hung one is force-closed and reclaimed by another worker via the stall
+ *  machinery (lockDuration/stalledInterval in tuning.ts). */
+const DRAIN_TIMEOUT_MS = 30_000;
+
 let draining = false;
 async function shutdown(signal: string): Promise<void> {
   if (draining) return; // ignore repeated signals while a drain is already in flight
   draining = true;
   ready = false; // fail readiness so the orchestrator stops considering us live while we drain
   log.info("workers: draining", { signal });
-  await Promise.all(workers.map((w) => w.close()));
+  const drained = await Promise.race([
+    Promise.all(workers.map((w) => w.close())).then(() => true),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), DRAIN_TIMEOUT_MS)),
+  ]);
+  if (!drained) {
+    log.error("workers: drain timed out, forcing close", { timeoutMs: DRAIN_TIMEOUT_MS });
+    // close(true) abandons in-flight jobs; their locks expire and the stall machinery reclaims them.
+    await Promise.all(workers.map((w) => w.close(true))).catch(() => {});
+  }
   await health.stop(true);
   log.info("workers: drained, exiting");
   process.exit(0);

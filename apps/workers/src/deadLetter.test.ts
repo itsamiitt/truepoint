@@ -93,6 +93,15 @@ test("options-less job defaults to a budget of 1 → first failure dead-letters 
   expect(buildDeadLetter("scoring", job, new Error("boom"))).not.toBeNull();
 });
 
+test("stall-exhausted failure dead-letters immediately even with attempts remaining (Phase 1)", () => {
+  // BullMQ's terminal stall failure bypasses the attempts machinery (attemptsMade < budget when it fires);
+  // it means the worker died repeatedly mid-job — exactly the case ops must see.
+  const job = fakeJob({ attemptsMade: 1, opts: { attempts: 3 } });
+  const record = buildDeadLetter("dedup", job, new Error("job stalled more than allowable limit"));
+  expect(record).not.toBeNull();
+  expect(record?.failedReason).toContain("stalled");
+});
+
 test("handler routes exhausted jobs and skips undefined jobs", async () => {
   const sink: WorkerDeadLetter[] = [];
   const handler = makeDeadLetterHandler("dedup", fakeDlq(sink));

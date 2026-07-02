@@ -152,6 +152,8 @@ import {
   REVERIFICATION_RETRY,
   SCORING_RETRY,
 } from "./retryPolicies.ts";
+import { SWEEP_WORKER_TUNING, deadlineMs, eventTuning } from "./tuning.ts";
+import { withDeadline } from "./withDeadline.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -454,7 +456,11 @@ export function startWorkers(): Worker[] {
   const mailboxThrottle = createRedisMailboxThrottle(connection, { capacity: 10, refillPerSec: 1 });
 
   const importsWorker = instrument(
-    new Worker<ImportJobData>(IMPORTS_QUEUE, processImport, { connection }),
+    new Worker<ImportJobData>(
+      IMPORTS_QUEUE,
+      withDeadline(IMPORTS_QUEUE, deadlineMs(IMPORTS_QUEUE), processImport),
+      { connection, ...eventTuning(IMPORTS_QUEUE) },
+    ),
     IMPORTS_QUEUE,
   );
   // Import jobs that exhaust their retries are dead-lettered (PII-free) for ops triage instead of being lost.
@@ -516,60 +522,97 @@ export function startWorkers(): Worker[] {
   // can be pushed below without a generic-mismatch error. Same element type the function already returns.
   const workers: Worker[] = [
     importsWorker,
+    // Event consumers (Phase 1): each processor is deadline-bounded (a hung upstream fails the attempt into
+    // the retry→DLQ path instead of holding the lock forever) and carries explicit concurrency + lock/stall
+    // tuning (tuning.ts). The spend path (enrichment) stays serial — F3 hard gate.
     instrument(
-      new Worker<EnrichmentJobData>(ENRICHMENT_QUEUE, processEnrichment, { connection }),
+      new Worker<EnrichmentJobData>(
+        ENRICHMENT_QUEUE,
+        withDeadline(ENRICHMENT_QUEUE, deadlineMs(ENRICHMENT_QUEUE), processEnrichment),
+        { connection, ...eventTuning(ENRICHMENT_QUEUE) },
+      ),
       ENRICHMENT_QUEUE,
       enrichmentDeadLetterQueue,
     ),
     instrument(
-      new Worker<ScoringJobData>(SCORING_QUEUE, processScoring, { connection }),
+      new Worker<ScoringJobData>(
+        SCORING_QUEUE,
+        withDeadline(SCORING_QUEUE, deadlineMs(SCORING_QUEUE), processScoring),
+        { connection, ...eventTuning(SCORING_QUEUE) },
+      ),
       SCORING_QUEUE,
       scoringDeadLetterQueue,
     ),
     instrument(
-      new Worker<DsarJobData>(DSAR_QUEUE, processDsar, { connection }),
+      new Worker<DsarJobData>(
+        DSAR_QUEUE,
+        withDeadline(DSAR_QUEUE, deadlineMs(DSAR_QUEUE), processDsar),
+        { connection, ...eventTuning(DSAR_QUEUE) },
+      ),
       DSAR_QUEUE,
       dsarDeadLetterQueue,
     ),
     instrument(
       new Worker<OutreachJobData>(
         OUTREACH_QUEUE,
-        makeProcessOutreach({
-          throttle: mailboxThrottle,
-          reEnqueue: async (data, delayMs) => {
-            await enqueueOutreach(data, delayMs);
-          },
-        }),
-        { connection },
+        // Concurrency 4 parallelizes across mailboxes/tenants; the per-mailbox SEND rate is still governed
+        // by the Redis token bucket (mailboxThrottle), so warm-up ramps are unaffected.
+        withDeadline(
+          OUTREACH_QUEUE,
+          deadlineMs(OUTREACH_QUEUE),
+          makeProcessOutreach({
+            throttle: mailboxThrottle,
+            reEnqueue: async (data, delayMs) => {
+              await enqueueOutreach(data, delayMs);
+            },
+          }),
+        ),
+        { connection, ...eventTuning(OUTREACH_QUEUE) },
       ),
       OUTREACH_QUEUE,
       outreachDeadLetterQueue,
     ),
     instrument(
-      new Worker<DedupJobData>(DEDUP_QUEUE, processDedup, { connection }),
+      new Worker<DedupJobData>(
+        DEDUP_QUEUE,
+        withDeadline(DEDUP_QUEUE, deadlineMs(DEDUP_QUEUE), processDedup),
+        { connection, ...eventTuning(DEDUP_QUEUE) },
+      ),
       DEDUP_QUEUE,
       dedupDeadLetterQueue,
     ),
     instrument(
-      new Worker<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, processFirmographics, { connection }),
+      new Worker<FirmographicsJobData>(
+        FIRMOGRAPHICS_QUEUE,
+        withDeadline(FIRMOGRAPHICS_QUEUE, deadlineMs(FIRMOGRAPHICS_QUEUE), processFirmographics),
+        { connection, ...eventTuning(FIRMOGRAPHICS_QUEUE) },
+      ),
       FIRMOGRAPHICS_QUEUE,
       firmographicsDeadLetterQueue,
     ),
     // Master-link backfill consumer: per-workspace, idempotent re-resolution of NULL master_* bridges.
     instrument(
-      new Worker<MasterBackfillJobData>(MASTER_BACKFILL_QUEUE, processMasterBackfill, {
-        connection,
-      }),
+      new Worker<MasterBackfillJobData>(
+        MASTER_BACKFILL_QUEUE,
+        withDeadline(
+          MASTER_BACKFILL_QUEUE,
+          deadlineMs(MASTER_BACKFILL_QUEUE),
+          processMasterBackfill,
+        ),
+        { connection, ...eventTuning(MASTER_BACKFILL_QUEUE) },
+      ),
       MASTER_BACKFILL_QUEUE,
       masterBackfillDeadLetterQueue,
     ),
     // Master-link backfill SWEEP consumer (PLAN_07 Stage B): the leader-locked daily fan-out that enqueues a
     // per-workspace backfill for every workspace with unresolved contacts. enqueueMasterBackfill is injected.
+    // Sweeps (Phase 1): explicitly serial — leader-locked singletons by design; no deadline (their
+    // containment is the leader TTL + internal caps + the scheduled re-run).
     instrument(
       new Worker<MasterBackfillSweepJobData>(
         MASTER_BACKFILL_SWEEP_QUEUE,
         makeProcessMasterBackfillSweep(connection, enqueueMasterBackfill),
-        { connection },
+        { connection, ...SWEEP_WORKER_TUNING },
       ),
       MASTER_BACKFILL_SWEEP_QUEUE,
     ),
@@ -580,14 +623,17 @@ export function startWorkers(): Worker[] {
       new Worker<ProjectionSweepJobData>(
         PROJECTION_SWEEP_QUEUE,
         makeProcessProjectionSweep(connection),
-        { connection },
+        { connection, ...SWEEP_WORKER_TUNING },
       ),
       PROJECTION_SWEEP_QUEUE,
     ),
     // Probabilistic-ER shadow sweep (I5): proposes pending match_links for human review. Leader-locked; INERT
     // while ER_SHADOW_ENABLED is off (the processor early-returns); never auto-merges/re-points (proposals only).
     instrument(
-      new Worker<ErSweepJobData>(ER_SWEEP_QUEUE, makeProcessErSweep(connection), { connection }),
+      new Worker<ErSweepJobData>(ER_SWEEP_QUEUE, makeProcessErSweep(connection), {
+        connection,
+        ...SWEEP_WORKER_TUNING,
+      }),
       ER_SWEEP_QUEUE,
     ),
     // M12 P4: the sequence-tick consumer. Leader-locked; claims due enrollments and enqueues each onto the
@@ -605,7 +651,7 @@ export function startWorkers(): Worker[] {
             { ...OUTREACH_RETRY, jobId: `seqstep:${e.logId}:${e.currentStep + 1}` },
           );
         }),
-        { connection },
+        { connection, ...SWEEP_WORKER_TUNING },
       ),
       EMAIL_SEQUENCE_TICK_QUEUE,
     ),
@@ -614,15 +660,17 @@ export function startWorkers(): Worker[] {
       new Worker<RetentionSweepJobData>(
         RETENTION_SWEEP_QUEUE,
         makeProcessRetentionSweep(connection),
-        { connection },
+        { connection, ...SWEEP_WORKER_TUNING },
       ),
       RETENTION_SWEEP_QUEUE,
     ),
     // Freshness re-verification per-workspace consumer (ADR-0025): re-grades stale revealed contacts.
     instrument(
-      new Worker<ReverificationJobData>(REVERIFICATION_QUEUE, processReverification, {
-        connection,
-      }),
+      new Worker<ReverificationJobData>(
+        REVERIFICATION_QUEUE,
+        withDeadline(REVERIFICATION_QUEUE, deadlineMs(REVERIFICATION_QUEUE), processReverification),
+        { connection, ...eventTuning(REVERIFICATION_QUEUE) },
+      ),
       REVERIFICATION_QUEUE,
       reverificationDeadLetterQueue,
     ),
@@ -632,7 +680,7 @@ export function startWorkers(): Worker[] {
       new Worker<ReverificationSweepJobData>(
         REVERIFICATION_SWEEP_QUEUE,
         makeProcessReverificationSweep(connection, enqueueReverification),
-        { connection },
+        { connection, ...SWEEP_WORKER_TUNING },
       ),
       REVERIFICATION_SWEEP_QUEUE,
     ),
@@ -641,7 +689,7 @@ export function startWorkers(): Worker[] {
       new Worker<DataQualitySnapshotSweepJobData>(
         DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
         makeProcessDataQualitySnapshotSweep(connection),
-        { connection },
+        { connection, ...SWEEP_WORKER_TUNING },
       ),
       DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
     ),
@@ -651,7 +699,7 @@ export function startWorkers(): Worker[] {
       new Worker<DataRetentionSweepJobData>(
         DATA_RETENTION_SWEEP_QUEUE,
         makeProcessDataRetentionSweep(connection),
-        { connection },
+        { connection, ...SWEEP_WORKER_TUNING },
       ),
       DATA_RETENTION_SWEEP_QUEUE,
     ),
@@ -660,7 +708,7 @@ export function startWorkers(): Worker[] {
       new Worker<TokenRefreshJobData>(
         EMAIL_TOKEN_REFRESH_QUEUE,
         makeProcessTokenRefresh(connection),
-        { connection },
+        { connection, ...SWEEP_WORKER_TUNING },
       ),
       EMAIL_TOKEN_REFRESH_QUEUE,
     ),
@@ -709,7 +757,9 @@ export function startWorkers(): Worker[] {
             );
           },
         }),
-        { connection },
+        // Explicitly serial while dark (Phase 1): the chunked pipeline's throughput lever is chunk fan-out,
+        // and any concurrency raise is a deliberate later decision, not a default.
+        { connection, concurrency: 1 },
       ),
       BULK_IMPORTS_QUEUE,
     );
@@ -748,7 +798,9 @@ export function startWorkers(): Worker[] {
           // The chunk phase feeds these vendor adapters to enrichContact — the SAME set processEnrichment uses.
           providers: defaultProviders(),
         }),
-        { connection },
+        // SPEND PATH — explicitly serial (re-audit F3 hard gate): do not raise until the atomic daily
+        // budget breaker + per-batch credit lease land (plan 15 §7 Phase-5 entry gate; tuning.ts header).
+        { connection, concurrency: 1 },
       ),
       BULK_ENRICHMENT_QUEUE,
     );
