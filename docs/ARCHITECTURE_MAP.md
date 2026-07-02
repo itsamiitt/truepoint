@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1351 source files · 75 code-bearing domains · 21 shared areas · 46 domain-vocabulary warnings · 59
+> **1359 source files · 76 code-bearing domains · 21 shared areas · 47 domain-vocabulary warnings · 60
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
@@ -152,6 +152,11 @@ apps/                           # deployable processes (thin transport adapters)
   create/confirm · drive/chunk runner in `lease` settle-mode + finalize/release); worker `queues/bulkReveal.ts`;
   api `/reveal-jobs/*` (create · confirm-lease · cancel · pause/resume · download); web `BulkRevealJobDialog.tsx`
   (select-all → job → live progress → CSV). See `docs/planning/reveal-experience/` + ADR-0042.
+- **realtime (Phase 4, ADR-0027; dark behind `REALTIME_SSE_ENABLED`):** the domain-event transactional outbox
+  (`event_outbox` migration 0051 + `eventOutboxRepository`, appended IN the reveal tx) → the leaderless relay
+  (`apps/workers/realtimeRelay.ts`, outbox → Redis pub/sub) → the authenticated SSE gateway (`features.events`
+  api `GET /events/stream`, streamSSE, workspace-scoped) → the web `lib/eventStream` fetch-reader + shell
+  `RealtimeBridge` that reconciles balance + reveal state live. Shared contract: `@leadwolf/types/realtimeEvents`.
 
 ### B. Prospect & account data surface
 
