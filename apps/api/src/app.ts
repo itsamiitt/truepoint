@@ -23,6 +23,7 @@ import {
   templateRoutes,
 } from "./features/email/index.ts";
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
+import { eventsRoutes } from "./features/events/routes.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
 import { bulkImportRoutes, importRoutes } from "./features/import/index.ts";
@@ -58,6 +59,14 @@ export const app = new Hono();
 const CORS_PREFLIGHT_MAX_AGE = 600;
 
 app.onError(onError);
+// SSE realtime stream (reveal-experience Phase 4, ADR-0027) — registered BEFORE compress() so the long-lived
+// event stream is never buffered/broken by the compressor. Carries its own CORS (the global cors is registered
+// after this). Dark until REALTIME_SSE_ENABLED (the route 404s); authn+tenancy run inside eventsRoutes.
+app.use(
+  "/api/v1/events/*",
+  cors({ origin: [...appOrigins()], credentials: true, maxAge: CORS_PREFLIGHT_MAX_AGE }),
+);
+app.route("/api/v1/events", eventsRoutes);
 // Compress text/JSON responses (perf RC#10). Mounted first so it wraps every downstream response body; it
 // honours Accept-Encoding, skips HEAD and already-encoded responses, and only reads the response (no request
 // body), so authn/parsing are untouched. The api serves no SSE/long-poll surface, so there is no stream to
