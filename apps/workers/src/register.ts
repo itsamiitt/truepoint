@@ -4,7 +4,7 @@
 
 import { env } from "@leadwolf/config";
 import { diskFileStore, registerEmailProviders } from "@leadwolf/core";
-import { db, notificationRepository } from "@leadwolf/db";
+import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
 import { defaultProviders } from "@leadwolf/integrations";
 import {
   BULK_ENRICHMENT_DRIVE_TOPIC,
@@ -16,9 +16,15 @@ import {
 } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
-import { type WorkerDeadLetter, makeDeadLetterHandler } from "./deadLetter.ts";
+import { type WorkerDeadLetter, extractScope, makeDeadLetterHandler } from "./deadLetter.ts";
 import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
+import {
+  type QueueDepth,
+  recordCompleted,
+  recordFailed,
+  renderPromMetrics,
+} from "./metrics.ts";
 import { type OutboxRelayHandle, startOutboxRelay } from "./outboxRelay.ts";
 import {
   BILLING_RECON_SWEEP_QUEUE,
@@ -253,6 +259,88 @@ export const tokenRefreshQueue = new Queue<TokenRefreshJobData>(EMAIL_TOKEN_REFR
   connection,
 });
 
+// ── /metrics collection (worker-platform plan 15 §6 — Phase 4) ─────────────────────────────────────────────
+
+/** Bound a Redis read so a wedged connection (maxRetriesPerRequest: null buffers forever) can never hang the
+ *  /metrics scrape. Rejects on expiry; the caller's allSettled turns that into an omitted row. */
+function bounded<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("metrics read timed out")), timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+/**
+ * Gather live queue depths + the outbox relay-lag and render the Prometheus text served on GET /metrics
+ * (health.ts). Reads the module-level producer handles (every always-on queue, DLQ, and sweep). Each read is
+ * individually bounded and a failed read is OMITTED — honest-unknown, never a fabricated zero row (the
+ * systemHealthProbes contract). The per-queue completed/failed counters are fed by instrument().
+ */
+export async function collectWorkerMetricsText(): Promise<string> {
+  const specs: ReadonlyArray<{ name: string; queue: Pick<Queue, "getJobCounts"> }> = [
+    { name: IMPORTS_QUEUE, queue: importQueue },
+    { name: IMPORTS_DLQ, queue: importDeadLetterQueue },
+    { name: ENRICHMENT_QUEUE, queue: enrichmentQueue },
+    { name: ENRICHMENT_DLQ, queue: enrichmentDeadLetterQueue },
+    { name: SCORING_QUEUE, queue: scoringQueue },
+    { name: SCORING_DLQ, queue: scoringDeadLetterQueue },
+    { name: DSAR_QUEUE, queue: dsarQueue },
+    { name: DSAR_DLQ, queue: dsarDeadLetterQueue },
+    { name: OUTREACH_QUEUE, queue: outreachQueue },
+    { name: OUTREACH_DLQ, queue: outreachDeadLetterQueue },
+    { name: DEDUP_QUEUE, queue: dedupQueue },
+    { name: DEDUP_DLQ, queue: dedupDeadLetterQueue },
+    { name: FIRMOGRAPHICS_QUEUE, queue: firmographicsQueue },
+    { name: FIRMOGRAPHICS_DLQ, queue: firmographicsDeadLetterQueue },
+    { name: MASTER_BACKFILL_QUEUE, queue: masterBackfillQueue },
+    { name: MASTER_BACKFILL_DLQ, queue: masterBackfillDeadLetterQueue },
+    { name: REVERIFICATION_QUEUE, queue: reverificationQueue },
+    { name: REVERIFICATION_DLQ, queue: reverificationDeadLetterQueue },
+    // Sweeps: depth is ~1 repeatable by design, but the failed count + reachability matter.
+    { name: MASTER_BACKFILL_SWEEP_QUEUE, queue: masterBackfillSweepQueue },
+    { name: PROJECTION_SWEEP_QUEUE, queue: projectionSweepQueue },
+    { name: ER_SWEEP_QUEUE, queue: erSweepQueue },
+    { name: EMAIL_SEQUENCE_TICK_QUEUE, queue: sequenceTickQueue },
+    { name: RETENTION_SWEEP_QUEUE, queue: retentionSweepQueue },
+    { name: REVERIFICATION_SWEEP_QUEUE, queue: reverificationSweepQueue },
+    { name: DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE, queue: dataQualitySnapshotSweepQueue },
+    { name: DATA_RETENTION_SWEEP_QUEUE, queue: dataRetentionSweepQueue },
+    { name: EMAIL_TOKEN_REFRESH_QUEUE, queue: tokenRefreshQueue },
+  ];
+
+  const settled = await Promise.allSettled(
+    specs.map(async (s) => {
+      const counts = await bounded(
+        s.queue.getJobCounts("waiting", "active", "failed", "delayed"),
+        1_500,
+      );
+      return {
+        queue: s.name,
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        failed: counts.failed ?? 0,
+        delayed: counts.delayed ?? 0,
+      } satisfies QueueDepth;
+    }),
+  );
+  const depths = settled
+    .filter((r): r is PromiseFulfilledResult<QueueDepth> => r.status === "fulfilled")
+    .map((r) => r.value);
+
+  // Relay lag (re-audit F1): the outbox's oldest unpublished row. A DB blip reads as null (omitted gauge).
+  const outboxOldestPendingSeconds = await bounded(
+    outboxRepository.oldestPendingAgeSeconds(),
+    1_500,
+  ).catch(() => null);
+
+  return renderPromMetrics({ depths, outboxOldestPendingSeconds });
+}
+
 // ── Dead-letter holding queues (worker-platform plan 15 §2.2, item 0.2) ────────────────────────────────────
 // One per retryable event queue, mirroring importDeadLetterQueue above: a job that exhausts its retry budget
 // is recorded as a PII-FREE record (deadLetter.ts — scope + provenance + reason, never the payload) for ops
@@ -444,23 +532,29 @@ export async function stopBackgroundRelays(): Promise<void> {
   await relay?.stop();
 }
 
-/** Attach structured completed/failed logging to a worker (per-queue observability), plus — when a dead-letter
- *  queue is provided (0.2) — routing of retry-exhausted jobs onto it as PII-free records (deadLetter.ts).
- *  Never logs payloads. */
+/** Attach structured completed/failed logging + metrics counters to a worker (per-queue observability), plus
+ *  — when a dead-letter queue is provided (0.2) — routing of retry-exhausted jobs onto it as PII-free records
+ *  (deadLetter.ts). Log lines carry the tenant/workspace scope when the payload exposes it (Phase 4, doc 19
+ *  §1 tenant tags — UUIDs only via extractScope, never payload fields). Never logs payloads. */
 function instrument<T = unknown>(
   worker: Worker<T>,
   queue: string,
   deadLetterQueue?: Queue<WorkerDeadLetter>,
 ): Worker<T> {
-  worker.on("completed", (job) => log.info("job completed", { queue, jobId: job.id }));
-  worker.on("failed", (job, err) =>
+  worker.on("completed", (job) => {
+    recordCompleted(queue);
+    log.info("job completed", { queue, jobId: job.id, ...extractScope(job.data) });
+  });
+  worker.on("failed", (job, err) => {
+    recordFailed(queue);
     log.error("job failed", {
       queue,
       jobId: job?.id,
       attemptsMade: job?.attemptsMade,
       error: err.message,
-    }),
-  );
+      ...extractScope(job?.data),
+    });
+  });
   if (deadLetterQueue) worker.on("failed", makeDeadLetterHandler<T>(queue, deadLetterQueue));
   return worker;
 }

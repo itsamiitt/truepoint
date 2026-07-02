@@ -4,12 +4,12 @@
 
 import { type EnrichContactResult, enrichContact } from "@leadwolf/core";
 import { defaultProviders } from "@leadwolf/integrations";
-import type { EnrichField } from "@leadwolf/types";
+import { ENRICHMENT_DLQ, ENRICHMENT_QUEUE, type EnrichField } from "@leadwolf/types";
 import type { Job } from "bullmq";
 
-export const ENRICHMENT_QUEUE = "enrichment";
-/** Dead-letter holding queue for enrichment jobs that exhaust their retries (PII-free records). */
-export const ENRICHMENT_DLQ = "enrichment-dlq";
+// Queue + DLQ names live in @leadwolf/types (workerQueues.ts — the admin probe reads them too) and are
+// RE-EXPORTED here so register.ts keeps importing them from this module unchanged (reverification precedent).
+export { ENRICHMENT_DLQ, ENRICHMENT_QUEUE };
 
 export interface EnrichmentJobData {
   tenantId: string;

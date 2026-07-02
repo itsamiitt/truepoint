@@ -5,13 +5,25 @@
 import { envSurfaceReport } from "@leadwolf/config";
 import { WORKERS_HEALTH_PORT, startHealthServer } from "./health.ts";
 import { log } from "./logger.ts";
-import { redisReadinessProbe, startWorkers, stopBackgroundRelays } from "./register.ts";
+import {
+  collectWorkerMetricsText,
+  redisReadinessProbe,
+  startWorkers,
+  stopBackgroundRelays,
+} from "./register.ts";
 
 const workers = startWorkers();
 let ready = true;
 // /ready = booted AND not draining AND (0.3/F14) Redis reachable — via the bounded PING with a
 // consecutive-failure threshold, so a wedged Redis fails readiness but a blip doesn't flap the fleet.
-const health = startHealthServer(() => ready, WORKERS_HEALTH_PORT, redisReadinessProbe);
+// /metrics (Phase 4) serves the zero-dep Prometheus text: per-queue counters + depths + outbox relay lag.
+const health = startHealthServer(
+  () => ready,
+  WORKERS_HEALTH_PORT,
+  redisReadinessProbe,
+  undefined, // failure threshold: keep the F14 default
+  collectWorkerMetricsText,
+);
 // Boot self-test (plan 15 §4.1): make "did the worker boot, and with what env surface?" answerable at a
 // glance. relaxedMissing lists web/auth-only keys absent under LEADWOLF_SURFACE=worker (access-guarded).
 log.info("workers: started", {

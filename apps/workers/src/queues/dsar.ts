@@ -2,12 +2,12 @@
 // VERIFIED request. Enqueued by the staff workflow (apps/admin later); never by an unverified intake.
 
 import { assembleAccessReport, deleteFanout } from "@leadwolf/core";
+import { DSAR_DLQ, DSAR_QUEUE } from "@leadwolf/types";
 import type { Job } from "bullmq";
 
-export const DSAR_QUEUE = "dsar";
-/** Dead-letter holding queue for DSAR jobs that exhaust their retries. PII-free: the record must NEVER carry
- *  subjectEmail (see the DsarJobData comment) — deadLetter.ts records scope/provenance/reason only. */
-export const DSAR_DLQ = "dsar-dlq";
+// Queue + DLQ names live in @leadwolf/types (workerQueues.ts — the admin probe reads them too); re-exported.
+// DLQ records stay PII-free: NEVER subjectEmail (see DsarJobData) — deadLetter.ts records scope/reason only.
+export { DSAR_DLQ, DSAR_QUEUE };
 
 export interface DsarJobData {
   requestId: string;

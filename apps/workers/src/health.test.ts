@@ -79,3 +79,41 @@ test("probe: draining wins — /ready is 503 for a drain regardless of probe sta
 test("default threshold is 3 (documented restraint)", () => {
   expect(DEFAULT_PROBE_FAILURE_THRESHOLD).toBe(3);
 });
+
+test("/metrics serves the provider's Prometheus text with the exposition content-type (Phase 4)", async () => {
+  const s = startHealthServer(
+    () => true,
+    0,
+    undefined,
+    undefined,
+    () => Promise.resolve('leadwolf_worker_jobs_completed_total{queue="imports"} 1\n'),
+  );
+  try {
+    const r = await fetch(`http://localhost:${s.port}/metrics`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("content-type")).toContain("text/plain");
+    expect(await r.text()).toContain("leadwolf_worker_jobs_completed_total");
+  } finally {
+    s.stop(true);
+  }
+});
+
+test("/metrics without a provider stays 404; a throwing provider answers 503 (never crashes)", async () => {
+  const bare = startHealthServer(() => true, 0);
+  const broken = startHealthServer(
+    () => true,
+    0,
+    undefined,
+    undefined,
+    () => Promise.reject(new Error("redis wedged")),
+  );
+  try {
+    expect((await fetch(`http://localhost:${bare.port}/metrics`)).status).toBe(404);
+    expect((await fetch(`http://localhost:${broken.port}/metrics`)).status).toBe(503);
+    // Liveness/readiness are unaffected by a broken metrics path.
+    expect((await fetch(`http://localhost:${broken.port}/health`)).status).toBe(200);
+  } finally {
+    bare.stop(true);
+    broken.stop(true);
+  }
+});

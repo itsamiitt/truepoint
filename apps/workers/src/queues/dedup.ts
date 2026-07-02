@@ -4,11 +4,11 @@
 // re-run is always safe.
 
 import { type RunDedupResult, runDedup } from "@leadwolf/core";
+import { DEDUP_DLQ, DEDUP_QUEUE } from "@leadwolf/types";
 import type { Job } from "bullmq";
 
-export const DEDUP_QUEUE = "dedup";
-/** Dead-letter holding queue for dedup jobs that exhaust their retries (PII-free records). */
-export const DEDUP_DLQ = "dedup-dlq";
+// Queue + DLQ names live in @leadwolf/types (workerQueues.ts — the admin probe reads them too); re-exported.
+export { DEDUP_DLQ, DEDUP_QUEUE };
 
 export interface DedupJobData {
   tenantId: string;

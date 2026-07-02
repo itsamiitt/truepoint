@@ -17,13 +17,13 @@ import {
   sendStep,
 } from "@leadwolf/core";
 import { withTenantTx } from "@leadwolf/db";
+import { OUTREACH_DLQ, OUTREACH_QUEUE } from "@leadwolf/types";
 import type { Job } from "bullmq";
 import { log } from "../logger.ts";
 
-export const OUTREACH_QUEUE = "outreach";
-/** Dead-letter holding queue for outreach sends that exhaust their retries (PII-free records). A throttle
- *  deferral is a re-enqueue, never a failure, so it can never land here. */
-export const OUTREACH_DLQ = "outreach-dlq";
+// Queue + DLQ names live in @leadwolf/types (workerQueues.ts — the admin probe reads them too); re-exported.
+// A throttle deferral is a re-enqueue, never a failure, so it can never land in the DLQ.
+export { OUTREACH_DLQ, OUTREACH_QUEUE };
 
 export interface OutreachJobData {
   tenantId: string;

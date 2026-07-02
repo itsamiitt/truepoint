@@ -1,16 +1,41 @@
-// systemHealthProbes.ts — the live BullMQ probe aggregator behind GET /admin/system-health (plan B2). The api
-// owns the three queue PRODUCER singletons, so it can read their REAL depth/DLQ + connected-worker counts off
-// Redis directly (CLIENT LIST via getWorkers) instead of inferring them from a DB tally. Each per-queue
+// systemHealthProbes.ts — the live BullMQ probe aggregator behind GET /admin/system-health (plan B2). It
+// reads REAL depth/DLQ + connected-worker counts off Redis directly (CLIENT LIST via getWorkers) instead of
+// inferring them from a DB tally — via the three feature-owned producer singletons plus the generic bounded
+// probe (queueProbes.ts) for every other event queue + DLQ (Phase 4 coverage). Each per-queue
 // accessor is bounded by its own ~1.5s timeout and THROWS on timeout/Redis error; here we fan them out with
 // Promise.allSettled so one dead queue never sinks the others and the whole probe is non-blocking + total —
 // it always resolves, never rejects, so the route can never hang or 500 on it. We do NOT fabricate green
 // checks: a queue that fails to answer is reported reachable:false with null counts (not a zeroed reading),
 // and worker/redis status is derived only from queues that actually answered.
 
-import { BULK_IMPORTS_QUEUE, IMPORTS_QUEUE, REVERIFICATION_QUEUE } from "@leadwolf/types";
+import {
+  BULK_ENRICHMENT_DLQ,
+  BULK_ENRICHMENT_QUEUE,
+  BULK_IMPORTS_DLQ,
+  BULK_IMPORTS_QUEUE,
+  DEDUP_DLQ,
+  DEDUP_QUEUE,
+  DSAR_DLQ,
+  DSAR_QUEUE,
+  ENRICHMENT_DLQ,
+  ENRICHMENT_QUEUE,
+  FIRMOGRAPHICS_DLQ,
+  FIRMOGRAPHICS_QUEUE,
+  IMPORTS_DLQ,
+  IMPORTS_QUEUE,
+  MASTER_BACKFILL_DLQ,
+  MASTER_BACKFILL_QUEUE,
+  OUTREACH_DLQ,
+  OUTREACH_QUEUE,
+  REVERIFICATION_DLQ,
+  REVERIFICATION_QUEUE,
+  SCORING_DLQ,
+  SCORING_QUEUE,
+} from "@leadwolf/types";
 import { reverificationQueueHealth } from "../home/reverificationQueue.ts";
 import { bulkQueueHealth } from "../import/bulkQueue.ts";
 import { importQueueHealth } from "../import/queue.ts";
+import { genericQueueHealth } from "./queueProbes.ts";
 
 /** Per-queue live reading. Counts are null (NOT 0) when the queue was unreachable — an honest "unknown",
  *  never a fabricated empty queue. Consumers must check `reachable` before trusting the numbers. */
@@ -51,13 +76,40 @@ export function deriveServiceHealth(queues: QueueReport[]): {
 }
 
 // Pair each accessor with its known queue name so an unreachable (rejected) probe can still be named.
+// Phase 4 (worker-platform plan 15 §6): coverage extended from 3 queues to EVERY always-on event queue and
+// every dead-letter queue — a growing DLQ is the primary "jobs are being lost" ops signal (doc 19 §9.3), and
+// before this the admin surface was blind to 22 of 25 queues. The three feature-owned accessors keep probing
+// their own lazy producer singletons; the rest go through the generic bounded probe (queueProbes.ts).
+// Leader-locked sweep queues are deliberately not probed here: their depth is ~1 repeatable by design, and
+// the workers' own /metrics endpoint covers their liveness via completed/failed counters.
 const SPECS = [
   { name: IMPORTS_QUEUE, probe: importQueueHealth },
   { name: BULK_IMPORTS_QUEUE, probe: bulkQueueHealth },
   { name: REVERIFICATION_QUEUE, probe: reverificationQueueHealth },
+  // Event queues with no api-side producer (worker-consumed; names shared via @leadwolf/types).
+  { name: ENRICHMENT_QUEUE, probe: () => genericQueueHealth(ENRICHMENT_QUEUE) },
+  { name: SCORING_QUEUE, probe: () => genericQueueHealth(SCORING_QUEUE) },
+  { name: DSAR_QUEUE, probe: () => genericQueueHealth(DSAR_QUEUE) },
+  { name: OUTREACH_QUEUE, probe: () => genericQueueHealth(OUTREACH_QUEUE) },
+  { name: DEDUP_QUEUE, probe: () => genericQueueHealth(DEDUP_QUEUE) },
+  { name: FIRMOGRAPHICS_QUEUE, probe: () => genericQueueHealth(FIRMOGRAPHICS_QUEUE) },
+  { name: MASTER_BACKFILL_QUEUE, probe: () => genericQueueHealth(MASTER_BACKFILL_QUEUE) },
+  { name: BULK_ENRICHMENT_QUEUE, probe: () => genericQueueHealth(BULK_ENRICHMENT_QUEUE) },
+  // Dead-letter queues: depth = `waiting` (nothing consumes a DLQ — records wait for redrive).
+  { name: IMPORTS_DLQ, probe: () => genericQueueHealth(IMPORTS_DLQ) },
+  { name: BULK_IMPORTS_DLQ, probe: () => genericQueueHealth(BULK_IMPORTS_DLQ) },
+  { name: BULK_ENRICHMENT_DLQ, probe: () => genericQueueHealth(BULK_ENRICHMENT_DLQ) },
+  { name: REVERIFICATION_DLQ, probe: () => genericQueueHealth(REVERIFICATION_DLQ) },
+  { name: ENRICHMENT_DLQ, probe: () => genericQueueHealth(ENRICHMENT_DLQ) },
+  { name: SCORING_DLQ, probe: () => genericQueueHealth(SCORING_DLQ) },
+  { name: DSAR_DLQ, probe: () => genericQueueHealth(DSAR_DLQ) },
+  { name: OUTREACH_DLQ, probe: () => genericQueueHealth(OUTREACH_DLQ) },
+  { name: DEDUP_DLQ, probe: () => genericQueueHealth(DEDUP_DLQ) },
+  { name: FIRMOGRAPHICS_DLQ, probe: () => genericQueueHealth(FIRMOGRAPHICS_DLQ) },
+  { name: MASTER_BACKFILL_DLQ, probe: () => genericQueueHealth(MASTER_BACKFILL_DLQ) },
 ] as const;
 
-/** Fan out the three bounded queue probes and derive redis/workers/per-queue health. Always resolves
+/** Fan out the bounded queue probes and derive redis/workers/per-queue health. Always resolves
  *  (allSettled): a total Redis outage yields redis:"down", workers:"unknown", and every queue reachable:false
  *  — no throw, no hang. Worker liveness uses ANY-queue-has-a-worker, not a SUM, so one worker process serving
  *  several queues is not double-counted into a false "many workers" signal. */

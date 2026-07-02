@@ -15,6 +15,7 @@ export * from "./platformAudit.ts";
 export * from "./intel.ts";
 export * from "./dataHealth.ts";
 export * from "./reverification.ts";
+export * from "./workerQueues.ts";
 export * from "./enrichmentPolicy.ts";
 export * from "./compliance.ts";
 export * from "./retention.ts";
