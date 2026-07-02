@@ -94,8 +94,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1347,
-  "fileSetHash": "sha256:44c1a2d1d48fd98843f13c18fc9b91755ead866f345139908bcb809e3ba03e0b",
+  "fileCount": 1351,
+  "fileSetHash": "sha256:22e407803971a00979a95a39789586e2f2f855a092404704e202ff23cbea4f13",
   "features": {
     "account-search": {
       "web": [],
@@ -982,6 +982,7 @@
         "apps/web/src/features/prospect/components/AiSearchBox.tsx",
         "apps/web/src/features/prospect/components/BulkActionBar.tsx",
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
+        "apps/web/src/features/prospect/components/BulkRevealJobDialog.tsx",
         "apps/web/src/features/prospect/components/CopyButton.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
         "apps/web/src/features/prospect/components/FilterPanel.tsx",
@@ -1018,6 +1019,7 @@
         "apps/web/src/features/prospect/hooks/useRecentSearches.test.ts",
         "apps/web/src/features/prospect/hooks/useRecentSearches.ts",
         "apps/web/src/features/prospect/hooks/useReveal.ts",
+        "apps/web/src/features/prospect/hooks/useRevealJob.ts",
         "apps/web/src/features/prospect/hooks/useRevealStore.tsx",
         "apps/web/src/features/prospect/hooks/useRevealedContact.ts",
         "apps/web/src/features/prospect/hooks/useSavedSearches.ts",
@@ -1146,6 +1148,7 @@
       "web": [],
       "admin": [],
       "api": [
+        "apps/api/src/features/reveal/bulkRevealQueue.ts",
         "apps/api/src/features/reveal/index.ts",
         "apps/api/src/features/reveal/routes.ts"
       ],
@@ -2237,6 +2240,7 @@
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/bulkEnrichment.ts",
+    "apps/workers/src/queues/bulkReveal.ts",
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/erSweep.ts",
     "apps/workers/src/queues/firmographics.ts",

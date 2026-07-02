@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1328 source files · 75 code-bearing domains · 21 shared areas · 46 domain-vocabulary warnings · 57
+> **1351 source files · 75 code-bearing domains · 21 shared areas · 46 domain-vocabulary warnings · 59
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
@@ -132,7 +132,7 @@ apps/                           # deployable processes (thin transport adapters)
   `verificationJobRepository` record/listRecent; migration 0022) — written by `runReverification` (PLAN_06);
   `data_quality_snapshots` (the Data Health TREND store — `dataQualitySnapshotRepository`; migration 0023)
 
-#### reveal — *M1 masked reads + M3 money loop + no-charge revealed reads + in-list reveal* ([07 §3](./planning/07-billing-credits.md), ADR-0007/0013)
+#### reveal — *M1 masked reads + M3 money loop + no-charge revealed reads + in-list reveal + async bulk* ([07 §3](./planning/07-billing-credits.md), ADR-0007/0013/0029)
 - **core:** `reveal/revealContact.ts` — the monetized tx: in-tx suppression gate → cross-`reveal_type` dedup
   (`revealCharge.ts` — charge only the NEWLY-uncovered field(s)) → idempotent claim (unique
   `(workspace, contact, reveal_type)`) → `FOR UPDATE` charge against `tenants.reveal_credit_balance` → same-tx
@@ -146,6 +146,12 @@ apps/                           # deployable processes (thin transport adapters)
 - **web (prospect):** `RevealCell.tsx` in-grid reveal (value + copy + badge, or a cost-labelled reveal button) +
   `useRevealStore.tsx` (optimistic single source of truth) + `useRevealedContact.ts` / `CopyButton.tsx` in the
   detail drawer
+- **async bulk (Phase 3, ADR-0029/0036; dark behind `BULK_REVEAL_ENABLED`):** `reveal_jobs`/`reveal_job_rows`
+  (migration 0050) + `revealJobRepository` + credit `leaseForJob`/`releaseForJob` (recon-safe
+  lease→settle→release; pure `leaseAccounting.computeReleaseSplit`); core `reveal/bulk/*` (estimate ·
+  create/confirm · drive/chunk runner in `lease` settle-mode + finalize/release); worker `queues/bulkReveal.ts`;
+  api `/reveal-jobs/*` (create · confirm-lease · cancel · pause/resume · download); web `BulkRevealJobDialog.tsx`
+  (select-all → job → live progress → CSV). See `docs/planning/reveal-experience/` + ADR-0042.
 
 ### B. Prospect & account data surface
 
