@@ -138,13 +138,15 @@ in the admin **Feature flags** page.
 
 ---
 
-## 5. Prep the agent can do NOW (no gate)
+## 5. Prep — DONE (ready for you to act on)
 
-- **Dedup-merge design + threat model** — the reviewable spec your security review reads; de-risks §2.1.
-- **S3 adapter code + `package.json` dep entry** — you'd just run `bun install` to lock it + drop in bucket creds (§2.3).
-- **Bulk-path conflict detection** (§2.5) — safe, additive, batched.
+- ✅ **Dedup-merge design + threat model** → [`dedup-merge-design.md`](./dedup-merge-design.md). Hand this to
+  security; it ends with the exact decisions/checklist they sign off. Once signed → agent builds §2.1.
+- ✅ **S3 adapter — full code + setup** → [`s3-filestore-setup.md`](./s3-filestore-setup.md). §1 is the
+  `bun add` + env "needful"; §2–§4 are the ready-to-commit files the agent lands after your `bun.lock` is updated.
+- ⏳ **Bulk-path conflict detection** (§2.5) — safe/additive/batched; agent can do anytime. Just ask.
 
-_Ask for any of these and they'll be built + committed to the feature branch._
+_Do the needful in the two docs above (run the review, run the `bun add`), and the agent starts implementing._
 
 ---
 
