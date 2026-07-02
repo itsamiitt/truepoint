@@ -160,6 +160,7 @@ import {
   type TokenRefreshJobData,
   makeProcessTokenRefresh,
 } from "./queues/tokenRefresh.ts";
+import { startRealtimeRelay } from "./realtimeRelay.ts";
 import {
   DSAR_RETRY,
   ENRICHMENT_RETRY,
@@ -873,6 +874,12 @@ export function startWorkers(): Worker[] {
       );
     });
     workers.push(bulkRevealWorker);
+  }
+  // Realtime relay (reveal-experience Phase 4, ADR-0027) — DARK by default (REALTIME_SSE_ENABLED=false). Drains
+  // the event_outbox → Redis pub/sub for the SSE gateway. Leaderless (FOR UPDATE SKIP LOCKED); a self-scheduling
+  // `.unref()`-ed loop that never blocks shutdown. Not a BullMQ Worker, so it isn't pushed to `workers`.
+  if (env.REALTIME_SSE_ENABLED) {
+    startRealtimeRelay(new IORedis(env.REDIS_URL));
   }
   // Low-balance notifier sweep (plans-pricing-credits) — DARK by default (LOW_BALANCE_NOTIFIER_ENABLED=false).
   // Purely additive: when off, the queue/worker/schedule are never constructed and nothing is scanned. READ-ONLY
