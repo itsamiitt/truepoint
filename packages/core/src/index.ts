@@ -97,6 +97,7 @@ export {
   REVEAL_CHUNK_ROWS,
   type RunBulkRevealDriveInput,
   type BulkProcessRevealChunkInput,
+  type EnqueueRevealChunk,
 } from "./reveal/bulk/runBulkReveal.ts";
 export {
   projectRevealEstimate,

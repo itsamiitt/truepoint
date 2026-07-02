@@ -18,11 +18,17 @@ type WsScope = TenantScope & { workspaceId: string };
 /** Contacts per chunk. Reveals are per-contact network verifies, so bands are smaller than bulk-enrich's 2000. */
 export const REVEAL_CHUNK_ROWS = 500;
 
+/** Enqueue one `chunk` job (injected so core never imports BullMQ). The drive passes its own jobId + scope. */
+export type EnqueueRevealChunk = (
+  jobId: string,
+  scope: WsScope,
+  band: { rowStart: number; rowEnd: number },
+) => Promise<void>;
+
 export interface RunBulkRevealDriveInput {
   scope: WsScope;
   jobId: string;
-  /** Injected so core never imports BullMQ. Enqueues one chunk per band. */
-  enqueueChunk: (band: { rowStart: number; rowEnd: number }) => Promise<void>;
+  enqueueChunk: EnqueueRevealChunk;
 }
 
 /** Plan + enqueue the chunk bands (or finalize immediately for a zero-row job). Runs only for `running` jobs. */
@@ -43,7 +49,7 @@ export async function runBulkRevealDrive(
   }
   let bands = 0;
   for (let start = 0; start < total; start += REVEAL_CHUNK_ROWS) {
-    await input.enqueueChunk({
+    await input.enqueueChunk(input.jobId, input.scope, {
       rowStart: start,
       rowEnd: Math.min(start + REVEAL_CHUNK_ROWS, total),
     });

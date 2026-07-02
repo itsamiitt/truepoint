@@ -3,7 +3,10 @@
 // scope comes from the verified token (never the body), the Idempotency-Key replay sits in middleware, and
 // masking + RLS + the credit invariants live in the core/db layers.
 
+import { env } from "@leadwolf/config";
 import {
+  confirmRevealJob,
+  createRevealJob,
   defaultEmailVerifier,
   defaultPhoneVerifier,
   editContactFields,
@@ -11,11 +14,22 @@ import {
   getRevealedContactsBatch,
   revealContact,
 } from "@leadwolf/core";
-import { contactRepository } from "@leadwolf/db";
 import {
+  type RevealJobRecord,
+  contactRepository,
+  creditRepository,
+  revealJobRepository,
+  searchRepository,
+  withTenantTx,
+} from "@leadwolf/db";
+import {
+  BULK_SELECTION_CAP,
   ForbiddenError,
+  InsufficientCreditsError,
   NotFoundError,
+  type RevealJobSummary,
   ValidationError,
+  bulkRevealCreateSchema,
   contactFieldEditSchema,
   revealRequestSchema,
   revealedBatchRequestSchema,
@@ -26,6 +40,29 @@ import { idempotency } from "../../middleware/idempotency.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
 import { revealRateLimit } from "../../middleware/revealRateLimit.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
+import { bulkFileStore } from "../import/bulkStore.ts";
+import { enqueueBulkRevealDrive } from "./bulkRevealQueue.ts";
+
+/** Map a control-row record to the PII-free customer status DTO (the reveal-jobs UI polls this). */
+function toRevealJobSummary(job: RevealJobRecord): RevealJobSummary {
+  return {
+    id: job.id,
+    revealType: job.revealType as RevealJobSummary["revealType"],
+    status: job.status as RevealJobSummary["status"],
+    totalContacts: job.totalContacts,
+    processedContacts: job.processedContacts,
+    revealedContacts: job.revealedContacts,
+    alreadyOwnedContacts: job.alreadyOwnedContacts,
+    suppressedContacts: job.suppressedContacts,
+    failedContacts: job.failedContacts,
+    creditEstimate: job.creditEstimate,
+    creditSpent: job.creditSpent,
+    resultReady: job.status === "completed" && job.resultKey !== null,
+    createdAt: job.createdAt.toISOString(),
+    startedAt: job.startedAt?.toISOString() ?? null,
+    completedAt: job.completedAt?.toISOString() ?? null,
+  };
+}
 
 export const revealRoutes = new Hono<{ Variables: RoleVariables }>();
 
@@ -110,6 +147,183 @@ revealRoutes.post("/revealed/batch", async (c) => {
   );
   return c.json({ revealed }, 200);
 });
+
+// ── Async bulk-reveal jobs (reveal-experience Phase 3, ADR-0029/0036) ────────────────────────────────────
+// Create → confirm(lease) → drive/chunk on a worker → finalize(release). Spends NOTHING until the confirm gate
+// (member+, env.BULK_REVEAL_ENABLED). Distinct path segment (/reveal-jobs) — no collision with /:id/reveal.
+
+/** Create a job over an explicit selection OR a select-all-matching query (resolved to visible ids here). Only
+ *  arms the confirm gate — no credit moves. Returns the worst-case estimate + whether the balance covers it. */
+revealRoutes.post("/reveal-jobs", requireRole("owner", "admin", "member"), async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace before revealing.");
+  const parsed = bulkRevealCreateSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success)
+    throw new ValidationError("Body must be { revealType, contactIds | criteria }.");
+  const scope = { tenantId: c.get("tenantId"), workspaceId };
+
+  // Select-all-matching → materialize the visible ids server-side (capped). This is what makes bulk reveal work
+  // across an entire search result, which the synchronous client loop could not.
+  const contactIds = parsed.data.criteria
+    ? await withTenantTx(scope, (tx) =>
+        searchRepository.resolveVisibleIds(tx, parsed.data.criteria!, BULK_SELECTION_CAP),
+      )
+    : (parsed.data.contactIds ?? []);
+  if (contactIds.length === 0) throw new ValidationError("No contacts match the selection.");
+
+  const created = await createRevealJob({
+    scope,
+    revealType: parsed.data.revealType,
+    contactIds,
+    createdByUserId: c.get("claims").sub,
+    idempotencyKey: c.req.header("Idempotency-Key") ?? null,
+  });
+  const balance = await creditRepository.getBalance(scope);
+  const max = created.estimate.projectedMaxCredits;
+  return c.json(
+    {
+      jobId: created.jobId,
+      revealType: parsed.data.revealType,
+      totalContacts: created.estimate.totalContacts,
+      billableContacts: created.estimate.billableContacts,
+      alreadyOwnedContacts: created.estimate.alreadyOwnedContacts,
+      projectedMaxCredits: max,
+      balance,
+      balanceAfter: Math.max(0, balance - max),
+      sufficient: balance >= max,
+    },
+    created.created ? 201 : 200,
+  );
+});
+
+/** List this workspace's reveal jobs (status polling). Any member may read. */
+revealRoutes.get("/reveal-jobs", requireRole("owner", "admin", "member", "viewer"), async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+  const jobs = await revealJobRepository.listJobsByWorkspace({
+    tenantId: c.get("tenantId"),
+    workspaceId,
+  });
+  return c.json({ jobs: jobs.map(toRevealJobSummary) });
+});
+
+/** One job's status. */
+revealRoutes.get(
+  "/reveal-jobs/:jobId",
+  requireRole("owner", "admin", "member", "viewer"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const job = await revealJobRepository.getJob(
+      { tenantId: c.get("tenantId"), workspaceId },
+      c.req.param("jobId"),
+    );
+    if (!job) throw new NotFoundError("Reveal job not found in this workspace.");
+    return c.json(toRevealJobSummary(job));
+  },
+);
+
+/** The failed contact ids — the frontend "retry failed" re-submits them as a NEW job (clean lease cycle). */
+revealRoutes.get(
+  "/reveal-jobs/:jobId/failed",
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const contactIds = await revealJobRepository.listFailedContactIds(
+      { tenantId: c.get("tenantId"), workspaceId },
+      c.req.param("jobId"),
+    );
+    return c.json({ contactIds });
+  },
+);
+
+/** Signed download URL for the revealed CSV (terminal jobs only). */
+revealRoutes.get(
+  "/reveal-jobs/:jobId/download",
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const job = await revealJobRepository.getJob(
+      { tenantId: c.get("tenantId"), workspaceId },
+      c.req.param("jobId"),
+    );
+    if (!job || !job.resultKey)
+      throw new NotFoundError("No revealed export is ready for this job.");
+    const downloadUrl = await bulkFileStore().getSignedDownloadUrl(job.resultKey);
+    return c.json({ downloadUrl });
+  },
+);
+
+/** The MONEY GATE: lease the worst-case ceiling + flip awaiting_confirmation → running, then enqueue the drive.
+ *  Dark until BULK_REVEAL_ENABLED (defense in depth on top of the producer's own gate). */
+revealRoutes.post(
+  "/reveal-jobs/:jobId/confirm",
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    if (!env.BULK_REVEAL_ENABLED)
+      throw new ForbiddenError("feature_disabled", "Bulk reveal is not enabled.");
+    const scope = { tenantId: c.get("tenantId"), workspaceId };
+    const jobId = c.req.param("jobId");
+    const res = await confirmRevealJob(scope, jobId, c.get("claims").sub);
+    if (res.result === "insufficient")
+      throw new InsufficientCreditsError(res.balance, res.required);
+    if (res.result === "not_awaiting")
+      return c.json({ code: "not_awaiting", detail: "Job is not awaiting confirmation." }, 409);
+    await enqueueBulkRevealDrive({ kind: "drive", jobId, scope });
+    return c.json({ ok: true, status: "running" });
+  },
+);
+
+/** Cancel a non-terminal job + release the unspent lease remainder. */
+revealRoutes.post(
+  "/reveal-jobs/:jobId/cancel",
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const ok = await revealJobRepository.cancelAndRelease(
+      { tenantId: c.get("tenantId"), workspaceId },
+      c.req.param("jobId"),
+      c.get("claims").sub,
+    );
+    return c.json({ ok, status: ok ? "cancelled" : "unchanged" });
+  },
+);
+
+/** Pause a running job (chunks stop at the next status re-check; the lease is retained for resume). */
+revealRoutes.post(
+  "/reveal-jobs/:jobId/pause",
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const ok = await revealJobRepository.pauseRunning(
+      { tenantId: c.get("tenantId"), workspaceId },
+      c.req.param("jobId"),
+    );
+    return c.json({ ok, status: ok ? "paused" : "unchanged" });
+  },
+);
+
+/** Resume a paused job + re-enqueue the drive (it re-plans the still-queued rows). */
+revealRoutes.post(
+  "/reveal-jobs/:jobId/resume",
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const scope = { tenantId: c.get("tenantId"), workspaceId };
+    const jobId = c.req.param("jobId");
+    const ok = await revealJobRepository.resumePaused(scope, jobId);
+    if (ok) await enqueueBulkRevealDrive({ kind: "drive", jobId, scope });
+    return c.json({ ok, status: ok ? "running" : "unchanged" });
+  },
+);
 
 // Hand-edit a contact's scalar profile fields, PINNING each against future enrichment overwrite (PLAN_03 §1.4).
 // Transport only: scope comes from the verified token (never the body), and the pin + RLS-scoped, idempotent

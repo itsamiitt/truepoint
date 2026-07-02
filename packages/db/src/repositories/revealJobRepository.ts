@@ -434,6 +434,23 @@ export const revealJobRepository = {
     });
   },
 
+  /** The contact ids that FAILED (error/insufficient) — the frontend "retry failed" re-submits these as a new
+   *  job (its own clean lease/release cycle), rather than re-opening this job's accounting. */
+  async listFailedContactIds(scope: TenantScope, jobId: string): Promise<string[]> {
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select({ contactId: revealJobRows.contactId })
+        .from(revealJobRows)
+        .where(
+          and(
+            eq(revealJobRows.jobId, jobId),
+            inArray(revealJobRows.outcome, ["error", "insufficient"]),
+          ),
+        );
+      return rows.map((r) => r.contactId).filter((cId): cId is string => cId !== null);
+    });
+  },
+
   /** Retry-failed: re-queue rows that ended in error/insufficient. Returns how many were re-queued. */
   async requeueFailedRows(scope: TenantScope, jobId: string): Promise<number> {
     return withTenantTx(scope, async (tx) => {

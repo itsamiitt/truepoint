@@ -3,13 +3,19 @@
 // startWorkers() boots the consumers. As new queues land (CRM sync, outreach delivery, …) register them here.
 
 import { env } from "@leadwolf/config";
-import { diskFileStore, registerEmailProviders } from "@leadwolf/core";
+import {
+  defaultEmailVerifier,
+  defaultPhoneVerifier,
+  diskFileStore,
+  registerEmailProviders,
+} from "@leadwolf/core";
 import { db, notificationRepository } from "@leadwolf/db";
 import { defaultProviders } from "@leadwolf/integrations";
 import type {
   BulkEnrichmentDeadLetter,
   BulkImportDeadLetter,
   BulkImportScope,
+  BulkRevealDeadLetter,
   ImportDeadLetter,
 } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
@@ -36,6 +42,13 @@ import {
   deadLetterFailedBulkImport,
   makeProcessBulkImport,
 } from "./queues/bulkImports.ts";
+import {
+  BULK_REVEAL_DLQ,
+  BULK_REVEAL_QUEUE,
+  type BulkRevealJobData,
+  deadLetterFailedBulkReveal,
+  makeProcessBulkReveal,
+} from "./queues/bulkReveal.ts";
 import {
   DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
   type DataQualitySnapshotSweepJobData,
@@ -148,10 +161,8 @@ import {
   makeProcessTokenRefresh,
 } from "./queues/tokenRefresh.ts";
 import {
-  DEDUP_RETRY,
   DSAR_RETRY,
   ENRICHMENT_RETRY,
-  FIRMOGRAPHICS_RETRY,
   MASTER_BACKFILL_RETRY,
   OUTREACH_RETRY,
   REVERIFICATION_RETRY,
@@ -818,6 +829,50 @@ export function startWorkers(): Worker[] {
       );
     });
     workers.push(bulkEnrichmentWorker);
+  }
+  // Async BULK REVEAL consumer — DARK by default (BULK_REVEAL_ENABLED=false; the apps/api producer enqueues
+  // nothing while off, so this never runs in prod until the flag is flipped in a CI-gated step). A `drive` job
+  // chunks a CONFIRMED (`running`) job's contacts into bands + fans out `chunk` jobs; a `chunk` reveals its band
+  // through the gated revealContact in `lease` settle-mode (the job's ONE lease already reserved the credits —
+  // no per-row hot-lock) and, on the last band, writes the revealed CSV + finalizes with a release.
+  if (env.BULK_REVEAL_ENABLED) {
+    const revealFileStore = diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
+    const bulkRevealQueue = new Queue<BulkRevealJobData>(BULK_REVEAL_QUEUE, { connection });
+    const bulkRevealDeadLetterQueue = new Queue<BulkRevealDeadLetter>(BULK_REVEAL_DLQ, {
+      connection,
+    });
+    const bulkRevealWorker = instrument(
+      new Worker<BulkRevealJobData>(
+        BULK_REVEAL_QUEUE,
+        makeProcessBulkReveal({
+          // The drive fans out one chunk job per band onto the SAME bulk-reveal queue.
+          enqueueChunk: async (jobId, scope, band) => {
+            await bulkRevealQueue.add("chunk", {
+              kind: "chunk",
+              jobId,
+              scope,
+              rowStart: band.rowStart,
+              rowEnd: band.rowEnd,
+            });
+          },
+          fileStore: revealFileStore,
+          verifier: defaultEmailVerifier(),
+          phoneVerifier: defaultPhoneVerifier(),
+        }),
+        // SPEND PATH — explicitly serial (the reveal counter lock + the single lease already serialize a job's
+        // own chunks; keep concurrency 1 until per-tenant fairness/parallelism is proven, mirroring bulk-enrich).
+        { connection, concurrency: 1 },
+      ),
+      BULK_REVEAL_QUEUE,
+    );
+    bulkRevealWorker.on("failed", (job, err) => {
+      void deadLetterFailedBulkReveal(bulkRevealDeadLetterQueue, job, err).catch((e) =>
+        log.error("bulk-reveal: dead-letter routing failed", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    });
+    workers.push(bulkRevealWorker);
   }
   // Low-balance notifier sweep (plans-pricing-credits) — DARK by default (LOW_BALANCE_NOTIFIER_ENABLED=false).
   // Purely additive: when off, the queue/worker/schedule are never constructed and nothing is scanned. READ-ONLY
