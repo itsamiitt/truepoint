@@ -43,6 +43,14 @@ export interface RevealInput {
   verifier?: EmailVerifierPort;
   /** The phone verifier (06 §9). Default = config-gated Twilio Lookup, else the E.164 format check. */
   phoneVerifier?: PhoneVerifierPort;
+  /**
+   * How the credit charge is settled (07 §3, ADR-0029). `counter` (default, the single-reveal path): charge the
+   * tenant counter now under FOR UPDATE + write the paired `spend` ledger entry — byte-identical to before.
+   * `lease` (the async bulk-reveal job): the job has ALREADY reserved the worst-case ceiling off the counter
+   * (one lease, not a per-row hot-lock), so this reveal only claims + records `credits_consumed` on the claim
+   * (and returns the cost so the job can settle/release the aggregate) — it does NOT touch the counter here.
+   */
+  settleMode?: "counter" | "lease";
 }
 
 /** Per-type credit cost — read from config so pricing is never hardcoded in a code path (07 §1). */
@@ -193,10 +201,13 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
         return buildResponse(0, balance, true);
       }
 
-      // 2) charge against the TENANT counter under FOR UPDATE — skipped entirely when the verified
-      // result is unusable (cost 0): the claim row stays, recording the 0-credit outcome (07 §3).
+      // 2) charge against the TENANT counter under FOR UPDATE — skipped entirely when the verified result is
+      // unusable (cost 0): the claim row stays, recording the 0-credit outcome (07 §3). Also skipped in `lease`
+      // mode (async bulk-reveal): the job already reserved the ceiling off the counter, so this reveal records
+      // credits_consumed on the claim (done above) but leaves the counter to the job's aggregate settle/release.
+      const settleMode = input.settleMode ?? "counter";
       let balanceAfter: number;
-      if (cost > 0) {
+      if (cost > 0 && settleMode === "counter") {
         const { balance, subscriptionBalance } = await creditRepository.lockBalance(
           tx,
           input.scope.tenantId,

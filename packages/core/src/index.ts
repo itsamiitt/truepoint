@@ -83,6 +83,26 @@ export {
   type BulkRevealExportInput,
   type BulkRevealExportResult,
 } from "./reveal/bulkRevealExport.ts";
+// Async BULK REVEAL job (reveal-experience Phase 3, ADR-0029/0036) — create+estimate, the confirm/lease money
+// gate, and the worker drive/chunk that reveals in `lease` settle-mode + finalizes with a release.
+export {
+  createRevealJob,
+  confirmRevealJob,
+  type CreateRevealJobInput,
+  type CreateRevealJobResult,
+} from "./reveal/bulk/createRevealJob.ts";
+export {
+  runBulkRevealDrive,
+  bulkProcessRevealChunk,
+  REVEAL_CHUNK_ROWS,
+  type RunBulkRevealDriveInput,
+  type BulkProcessRevealChunkInput,
+} from "./reveal/bulk/runBulkReveal.ts";
+export {
+  projectRevealEstimate,
+  type RevealEstimate,
+  type RevealCandidate,
+} from "./reveal/bulk/estimate.ts";
 // Staff cross-tenant export executor (doc 12; audit A1, Phase 2) — runs on a bulk_export approval under the owner
 // tx; explicit-scope suppression filter + decrypt + CSV through the FileStore. Platform-audited, not credit-charged.
 export {
