@@ -116,6 +116,9 @@ export const REPO_DOMAIN = {
   intent_signal: "scoring",
   providerCall: "enrichment",
   provider_call: "enrichment",
+  // The transactional outbox (worker_outbox, ADR-0027): generic mechanism, but its only topic today is the
+  // bulk-enrichment confirm→drive publish — re-home if a second domain adopts it.
+  outbox: "enrichment",
   reveal: "reveal",
   credit: "billing",
   stripeCustomer: "billing",

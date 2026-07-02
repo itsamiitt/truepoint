@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1328 source files · 75 code-bearing domains · 21 shared areas · 46 domain-vocabulary warnings · 57
+> **1354 source files · 75 code-bearing domains · 21 shared areas · 46 domain-vocabulary warnings · 58
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
@@ -498,9 +498,12 @@ flowchart TD
   WorkspaceSwitcher/OrgSwitcher/TeamSwitcher, useSidebarPin); `lib/` (`authClient`, `pkce`, `publicConfig`).
 - **`apps/admin`** — `app/(shell)/*` staff pages + `components/shell/*` (AdminShell two-stage gate, Sidebar/TopBar/navConfig,
   Brandmark) + `ImpersonationBanner` + `EntityPicker`/`TenantPicker`/`UserPicker`; `lib/` (`adminGate`, `authClient`, `pkce`, `publicConfig`).
-- **`apps/workers`** — `index.ts` (entry + graceful drain), `register.ts` (composition root + producers), `leaderLock.ts`
-  (single-runner election for scheduled ticks), `health`/`logger`; queue processors bucketed to their feature (imports/
-  enrichment/scoring/dsar/outreach) — see Notes for the four undeclared queues. Queue itests in `apps/workers/test/`.
+- **`apps/workers`** — `index.ts` (entry + bounded graceful drain), `register.ts` (composition root + producers +
+  `/metrics` collection), `leaderLock.ts` (single-runner election for scheduled ticks), `health` (liveness/readiness w/
+  bounded Redis probe + `/metrics`)/`logger`; the worker-platform hardening layer (`retryPolicies`, `deadLetter`,
+  `tuning`, `withDeadline`, `metrics`, `outboxRelay` — the leaderless ADR-0027 outbox drainer; see
+  `docs/planning/worker-platform/`); queue processors bucketed to their feature (imports/enrichment/scoring/dsar/
+  outreach) — see Notes for the undeclared queues. Queue itests in `apps/workers/test/`.
 
 ## Notes / unbucketed & warnings
 
@@ -527,6 +530,8 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was refreshed from the 967-file JSON. When the source set changes again, re-run
+- **Map hygiene:** this prose was last refreshed from the 1354-file JSON (worker-platform Phases 0–5: the
+  hardening layer above, `worker_outbox` + `outboxRepository` → `enrichment` via `REPO_DOMAIN`, admin
+  `queueProbes`, import `queueBackpressure`, `types/workerQueues.ts`). When the source set changes again, re-run
   `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares the `fileSetHash`) and refresh these purposes.
 ```
