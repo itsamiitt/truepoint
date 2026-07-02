@@ -6,17 +6,20 @@ import { env } from "@leadwolf/config";
 import { diskFileStore, registerEmailProviders } from "@leadwolf/core";
 import { db, notificationRepository } from "@leadwolf/db";
 import { defaultProviders } from "@leadwolf/integrations";
-import type {
-  BulkEnrichmentDeadLetter,
-  BulkImportDeadLetter,
-  BulkImportScope,
-  ImportDeadLetter,
+import {
+  BULK_ENRICHMENT_DRIVE_TOPIC,
+  type BulkEnrichmentDeadLetter,
+  type BulkImportDeadLetter,
+  type BulkImportScope,
+  type ImportDeadLetter,
+  bulkEnrichmentJobDataSchema,
 } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { type WorkerDeadLetter, makeDeadLetterHandler } from "./deadLetter.ts";
 import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
+import { type OutboxRelayHandle, startOutboxRelay } from "./outboxRelay.ts";
 import {
   BILLING_RECON_SWEEP_QUEUE,
   type BillingReconSweepJobData,
@@ -429,6 +432,18 @@ export async function enqueueMasterBackfill(
   return String(job.id);
 }
 
+// Phase 3 (ADR-0027): the outbox relay handle, set by startWorkers when the bulk-enrichment block runs.
+let outboxRelay: OutboxRelayHandle | undefined;
+
+/** Stop background relays (Phase 3): halts the outbox relay's schedule and awaits its in-flight tick. The
+ *  entrypoint calls this FIRST in the drain so no new drive publish races the worker close. No-op when the
+ *  bulk-enrichment block never started a relay (flag off). Safe to call more than once. */
+export async function stopBackgroundRelays(): Promise<void> {
+  const relay = outboxRelay;
+  outboxRelay = undefined;
+  await relay?.stop();
+}
+
 /** Attach structured completed/failed logging to a worker (per-queue observability), plus — when a dead-letter
  *  queue is provided (0.2) — routing of retry-exhausted jobs onto it as PII-free records (deadLetter.ts).
  *  Never logs payloads. */
@@ -796,9 +811,15 @@ export function startWorkers(): Worker[] {
       new Worker<BulkEnrichmentJobData>(
         BULK_ENRICHMENT_QUEUE,
         makeProcessBulkEnrichment({
-          // The drive phase fans out one chunk job per band onto the SAME bulk-enrichment queue.
+          // The drive phase fans out one chunk job per band onto the SAME bulk-enrichment queue. STABLE jobId
+          // (Phase 3): a duplicate drive delivery (at-least-once outbox re-publish) re-fans the same chunk ids
+          // and BullMQ keeps exactly one of each — idempotent fan-out, no duplicate chunk work.
           enqueueChunk: async (jobId, scope, chunkId) => {
-            await bulkEnrichmentQueue.add("chunk", { kind: "chunk", jobId, scope, chunkId });
+            await bulkEnrichmentQueue.add(
+              "chunk",
+              { kind: "chunk", jobId, scope, chunkId },
+              { jobId: `bulkenrich:chunk:${jobId}:${chunkId}` },
+            );
           },
           // The chunk phase feeds these vendor adapters to enrichContact — the SAME set processEnrichment uses.
           providers: defaultProviders(),
@@ -818,6 +839,28 @@ export function startWorkers(): Worker[] {
       );
     });
     workers.push(bulkEnrichmentWorker);
+
+    // Phase 3 (ADR-0027): the LEADERLESS outbox relay. The confirm endpoint no longer enqueues to Redis —
+    // the awaiting_confirmation → running transition commits its drive-publish intent into worker_outbox in
+    // the SAME tx (enrichmentJobRepository.confirmAwaitingJob), and every worker replica drains it here with
+    // FOR UPDATE SKIP LOCKED on a continuous 1s poll (re-audit F1: no leader lock, no daily cadence — only
+    // the SKIP LOCKED drain idea is shared with projection_sweep, F2). At-least-once by design: the STABLE
+    // drive jobId dedupes a re-publish at the queue, and runBulkEnrich additionally guards on `running`.
+    // Payload is validated against the shared schema before publish; a malformed row burns its attempts cap
+    // (bounded) and fails out via the repository, loudly logged each claim. Gated with the consumer: when
+    // the kill-switch is off no relay runs and committed intents simply wait, exactly like the dark queue.
+    outboxRelay = startOutboxRelay({
+      publishers: {
+        [BULK_ENRICHMENT_DRIVE_TOPIC]: async (payload) => {
+          const data = bulkEnrichmentJobDataSchema.parse(payload);
+          await bulkEnrichmentQueue.add("drive", data, {
+            jobId: `bulkenrich:drive:${data.jobId}`,
+            attempts: 3,
+            backoff: { type: "exponential", delay: 2000, jitter: 0.5 },
+          });
+        },
+      },
+    });
   }
   // Low-balance notifier sweep (plans-pricing-credits) — DARK by default (LOW_BALANCE_NOTIFIER_ENABLED=false).
   // Purely additive: when off, the queue/worker/schedule are never constructed and nothing is scanned. READ-ONLY

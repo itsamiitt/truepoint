@@ -128,6 +128,14 @@ export {
   type PendingProjection,
   type ClusterEvidenceSummary,
 } from "./repositories/projectorRepository.ts";
+// Transactional outbox (ADR-0027; worker-platform Phase 3) — the publish intent commits atomically with the
+// business transition (write side, tenant tx) and the workers relay drains it leaderlessly (SKIP LOCKED, owner).
+export {
+  outboxRepository,
+  MAX_PUBLISH_ATTEMPTS,
+  type OutboxEnqueue,
+  type ClaimedOutboxRow,
+} from "./repositories/outboxRepository.ts";
 // Retention SHADOW sweep COUNT layer (data-management backlog #6, phase 2) — the per-class candidate counter (a
 // cross-tenant OWNER read with an explicit tenant predicate; COUNTS only, no deletion) + the fixed table/aging/
 // scope META phase 3's deleters reuse + the active-tenant fleet enumeration the sweep fans out over.

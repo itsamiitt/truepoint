@@ -5,7 +5,7 @@
 import { envSurfaceReport } from "@leadwolf/config";
 import { WORKERS_HEALTH_PORT, startHealthServer } from "./health.ts";
 import { log } from "./logger.ts";
-import { redisReadinessProbe, startWorkers } from "./register.ts";
+import { redisReadinessProbe, startWorkers, stopBackgroundRelays } from "./register.ts";
 
 const workers = startWorkers();
 let ready = true;
@@ -33,6 +33,9 @@ async function shutdown(signal: string): Promise<void> {
   draining = true;
   ready = false; // fail readiness so the orchestrator stops considering us live while we drain
   log.info("workers: draining", { signal });
+  // Stop the outbox relay FIRST (Phase 3): no new drive publish may race the worker close below; unclaimed
+  // intents stay pending in worker_outbox and the next boot's relay resumes them (at-least-once).
+  await stopBackgroundRelays().catch(() => {});
   const drained = await Promise.race([
     Promise.all(workers.map((w) => w.close())).then(() => true),
     new Promise<boolean>((resolve) => setTimeout(() => resolve(false), DRAIN_TIMEOUT_MS)),
