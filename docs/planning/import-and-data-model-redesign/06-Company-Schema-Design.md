@@ -130,7 +130,7 @@ posture as the existing `accounts.domain` and `contacts.email_domain` clear face
 | `domain` | citext NOT NULL | normalized eTLD+1 (DM1 normalizer); freemail-guarded at the app edge |
 | `is_primary` | boolean NOT NULL default false | exactly-one-primary invariant, below |
 | `source` | varchar(30) NOT NULL | CHECK: `import` \| `enrichment` \| `manual` \| `master_suggestion` |
-| `source_import_id` | uuid | audit pointer to the originating import job; bare uuid, no FK (the `import_job_rows` audit-pointer idiom, 01 §2.2) |
+| `source_import_id` | uuid | lineage pointer to the originating `source_imports` row (the contact-import row that carried the domain); FK ON DELETE SET NULL — same mechanics as doc 05's shared column (retention may reap `source_imports`, 05 §1.1); the bare-uuid idiom stays confined to job ledgers (`import_job_rows`) |
 | `pinned` | boolean NOT NULL default false | pinned rows are never detached/demoted by import or enrichment (DM6 pin semantics, per-row form) |
 | `verified_at` | timestamptz | last time the domain was confirmed live/owned (enrichment sets it); NULL = never |
 | `deleted_at` | timestamptz | soft-detach tombstone |
@@ -281,8 +281,9 @@ N location rows.
 object (03 §4.1 [46][14][104][107][108][111][103]) — their answer is extra account records via
 the parent pointer, which *is* the fragmentation trap for a sales-intelligence product. We
 diverge because TruePoint's workflows need offices *under one identity*: assigning contacts to
-an office (`contacts` gains an optional `account_location_id` in doc `04`'s remit — recorded
-here as the consuming edge, designed there), territory/region filtering over offices, and
+an office (`contacts` would gain an optional `account_location_id` — recorded here as the
+consuming edge; **deferred**: no S-C\* step ships it in this series, tracked in doc `07`'s DDL
+inventory as adjacent-scope), territory/region filtering over offices, and
 enrichment landing per-site data (ZoomInfo treats locations as enrichable entities, [103]).
 
 **HQ flat cache.** `hq_country`/`hq_city` become the primary-cache of the primary (`type='hq'`
@@ -362,7 +363,7 @@ Master hierarchy stays a suggestion layer (§2), consistent with that stance.
 
 | Step | Contents | Reversible? |
 |---|---|---|
-| **S-A1** | Create `account_domains` (+ RLS policies, updated_at trigger, grants). **Backfill:** one primary row per account WHERE `domain IS NOT NULL` (`is_primary = true`, `source = 'import'`, `verified_at = NULL`); idempotent (`ON CONFLICT DO NOTHING` on the ws+domain unique) | yes — drop table; flat column untouched |
+| **S-A1** | Create `account_domains` (+ RLS policies, updated_at trigger, grants). **Backfill:** one primary row per account WHERE `domain IS NOT NULL` (`is_primary = true`, `source = 'import'`, `verified_at = NULL`); idempotent (`ON CONFLICT DO NOTHING` on the ws+domain unique). **The backfill re-runs after S-A2 is live** to close the write-gap tail — dual-write precedes the *final* backfill pass, per doc 05 §Implementation's ordering refinement (accounts written between the first pass and dual-write-on would otherwise lack child rows) | yes — drop table; flat column untouched |
 | **S-A2** | Dual-write: the account write path (import upsert, enrichment, manual edit) writes child + cache in one tx; reads stay on the flat cache | yes — revert writer; cache remains authoritative |
 | **S-A3** | Create `account_locations` (+ RLS). Backfill primary `hq` row from `hq_country`/`hq_city` best-effort (name→ISO map; unmappable → `country NULL`, city carried) | yes — drop table |
 | **S-A4** | Add `parent_account_id`, `root_account_id`, `uniq_accounts_ws_id`, the composite same-workspace FK, self-parent CHECK, `idx_accounts_ws_root`. No backfill (hierarchy starts empty; master suggestions populate it organically) | yes — drop columns/constraints |
@@ -388,8 +389,9 @@ Per `truepoint-architecture/references/pre-build-thinking.md`; answers cite the 
   `is_primary`; the flat columns are a **cache** (single-writer sync contract, doc 05). Family
   membership: `parent_account_id` (derived: `root_account_id`, recomputed on every edge write).
   Hierarchy truth is the overlay's own assertion; Layer-0 is a suggestion source, never a
-  second writer. On conflict, child rows win; the reconciliation job repairs the cache, never
-  the reverse.
+  second writer. On conflict, child rows win and the reconciliation job repairs the cache —
+  post-S-A6 cutover; while S-A2 dual-write runs the flat cache stays authoritative (the same
+  phase rule as doc 05 §3.4).
 - **Failure modes.** (1) *Cycle introduced by merge or concurrent edits* — write-time CTE check
   + FOR-UPDATE endpoint locks + mandatory merge re-validation (§2); residual: nightly cycle
   detector (§Testing) alerts and the family view renders depth-capped (never infinite-loops:
