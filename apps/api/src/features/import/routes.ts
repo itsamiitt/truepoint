@@ -32,6 +32,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueImport, getImportJob } from "./queue.ts";
@@ -164,7 +165,11 @@ importRoutes.post("/", async (c) => {
   return c.json(body, 202);
 });
 
-// Poll an import job's status/progress. Tenant-scoped: only the owning workspace may read its job.
+// Poll an import job's status/progress. Tenant-scoped: only the owning workspace may read its job — and,
+// behind the S-V3 dual gate, only the job's CREATOR or an elevated role within it (import-redesign 10 §5
+// row 3: this Redis/BullMQ-backed read has no repository row, so the SAME rule is applied app-side over the
+// queue payload's importedByUserId until the read retires with 08 §1.2). Gate off ⇒ workspace-wide,
+// byte-identical (T-V4). Invisible ⇒ 404, indistinguishable from absent (no existence oracle).
 importRoutes.get("/:jobId", async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
@@ -174,6 +179,18 @@ importRoutes.get("/:jobId", async (c) => {
   // Tenant isolation: a job from another workspace (or a non-existent id) returns 404 — never leak existence.
   if (!job || job.data.scope.workspaceId !== workspaceId)
     throw new NotFoundError("Import job not found.");
+
+  // Creator ∪ elevated (10 §2.1 detail row), evaluated only when the dual gate is on. A payload with no
+  // importedByUserId is a system/automation job — nobody's "own", visible to elevated roles only.
+  const viewer = await buildJobViewer({
+    tenantId: c.get("tenantId"),
+    workspaceId,
+    userId: c.get("claims").sub,
+  });
+  if (viewer.scoped && viewer.role !== "owner" && viewer.role !== "admin") {
+    if (job.data.importedByUserId !== viewer.userId)
+      throw new NotFoundError("Import job not found.");
+  }
 
   const state = await job.getState();
   const progress = importProgressSchema.safeParse(job.progress);

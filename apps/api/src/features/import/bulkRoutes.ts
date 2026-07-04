@@ -22,7 +22,6 @@ import {
   ForbiddenError,
   type ImportJobCounts,
   ImportValidationError,
-  type JobViewer,
   NotFoundError,
   type SourceName,
   columnMappingSchema,
@@ -32,6 +31,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueBulkImportDrive } from "./bulkQueue.ts";
@@ -238,9 +238,10 @@ bulkImportRoutes.get("/:jobId", async (c) => {
   const jobId = c.req.param("jobId");
 
   // Viewer-predicated detail read (import-redesign 10 §5 row 2 — the legacy bulk poll rides the same
-  // predicate as every detail-by-id). S-V2: dual gate hard-off (scoped: false ⇒ workspace-wide,
-  // byte-identical); S-V3 evaluates the real gate and resolves the caller's workspace role.
-  const viewer: JobViewer = { userId: c.get("claims").sub, role: "viewer", scoped: false };
+  // predicate as every detail-by-id), behind the S-V3 dual gate. This route runs no requireRole guard, so
+  // buildJobViewer resolves the caller's ACTIVE workspace role itself — but only when the gate is on
+  // (gate off ⇒ zero extra queries, workspace-wide, byte-identical — T-V4).
+  const viewer = await buildJobViewer({ tenantId, workspaceId, userId: c.get("claims").sub });
   const job = await withTenantTx(scope, (tx) => importJobRepository.getJob(tx, viewer, jobId));
   // Tenant isolation: RLS already restricts getJob to the caller's workspace; the explicit workspace check is
   // belt-and-suspenders. A foreign/absent job 404s — never leak another workspace's job (nor its existence).

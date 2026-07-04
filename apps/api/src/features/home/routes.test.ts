@@ -97,6 +97,9 @@ mock.module("@leadwolf/core", () => ({
   buildDataQualitySummary: async () => dataQuality,
   recentDataQualityTrend: async () => trend,
   recentReverificationRuns: async () => reverificationRuns,
+  // buildJobViewer (middleware/jobViewer.ts) imports this; with JOB_VISIBILITY_SCOPED unset it is never
+  // CALLED, but the mocked module must still export it so the import binding resolves.
+  isFlagEnabledForTenant: async () => false,
 }));
 
 const { homeRoutes } = await import("./routes.ts");

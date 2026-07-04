@@ -24,7 +24,6 @@ import {
   type EnrichmentJobDetailResponse,
   type EnrichmentJobListResponse,
   ForbiddenError,
-  type JobViewer,
   NotFoundError,
   ValidationError,
   enrichmentJobDetailResponseSchema,
@@ -33,6 +32,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
 
@@ -45,13 +45,18 @@ enrichmentRoutes.use("*", tenancy);
 // Registered BEFORE POST /:entity/:id so the literal `jobs` segment is never captured as an `:entity` param.
 
 /** List the enrichment jobs visible to the viewer (most-recent first) with live status/progress/counts.
- *  The repo's jobVisibility predicate decides WHICH rows (import-redesign 10 §2.1). S-V2: viewer wired with
- *  the dual gate hard-off (scoped: false ⇒ workspace-wide, byte-identical); S-V3 evaluates the real gate. */
+ *  The repo's jobVisibility predicate decides WHICH rows (import-redesign 10 §2.1), behind the S-V3 dual
+ *  gate (env JOB_VISIBILITY_SCOPED + per-tenant flag; off ⇒ workspace-wide, byte-identical — T-V4). */
 enrichmentRoutes.get("/jobs", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace to view enrichment jobs.");
-  const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
+  const viewer = await buildJobViewer({
+    tenantId: c.get("tenantId"),
+    workspaceId,
+    userId: c.get("claims").sub,
+    role: getWorkspaceRole(c),
+  });
   const jobs = await listEnrichmentJobs({
     scope: { tenantId: c.get("tenantId"), workspaceId },
     viewer,
@@ -69,7 +74,12 @@ enrichmentRoutes.get(
     const workspaceId = c.get("workspaceId");
     if (!workspaceId)
       throw new ForbiddenError("no_workspace", "Select a workspace to view enrichment jobs.");
-    const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
+    const viewer = await buildJobViewer({
+      tenantId: c.get("tenantId"),
+      workspaceId,
+      userId: c.get("claims").sub,
+      role: getWorkspaceRole(c),
+    });
     const job = await getEnrichmentJobStatus({
       scope: { tenantId: c.get("tenantId"), workspaceId },
       viewer,

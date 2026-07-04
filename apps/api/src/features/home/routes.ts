@@ -22,7 +22,6 @@ import { retentionRunRepository, withTenantTx } from "@leadwolf/db";
 import {
   dataQualityTrendSchema,
   ForbiddenError,
-  type JobViewer,
   homeSummarySchema,
   retentionRunSchema,
   reverificationRunsSchema,
@@ -31,6 +30,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
@@ -57,9 +57,14 @@ homeRoutes.get("/summary", requireRole("owner", "admin", "member", "viewer"), as
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
 
-  // Viewer for the Recent Imports card predicate (import-redesign 10 §5 row 9). S-V2: dual gate hard-off
-  // (scoped: false ⇒ workspace-wide, byte-identical); S-V3 evaluates the real gate.
-  const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
+  // Viewer for the Recent Imports card predicate (import-redesign 10 §5 row 9), behind the S-V3 dual gate
+  // (env JOB_VISIBILITY_SCOPED + per-tenant flag; off ⇒ workspace-wide, byte-identical — T-V4).
+  const viewer = await buildJobViewer({
+    tenantId: c.get("tenantId"),
+    workspaceId,
+    userId: c.get("claims").sub,
+    role: getWorkspaceRole(c),
+  });
   const summary = await buildHomeSummary({
     scope: { tenantId: c.get("tenantId"), workspaceId },
     viewer,

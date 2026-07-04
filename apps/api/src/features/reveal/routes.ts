@@ -38,6 +38,7 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { idempotency } from "../../middleware/idempotency.ts";
+import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { revealRateLimit } from "../../middleware/revealRateLimit.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
@@ -206,12 +207,17 @@ revealRoutes.post("/reveal-jobs", requireRole("owner", "admin", "member"), async
 });
 
 /** List the reveal jobs visible to the viewer (status polling). Any active role may read; the repo's
- *  jobVisibility predicate decides WHICH rows (import-redesign 10 §2.1). S-V2: viewer wired with the
- *  dual gate hard-off (scoped: false ⇒ workspace-wide, byte-identical); S-V3 evaluates the real gate. */
+ *  jobVisibility predicate decides WHICH rows (import-redesign 10 §2.1), behind the S-V3 dual gate
+ *  (env JOB_VISIBILITY_SCOPED + per-tenant flag; off ⇒ workspace-wide, byte-identical — T-V4). */
 revealRoutes.get("/reveal-jobs", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
-  const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
+  const viewer = await buildJobViewer({
+    tenantId: c.get("tenantId"),
+    workspaceId,
+    userId: c.get("claims").sub,
+    role: getWorkspaceRole(c),
+  });
   const jobs = await revealJobRepository.listJobs(
     { tenantId: c.get("tenantId"), workspaceId },
     viewer,
@@ -226,7 +232,12 @@ revealRoutes.get(
   async (c) => {
     const workspaceId = c.get("workspaceId");
     if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
-    const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
+    const viewer = await buildJobViewer({
+      tenantId: c.get("tenantId"),
+      workspaceId,
+      userId: c.get("claims").sub,
+      role: getWorkspaceRole(c),
+    });
     const job = await revealJobRepository.getJob(
       { tenantId: c.get("tenantId"), workspaceId },
       viewer,
@@ -260,7 +271,12 @@ revealRoutes.get(
   async (c) => {
     const workspaceId = c.get("workspaceId");
     if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
-    const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
+    const viewer = await buildJobViewer({
+      tenantId: c.get("tenantId"),
+      workspaceId,
+      userId: c.get("claims").sub,
+      role: getWorkspaceRole(c),
+    });
     const job = await revealJobRepository.getJob(
       { tenantId: c.get("tenantId"), workspaceId },
       viewer,

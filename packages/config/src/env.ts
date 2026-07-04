@@ -219,6 +219,16 @@ export const appEnvSchema = z
     // call that would exceed this is rejected with a budget error BEFORE any model spend.
     AI_NL_SEARCH_DAILY_BUDGET: z.coerce.number().int().positive().default(200),
 
+    // Owner-scoped job visibility (import-and-data-model-redesign 10; the G01 fix). GLOBAL kill-switch of the
+    // dual gate: effective scoping = (this === "true") AND the per-tenant `job_visibility_scoped` flag. While
+    // off, every job surface (import/reveal/enrichment lists + detail + the home Recent Imports card) keeps
+    // its shipped workspace-wide visibility BYTE-IDENTICALLY (the jobVisibility predicate short-circuits;
+    // T-V4 parity). Flipping it off at any point is the instant fleet-wide rollback lever (15 §R-P0). Same
+    // explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy.
+    JOB_VISIBILITY_SCOPED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Bulk COPY-staging import (backlog #2, phase 6; 15-bulk-import-design). HARD GATE, default FALSE: the whole
     // pipeline is DARK in prod until the COPY spike + a prod object store are ready. While off, the apps/api
     // producer creates/enqueues NOTHING and the apps/workers consumer is not even registered. Modelled on
