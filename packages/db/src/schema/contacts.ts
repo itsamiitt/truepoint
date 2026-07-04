@@ -268,6 +268,13 @@ export const sourceImports = pgTable(
       t.workspaceId,
       t.importedAt.desc(),
     ),
+    // Member-path Recent Imports read (import-redesign 10 S-V1): the jobVisibility predicate narrowed to
+    // one importer within a workspace, newest-first — the scoped recentBatches path stays index-backed.
+    wsImporterAtIdx: index("idx_source_imports_ws_importer_at").on(
+      t.workspaceId,
+      t.importedByUserId,
+      t.importedAt.desc(),
+    ),
     sourceNameEnum: check(
       "source_imports_source_name_enum",
       sql`${t.sourceName} IN ('apollo','zoominfo','linkedin','sales_navigator','hubspot','salesforce','clearbit','manual')`,

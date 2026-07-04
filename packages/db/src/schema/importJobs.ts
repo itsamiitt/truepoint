@@ -11,6 +11,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   index,
   integer,
@@ -68,6 +69,9 @@ export const importJobs = pgTable(
     // NON-PII reject breakdown (G08): stable label → count (e.g. {"email: invalid value": 12}). Never a row
     // value — see import/validateRow.rejectLabel. Powers the staff drill-down's "why rows were rejected" block.
     rejectHistogram: jsonb("reject_histogram").notNull().default({}),
+    // Per-job share flag (import-redesign 10 §2.3, S-V1): column now, UX deferred — written by no route,
+    // read only by the jobVisibility predicate (constant false ⇒ zero behavior change while unset).
+    sharedWithWorkspace: boolean("shared_with_workspace").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -76,6 +80,14 @@ export const importJobs = pgTable(
   (t) => ({
     // The dashboard/worker read path: jobs of a given status within a workspace.
     byWsStatus: index("idx_import_jobs_ws_status").on(t.workspaceId, t.status),
+    // Member-path keyset list (import-redesign 10 S-V1): the jobVisibility predicate narrowed to a creator
+    // within a workspace, newest-first — keeps the scoped list index-ordered (no sort node).
+    byWsCreatorCreated: index("idx_import_jobs_ws_creator_created").on(
+      t.workspaceId,
+      t.createdByUserId,
+      t.createdAt.desc(),
+      t.id.desc(),
+    ),
     // Submit idempotency: a re-submit carrying the same key into the same workspace collapses onto the job.
     uniqWsIdempotency: uniqueIndex("uniq_import_jobs_ws_idempotency")
       .on(t.workspaceId, t.idempotencyKey)

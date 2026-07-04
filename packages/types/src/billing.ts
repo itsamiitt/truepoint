@@ -204,5 +204,8 @@ export const auditAction = z.enum([
   "code.exchanged",
   "signup",
   "oauth.link",
+  // Import visibility & permissions P0 (import-and-data-model-redesign 10 §3 / 15 ruling M1): the audited
+  // per-workspace import-policy change (who_can_import + strategy defaults). Writer lands with S-V4.
+  "import.policy_updated",
 ]);
 export type AuditAction = z.infer<typeof auditAction>;

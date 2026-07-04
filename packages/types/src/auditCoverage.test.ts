@@ -64,6 +64,9 @@ const PENDING = new Set<string>([
   "suppression.remove",
   "dsar.rectify",
   "apikey.use",
+  // Import visibility P0 (import-redesign 10, ruling M1): enum + CHECK land with S-V1 (migration train);
+  // the writer (the audited import_policy settings PUT) lands with S-V4 — move to WRITTEN then.
+  "import.policy_updated",
   // Email M12 (packages/core email): disconnecting a mailbox has no service path yet (the connect/verify
   // writers landed in P0; mailbox.disconnect lands with the mailbox-management surface).
   "mailbox.disconnect",

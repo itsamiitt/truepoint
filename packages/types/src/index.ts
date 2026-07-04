@@ -11,6 +11,8 @@ export * from "./bulkEnrichment.ts";
 export * from "./bulkReveal.ts";
 export * from "./realtimeEvents.ts";
 export * from "./bulkImport.ts";
+export * from "./jobVisibility.ts";
+export * from "./importPolicy.ts";
 export * from "./billing.ts";
 export * from "./platformAudit.ts";
 export * from "./intel.ts";
