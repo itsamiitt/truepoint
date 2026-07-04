@@ -10,16 +10,19 @@
 import {
   BULK_ENRICHMENT_DRIVE_TOPIC,
   type EnrichmentJobStatus,
+  type JobViewer,
   type MatchMethod,
 } from "@leadwolf/types";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { type TenantScope, withTenantTx } from "../client.ts";
+import { users } from "../schema/auth.ts";
 import { contacts } from "../schema/contacts.ts";
 import {
   enrichmentJobChunks,
   enrichmentJobRows,
   enrichmentJobs,
 } from "../schema/enrichmentJobs.ts";
+import { jobVisibility } from "./jobVisibility.ts";
 import { outboxRepository } from "./outboxRepository.ts";
 
 // ── Job lifecycle ──────────────────────────────────────────────────────────────────────────────────────
@@ -58,6 +61,13 @@ export interface JobRecord {
   startedAt: Date | null;
   completedAt: Date | null;
   failedReason: string | null;
+}
+
+/** A viewer-read job row: the control record + creator attribution (import-redesign 10 §2.1). The display
+ *  name joins from `users` at read time; null = the user row is gone → the UI renders "Former member". */
+export interface JobViewRow extends JobRecord {
+  createdByUserId: string | null;
+  createdByDisplayName: string | null;
 }
 
 /** Lifecycle transition for a job. `failedReason` is set only on the `failed` transition. */
@@ -178,6 +188,28 @@ function definedOnly<T extends object>(v: T): Partial<T> {
   return Object.fromEntries(Object.entries(v).filter(([, val]) => val !== undefined)) as Partial<T>;
 }
 
+/** The JobRecord select shape (the control-row, non-PII status columns) — shared by the viewer reads and
+ *  the system read so the three can never drift. */
+const JOB_STATUS_COLS = {
+  id: enrichmentJobs.id,
+  sourceName: enrichmentJobs.sourceName,
+  status: enrichmentJobs.status,
+  totalRows: enrichmentJobs.totalRows,
+  processedRows: enrichmentJobs.processedRows,
+  matchedRows: enrichmentJobs.matchedRows,
+  enrichedRows: enrichmentJobs.enrichedRows,
+  chargedRows: enrichmentJobs.chargedRows,
+  creditEstimateMicros: enrichmentJobs.creditEstimateMicros,
+  creditSpentMicros: enrichmentJobs.creditSpentMicros,
+  columnMapping: enrichmentJobs.columnMapping,
+  options: enrichmentJobs.options,
+  idempotencyKey: enrichmentJobs.idempotencyKey,
+  createdAt: enrichmentJobs.createdAt,
+  startedAt: enrichmentJobs.startedAt,
+  completedAt: enrichmentJobs.completedAt,
+  failedReason: enrichmentJobs.failedReason,
+};
+
 export const enrichmentJobRepository = {
   // ── Jobs ───────────────────────────────────────────────────────────────────────────────────────────
 
@@ -220,64 +252,75 @@ export const enrichmentJobRepository = {
   },
 
   /**
-   * List the workspace's jobs, most-recent first, capped at `limit` (default 50). Workspace-scoped via RLS —
-   * the `enrichment_jobs_workspace_isolation` policy restricts the SELECT to the caller's workspace, so this
-   * can never return another workspace's jobs. The control-row columns only (all non-PII; serializable) — the
-   * customer status surface (G-ENR-4) reads these, never the high-volume per-row ledger. Used by the read-only
-   * status endpoints; does not mutate.
+   * List the jobs VISIBLE TO THE VIEWER, most-recent first, capped at `limit` (default 50). Workspace-scoped
+   * via RLS (the `enrichment_jobs_workspace_isolation` policy) AND viewer-scoped via the jobVisibility
+   * predicate (import-redesign 10 §2.1): members see their own + shared rows; elevated roles see all with
+   * creator attribution; dual gate off ⇒ workspace-wide, byte-identical (T-V4). Renamed from the
+   * unpredicated `listJobsByWorkspace` (10 §4.2 rule 1 — the old name is deleted so omission is a compile
+   * error). The control-row columns only (all non-PII; serializable) — the customer status surface (G-ENR-4)
+   * reads these, never the high-volume per-row ledger. Read-only.
    */
-  async listJobsByWorkspace(scope: TenantScope, limit = 50): Promise<JobRecord[]> {
+  async listJobs(scope: TenantScope, viewer: JobViewer, limit = 50): Promise<JobViewRow[]> {
     const capped = Math.max(1, Math.min(200, Math.trunc(limit)));
     return withTenantTx(scope, (tx) =>
       tx
         .select({
-          id: enrichmentJobs.id,
-          sourceName: enrichmentJobs.sourceName,
-          status: enrichmentJobs.status,
-          totalRows: enrichmentJobs.totalRows,
-          processedRows: enrichmentJobs.processedRows,
-          matchedRows: enrichmentJobs.matchedRows,
-          enrichedRows: enrichmentJobs.enrichedRows,
-          chargedRows: enrichmentJobs.chargedRows,
-          creditEstimateMicros: enrichmentJobs.creditEstimateMicros,
-          creditSpentMicros: enrichmentJobs.creditSpentMicros,
-          columnMapping: enrichmentJobs.columnMapping,
-          options: enrichmentJobs.options,
-          idempotencyKey: enrichmentJobs.idempotencyKey,
-          createdAt: enrichmentJobs.createdAt,
-          startedAt: enrichmentJobs.startedAt,
-          completedAt: enrichmentJobs.completedAt,
-          failedReason: enrichmentJobs.failedReason,
+          ...JOB_STATUS_COLS,
+          createdByUserId: enrichmentJobs.createdByUserId,
+          createdByDisplayName: sql<
+            string | null
+          >`coalesce(${users.fullName}, ${users.email}::text)`,
         })
         .from(enrichmentJobs)
+        .leftJoin(users, eq(users.id, enrichmentJobs.createdByUserId))
+        .where(
+          jobVisibility(viewer, {
+            createdByUserId: enrichmentJobs.createdByUserId,
+            sharedWithWorkspace: enrichmentJobs.sharedWithWorkspace,
+          }),
+        )
         .orderBy(desc(enrichmentJobs.createdAt), desc(enrichmentJobs.id))
         .limit(capped),
     );
   },
 
-  /** Read a job by id (RLS already restricts it to the caller's workspace). Null if not visible. */
-  async getJob(scope: TenantScope, jobId: string): Promise<JobRecord | null> {
+  /**
+   * USER-FACING read of one job by id — the SAME predicate as the list (10 §4.2 rule 2), so a leaked or
+   * guessed id is no IDOR side-door: invisible (foreign-user or absent) ⇒ null ⇒ the route 404s without
+   * revealing existence. Worker/system paths use getJobSystem (10 §4.3).
+   */
+  async getJob(scope: TenantScope, viewer: JobViewer, jobId: string): Promise<JobViewRow | null> {
     return withTenantTx(scope, async (tx) => {
       const rows = await tx
         .select({
-          id: enrichmentJobs.id,
-          sourceName: enrichmentJobs.sourceName,
-          status: enrichmentJobs.status,
-          totalRows: enrichmentJobs.totalRows,
-          processedRows: enrichmentJobs.processedRows,
-          matchedRows: enrichmentJobs.matchedRows,
-          enrichedRows: enrichmentJobs.enrichedRows,
-          chargedRows: enrichmentJobs.chargedRows,
-          creditEstimateMicros: enrichmentJobs.creditEstimateMicros,
-          creditSpentMicros: enrichmentJobs.creditSpentMicros,
-          columnMapping: enrichmentJobs.columnMapping,
-          options: enrichmentJobs.options,
-          idempotencyKey: enrichmentJobs.idempotencyKey,
-          createdAt: enrichmentJobs.createdAt,
-          startedAt: enrichmentJobs.startedAt,
-          completedAt: enrichmentJobs.completedAt,
-          failedReason: enrichmentJobs.failedReason,
+          ...JOB_STATUS_COLS,
+          createdByUserId: enrichmentJobs.createdByUserId,
+          createdByDisplayName: sql<
+            string | null
+          >`coalesce(${users.fullName}, ${users.email}::text)`,
         })
+        .from(enrichmentJobs)
+        .leftJoin(users, eq(users.id, enrichmentJobs.createdByUserId))
+        .where(
+          and(
+            eq(enrichmentJobs.id, jobId),
+            jobVisibility(viewer, {
+              createdByUserId: enrichmentJobs.createdByUserId,
+              sharedWithWorkspace: enrichmentJobs.sharedWithWorkspace,
+            }),
+          ),
+        )
+        .limit(1);
+      return rows[0] ?? null;
+    });
+  },
+
+  /** SYSTEM read of a job by id — worker paths only (chunk runners, the drive, the confirm gate): no viewer,
+   *  RLS workspace isolation unchanged. Never call from a user-facing route (10 §4.3). */
+  async getJobSystem(scope: TenantScope, jobId: string): Promise<JobRecord | null> {
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select(JOB_STATUS_COLS)
         .from(enrichmentJobs)
         .where(eq(enrichmentJobs.id, jobId))
         .limit(1);

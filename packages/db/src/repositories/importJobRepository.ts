@@ -14,10 +14,12 @@ import type {
   BulkImportJobStatus,
   BulkImportRowOutcome,
   ConflictPolicy,
+  JobViewer,
 } from "@leadwolf/types";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { importJobChunks, importJobRows, importJobs } from "../schema/importJobs.ts";
+import { jobVisibility } from "./jobVisibility.ts";
 
 // ── Row types (VerificationJob-style $inferSelect) ─────────────────────────────────────────────────────────
 
@@ -156,22 +158,55 @@ export const importJobRepository = {
     return { id: existing[0].id, created: false };
   },
 
-  /** Read a job by id (RLS already restricts it to the caller's workspace). Null if not visible. */
-  async getJob(tx: Tx, jobId: string): Promise<ImportJobRow | null> {
+  /**
+   * USER-FACING read of a job by id (import-redesign 10 §4.2 rule 2): RLS walls the workspace AND the
+   * jobVisibility predicate narrows to the viewer (creator-or-shared for members; all for elevated; the
+   * whole workspace while the dual gate is off). Invisible (foreign-user or absent) ⇒ null ⇒ the route 404s
+   * without revealing existence — the same predicate as the list, so a leaked id is no IDOR side-door.
+   * Worker/system paths must use getJobSystem (they act on behalf of the job, not a user — 10 §4.3).
+   */
+  async getJob(tx: Tx, viewer: JobViewer, jobId: string): Promise<ImportJobRow | null> {
+    const rows = await tx
+      .select()
+      .from(importJobs)
+      .where(
+        and(
+          eq(importJobs.id, jobId),
+          jobVisibility(viewer, {
+            createdByUserId: importJobs.createdByUserId,
+            sharedWithWorkspace: importJobs.sharedWithWorkspace,
+          }),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  /** SYSTEM read of a job by id — worker paths only (chunk runners, the drive, finalize): no viewer, RLS
+   *  workspace isolation unchanged. Never call from a user-facing route (10 §4.3). */
+  async getJobSystem(tx: Tx, jobId: string): Promise<ImportJobRow | null> {
     const rows = await tx.select().from(importJobs).where(eq(importJobs.id, jobId)).limit(1);
     return rows[0] ?? null;
   },
 
   /**
-   * List the workspace's jobs, most-recent first, capped at `limit` (default 50, max 200). Workspace-scoped
-   * via RLS — the `import_jobs_workspace_isolation` policy restricts the SELECT to the caller's workspace, so
-   * this can never return another workspace's jobs. Control-row columns only (all non-PII; serializable).
+   * List the jobs VISIBLE TO THE VIEWER, most-recent first, capped at `limit` (default 50, max 200).
+   * Workspace-scoped via RLS (the `import_jobs_workspace_isolation` policy) AND viewer-scoped via the
+   * jobVisibility predicate baked in BEFORE the tenant list route ever exists (10 §5 row 1 — strict from
+   * birth). Renamed from the unpredicated `listJobsByWorkspace` (10 §4.2 rule 1: the old name is deleted so
+   * no call site can compile against a workspace-wide read). Control-row columns only (non-PII).
    */
-  async listJobsByWorkspace(tx: Tx, limit = 50): Promise<ImportJobRow[]> {
+  async listJobs(tx: Tx, viewer: JobViewer, limit = 50): Promise<ImportJobRow[]> {
     const capped = Math.max(1, Math.min(200, Math.trunc(limit)));
     return tx
       .select()
       .from(importJobs)
+      .where(
+        jobVisibility(viewer, {
+          createdByUserId: importJobs.createdByUserId,
+          sharedWithWorkspace: importJobs.sharedWithWorkspace,
+        }),
+      )
       .orderBy(desc(importJobs.createdAt), desc(importJobs.id))
       .limit(capped);
   },

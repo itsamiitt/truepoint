@@ -22,6 +22,7 @@ import { retentionRunRepository, withTenantTx } from "@leadwolf/db";
 import {
   dataQualityTrendSchema,
   ForbiddenError,
+  type JobViewer,
   homeSummarySchema,
   retentionRunSchema,
   reverificationRunsSchema,
@@ -31,7 +32,7 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
-import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
+import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
 import { enqueueReverification } from "./reverificationQueue.ts";
 
@@ -56,7 +57,13 @@ homeRoutes.get("/summary", requireRole("owner", "admin", "member", "viewer"), as
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
 
-  const summary = await buildHomeSummary({ scope: { tenantId: c.get("tenantId"), workspaceId } });
+  // Viewer for the Recent Imports card predicate (import-redesign 10 §5 row 9). S-V2: dual gate hard-off
+  // (scoped: false ⇒ workspace-wide, byte-identical); S-V3 evaluates the real gate.
+  const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
+  const summary = await buildHomeSummary({
+    scope: { tenantId: c.get("tenantId"), workspaceId },
+    viewer,
+  });
   const body = JSON.stringify(homeSummarySchema.parse(summary));
   const etag = weakETag(body);
 

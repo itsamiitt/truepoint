@@ -80,13 +80,16 @@ mock.module("../../middleware/tenancy.ts", () => ({
     await next();
   },
 }));
-// requireRole: allow through and stash a role (the handler doesn't read it, but keep the surface honest).
+// requireRole: allow through and stash the role under the real key ("role") — the /summary handler now
+// reads it via getWorkspaceRole to build the JobViewer (import-redesign S-V2), so the mock must export
+// getWorkspaceRole too (mock.module replaces the whole module).
 mock.module("../../middleware/requireRole.ts", () => ({
   requireRole:
     () => async (c: { set: (k: string, v: unknown) => void }, next: () => Promise<void>) => {
-      c.set("workspaceRole", "owner");
+      c.set("role", "owner");
       await next();
     },
+  getWorkspaceRole: (c: { get: (k: string) => unknown }) => c.get("role"),
 }));
 
 mock.module("@leadwolf/core", () => ({

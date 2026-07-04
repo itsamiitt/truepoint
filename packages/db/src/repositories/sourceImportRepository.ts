@@ -3,10 +3,11 @@
 // Tx-aware so it composes into the import pipeline's per-row transaction (03 §9). `content_hash` lets an
 // identical re-import short-circuit to a no-op (idempotency).
 
-import type { SourceName } from "@leadwolf/types";
+import type { JobViewer, SourceName } from "@leadwolf/types";
 import { and, eq, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { sourceImports } from "../schema/contacts.ts";
+import { creatorVisibility } from "./jobVisibility.ts";
 
 /** One import batch for the Home dashboard — a (file, source, minute) group with its contact count. */
 export interface ImportBatchRow {
@@ -97,12 +98,20 @@ export const sourceImportRepository = {
   },
 
   /**
-   * The most recent import batches for the Home dashboard: provenance rows grouped by
-   * (source_file, source_name, minute) with their contact count, newest first. Workspace-scoped via RLS.
+   * The most recent import batches VISIBLE TO THE VIEWER for the Home dashboard: provenance rows grouped by
+   * (source_file, source_name, minute) with their contact count, newest first. Workspace-scoped via RLS AND
+   * viewer-scoped via the creator predicate on `imported_by_user_id` (import-redesign 10 §5 row 9): members
+   * see their own batches; elevated roles see the workspace view; dual gate off ⇒ workspace-wide,
+   * byte-identical (T-V4). The viewer is REQUIRED (10 §4.2 rule 1 — the unpredicated signature is gone).
    * Pass `tx` to run on a caller's existing scoped transaction (e.g. the Home summary fan-out); omit it
    * for a standalone read.
    */
-  async recentBatches(scope: TenantScope, limit = 5, tx?: Tx): Promise<ImportBatchRow[]> {
+  async recentBatches(
+    scope: TenantScope,
+    viewer: JobViewer,
+    limit = 5,
+    tx?: Tx,
+  ): Promise<ImportBatchRow[]> {
     const run = async (t: Tx): Promise<ImportBatchRow[]> => {
       const minute = sql`date_trunc('minute', ${sourceImports.importedAt})`;
       const rows = await t
@@ -113,6 +122,7 @@ export const sourceImportRepository = {
           importedAt: sql<Date>`max(${sourceImports.importedAt})`,
         })
         .from(sourceImports)
+        .where(creatorVisibility(viewer, sourceImports.importedByUserId))
         .groupBy(sourceImports.sourceFile, sourceImports.sourceName, minute)
         .orderBy(sql`max(${sourceImports.importedAt}) desc`)
         .limit(limit);

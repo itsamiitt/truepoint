@@ -5,11 +5,20 @@
 // counts/progress are derived from the `enrichment_jobs` counters the worker maintains; timestamps are ISO'd at
 // the edge. Mirrors buildHomeSummary's shape (compose scoped repo reads → a serialisable, PII-free DTO).
 
-import { type JobRecord, type TenantScope, enrichmentJobRepository } from "@leadwolf/db";
-import type { EnrichmentJobStatus, EnrichmentJobSummary } from "@leadwolf/types";
+import {
+  type JobRecord,
+  type JobViewRow,
+  type TenantScope,
+  enrichmentJobRepository,
+} from "@leadwolf/db";
+import type { EnrichmentJobStatus, EnrichmentJobSummary, JobViewer } from "@leadwolf/types";
 
 export interface EnrichmentJobStatusScope {
   scope: { tenantId: string; workspaceId: string };
+  /** WHO is looking (import-redesign 10 §4): REQUIRED — the repo predicate narrows to the viewer (members
+   *  see own + shared; elevated see all; dual gate off ⇒ workspace-wide, byte-identical). Built by the
+   *  route from middleware outputs only. */
+  viewer: JobViewer;
 }
 
 export interface ListEnrichmentJobsInput extends EnrichmentJobStatusScope {
@@ -74,20 +83,33 @@ export function toEnrichmentJobSummary(job: JobRecord): EnrichmentJobSummary {
   };
 }
 
-/** List the workspace's enrichment jobs, most-recent first, as status summaries. Workspace-scoped via RLS. */
+/** The viewer-read summary: the base DTO + creator attribution ONLY while scoping is active, so flag-off
+ *  responses stay byte-identical (import-redesign 10 §2.1 attribution / 15 §2.4 parity). */
+function toViewerSummary(job: JobViewRow, viewer: JobViewer): EnrichmentJobSummary {
+  const summary = toEnrichmentJobSummary(job);
+  if (!viewer.scoped) return summary;
+  return {
+    ...summary,
+    createdBy: { userId: job.createdByUserId, displayName: job.createdByDisplayName },
+  };
+}
+
+/** List the enrichment jobs visible to the viewer, most-recent first, as status summaries. Workspace-scoped
+ *  via RLS; viewer-scoped via the repo's jobVisibility predicate (import-redesign 10 §2.1). */
 export async function listEnrichmentJobs(
   input: ListEnrichmentJobsInput,
 ): Promise<EnrichmentJobSummary[]> {
   const scope: TenantScope = input.scope;
-  const jobs = await enrichmentJobRepository.listJobsByWorkspace(scope, input.limit ?? 50);
-  return jobs.map(toEnrichmentJobSummary);
+  const jobs = await enrichmentJobRepository.listJobs(scope, input.viewer, input.limit ?? 50);
+  return jobs.map((job) => toViewerSummary(job, input.viewer));
 }
 
-/** One job's status summary by id. Null when not visible to the caller's workspace (RLS) or absent. */
+/** One job's status summary by id. Null when not visible to the caller (RLS workspace wall + the viewer
+ *  predicate — invisible is indistinguishable from absent, 10 §4.2 rule 2) — the route 404s. */
 export async function getEnrichmentJobStatus(
   input: GetEnrichmentJobInput,
 ): Promise<EnrichmentJobSummary | null> {
   const scope: TenantScope = input.scope;
-  const job = await enrichmentJobRepository.getJob(scope, input.jobId);
-  return job ? toEnrichmentJobSummary(job) : null;
+  const job = await enrichmentJobRepository.getJob(scope, input.viewer, input.jobId);
+  return job ? toViewerSummary(job, input.viewer) : null;
 }

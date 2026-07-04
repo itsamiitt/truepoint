@@ -7,6 +7,7 @@
 
 import { z } from "zod";
 import { revealType } from "./billing.ts";
+import { jobCreatedBySchema } from "./jobVisibility.ts";
 import { contactQuery } from "./search.ts";
 
 // ── Queue + flag identifiers (the single source both api + workers import) ───────────────────────────────
@@ -110,6 +111,9 @@ export const revealJobSummarySchema = z.object({
   createdAt: z.string().datetime({ offset: true }),
   startedAt: z.string().datetime({ offset: true }).nullable(),
   completedAt: z.string().datetime({ offset: true }).nullable(),
+  /** Creator attribution (import-redesign 10 §2.1) — present ONLY while the job-visibility dual gate is on
+   *  for the tenant (absent flag-off ⇒ byte-identical legacy responses, T-V4). */
+  createdBy: jobCreatedBySchema.optional(),
 });
 export type RevealJobSummary = z.infer<typeof revealJobSummarySchema>;
 

@@ -249,10 +249,18 @@ export {
   type LogWithSequence,
   type OutreachLogRow,
 } from "./repositories/outreachLogRepository.ts";
+// The ONE job-visibility predicate (import-redesign 10 §4) — applied inside every user-facing job list/get
+// repository method; exported for the repo layer and its tests (routes NEVER assemble the predicate).
+export {
+  jobVisibility,
+  creatorVisibility,
+  type JobVisibilityColumns,
+} from "./repositories/jobVisibility.ts";
 export {
   enrichmentJobRepository,
   type JobCreateValues,
   type JobRecord,
+  type JobViewRow,
   type JobStatusUpdate,
   type JobProgressDelta,
   type ChunkCreateValues,
@@ -269,6 +277,7 @@ export {
   revealJobRepository,
   type RevealJobCreateValues,
   type RevealJobRecord,
+  type RevealJobViewRow,
   type RevealJobStatusUpdate,
   type RevealJobProgressDelta,
   type RevealBandRow,

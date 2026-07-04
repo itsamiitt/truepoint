@@ -22,6 +22,7 @@ import {
   ForbiddenError,
   type ImportJobCounts,
   ImportValidationError,
+  type JobViewer,
   NotFoundError,
   type SourceName,
   columnMappingSchema,
@@ -236,7 +237,11 @@ bulkImportRoutes.get("/:jobId", async (c) => {
   const scope = { tenantId, workspaceId };
   const jobId = c.req.param("jobId");
 
-  const job = await withTenantTx(scope, (tx) => importJobRepository.getJob(tx, jobId));
+  // Viewer-predicated detail read (import-redesign 10 §5 row 2 — the legacy bulk poll rides the same
+  // predicate as every detail-by-id). S-V2: dual gate hard-off (scoped: false ⇒ workspace-wide,
+  // byte-identical); S-V3 evaluates the real gate and resolves the caller's workspace role.
+  const viewer: JobViewer = { userId: c.get("claims").sub, role: "viewer", scoped: false };
+  const job = await withTenantTx(scope, (tx) => importJobRepository.getJob(tx, viewer, jobId));
   // Tenant isolation: RLS already restricts getJob to the caller's workspace; the explicit workspace check is
   // belt-and-suspenders. A foreign/absent job 404s — never leak another workspace's job (nor its existence).
   if (!job || job.workspaceId !== workspaceId)

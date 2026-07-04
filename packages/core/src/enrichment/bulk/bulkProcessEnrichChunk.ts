@@ -102,7 +102,7 @@ export async function bulkProcessEnrichChunk(
     braked: false,
   };
 
-  const job = await enrichmentJobRepository.getJob(repoScope, jobId);
+  const job = await enrichmentJobRepository.getJobSystem(repoScope, jobId);
   if (!job || job.status !== "running") return empty; // only a confirmed, still-running job is processed
   const chunk = await enrichmentJobRepository.getChunk(repoScope, chunkId);
   if (!chunk || chunk.status === "completed") return empty; // idempotent: never double-process a chunk
@@ -216,7 +216,7 @@ export async function bulkProcessEnrichChunk(
   // paused whenever any chunk braked, which is the correct outcome).
   const chunks = await enrichmentJobRepository.listChunks(repoScope, jobId);
   if (chunks.length > 0 && chunks.every((c) => c.status === "completed")) {
-    const fresh = await enrichmentJobRepository.getJob(repoScope, jobId);
+    const fresh = await enrichmentJobRepository.getJobSystem(repoScope, jobId);
     if (fresh?.status === "running") {
       await enrichmentJobRepository.updateJobStatus(repoScope, jobId, {
         status: "completed",

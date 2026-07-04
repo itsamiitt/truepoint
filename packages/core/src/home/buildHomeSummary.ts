@@ -25,13 +25,17 @@ import {
   sourceImportRepository,
   withTenantTx,
 } from "@leadwolf/db";
-import type { HomeSummary, RevealType } from "@leadwolf/types";
+import type { HomeSummary, JobViewer, RevealType } from "@leadwolf/types";
 
 export interface BuildHomeSummaryInput {
   scope: { tenantId: string; workspaceId: string };
+  /** WHO is looking (import-redesign 10 §5 row 9): REQUIRED — recentBatches narrows the Recent Imports card
+   *  to the viewer's own batches for members when the dual gate is on (elevated roles keep the workspace
+   *  view; gate off ⇒ workspace-wide, byte-identical). Built by the route from middleware outputs only. */
+  viewer: JobViewer;
 }
 
-export async function buildHomeSummary({ scope }: BuildHomeSummaryInput): Promise<HomeSummary> {
+export async function buildHomeSummary({ scope, viewer }: BuildHomeSummaryInput): Promise<HomeSummary> {
   const tenantScope: TenantScope = scope;
   const {
     creditBalance,
@@ -48,7 +52,7 @@ export async function buildHomeSummary({ scope }: BuildHomeSummaryInput): Promis
     burn: await creditRepository.burnByDay(tenantScope, 30, tx),
     recentReveals: await revealRepository.listByWorkspace(tenantScope, 10, tx),
     hotLeads: await contactRepository.topByPriority(tenantScope, 5, tx),
-    recentImports: await sourceImportRepository.recentBatches(tenantScope, 5, tx),
+    recentImports: await sourceImportRepository.recentBatches(tenantScope, viewer, 5, tx),
     enrichmentActivity: await providerCallRepository.recentActivity(tenantScope, 5, tx),
     performance: await sequenceRepository.performanceSnapshot(tenantScope, tx),
     activityCounts: await activityRepository.countByTypeForWorkspace(tenantScope, 30, tx),

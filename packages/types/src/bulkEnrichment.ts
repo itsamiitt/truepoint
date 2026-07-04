@@ -5,6 +5,7 @@
 // does not. emailStatus reuses the existing email_status value set (contacts.ts) — never re-derive it.
 
 import { z } from "zod";
+import { jobCreatedBySchema } from "./jobVisibility.ts";
 
 // ── Queue names (shared producer/consumer) ──────────────────────────────────────────────────────────────
 /**
@@ -220,6 +221,9 @@ export const enrichmentJobSummarySchema = z.object({
   startedAt: z.string().datetime({ offset: true }).nullable(),
   completedAt: z.string().datetime({ offset: true }).nullable(),
   failedReason: z.string().nullable(),
+  /** Creator attribution (import-redesign 10 §2.1) — present ONLY while the job-visibility dual gate is on
+   *  for the tenant (absent flag-off ⇒ byte-identical legacy responses, T-V4). */
+  createdBy: jobCreatedBySchema.optional(),
 });
 export type EnrichmentJobSummary = z.infer<typeof enrichmentJobSummarySchema>;
 

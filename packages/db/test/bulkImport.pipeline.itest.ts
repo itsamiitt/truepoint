@@ -435,7 +435,7 @@ describe("bulk import pipeline: COPY spike + drive/chunk/finalize + sync parity"
     expect(finalize?.fireRollups).toBe(true); // ≥1 contact landed
 
     // Control-row counters (atomic deltas onto the zeroed columns) + terminal status.
-    const job = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJob(tx, jobIdA));
+    const job = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJobSystem(tx, jobIdA));
     expect(job?.status).toBe("completed");
     expect(job?.rowsTotal).toBe(4);
     expect(job?.rowsCreated).toBe(2);
@@ -513,7 +513,7 @@ describe("bulk import pipeline: COPY spike + drive/chunk/finalize + sync parity"
     // The bulk control-row counters (case 3) vs the sync summary: created + duplicate agree exactly. The
     // in-file duplicate lands in DIFFERENT buckets by design — bulk `deduped` (dropped at the staging dedup
     // step) vs sync `skipped` (content-hash idempotency) — but BOTH are 1 and BOTH collapse to one B contact.
-    const jobA = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJob(tx, jobIdA));
+    const jobA = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJobSystem(tx, jobIdA));
     expect(summary.created).toBe(jobA?.rowsCreated); // 2 === 2
     expect(summary.duplicates).toBe(jobA?.rowsDuplicate); // 1 === 1
     // skipped ↔ deduped: the documented divergence (1 === 1) — the in-file dup, different bucket, same effect.

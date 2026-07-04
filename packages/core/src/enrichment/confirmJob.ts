@@ -33,7 +33,7 @@ export async function confirmBulkEnrichmentJob(
   // GUARDED transition — true iff THIS call moved the job awaiting_confirmation → running.
   const promoted = await enrichmentJobRepository.confirmAwaitingJob(scope, input.jobId);
   // Read the job back so the response reflects the (possibly just-changed) status, or reports the conflict state.
-  const job = await enrichmentJobRepository.getJob(scope, input.jobId);
+  const job = await enrichmentJobRepository.getJobSystem(scope, input.jobId);
   if (!job) return { outcome: "not_found" };
   const summary = toEnrichmentJobSummary(job);
   return promoted

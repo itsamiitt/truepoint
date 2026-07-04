@@ -24,6 +24,7 @@ import {
   type EnrichmentJobDetailResponse,
   type EnrichmentJobListResponse,
   ForbiddenError,
+  type JobViewer,
   NotFoundError,
   ValidationError,
   enrichmentJobDetailResponseSchema,
@@ -32,7 +33,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
+import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
 
 export const enrichmentRoutes = new Hono<{ Variables: RoleVariables }>();
@@ -43,19 +44,24 @@ enrichmentRoutes.use("*", tenancy);
 // ── Customer-visible job-status surface (G-ENR-4) — READ-only; any active workspace role may view. ───────
 // Registered BEFORE POST /:entity/:id so the literal `jobs` segment is never captured as an `:entity` param.
 
-/** List this workspace's enrichment jobs (most-recent first) with live status/progress/counts. */
+/** List the enrichment jobs visible to the viewer (most-recent first) with live status/progress/counts.
+ *  The repo's jobVisibility predicate decides WHICH rows (import-redesign 10 §2.1). S-V2: viewer wired with
+ *  the dual gate hard-off (scoped: false ⇒ workspace-wide, byte-identical); S-V3 evaluates the real gate. */
 enrichmentRoutes.get("/jobs", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace to view enrichment jobs.");
+  const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
   const jobs = await listEnrichmentJobs({
     scope: { tenantId: c.get("tenantId"), workspaceId },
+    viewer,
   });
   const body: EnrichmentJobListResponse = { jobs };
   return c.json(enrichmentJobListResponseSchema.parse(body), 200);
 });
 
-/** One enrichment job's status detail. 404 (never leak existence) when not in the caller's workspace. */
+/** One enrichment job's status detail — the SAME predicate as the list (10 §4.2 rule 2). 404 (never leak
+ *  existence) when absent OR invisible to the viewer. */
 enrichmentRoutes.get(
   "/jobs/:jobId",
   requireRole("owner", "admin", "member", "viewer"),
@@ -63,8 +69,10 @@ enrichmentRoutes.get(
     const workspaceId = c.get("workspaceId");
     if (!workspaceId)
       throw new ForbiddenError("no_workspace", "Select a workspace to view enrichment jobs.");
+    const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
     const job = await getEnrichmentJobStatus({
       scope: { tenantId: c.get("tenantId"), workspaceId },
+      viewer,
       jobId: c.req.param("jobId"),
     });
     if (!job) throw new NotFoundError("Enrichment job not found.");

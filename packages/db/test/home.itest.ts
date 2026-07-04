@@ -240,9 +240,13 @@ afterAll(async () => {
 
 describe("M-Home dashboard summary DoD", () => {
   const scopeA = () => ({ tenantId: tenantA, workspaceId: wsA });
+  // These tests assert the workspace-scoped summary composition, not the owner scope: a scoped:false viewer
+  // short-circuits the Recent Imports predicate to workspace-wide (the shipped behavior; T-V4 parity).
+  const wsWideViewer = () =>
+    ({ userId: "00000000-0000-0000-0000-000000000000", role: "owner", scoped: false }) as const;
 
   test("creditBalance mirrors the tenant counter; burn buckets sum to this workspace's spend", async () => {
-    const summary = await core.buildHomeSummary({ scope: scopeA() });
+    const summary = await core.buildHomeSummary({ scope: scopeA(), viewer: wsWideViewer() });
 
     // A started at 10 and burned exactly 2 (two paid email reveals).
     expect(await balanceOf(tenantA)).toBe(8);
@@ -258,7 +262,7 @@ describe("M-Home dashboard summary DoD", () => {
   });
 
   test("recentReveals are this workspace's only — B's reveals never appear", async () => {
-    const summary = await core.buildHomeSummary({ scope: scopeA() });
+    const summary = await core.buildHomeSummary({ scope: scopeA(), viewer: wsWideViewer() });
 
     expect(summary.recentReveals.length).toBe(2);
     const aRevealIds = await admin`SELECT id FROM contact_reveals WHERE workspace_id = ${wsA}`;
@@ -272,7 +276,7 @@ describe("M-Home dashboard summary DoD", () => {
   });
 
   test("recentImports collapse one CSV into one source_file batch — and only A's file", async () => {
-    const summary = await core.buildHomeSummary({ scope: scopeA() });
+    const summary = await core.buildHomeSummary({ scope: scopeA(), viewer: wsWideViewer() });
 
     // The one CSV collapses into exactly ONE logical batch (grouped by source_file/source/minute): its 3
     // sub-second contact rows fold together. (Enrichment adds its own 'apollo'/null-file provenance batch,
@@ -287,7 +291,7 @@ describe("M-Home dashboard summary DoD", () => {
   });
 
   test("enrichmentActivity is this workspace's provider calls only", async () => {
-    const summary = await core.buildHomeSummary({ scope: scopeA() });
+    const summary = await core.buildHomeSummary({ scope: scopeA(), viewer: wsWideViewer() });
     expect(summary.enrichmentActivity.length).toBe(1);
     expect(summary.enrichmentActivity[0]!.providerName).toBe("apollo");
 
@@ -297,14 +301,14 @@ describe("M-Home dashboard summary DoD", () => {
   });
 
   test("sequenceSnapshot counts this workspace only; sent is derived from the email_sent bucket", async () => {
-    const summary = await core.buildHomeSummary({ scope: scopeA() });
+    const summary = await core.buildHomeSummary({ scope: scopeA(), viewer: wsWideViewer() });
     expect(summary.sequenceSnapshot.activeSequences).toBe(1); // sequences default to status 'active'
     expect(summary.sequenceSnapshot.enrolled).toBe(1);
     expect(summary.sequenceSnapshot.sent).toBe(2); // two email_sent activities
   });
 
   test("hotLeads are priority-desc, capped at 5, and carry NO PII (facets only)", async () => {
-    const summary = await core.buildHomeSummary({ scope: scopeA() });
+    const summary = await core.buildHomeSummary({ scope: scopeA(), viewer: wsWideViewer() });
 
     expect(summary.hotLeads.length).toBe(3); // A's 3 scored contacts surface (well under the cap of 5)
     expect(summary.hotLeads.length).toBeLessThanOrEqual(5);
@@ -342,7 +346,7 @@ describe("M-Home dashboard summary DoD", () => {
   });
 
   test("activityFeed includes A's workspace rows + A's tenant-level (NULL) rows, but never B's", async () => {
-    const summary = await core.buildHomeSummary({ scope: scopeA() });
+    const summary = await core.buildHomeSummary({ scope: scopeA(), viewer: wsWideViewer() });
 
     expect(summary.activityFeed.length).toBeGreaterThan(0);
     expect(summary.activityFeed.length).toBeLessThanOrEqual(15);

@@ -87,7 +87,7 @@ export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkI
   const { scope, jobId, fileStore, enqueueChunk } = input;
 
   const job: ImportJobRow | null = await withTenantTx(scope, (tx) =>
-    importJobRepository.getJob(tx, jobId),
+    importJobRepository.getJobSystem(tx, jobId),
   );
   if (!job) throw new Error(`runBulkImport: job not found (${jobId})`);
 
@@ -213,7 +213,7 @@ export async function finalizeIfLastChunk(
   const outcome = await withTenantTx(scope, async (tx) => {
     const tally = await importJobRepository.incrementCompletedChunks(tx, jobId);
     if (tally.completedChunks < tally.totalChunks) return { last: false, fireRollups: false };
-    const job = await importJobRepository.getJob(tx, jobId);
+    const job = await importJobRepository.getJobSystem(tx, jobId);
     const rejected = job?.rowsRejected ?? 0;
     const unprocessed = job?.rowsUnprocessed ?? 0;
     const landed = (job?.rowsCreated ?? 0) + (job?.rowsMatched ?? 0);

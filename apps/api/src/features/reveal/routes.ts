@@ -15,7 +15,7 @@ import {
   revealContact,
 } from "@leadwolf/core";
 import {
-  type RevealJobRecord,
+  type RevealJobViewRow,
   contactRepository,
   creditRepository,
   revealJobRepository,
@@ -26,6 +26,7 @@ import {
   BULK_SELECTION_CAP,
   ForbiddenError,
   InsufficientCreditsError,
+  type JobViewer,
   NotFoundError,
   type RevealJobSummary,
   ValidationError,
@@ -37,15 +38,17 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { idempotency } from "../../middleware/idempotency.ts";
-import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
+import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { revealRateLimit } from "../../middleware/revealRateLimit.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
 import { bulkFileStore } from "../import/bulkStore.ts";
 import { enqueueBulkRevealDrive } from "./bulkRevealQueue.ts";
 
-/** Map a control-row record to the PII-free customer status DTO (the reveal-jobs UI polls this). */
-function toRevealJobSummary(job: RevealJobRecord): RevealJobSummary {
-  return {
+/** Map a viewer-read control row to the PII-free customer status DTO (the reveal-jobs UI polls this).
+ *  Creator attribution rides ONLY while the job-visibility dual gate is on for the tenant (import-redesign
+ *  10 §2.1) — flag-off responses stay byte-identical (T-V4). */
+function toRevealJobSummary(job: RevealJobViewRow, viewer: JobViewer): RevealJobSummary {
+  const summary: RevealJobSummary = {
     id: job.id,
     revealType: job.revealType as RevealJobSummary["revealType"],
     status: job.status as RevealJobSummary["status"],
@@ -61,6 +64,11 @@ function toRevealJobSummary(job: RevealJobRecord): RevealJobSummary {
     createdAt: job.createdAt.toISOString(),
     startedAt: job.startedAt?.toISOString() ?? null,
     completedAt: job.completedAt?.toISOString() ?? null,
+  };
+  if (!viewer.scoped) return summary;
+  return {
+    ...summary,
+    createdBy: { userId: job.createdByUserId, displayName: job.createdByDisplayName },
   };
 }
 
@@ -197,30 +205,35 @@ revealRoutes.post("/reveal-jobs", requireRole("owner", "admin", "member"), async
   );
 });
 
-/** List this workspace's reveal jobs (status polling). Any member may read. */
+/** List the reveal jobs visible to the viewer (status polling). Any active role may read; the repo's
+ *  jobVisibility predicate decides WHICH rows (import-redesign 10 §2.1). S-V2: viewer wired with the
+ *  dual gate hard-off (scoped: false ⇒ workspace-wide, byte-identical); S-V3 evaluates the real gate. */
 revealRoutes.get("/reveal-jobs", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
-  const jobs = await revealJobRepository.listJobsByWorkspace({
-    tenantId: c.get("tenantId"),
-    workspaceId,
-  });
-  return c.json({ jobs: jobs.map(toRevealJobSummary) });
+  const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
+  const jobs = await revealJobRepository.listJobs(
+    { tenantId: c.get("tenantId"), workspaceId },
+    viewer,
+  );
+  return c.json({ jobs: jobs.map((job) => toRevealJobSummary(job, viewer)) });
 });
 
-/** One job's status. */
+/** One job's status — the SAME predicate as the list (10 §4.2 rule 2); invisible ⇒ 404. */
 revealRoutes.get(
   "/reveal-jobs/:jobId",
   requireRole("owner", "admin", "member", "viewer"),
   async (c) => {
     const workspaceId = c.get("workspaceId");
     if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
     const job = await revealJobRepository.getJob(
       { tenantId: c.get("tenantId"), workspaceId },
+      viewer,
       c.req.param("jobId"),
     );
     if (!job) throw new NotFoundError("Reveal job not found in this workspace.");
-    return c.json(toRevealJobSummary(job));
+    return c.json(toRevealJobSummary(job, viewer));
   },
 );
 
@@ -239,15 +252,18 @@ revealRoutes.get(
   },
 );
 
-/** Signed download URL for the revealed CSV (terminal jobs only). */
+/** Signed download URL for the revealed CSV (terminal jobs only). Rides the viewer-predicated detail read
+ *  (10 §4.2 rule 2): when the gate is on, a member can fetch only their own job's export. */
 revealRoutes.get(
   "/reveal-jobs/:jobId/download",
   requireRole("owner", "admin", "member"),
   async (c) => {
     const workspaceId = c.get("workspaceId");
     if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const viewer: JobViewer = { userId: c.get("claims").sub, role: getWorkspaceRole(c), scoped: false };
     const job = await revealJobRepository.getJob(
       { tenantId: c.get("tenantId"), workspaceId },
+      viewer,
       c.req.param("jobId"),
     );
     if (!job || !job.resultKey)

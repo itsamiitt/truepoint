@@ -58,6 +58,11 @@ afterAll(async () => {
 describe("import_jobs control plane: create + per-workspace RLS isolation", () => {
   const scopeA = () => ({ tenantId: tenantA, workspaceId: wsA });
   const scopeB = () => ({ tenantId: tenantB, workspaceId: wsB });
+  // These tests assert the RLS workspace wall, not the owner scope: a scoped:false viewer short-circuits
+  // the jobVisibility predicate to workspace-wide (the shipped behavior; T-V4 parity). The owner-scope
+  // matrix has its own itest (jobVisibility.itest.ts).
+  const wsWideViewer = () =>
+    ({ userId: "00000000-0000-0000-0000-000000000000", role: "owner", scoped: false }) as const;
 
   test("a created job is readable in its own workspace", async () => {
     const created = await db.withTenantTx(scopeA(), (tx) =>
@@ -72,14 +77,14 @@ describe("import_jobs control plane: create + per-workspace RLS isolation", () =
     expect(created.created).toBe(true);
 
     const jobs = await db.withTenantTx(scopeA(), (tx) =>
-      db.importJobRepository.listJobsByWorkspace(tx),
+      db.importJobRepository.listJobs(tx, wsWideViewer()),
     );
     expect(jobs).toHaveLength(1);
     expect(jobs[0]!.sourceName).toBe("contacts.csv");
     expect(jobs[0]!.status).toBe("queued");
 
     const job = await db.withTenantTx(scopeA(), (tx) =>
-      db.importJobRepository.getJob(tx, created.id),
+      db.importJobRepository.getJob(tx, wsWideViewer(), created.id),
     );
     expect(job?.id).toBe(created.id);
     expect(job?.workspaceId).toBe(wsA);
@@ -87,7 +92,7 @@ describe("import_jobs control plane: create + per-workspace RLS isolation", () =
 
   test("workspace B cannot see workspace A's jobs (RLS), but the admin can", async () => {
     const jobsB = await db.withTenantTx(scopeB(), (tx) =>
-      db.importJobRepository.listJobsByWorkspace(tx),
+      db.importJobRepository.listJobs(tx, wsWideViewer()),
     );
     expect(jobsB).toHaveLength(0);
     // The BYPASSRLS admin/owner connection sees the row — proving it exists; only RLS hides it from B.
@@ -106,7 +111,7 @@ describe("import_jobs control plane: create + per-workspace RLS isolation", () =
       }),
     );
     const jobsA = await db.withTenantTx(scopeA(), (tx) =>
-      db.importJobRepository.listJobsByWorkspace(tx),
+      db.importJobRepository.listJobs(tx, wsWideViewer()),
     );
     expect(jobsA).toHaveLength(1); // still only A's own job
     expect(jobsA[0]!.workspaceId).toBe(wsA);
