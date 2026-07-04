@@ -11,6 +11,7 @@ import {
   Search,
   Send,
   Settings,
+  Upload,
 } from "lucide-react";
 
 export interface NavDestination {
@@ -31,6 +32,18 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Reports", href: "/reports", match: "/reports", icon: BarChart2 },
   { label: "Data Health", href: "/data-health", match: "/data-health", icon: HeartPulse },
 ];
+
+/** The Imports destination (import-redesign 11 §1.1) — the section landing at /imports, single-sourced here.
+ *  Deliberately NOT in DESTINATIONS yet: the rail entry stays hidden until S-U2 gives /imports its real
+ *  history page behind the IMPORT_V2 dual gate (11 §Rollout); the routes exist and resolve their section
+ *  title from this entry meanwhile.
+ *  WIRE(S-U2): move into DESTINATIONS (after Lists) when the history page ships. */
+export const IMPORTS_DESTINATION: NavDestination = {
+  label: "Imports",
+  href: "/imports",
+  match: "/imports",
+  icon: Upload,
+};
 
 /** Pinned Settings entry in the rail. Points at an existing route; the scope sub-nav lives in the settings
  *  layout (driven by SETTINGS_NAV below). */
@@ -103,8 +116,10 @@ export function sectionTitleFor(pathname: string): string {
   for (const d of DESTINATIONS) {
     if (pathname === d.match || pathname.startsWith(`${d.match}/`)) return d.label;
   }
-  if (pathname.startsWith("/imports/")) return "Bulk import";
-  if (pathname.startsWith("/import")) return "Import";
+  // The Imports section (landing + wizard + job pages) titles from the single-sourced destination entry —
+  // the old "/imports/ → Bulk import" and "/import → Import" special cases collapsed here (11 §1.1; the
+  // /import route itself is now a redirect into the section).
+  if (isActive(pathname, IMPORTS_DESTINATION.match)) return IMPORTS_DESTINATION.label;
   if (pathname.startsWith("/enrichment/jobs")) return "Enrichment jobs";
   if (pathname.startsWith("/sales-navigator")) return "Sales Navigator";
   return "TruePoint";
@@ -144,12 +159,11 @@ export const PALETTE_QUICK: PaletteEntry[] = [
     href: "/lists",
     keywords: ["list", "lists", "collection", "segment"],
   },
-  { id: "act-import", label: "Import contacts", href: "/import", keywords: ["csv", "upload"] },
   {
-    id: "act-bulk-import",
-    label: "Bulk import (large file)",
-    href: "/import",
-    keywords: ["bulk", "large", "background", "csv", "xlsx", "upload", "import"],
+    id: "act-import",
+    label: "Import contacts",
+    href: "/imports/new",
+    keywords: ["csv", "upload"],
   },
   {
     id: "act-enrichment-jobs",

@@ -1,6 +1,7 @@
 // ImportPage.tsx — composes the import slice: the wizard above, the workspace's masked contacts below. The
 // wizard's onImported reloads the list so a successful import is visible immediately. This is the feature's
-// public component (rendered by the thin app/import route).
+// public component (rendered by the thin app/(shell)/imports/new route; the retired /import route redirects
+// here — import-redesign 11 §1.1, S-U1).
 "use client";
 
 import { PageHeader } from "@/components/PageHeader";

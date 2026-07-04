@@ -1,7 +1,8 @@
 // (shell)/imports/[jobId]/page.tsx — the thin App Router route for ONE bulk import's live status (backlog #2).
 // All behavior lives in the feature slice (features/import → BulkImportProgress); this file only resolves the
-// route param and mounts the slice component inside the (shell) chrome. Not a primary rail tab (the 7-tab nav is
-// fixed) — reached from the import wizard's large-file hand-off / a deep link, like the enrichment-jobs route.
+// route param and mounts the slice component inside the (shell) chrome. Reached by deep link only (the wizard's
+// client-side bulk hand-off died with the "Large file" toggle — import-redesign 11 §1.4, S-U1); the durable job
+// page (11 §4, S-U3) generalizes this surface to every import later.
 // In Next.js 15 `params` is a Promise (awaited here); the slice component does the polling + render.
 import { BulkImportProgress } from "@/features/import";
 

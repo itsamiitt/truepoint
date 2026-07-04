@@ -16,16 +16,9 @@ import type {
   ImportPreview,
   SourceName,
 } from "@leadwolf/types";
-import { ErrorState, TpButton, TpCheckbox, TpInput, TpSelect } from "@leadwolf/ui";
-import { useRouter } from "next/navigation";
+import { ErrorState, TpButton, TpInput, TpSelect } from "@leadwolf/ui";
 import { useEffect, useRef, useState } from "react";
-import {
-  BulkImportDisabledError,
-  listMappingTemplates,
-  postBulkImport,
-  postImportPreview,
-  saveMappingTemplate,
-} from "../api";
+import { listMappingTemplates, postImportPreview, saveMappingTemplate } from "../api";
 import { useImport } from "../hooks/useImport";
 import { rejectedRowsToCsv } from "../rejectedRowsCsv";
 import { IDENTITY_FIELDS, MAPPABLE_FIELDS, type MappableField, SOURCE_OPTIONS } from "../types";
@@ -98,15 +91,6 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
   const [sourceName, setSourceName] = useState<SourceName>("manual");
   const [mapping, setMapping] = useState<Partial<Record<CanonicalField, string>>>({});
   const [conflictPolicy, setConflictPolicy] = useState<ConflictPolicy>("skip");
-
-  // Large-file path (backlog #2): instead of the on-thread synchronous importer, route the upload to the bulk
-  // background importer (POST /imports/bulk) and navigate to its live progress page. Additive — when the toggle is
-  // off, the sync path (useImport) is unchanged. A 403 bulk_import_disabled surfaces a clear "not enabled" message.
-  const router = useRouter();
-  const [largeFile, setLargeFile] = useState(false);
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const [bulkErr, setBulkErr] = useState<string | null>(null);
-  const [bulkDisabled, setBulkDisabled] = useState(false);
 
   // Pre-commit validation preview (G-IMP-1): the user validates first, then confirms to run the real import.
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -222,30 +206,6 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
     run({ file, sourceName, mapping: cleanedMapping(), conflictPolicy, listId: targetListId });
   }
 
-  // The large-file path: enqueue a background bulk import, then hand off to its live progress destination
-  // (/imports/[jobId]), which polls the job to completion. On a dark-gated 403 we show the "not enabled" message
-  // (never a generic failure); other failures surface as an error state. Same validate-first gate as the sync path.
-  async function onSubmitBulk(): Promise<void> {
-    if (!file || !preview) return;
-    setBulkBusy(true);
-    setBulkErr(null);
-    setBulkDisabled(false);
-    try {
-      const ref = await postBulkImport({
-        file,
-        sourceName,
-        mapping: cleanedMapping(),
-        conflictPolicy,
-        listId: targetListId,
-      });
-      router.push(`/imports/${ref.jobId}`);
-    } catch (e) {
-      if (e instanceof BulkImportDisabledError) setBulkDisabled(true);
-      else setBulkErr(e instanceof Error ? e.message : "Couldn’t start the background import.");
-      setBulkBusy(false);
-    }
-  }
-
   function onDownloadRejected(): void {
     if (!summary || summary.rejectedRows.length === 0) return;
     const base = (file?.name ?? "import").replace(/\.(csv|xlsx?)$/i, "");
@@ -299,18 +259,6 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
             ))}
           </TpSelect>
         </label>
-      </div>
-
-      <div className="tp-row">
-        <TpCheckbox
-          checked={largeFile}
-          onChange={(e) => {
-            setLargeFile(e.target.checked);
-            setBulkErr(null);
-            setBulkDisabled(false);
-          }}
-          label="Large file — import in the background (recommended for big uploads)"
-        />
       </div>
 
       {headers.length > 0 && templates.length > 0 && (
@@ -401,37 +349,16 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
         >
           {previewBusy ? "Validating…" : "Validate"}
         </TpButton>
-        {largeFile ? (
-          <TpButton
-            variant="primary"
-            type="button"
-            disabled={!canSubmit || bulkBusy}
-            loading={bulkBusy}
-            onClick={() => void onSubmitBulk()}
-          >
-            {bulkBusy ? "Starting…" : "Confirm & import in background"}
-          </TpButton>
-        ) : (
-          <TpButton variant="primary" type="button" disabled={!canSubmit} onClick={onSubmit}>
-            {status === "submitting"
-              ? "Uploading…"
-              : status === "processing"
-                ? "Processing…"
-                : "Confirm & import"}
-          </TpButton>
-        )}
+        <TpButton variant="primary" type="button" disabled={!canSubmit} onClick={onSubmit}>
+          {status === "submitting"
+            ? "Uploading…"
+            : status === "processing"
+              ? "Processing…"
+              : "Confirm & import"}
+        </TpButton>
       </div>
 
       {previewError && <ErrorState title="Couldn’t validate the file" detail={previewError} />}
-
-      {bulkDisabled && (
-        <p className="app-muted">
-          Bulk import isn’t enabled for your workspace yet. Switch off “Large file” to import now, or contact your
-          administrator.
-        </p>
-      )}
-
-      {bulkErr && <ErrorState title="Couldn’t start the background import" detail={bulkErr} />}
 
       {preview && status !== "done" && (
         <div className="tp-summary">

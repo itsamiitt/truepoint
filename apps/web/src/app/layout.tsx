@@ -5,6 +5,7 @@ import { GeistSans } from "geist/font/sans";
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { API_BASE, AUTH_ORIGIN } from "../lib/publicConfig";
+import { Providers } from "./providers";
 import "@leadwolf/ui/tokens.css";
 import "./globals.css";
 
@@ -42,7 +43,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <link key={origin} rel="dns-prefetch" href={origin} />
         ))}
       </head>
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
