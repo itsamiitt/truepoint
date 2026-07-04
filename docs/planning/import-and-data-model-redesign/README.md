@@ -1,6 +1,7 @@
 # Import & Data-Model Redesign — Planning Series
 
-> **Status:** series in progress (planning only — no code, no migrations ship from this series).
+> **Status:** complete — all 18 docs written & adversarially reviewed (planning only — no code,
+> no migrations ship from this series; `16` stays living as phases ship).
 > **Date opened:** 2026-07-02 · **Branch:** feat/data-mgmt-01-research-brief
 > **Scope:** the customer-facing Import Management System and the Contact/Company data model
 > (multi-value phones/emails, company hierarchy/domains, job visibility, import UX).
@@ -61,7 +62,7 @@ Doc statuses in this table: 🔲 not written · 🟡 drafted · ✅ written & ad
 
 | Doc | Title | Status |
 |---|---|---|
-| [`00`](00-Executive-Summary-and-Recommendations.md) | Executive Summary & Recommendations | 🔲 |
+| [`00`](00-Executive-Summary-and-Recommendations.md) | Executive Summary & Recommendations | ✅ |
 | [`01`](01-Current-State-Audit.md) | Current-State Audit (code-grounded source of truth) | ✅ |
 | [`02`](02-Root-Cause-and-Gap-Analysis.md) | Root-Cause & Gap Analysis (gap register G01–G26) | ✅ |
 | [`03`](03-Enterprise-Research.md) | Enterprise Research (citation register, 145 sources) | ✅ |
@@ -75,8 +76,8 @@ Doc statuses in this table: 🔲 not written · 🟡 drafted · ✅ written & ad
 | [`11`](11-UI-UX-Redesign.md) | Import UI/UX Redesign | ✅ |
 | [`12`](12-Performance-and-Scalability.md) | Performance & Scalability | ✅ |
 | [`13`](13-Security-and-Compliance.md) | Security & Compliance | ✅ |
-| [`14`](14-Roadmap-Risk-and-Future-Enhancements.md) | Roadmap, Risk & Future Enhancements | 🔲 |
-| [`15`](15-Migration-Rollback-and-Testing.md) | Migration, Rollback & Testing | 🔲 |
+| [`14`](14-Roadmap-Risk-and-Future-Enhancements.md) | Roadmap, Risk & Future Enhancements | ✅ |
+| [`15`](15-Migration-Rollback-and-Testing.md) | Migration, Rollback & Testing | ✅ |
 | [`16`](16-Implementation-Audit.md) | Implementation Audit (living) | ✅ (scaffolded; updates as phases ship) |
 
 ## Deliverable traceability
@@ -98,11 +99,11 @@ The engagement enumerated 20 deliverables. Each resolves here:
 | 11 | Database relationship diagrams | `07` |
 | 12 | Performance & scalability strategy | `12` |
 | 13 | Security considerations | `13` |
-| 14 | Multi-phase implementation roadmap | `14` §Phases |
+| 14 | Multi-phase implementation roadmap | `14` §Recommended Solution (the phase spine) |
 | 15 | Risk assessment | `14` §Risk register |
-| 16 | Migration strategy | `15` §Migration |
-| 17 | Testing strategy | `15` §Testing |
-| 18 | Rollback strategy | `15` §Rollback |
+| 16 | Migration strategy | `15` §M-SEQ + §2 (mechanics per family) |
+| 17 | Testing strategy | `15` §5 (Testing strategy) |
+| 18 | Rollback strategy | `15` §4 (§R-P0…§R-P5) |
 | 19 | Future enhancements | `14` §Future enhancements |
 | 20 | Final enterprise architecture recommendations | `00` |
 
