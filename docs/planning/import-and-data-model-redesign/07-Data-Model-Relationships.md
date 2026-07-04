@@ -263,7 +263,7 @@ verbatim — 05 §2.4, 06 §Security).
 
 | Table | FKs (→ target, on-delete) | Soft-delete | RLS policy | Status |
 |---|---|---|---|---|
-| `contacts` | tenant/workspace → CASCADE; `account_id` → accounts SET NULL; `master_person_id` → master_persons (no onDelete — re-pointable bridge); `owner_user_id` → users SET NULL; `pipeline_stage_id` → SET NULL; `duplicate_of_contact_id` → self SET NULL; **NEW** `merged_into_contact_id` → self (S-C1; loser-only, never cascades) | `deleted_at` (DSAR tombstone + **NEW** merge-loser producer, 04 §3.4) | ws-isolation (`contacts_workspace_isolation`) | EXISTING + S-C1 |
+| `contacts` | tenant/workspace → CASCADE; `account_id` → accounts SET NULL; `master_person_id` → master_persons (no onDelete — re-pointable bridge); `owner_user_id` → users SET NULL; `revealed_by_user_id` → users (no onDelete — immutable reveal credit); `pipeline_stage_id` → SET NULL; `duplicate_of_contact_id` → self SET NULL; **NEW** `merged_into_contact_id` → self (S-C1; loser-only, never cascades) | `deleted_at` (DSAR tombstone + **NEW** merge-loser producer, 04 §3.4) | ws-isolation (`contacts_workspace_isolation`) | EXISTING + S-C1 |
 | `contact_emails` / `contact_phones` | tenant/workspace → CASCADE; `contact_id` → contacts **CASCADE** (hard-purge fanout only; product delete is soft); `source_import_id` → source_imports **SET NULL** | `deleted_at` (tombstoned rows = channel history; excluded from every partial index) | ws-isolation, **direct** on the denormalized `workspace_id` — never derived through the parent join (05 §2.4) | NEW S-CH1 |
 | `accounts` | tenant/workspace → CASCADE; `master_company_id` → master_companies (no onDelete); **NEW** composite `(workspace_id, parent_account_id)` → `accounts (workspace_id, id)` SET NULL-on-purge (S-A4 — cross-workspace parent structurally impossible) | **NEW** `deleted_at` (S-A5, G18): children tombstone same-tx; hierarchy children spliced to grandparent; contacts keep `account_id` | ws-isolation (`accounts_workspace_isolation`) | EXISTING + S-A4/S-A5 |
 | `account_domains` | tenant/workspace → CASCADE; `account_id` → accounts CASCADE (retention hard-purge only); `source_import_id` → source_imports SET NULL | `deleted_at` (soft-detach releases the ws-domain unique) | ws-isolation (06 §Security, quoted shape) | NEW S-A1 |
@@ -274,7 +274,7 @@ verbatim — 05 §2.4, 06 §Security).
 | `tags` | tenant/workspace → CASCADE | none | ws-isolation (`tags_workspace_isolation`) | EXISTING |
 | `record_tags` | tenant/workspace → CASCADE; `tag_id` → tags CASCADE; **`record_id` = bare uuid, NO FK** (entity CHECK `contact|account`) | none | ws-isolation (`record_tags_workspace_isolation`) | EXISTING — **G23 ◇, §7** |
 | `activities` | tenant/workspace → CASCADE; `contact_id` → contacts CASCADE; `actor_user_id` → users (null = system) | none (timeline re-points wholesale on merge) | ws-isolation (`activities_workspace_isolation`) | EXISTING |
-| `contact_reveals` | tenant/workspace → CASCADE; `contact_id` → contacts CASCADE; unique claim `(workspace_id, contact_id, reveal_type)` | none (claims move on merge, never re-minted — 04 §3.4) | ws-isolation (`contact_reveals_workspace_isolation`) | EXISTING |
+| `contact_reveals` | tenant/workspace → CASCADE; `contact_id` → contacts CASCADE; `revealed_by_user_id` → users NOT NULL (no onDelete); unique claim `(workspace_id, contact_id, reveal_type)` | none (claims move on merge, never re-minted — 04 §3.4) | ws-isolation (`contact_reveals_workspace_isolation`) | EXISTING |
 | `import_jobs` | tenant/workspace → CASCADE; `created_by_user_id` → users (null = system); `target_list_id` = bare uuid (audit pointer) | none (terminal statuses; retention reaps) | ws-isolation (`import_jobs_workspace_isolation`) — owner predicate is **app-layer**, doc `10` (no user GUC exists, 01 §5.1) | EXISTING (dark) |
 | `import_job_chunks` | `job_id` → import_jobs CASCADE | none | scoped **through the parent job** (EXISTS subquery — `rls/importJobs.sql:26–34`; no own workspace_id) | EXISTING (dark) |
 | `import_job_rows` | `job_id` → CASCADE; `chunk_id` → CASCADE; four `*_contact_id`/`source_import_id` = **bare uuids, NO FK** (point-in-time audit pointers — never rewritten by merge, Class B, 04 §3.4) | none (ledger; partitioning intent G25) | ws-isolation, direct on denormalized `workspace_id` | EXISTING (dark) |
@@ -306,13 +306,13 @@ via S-A5. A future child table added without a merge rule must fail 04's T1 inve
 | `uniq_contacts_ws_linkedin` `(workspace_id, linkedin_public_id)` WHERE non-null | contacts | EXISTING | identity rung 2 |
 | `uniq_contacts_ws_salesnav` `(workspace_id, sales_nav_lead_id)` WHERE non-null | contacts | EXISTING | identity rung 3 |
 | `uniq_accounts_ws_domain` `(workspace_id, domain)` WHERE non-null | accounts | EXISTING → **modified S-A5** (adds `AND deleted_at IS NULL`; online swap) | company rung C1 (primary cache) |
-| `uniq_source_imports_ws_content` `(workspace_id, content_hash)` | source_imports | EXISTING | identical-payload idempotency |
-| `uniq_list_members_list_contact` `(list_id, contact_id)` | list_members | EXISTING | membership idempotency; merge conflict-skip target |
-| `uniq_record_tags_tag_record` `(tag_id, entity, record_id)` | record_tags | EXISTING | assignment idempotency (G23 §7) |
-| `uniq_tags_ws_name` `(workspace_id, lower(name))` · `uniq_lists_ws_name` (live-only) | tags / lists | EXISTING | name uniqueness |
+| `uniq_source_imports_ws_content` `(workspace_id, content_hash)` WHERE non-null | source_imports | EXISTING | identical-payload idempotency |
+| `uniq_list_members_list_contact` `(list_id, contact_id)` (full unique) | list_members | EXISTING | membership idempotency; merge conflict-skip target |
+| `uniq_record_tags_tag_record` `(tag_id, entity, record_id)` (full unique) | record_tags | EXISTING | assignment idempotency (G23 §7) |
+| `uniq_tags_ws_name` `(workspace_id, lower(name))` (full unique) · `uniq_lists_ws_name` (live-only partial) | tags / lists | EXISTING | name uniqueness |
 | `uniq_import_jobs_ws_idempotency` `(workspace_id, idempotency_key)` WHERE non-null | import_jobs | EXISTING | submit idempotency |
-| `uniq_import_job_chunks_job_chunk` `(job_id, chunk_index)` | import_job_chunks | EXISTING | chunk claim dedup |
-| `uniq_import_mapping_templates_ws_lower_name` | import_mapping_templates | EXISTING | template upsert-in-place |
+| `uniq_import_job_chunks_job_chunk` `(job_id, chunk_index)` (full unique) | import_job_chunks | EXISTING | chunk claim dedup |
+| `uniq_import_mapping_templates_ws_lower_name` `(workspace_id, lower(name))` (full unique) | import_mapping_templates | EXISTING | template upsert-in-place |
 | `uniq_contact_emails_primary` `(contact_id)` WHERE `is_primary AND deleted_at IS NULL` (same shape for phones) | contact_emails/_phones | **NEW S-CH1** | at-most-one live primary (exactly-one is app-enforced + swept) |
 | `uniq_contact_emails_ws_value` `(workspace_id, blind_index)` WHERE live | contact_emails | **NEW S-CH1** | one email *value* per workspace → any-value identity rung (05 §2.2) |
 | `uniq_contact_emails_contact_value` / `uniq_contact_phones_contact_value` `(contact_id, blind_index)` WHERE live | both | **NEW S-CH1** | per-contact value dedup + FK-fanout index. **Phones are deliberately NOT ws-unique** — shared HQ lines are legal; cross-contact E.164 is a signal (05 §2.2) |
@@ -372,9 +372,10 @@ under the RLS predicate.
 design-of-record ([`../data-management/15-bulk-import-design.md`](../data-management/15-bulk-import-design.md)):
 "COPY only fast-loads an **UNLOGGED, non-RLS** per-job staging table (Postgres forbids COPY on
 RLS tables)" over the "**owner copy connection**", with rows *already prepared* — "PII is
-encrypted even in staging"; isolation is by access path, "all staging access confined to
-`importStagingRepository` on the owner connection" with **every read carrying an explicit
-`workspace_id` predicate** (`importStagingRepository.ts:1–8`; 01 §3.2). The schema declares the
+encrypted even in staging"; isolation drops to access path — "all staging access is CONFINED to
+this one repository" (`importStagingRepository`) on the owner connection, where "every read
+carries an EXPLICIT `workspace_id` predicate" (quoted from `importStagingRepository.ts:1–8`;
+01 §3.2). The schema declares the
 same boundary: "the per-job UNLOGGED staging table is non-RLS by design … isolated by access
 path in importStagingRepository — not here" (`rls/importJobs.sql:4–5`).
 
@@ -476,7 +477,7 @@ means the step is code/flag/backfill only (listed because 15 sequences gates bet
 | **S-A4** (06) | Yes | `accounts.parent_account_id` + `root_account_id`; `uniq_accounts_ws_id`; composite same-workspace FK; self-parent CHECK; `idx_accounts_ws_root` |
 | **S-A5** (06) | Yes | `accounts.deleted_at` (G18); online swap of `uniq_accounts_ws_domain` → live-only partial; live-only partials on account list/search indexes per doc 12 |
 | **S-A6** (06) | No | Per-tenant read cutover (dual-gate): `domains[]`/`locations[]`/hierarchy in API; ladder rung C2 activates |
-| *(deferred, no step)* | — | `contacts.account_location_id` (06 §3 consuming edge — adjacent-scope ◇); `contact_tags`/`account_tags` physical split (§7); doc 08's `import_jobs` keyset list index (§4.3) rides 08's step set |
+| *(deferred, no step)* | — | `contacts.account_location_id` (06 §3 consuming edge — adjacent-scope ◇); `contact_tags`/`account_tags` physical split (§7); **G22 ◇ field-level history** (recorded here per 02 §Register: 04 §4's in-tx `audit_log` before/after metadata is the shipped answer; overlay temporal tables stay `14 §future` — no DDL in this series); doc 08's `import_jobs` keyset list index (§4.3) rides 08's step set |
 
 **Hard ordering edges 15 must honor** (from 04/05/06, restated once): S-CH2 (dual-write)
 **before** the final S-CH3 backfill pass; S-C4 (merge engine) **after** S-CH1–S-CH4 *and* S-A1 +

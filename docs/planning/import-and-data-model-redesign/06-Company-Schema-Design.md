@@ -410,7 +410,7 @@ Per `truepoint-architecture/references/pre-build-thinking.md`; answers cite the 
   history beyond that is G22, explicitly deferred (02 §G22).
 - **Security** (truepoint-security checklist): every new table carries `tenant_id` +
   `workspace_id` and gets the exact shipped policy idiom, FORCE'd, fail-closed
-  (`packages/db/src/rls/contacts.sql:20–22` shape):
+  (`packages/db/src/rls/contacts.sql:17–22` shape):
 
   ```sql
   ALTER TABLE account_domains ENABLE ROW LEVEL SECURITY;
@@ -489,6 +489,12 @@ Per `truepoint-architecture/references/pre-build-thinking.md`; answers cite the 
 - Import mapping contract (doc 08): multi-domain column, optional primary flag, optional
   parent-by-domain/id association column (the [14] pattern: hierarchy links ride the file,
   resolved through the §5 ladder; unresolvable parents → review, never dangling).
+
+## Edge Cases
+
+Consolidated in the pre-build pass above (§DB & Backend, "Edge cases" bullet): self-parent,
+cross-workspace parent attempt, explicit-verb-only domain moves, tombstoned-domain re-attach,
+zero-live-domain accounts, enum rejection, and concurrent hierarchy edits.
 
 ## Testing hooks
 

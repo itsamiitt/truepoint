@@ -57,7 +57,10 @@ Pinned to shipped code and locked decisions before any design claim:
    `CONTACT_PROVENANCE_FIELDS` excludes email/phone because "channel provenance is DEFERRED to
    the reveal/channel layer" (`packages/types/src/fieldProvenance.ts:50–62`); DM6 names that
    deferred layer explicitly (`00-overview.md` §DM6). **The child tables specified here ARE
-   that channel layer** — they fulfill the DM6 seam rather than competing with it. §Cache
+   that channel layer** — they fulfill the DM6 seam rather than competing with it. (DM6 and the
+   code comment carry the era's working name for it, `revealed_channels` "Phase 4";
+   `contact_emails`/`contact_phones` supersede that *name* — a naming refinement of the same
+   reserved seam, not a second design.) §Cache
    contract below specifies the division precisely: the winner-map governs *which value holds
    the primary cache slot*; child rows carry *per-value* provenance.
 5. **Status vocabularies are reused, never re-derived** (DM1): `email_status` =
@@ -332,8 +335,8 @@ CREATE INDEX idx_contact_emails_ws_domain  ON contact_emails (workspace_id, emai
 ```
 
 `(workspace_id, contact_id)` keeps the per-contact channel fetch index-backed *under the RLS
-workspace predicate* (the house rationale on every `contacts` composite,
-`contacts.ts:94–98`). The contact-leading uniques in §2.2 serve the FK cascade path
+workspace predicate* (the house rationale stated on the shipped workspace-composite indexes,
+e.g. `contacts.ts:219, 225–227`). The contact-leading uniques in §2.2 serve the FK cascade path
 (`DELETE FROM contacts` fanout scans by bare `contact_id`).
 
 Six indexes per table is the budget ceiling; nothing else is added until a measured read
@@ -484,9 +487,10 @@ truth (S-CH2/S-CH3), **child wins** after read cutover (S-CH4). The job never gu
   (`contactRepository.ts:391–465`; 15 §2 chunk merge) — only the email SELECT's table
   changes, and it stays one query per chunk. During dual-write (pre-cutover) the lookup
   UNIONs flat + child to see pre-backfill rows; after S-CH4 it reads child only. Ladder
-  precedence (email → linkedin → sales-nav) is untouched; whether E.164 joins the ladder as a
-  fourth deterministic rung is doc 04's call (the vocabulary already exists,
-  `matchKeys.ts:23–28`) — this doc only guarantees the index (§2.2) that makes it O(1).
+  precedence (email → linkedin → sales-nav) is untouched; how E.164 participates was doc 04's
+  call and **04 §2 has made it**: a match *signal* feeding `duplicate_of_contact_id` markers,
+  never a deterministic upsert rung (the vocabulary already exists, `matchKeys.ts:23–28`) —
+  this doc only guarantees the index (§2.2) that makes the probe O(1).
 - **COPY-staging compatibility (the 15 §1 ciphertext rule).** Multi-value cells are prepared
   *before* staging: the `prepareContact` extension emits, per row, a `channels` structure —
   each entry already carrying `{ table, type, value_enc, blind_index, e164_enc?,
@@ -494,8 +498,11 @@ truth (S-CH2/S-CH3), **child wins** after read cutover (S-CH4). The job never gu
   Staged as one jsonb column (bytes hex-encoded inside the json — COPY-safe as quoted text,
   sidestepping the bytea-in-CSV encoding for the variable-cardinality part; the flat primary
   columns keep their existing bytea staging encoding). The chunk merge inserts child rows
-  batched (`insertBatch` sibling) in the same chunk `withTenantTx`. Plaintext never reaches
-  staging (15 §8 posture unchanged).
+  batched (`insertBatch` sibling) in the same chunk `withTenantTx`. No channel value —
+  primary or secondary — ever reaches staging as plaintext (the 15 §1 ciphertext rule);
+  `staging.raw_data` remains the **one** documented transient-plaintext column (the raw source
+  row kept for `source_imports` provenance, REVOKE'd + dropped on finalize — 15 §8;
+  `importStagingRepository.ts:6–8`), and the `channels` structure adds no second one.
 - **Column mapping:** the wizard maps multiple source columns onto typed channel slots
   (`phone` → type `work`/primary-candidate, `mobile_phone` → `mobile`, `hq_phone` → `hq`,
   `secondary_email` → `personal`, …) — doc 08 owns the mapping UX; this doc fixes the target

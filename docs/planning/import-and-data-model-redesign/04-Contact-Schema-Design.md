@@ -70,10 +70,10 @@ Per the series README, this section pins the design to shipped code and locked d
   contract is expressed *through* it.
 - **ADR-0028** — custom fields stay values-in-jsonb (100M-row rationale, 01 §6.7). No EAV, no
   custom-field child table is proposed here.
-- **`data-management/15-bulk-import-design.md` §rationale** — the pin-aware overwrite rule lives
-  in canonical TS (`planFieldWrite`) and is **never re-expressed as SQL** `CASE` over
-  `field_provenance`; the three-partial-unique identity ladder cannot ride a single
-  `ON CONFLICT`. Both facts shape the merge engine below.
+- **`data-management/15-bulk-import-design.md` §1 (the decisive architecture call)** — the
+  pin-aware overwrite rule lives in canonical TS (`planFieldWrite`) and is **never re-expressed
+  as SQL** `CASE` over `field_provenance`; the three-partial-unique identity ladder cannot ride
+  a single `ON CONFLICT`. Both facts shape the merge engine below.
 
 **What this doc explicitly does NOT change:**
 
@@ -208,7 +208,7 @@ phones — 05 §2.2); `contacts` gains no new unique. Following the Salesforce m
   import in doc 08).
 
 This preserves the shipped invariant that one upsert cannot express conflict-on-any-of-N keys
-(`data-management/15` §rationale) — the primaries stay the only conflict targets; everything
+(`data-management/15` §1) — the primaries stay the only conflict targets; everything
 else routes through markers and (now) merge.
 
 ### §3 The merge contract (owns G20)
@@ -247,7 +247,7 @@ somewhere to demote *to* — 03 §2.3 [9]) and, for the account sibling, doc 06'
   **pinned survivor field is structurally unoverwritable** even if the UI misbehaves
   (`fieldProvenance.ts:48–53`). A user's explicit per-field pick is a human assertion and runs
   through `planUserEdit` (sets `pin:true`), consistent with `editContact.ts`. Per
-  `data-management/15` §rationale, none of this is re-expressed as SQL `CASE` — the executor
+  `data-management/15` §1, none of this is re-expressed as SQL `CASE` — the executor
   calls the pure planners and persists the result in the tx.
 - `custom_fields`: shallow union, survivor-wins per key (§1). `field_provenance` of the loser is
   never merged into the survivor's map (descriptors describe the survivor's *current* values);
@@ -279,13 +279,13 @@ Two classes:
 |---|---|
 | `contact_emails` / `contact_phones` (05 §) | §3.3 — demote to secondary; collapse collisions |
 | `list_members` (`lists.ts:92–94`, unique `(list_id, contact_id)` at `:108`) | `UPDATE … SET contact_id = survivor` with per-row conflict-skip — a list holding both keeps one membership (union, 03 §2.1 [40]); the loser's `added_via`/`source_import_id` provenance rides the surviving row only when the survivor had none |
-| `source_imports` (`contacts.ts:249–251`) | Re-point (lineage follows the person). `(workspace_id, content_hash)` unique collisions are impossible across distinct rows (hash includes row content) but the update still runs conflict-tolerant |
+| `source_imports` (`contacts.ts:249–251`) | Re-point (lineage follows the person). The `(workspace_id, content_hash)` unique (`contacts.ts:261–263`) does not include `contact_id`, so re-pointing structurally cannot collide with it; the update still runs conflict-tolerant as belt-and-braces |
 | `activities` (`activity.ts:29–31`) | Re-point wholesale — the survivor's timeline becomes the union (03 §2.1 [40]) |
 | `record_tags` (`tags.ts:48+`, bare uuid — G23 ◇) | Re-point by `(entity='contact', record_id=loser)`, dedupe against survivor's existing tag set. The missing-FK integrity question stays doc 07's |
 | `contact_reveals` (`billing.ts:39,45`) | Re-point per reveal_type, conflict-skip when the survivor already holds the same claim. **Merge never creates a billable event and never double-charges** — claims move, they are not re-minted |
 | `suppression_list` rows with `match_type='contact_id'` (`billing.ts:156,167`) | Re-point — suppression is unbypassable (DM7); a suppressed loser must keep suppressing the merged record |
 | `consent_records` (`compliance.ts:15,25`) | Re-point — consent history follows the person |
-| `outreach_log` (`outreach.ts:92`), `email_thread`/`email_message`/`email_event` (`email.ts`), `sales_nav_links` (`salesnav.ts:37`), `scores`/`intent_signals` (`intel.ts:35`) | Re-point; `scores`: keep both histories, survivor's `priority_score` cache recomputes next pass |
+| `outreach_log` (`outreach.ts:92`), `email_thread`/`email_message`/`email_event` (`email.ts:151,274,321`), `sales_nav_links` (`salesnav.ts:37`), `scores`/`intent_signals` (`intel.ts:40,64`) | Re-point; `scores`: keep both histories, survivor's `priority_score` cache recomputes next pass |
 
 **Class B — historical/job ledgers: never rewritten.** `import_job_rows` audit pointers (no FKs
 by design, `importJobs.ts:144–146`), `enrichment_job_rows.matched_contact_id`,
@@ -468,7 +468,7 @@ Per `truepoint-architecture/references/pre-build-thinking.md`; answers cite the 
 | S-C1 | Additive columns `contacts.merged_into_contact_id` (self-FK) + `merged_at`; partial index on non-null | 🔲 |
 | S-C2 | Extend `audit_log` action CHECK + `auditAction` enum with `contact.merge`; scalar-edit audit metadata contract | 🔲 |
 | S-C3 | Seed `contact_merge_enabled` per-tenant flag (off) + `CONTACT_MERGE_ENABLED` env kill-switch (dual-gate, 01 §7.3 pattern) | 🔲 |
-| S-C4 | Core merge engine (`packages/core`): pure plan (survivor/loser/decisions → write-set via `planFieldWrite`/`planUserEdit`) + tx executor with the §3.4 inventory | 🔲 (depends on 05's S-MV* child tables) |
+| S-C4 | Core merge engine (`packages/core`): pure plan (survivor/loser/decisions → write-set via `planFieldWrite`/`planUserEdit`) + tx executor with the §3.4 inventory | 🔲 (depends on 05's S-CH1–S-CH4 child tables) |
 | S-C5 | API verb `POST /contacts/:id/merge` + preview endpoint; merge DTOs in `@leadwolf/types` (§6) | 🔲 |
 | S-C6 | Match-time ladder extension (any-value email resolve + phone-signal marker writes, §2) in `findByDedupKeys` + bulk staging equivalents | 🔲 (after 05) |
 | S-C7 | Masked-DTO channel summary + read projection (§6) | 🔲 (after 05) |

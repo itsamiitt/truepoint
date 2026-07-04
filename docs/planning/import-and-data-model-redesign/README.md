@@ -65,13 +65,13 @@ Doc statuses in this table: 🔲 not written · 🟡 drafted · ✅ written & ad
 | [`01`](01-Current-State-Audit.md) | Current-State Audit (code-grounded source of truth) | ✅ |
 | [`02`](02-Root-Cause-and-Gap-Analysis.md) | Root-Cause & Gap Analysis (gap register G01–G26) | ✅ |
 | [`03`](03-Enterprise-Research.md) | Enterprise Research (citation register, 145 sources) | ✅ |
-| [`04`](04-Contact-Schema-Design.md) | Contact Schema Design | 🔲 |
-| [`05`](05-Multi-Value-Channel-Architecture.md) | Multi-Value Channel Architecture (phones & emails) | 🔲 |
-| [`06`](06-Company-Schema-Design.md) | Company Schema Design | 🔲 |
-| [`07`](07-Data-Model-Relationships.md) | Data-Model Relationships (ER diagrams, constraints) | 🔲 |
-| [`08`](08-Import-Architecture.md) | Import Management Architecture | 🔲 |
-| [`09`](09-Queue-and-Background-Processing.md) | Queue & Background Processing | 🔲 |
-| [`10`](10-Visibility-and-Permissions.md) | Job Visibility & Permissions | 🔲 |
+| [`04`](04-Contact-Schema-Design.md) | Contact Schema Design | ✅ |
+| [`05`](05-Multi-Value-Channel-Architecture.md) | Multi-Value Channel Architecture (phones & emails) | ✅ |
+| [`06`](06-Company-Schema-Design.md) | Company Schema Design | ✅ |
+| [`07`](07-Data-Model-Relationships.md) | Data-Model Relationships (ER diagrams, constraints) | ✅ |
+| [`08`](08-Import-Architecture.md) | Import Management Architecture | ✅ |
+| [`09`](09-Queue-and-Background-Processing.md) | Queue & Background Processing | 🟡 |
+| [`10`](10-Visibility-and-Permissions.md) | Job Visibility & Permissions | 🟡 |
 | [`11`](11-UI-UX-Redesign.md) | Import UI/UX Redesign | 🔲 |
 | [`12`](12-Performance-and-Scalability.md) | Performance & Scalability | 🔲 |
 | [`13`](13-Security-and-Compliance.md) | Security & Compliance | 🔲 |
