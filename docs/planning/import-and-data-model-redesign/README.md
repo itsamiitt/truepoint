@@ -70,11 +70,11 @@ Doc statuses in this table: 🔲 not written · 🟡 drafted · ✅ written & ad
 | [`06`](06-Company-Schema-Design.md) | Company Schema Design | ✅ |
 | [`07`](07-Data-Model-Relationships.md) | Data-Model Relationships (ER diagrams, constraints) | ✅ |
 | [`08`](08-Import-Architecture.md) | Import Management Architecture | ✅ |
-| [`09`](09-Queue-and-Background-Processing.md) | Queue & Background Processing | 🟡 |
-| [`10`](10-Visibility-and-Permissions.md) | Job Visibility & Permissions | 🟡 |
-| [`11`](11-UI-UX-Redesign.md) | Import UI/UX Redesign | 🔲 |
-| [`12`](12-Performance-and-Scalability.md) | Performance & Scalability | 🔲 |
-| [`13`](13-Security-and-Compliance.md) | Security & Compliance | 🔲 |
+| [`09`](09-Queue-and-Background-Processing.md) | Queue & Background Processing | ✅ |
+| [`10`](10-Visibility-and-Permissions.md) | Job Visibility & Permissions | ✅ |
+| [`11`](11-UI-UX-Redesign.md) | Import UI/UX Redesign | ✅ |
+| [`12`](12-Performance-and-Scalability.md) | Performance & Scalability | ✅ |
+| [`13`](13-Security-and-Compliance.md) | Security & Compliance | ✅ |
 | [`14`](14-Roadmap-Risk-and-Future-Enhancements.md) | Roadmap, Risk & Future Enhancements | 🔲 |
 | [`15`](15-Migration-Rollback-and-Testing.md) | Migration, Rollback & Testing | 🔲 |
 | [`16`](16-Implementation-Audit.md) | Implementation Audit (living) | ✅ (scaffolded; updates as phases ship) |

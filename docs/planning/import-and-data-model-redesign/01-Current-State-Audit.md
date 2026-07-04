@@ -376,6 +376,10 @@ Per-workspace typed registry `custom_field_definitions`
   (“NO master-graph write — grain B remains security-review-gated”,
   `platformAdminWrites.ts:337`). Sibling `execBulkDelete` = bounded soft-delete ≤ 1000 ids
   (`platformAdminWrites.ts:374–392`).
+- **Customer-facing review surface (dismiss-only):** a duplicates list ships today in
+  `apps/web/src/features/data-health/components/DuplicatesSection.tsx` (+
+  `hooks/useDuplicatePairs.ts`) — it can list marker pairs and **unmark** them, but offers no
+  accept/merge verb (doc `11` upgrades it in place rather than adding a second surface).
 - **Grain-B** master cluster merge/split: design-only (`pending/dedup-merge-design.md`).
 - Layer-0 probabilistic ER proposes `match_links` only, shadow-gated
   (prospect-database-platform I5 — see that series).

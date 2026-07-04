@@ -53,7 +53,7 @@ Pinned to shipped code at the same head as doc 01 (branch `feat/data-mgmt-01-res
   instrument — job tables are workspace-scoped rows, and the live job lists already gate on
   `requireRole` (`reveal/routes.ts:201`, `enrichment/routes.ts:47`).
 - **Two-surface wall (README §Two-surface note).** Staff capabilities
-  (`packages/types/src/staffCapability.ts:13–38`, 21 caps; `data:*` at :33–37) never gate
+  (`packages/types/src/staffCapability.ts:13–38`, 21 caps; `data:*` at :33–36) never gate
   `apps/web`; a workspace/org role never gates `/admin/*`. Nothing in this doc uses a staff cap.
 - **The creator columns already exist and are populated** — `import_jobs.created_by_user_id`
   (`schema/importJobs.ts:45`), `reveal_jobs.created_by_user_id` (`schema/revealJobs.ts:39`),
@@ -183,7 +183,8 @@ the client.
 |---|---|---|---|---|
 | **List** (`GET /imports`, `GET /reveal-jobs`, `GET /jobs`, Recent Imports) | own + shared¹ | **own + shared** | **all, with creator attribution** | the G01 fix; HubSpot export-log split (03 §5.1 [7]) |
 | **Detail by id** | same predicate as list | same predicate as list | all | identical predicate ⇒ no IDOR side-door (§4.2); invisible ⇒ **404**, never 403 (shipped posture, 01 §5.7 / `bulkRoutes.ts:242`) |
-| **Create** (submit / commit / one-shot) | ✗ 403 | ✓ (default; workspace policy may raise to admin-only, §3) | ✓ | the G02 fix; today: no gate at all (`import/routes.ts:127`) |
+| **Create** (upload / commit / one-shot) | ✗ 403 | ✓ (default; workspace policy may raise to admin-only, §3) | ✓ | the G02 fix; today: no gate at all (`import/routes.ts:127`) |
+| **Draft-phase verbs** (save mapping / preview on `:id` — 08 §2.3) | ✗ | **creator only**³ | creator only³ | a draft is its creator's wizard session, not workspace data; rides the create grant (§3); new surface (08 Phase B) — strict from birth |
 | **Cancel** | creator only² | **creator** | all | Salesforce creator-or-named-permission abort rule (03 §5.1 [56]); rides 08 §2.2's stop-remainder semantics |
 | **Retry failed rows** | creator only² | creator | all | creation-shaped: also requires the create grant (§3) |
 | **Download error artifact** (rejected/repair CSV — **PII**) | ✗ | **creator only** | all | tightest gate — HubSpot importer-or-super-admin (03 §5.1 [6]); never widened by `shared_with_workspace` (share shares *metadata*, never artifacts); every download audited (§7) |
@@ -193,7 +194,10 @@ the client.
 ¹ Post-G02 a viewer creates nothing, so "own" is normally empty — the predicate still applies
 uniformly (legacy rows; role downgrades). ² Creator-verbs are honored regardless of current
 role: Salesforce's rule is "if you created it" (03 §5.1 [56]); a member demoted to viewer can
-still cancel their own stuck job.
+still cancel their own stuck job. ³ Draft-phase verbs — and commit, which finalizes a draft —
+act only on the caller's **own** draft: elevated roles see draft rows per the list predicate
+(drafts are list-excluded by default, 08 §7) and may cancel one (Cancel row), but never edit or
+commit another user's draft.
 
 **Attribution is part of the contract, not garnish:** every all-visible list row carries
 `createdBy { userId, displayName }` (join to `users`; HubSpot renders name + email, 03 §5.1
@@ -202,9 +206,10 @@ still cancel their own stuck job.
 
 #### §2.2 Row visibility vs record visibility
 
-Scoping a job list does **not** scope the records the job created (the Salesloft distinction,
-03 §5.1 [119]): contacts landed by member A's import remain workspace-visible per the record
-model (§6.3). The job row is the activity artifact; the records are the shared dataset.
+Scoping a job list does **not** scope the records the job created (the Salesloft distinction —
+illustrative only, 03 §5.1 [119] is register-marked blog-grade; the binding anchor is the
+shipped record model, 01 §6.4): contacts landed by member A's import remain workspace-visible
+per the record model (§6.3). The job row is the activity artifact; the records are the shared dataset.
 
 #### §2.3 The per-job share flag — column now, UX deferred 🔲
 

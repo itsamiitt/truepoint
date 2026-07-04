@@ -266,7 +266,7 @@ than both Salesforce and HubSpot (03 §6.2 matrix).
 | State | Terminal | Entered by | Legal exits | Notes |
 |---|---|---|---|---|
 | `uploading` | no | client `POST /imports` (multipart-presigned variant, Phase B) | `draft` (upload complete) · `failed` (upload failed/abandoned past TTL) | new (S-I1) |
-| `draft` | no | client upload complete (server) | `queued` / `deferred` (client **commit**) · reaped (sweep; row deleted, audited) | new (S-I1); never listed in history by default |
+| `draft` | no | client upload complete (server) | `queued` / `deferred` (client **commit**) · `cancelled` (client cancel ≡ discard, §2.2) · reaped (sweep; row deleted, audited) | new (S-I1); never listed in history by default |
 | `queued` | no | client commit; legacy one-shot submit; scheduler promoting `deferred`; parent job spawning a retry child (§6.3) | `validating` (worker claim) · `cancelled` (client cancel) · `deferred` (re-shed, rare) | shipped |
 | `deferred` | no | server at commit (workspace concurrency cap hit) | `queued` (scheduler, 09) · `cancelled` (client) | new (S-I1) |
 | `validating` | no | worker (drive start: parse + validate; copy mode: stage begins) | `staged` (copy) · `running` (fast) · `failed` (parse error / AV `infected`) · `cancelled` (client request honored at boundary) | shipped; fast mode passes through |

@@ -286,7 +286,7 @@ Per-kind budgets — the column that matters is *what a replay can and cannot do
 
 | Job kind | Attempts | Backoff base | Deadline (`withDeadline`) | Replay-safe because | Must-not-double-fire, handled by |
 |---|---|---|---|---|---|
-| `drive` (fast + copy) | 3 (shipped, `bulkQueue.ts:33`) | 2 s | 15 min (copy; stage-bound) · 2 min (fast) | watermark resume — a re-drive never re-stages (data-management/15 §2; `runBulkImport` resume, 01 §2.2 hop 7); chunk fan-out dedupes on stable jobId + `(job_id, chunk_index)` unique | — |
+| `drive` (fast + copy) | 3 (shipped, `bulkQueue.ts:32`) | 2 s | 15 min (copy; stage-bound) · 2 min (fast) | watermark resume — a re-drive never re-stages (data-management/15 §2; `runBulkImport` resume, 01 §2.2 hop 7); chunk fan-out dedupes on stable jobId + `(job_id, chunk_index)` unique | — |
 | `chunk` | 3 | 2 s | 10 min | **row ledger + 3-level idempotency**: terminal-skip on the chunk row, row `content_hash`, dedup-key upserts — re-merging a band promotes nothing twice (data-management/15 §2) | counter deltas: applied once per chunk *completion tx*, not per attempt (the delta write commits with the merge, so a failed attempt contributes nothing) |
 | finalize (in-chunk step, not a job) | rides its chunk's budget | — | — | — | **the atomic completer**: only a real completion increments `completed_chunks`, and only the transition `completed_chunks == total_chunks` finalizes — exactly once by construction (`bulkImports.ts:100–112`, shipped) |
 | error-report/artifact write (finalize step) | 3 internal retries then job stays terminal with `artifact_pending` flag re-swept by the reaper | 5 s | — | artifact write is idempotent (same key, full overwrite); the terminal status never blocks on it | terminal transition commits *before* artifact upload — a crash re-runs only the upload |
@@ -372,8 +372,11 @@ This doc supplies the machinery:
    staging dropped, the `import.job.cancelled` event + notify intent written in the same tx
    (§6). Who runs it: the last in-flight chunk observing `cancelled`; if nothing was in
    flight, the cancel verb's own tx finalizes inline; the reaper is the crash backstop.
-5. **Cancellable states** are 08 §2.1's exits column (everything non-terminal except
-   operator-owned `paused`); cancel-on-cancelled is a 200 no-op (08 §2.3).
+5. **Cancellable states** follow 08's machine (08 §2.1 exits + §2.2 mechanics): the client verb
+   covers `draft`/`queued`/`deferred`/`validating`/`staged`/`running` (08 §2.2 — cancelling a
+   `draft` is a discard: nothing ever ran); `paused` exits to `cancelled` only on the operator
+   path (Surface 1 owns `paused`); `uploading` has no cancel exit — an abandoned upload TTLs to
+   `failed` (08 §2.1). Cancel-on-cancelled is a 200 no-op (08 §2.3).
 
 ### §6 Notifications & lifecycle events via the outbox (G06) 🔲
 
@@ -493,6 +496,7 @@ the "stuck import" ticket class this series exists to kill. Rules:
 
 | State | UI copy direction (11 owns wording) | Waits on |
 |---|---|---|
+| `uploading` | "Uploading your file" (Phase-B presigned flow only, 08 §2.1; direct uploads never show it) | client (bytes in flight) |
 | `draft` | "Draft — finish setting up your import" | user |
 | `queued` | "Waiting to start" | worker |
 | `deferred` | "Queued — will start when a slot frees (N running)" | scheduler (visible cap, 03 §6.1 [18]) |
