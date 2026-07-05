@@ -122,7 +122,7 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
     // Exactly ONE real chunk row (uniform accounting, 08 §1.1). A retry attempt reuses the existing row —
     // the (job_id, chunk_index) unique is the idempotency backstop; `attempts` counts the re-claims.
     const chunks = await importJobRepository.listChunks(tx, jobId);
-    let chunk = chunks.find((c) => c.chunkIndex === 0) ?? null;
+    const chunk = chunks.find((c) => c.chunkIndex === 0) ?? null;
     let chunkId: string;
     if (chunk) {
       chunkId = chunk.id;
@@ -205,10 +205,16 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
         rowsRejected: summary.rejected,
       };
       await importJobRepository.updateJobProgress(tx, jobId, delta);
-      // Rejected-rows ledger (08 §6.1): one import_job_rows entry per rejected input line. Landed rows'
-      // per-row outcomes are NOT derivable from the summary (runImport reports them in aggregate only) —
-      // their ledger coverage arrives with the artifact step (S-I7); counters carry the truth meanwhile.
-      const ledger: ImportJobRowInsert[] = summary.rejectedRows.map((r) => ({
+      // Rejected-rows ledger (08 §6.1): one import_job_rows entry per rejected INPUT LINE — summary
+      // .rejectedRows may carry >1 reason per row (one per offending field), so dedupe by row index with
+      // the PRIMARY (first) reason, mirroring summary.errors. Landed rows' per-row outcomes are NOT
+      // derivable from the summary (runImport reports them in aggregate only) — their ledger coverage
+      // arrives with the artifact step (S-I7); counters carry the truth meanwhile.
+      const byRow = new Map<number, (typeof summary.rejectedRows)[number]>();
+      for (const r of summary.rejectedRows) {
+        if (!byRow.has(r.row)) byRow.set(r.row, r);
+      }
+      const ledger: ImportJobRowInsert[] = [...byRow.values()].map((r) => ({
         jobId,
         chunkId: claim.chunkId,
         rowIndex: r.row,
