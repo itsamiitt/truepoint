@@ -39,6 +39,13 @@ const workspaceId = () =>
     .references(() => workspaces.id, { onDelete: "cascade" });
 
 // ── import_jobs — the control row (one per uploaded file; NOT partitioned) ──────────────────────────────
+// STORAGE PARAMS (S-P5, migration 0056 — Drizzle cannot express storage parameters, so this comment is the
+// schema-side record; the hand-authored migration owns the DDL and a regen has nothing to fight):
+// `fillfactor = 90` — the job row is the hottest row in the system during a run (≤ K chunk writers × ≤ 20
+// counter deltas per 10k chunk, 09 §4.2), and the eight rows_* counters are deliberately NON-INDEXED so
+// each delta is a HOT update given page headroom (12 §6.2). ⚠ NEVER INDEX A COUNTER COLUMN — an index on
+// any rows_* / completed_chunks column forfeits HOT and puts ~200 index-entry writes per job on this row
+// (12 §6.2's rule, recorded here per 12 §Rollout so no future index "optimization" trips it).
 export const importJobs = pgTable(
   "import_jobs",
   {
@@ -182,6 +189,10 @@ export const importJobChunks = pgTable(
 // NOTE: 03 §12 targets monthly range-partitioning (same as activities/provider_calls/enrichment_job_rows) —
 // plain table until volume warrants; do not silently drop the partitioning intent. The four *_id pointer
 // columns are plain uuid with NO FK (audit pointers; mirror enrichment_job_rows.matched_master_person_id).
+// STORAGE PARAMS (S-P5, migration 0056; comment-only — Drizzle can't express them): per-table autovacuum
+// posture for an append-only table at the 100M-row horizon (12 §6.2) — vacuum/analyze scale factors 0.01
+// + insert threshold 100k, so the visibility map (index-only scans) and freeze keep up with import bursts
+// instead of waiting for 20% of a 100M-row table. Reversible via ALTER … RESET (15 §R-P2).
 export const importJobRows = pgTable(
   "import_job_rows",
   {

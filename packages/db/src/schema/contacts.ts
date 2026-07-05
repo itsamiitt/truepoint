@@ -240,6 +240,11 @@ export const contacts = pgTable(
 // ── Source imports (per-import provenance — the ONLY lineage under ADR-0006) ───────────────────────────
 // NOTE: 03 §12 targets monthly range-partitioning for this high-volume table; shipped as a plain table in
 // M1 and converted when volume warrants (do not silently drop the partitioning intent).
+// STORAGE PARAMS (S-P5, migration 0056; comment-only — Drizzle can't express them): append-only autovacuum
+// posture per import-redesign 12 §6.2 (scale factors 0.01 + insert threshold 100k — visibility map/freeze
+// sized for 100M rows and import bursts). Reversible via ALTER … RESET. The other two §6.2 tables,
+// contact_emails/contact_phones, are unshipped (05 S-CH1) — 0056 guards them with to_regclass and S-CH1's
+// migration MUST (re)state the same parameters (16 drift row carries this).
 export const sourceImports = pgTable(
   "source_imports",
   {

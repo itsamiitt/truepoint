@@ -393,6 +393,13 @@
       "when": 1784900000000,
       "tag": "0055_import_template_sharing",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1785000000000,
+      "tag": "0056_import_storage_params",
+      "breakpoints": true
     }
   ]
 }
