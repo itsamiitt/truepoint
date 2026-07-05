@@ -15,6 +15,7 @@ import type {
   BulkImportRowOutcome,
   ConflictPolicy,
   ImportJobStatusV2,
+  ImportMergeMode,
   JobViewer,
 } from "@leadwolf/types";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
@@ -55,6 +56,11 @@ export interface ImportJobCreateValues {
   processingMode?: "fast" | "copy";
   /** The honest DISPLAY filename (source_name holds the SourceName provider enum — 08 §Contradiction scan). */
   sourceFilename?: string | null;
+  /** The 08 §5 strategy pair the server resolved for this job (S-I6): request → template → import_policy
+   *  default. Persisted so history/detail reflects HOW the job merged; the columns default to the policy-
+   *  matching create_and_update / false, so an unset caller is unchanged. */
+  mergeMode?: ImportMergeMode;
+  preservePopulated?: boolean;
 }
 
 /**

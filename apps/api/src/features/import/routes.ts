@@ -16,9 +16,15 @@ import {
   parseImportFile,
   writeAudit,
 } from "@leadwolf/core";
-import { type ImportJobRow, importJobRepository, withTenantTx } from "@leadwolf/db";
+import {
+  type ImportJobRow,
+  importJobRepository,
+  importPolicyRepository,
+  withTenantTx,
+} from "@leadwolf/db";
 import {
   type ColumnMapping,
+  type ConflictPolicy,
   DEFAULT_CONFLICT_POLICY,
   ForbiddenError,
   IMPORT_FASTPATH_MAX_BYTES,
@@ -32,6 +38,7 @@ import {
   type ImportJobStatusResponse,
   type ImportPreview,
   type ImportProgress,
+  type ImportStrategy,
   type ImportSummary,
   ImportTooLargeError,
   ImportValidationError,
@@ -39,6 +46,7 @@ import {
   type SourceName,
   columnMappingSchema,
   conflictPolicy,
+  importMergeMode,
   importProgressSchema,
   importSummarySchema,
   importTargetSchema,
@@ -267,6 +275,55 @@ function assertFastPathRouting(fileName: string, byteSize: number, rowCount: num
   }
 }
 
+// ── S-I6: resolve the 08 §5 merge strategy for a gate-on job (request → template → import_policy default) ─
+// Precedence (08 §5): explicit request `mergeMode`/`preservePopulated` win (each independently falling back to
+// the workspace policy default); a legacy client sending only `conflictPolicy` gets it MAPPED onto the triad
+// (the compatibility mapping — mirrors core's conflictPolicyToStrategy); otherwise the org-admin workspace
+// default from `import_policy` (10 §3). The TEMPLATE layer (a saved mapping template's strategy block) slots
+// between request and policy when S-I2/S-I8 wire `mapping_template_id` on this route — not yet reachable here.
+async function resolveImportStrategy(
+  form: FormData,
+  scope: { tenantId: string; workspaceId: string },
+  conflictPolicyData: ConflictPolicy,
+  conflictPolicySent: boolean,
+): Promise<ImportStrategy> {
+  const mergeRaw = form.get("mergeMode") ?? form.get("merge_mode");
+  const preserveRaw = form.get("preservePopulated") ?? form.get("preserve_populated");
+
+  if (mergeRaw != null || preserveRaw != null) {
+    // Explicit v2 strategy fields present ⇒ they win, each field independently defaulting to the policy.
+    const policy = await importPolicyRepository.resolved(scope);
+    let mergeMode = policy.defaultMergeMode;
+    if (mergeRaw != null) {
+      const parsed = importMergeMode.safeParse(mergeRaw);
+      if (!parsed.success)
+        throw new ImportValidationError(
+          "'mergeMode' must be one of: create_and_update, create_only, update_only.",
+        );
+      mergeMode = parsed.data;
+    }
+    let preservePopulated = policy.defaultPreservePopulated;
+    if (preserveRaw != null) {
+      if (preserveRaw !== "true" && preserveRaw !== "false")
+        throw new ImportValidationError("'preservePopulated' must be 'true' or 'false'.");
+      preservePopulated = preserveRaw === "true";
+    }
+    return { mergeMode, preservePopulated };
+  }
+
+  if (conflictPolicySent) {
+    // Legacy conflictPolicy → triad (08 §5): overwrite → create_and_update; skip/keep_both → create_only;
+    // preserve_populated:false (no legacy switch). Byte-equivalent to core's conflictPolicyToStrategy.
+    return {
+      mergeMode: conflictPolicyData === "overwrite" ? "create_and_update" : "create_only",
+      preservePopulated: false,
+    };
+  }
+
+  const policy = await importPolicyRepository.resolved(scope);
+  return { mergeMode: policy.defaultMergeMode, preservePopulated: policy.defaultPreservePopulated };
+}
+
 /** Parse the shared import form fields (file + sourceName + mapping); throws ImportValidationError on bad input. */
 async function parseImportForm(form: FormData): Promise<{
   file: File;
@@ -367,12 +424,16 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
     // otherwise the verdict is `fast` (processing_mode below). Gate-on only — the legacy path never refuses.
     assertFastPathRouting(file.name, file.size, parsed.rows.length);
     const scope = { tenantId, workspaceId };
+    // S-I6: resolve the 08 §5 merge strategy (request → import_policy default; legacy conflictPolicy mapped).
+    // It rides the payload (supersedes conflictPolicy in the engine) AND is persisted on the job row below.
+    const strategy = await resolveImportStrategy(form, scope, parsedPolicy.data, policyRaw != null);
     const input: ImportFastInput = {
       importedByUserId: claims.sub,
       sourceName: src,
       sourceFile: file.name,
       mapping,
       conflictPolicy: parsedPolicy.data,
+      strategy,
       rows: parsed.rows,
       target: listId ? { listId } : undefined,
     };
@@ -407,6 +468,9 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
         // fast — copy engagement is S-I5/S-I9) + the honest display filename.
         processingMode: "fast",
         sourceFilename: file.name,
+        // S-I6: persist the resolved 08 §5 strategy so history/detail reflects HOW the job merged.
+        mergeMode: strategy.mergeMode,
+        preservePopulated: strategy.preservePopulated,
       });
       return { ...res, admission: verdict };
     });

@@ -23,8 +23,10 @@ import {
 import type {
   ColumnMapping,
   ConflictPolicy,
+  ImportMergeMode,
   ImportRowError,
   ImportRowOutcome,
+  ImportStrategy,
   ImportSummary,
   ImportTarget,
   RejectedRow,
@@ -49,8 +51,13 @@ export interface RunImportInput {
   sourceFile?: string;
   mapping: ColumnMapping;
   rows: RawRow[]; // already parsed (parseImportFile)
-  /** How to resolve a match against an existing workspace contact (G-IMP-5). Defaults to `skip` (no overwrite). */
+  /** How to resolve a match against an existing workspace contact (G-IMP-5). Defaults to `skip` (no overwrite).
+   *  LEGACY input: when `strategy` is absent it maps onto the 08 §5 triad (compatibility mapping below). */
   conflictPolicy?: ConflictPolicy;
+  /** The 08 §5 merge-strategy triad + preserve_populated switch (S-I6, gate-on). SUPERSEDES `conflictPolicy`
+   *  when present; expressed through the CANONICAL `planFieldWrite` path (never SQL). Absent ⇒ the legacy
+   *  `conflictPolicy` mapping drives the engine, byte-identically. */
+  strategy?: ImportStrategy;
   /**
    * Optional "import into list" target (list-plan/03 §2.2, Phase 2). When set, every landed contact (created,
    * overwritten-match, AND a held-back duplicate / idempotent-skip that resolved to an existing workspace
@@ -216,13 +223,26 @@ async function recordImportEvidence(
   }
 }
 
+/**
+ * Legacy `conflictPolicy` → 08 §5 strategy triad (the compatibility mapping): `skip` → `create_only`,
+ * `overwrite` → `create_and_update`, `keep_both` → `create_only` (retired — no market analog; it manufactured
+ * the duplicates the review queue exists to prevent, so a legacy submission carrying it is treated as
+ * `create_only`). Legacy always maps to `preservePopulated:false` (there was no such switch), so the gate-off
+ * internal path stays BYTE-IDENTICAL: `create_only` reproduces the old skip/keep_both held-back-duplicate
+ * branch, and `create_and_update` reproduces the old overwrite update branch; `update_only` is unreachable.
+ */
+function conflictPolicyToStrategy(policy: ConflictPolicy): ImportStrategy {
+  const mergeMode: ImportMergeMode = policy === "overwrite" ? "create_and_update" : "create_only";
+  return { mergeMode, preservePopulated: false };
+}
+
 async function importOneRow(
   tx: Tx,
   input: RunImportInput,
   raw: RawRow,
   prepared: PreparedContact,
   hash: Uint8Array,
-  policy: ConflictPolicy,
+  strategy: ImportStrategy,
 ): Promise<RowLanding> {
   const { tenantId, workspaceId } = input.scope;
   const listId = input.target?.listId;
@@ -251,16 +271,23 @@ async function importOneRow(
   // that does not land never mints a master node nor stamps an account — resolve only on landing rows).
   const match = await contactRepository.findByDedupKeys(tx, workspaceId, prepared.dedupKeys);
 
-  // G-IMP-5 conflict policy held-back DUPLICATE (skip/keep_both): keep the existing contact untouched; count
-  // it as a duplicate (no provenance row appended), but still add it to the target list (the point of an
-  // "import into list" is membership). This path does NOT land → no master resolution, no account upsert.
-  //   - `keep_both` → a truly SEPARATE record can't exist in the overlay (one-per-identity-key), and
-  //                   separate-record survivorship is ER's domain (30 §5, ADR-0021); until that lands,
-  //                   keep_both holds the match back as a duplicate (NOT a silent overwrite) rather than
-  //                   throwing a unique-constraint error on an insert that can never succeed.
-  if (match && (policy === "skip" || policy === "keep_both")) {
+  // create_only (08 §5 — and the legacy skip/keep_both that maps to it): a matched contact is a held-back
+  // DUPLICATE — kept untouched, counted as a duplicate (no provenance row appended), but still added to the
+  // target list (membership is the point of an "import into list"). This path does NOT land → no master
+  // resolution, no account upsert. (keep_both had no separate-record home in the one-per-identity overlay —
+  // ER's domain, 30 §5/ADR-0021 — so mapping it to create_only holds the match back instead of throwing a
+  // unique-constraint error on an insert that can never succeed.)
+  if (match && strategy.mergeMode === "create_only") {
     const addedToList = listId ? await addLandedToList(tx, input, listId, match.id, null) : false;
     return { outcome: "duplicate", contactId: match.id, sourceImportId: null, addedToList };
+  }
+
+  // update_only MISS (08 §5.3): no existing contact to update ⇒ the row is SKIPPED with code
+  // `no_match_update_only` (a SKIP, never a reject — HubSpot's mode-violation class). It does not land, mints
+  // nothing, and joins no list. Reachable only when the strategy is explicitly update_only (gate-on); the
+  // legacy mapping never produces update_only, so the gate-off path never reaches this branch.
+  if (!match && strategy.mergeMode === "update_only") {
+    return { outcome: "skipped", contactId: null, sourceImportId: null, addedToList: false };
   }
 
   // ── LANDING ROW (created, or overwrite→matched) ──────────────────────────────────────────────────────────
@@ -307,15 +334,42 @@ async function importOneRow(
   let contactId: string;
   let outcome: RowLandingOutcome;
   if (match) {
-    // `overwrite` → update the existing contact, but plan the SCALAR write against its current provenance so a
-    // pinned (user-corrected) scalar survives: drop every pinned scalar key from `values` (the import value must
-    // not overwrite the user's correction), then stamp `import:<source>` provenance on the scalars we DO write.
+    // Matched under an UPDATING mode (create_and_update / update_only). Plan the SCALAR write against the
+    // existing provenance so a PINNED (user-corrected) scalar survives EVERY strategy unconditionally (DM6 —
+    // the pin is the user's override of all automation): drop every pinned scalar key from `values`, then
+    // stamp `import:<source>` provenance on the scalars we DO write.
     const existingProv = await contactRepository.getFieldProvenance(tx, match.id);
-    const { writableFields, provenance } = planFieldWrite(existingProv, scalarFields, {
-      src: `import:${input.sourceName}`,
-    });
+    const planned = planFieldWrite(existingProv, scalarFields, { src: `import:${input.sourceName}` });
+    let written = planned.writableFields;
+    let provenance = planned.provenance;
+    // preserve_populated (08 §5.1 — the orthogonal switch): an update never overwrites an already-POPULATED
+    // target, only fills blanks. Drop every writable scalar whose existing value is non-empty; re-plan
+    // provenance over the reduced set so a preserved field keeps its PRIOR descriptor (never re-stamped as
+    // import-written). Gate-off/legacy always has preservePopulated=false ⇒ `written`/`provenance` unchanged,
+    // so this is byte-identical when off; guarded so a values read can never fail the row.
+    if (strategy.preservePopulated && written.size > 0) {
+      try {
+        const existingScalar = (await contactRepository.getScalarValues(tx, match.id)) as Record<
+          string,
+          unknown
+        >;
+        const kept = new Set<string>();
+        for (const f of written) {
+          const v = existingScalar[f];
+          if (v === null || v === undefined || v === "") kept.add(f); // blank target — import may fill it
+        }
+        if (kept.size !== written.size) {
+          written = kept;
+          provenance = planFieldWrite(existingProv, [...kept], {
+            src: `import:${input.sourceName}`,
+          }).provenance;
+        }
+      } catch (err) {
+        console.error("[import] preserve_populated check failed (non-fatal)", err);
+      }
+    }
     for (const f of scalarFields) {
-      if (!writableFields.has(f)) delete (values as unknown as Record<string, unknown>)[f];
+      if (!written.has(f)) delete (values as unknown as Record<string, unknown>)[f];
     }
     // data-management #8 — flag TRUE cross-source conflicts on the scalars we overwrite. ADDITIVE + fully GUARDED:
     // any failure falls back to the plain provenance, so conflict detection can NEVER fail or alter the import.
@@ -327,7 +381,7 @@ async function importOneRow(
         existingProvenance: existingProv,
         existingValues,
         incomingValues: prepared.values as unknown as Record<string, unknown>,
-        writtenFields: writableFields,
+        writtenFields: written,
         incomingSrc: `import:${input.sourceName}`,
       });
     } catch (err) {
@@ -397,6 +451,10 @@ async function loadEnabledValidationRules(scope: RunImportInput["scope"]): Promi
  */
 export async function runImport(input: RunImportInput): Promise<ImportSummary> {
   const policy: ConflictPolicy = input.conflictPolicy ?? DEFAULT_CONFLICT_POLICY;
+  // 08 §5 strategy triad (S-I6): the explicit per-import strategy (gate-on) wins; otherwise the legacy
+  // conflictPolicy maps onto the triad so the gate-off internal path is byte-identical (create_only/
+  // create_and_update reproduce the old skip/keep_both/overwrite branches exactly, preservePopulated=false).
+  const strategy: ImportStrategy = input.strategy ?? conflictPolicyToStrategy(policy);
   // Trust boundary: validate the import-into-list target against the caller's workspace BEFORE any row runs.
   // Reuses the same guard the manual add path + the API edge use (assertListInWorkspace → NotFoundError on a
   // foreign/absent id), so a bad list id fails the whole import fast and consistently — the client id is never
@@ -465,7 +523,7 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
       const prepared = prepareContact(mapped);
       const hash = contentHash({ mapped, sourceName: input.sourceName });
       const landing = await withTenantTx(input.scope, (tx) =>
-        importOneRow(tx, input, raw, prepared, hash, policy),
+        importOneRow(tx, input, raw, prepared, hash, strategy),
       );
       if (landing.outcome === "created") created++;
       else if (landing.outcome === "matched") matched++;

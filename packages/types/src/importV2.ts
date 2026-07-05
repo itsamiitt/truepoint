@@ -102,6 +102,10 @@ export const importFastInputSchema = z.object({
   sourceFile: z.string().max(255).optional(),
   mapping: columnMappingSchema,
   conflictPolicy: conflictPolicy.optional(),
+  /** The 08 §5 strategy triad (S-I6): the server-resolved merge_mode + preserve_populated. When present it
+   *  SUPERSEDES `conflictPolicy` in the engine; absent (legacy/gate-off) ⇒ conflictPolicy maps onto the triad
+   *  (byte-identical internal path). */
+  strategy: importStrategySchema.optional(),
   /** The parsed CSV/XLSX rows, keyed by trimmed header (core's RawRow). */
   rows: z.array(z.record(z.string(), z.string())),
   target: importTargetSchema.optional(),

@@ -212,6 +212,9 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
     sourceFile: input.sourceFile,
     mapping: input.mapping,
     conflictPolicy: input.conflictPolicy,
+    // 08 §5 strategy triad (S-I6): the server-resolved strategy rides the payload and supersedes conflictPolicy
+    // in the engine; absent (a job submitted before S-I6) ⇒ runImport maps conflictPolicy onto the triad.
+    strategy: input.strategy,
     rows: input.rows,
     target: input.target,
   };
