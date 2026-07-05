@@ -30,6 +30,16 @@ export const appEnvSchema = z
       .refine((u) => /^https?:\/\//.test(u), { message: "must start with http:// or https://" })
       .optional(),
     APP_ORIGINS: z.string().transform(csv).pipe(z.array(z.string().url()).min(1)),
+    // Chrome-extension origins allowed to exchange/verify tokens (doc chrome-extension/10 §7, ADR-0044).
+    // OFF BY DEFAULT — unset ⇒ no extension can auth (zero behavior change). Restricted to the
+    // `chrome-extension://<32-char id>` form so this can never smuggle an arbitrary https origin past the
+    // web-app allow-list. Set to the PUBLISHED extension id(s) only (never a wildcard). Folded into
+    // `appOrigins()` so it gates both token CORS (apps/auth) and token-audience verification (apps/api).
+    EXTENSION_ORIGINS: z
+      .string()
+      .transform(csv)
+      .pipe(z.array(z.string().regex(/^chrome-extension:\/\/[a-p]{32}$/)))
+      .optional(),
     AUTH_COOKIE_DOMAIN: z.string().min(1),
 
     // Client-IP binding posture for the cross-domain code (ADR-0016 addendum): `strict` = exact match on
@@ -464,9 +474,7 @@ export function resolveAppEnv(
           get(target, prop, receiver) {
             if (typeof prop === "string" && relaxedMissing.includes(prop)) {
               throw new Error(
-                `env.${prop} was accessed on the worker surface but is not set. This key is web/auth-only ` +
-                  "and was relaxed at boot (LEADWOLF_SURFACE=worker). If a worker path genuinely needs it, " +
-                  "set it in the worker environment — or remove it from WORKER_RELAXED_KEYS in env.ts.",
+                `env.${prop} was accessed on the worker surface but is not set. This key is web/auth-only and was relaxed at boot (LEADWOLF_SURFACE=worker). If a worker path genuinely needs it, set it in the worker environment — or remove it from WORKER_RELAXED_KEYS in env.ts.`,
               );
             }
             return Reflect.get(target, prop, receiver);
@@ -482,9 +490,14 @@ export const env: AppEnv = loaded.env;
 /** The surface report for THIS process (see SurfaceReport). Workers log it at boot. */
 export const envSurfaceReport: SurfaceReport = loaded.report;
 
-/** Origins allowed to exchange/refresh tokens (CORS allow-list; never a wildcard). */
-export const appOrigins = (): readonly string[] => env.APP_ORIGINS;
+/** Origins allowed to exchange/refresh tokens + accepted as token audiences (allow-list; never a
+ *  wildcard). Web app origins (`APP_ORIGINS`) + any registered chrome-extension origins
+ *  (`EXTENSION_ORIGINS`, off by default — doc chrome-extension/10 §7, ADR-0044). */
+export const appOrigins = (): readonly string[] => [
+  ...env.APP_ORIGINS,
+  ...(env.EXTENSION_ORIGINS ?? []),
+];
 
-/** True when `origin` is an exact, allow-listed app origin. */
+/** True when `origin` is an exact, allow-listed app or extension origin. */
 export const isAllowedOrigin = (origin: string | null | undefined): boolean =>
-  origin != null && env.APP_ORIGINS.includes(origin);
+  origin != null && appOrigins().includes(origin);
