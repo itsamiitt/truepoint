@@ -7,10 +7,16 @@
 
 import { z } from "zod";
 import { columnMappingSchema } from "./contacts.ts";
+import { importMergeMode } from "./importPolicy.ts";
 
 // ── Constraints (mirror the import_mapping_templates schema in packages/db) ───────────────────────────────
 /** A template name is the workspace-unique handle (case-insensitive — the DB unique index lowers it). */
 export const importTemplateName = z.string().trim().min(1).max(120);
+
+/** Who sees a saved template (S-I2, import-redesign 08 §3.1): 'workspace' (default — the shipped semantics,
+ *  the named shared template no vendor ships) or 'private' (creator-only; the Data Loader .sdl analog). */
+export const importTemplateVisibility = z.enum(["private", "workspace"]);
+export type ImportTemplateVisibility = z.infer<typeof importTemplateVisibility>;
 
 // ── Save / upsert request DTO ────────────────────────────────────────────────────────────────────────────
 /**
@@ -23,6 +29,15 @@ export const saveImportMappingTemplateSchema = z.object({
   mapping: columnMappingSchema.refine((m) => Object.keys(m).length > 0, {
     message: "A template needs at least one mapped field.",
   }),
+  // ── S-I2 sharing + strategy block (import-redesign 08 §3.1) — ALL OPTIONAL: dark while the
+  // IMPORT_V2_ENABLED dual gate is off (the shipped route strips/ignores them until its S-I2 slice ships).
+  /** Omitted → server default 'workspace' (the shipped semantics). */
+  visibility: importTemplateVisibility.optional(),
+  /** The template-carried strategy pair. null/omitted = don't pin — inherit the workspace policy default. */
+  mergeMode: importMergeMode.nullable().optional(),
+  preservePopulated: z.boolean().nullable().optional(),
+  /** Parse/import options copied with the template (countryHint, delimiter…; shape owned by S-I5/S-I8). */
+  options: z.record(z.string(), z.unknown()).optional(),
 });
 export type SaveImportMappingTemplate = z.infer<typeof saveImportMappingTemplateSchema>;
 
@@ -33,6 +48,12 @@ export const importMappingTemplateSchema = z.object({
   name: z.string(),
   mapping: columnMappingSchema,
   createdByUserId: z.string().uuid().nullable(),
+  // ── S-I2 fields — OPTIONAL on the DTO: absent from the shipped responses until the template read path's
+  // S-I2 slice ships, so flag-off responses (and the current core/api return shape) stay byte-identical.
+  visibility: importTemplateVisibility.optional(),
+  mergeMode: importMergeMode.nullable().optional(),
+  preservePopulated: z.boolean().nullable().optional(),
+  options: z.record(z.string(), z.unknown()).optional(),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true }),
 });
