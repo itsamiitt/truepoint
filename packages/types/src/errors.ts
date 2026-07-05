@@ -187,6 +187,23 @@ export class ImportValidationError extends AppError {
 }
 
 /**
+ * The malware scanner is CONFIGURED but unreachable/failing (import-redesign 13 §2.2, S-S2/G08) — the
+ * FAIL-CLOSED refusal at upload admission: a real scanner that cannot answer never admits a file (delayed
+ * imports over unscanned imports, always). 503 with the stable `scan_unavailable` slug and honest copy;
+ * carries NOTHING about the engine or the file. Distinct from an `infected` refusal (a 422 at the seam).
+ */
+export class ScanUnavailableError extends AppError {
+  constructor(detail?: string) {
+    super({
+      status: 503,
+      code: "scan_unavailable",
+      title: "Upload scanning is temporarily unavailable",
+      detail,
+    });
+  }
+}
+
+/**
  * The per-workspace import commit quota is exhausted (import-and-data-model-redesign 08 §2.3 / 12 §5, S-I10):
  * commits (incl. retry-failed children — a retry "counts against the commit quota") per workspace per hour
  * exceed `IMPORT_MAX_COMMITS_PER_HOUR`. 429 with the stable `import_quota_exceeded` slug; `retryAfterSeconds`

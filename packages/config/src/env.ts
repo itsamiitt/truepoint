@@ -259,6 +259,20 @@ export const appEnvSchema = z
     BULK_IMPORT_S3_SSE: z.string().min(1).default("AES256"),
     // Presigned-GET TTL — bounded per 13 §4.3 (a presigned URL is a bearer capability; ≤ 5 min).
     BULK_IMPORT_S3_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().max(300).default(300),
+    // ── GATE C (G08 / S-S2): the malware scanner selection (import-redesign 13 §2). Default `stub` = the
+    // shipped behavior byte-identical (uploads record av_scan_status='skipped', nothing is refused).
+    // `clamav` composes the dependency-free clamd INSTREAM adapter at BOTH roots — from that moment every
+    // upload is scanned at admission, the copy drive re-checks before staging, infected ⇒ refused/failed
+    // terminal, and a scanner OUTAGE FAILS CLOSED (503 at admission — never a silent 'skipped'). Reverting
+    // to `stub` after enabling is deliberately loud: the no-new-'skipped' monitor fires (13 §2.3/§11).
+    // Deploying the clamd sidecar + flipping this var is the user-owed half of Gate C.
+    MALWARE_SCANNER: z.enum(["stub", "clamav"]).default("stub"),
+    CLAMAV_HOST: z.string().min(1).default("127.0.0.1"),
+    CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
+    // Whole-scan deadline; exceeded ⇒ verdict 'error' ⇒ fail-closed. Must comfortably cover the byte
+    // ceiling at the sidecar's throughput; clamd's own StreamMaxLength must be ≥ the upload ceiling
+    // (13 §2.1: a file too big to scan is a file too big to accept).
+    CLAMAV_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
     // The sync→bulk promotion threshold (rows): an import larger than this is steered onto the bulk pipeline
     // rather than the inline `imports` queue. Consumed by the promotion logic; a sensible default until tuned.
     BULK_IMPORT_THRESHOLD_ROWS: z.coerce.number().int().positive().default(5000),

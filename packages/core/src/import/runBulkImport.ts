@@ -15,6 +15,7 @@ import {
 } from "@leadwolf/db";
 import type { BulkImportScope, BulkImportJobStatus } from "@leadwolf/types";
 import { assertListInWorkspace } from "../prospect/lists.ts";
+import type { MalwareScannerPort } from "../security/malwareScanner.ts";
 import type { FileStore } from "../storage/fileStore.ts";
 import { type BulkStageResult, bulkStage } from "./bulkStage.ts";
 import { rejectedRowsToCsv } from "./rejectedRowsCsv.ts";
@@ -41,6 +42,17 @@ export interface RunBulkImportInput {
    * Also dodges addBulk-style degradation above ~1k jobs. 0/undefined = ∞ sentinel = legacy enqueue-all.
    */
   chunkWindow?: number;
+  /**
+   * S-S2 wire point 2 (G08, import-redesign 13 §2.2): the drive re-checks `av_scan_status ∈ {clean}` BEFORE
+   * parse/staging — "promote-to-staging re-checks the gate". Injected by the worker (core stays vendor-free;
+   * the api's admission seam is wire point 1). Absent or the stub (`real: false`) ⇒ today's behavior,
+   * byte-identical (records stay 'skipped'/'pending'). With a REAL scanner: a not-yet-clean job's stored
+   * object is scanned now — `infected` ⇒ the `failed` terminal (av_infected; NO quarantine state — 08 §2.1's
+   * machine has none) with the object left in place but unreachable (no tenant download path reads a source
+   * object; S-S7's lifecycle bounds it); `error` ⇒ THROW (fail-closed into the normal retry budget → DLQ —
+   * a scanner outage delays imports, it never admits an unscanned file).
+   */
+  malwareScanner?: MalwareScannerPort;
 }
 
 /** Resolve the effective fan-out count under the window (0/undefined = ∞ sentinel = enqueue all). */
@@ -57,6 +69,9 @@ export interface RunBulkImportResult {
   resumed: boolean;
   /** Present on a fresh drive (absent on a resume) — the stage counters + the rejected-rows artifact source. */
   stage?: BulkStageResult;
+  /** S-S2: true when the drive-time AV re-check found the object infected and wrote the failed terminal —
+   *  the worker meters + operator-notifies on it (13 §9.2: an infected verdict is the control WORKING). */
+  infected?: boolean;
 }
 
 export interface FinalizeIfLastChunkInput {
@@ -97,7 +112,7 @@ function planBands(total: number, size: number): Band[] {
  * never trusted). Resumable: an already-staged job re-enqueues only its non-`completed` chunks.
  */
 export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkImportResult> {
-  const { scope, jobId, fileStore, enqueueChunk, chunkWindow } = input;
+  const { scope, jobId, fileStore, enqueueChunk, chunkWindow, malwareScanner } = input;
 
   const job: ImportJobRow | null = await withTenantTx(scope, (tx) =>
     importJobRepository.getJobSystem(tx, jobId),
@@ -135,6 +150,52 @@ export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkI
   await withTenantTx(scope, (tx) =>
     importJobRepository.updateJobStatus(tx, jobId, { status: "validating", startedAt: new Date() }),
   );
+
+  // ── S-S2 wire point 2 (G08, 13 §2.2): the AV gate, re-checked BEFORE parse/staging. Scan STRICTLY
+  // precedes parse — bulkStage (the CSV parser) is itself attack surface (13 §1.4), so nothing below runs
+  // until the verdict is in. Already-'clean' (upload-time verdict) skips the re-scan; 'infected' on the row
+  // is a defensive terminal (should have been refused at admission); otherwise a REAL scanner scans the
+  // stored object now. Stub/absent ⇒ proceed exactly as today (dark, byte-identical).
+  if (job.avScanStatus !== "clean") {
+    const failInfected = async (signature?: string): Promise<RunBulkImportResult> => {
+      await withTenantTx(scope, (tx) =>
+        importJobRepository.updateJobStatus(tx, jobId, {
+          status: "failed",
+          avScanStatus: "infected",
+          // The STABLE code, never the filename or raw scanner output (13 §2.2); the signature name is
+          // non-PII and aids the quarantine-review runbook, carried only when the engine issued one.
+          failedReason: signature ? `av_infected:${signature}` : "av_infected",
+          completedAt: new Date(),
+        }),
+      );
+      // NOTE: no `import.av_infected` audit row yet — the P2 audit-action CHECK extension has not ridden a
+      // migration train (0054 shipped the P1 list only; ruling M1). Writing the action today would fail the
+      // DB CHECK at runtime. The failed terminal + av_scan_status ARE the durable record; the audit row
+      // lands with the next migration train (recorded as doc-16 drift). DDL TODO(P2-train): extend the
+      // audit_log action CHECK with 'import.draft_reaped','import.av_infected', then audit here in-tx.
+      return { jobId, status: "failed", totalChunks: 0, enqueuedChunks: 0, resumed: false, infected: true };
+    };
+    if (job.avScanStatus === "infected") return failInfected();
+    if (malwareScanner?.real) {
+      const verdict = await malwareScanner.scan(await fileStore.getObjectStream(job.sourceFile));
+      if (verdict.verdict === "infected") return failInfected(verdict.signature);
+      if (verdict.verdict === "clean") {
+        // Record the cleared gate (the repository's documented avScanStatus rider) — status stays
+        // 'validating' (this is the same phase, not a transition).
+        await withTenantTx(scope, (tx) =>
+          importJobRepository.updateJobStatus(tx, jobId, {
+            status: "validating",
+            avScanStatus: "clean",
+          }),
+        );
+      } else {
+        // 'error'/'skipped' from a REAL engine ⇒ FAIL-CLOSED: throw into the normal retry budget (09 §3);
+        // exhaustion dead-letters the drive (operator redrive after the scanner recovers is idempotent —
+        // staging never started). Never parse an unscanned object.
+        throw new Error("bulk-import: malware scan unavailable — failing closed (av_unavailable)");
+      }
+    }
+  }
 
   const stagingTable = importStagingRepository.stagingTableName(jobId);
   await importStagingRepository.createStagingTable(jobId, scope.workspaceId);

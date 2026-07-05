@@ -10,9 +10,10 @@ import {
   diskFileStore,
   markFastImportFailed,
   registerEmailProviders,
+  stubMalwareScanner,
 } from "@leadwolf/core";
 import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
-import { defaultProviders, s3FileStoreFromEnv } from "@leadwolf/integrations";
+import { clamdScanner, defaultProviders, s3FileStoreFromEnv } from "@leadwolf/integrations";
 import {
   BULK_ENRICHMENT_DRIVE_TOPIC,
   type BulkEnrichmentDeadLetter,
@@ -34,6 +35,7 @@ import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
 import {
   type QueueDepth,
+  incrementImportCounter,
   recordCompleted,
   recordFailed,
   renderPromMetrics,
@@ -907,8 +909,21 @@ export function startWorkers(): Worker[] {
     // selection the apps/api producer runs (apps never import apps), so both roots read/write ONE backend —
     // the 01 §3.1 multi-instance failure mode closes the moment the bucket env lands.
     const bulkFileStore = s3FileStoreFromEnv() ?? diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
+    // S-S2 (G08 / Gate C, wire point 2): the SAME env selection the api's admission seam runs — clamav ⇒
+    // the dependency-free clamd INSTREAM adapter; default stub ⇒ dark, byte-identical (the drive re-check
+    // is a no-op and records stay 'skipped'). Deploying the sidecar + flipping MALWARE_SCANNER is the
+    // user-owed half of Gate C.
+    const malwareScanner =
+      env.MALWARE_SCANNER === "clamav"
+        ? clamdScanner({
+            host: env.CLAMAV_HOST,
+            port: env.CLAMAV_PORT,
+            timeoutMs: env.CLAMAV_TIMEOUT_MS,
+          })
+        : stubMalwareScanner();
     const processBulkImport = makeProcessBulkImport({
       fileStore: bulkFileStore,
+      malwareScanner,
       // The drive phase fans out one chunk job per staged band onto the SAME bulk queue — copy-chunk band,
       // STABLE jobId `import-chunk:<chunkId>` (09 §1.2) so a re-drive/reaper re-publish dedupes at the queue
       // (and S-Q2's rolling-window continuation enqueue is idempotent by construction).
@@ -1016,6 +1031,17 @@ export function startWorkers(): Worker[] {
     // (result.finalized) — a terminal-skip replay re-fires nothing.
     bulkImportsWorker.on("completed", (job, result) => {
       const data = job?.data as UnifiedImportJobData | undefined;
+      // S-S2 operator notification (13 §9.2: an infected verdict is S3-routine — the control WORKING — but
+      // operators must SEE it): the drive-time AV re-check wrote the failed terminal; meter + log loudly.
+      // Cheap-and-present today (metric + structured log feed the §K alert catalog); the tenant-facing
+      // failure notification for COPY jobs rides the copy-notify follow-up (S-Q3/S-Q4 drift — doc 16).
+      if (data?.kind === "drive" && (result as { infected?: boolean } | undefined)?.infected) {
+        incrementImportCounter("av_infected_total");
+        log.error("bulk-import: drive-time malware scan found the stored object INFECTED", {
+          jobId: data.jobId,
+          workspaceId: data.scope.workspaceId,
+        });
+      }
       if (data?.kind !== "fast") return;
       const r = result as { finalized?: boolean; landed?: boolean; status?: string } | undefined;
       if (!r?.finalized) return;
@@ -1159,6 +1185,9 @@ export function startWorkers(): Worker[] {
             },
             orphanGraceMs: env.IMPORT_REAPER_ORPHAN_GRACE_MS,
             stallWindowMs: env.IMPORT_REAPER_STALL_WINDOW_MS,
+            // S-S2 no-new-'skipped' monitor (13 §2.3): armed ONLY when a real scanner is configured —
+            // any fresh 'skipped' row then means the G08 gate failed open (S2 alert; §K catalog).
+            scannerConfigured: env.MALWARE_SCANNER !== "stub",
           }),
           { connection, ...SWEEP_WORKER_TUNING },
         ),

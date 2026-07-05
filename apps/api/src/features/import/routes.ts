@@ -23,6 +23,7 @@ import {
   withTenantTx,
 } from "@leadwolf/db";
 import {
+  type AvScanStatus,
   type ColumnMapping,
   type ConflictPolicy,
   DEFAULT_CONFLICT_POLICY,
@@ -62,6 +63,7 @@ import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueFastImport } from "./bulkQueue.ts";
 import { requireImportCreateGrant } from "./createGrant.ts";
 import { isImportV2Enabled } from "./importV2Gate.ts";
+import { scanImportUpload } from "./malwareScan.ts";
 import { enqueueImport, getImportJob } from "./queue.ts";
 import { admittedImportFormData, readAdmittedImportContent } from "./uploadAdmission.ts";
 
@@ -414,6 +416,15 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
   const listId = parseListTarget(form);
   if (listId) await assertListInWorkspace({ scope: { tenantId, workspaceId }, listId });
 
+  // S-S2 wire point 1 (G08, 13 §2.2): scan the admitted upload BEFORE parse — the parser is itself attack
+  // surface (13 §1.4), so the AV verdict must never depend on surviving it. Applies to BOTH branches below
+  // (the fast Phase-A bytes ARE this request's upload — there is no stored object to re-scan later, so
+  // admission is the fast path's one wire point). Stub ⇒ 'skipped' (shipped behavior, byte-identical);
+  // infected ⇒ refused pre-job (no row, nothing enqueued); real-scanner outage ⇒ 503 fail-closed.
+  const avScan = await scanImportUpload(file);
+  if (avScan === "infected")
+    throw new ImportValidationError("The uploaded file did not pass the malware scan.");
+
   const parsed = parseImportFile(await readAdmittedImportContent(file), file.name);
 
   // ── S-I3 fork: the IMPORT_V2 dual gate (env kill-switch AND per-tenant flag; importV2Gate.ts). ─────────
@@ -460,8 +471,9 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
         sourceFile: `inline:${randomUUID()}`,
         sourceName: src,
         fileSize: file.size,
-        // No scanner is wired at this composition root (the G08 seam) — recorded honestly, like bulkRoutes.
-        avScanStatus: "skipped",
+        // S-S2: the admission scan's real verdict ('clean' with a scanner; 'skipped' under the stub —
+        // recorded honestly either way; 'infected' never reaches here, it was refused above).
+        avScanStatus: avScan,
         idempotencyKey,
         columnMapping: mapping,
         conflictPolicy: parsedPolicy.data,
@@ -734,7 +746,10 @@ importRoutes.post("/:jobId/retry-failed", async (c) => {
       // records an honest inline sentinel, the display filename inherits the parent's.
       sourceFile: `retry:${randomUUID()}`,
       sourceName: parent.sourceName,
-      avScanStatus: "skipped",
+      // S-S2: a retry child carries NO new bytes — its rows are the parent's ledger rows, admitted (and
+      // scanned, when a scanner was configured) at the parent's upload. Inherit the parent's verdict rather
+      // than minting a fresh 'skipped' (the no-new-'skipped' monitor excludes `retry:%` rows either way).
+      avScanStatus: (parent.avScanStatus as AvScanStatus) ?? "skipped",
       idempotencyKey,
       columnMapping: mapping,
       conflictPolicy: parentConflict,

@@ -12,7 +12,6 @@ import { env } from "@leadwolf/config";
 import { assertListInWorkspace, isFlagEnabledForTenant } from "@leadwolf/core";
 import { type ImportJobRow, importJobRepository, withTenantTx } from "@leadwolf/db";
 import {
-  type AvScanStatus,
   BULK_IMPORT_FLAG_KEY,
   type BulkImportJobRef,
   type BulkImportJobStatus,
@@ -37,6 +36,7 @@ import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueBulkImportDrive } from "./bulkQueue.ts";
 import { bulkFileStore } from "./bulkStore.ts";
 import { requireImportCreateGrant } from "./createGrant.ts";
+import { scanImportUpload } from "./malwareScan.ts";
 import { admittedImportFormData, assertBulkUploadAdmissible } from "./uploadAdmission.ts";
 
 export const bulkImportRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -121,14 +121,10 @@ function sourceExt(name: string): string {
   return ext || "csv";
 }
 
-/**
- * AV-scan SEAM (G-IMP-6): no scanner is wired at this composition root yet, so an untrusted upload is recorded as
- * `skipped`. When a real scanner is injected here it returns `clean`/`infected`; the caller REFUSES an `infected`
- * file before any job is created (and core's promote-to-staging re-checks the gate).
- */
-function scanUpload(): AvScanStatus {
-  return "skipped";
-}
+// AV-scan SEAM (G-IMP-6 → S-S2/G08, wire point 1): scanImportUpload runs the env-selected MalwareScannerPort
+// (MALWARE_SCANNER=clamav ⇒ clamd INSTREAM; default stub ⇒ 'skipped', byte-identical). The caller REFUSES an
+// `infected` file before any job is created; a configured-but-unreachable scanner throws 503 (fail-closed,
+// never a silent 'skipped'); core's promote-to-staging re-checks the gate (wire point 2, runBulkImport).
 
 // POST /imports/bulk — accept a (potentially huge) upload: stream it to the FileStore, record a control row, and
 // enqueue ONE drive job; return 202 + a job ref to poll. No per-row work on the request thread.
@@ -175,8 +171,10 @@ bulkImportRoutes.post("/", requireImportCreateGrant(), async (c) => {
   const listId = parseBulkListTarget(form);
   if (listId) await assertListInWorkspace({ scope, listId });
 
-  // AV-scan SEAM: refuse an infected upload before any job exists. With no scanner configured this is `skipped`.
-  const avScan = scanUpload();
+  // AV-scan (S-S2, wire point 1): refuse an infected upload BEFORE any job exists (no row, no stored object
+  // retained) and BEFORE the bytes are streamed to the store. Stub ⇒ 'skipped' (shipped behavior); real
+  // scanner outage ⇒ 503 fail-closed inside the helper. Scan strictly precedes parse AND storage.
+  const avScan = await scanImportUpload(file);
   if (avScan === "infected")
     throw new ImportValidationError("The uploaded file did not pass the malware scan.");
 

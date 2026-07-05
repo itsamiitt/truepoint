@@ -11,6 +11,7 @@ import {
   type EnqueueChunk,
   type FastImportResult,
   type FileStore,
+  type MalwareScannerPort,
   bulkProcessChunk,
   continueChunkWindow,
   finalizeIfLastChunk,
@@ -72,6 +73,13 @@ export interface BulkImportProcessDeps {
    * producer). False ⇒ the handler fires the rollups — byte-identical (T-Q3 flag-off).
    */
   emitOutbox: boolean;
+  /**
+   * S-S2 (G08, 13 §2.2 wire point 2): the env-selected MalwareScannerPort the copy DRIVE re-checks before
+   * parse/staging. The root composes it (MALWARE_SCANNER=clamav ⇒ clamd; default stub ⇒ dark, byte-identical);
+   * infected ⇒ failed terminal (the completed handler meters + operator-notifies on `result.infected`);
+   * real-scanner outage ⇒ the drive throws (fail-closed retry → DLQ).
+   */
+  malwareScanner?: MalwareScannerPort;
 }
 
 /** A copy-kind job claimed while BULK_IMPORT_ENABLED is off (see BulkImportProcessDeps.copyEnabled). */
@@ -93,6 +101,8 @@ export type BulkImportProcessResult =
       totalChunks: number;
       enqueuedChunks: number;
       resumed: boolean;
+      /** S-S2: the drive-time AV re-check found the stored object infected (failed terminal written). */
+      infected?: boolean;
     }
   | {
       kind: "chunk";
@@ -151,6 +161,8 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
         enqueueChunk: deps.enqueueChunk,
         // S-Q2: the drive enqueues only the first K bands; chunk completions refill (continuation below).
         chunkWindow: deps.chunkWindow,
+        // S-S2: scan-before-staging re-check (dark under the stub; fail-closed on a real engine's outage).
+        malwareScanner: deps.malwareScanner,
       });
       return {
         kind: "drive",
@@ -159,6 +171,7 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
         totalChunks: r.totalChunks,
         enqueuedChunks: r.enqueuedChunks,
         resumed: r.resumed,
+        infected: r.infected,
       };
     }
 

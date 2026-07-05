@@ -128,7 +128,20 @@ export interface ImportReaperDeps {
   ) => Promise<void>;
   orphanGraceMs: number;
   stallWindowMs: number;
+  /**
+   * S-S2 (G08, 13 §2.3): true when a REAL malware scanner is configured (MALWARE_SCANNER ≠ stub). Arms the
+   * NO-NEW-'skipped' MONITOR: the sweep counts fresh `av_scan_status='skipped'` uploads (last 24 h,
+   * `retry:%` children excluded — they inherit, they don't scan) and stale `pending` rows, publishing
+   * `leadwolf_import_av_skipped_recent` / `_av_pending_stale`. Either > 0 while armed = the gate failing
+   * OPEN — an S2 security alert (§K catalog), never normal. Unarmed (stub) the gauges are not published
+   * (honest absence — 'skipped' is the truthful record while no scanner exists).
+   */
+  scannerConfigured: boolean;
 }
+
+/** The monitor's look-back / staleness windows (13 §2.3's "new skipped / pending older than SLA"). */
+const AV_SKIPPED_LOOKBACK_MS = 24 * 60 * 60_000;
+const AV_PENDING_STALE_MS = 60 * 60_000;
 
 /**
  * Build the reaper processor. Leader-locked; enumerates non-terminal jobs on the owner connection, applies
@@ -246,6 +259,29 @@ export function makeProcessImportReaperSweep(redis: IORedis, deps: ImportReaperD
         log.error("import reaper: accounting-identity violations on terminal jobs", {
           count: accountingViolations,
         });
+      }
+
+      // S-S2 no-new-'skipped' monitor (13 §2.3) — armed only with a real scanner configured; any hit is
+      // the G08 gate failing open (S2 security). Published every tick so the alert clears itself once the
+      // wiring regression is fixed and the look-back window rolls past.
+      if (deps.scannerConfigured) {
+        const [skippedRecent, pendingStale] = await Promise.all([
+          importJobRepository.countRecentSkippedAvScans(AV_SKIPPED_LOOKBACK_MS).catch(() => 0),
+          importJobRepository.countStalePendingAvScans(AV_PENDING_STALE_MS).catch(() => 0),
+        ]);
+        setImportGauge("av_skipped_recent", skippedRecent);
+        setImportGauge("av_pending_stale", pendingStale);
+        if (skippedRecent > 0) {
+          log.error(
+            "import reaper: NEW av_scan_status='skipped' uploads while a real scanner is configured — the G08 gate is failing open",
+            { count: skippedRecent },
+          );
+        }
+        if (pendingStale > 0) {
+          log.warn("import reaper: av_scan_status='pending' rows older than the scan SLA", {
+            count: pendingStale,
+          });
+        }
       }
     });
   };

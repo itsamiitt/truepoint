@@ -486,6 +486,33 @@ export const importJobRepository = {
     return Number(rows[0]?.n ?? 0);
   },
 
+  /** S-S2 (13 §2.3) — the NO-NEW-'skipped' monitor's census: uploads recorded `av_scan_status='skipped'`
+   *  within the look-back window. `retry:%` children are EXCLUDED (they carry no new bytes and INHERIT the
+   *  parent's verdict — a retry of a pre-scanner parent is not a scan bypass). Owner-connection count of
+   *  control-row columns only (the reaper-reads posture above). Should be 0 whenever a real scanner is
+   *  configured — any hit is the G08 gate failing open (S2). */
+  async countRecentSkippedAvScans(lookbackMs: number): Promise<number> {
+    const rows = (await db.execute(sql`
+      SELECT count(*)::int AS n FROM import_jobs
+      WHERE av_scan_status = 'skipped'
+        AND source_file NOT LIKE 'retry:%'
+        AND created_at > now() - (${lookbackMs} * interval '1 millisecond')
+    `)) as unknown as Array<{ n: number }>;
+    return Number(rows[0]?.n ?? 0);
+  },
+
+  /** S-S2 (13 §2.3) — `pending`-older-than-SLA half of the monitor: non-terminal jobs whose AV verdict never
+   *  arrived (scanner outage holding jobs, or a wiring gap). Owner-connection count, control rows only. */
+  async countStalePendingAvScans(olderThanMs: number): Promise<number> {
+    const rows = (await db.execute(sql`
+      SELECT count(*)::int AS n FROM import_jobs
+      WHERE av_scan_status = 'pending'
+        AND status NOT IN ('completed','partial','failed','cancelled')
+        AND created_at < now() - (${olderThanMs} * interval '1 millisecond')
+    `)) as unknown as Array<{ n: number }>;
+    return Number(rows[0]?.n ?? 0);
+  },
+
   // ── Commit quota + retry-child sourcing (import-redesign 08 §2.3/§6.3, S-I10) ─────────────────────────
 
   /** Count a workspace's jobs CREATED since `since` — the per-workspace commit-quota census (08 §2.3 / 12 §5;
