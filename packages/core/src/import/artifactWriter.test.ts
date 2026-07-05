@@ -73,9 +73,13 @@ describe("buildErrorReportCsv redaction (T-S5)", () => {
       },
     ];
     const csv = buildErrorReportCsv(rows);
-    expect(csv).toContain("_REDACTED_");
+    // No raw value fragment survives into the shareable aggregate — the email and phone are gone…
     expect(csv).not.toContain("jane.doe@secret.example.com");
     expect(csv).not.toContain("15551234567");
+    // …and the free-text processing_error `err.message` (which regex redaction can't fully scrub — a name or a
+    // bare domain would slip) is collapsed to the stable non-PII label, never surfaced at all.
+    expect(csv).not.toContain("duplicate key value");
+    expect(csv).toContain("Processing error");
     // Aggregate shape: codes + columns + counts + sample lines, one bucket per code:column.
     expect(csv.split("\r\n")[0]).toBe("error_code,column,impact_count,sample_lines,sample_detail");
     expect(csv).toContain("malformed_email");

@@ -142,10 +142,14 @@ export function buildErrorReportCsv(rejectedRows: RejectedRow[]): string {
     const key = rejectReasonToken(code, r.field);
     let b = buckets.get(key);
     if (!b) {
-      // The detail is the FIRST reason for this bucket, value-scrubbed to `_REDACTED_` — a triage hint, never a
-      // cell value (13 §3.3). Generic reasons ("Malformed email address.") survive verbatim; a processing_error
-      // that quoted a value comes through redacted.
-      b = { code, column: r.field ?? "", count: 0, lines: [], detail: redactValues(r.reason) };
+      // The detail is the FIRST reason for this bucket — a triage hint, NEVER a cell value (13 §3.3). Every
+      // active code's `reason` is a generic constant EXCEPT `processing_error`, whose reason is a free-text
+      // catch-path `err.message` (runImport) that may embed a value regex redaction cannot fully catch (a name,
+      // a short id, a bare domain). Collapse that one to the stable non-PII label — the exact discipline
+      // `rejectLabel` already applies to the histogram — so no raw message can ride the shareable error report;
+      // `redactValues` stays as defense-in-depth on the remaining (already-generic) reasons.
+      const detail = code === "processing_error" ? "Processing error" : redactValues(r.reason);
+      b = { code, column: r.field ?? "", count: 0, lines: [], detail };
       buckets.set(key, b);
     }
     b.count += 1;
