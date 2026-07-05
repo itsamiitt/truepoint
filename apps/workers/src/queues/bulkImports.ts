@@ -47,6 +47,24 @@ export interface BulkImportProcessDeps {
    * inside the injected fn: a rollup-enqueue failure must never fail the chunk job.
    */
   fireRollups: (scope: BulkImportScope) => void | Promise<void>;
+  /**
+   * Whether the COPY kinds (drive/chunk) may run — env.BULK_IMPORT_ENABLED at the composition root (S-Q1,
+   * 09 §1.1). Since the worker is now ALSO constructed under IMPORT_V2_ENABLED (the fast lane), a stale copy
+   * job arriving while the copy gate is off must FAIL LOUDLY (retry→DLQ; operator redrive after enabling —
+   * replay is idempotent) rather than run a gated pipeline or silently consume the job. The fast kind is
+   * never affected by this switch.
+   */
+  copyEnabled: boolean;
+}
+
+/** A copy-kind job claimed while BULK_IMPORT_ENABLED is off (see BulkImportProcessDeps.copyEnabled). */
+export class CopyKindsDisabledError extends Error {
+  constructor(kind: string) {
+    super(
+      `bulk-imports: refusing '${kind}' job — BULK_IMPORT_ENABLED is off (copy kinds gated; fast lane only)`,
+    );
+    this.name = "CopyKindsDisabledError";
+  }
 }
 
 /** A non-PII summary of what a single bulk-import job step did (for per-queue observability; never the rows). */
@@ -93,6 +111,9 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
     // Defense in depth: re-validate + narrow the queue payload (the producer is trusted, but the discriminated
     // union guards a malformed/stale job). bulkImportJobDataSchema narrows `kind` → drive | chunk.
     const data = bulkImportJobDataSchema.parse(job.data);
+
+    // COPY kinds stay gated by BULK_IMPORT_ENABLED even though the worker itself now boots for the fast lane.
+    if (!deps.copyEnabled) throw new CopyKindsDisabledError(data.kind);
 
     if (data.kind === "drive") {
       const r = await runBulkImport({

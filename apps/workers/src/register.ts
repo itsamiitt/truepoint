@@ -19,6 +19,7 @@ import {
   type BulkImportDeadLetter,
   type BulkImportScope,
   type BulkRevealDeadLetter,
+  IMPORT_QUEUE_PRIORITY,
   type ImportDeadLetter,
   bulkEnrichmentJobDataSchema,
 } from "@leadwolf/types";
@@ -181,7 +182,12 @@ import {
   REVERIFICATION_RETRY,
   SCORING_RETRY,
 } from "./retryPolicies.ts";
-import { SWEEP_WORKER_TUNING, deadlineMs, eventTuning } from "./tuning.ts";
+import {
+  SWEEP_WORKER_TUNING,
+  bulkImportKindDeadlineMs,
+  deadlineMs,
+  eventTuning,
+} from "./tuning.ts";
 import { withDeadline } from "./withDeadline.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
@@ -842,13 +848,14 @@ export function startWorkers(): Worker[] {
       EMAIL_TOKEN_REFRESH_QUEUE,
     ),
   ];
-  // Bulk COPY-staging import (backlog #2, phase 6) — GATED DARK behind BULK_IMPORT_ENABLED (default false). Purely
-  // ADDITIVE: when off, the bulk queues/worker are never even constructed (the array above is untouched) and the
-  // apps/api producer enqueues nothing, so the feature is inert in prod until the COPY spike + a prod object store
-  // land. When on: a `drive` job stages the upload + fans out `chunk` jobs onto the SAME bulk queue; each `chunk`
-  // merges one staged band, and the LAST chunk's finalize fires the dedup/firmographics/masterBackfill rollups
-  // ONCE — the SAME idempotent per-workspace rollups the sync import kicks on completion (best-effort).
-  if (env.BULK_IMPORT_ENABLED) {
+  // The UNIFIED import execution queue (import-redesign 09 §1.1, S-Q1): ONE `bulk-imports` consumer carries
+  // the COPY kinds (drive/chunk — backlog #2, gated by BULK_IMPORT_ENABLED) AND the v2 fast lane (S-I3 —
+  // gated at the PRODUCER by the IMPORT_V2 dual gate). Constructed when EITHER gate's env layer is on, so
+  // the fast path runs under IMPORT_V2 even with BULK_IMPORT off; with both off nothing here is built and
+  // the array above is untouched (byte-identical boot). Copy kinds arriving while BULK_IMPORT_ENABLED is
+  // off fail loudly (CopyKindsDisabledError → retry → DLQ; redrive is idempotent) — never silently consumed.
+  // Priority bands order the WAITING set (fast=1 · copy drive=5 · copy chunk=10); within a band, FIFO.
+  if (env.BULK_IMPORT_ENABLED || env.IMPORT_V2_ENABLED) {
     const bulkImportsQueue = new Queue<UnifiedImportJobData>(BULK_IMPORTS_QUEUE, { connection });
     const bulkImportDeadLetterQueue = new Queue<BulkImportDeadLetter>(BULK_IMPORTS_DLQ, {
       connection,
@@ -856,39 +863,56 @@ export function startWorkers(): Worker[] {
     // DEV/TEST local-disk store; the prod FileStore (S3, presigned multipart, AV-before-promote) is injected here
     // later (no AWS SDK pulled in). Same env dir the apps/api producer composes against (apps never import apps).
     const bulkFileStore = diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
+    const processBulkImport = makeProcessBulkImport({
+      fileStore: bulkFileStore,
+      // The drive phase fans out one chunk job per staged band onto the SAME bulk queue — copy-chunk band,
+      // STABLE jobId `import-chunk:<chunkId>` (09 §1.2) so a re-drive/reaper re-publish dedupes at the queue
+      // (and S-Q2's rolling-window continuation enqueue is idempotent by construction).
+      enqueueChunk: async (jobId, scope, chunkId) => {
+        await bulkImportsQueue.add(
+          "chunk",
+          { kind: "chunk", jobId, scope, chunkId },
+          { priority: IMPORT_QUEUE_PRIORITY.copyChunk, jobId: `import-chunk:${chunkId}` },
+        );
+      },
+      // The LAST chunk's finalize fires these ONCE — the SAME idempotent per-workspace rollups the sync import
+      // kicks on completion. Best-effort: a rollup-enqueue failure never fails the chunk job.
+      fireRollups: (scope: BulkImportScope) => {
+        const data = { tenantId: scope.tenantId, workspaceId: scope.workspaceId };
+        void enqueueDedup(data).catch((e) =>
+          log.error("bulk-import: dedup enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        void enqueueFirmographics(data).catch((e) =>
+          log.error("bulk-import: firmographics enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        void enqueueMasterBackfill(data).catch((e) =>
+          log.error("bulk-import: master-backfill enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      },
+      // Copy kinds stay gated by their own env switch even when this worker boots for the fast lane only.
+      copyEnabled: env.BULK_IMPORT_ENABLED,
+    });
     const bulkImportsWorker = instrument(
       new Worker<UnifiedImportJobData>(
         BULK_IMPORTS_QUEUE,
-        makeProcessBulkImport({
-          fileStore: bulkFileStore,
-          // The drive phase fans out one chunk job per staged band onto the SAME bulk queue.
-          enqueueChunk: async (jobId, scope, chunkId) => {
-            await bulkImportsQueue.add("chunk", { kind: "chunk", jobId, scope, chunkId });
-          },
-          // The LAST chunk's finalize fires these ONCE — the SAME idempotent per-workspace rollups the sync import
-          // kicks on completion. Best-effort: a rollup-enqueue failure never fails the chunk job.
-          fireRollups: (scope: BulkImportScope) => {
-            const data = { tenantId: scope.tenantId, workspaceId: scope.workspaceId };
-            void enqueueDedup(data).catch((e) =>
-              log.error("bulk-import: dedup enqueue failed", {
-                error: e instanceof Error ? e.message : String(e),
-              }),
-            );
-            void enqueueFirmographics(data).catch((e) =>
-              log.error("bulk-import: firmographics enqueue failed", {
-                error: e instanceof Error ? e.message : String(e),
-              }),
-            );
-            void enqueueMasterBackfill(data).catch((e) =>
-              log.error("bulk-import: master-backfill enqueue failed", {
-                error: e instanceof Error ? e.message : String(e),
-              }),
-            );
-          },
-        }),
-        // Explicitly serial while dark (Phase 1): the chunked pipeline's throughput lever is chunk fan-out,
-        // and any concurrency raise is a deliberate later decision, not a default.
-        { connection, concurrency: 1 },
+        // Per-KIND deadline (09 §3; S-Q1): fast 2 min · drive 15 min · chunk 10 min — chosen per job at
+        // claim, each ≤ the queue-level ceiling registered in PROCESSOR_DEADLINE_MS. An unknown kind fails
+        // the attempt loudly (tuning.ts lookup), never runs unbounded.
+        (job) =>
+          withDeadline(
+            BULK_IMPORTS_QUEUE,
+            bulkImportKindDeadlineMs((job.data as { kind?: string }).kind),
+            processBulkImport,
+          )(job),
+        // Serial + explicit lock/stall containment via the tuning table (60s lock / 30s stall / 2 stalls →
+        // DLQ), replacing the bare `concurrency: 1` — the same registration pattern as every event worker.
+        { connection, ...eventTuning(BULK_IMPORTS_QUEUE) },
       ),
       BULK_IMPORTS_QUEUE,
     );

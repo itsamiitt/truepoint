@@ -58,7 +58,13 @@ const MAX_WAITING_DRIVES = 1_000;
 export async function enqueueBulkImportDrive(data: BulkImportDriveJobData): Promise<string> {
   const q = bulkImportQueue();
   await assertQueueCapacity(q, BULK_IMPORTS_QUEUE, MAX_WAITING_DRIVES);
-  const job = await q.add("drive", data);
+  // S-Q1 (09 §1.1/§1.2): copy-drive priority band + STABLE jobId `import-drive:<jobId>` — a duplicate
+  // publish (reaper re-drive, replayed intent) dedupes at the queue; the drive itself is watermark-resumable
+  // so a re-execution never re-stages. Dark behind BULK_IMPORT_ENABLED like everything on this route.
+  const job = await q.add("drive", data, {
+    priority: IMPORT_QUEUE_PRIORITY.copyDrive,
+    jobId: `import-drive:${data.jobId}`,
+  });
   return String(job.id);
 }
 

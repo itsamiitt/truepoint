@@ -37,6 +37,10 @@ const EVENT_LOCK: Omit<WorkerTuning, "concurrency"> = {
  *  - master-backfill/reverification 2 — batched, vendor/DB-bound; modest parallelism, gentle on the pool. */
 export const EVENT_WORKER_TUNING: Readonly<Record<string, WorkerTuning>> = {
   imports: { concurrency: 1, ...EVENT_LOCK },
+  // The unified import execution queue (import-redesign 09 §1.1, S-Q1): fast + copy drive + copy chunk on
+  // ONE queue with priority bands. Serial while dark — the chunked pipeline's throughput lever is chunk
+  // fan-out, and any raise is a deliberate tuning.ts change gated on CI (09 Reconciliation #4), not a default.
+  "bulk-imports": { concurrency: 1, ...EVENT_LOCK },
   enrichment: { concurrency: 1, ...EVENT_LOCK },
   scoring: { concurrency: 4, ...EVENT_LOCK },
   dsar: { concurrency: 1, ...EVENT_LOCK },
@@ -60,6 +64,10 @@ export const SWEEP_WORKER_TUNING: WorkerTuning = { concurrency: 1 };
  *  TTL + internal caps + the daily re-run. */
 export const PROCESSOR_DEADLINE_MS: Readonly<Record<string, number>> = {
   imports: 15 * 60_000, // large (but bounded) CSVs are legitimate
+  // Queue-level CEILING for the unified import queue — the widest of its per-kind bounds below. The
+  // runtime deadline is per KIND (bulkImportKindDeadlineMs); this entry keeps the one-deadline-per-queue
+  // invariant (tuning.test.ts) honest as the outer bound.
+  "bulk-imports": 15 * 60_000,
   enrichment: 2 * 60_000,
   scoring: 60_000,
   dsar: 5 * 60_000,
@@ -69,6 +77,23 @@ export const PROCESSOR_DEADLINE_MS: Readonly<Record<string, number>> = {
   "master-backfill": 5 * 60_000,
   reverification: 5 * 60_000,
 };
+
+/** Per-KIND processor deadlines on the unified `bulk-imports` queue (import-redesign 09 §3): the fast lane
+ *  is a small-file inline merge (2 min); a copy drive is stage-bound (15 min); a copy chunk merges one
+ *  ~10k-row band (10 min). Each is ≤ the queue-level ceiling above. */
+export const BULK_IMPORT_KIND_DEADLINE_MS: Readonly<Record<string, number>> = {
+  fast: 2 * 60_000,
+  drive: 15 * 60_000,
+  chunk: 10 * 60_000,
+};
+
+/** Kind-deadline lookup with the same fail-loud contract as eventTuning — an unknown kind must fail the
+ *  attempt loudly (into retry→DLQ), never silently run unbounded. */
+export function bulkImportKindDeadlineMs(kind: string | undefined): number {
+  const ms = BULK_IMPORT_KIND_DEADLINE_MS[kind ?? ""];
+  if (!ms) throw new Error(`tuning.ts: no bulk-imports deadline registered for kind "${kind}"`);
+  return ms;
+}
 
 /** Queues whose processors spend money per unit of work — pinned serial until F3's gates land. */
 export const SPEND_PATH_QUEUES: readonly string[] = ["enrichment"];
