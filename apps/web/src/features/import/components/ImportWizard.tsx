@@ -18,7 +18,7 @@ import type {
 } from "@leadwolf/types";
 import { ErrorState, TpButton, TpInput, TpSelect } from "@leadwolf/ui";
 import { useEffect, useRef, useState } from "react";
-import { listMappingTemplates, postImportPreview, saveMappingTemplate } from "../api";
+import { listMappingTemplates, postImport, postImportPreview, saveMappingTemplate } from "../api";
 import { useImport } from "../hooks/useImport";
 import { rejectedRowsToCsv } from "../rejectedRowsCsv";
 import { IDENTITY_FIELDS, MAPPABLE_FIELDS, type MappableField, SOURCE_OPTIONS } from "../types";
@@ -76,7 +76,15 @@ function downloadCsv(csv: string, filename: string): void {
 }
 
 export interface ImportWizardProps {
-  onImported: () => void;
+  /** Inline-completion callback: fired once per completed import in the INLINE flow (the "import into list"
+   *  dialog, which reads the receipt in place). Unused in the hand-off flow — there the job runs on its own
+   *  durable page. Optional so the page context can omit it. */
+  onImported?: () => void;
+  /** Hand-off callback (import-redesign 11 §4, S-U3): when provided, submitting ENQUEUES the import and calls
+   *  this with the new job id INSTEAD of polling inline — the parent navigates to the durable job page
+   *  (/imports/:jobId), which polls without ever giving up (the G11 fix). When absent, the wizard keeps the
+   *  inline poll + receipt (the dialog reuse). */
+  onStarted?: (jobId: string) => void;
   /** When set, this import targets a list (list-plan/03 §2.2): the `listId` is sent with the upload and every
    *  landed row is added to that list. `targetListName` is display-only (the receipt/title); the SERVER trusts
    *  only the id, validated against the caller's workspace. */
@@ -84,8 +92,11 @@ export interface ImportWizardProps {
   targetListName?: string;
 }
 
-export function ImportWizard({ onImported, targetListId, targetListName }: ImportWizardProps) {
+export function ImportWizard({ onImported, onStarted, targetListId, targetListName }: ImportWizardProps) {
   const { status, jobId, summary, error, busy, run } = useImport();
+  // Hand-off (onStarted) submit state — kept separate from useImport, which drives only the inline flow.
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [sourceName, setSourceName] = useState<SourceName>("manual");
@@ -158,7 +169,7 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
   useEffect(() => {
     if (status === "done" && summary && !notifiedRef.current) {
       notifiedRef.current = true;
-      onImported();
+      onImported?.();
     }
   }, [status, summary, onImported]);
 
@@ -182,8 +193,8 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
   }
 
   const identityMapped = IDENTITY_FIELDS.some((f) => mapping[f]);
-  const canValidate = Boolean(file) && identityMapped && !previewBusy && !busy;
-  const canSubmit = Boolean(file) && identityMapped && preview !== null && !busy;
+  const canValidate = Boolean(file) && identityMapped && !previewBusy && !busy && !starting;
+  const canSubmit = Boolean(file) && identityMapped && preview !== null && !busy && !starting;
 
   async function onValidate(): Promise<void> {
     if (!file) return;
@@ -202,8 +213,26 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
 
   function onSubmit(): void {
     if (!file || !preview) return;
+    const args = { file, sourceName, mapping: cleanedMapping(), conflictPolicy, listId: targetListId };
+    // Hand-off flow (11 §4, S-U3): enqueue, then let the parent navigate to the durable job page. No inline
+    // poll — the job page owns progress/completion and never gives up.
+    if (onStarted) {
+      setStarting(true);
+      setStartError(null);
+      void (async () => {
+        try {
+          const ref = await postImport(args);
+          onStarted(ref.jobId); // parent navigates away; this component unmounts
+        } catch (e) {
+          setStartError(e instanceof Error ? e.message : "Import failed to start.");
+          setStarting(false);
+        }
+      })();
+      return;
+    }
+    // Inline flow (the "import into list" dialog): poll to completion and show the receipt in place.
     notifiedRef.current = false;
-    run({ file, sourceName, mapping: cleanedMapping(), conflictPolicy, listId: targetListId });
+    run(args);
   }
 
   function onDownloadRejected(): void {
@@ -350,7 +379,7 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
           {previewBusy ? "Validating…" : "Validate"}
         </TpButton>
         <TpButton variant="primary" type="button" disabled={!canSubmit} onClick={onSubmit}>
-          {status === "submitting"
+          {starting || status === "submitting"
             ? "Uploading…"
             : status === "processing"
               ? "Processing…"
@@ -359,6 +388,7 @@ export function ImportWizard({ onImported, targetListId, targetListName }: Impor
       </div>
 
       {previewError && <ErrorState title="Couldn’t validate the file" detail={previewError} />}
+      {startError && <ErrorState title="Couldn’t start the import" detail={startError} />}
 
       {preview && status !== "done" && (
         <div className="tp-summary">

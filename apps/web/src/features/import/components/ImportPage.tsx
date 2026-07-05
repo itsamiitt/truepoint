@@ -6,17 +6,21 @@
 
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState, StateSwitch } from "@leadwolf/ui";
+import { useRouter } from "next/navigation";
 import { useContacts } from "../hooks/useContacts";
 import { ContactsTable } from "./ContactsTable";
 import { ImportWizard } from "./ImportWizard";
 
 export function ImportPage() {
+  const router = useRouter();
   const { contacts, error, loading, reload } = useContacts();
 
   return (
     <main className="app-main">
       <PageHeader title="Contacts" />
-      <ImportWizard onImported={() => void reload()} />
+      {/* Hand off to the durable job page on submit (11 §4, S-U3): the import runs there, navigable away, no
+          dead 2-min poll. The contacts list below refreshes on return. */}
+      <ImportWizard onStarted={(jobId) => router.push(`/imports/${jobId}`)} />
 
       <section className="tp-card">
         <h2>Workspace contacts {loading ? "" : `(${contacts.length})`}</h2>

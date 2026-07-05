@@ -1,14 +1,15 @@
-// (shell)/imports/[jobId]/page.tsx — the thin App Router route for ONE bulk import's live status (backlog #2).
-// All behavior lives in the feature slice (features/import → BulkImportProgress); this file only resolves the
-// route param and mounts the slice component inside the (shell) chrome. Reached by deep link only (the wizard's
-// client-side bulk hand-off died with the "Large file" toggle — import-redesign 11 §1.4, S-U1); the durable job
-// page (11 §4, S-U3) generalizes this surface to every import later.
+// (shell)/imports/[jobId]/page.tsx — the durable, full-page status view for ONE import (import-redesign 11 §4,
+// S-U3). The sync wizard navigates here on submit, and the URL is the handle: refresh/return resumes and the
+// poll never gives up. All behavior lives in the feature slice (features/import → ImportJobPage), which reads
+// GET /imports/:jobId (the additive v2 detail when the gate is on, the legacy poll shape otherwise).
+// NOTE: this route previously mounted the dark bulk-progress surface (BulkImportProgress, deep-link only). Bulk
+// is gate-off with no live producer, so it is repointed here; the bulk surface re-wires at Phase 2 (16 drift).
 // In Next.js 15 `params` is a Promise (awaited here); the slice component does the polling + render.
-import { BulkImportProgress } from "@/features/import";
+import { ImportJobPage } from "@/features/import";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page({ params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await params;
-  return <BulkImportProgress jobId={jobId} />;
+  return <ImportJobPage jobId={jobId} />;
 }
