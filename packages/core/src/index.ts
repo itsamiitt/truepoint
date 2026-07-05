@@ -119,10 +119,20 @@ export {
   rejectedRowsFor,
   identitySignature,
   type RowVerdict,
+  type RowRejectReason,
   type RowIdentity,
 } from "./import/validateRow.ts";
 export { buildImportPreview, type PreviewOptions } from "./import/preview.ts";
 export { rejectedRowsToCsv } from "./import/rejectedRowsCsv.ts";
+// The S-I7 server-side artifact pair (repair CSV + taxonomy-grouped error report) + their deterministic keys.
+export {
+  buildRepairCsv,
+  buildErrorReportCsv,
+  writeImportArtifacts,
+  repairArtifactKey,
+  errorReportArtifactKey,
+  type ImportArtifactKeys,
+} from "./import/artifactWriter.ts";
 
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
 // No-charge "view already-revealed data" reads (Phase 1 single + Phase 2 batch): decrypt ONLY the fields this

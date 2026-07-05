@@ -25,6 +25,9 @@ import {
   type ImportJobRowInsert,
 } from "@leadwolf/db";
 import type { ImportFastInput, ImportSummary } from "@leadwolf/types";
+import { rejectReasonToken } from "@leadwolf/types";
+import type { FileStore } from "../storage/fileStore.ts";
+import { writeImportArtifacts } from "./artifactWriter.ts";
 import { ACTIVE_IMPORT_STATUSES } from "./importFairness.ts";
 import { runImport, type RunImportInput } from "./runImport.ts";
 
@@ -43,6 +46,14 @@ export interface RunFastImportInput {
    * promotes unconditionally (test/tooling convenience; the worker always injects it).
    */
   requeueDeferred?: (nextDeferrals: number) => Promise<void>;
+  /**
+   * The object store the S-I7 artifact pair (repair CSV + error report) is written through at the terminal
+   * transition when ≥1 row was rejected (08 §6.2). Injected by the worker (core stays SDK-free). Absent ⇒ the
+   * artifacts are skipped (test/tooling convenience; the ledger + counters still commit) — the honest posture
+   * while no FileStore is composed. In prod the pair is written only while the IMPORT_V2 dual gate is on, which
+   * post-G07 means the encrypting S3 adapter (encryption-at-rest gap: the dev diskFileStore is plaintext — 13).
+   */
+  fileStore?: FileStore;
 }
 
 /** Non-PII result for per-queue observability (mirrors BulkImportProcessResult's discipline). */
@@ -190,6 +201,18 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
 
   // ── Terminal tx: deltas + ledger + chunk completion + status flip commit TOGETHER, exactly once. ───────
   const status = summary.rejected > 0 ? "partial" : "completed";
+
+  // S-I7 artifact pair (08 §6.2) — generated + written to the FileStore OUTSIDE the terminal tx (object-store
+  // I/O must never hold a DB transaction open); the resulting keys ride the tx below. Only on a real completion
+  // (not a chunkDone crash-recovery replay), only when ≥1 row was rejected, and only when a store is injected
+  // (test/tooling without one still commits the ledger + counters). A store failure leaves the keys null → the
+  // job is honestly artifact-less. The repair CSV is REGENERATED content (serialized ledger rows), never the
+  // original file's bytes — so an infected upload can never ride it back out (13 §11 worst-case #1).
+  const writeArtifacts = !claim.chunkDone && summary.rejected > 0 && args.fileStore != null;
+  const artifactKeys = writeArtifacts
+    ? await writeImportArtifacts(args.fileStore as FileStore, jobId, summary.rejectedRows)
+    : { repairKey: null as string | null, errorsKey: null as string | null };
+
   await withTenantTx(scope, async (tx) => {
     const job = await importJobRepository.getJobSystem(tx, jobId);
     // Cancel/terminal wins (08 §2.1 legality; the full FOR UPDATE guard is S-I4's cancel verb work): if the
@@ -207,9 +230,11 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
       await importJobRepository.updateJobProgress(tx, jobId, delta);
       // Rejected-rows ledger (08 §6.1): one import_job_rows entry per rejected INPUT LINE — summary
       // .rejectedRows may carry >1 reason per row (one per offending field), so dedupe by row index with
-      // the PRIMARY (first) reason, mirroring summary.errors. Landed rows' per-row outcomes are NOT
-      // derivable from the summary (runImport reports them in aggregate only) — their ledger coverage
-      // arrives with the artifact step (S-I7); counters carry the truth meanwhile.
+      // the PRIMARY (first) reason (the exact rule buildRepairCsv uses, so ledger + artifact agree). The
+      // reject_reason is the TYPED code:column token (13 §3.3) — NEVER the free-text reason (which may embed a
+      // value); the values live only in `input` (the sanctioned durable-plaintext ledger column, 13 #4) and the
+      // gated repair CSV. Landed rows' per-row outcomes stay aggregate-only (runImport is UNCHANGED; counters
+      // carry the truth — the S-I3 drift note).
       const byRow = new Map<number, (typeof summary.rejectedRows)[number]>();
       for (const r of summary.rejectedRows) {
         if (!byRow.has(r.row)) byRow.set(r.row, r);
@@ -221,7 +246,7 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
         workspaceId: scope.workspaceId,
         input: r.raw,
         outcome: "rejected",
-        rejectReason: r.reason,
+        rejectReason: rejectReasonToken(r.code ?? "processing_error", r.field),
       }));
       await importJobRepository.insertJobRows(tx, ledger);
       await importJobRepository.updateChunk(tx, claim.chunkId, {
@@ -231,10 +256,23 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
       });
       await importJobRepository.incrementCompletedChunks(tx, jobId);
     }
+    // The repair-CSV key rides the shipped `rejected_artifact_key` column; the SECOND artifact (error report)
+    // has no dedicated column, so its key lands in the `options` jsonb (`errorReportKey`) — DRIFT: 08 S-I1 sized
+    // one artifact-key column for the shipped single-artifact predecessor; the pair needs a second, kept in
+    // options rather than a schema change (recorded in doc 16). Written only when a key exists (store succeeded).
+    const options =
+      artifactKeys.errorsKey != null
+        ? {
+            ...(job.options as Record<string, unknown> | null | undefined),
+            errorReportKey: artifactKeys.errorsKey,
+          }
+        : undefined;
     await importJobRepository.updateJobStatus(tx, jobId, {
       status,
       completedAt: new Date(),
       rejectHistogram: summary.rejectHistogram,
+      rejectedArtifactKey: artifactKeys.repairKey ?? undefined,
+      options,
     });
   });
 

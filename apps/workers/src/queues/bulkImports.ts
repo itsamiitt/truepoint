@@ -121,6 +121,9 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
         input: fast.input,
         deferrals: fast.deferrals ?? 0,
         requeueDeferred: (nextDeferrals) => deps.requeueFastDeferred(fast, nextDeferrals),
+        // S-I7: the SAME injected object store the copy drive stages through — the fast wrapper writes the
+        // repair-CSV + error-report pair through it at the terminal transition when ≥1 row was rejected.
+        fileStore: deps.fileStore,
       });
     }
 
@@ -162,6 +165,10 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
     if (r.processed) {
       const f = await finalizeIfLastChunk({ scope: data.scope, jobId: data.jobId });
       finalized = f.finalized;
+      // RESERVED (dormant) copy-mode artifact hook (S-I7): when copy mode engages (Phase C, G07+G09), the LAST
+      // chunk's finalize is where the same `writeImportArtifacts` pair (repair CSV + error report) is generated —
+      // the copy path's rejected rows are the drive's (runBulkImport still writes the legacy single predecessor
+      // today). Wiring it here needs finalize to surface the rejected rows; deferred with copy-mode engagement.
       // Rollups fire ONLY on the last chunk's finalize, ONCE per job — the same trigger the sync import uses.
       if (f.fireRollups) {
         await deps.fireRollups(data.scope);

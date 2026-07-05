@@ -75,6 +75,13 @@ export interface ImportJobStatusUpdate {
   /** NON-PII reject breakdown (stable label → count) — a full SET (not a counter delta), so it rides this
    *  lifecycle patch rather than updateJobProgress. The drive phase writes it once, on the `staged` transition. */
   rejectHistogram?: Record<string, number>;
+  /** Object-store key of the REPAIR CSV artifact (08 §6.2, S-I7) — written on the terminal transition when ≥1
+   *  row was rejected and a FileStore is composed. The error-report key rides `options.errorReportKey` (only one
+   *  key column shipped in S-I1 — 08's predecessor sizing; the pair's second key lives in options). */
+  rejectedArtifactKey?: string | null;
+  /** Parse/import options jsonb (08 §Contradiction/S-I5). A FULL SET (not a merge) — the caller merges with the
+   *  current value before passing it. S-I7 writes `errorReportKey` (the second artifact key) here. */
+  options?: Record<string, unknown>;
 }
 
 /** Row-accounting deltas applied ATOMICALLY (added to the current value) as a chunk finishes. All optional. */
@@ -199,25 +206,59 @@ export const importJobRepository = {
   },
 
   /**
-   * List the jobs VISIBLE TO THE VIEWER, most-recent first, capped at `limit` (default 50, max 200).
-   * Workspace-scoped via RLS (the `import_jobs_workspace_isolation` policy) AND viewer-scoped via the
-   * jobVisibility predicate baked in BEFORE the tenant list route ever exists (10 §5 row 1 — strict from
-   * birth). Renamed from the unpredicated `listJobsByWorkspace` (10 §4.2 rule 1: the old name is deleted so
-   * no call site can compile against a workspace-wide read). Control-row columns only (non-PII).
+   * List the jobs VISIBLE TO THE VIEWER, most-recent first, KEYSET-paginated on the `idx_import_jobs_ws_created`
+   * composite `(workspace_id, created_at DESC, id DESC)` (08 S-I1 / 07 §4.3) — the exact ORDER BY, so the scan
+   * is index-ordered with no sort node. Workspace-scoped via RLS AND viewer-scoped via the jobVisibility
+   * predicate baked in BEFORE the tenant list route ever exists (10 §5 row 1 — strict from birth). Renamed
+   * from the unpredicated `listJobsByWorkspace` (10 §4.2 rule 1: the old name is deleted so no call site can
+   * compile against a workspace-wide read). `cursor` pages STRICTLY OLDER than `(createdAt, id)` (opaque at
+   * the route). Control-row columns only (non-PII).
    */
-  async listJobs(tx: Tx, viewer: JobViewer, limit = 50): Promise<ImportJobRow[]> {
-    const capped = Math.max(1, Math.min(200, Math.trunc(limit)));
+  async listJobs(
+    tx: Tx,
+    viewer: JobViewer,
+    opts: { limit?: number; cursor?: { createdAt: Date; id: string } | null } = {},
+  ): Promise<ImportJobRow[]> {
+    const capped = Math.max(1, Math.min(200, Math.trunc(opts.limit ?? 50)));
+    const predicate = jobVisibility(viewer, {
+      createdByUserId: importJobs.createdByUserId,
+      sharedWithWorkspace: importJobs.sharedWithWorkspace,
+    });
+    // Row-value keyset: `(created_at, id) < (cursor.createdAt, cursor.id)` matches the composite index order
+    // exactly. `and(...)` drops the `undefined` visibility term (elevated / gate-off) — never widens scope.
+    const keyset = opts.cursor
+      ? sql`(${importJobs.createdAt}, ${importJobs.id}) < (${opts.cursor.createdAt}, ${opts.cursor.id})`
+      : undefined;
     return tx
       .select()
       .from(importJobs)
-      .where(
-        jobVisibility(viewer, {
-          createdByUserId: importJobs.createdByUserId,
-          sharedWithWorkspace: importJobs.sharedWithWorkspace,
-        }),
-      )
+      .where(and(predicate, keyset))
       .orderBy(desc(importJobs.createdAt), desc(importJobs.id))
       .limit(capped);
+  },
+
+  /**
+   * USER-FACING read of a job by id for a STATE-MUTATING verb (the cancel verb, 08 §2.1 / 09 §5): the SAME
+   * viewer-predicated read as getJob (creator ∪ elevated; invisible ⇒ null ⇒ 404, no IDOR side-door) but
+   * `FOR UPDATE`, so 08 §2.1's legality check runs against the LOCKED row and a concurrent worker transition
+   * can never race the verb. Compose inside the same withTenantTx as the transition + its in-tx audit row.
+   */
+  async getJobForUpdate(tx: Tx, viewer: JobViewer, jobId: string): Promise<ImportJobRow | null> {
+    const rows = await tx
+      .select()
+      .from(importJobs)
+      .where(
+        and(
+          eq(importJobs.id, jobId),
+          jobVisibility(viewer, {
+            createdByUserId: importJobs.createdByUserId,
+            sharedWithWorkspace: importJobs.sharedWithWorkspace,
+          }),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    return rows[0] ?? null;
   },
 
   /** Transition a job's lifecycle status (+ the matching timestamp / staging / chunk-plan fields). Scoped. */

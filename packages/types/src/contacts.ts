@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { revealType } from "./billing.ts";
+import { importRejectCode } from "./importReject.ts";
 import { freshnessStatus } from "./intel.ts";
 
 // ── Enums (mirror 03 §5 CHECK constraints) ─────────────────────────────────────────────────────────────
@@ -187,6 +188,10 @@ export const rejectedRowSchema = z.object({
   row: z.number().int().nonnegative(), // 0-based index in the parsed file
   field: z.string().nullable(), // canonical field at fault, or null for a whole-row reason
   reason: z.string(),
+  /** The typed reject code (importReject.ts) — the machine-readable half of the reason, shared by the ledger's
+   *  `reject_reason` token and the artifacts' `tp__error_code` column (S-I7, 08 §4). Optional so legacy
+   *  producers and the flag-off path stay byte-identical; populated by every core producer from S-I7 on. */
+  code: importRejectCode.optional(),
   raw: z.record(z.string(), z.string()), // the verbatim source row (header → value)
 });
 export type RejectedRow = z.infer<typeof rejectedRowSchema>;

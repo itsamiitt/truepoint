@@ -67,11 +67,17 @@ describe("rejectedRowsFor", () => {
   test("emits one artifact entry per reason, echoing the raw row", () => {
     const raw = { Email: "bad", First: "X" };
     const rows = rejectedRowsFor(7, raw, [
-      { field: "email", reason: "Malformed email address." },
-      { field: null, reason: "No identity key." },
+      { field: "email", reason: "Malformed email address.", code: "malformed_email" },
+      { field: null, reason: "No identity key.", code: "missing_identifier" },
     ]);
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual({ row: 7, field: "email", reason: "Malformed email address.", raw });
+    expect(rows[0]).toEqual({
+      row: 7,
+      field: "email",
+      reason: "Malformed email address.",
+      code: "malformed_email",
+      raw,
+    });
     expect(rows[1]?.field).toBeNull();
     expect(rows[1]?.raw).toBe(raw);
   });

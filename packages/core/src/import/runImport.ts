@@ -445,7 +445,15 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
     if (validationRules.length > 0) {
       const ruleFailures = runValidationRules(verdict.mapped as Record<string, unknown>, validationRules);
       if (ruleFailures.length > 0) {
-        rejectedRows.push(...ruleFailures.map((f) => ({ row: i, field: f.field, reason: f.message, raw })));
+        rejectedRows.push(
+          ...ruleFailures.map((f) => ({
+            row: i,
+            field: f.field,
+            reason: f.message,
+            code: "validation_rule_failed" as const,
+            raw,
+          })),
+        );
         bumpReject(ruleFailures[0]!.field, "rule");
         errors.push({ row: i, message: ruleFailures[0]!.message });
         continue;
@@ -465,9 +473,11 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
       else skipped++;
       if (landing.addedToList) addedToList++;
     } catch (err) {
-      // A DB/constraint failure after validation passed: surface it as a reject (it did not land).
+      // A DB/constraint failure after validation passed: surface it as a reject (it did not land). The typed
+      // code is the BUCKETED `processing_error` — the free-text `message` (which may embed a value) is NEVER
+      // what the ledger token or the error report exposes (13 §3.3); it survives only in the gated repair CSV.
       const message = err instanceof Error ? err.message : String(err);
-      rejectedRows.push({ row: i, field: null, reason: message, raw });
+      rejectedRows.push({ row: i, field: null, reason: message, code: "processing_error", raw });
       bumpReject(null, "error");
       errors.push({ row: i, message });
     }

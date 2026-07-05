@@ -129,7 +129,7 @@ export async function bulkStage(input: BulkStageInput): Promise<BulkStageResult>
       } catch (err) {
         // validateRow already guarantees an identity key, so this is defensive — surface it as a reject, not a throw.
         const reason = err instanceof Error ? err.message : String(err);
-        rejectedRows.push({ row: rowIndex, field: null, reason, raw });
+        rejectedRows.push({ row: rowIndex, field: null, reason, code: "processing_error", raw });
         bumpReject(null, "error");
         continue;
       }
