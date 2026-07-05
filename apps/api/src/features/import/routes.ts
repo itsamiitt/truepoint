@@ -21,6 +21,7 @@ import {
   type ColumnMapping,
   DEFAULT_CONFLICT_POLICY,
   ForbiddenError,
+  IMPORT_FASTPATH_MAX_BYTES,
   IllegalStateError,
   type ImportFastInput,
   type ImportJobDetailV2,
@@ -32,6 +33,7 @@ import {
   type ImportPreview,
   type ImportProgress,
   type ImportSummary,
+  ImportTooLargeError,
   ImportValidationError,
   NotFoundError,
   type SourceName,
@@ -236,6 +238,35 @@ function decodeJobCursor(raw: string): { createdAt: Date; id: string } | null {
   }
 }
 
+// ── S-I5: server-side routing pre-gate (08 §1, G10 routing half) ────────────────────────────────────────
+// The SERVER decides fast vs copy from MEASURED facts (row count + byte size), never a client hint. Copy mode
+// is not engaged until the enable-gates clear (G07+G09), so an over-threshold file gets an honest
+// `file_too_large`/`xlsx_too_large` refusal NAMING the ceiling (12 §5) — never a dead-end toggle (14's
+// standing fallback). Copy engagement + its UX are S-I9/Phase 2. Called ONLY inside the IMPORT_V2 gate, so the
+// legacy path is byte-identical (a 100k-row CSV still runs on the legacy engine, unrefused, gate-off).
+function assertFastPathRouting(fileName: string, byteSize: number, rowCount: number): void {
+  const isXlsx = /\.xlsx$/i.test(fileName);
+  const rowCeiling = env.BULK_IMPORT_THRESHOLD_ROWS;
+  if (rowCeiling > 0 && rowCount > rowCeiling) {
+    throw new ImportTooLargeError({
+      limit: rowCeiling,
+      current: rowCount,
+      unit: "rows",
+      code: isXlsx ? "xlsx_too_large" : "file_too_large",
+    });
+  }
+  // XLSX bytes are already hard-capped at admission (IMPORT_XLSX_MAX_BYTES); the fast-path BYTE ceiling here is
+  // the CSV routing limit (12 §5's 10 MB pair-half). Above it ⇒ copy territory ⇒ honest refusal until Phase 2.
+  if (!isXlsx && byteSize > IMPORT_FASTPATH_MAX_BYTES) {
+    throw new ImportTooLargeError({
+      limit: IMPORT_FASTPATH_MAX_BYTES,
+      current: byteSize,
+      unit: "bytes",
+      code: "file_too_large",
+    });
+  }
+}
+
 /** Parse the shared import form fields (file + sourceName + mapping); throws ImportValidationError on bad input. */
 async function parseImportForm(form: FormData): Promise<{
   file: File;
@@ -332,6 +363,9 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
   // (G03 closes). GATE OFF: the legacy branch below is the shipped code, byte-identical (T1 parity) — the
   // Redis enqueue, the BullMQ jobId, the 202 body, everything.
   if (await isImportV2Enabled(tenantId)) {
+    // S-I5: measured server-side routing. Over-threshold ⇒ honest refusal (copy mode is dark until Phase 2);
+    // otherwise the verdict is `fast` (processing_mode below). Gate-on only — the legacy path never refuses.
+    assertFastPathRouting(file.name, file.size, parsed.rows.length);
     const scope = { tenantId, workspaceId };
     const input: ImportFastInput = {
       importedByUserId: claims.sub,
