@@ -242,6 +242,23 @@ export const appEnvSchema = z
     // FileStore (S3: presigned multipart + AV-scan-before-promote) is injected at the app composition root later —
     // no AWS SDK is added here; this dir is only the dev adapter's root. Has a sane default so dev/test boot clean.
     BULK_IMPORT_STORAGE_DIR: z.string().min(1).default(".data/bulk-imports"),
+    // ── GATE B (G07): the PRODUCTION S3-compatible object store (import-redesign 14 §gates; db-mgmt 05 §5.3).
+    // The dependency-free SigV4 adapter (@leadwolf/integrations s3FileStore) is selected at BOTH composition
+    // roots (apps/api bulkStore.ts + apps/workers register.ts) when BUCKET + ACCESS_KEY_ID + SECRET are all
+    // set; any of them absent ⇒ diskFileStore, byte-identical to today (the adapter ships DARK — provisioning
+    // the bucket and setting these vars is the entire user-owed enable step). The credentials are SECRETS:
+    // server-only, never logged, never NEXT_PUBLIC_.
+    BULK_IMPORT_S3_BUCKET: z.string().min(1).optional(),
+    BULK_IMPORT_S3_REGION: z.string().min(1).default("us-east-1"), // R2 uses "auto" — signs fine
+    // S3-compatible endpoint origin for R2/MinIO (path-style addressing). Unset = AWS virtual-host style.
+    BULK_IMPORT_S3_ENDPOINT: z.string().url().optional(),
+    BULK_IMPORT_S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+    BULK_IMPORT_S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    // Server-side-encryption header on writes ("AES256" | "aws:kms") — 13 §4.1's encrypted-at-rest posture.
+    // Explicit "none" omits the header for stores that encrypt unconditionally and reject it (R2).
+    BULK_IMPORT_S3_SSE: z.string().min(1).default("AES256"),
+    // Presigned-GET TTL — bounded per 13 §4.3 (a presigned URL is a bearer capability; ≤ 5 min).
+    BULK_IMPORT_S3_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().max(300).default(300),
     // The sync→bulk promotion threshold (rows): an import larger than this is steered onto the bulk pipeline
     // rather than the inline `imports` queue. Consumed by the promotion logic; a sensible default until tuned.
     BULK_IMPORT_THRESHOLD_ROWS: z.coerce.number().int().positive().default(5000),

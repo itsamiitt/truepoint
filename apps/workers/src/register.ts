@@ -12,7 +12,7 @@ import {
   registerEmailProviders,
 } from "@leadwolf/core";
 import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
-import { defaultProviders } from "@leadwolf/integrations";
+import { defaultProviders, s3FileStoreFromEnv } from "@leadwolf/integrations";
 import {
   BULK_ENRICHMENT_DRIVE_TOPIC,
   type BulkEnrichmentDeadLetter,
@@ -902,9 +902,11 @@ export function startWorkers(): Worker[] {
     // S-Q7: publish these handles for /metrics depth scraping (queue depth/age + DLQ depth alerts, 09 §8).
     bulkImportsQueueHandle = bulkImportsQueue;
     bulkImportsDlqHandle = bulkImportDeadLetterQueue;
-    // DEV/TEST local-disk store; the prod FileStore (S3, presigned multipart, AV-before-promote) is injected here
-    // later (no AWS SDK pulled in). Same env dir the apps/api producer composes against (apps never import apps).
-    const bulkFileStore = diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
+    // GATE B (G07) selection seam: BULK_IMPORT_S3_* complete ⇒ the S3-compatible SigV4 adapter (presigned
+    // multipart + SSE, @leadwolf/integrations — no AWS SDK); else the DEV/TEST local-disk store. The SAME env
+    // selection the apps/api producer runs (apps never import apps), so both roots read/write ONE backend —
+    // the 01 §3.1 multi-instance failure mode closes the moment the bucket env lands.
+    const bulkFileStore = s3FileStoreFromEnv() ?? diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
     const processBulkImport = makeProcessBulkImport({
       fileStore: bulkFileStore,
       // The drive phase fans out one chunk job per staged band onto the SAME bulk queue — copy-chunk band,
@@ -1252,7 +1254,9 @@ export function startWorkers(): Worker[] {
   // through the gated revealContact in `lease` settle-mode (the job's ONE lease already reserved the credits —
   // no per-row hot-lock) and, on the last band, writes the revealed CSV + finalizes with a release.
   if (env.BULK_REVEAL_ENABLED) {
-    const revealFileStore = diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
+    // Same Gate-B selection as the import store: the api's reveal download reads the SAME backend this
+    // worker writes, so the two roots must flip together (env-selected identically; disk fallback = today).
+    const revealFileStore = s3FileStoreFromEnv() ?? diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
     const bulkRevealQueue = new Queue<BulkRevealJobData>(BULK_REVEAL_QUEUE, { connection });
     const bulkRevealDeadLetterQueue = new Queue<BulkRevealDeadLetter>(BULK_REVEAL_DLQ, {
       connection,
