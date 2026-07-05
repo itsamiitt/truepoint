@@ -36,12 +36,23 @@ export {
 export {
   runBulkImport,
   finalizeIfLastChunk,
+  chunkWindowLimit,
+  continueChunkWindow,
   type EnqueueChunk,
   type RunBulkImportInput,
   type RunBulkImportResult,
   type FinalizeIfLastChunkInput,
   type FinalizeResult,
 } from "./import/runBulkImport.ts";
+// Tenant fairness for the unified import queue (import-redesign 09 §2, S-Q2): per-workspace job cap →
+// `deferred` admission + the leader-locked sweep's per-workspace promotion pass. Knobs revert by env.
+export {
+  ACTIVE_IMPORT_STATUSES,
+  decideFastAdmission,
+  promoteDeferredForWorkspace,
+  type FastAdmission,
+  type PromotedImportJob,
+} from "./import/importFairness.ts";
 export type { RawRow } from "./import/columnMap.ts";
 // Fast-path dual-write wrapper (import-redesign 08 §1.2 Phase A / 09 §1.1, S-I3): durable state transitions +
 // atomic counter deltas + the rejected-rows ledger AROUND the unchanged runImport. DARK while the

@@ -17,6 +17,7 @@
 //     consumer's ImportFailedError semantics byte-for-byte — so BullMQ retries and, on exhaustion, the
 //     worker's failed-hook calls markFastImportFailed to write the honest `failed` terminal.
 
+import { env } from "@leadwolf/config";
 import {
   importJobRepository,
   withTenantTx,
@@ -24,6 +25,7 @@ import {
   type ImportJobRowInsert,
 } from "@leadwolf/db";
 import type { ImportFastInput, ImportSummary } from "@leadwolf/types";
+import { ACTIVE_IMPORT_STATUSES } from "./importFairness.ts";
 import { runImport, type RunImportInput } from "./runImport.ts";
 
 export interface RunFastImportInput {
@@ -31,6 +33,16 @@ export interface RunFastImportInput {
   /** The durable import_jobs.id (the public jobId — one job identity for both modes, 08 §1.1). */
   jobId: string;
   input: ImportFastInput;
+  /** How many times the deferred lane has already re-enqueued this job (S-Q2; payload `deferrals`). */
+  deferrals?: number;
+  /**
+   * S-Q2 deferred-lane transport (Phase A): when a claim finds the job `deferred` AND the workspace still
+   * at its cap, the wrapper calls this to re-enqueue the SAME payload after env.IMPORT_DEFER_RECHECK_DELAY_MS
+   * (rows travel in the payload, so parking without transport would strand them — importV2.ts). Injected by
+   * the worker so core never touches BullMQ. Absent ⇒ the cap re-check is skipped and a deferred claim
+   * promotes unconditionally (test/tooling convenience; the worker always injects it).
+   */
+  requeueDeferred?: (nextDeferrals: number) => Promise<void>;
 }
 
 /** Non-PII result for per-queue observability (mirrors BulkImportProcessResult's discipline). */
@@ -41,6 +53,8 @@ export interface FastImportResult {
   status: string;
   /** false on a terminal-skip replay — the completed-handler must NOT re-fire rollups/notifications. */
   finalized: boolean;
+  /** true when the claim found the workspace at its cap and re-enqueued instead of running (S-Q2). */
+  deferred?: boolean;
   created: number;
   matched: number;
   duplicate: number;
@@ -78,13 +92,27 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
   const { scope, jobId, input } = args;
   const total = input.rows.length;
 
-  // ── Claim: terminal-skip guard + queued→validating (+ the single chunk row) ─────────────────────────────
+  // ── Claim: terminal-skip guard + the S-Q2 cap re-check + queued→validating (+ the single chunk row) ────
   const claim = await withTenantTx(scope, async (tx) => {
     const job = await importJobRepository.getJobSystem(tx, jobId);
     if (!job) throw new Error(`runFastImport: durable job row not found (${jobId})`);
     if (TERMINAL.has(job.status)) {
       // Replay of a settled job (at-least-once transport): a no-op, never a second effect.
       return { skip: true as const, status: job.status };
+    }
+    // Deferred lane (09 §2.2, S-Q2): the commit verb parked this job at the workspace cap. Re-check the
+    // census at claim: still at cap ⇒ re-enqueue after the recheck delay (outside this tx) and exit without
+    // touching the row (the leader-locked sweep is the DB-truth promoter; this loop is the Phase-A
+    // transport). Below cap ⇒ promote and run — deferred→queued→validating collapses into this claim tx
+    // (the sweep's flip and this claim converge; the pinned-status UPDATE in the sweep makes racing safe).
+    if (job.status === "deferred" && args.requeueDeferred) {
+      const cap = env.IMPORT_WORKSPACE_JOB_CAP;
+      if (cap > 0) {
+        const active = await importJobRepository.countJobsByStatuses(tx, scope.workspaceId, [
+          ...ACTIVE_IMPORT_STATUSES,
+        ]);
+        if (active >= cap) return { skip: true as const, status: "deferred", defer: true as const };
+      }
     }
     await importJobRepository.updateJobStatus(tx, jobId, {
       status: "validating",
@@ -116,11 +144,17 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
     return { skip: false as const, chunkId, chunkDone: chunk?.status === "completed" };
   });
   if (claim.skip) {
+    const stillDeferred = "defer" in claim && claim.defer === true;
+    if (stillDeferred && args.requeueDeferred) {
+      // Outside the tx: the payload re-enqueues itself with the recheck delay (rows must not be lost).
+      await args.requeueDeferred((args.deferrals ?? 0) + 1);
+    }
     return {
       kind: "fast",
       jobId,
       status: claim.status,
       finalized: false,
+      deferred: stillDeferred,
       created: 0,
       matched: 0,
       duplicate: 0,

@@ -14,10 +14,11 @@ import type {
   BulkImportJobStatus,
   BulkImportRowOutcome,
   ConflictPolicy,
+  ImportJobStatusV2,
   JobViewer,
 } from "@leadwolf/types";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
-import type { Tx } from "../client.ts";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { type Tx, db } from "../client.ts";
 import { importJobChunks, importJobRows, importJobs } from "../schema/importJobs.ts";
 import { jobVisibility } from "./jobVisibility.ts";
 
@@ -39,7 +40,9 @@ export interface ImportJobCreateValues {
   createdByUserId?: string | null;
   sourceFile: string;
   sourceName: string;
-  status?: BulkImportJobStatus;
+  /** Widened to the 12-state v2 vocabulary (S-Q2: the commit verb may park a job `deferred`); the legacy
+   *  9-state BulkImportJobStatus is a strict subset, so existing callers are unchanged. */
+  status?: ImportJobStatusV2;
   fileSize?: number | null;
   avScanStatus?: AvScanStatus;
   idempotencyKey?: string | null;
@@ -60,7 +63,8 @@ export interface ImportJobCreateValues {
  * on the same `staged` transition, and `avScanStatus` once the AV gate clears — so they ride this same patch.
  */
 export interface ImportJobStatusUpdate {
-  status: BulkImportJobStatus;
+  /** Widened to the 12-state v2 vocabulary (S-Q2 promotes `deferred → queued`); legacy callers unchanged. */
+  status: ImportJobStatusV2;
   startedAt?: Date | null;
   completedAt?: Date | null;
   failedReason?: string | null;
@@ -261,6 +265,67 @@ export const importJobRepository = {
       });
     if (!rows[0]) throw new Error("import job not found for completed-chunk increment");
     return rows[0];
+  },
+
+  // ── Fairness census + deferred promotion (import-redesign 09 §2, S-Q2) ───────────────────────────────
+
+  /** Count a workspace's jobs in the given states — the per-workspace cap census (09 §2.2). The census is
+   *  deliberately UNSERIALIZED (soft cap, ±1 under a submit race): the atomic version is the Phase-5
+   *  fair-share dispatcher, not an interim lock. Workspace-scoped via RLS + the explicit predicate. */
+  async countJobsByStatuses(tx: Tx, workspaceId: string, statuses: string[]): Promise<number> {
+    const rows = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(importJobs)
+      .where(and(eq(importJobs.workspaceId, workspaceId), inArray(importJobs.status, statuses)));
+    return rows[0]?.n ?? 0;
+  },
+
+  /**
+   * Promote up to `limit` of the workspace's `deferred` jobs to `queued`, OLDEST-FIRST (09 §2.2's
+   * leader-locked sweep calls this per workspace with its computed headroom). Returns the promoted rows'
+   * id + processing_mode so the sweep can re-publish transport for copy drives (fast jobs' transport rides
+   * their delayed re-check loop — Phase A). Idempotent: promoting zero rows is a no-op; the WHERE pins
+   * `status='deferred'` so a concurrent claim-time promotion never double-flips.
+   */
+  async promoteDeferredJobs(
+    tx: Tx,
+    workspaceId: string,
+    limit: number,
+  ): Promise<Array<{ id: string; processingMode: string | null }>> {
+    if (limit <= 0) return [];
+    const capped = Math.min(100, Math.trunc(limit));
+    return tx
+      .update(importJobs)
+      .set({ status: "queued" })
+      .where(
+        and(
+          eq(importJobs.status, "deferred"),
+          inArray(
+            importJobs.id,
+            tx
+              .select({ id: importJobs.id })
+              .from(importJobs)
+              .where(
+                and(eq(importJobs.workspaceId, workspaceId), eq(importJobs.status, "deferred")),
+              )
+              .orderBy(asc(importJobs.createdAt), asc(importJobs.id))
+              .limit(capped),
+          ),
+        ),
+      )
+      .returning({ id: importJobs.id, processingMode: importJobs.processingMode });
+  },
+
+  /** Enumerate workspaces holding `deferred` jobs for the promotion sweep — a system-level, non-PII,
+   *  OWNER-connection read mirroring retentionScanRepository.listActiveTenants (the sweep fans out per
+   *  workspace, then opens one RLS-scoped tx each). Capped by `limit`. */
+  async listDeferredWorkspaces(
+    limit = 500,
+  ): Promise<Array<{ tenantId: string; workspaceId: string }>> {
+    const rows = (await db.execute(
+      sql`SELECT DISTINCT tenant_id, workspace_id FROM import_jobs WHERE status = 'deferred' LIMIT ${limit}`,
+    )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
+    return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
   },
 
   // ── Chunks ─────────────────────────────────────────────────────────────────────────────────────────

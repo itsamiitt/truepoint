@@ -257,6 +257,20 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Tenant-fairness knobs for the unified import queue (import-redesign 09 §2, S-Q2). All revert by env
+    // (15 §R-P1: "tuning knobs revert by env"); each 0 = the DISABLED/∞ sentinel restoring legacy behavior.
+    // Per-workspace cap on concurrently EXECUTING imports (states validating|staged|running — 08 §2.1's
+    // `deferred` parks the overflow, HubSpot's visible-backpressure pattern). Doc 12 publishes the number
+    // (N=3, worst-case per-workspace chunk fan-out = K×N). 0 = no cap (nothing ever defers).
+    IMPORT_WORKSPACE_JOB_CAP: z.coerce.number().int().nonnegative().default(3),
+    // Bounded rolling chunk fan-out window K (09 §2.2): a copy drive enqueues only the first K chunk jobs;
+    // each completion enqueues the next pending band (self-perpetuating; reaper-healed). 0 = ∞ sentinel =
+    // legacy enqueue-all (also dodges addBulk degradation above ~1k jobs).
+    IMPORT_CHUNK_WINDOW: z.coerce.number().int().nonnegative().default(2),
+    // How long a DEFERRED fast job waits before its cooperative cap re-check re-claims it (Phase A: fast
+    // payloads carry rows, so the deferred lane re-enqueues with this delay rather than parking without
+    // transport — importV2.ts documents the bound).
+    IMPORT_DEFER_RECHECK_DELAY_MS: z.coerce.number().int().positive().default(15_000),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the

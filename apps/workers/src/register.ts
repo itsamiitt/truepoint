@@ -93,6 +93,12 @@ import {
   makeProcessGmailInboxPoll,
 } from "./queues/gmailInboxPollSweep.ts";
 import {
+  IMPORT_PROMOTION_SWEEP_EVERY_MS,
+  IMPORT_PROMOTION_SWEEP_QUEUE,
+  type ImportPromotionSweepJobData,
+  makeProcessImportPromotionSweep,
+} from "./queues/importPromotionSweep.ts";
+import {
   IMPORTS_DLQ,
   IMPORTS_QUEUE,
   type ImportJobData,
@@ -897,6 +903,22 @@ export function startWorkers(): Worker[] {
       },
       // Copy kinds stay gated by their own env switch even when this worker boots for the fast lane only.
       copyEnabled: env.BULK_IMPORT_ENABLED,
+      // Bounded rolling fan-out window K (S-Q2; 0 = ∞ = legacy enqueue-all). Dormant until copy mode runs.
+      chunkWindow: env.IMPORT_CHUNK_WINDOW,
+      // Deferred-lane transport for the fast kind (S-Q2): re-enqueue the SAME payload (rows ride it —
+      // Phase-A bound) with the fast band after the recheck delay; the `:r<n>` suffix sidesteps the spent
+      // stable id. The leader-locked sweep below is the DB-truth promoter; this loop is only transport.
+      requeueFastDeferred: async (data, nextDeferrals) => {
+        await bulkImportsQueue.add(
+          "fast",
+          { ...data, deferrals: nextDeferrals },
+          {
+            priority: IMPORT_QUEUE_PRIORITY.fast,
+            jobId: `import-fast:${data.jobId}:r${nextDeferrals}`,
+            delay: env.IMPORT_DEFER_RECHECK_DELAY_MS,
+          },
+        );
+      },
     });
     const bulkImportsWorker = instrument(
       new Worker<UnifiedImportJobData>(
@@ -993,6 +1015,45 @@ export function startWorkers(): Worker[] {
       }
     });
     workers.push(bulkImportsWorker);
+
+    // S-Q2: the leader-locked `deferred → queued` promotion sweep (09 §2.2) — the scheduler half of the
+    // per-workspace cap. Rides the same construction gate as the unified queue (nothing to promote while
+    // both gates are off — `deferred` rows only exist once a producer gate opened). Copy drives re-publish
+    // with their stable id + band; fast promotions are DB flips (transport = the deferred re-check loop).
+    const importPromotionSweepQueue = new Queue<ImportPromotionSweepJobData>(
+      IMPORT_PROMOTION_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<ImportPromotionSweepJobData>(
+          IMPORT_PROMOTION_SWEEP_QUEUE,
+          makeProcessImportPromotionSweep(connection, async (jobId, scope) => {
+            await bulkImportsQueue.add(
+              "drive",
+              { kind: "drive", jobId, scope },
+              { priority: IMPORT_QUEUE_PRIORITY.copyDrive, jobId: `import-drive:${jobId}` },
+            );
+          }),
+          { connection, ...SWEEP_WORKER_TUNING },
+        ),
+        IMPORT_PROMOTION_SWEEP_QUEUE,
+      ),
+    );
+    void importPromotionSweepQueue
+      .add(
+        "sweep",
+        {},
+        {
+          repeat: { every: IMPORT_PROMOTION_SWEEP_EVERY_MS },
+          jobId: "import-promotion-sweep",
+        },
+      )
+      .catch((e) =>
+        log.error("failed to schedule the import-promotion sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
   }
   // Bulk (existing-contact) re-enrich money path (prospect-database-platform I3 / audit A3/P08) — GATED DARK behind
   // BULK_ENRICHMENT_ENABLED (default false). Purely ADDITIVE: when off, the queue/worker are never constructed and

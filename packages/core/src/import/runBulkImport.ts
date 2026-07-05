@@ -34,6 +34,19 @@ export interface RunBulkImportInput {
   jobId: string;
   fileStore: FileStore;
   enqueueChunk: EnqueueChunk;
+  /**
+   * Bounded rolling fan-out window K (import-redesign 09 §2.2, S-Q2): the drive enqueues only the first
+   * `min(K, bands)` chunk jobs; each completed chunk enqueues the next pending band
+   * (continueChunkWindow) — a self-perpetuating window, reaper-healable from the chunk rows (DB is truth).
+   * Also dodges addBulk-style degradation above ~1k jobs. 0/undefined = ∞ sentinel = legacy enqueue-all.
+   */
+  chunkWindow?: number;
+}
+
+/** Resolve the effective fan-out count under the window (0/undefined = ∞ sentinel = enqueue all). */
+export function chunkWindowLimit(window: number | undefined, totalPending: number): number {
+  if (!window || window <= 0) return totalPending;
+  return Math.min(window, totalPending);
 }
 
 export interface RunBulkImportResult {
@@ -84,19 +97,21 @@ function planBands(total: number, size: number): Band[] {
  * never trusted). Resumable: an already-staged job re-enqueues only its non-`completed` chunks.
  */
 export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkImportResult> {
-  const { scope, jobId, fileStore, enqueueChunk } = input;
+  const { scope, jobId, fileStore, enqueueChunk, chunkWindow } = input;
 
   const job: ImportJobRow | null = await withTenantTx(scope, (tx) =>
     importJobRepository.getJobSystem(tx, jobId),
   );
   if (!job) throw new Error(`runBulkImport: job not found (${jobId})`);
 
-  // RESUME — staging already done + chunks exist: re-enqueue only the unfinished chunks; never re-stage.
+  // RESUME — staging already done + chunks exist: re-enqueue only the unfinished chunks (windowed — the
+  // continuation refills as they complete); never re-stage.
   const existingChunks = await withTenantTx(scope, (tx) => importJobRepository.listChunks(tx, jobId));
   if (job.stagingTable && existingChunks.length > 0) {
+    const pending = existingChunks.filter((c) => c.status !== "completed");
+    const limit = chunkWindowLimit(chunkWindow, pending.length);
     let enqueued = 0;
-    for (const c of existingChunks) {
-      if (c.status === "completed") continue;
+    for (const c of pending.slice(0, limit)) {
       await enqueueChunk(jobId, scope, c.id);
       enqueued += 1;
     }
@@ -182,8 +197,11 @@ export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkI
       chunkIds.push(id);
     }
   });
+  // Bounded rolling fan-out (S-Q2): only the first K bands enter the queue; each completion enqueues the
+  // next pending band (continueChunkWindow in the worker). K=0/undefined keeps the legacy enqueue-all.
+  const limit = chunkWindowLimit(chunkWindow, chunkIds.length);
   let enqueued = 0;
-  for (const id of chunkIds) {
+  for (const id of chunkIds.slice(0, limit)) {
     await enqueueChunk(jobId, scope, id);
     enqueued += 1;
   }
@@ -196,6 +214,31 @@ export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkI
     resumed: false,
     stage,
   };
+}
+
+/**
+ * The window CONTINUATION (09 §2.2, S-Q2): after a chunk completes (and did not finalize the job), enqueue
+ * the lowest-indexed still-pending chunks up to the window. Over-enqueueing is harmless BY CONSTRUCTION:
+ * the stable `import-chunk:<chunkId>` jobId dedupes at the queue and the chunk processor's terminal-skip
+ * discards a re-delivered completed band — so a crashed continuation is healed by the reaper (S-Q5) and a
+ * duplicate continuation is a no-op. Cheap: one chunk-list read per completion.
+ */
+export async function continueChunkWindow(args: {
+  scope: BulkImportScope;
+  jobId: string;
+  enqueueChunk: EnqueueChunk;
+  window: number;
+}): Promise<number> {
+  const { scope, jobId, enqueueChunk, window } = args;
+  if (!window || window <= 0) return 0; // ∞ sentinel: the drive enqueued everything already
+  const chunks = await withTenantTx(scope, (tx) => importJobRepository.listChunks(tx, jobId));
+  const pending = chunks.filter((c) => c.status === "queued");
+  let enqueued = 0;
+  for (const c of pending.slice(0, window)) {
+    await enqueueChunk(jobId, scope, c.id);
+    enqueued += 1;
+  }
+  return enqueued;
 }
 
 /**

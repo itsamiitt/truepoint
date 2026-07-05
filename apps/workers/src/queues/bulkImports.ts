@@ -12,6 +12,7 @@ import {
   type FastImportResult,
   type FileStore,
   bulkProcessChunk,
+  continueChunkWindow,
   finalizeIfLastChunk,
   runBulkImport,
   runFastImport,
@@ -55,6 +56,15 @@ export interface BulkImportProcessDeps {
    * never affected by this switch.
    */
   copyEnabled: boolean;
+  /** Bounded rolling fan-out window K (S-Q2; env.IMPORT_CHUNK_WINDOW at the root). 0 = ∞ = enqueue-all. */
+  chunkWindow: number;
+  /**
+   * S-Q2 deferred-lane transport for the fast kind: re-enqueue the SAME fast payload after the recheck
+   * delay (rows travel in the payload — parking without transport would strand them). The composition root
+   * adds it with the fast priority band + a `:r<n>`-suffixed jobId (a spent stable id would dedupe the
+   * re-enqueue away).
+   */
+  requeueFastDeferred: (data: ImportFastJobData, nextDeferrals: number) => Promise<void>;
 }
 
 /** A copy-kind job claimed while BULK_IMPORT_ENABLED is off (see BulkImportProcessDeps.copyEnabled). */
@@ -105,7 +115,13 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
     // (importV2.ts) — so the DLQ path below must never copy `input` into a record.
     if ((job.data as { kind?: string }).kind === "fast") {
       const fast = importFastJobDataSchema.parse(job.data);
-      return runFastImport({ scope: fast.scope, jobId: fast.jobId, input: fast.input });
+      return runFastImport({
+        scope: fast.scope,
+        jobId: fast.jobId,
+        input: fast.input,
+        deferrals: fast.deferrals ?? 0,
+        requeueDeferred: (nextDeferrals) => deps.requeueFastDeferred(fast, nextDeferrals),
+      });
     }
 
     // Defense in depth: re-validate + narrow the queue payload (the producer is trusted, but the discriminated
@@ -148,6 +164,16 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
       if (f.fireRollups) {
         await deps.fireRollups(data.scope);
         firedRollups = true;
+      }
+      // Rolling-window continuation (S-Q2, 09 §2.2): a completed band refills the window with the next
+      // pending band(s). Idempotent by stable chunk jobIds + terminal-skip; the reaper heals a lost enqueue.
+      if (!finalized) {
+        await continueChunkWindow({
+          scope: data.scope,
+          jobId: data.jobId,
+          enqueueChunk: deps.enqueueChunk,
+          window: deps.chunkWindow,
+        });
       }
     }
     return {

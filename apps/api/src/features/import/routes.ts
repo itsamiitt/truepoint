@@ -7,7 +7,13 @@
 // client-supplied listId is validated against that workspace before enqueue (list-plan D4 — never trusted).
 
 import { randomUUID } from "node:crypto";
-import { assertListInWorkspace, buildImportPreview, parseImportFile } from "@leadwolf/core";
+import { env } from "@leadwolf/config";
+import {
+  assertListInWorkspace,
+  buildImportPreview,
+  decideFastAdmission,
+  parseImportFile,
+} from "@leadwolf/core";
 import { type ImportJobRow, importJobRepository, withTenantTx } from "@leadwolf/db";
 import {
   type ColumnMapping,
@@ -261,11 +267,17 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
     // the shipped partial unique (workspace_id, idempotency_key) — the replay returns the SAME jobId and
     // enqueues nothing (levels 2/3 — the single chunk row + source_imports.content_hash — live below).
     const idempotencyKey = c.req.header("idempotency-key") ?? null;
-    const { id: jobId, created } = await withTenantTx(scope, (tx) =>
-      importJobRepository.createJob(tx, {
+    // S-Q2 per-workspace cap (09 §2.2): the census + the row creation share ONE tx — at/over the cap the
+    // job parks in `deferred` (the visible-backpressure state; the legacy response shape maps it to
+    // `queued`, 08 §2.4) and its queue job carries the recheck delay; the leader-locked sweep promotes
+    // oldest-first as slots free. Cap 0 = disabled = always `queued` (legacy).
+    const { id: jobId, created, admission } = await withTenantTx(scope, async (tx) => {
+      const verdict = await decideFastAdmission(tx, workspaceId);
+      const res = await importJobRepository.createJob(tx, {
         tenantId,
         workspaceId,
         createdByUserId: claims.sub,
+        status: verdict,
         // No stored object exists on the Phase-A fast path (rows travel in the payload until G07); the
         // NOT NULL storage-key column records an honest inline sentinel, and the DISPLAY filename lands in
         // the S-I1 source_filename column (source_name keeps the provider enum — 08 §Contradiction scan).
@@ -282,10 +294,16 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
         // fast — copy engagement is S-I5/S-I9) + the honest display filename.
         processingMode: "fast",
         sourceFilename: file.name,
-      }),
-    );
+      });
+      return { ...res, admission: verdict };
+    });
     if (created) {
-      await enqueueFastImport({ kind: "fast", jobId, scope, input });
+      // A deferred job STILL gets transport (rows live in the payload until G07 — Phase-A bound): the
+      // delayed claim re-checks the cap cooperatively and re-parks or runs; the sweep is the DB promoter.
+      await enqueueFastImport(
+        { kind: "fast", jobId, scope, input },
+        admission === "deferred" ? env.IMPORT_DEFER_RECHECK_DELAY_MS : 0,
+      );
     }
     const body: ImportJobRef = { jobId, status: "queued" };
     return c.json(body, 202);
