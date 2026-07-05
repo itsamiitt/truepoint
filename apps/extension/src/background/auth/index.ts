@@ -1,68 +1,59 @@
-// AuthModule — the facade (doc 10 §6.1/§6.2). Owns the in-memory token, single-flight + serialized silent
-// re-auth, interactive login, logout, and workspace/org switching. Primary model = SILENT RE-AUTH
-// (ADR-0044): fresh access tokens come from re-running launchWebAuthFlow non-interactively; NO refresh
-// token is ever held by the extension. The `lw_refresh` cookie stays first-party on the auth origin.
-import { ENV } from "../../shared/env.ts";
+// AuthModule — the facade (doc 12 §6, ADR-0045). Primary model = COMPANION WINDOW: interactive login runs
+// the real web login in a popup window and receives an extension-scoped token via an origin+nonce-verified
+// externally_connectable handoff. Silent refresh uses a SW-held ROTATING refresh token (in
+// chrome.storage.session — survives worker death, cleared on browser close). No launchWebAuthFlow, no PKCE.
+import { EXT_TOKEN_BASE } from "../../shared/env.ts";
 import type { AccountDisplay, AuthState, OrgSummary } from "../../shared/messages.ts";
-import { clearSession, getSession, setSession } from "../../shared/storage.ts";
 import { fetchAccount } from "./account.ts";
+import { type HandoffTokens, randomNonce, runCompanionLogin } from "./companionWindow.ts";
 import {
-  buildLoginUrl,
-  createPkcePair,
-  extractCode,
-  randomState,
-  redirectUri,
-  runAuthFlow,
-} from "./pkceFlow.ts";
-import { AuthError, exchangeCode } from "./silentAuth.ts";
+  clearRefreshToken,
+  loadRefreshToken,
+  refreshTokens,
+  saveRefreshToken,
+} from "./refreshToken.ts";
 import { TokenStore } from "./tokenStore.ts";
 
 const REFRESH_SKEW_MS = 60_000;
 
 export interface AuthDeps {
-  /** The SW schedules/clears the `auth-refresh` alarm from the new expiry (null = clear). Doc 10 §4.3. */
+  /** The SW schedules/clears the `auth-refresh` alarm from the new expiry (null = clear). Doc 12 §6.2. */
   onTokenChanged(expiresAtMs: number | null): void;
   /** Fired when derived state changes off the token path (the async account lookup) so the SW re-broadcasts. */
   onStateChanged?(): void;
 }
 
-interface FlowHint {
-  workspaceId?: string;
-  tenantId?: string;
-}
-
 export class AuthModule {
   private readonly tokens = new TokenStore();
   private account: AccountDisplay | null = null;
-  private reauthInFlight: Promise<boolean> | null = null;
+  private refreshInFlight: Promise<boolean> | null = null;
   private flowLock: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly deps: AuthDeps) {}
 
-  /** On worker wake: if a prior session marker exists, attempt one silent re-auth. */
+  /** On worker wake: if a rotating refresh token survived (storage.session), refresh silently. */
   async init(): Promise<void> {
-    if (await getSession<boolean>("logged_in")) {
-      await this.reauth();
+    if (await loadRefreshToken()) {
+      await this.refresh();
     }
   }
 
-  /** Used by ApiClient before every request; silently re-auths if the token is missing/near-expiry. */
+  /** Used by ApiClient before every request; refreshes if the token is missing/near-expiry. */
   async getAccessToken(): Promise<string | null> {
     if (this.tokens.isFresh(REFRESH_SKEW_MS)) {
       return this.tokens.raw;
     }
-    if (await this.reauth()) {
+    if (await this.refresh()) {
       return this.tokens.raw;
     }
-    // Silent re-auth failed (e.g. a transient auth-service blip). We refresh early (at the 60s skew), so a
-    // token that has not ACTUALLY expired yet is still usable; otherwise we are signed out.
+    // Refresh failed (e.g. a transient auth-service blip). We refresh early (60s skew), so a token that has
+    // not ACTUALLY expired yet is still usable; otherwise we are signed out.
     return this.tokens.raw && Date.now() < this.tokens.expiresAt ? this.tokens.raw : null;
   }
 
-  /** Force a silent re-auth (ApiClient 401-retry + the alarm pre-refresh). True ONLY when a new token was
-   *  minted — so the 401-retry never re-sends a stale token. */
+  /** Force a silent refresh (ApiClient 401-retry + the alarm pre-refresh). True only when a token is fresh. */
   async refreshNow(): Promise<boolean> {
-    return this.reauth();
+    return this.refresh();
   }
 
   get tenantId(): string | null {
@@ -96,10 +87,13 @@ export class AuthModule {
     };
   }
 
-  /** Interactive login (first time / after full logout). */
+  /** Interactive login — opens the companion window and applies the verified handoff. */
   async login(): Promise<AuthState> {
     try {
-      await this.serialize(() => this.runFlow(true, "login"));
+      await this.serialize(async () => {
+        const handoff = await runCompanionLogin(randomNonce());
+        await this.apply(handoff);
+      });
     } catch {
       // stay signed-out; caller re-reads getState()
     }
@@ -107,26 +101,32 @@ export class AuthModule {
   }
 
   async logout(): Promise<AuthState> {
-    // Best-effort server session clear: the cross-origin POST can't carry the SameSite=Strict cookie, so
-    // navigate to the auth-origin logout in a launchWebAuthFlow context. Local clear is guaranteed.
-    try {
-      const url = `${ENV.authOrigin}/auth/logout?redirect_uri=${encodeURIComponent(redirectUri())}`;
-      await runAuthFlow(url, false);
-    } catch {
-      // best-effort
+    // Best-effort server revoke of the extension refresh-token family; local clear is guaranteed.
+    const rt = await loadRefreshToken();
+    if (rt) {
+      try {
+        await fetch(`${EXT_TOKEN_BASE}/logout`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ refreshToken: rt }),
+          signal: AbortSignal.timeout(8_000),
+        });
+      } catch {
+        // best-effort
+      }
     }
     this.tokens.clear();
     this.account = null;
+    await clearRefreshToken();
     this.deps.onTokenChanged(null);
-    await clearSession("logged_in");
     return this.getState();
   }
 
-  /** Re-mint the token with a new workspace (doc 10 §2.6) — a silent re-auth carrying the selection,
-   *  serialized so a concurrent plain reauth can't clobber the switched scope. */
+  /** Re-mint with a new workspace (doc 12 §6) — a scoped refresh, serialized so a concurrent plain refresh
+   *  can't clobber the switched scope. */
   async switchWorkspace(workspaceId: string): Promise<AuthState> {
     try {
-      await this.serialize(() => this.runFlow(false, "none", { workspaceId }));
+      await this.serialize(() => this.doRefresh({ workspaceId }));
     } catch {
       // keep current session on failure
     }
@@ -135,41 +135,59 @@ export class AuthModule {
 
   async switchOrg(tenantId: string): Promise<AuthState> {
     try {
-      await this.serialize(() => this.runFlow(false, "none", { tenantId }));
+      await this.serialize(() => this.doRefresh({ tenantId }));
     } catch {
       // keep current session on failure
     }
     return this.getState();
   }
 
-  /** List the user's orgs. `/auth/orgs` is cookie-based (cross-origin from the extension); the extension
-   *  reads it via a Bearer API mirror. TODO(net-new, doc 10 §7): GET /api/v1/orgs. */
+  /** List the user's orgs. `/auth/orgs` is cookie-based (cross-origin); read via a Bearer API mirror.
+   *  TODO(net-new, doc 12 §8): GET /api/v1/orgs. */
   async listOrgs(): Promise<{ orgs: OrgSummary[]; activeTenantId: string | null }> {
     return { orgs: [], activeTenantId: this.tokens.tenantId };
   }
 
-  /** Single-flight silent re-auth: concurrent callers share one in-flight attempt, itself serialized
-   *  against login/switch so flows never interleave. Returns true only when a fresh token is available. */
-  private reauth(): Promise<boolean> {
-    if (this.reauthInFlight) {
-      return this.reauthInFlight;
+  /** Single-flight silent refresh: concurrent callers share one attempt, serialized against login/switch. */
+  private refresh(): Promise<boolean> {
+    if (this.refreshInFlight) {
+      return this.refreshInFlight;
     }
-    this.reauthInFlight = this.serialize(async () => {
-      // A login/switch we queued behind may have just minted a fresh token — skip a redundant flow.
+    this.refreshInFlight = this.serialize(async () => {
+      // A login/switch we queued behind may have just applied a fresh token — skip a redundant refresh.
       if (this.tokens.isFresh(REFRESH_SKEW_MS)) {
-        return;
+        return true;
       }
-      await this.runFlow(false, "none");
+      return this.doRefresh();
     })
-      .then(() => true)
       .catch(() => false)
       .finally(() => {
-        this.reauthInFlight = null;
+        this.refreshInFlight = null;
       });
-    return this.reauthInFlight;
+    return this.refreshInFlight;
   }
 
-  /** Serialize all auth flows (login / switch / reauth) so they cannot interleave on the shared token. */
+  private async doRefresh(scope?: { workspaceId?: string; tenantId?: string }): Promise<boolean> {
+    const rt = await loadRefreshToken();
+    if (!rt) {
+      return false;
+    }
+    await this.apply(await refreshTokens(rt, scope));
+    return true;
+  }
+
+  private async apply(tokens: HandoffTokens): Promise<void> {
+    this.tokens.set(tokens.accessToken, tokens.expiresIn);
+    await saveRefreshToken(tokens.refreshToken);
+    this.deps.onTokenChanged(this.tokens.expiresAt);
+    // Display identity is fetched OFF the token path (fire-and-forget, bounded) so a slow /me never stalls.
+    void fetchAccount(tokens.accessToken).then((account) => {
+      this.account = account;
+      this.deps.onStateChanged?.();
+    });
+  }
+
+  /** Serialize all auth flows (login / switch / refresh) so they cannot interleave on the shared token. */
   private serialize<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.flowLock.then(fn, fn);
     this.flowLock = next.then(
@@ -177,36 +195,5 @@ export class AuthModule {
       () => undefined,
     );
     return next;
-  }
-
-  private async runFlow(
-    interactive: boolean,
-    prompt: "login" | "none",
-    hint?: FlowHint,
-  ): Promise<void> {
-    const { verifier, challenge } = await createPkcePair();
-    const state = randomState();
-
-    // The verifier + state stay in this closure only (no storage round-trip is needed — launchWebAuthFlow
-    // resolves in-process, unlike the web app's redirect-to-a-new-page flow).
-    const url = buildLoginUrl({ challenge, state, prompt, ...hint });
-    const redirect = await runAuthFlow(url, interactive);
-    if (!redirect) {
-      throw new AuthError(0, "auth_incomplete");
-    }
-    const { code } = extractCode(redirect, state);
-    const resp = await exchangeCode(code, verifier, state);
-
-    this.tokens.set(resp.accessToken, resp.expiresIn);
-    await setSession("logged_in", true);
-    this.deps.onTokenChanged(this.tokens.expiresAt);
-
-    // Display identity is fetched OFF the token path (fire-and-forget, bounded by its own timeout) so a
-    // slow/hung GET /me can never stall the token — the token is already live. State re-broadcasts when
-    // the name resolves.
-    void fetchAccount(resp.accessToken).then((account) => {
-      this.account = account;
-      this.deps.onStateChanged?.();
-    });
   }
 }

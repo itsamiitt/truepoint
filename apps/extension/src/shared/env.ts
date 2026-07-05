@@ -6,8 +6,12 @@ export const ENV = {
   apiOrigin: "https://api.truepoint.in",
   authOrigin: "https://auth.truepoint.in",
   appOrigin: "https://app.truepoint.in",
-  /** OAuth client id for the extension's PKCE flow (public client). */
-  oauthClientId: "truepoint-extension",
 } as const;
 
 export const API_BASE = `${ENV.apiOrigin}/api/v1`;
+
+/** The companion-window handoff page (opened in a popup; runs the real web login). Doc 12 §6.1. NET-NEW page. */
+export const HANDOFF_URL = `${ENV.appOrigin}/auth/extension`;
+
+/** Extension-scoped token endpoints (Bearer / refresh-token; no cookie). Doc 12 §8. NET-NEW backend. */
+export const EXT_TOKEN_BASE = `${API_BASE}/auth/extension`;

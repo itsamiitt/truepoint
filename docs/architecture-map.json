@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1403,
-  "fileSetHash": "sha256:16fe586d4b63b0d0b686f02acca19235ea8f79ab1c79bc238ab28ed729182395",
+  "fileCount": 1404,
+  "fileSetHash": "sha256:30309b90546724d71bb3deda71062f96d7249d9e2f79e54e9af2fc6089a2418e",
   "features": {
     "account-search": {
       "web": [],
@@ -1888,9 +1888,10 @@
     "apps/extension/background": [
       "apps/extension/src/background/api/client.ts",
       "apps/extension/src/background/auth/account.ts",
+      "apps/extension/src/background/auth/companionWindow.ts",
+      "apps/extension/src/background/auth/errors.ts",
       "apps/extension/src/background/auth/index.ts",
-      "apps/extension/src/background/auth/pkceFlow.ts",
-      "apps/extension/src/background/auth/silentAuth.ts",
+      "apps/extension/src/background/auth/refreshToken.ts",
       "apps/extension/src/background/auth/tokenStore.ts",
       "apps/extension/src/background/bus/index.ts",
       "apps/extension/src/background/config/remoteConfig.ts",

@@ -24,15 +24,18 @@ export default defineManifest({
   side_panel: {
     default_path: "src/ui/panel/index.html",
   },
-  permissions: ["storage", "alarms", "activeTab", "scripting", "sidePanel", "identity"],
-  // Standing hosts: the SW must reach the API + auth origins; the content script runs on LinkedIn.
-  host_permissions: [
-    "https://api.truepoint.in/*",
-    "https://auth.truepoint.in/*",
-    "https://*.linkedin.com/*",
-  ],
+  // No `identity` — the companion-window auth (ADR-0045) uses chrome.windows + externally_connectable,
+  // not launchWebAuthFlow.
+  permissions: ["storage", "alarms", "activeTab", "scripting", "sidePanel"],
+  // Standing hosts: the SW reaches the API for capture/reveal + the extension token endpoints; the content
+  // script runs on LinkedIn. (The companion window navigates to app.truepoint.in — a window nav needs no
+  // host permission; the handoff arrives via externally_connectable below.)
+  host_permissions: ["https://api.truepoint.in/*", "https://*.linkedin.com/*"],
   // "Capture anywhere" is requested per-host on a user gesture, never granted at install.
   optional_host_permissions: ["https://*/*", "http://*/*"],
+  // Only the TruePoint web app may message the extension (the auth handoff, ADR-0043/0045). Never a wildcard;
+  // the SW still verifies sender.origin + a state nonce before trusting any message (doc 12 §7).
+  externally_connectable: { matches: ["https://app.truepoint.in/*"] },
   content_scripts: [
     {
       matches: ["https://*.linkedin.com/*"],
