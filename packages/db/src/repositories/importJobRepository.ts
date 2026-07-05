@@ -20,7 +20,7 @@ import type {
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { type Tx, db } from "../client.ts";
 import { importJobChunks, importJobRows, importJobs } from "../schema/importJobs.ts";
-import { jobVisibility } from "./jobVisibility.ts";
+import { artifactVisibility, jobVisibility } from "./jobVisibility.ts";
 
 // ── Row types (VerificationJob-style $inferSelect) ─────────────────────────────────────────────────────────
 
@@ -193,6 +193,24 @@ export const importJobRepository = {
             sharedWithWorkspace: importJobs.sharedWithWorkspace,
           }),
         ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  /**
+   * ARTIFACT-GATE read of a job by id (import-redesign 10 §2.1 last row, 13 §4.2, S-V5): the TIGHTEST predicate
+   * for the PII-bearing error artifacts — creator ∪ elevated, `shared_with_workspace` IGNORED and the dual-gate
+   * short-circuit IGNORED (the artifact endpoint is strict from birth). RLS walls the workspace; artifactVisibility
+   * narrows to the creator for non-elevated callers. Invisible/foreign ⇒ null ⇒ the route 404s (no existence
+   * oracle). The route runs a member+ role gate before this, so a viewer never reaches it.
+   */
+  async getJobForArtifact(tx: Tx, viewer: JobViewer, jobId: string): Promise<ImportJobRow | null> {
+    const rows = await tx
+      .select()
+      .from(importJobs)
+      .where(
+        and(eq(importJobs.id, jobId), artifactVisibility(viewer, importJobs.createdByUserId)),
       )
       .limit(1);
     return rows[0] ?? null;

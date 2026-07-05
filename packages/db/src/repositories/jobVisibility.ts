@@ -44,3 +44,16 @@ export function creatorVisibility(viewer: JobViewer, createdByCol: AnyColumn): S
   if (viewer.role === "owner" || viewer.role === "admin") return undefined;
   return eq(createdByCol, viewer.userId);
 }
+
+/**
+ * The TIGHTEST gate — for the PII-bearing error artifacts (10 §2.1 last-but-one row, 13 §4.2): access is
+ * creator ∪ elevated, and — unlike the list/detail predicate — `shared_with_workspace` is IGNORED (sharing
+ * shares metadata, never artifacts) AND the dual-gate short-circuit is IGNORED (the artifact route is a NEW
+ * endpoint, strict from birth regardless of the JOB_VISIBILITY_SCOPED flag — 10 §5 row 5 "none — new
+ * endpoint"). Elevated ⇒ all rows in the (RLS-walled) workspace; everyone else ⇒ own rows only. The route
+ * runs a member+ role gate first, so a viewer never reaches this; a non-creator member narrows to null ⇒ 404.
+ */
+export function artifactVisibility(viewer: JobViewer, createdByCol: AnyColumn): SQL | undefined {
+  if (viewer.role === "owner" || viewer.role === "admin") return undefined;
+  return eq(createdByCol, viewer.userId);
+}
