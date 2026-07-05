@@ -339,6 +339,13 @@ export {
   type EnrichmentPolicyUpsert,
   type EnrichmentPolicyPatch,
 } from "./repositories/enrichmentPolicyRepository.ts";
+// Per-workspace import policy (import-redesign 10 §3, S-V4; G02) — the who_can_import grant knob +
+// the 08 §5 strategy defaults. Tx-aware upsert so the settings PUT audits in the same transaction.
+export {
+  importPolicyRepository,
+  type ImportPolicyRecord,
+  type ImportPolicyUpsert,
+} from "./repositories/importPolicyRepository.ts";
 // Platform super-admin read surface (ADR-0032) — bounded cross-tenant reads, run within withPlatformTx.
 export {
   platformAdminRepository,

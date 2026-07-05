@@ -59,6 +59,12 @@ export {
   deleteMappingTemplate,
   type SaveMappingTemplateInput,
 } from "./import/templates.ts";
+// The G02 "import at all" grant decision (import-redesign 10 §3, S-V4) — pure verdict; the api middleware
+// maps it to 403 problems (insufficient_role / import_disabled_by_policy) behind the visibility dual gate.
+export {
+  evaluateImportCreateGrant,
+  type ImportCreateGrantVerdict,
+} from "./import/importCreateGrant.ts";
 export { blindIndex } from "./import/blindIndex.ts";
 export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 // Pre-commit validation preview + rejected-rows artifact + conflict policy (30 §4, ADR-0036; G-IMP-1/5).

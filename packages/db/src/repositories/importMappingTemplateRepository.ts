@@ -89,6 +89,19 @@ export const importMappingTemplateRepository = {
     });
   },
 
+  /** Read one template by its case-insensitive name (the save-path ownership check, import-redesign 10
+   *  §2.1 template row: a member may overwrite only their OWN template). Workspace-scoped via RLS. */
+  async findByName(scope: TenantScope, name: string): Promise<ImportMappingTemplateRecord | null> {
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select(RECORD_COLUMNS)
+        .from(importMappingTemplates)
+        .where(sql`lower(${importMappingTemplates.name}) = lower(${name})`)
+        .limit(1);
+      return rows[0] ? toRecord(rows[0]) : null;
+    });
+  },
+
   /** Newest-updated-first templates for the workspace (the picker's data). Workspace-scoped via RLS. */
   async listByWorkspace(scope: TenantScope, limit = 200): Promise<ImportMappingTemplateRecord[]> {
     return withTenantTx(scope, async (tx) => {

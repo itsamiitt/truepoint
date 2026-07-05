@@ -36,6 +36,7 @@ import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueBulkImportDrive } from "./bulkQueue.ts";
 import { bulkFileStore } from "./bulkStore.ts";
+import { requireImportCreateGrant } from "./createGrant.ts";
 
 export const bulkImportRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -130,7 +131,9 @@ function scanUpload(): AvScanStatus {
 
 // POST /imports/bulk — accept a (potentially huge) upload: stream it to the FileStore, record a control row, and
 // enqueue ONE drive job; return 202 + a job ref to poll. No per-row work on the request thread.
-bulkImportRoutes.post("/", async (c) => {
+// S-V4 (G02): a job-CREATING import verb — the create grant rides the visibility dual gate on top of the
+// existing BULK_IMPORT_ENABLED + bulk_import_enabled pair (pass-through while the visibility gate is off).
+bulkImportRoutes.post("/", requireImportCreateGrant(), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before importing.");

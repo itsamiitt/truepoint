@@ -278,3 +278,21 @@ describe("T-V4 flag-off parity — scoped:false reads the legacy workspace-wide 
     expect(await db.enrichmentJobRepository.getJob(scope(), off, enrichB)).not.toBeNull();
   });
 });
+
+describe("T-V5 share flag — shared_with_workspace widens list/detail for members (10 §2.3)", () => {
+  test("a shared foreign job becomes visible to a scoped member in list AND detail", async () => {
+    // No route writes this column yet (UX deferred, doc 14) — flip it as the DB owner, the way a future
+    // share-verb would. B's reveal job becomes workspace-shared; B's other jobs stay private.
+    await admin`UPDATE reveal_jobs SET shared_with_workspace = true WHERE id = ${revealB}`;
+
+    const jobs = await db.revealJobRepository.listJobs(scope(), viewerA());
+    expect(jobs.map((j) => j.id).sort()).toEqual([revealA, revealB].sort());
+    expect(await db.revealJobRepository.getJob(scope(), viewerA(), revealB)).not.toBeNull();
+
+    // Other surfaces are unaffected — the flag is per-row, not per-workspace.
+    const enrich = await db.enrichmentJobRepository.listJobs(scope(), viewerA());
+    expect(enrich.map((j) => j.id)).toEqual([enrichA]);
+    // (Artifact reads stay creator-∪-elevated regardless of the share flag — 10 §2.1; the artifact
+    // endpoint itself is Phase 1 (S-V5/S-I7), so T-V7's download-audit case lands there.)
+  });
+});

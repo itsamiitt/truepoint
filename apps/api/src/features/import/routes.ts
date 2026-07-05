@@ -35,6 +35,7 @@ import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { requireImportCreateGrant } from "./createGrant.ts";
 import { enqueueImport, getImportJob } from "./queue.ts";
 
 export const importRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -113,7 +114,8 @@ function parseListTarget(form: FormData): string | undefined {
 // Pre-commit validation PREVIEW (G-IMP-1): parse + validate the upload and return counts (total/valid/
 // rejected/duplicate) + a sample of rejected rows with reasons — WITHOUT enqueuing anything. The wizard
 // shows this and requires the user to confirm before the actual import runs. No DB writes, no job.
-importRoutes.post("/preview", async (c) => {
+// S-V4: a draft-phase verb — rides the G02 create grant (10 §2.1), dual-gated (pass-through gate-off).
+importRoutes.post("/preview", requireImportCreateGrant(), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
@@ -125,7 +127,9 @@ importRoutes.post("/preview", async (c) => {
   return c.json(preview, 200);
 });
 
-importRoutes.post("/", async (c) => {
+// S-V4 (G02): the one-shot submit is a job-CREATING verb — member+ required, `who_can_import` enforced,
+// behind the dual gate (today's zero-gate posture is byte-identical while the gate is off).
+importRoutes.post("/", requireImportCreateGrant(), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
