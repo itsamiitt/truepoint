@@ -177,9 +177,33 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
     };
   }
 
-  await withTenantTx(scope, (tx) =>
-    importJobRepository.updateJobStatus(tx, jobId, { status: "running" }),
-  );
+  // Cooperative cancel boundary (09 §5.2, completing S-I4's fast-path cancel): BETWEEN validating and running,
+  // re-read the row and honor a cancel/terminal that arrived while we claimed — NEVER flip a `cancelled` job
+  // back to `running` (an illegal cancelled→running revive that the bare UPDATE would otherwise perform). The
+  // engine simply never runs; nothing was committed yet, so stop-remainder is trivially satisfied.
+  const boundary = await withTenantTx(scope, async (tx) => {
+    const job = await importJobRepository.getJobSystem(tx, jobId);
+    if (!job || TERMINAL.has(job.status))
+      return { proceed: false as const, status: job?.status ?? "failed" };
+    await importJobRepository.updateJobStatus(tx, jobId, { status: "running" });
+    return { proceed: true as const };
+  });
+  if (!boundary.proceed) {
+    return {
+      kind: "fast",
+      jobId,
+      status: boundary.status,
+      finalized: false,
+      created: 0,
+      matched: 0,
+      duplicate: 0,
+      skipped: 0,
+      rejected: 0,
+      total,
+      landed: false,
+      addedToList: 0,
+    };
+  }
 
   // ── The UNCHANGED engine (05 §3): per-row txs, ladder dedup, provenance — byte-identical to legacy. ────
   const runInput: RunImportInput = {
