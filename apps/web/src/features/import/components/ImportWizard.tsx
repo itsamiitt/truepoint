@@ -13,10 +13,11 @@ import type {
   ColumnMapping,
   ConflictPolicy,
   ImportMappingTemplate,
+  ImportMergeMode,
   ImportPreview,
   SourceName,
 } from "@leadwolf/types";
-import { ErrorState, TpButton, TpInput, TpSelect } from "@leadwolf/ui";
+import { ErrorState, TpButton, TpCheckbox, TpInput, TpSelect } from "@leadwolf/ui";
 import { useEffect, useRef, useState } from "react";
 import { listMappingTemplates, postImport, postImportPreview, saveMappingTemplate } from "../api";
 import { useImport } from "../hooks/useImport";
@@ -25,11 +26,27 @@ import { IDENTITY_FIELDS, MAPPABLE_FIELDS, type MappableField, SOURCE_OPTIONS } 
 
 const GROUPS = ["Identity", "Person", "Company", "Location"] as const;
 
-const CONFLICT_OPTIONS: { value: ConflictPolicy; label: string }[] = [
-  { value: "skip", label: "Skip — keep existing contact (no overwrite)" },
-  { value: "overwrite", label: "Overwrite — update existing contact" },
-  { value: "keep_both", label: "Keep both — new rows added; existing matches kept as-is" },
+/** The 08 §5 merge-mode triad, in plain language (import-redesign 11 §3, S-U4). This is the VISIBLE dedup
+ *  strategy the user chooses; the wizard also derives a legacy `conflictPolicy` from it so the choice takes
+ *  effect whether the IMPORT_V2 gate is on (strategy wins) or off (conflictPolicy). */
+const MERGE_OPTIONS: { value: ImportMergeMode; label: string }[] = [
+  { value: "create_and_update", label: "Add new and update existing matches" },
+  { value: "create_only", label: "Only add new — skip existing matches" },
+  { value: "update_only", label: "Only update existing matches — skip new rows" },
 ];
+
+/** Map the chosen merge mode onto the legacy conflict policy so gate-off imports still honor the intent
+ *  (08 §5's compatibility mapping, mirrored client-side). `update_only` has no legacy equivalent — it falls
+ *  back to `skip` gate-off (the new capability only takes effect gate-on). */
+function mergeModeToConflictPolicy(mode: ImportMergeMode): ConflictPolicy {
+  return mode === "create_and_update" ? "overwrite" : "skip";
+}
+
+/** Normalize a header/label for auto-mapping: lowercase, strip everything but a–z0–9 (so "First Name",
+ *  "first_name", "firstname" all collapse to one key). */
+function normalizeKey(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
 
 /** True when the picked file is an OOXML workbook (.xlsx) — drives the header reader. Matches the server's
  *  isXlsxFile dispatch (xlsx only, not legacy .xls); kept local because the web app must not depend on
@@ -60,6 +77,23 @@ async function readHeaders(file: File): Promise<string[]> {
     .split(",")
     .map((h) => h.trim().replace(/^"|"$/g, ""))
     .filter(Boolean);
+}
+
+/** Auto-map headers → canonical fields by normalized-name match (import-redesign 11 §3, S-U4). BINARY, not
+ *  fuzzy-with-confidence (03 §1: no fake percentages) — a header maps only if it collapses to the SAME key as a
+ *  field's label or name; every match is user-overridable via the same dropdowns. Each header is used once. */
+function autoMapHeaders(headers: string[]): Partial<Record<CanonicalField, string>> {
+  const next: Partial<Record<CanonicalField, string>> = {};
+  const used = new Set<string>();
+  for (const mf of MAPPABLE_FIELDS) {
+    const targets = new Set([normalizeKey(mf.label), normalizeKey(mf.field)]);
+    const match = headers.find((h) => !used.has(h) && targets.has(normalizeKey(h)));
+    if (match) {
+      next[mf.field] = match;
+      used.add(match);
+    }
+  }
+  return next;
 }
 
 /** Trigger a client-side download of `csv` as a CSV file (no server round-trip — the data is already local). */
@@ -101,7 +135,10 @@ export function ImportWizard({ onImported, onStarted, targetListId, targetListNa
   const [headers, setHeaders] = useState<string[]>([]);
   const [sourceName, setSourceName] = useState<SourceName>("manual");
   const [mapping, setMapping] = useState<Partial<Record<CanonicalField, string>>>({});
-  const [conflictPolicy, setConflictPolicy] = useState<ConflictPolicy>("skip");
+  // The visible dedup strategy (08 §5, S-U4): the merge-mode triad + the orthogonal "don't overwrite populated
+  // values" switch. A legacy conflictPolicy is derived at submit so gate-off imports honor the intent too.
+  const [mergeMode, setMergeMode] = useState<ImportMergeMode>("create_and_update");
+  const [preservePopulated, setPreservePopulated] = useState(false);
 
   // Pre-commit validation preview (G-IMP-1): the user validates first, then confirms to run the real import.
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -187,9 +224,11 @@ export function ImportWizard({ onImported, onStarted, targetListId, targetListNa
 
   async function onFile(f: File | null): Promise<void> {
     setFile(f);
-    setMapping({});
     invalidatePreview();
-    setHeaders(f ? await readHeaders(f) : []);
+    const hdrs = f ? await readHeaders(f) : [];
+    setHeaders(hdrs);
+    // Auto-map on load (S-U4): pre-fill the mapper from the headers; the user reviews/overrides before validating.
+    setMapping(hdrs.length > 0 ? autoMapHeaders(hdrs) : {});
   }
 
   const identityMapped = IDENTITY_FIELDS.some((f) => mapping[f]);
@@ -213,7 +252,15 @@ export function ImportWizard({ onImported, onStarted, targetListId, targetListNa
 
   function onSubmit(): void {
     if (!file || !preview) return;
-    const args = { file, sourceName, mapping: cleanedMapping(), conflictPolicy, listId: targetListId };
+    const args = {
+      file,
+      sourceName,
+      mapping: cleanedMapping(),
+      conflictPolicy: mergeModeToConflictPolicy(mergeMode),
+      mergeMode,
+      preservePopulated,
+      listId: targetListId,
+    };
     // Hand-off flow (11 §4, S-U3): enqueue, then let the parent navigate to the durable job page. No inline
     // poll — the job page owns progress/completion and never gives up.
     if (onStarted) {
@@ -276,12 +323,12 @@ export function ImportWizard({ onImported, onStarted, targetListId, targetListNa
           />
         </label>
         <label className="tp-field">
-          <span>On duplicate</span>
+          <span>When a row matches an existing contact</span>
           <TpSelect
-            value={conflictPolicy}
-            onChange={(e) => setConflictPolicy(e.target.value as ConflictPolicy)}
+            value={mergeMode}
+            onChange={(e) => setMergeMode(e.target.value as ImportMergeMode)}
           >
-            {CONFLICT_OPTIONS.map((o) => (
+            {MERGE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -289,6 +336,16 @@ export function ImportWizard({ onImported, onStarted, targetListId, targetListNa
           </TpSelect>
         </label>
       </div>
+
+      {mergeMode !== "create_only" && (
+        <div className="tp-row">
+          <TpCheckbox
+            checked={preservePopulated}
+            onChange={(e) => setPreservePopulated(e.target.checked)}
+            label="Don’t overwrite fields that already have a value (fill only what’s empty)"
+          />
+        </div>
+      )}
 
       {headers.length > 0 && templates.length > 0 && (
         <label className="tp-field">

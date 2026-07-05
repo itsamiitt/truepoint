@@ -12,6 +12,7 @@ import type {
   ImportJobStatusResponse,
   ImportMappingTemplate,
   ImportMappingTemplateList,
+  ImportMergeMode,
   ImportPreview,
   MaskedContact,
   SourceName,
@@ -31,6 +32,12 @@ export async function postImport(args: {
   sourceName: SourceName;
   mapping: ColumnMapping;
   conflictPolicy: ConflictPolicy;
+  /** The 08 §5 merge strategy (S-I6): sent as `mergeMode` + `preservePopulated` form fields. When the IMPORT_V2
+   *  gate is ON the server uses these (they win over `conflictPolicy`); gate-OFF they are ignored and the legacy
+   *  `conflictPolicy` drives dedup — so the wizard sends BOTH (the triad + a compat conflictPolicy) and the
+   *  right one takes effect per gate. Absent ⇒ the workspace `import_policy` default (10 §3). */
+  mergeMode?: ImportMergeMode;
+  preservePopulated?: boolean;
   /** Optional "import into list" target (list-plan/03 §2.2): landed rows are added to this list. Server-
    *  validated against the caller's workspace — the id is never trusted client-side. */
   listId?: string;
@@ -40,6 +47,8 @@ export async function postImport(args: {
   form.set("sourceName", args.sourceName);
   form.set("mapping", JSON.stringify(args.mapping));
   form.set("conflictPolicy", args.conflictPolicy);
+  if (args.mergeMode) form.set("mergeMode", args.mergeMode);
+  if (args.preservePopulated != null) form.set("preservePopulated", String(args.preservePopulated));
   if (args.listId) form.set("listId", args.listId);
   const res = await fetchWithAuth(`${API_BASE}/api/v1/imports`, { method: "POST", body: form });
   if (!res.ok) throw new Error(await problemMessage(res, "Import failed"));

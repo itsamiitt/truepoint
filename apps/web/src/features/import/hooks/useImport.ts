@@ -5,7 +5,13 @@
 // timers are torn down on unmount and at the start of every new run so nothing leaks or double-fires.
 "use client";
 
-import type { ColumnMapping, ConflictPolicy, ImportSummary, SourceName } from "@leadwolf/types";
+import type {
+  ColumnMapping,
+  ConflictPolicy,
+  ImportMergeMode,
+  ImportSummary,
+  SourceName,
+} from "@leadwolf/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getImportJob, postImport } from "../api";
 import {
@@ -22,6 +28,10 @@ export interface RunArgs {
   sourceName: SourceName;
   mapping: ColumnMapping;
   conflictPolicy: ConflictPolicy;
+  /** The 08 §5 merge strategy (S-U4). Sent alongside `conflictPolicy`; the server uses it gate-on, ignores it
+   *  gate-off. Optional — absent ⇒ the workspace policy default. */
+  mergeMode?: ImportMergeMode;
+  preservePopulated?: boolean;
   /** Optional "import into list" target — landed rows are added to this list (list-plan/03 §2.2). */
   listId?: string;
 }
