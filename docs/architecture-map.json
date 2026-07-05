@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1417,
-  "fileSetHash": "sha256:8dab2d4ee75353b74dd86c944f77d41033907b70b846f9635243eeaa570ebd7b",
+  "fileCount": 1418,
+  "fileSetHash": "sha256:ec448c2346ae1eeab2b23cf0c4ada4bd4cd011bd30492110b83c679bc69743dc",
   "features": {
     "account-search": {
       "web": [],
@@ -711,6 +711,7 @@
         "apps/web/src/features/import/components/BulkImportProgress.tsx",
         "apps/web/src/features/import/components/ContactsTable.tsx",
         "apps/web/src/features/import/components/ImportJobDrawer.tsx",
+        "apps/web/src/features/import/components/ImportJobPage.tsx",
         "apps/web/src/features/import/components/ImportJobsHistoryPage.tsx",
         "apps/web/src/features/import/components/ImportPage.tsx",
         "apps/web/src/features/import/components/ImportWizard.tsx",
