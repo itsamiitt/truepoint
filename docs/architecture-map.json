@@ -96,7 +96,7 @@
     "workspaces"
   ],
   "fileCount": 1408,
-  "fileSetHash": "sha256:906286416e0b32ad3a15a583df7af1abd5f97bd74a939764a5f2c570ed20a4ad",
+  "fileSetHash": "sha256:62e1961cbad8d555f42618a5a3973892ece0fbc524f8feae9b6d75ac7f0da4b1",
   "features": {
     "account-search": {
       "web": [],
@@ -1891,7 +1891,7 @@
     "apps/extension/background": [
       "apps/extension/src/background/api/client.ts",
       "apps/extension/src/background/auth/account.ts",
-      "apps/extension/src/background/auth/companionWindow.ts",
+      "apps/extension/src/background/auth/companionTab.ts",
       "apps/extension/src/background/auth/errors.ts",
       "apps/extension/src/background/auth/index.ts",
       "apps/extension/src/background/auth/refreshToken.ts",

@@ -1,6 +1,8 @@
 // Service-worker entry (02 §2/§4) — constructs the shared-runtime singletons, wires the RuntimeContext,
 // registers the message bus + event manager, and does a first warm-up (config + silent auth refresh).
+import { clearSession, getSession } from "../shared/storage.ts";
 import { ApiClient } from "./api/client.ts";
+import { classifyExternalMessage } from "./auth/companionTab.ts";
 import { AuthModule } from "./auth/index.ts";
 import { registerBus } from "./bus/index.ts";
 import { RemoteConfig } from "./config/remoteConfig.ts";
@@ -63,6 +65,38 @@ const manager = new BrowserEventManager(ctx, scheduler, eventStream);
 
 registerBus(ctx, scheduler);
 manager.register();
+
+// Persistent auth-handoff listener (ADR-0045 / doc 12): the companion tab on app.truepoint.in posts the
+// verified token here. Registered at the top level so it WAKES the worker even if it died during a long
+// interactive login — the transient in-Promise listener would have been lost. Every message is validated
+// against the app origin + the pending state nonce (in classifyExternalMessage) before it is trusted.
+chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  void (async () => {
+    const expected = await auth.pendingState();
+    const classified = expected ? classifyExternalMessage(message, sender, expected) : null;
+    if (!classified) {
+      sendResponse({ ok: false });
+      return;
+    }
+    if (classified.kind === "interactive") {
+      await auth.activatePendingTab();
+    } else {
+      await auth.applyHandoff(classified.tokens);
+      broadcastAuthState();
+    }
+    sendResponse({ ok: true });
+  })();
+  return true; // keep the channel open for the async sendResponse
+});
+
+// If the user closes the login tab before finishing, drop the pending marker.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void getSession<{ tabId: number | null }>("pending_auth").then((pending) => {
+    if (pending?.tabId === tabId) {
+      void clearSession("pending_auth");
+    }
+  });
+});
 
 void (async () => {
   await config.load();

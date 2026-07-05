@@ -1,11 +1,20 @@
-// AuthModule — the facade (doc 12 §6, ADR-0045). Primary model = COMPANION WINDOW: interactive login runs
-// the real web login in a popup window and receives an extension-scoped token via an origin+nonce-verified
-// externally_connectable handoff. Silent refresh uses a SW-held ROTATING refresh token (in
-// chrome.storage.session — survives worker death, cleared on browser close). No launchWebAuthFlow, no PKCE.
+// AuthModule — the facade (doc 12 §6, ADR-0045). Primary model = COMPANION TAB: login() opens the real web
+// login in a BACKGROUND (inactive) tab, so an already-signed-in user is verified silently; the handoff (an
+// extension-scoped token) arrives via an origin+nonce-verified externally_connectable message applied by the
+// SW's persistent listener (→ applyHandoff), so it completes even if the worker died mid-login. Silent refresh
+// uses a SW-held ROTATING refresh token (chrome.storage.session — survives worker death, cleared on browser
+// close) and needs NO tab. No launchWebAuthFlow, no PKCE.
 import { EXT_TOKEN_BASE } from "../../shared/env.ts";
 import type { AccountDisplay, AuthState, OrgSummary } from "../../shared/messages.ts";
+import { clearSession, getSession, setSession } from "../../shared/storage.ts";
 import { fetchAccount } from "./account.ts";
-import { type HandoffTokens, randomNonce, runCompanionLogin } from "./companionWindow.ts";
+import {
+  type HandoffTokens,
+  activateTab,
+  closeTab,
+  openCompanionTab,
+  randomNonce,
+} from "./companionTab.ts";
 import {
   clearRefreshToken,
   loadRefreshToken,
@@ -15,6 +24,14 @@ import {
 import { TokenStore } from "./tokenStore.ts";
 
 const REFRESH_SKEW_MS = 60_000;
+const PENDING_AUTH_KEY = "pending_auth";
+
+/** A login in progress: the tab we opened + the nonce the handoff must echo. Kept in storage.session so the
+ *  handoff still completes if the worker dies while the user is logging in (the persistent listener wakes it). */
+interface PendingAuth {
+  state: string;
+  tabId: number | null;
+}
 
 export interface AuthDeps {
   /** The SW schedules/clears the `auth-refresh` alarm from the new expiry (null = clear). Doc 12 §6.2. */
@@ -87,17 +104,38 @@ export class AuthModule {
     };
   }
 
-  /** Interactive login — opens the companion window and applies the verified handoff. */
+  /** Start login — open the handoff page in a BACKGROUND tab and record the pending nonce/tab. The sign-in
+   *  completes ASYNCHRONOUSLY via the persistent onMessageExternal handler (→ applyHandoff), which is what
+   *  lets an interactive login outlive the service worker. Returns the current (pending) state. */
   async login(): Promise<AuthState> {
-    try {
-      await this.serialize(async () => {
-        const handoff = await runCompanionLogin(randomNonce());
-        await this.apply(handoff);
-      });
-    } catch {
-      // stay signed-out; caller re-reads getState()
-    }
+    const state = randomNonce();
+    const tabId = await openCompanionTab(state);
+    const pending: PendingAuth = { state, tabId: tabId ?? null };
+    await setSession(PENDING_AUTH_KEY, pending);
     return this.getState();
+  }
+
+  /** The expected nonce for the in-progress login (the persistent handler validates against it). */
+  async pendingState(): Promise<string | null> {
+    return (await getSession<PendingAuth>(PENDING_AUTH_KEY))?.state ?? null;
+  }
+
+  /** Login UI is needed — bring the pending background tab to the foreground. */
+  async activatePendingTab(): Promise<void> {
+    const pending = await getSession<PendingAuth>(PENDING_AUTH_KEY);
+    if (pending?.tabId != null) {
+      await activateTab(pending.tabId);
+    }
+  }
+
+  /** Apply a verified handoff (persistent handler), then close the login tab and clear the pending marker. */
+  async applyHandoff(tokens: HandoffTokens): Promise<void> {
+    await this.serialize(() => this.apply(tokens));
+    const pending = await getSession<PendingAuth>(PENDING_AUTH_KEY);
+    if (pending?.tabId != null) {
+      closeTab(pending.tabId);
+    }
+    await clearSession(PENDING_AUTH_KEY);
   }
 
   async logout(): Promise<AuthState> {

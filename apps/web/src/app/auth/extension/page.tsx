@@ -63,19 +63,36 @@ async function run(setMessage: (m: string) => void): Promise<void> {
     return;
   }
 
-  // Ensure a web session (AppShell gate: mint from the refresh cookie, else start the full login and return here).
+  // Ensure a web session: mint from the refresh cookie in the BACKGROUND (this tab was opened inactive).
+  // If the user is already signed in, this succeeds silently and the tab never comes to the foreground.
   if (!getAccessToken()) {
     await silentRefresh();
   }
   if (!getAccessToken()) {
-    try {
-      sessionStorage.setItem(EXT_RETURN_KEY, window.location.pathname + window.location.search);
-      await startLogin();
-      return; // redirecting to the auth origin; the callback returns here after login
-    } catch {
-      setMessage("Couldn't start sign-in. Please try again.");
-      return;
+    // Interactive login is needed — ask the extension to bring this background tab to the foreground, then
+    // run the normal login (returning here via tp_ext_return through /auth/callback).
+    setMessage("Redirecting you to sign in…");
+    const runtime = extRuntime();
+    let started = false;
+    const startOnce = (): void => {
+      if (started) {
+        return;
+      }
+      started = true;
+      try {
+        sessionStorage.setItem(EXT_RETURN_KEY, window.location.pathname + window.location.search);
+      } catch {
+        // sessionStorage may be unavailable; login still proceeds (just won't auto-return here)
+      }
+      void startLogin().catch(() => setMessage("Couldn't start sign-in. Please try again."));
+    };
+    if (runtime?.sendMessage) {
+      runtime.sendMessage(extId, { type: "AUTH_STATUS", state, phase: "interactive" }, startOnce);
+      setTimeout(startOnce, 800); // fall back if the extension never acknowledges
+    } else {
+      startOnce();
     }
+    return;
   }
 
   // Mint an extension-scoped token for the signed-in user.
