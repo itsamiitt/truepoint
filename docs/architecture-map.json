@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1407,
-  "fileSetHash": "sha256:d8b2c4efea0ee240303d62520b652abc55e30712b1edef7e078c8143f4a525cd",
+  "fileCount": 1417,
+  "fileSetHash": "sha256:8dab2d4ee75353b74dd86c944f77d41033907b70b846f9635243eeaa570ebd7b",
   "features": {
     "account-search": {
       "web": [],
@@ -707,19 +707,28 @@
     "import": {
       "web": [
         "apps/web/src/features/import/api.ts",
+        "apps/web/src/features/import/apiV2.ts",
         "apps/web/src/features/import/components/BulkImportProgress.tsx",
         "apps/web/src/features/import/components/ContactsTable.tsx",
+        "apps/web/src/features/import/components/ImportJobDrawer.tsx",
+        "apps/web/src/features/import/components/ImportJobsHistoryPage.tsx",
         "apps/web/src/features/import/components/ImportPage.tsx",
         "apps/web/src/features/import/components/ImportWizard.tsx",
-        "apps/web/src/features/import/components/ImportsLanding.tsx",
         "apps/web/src/features/import/components/bulkFormat.test.ts",
         "apps/web/src/features/import/components/bulkFormat.ts",
+        "apps/web/src/features/import/components/format.ts",
+        "apps/web/src/features/import/components/shared/ConfirmDialog.tsx",
+        "apps/web/src/features/import/components/shared/stateCopy.ts",
         "apps/web/src/features/import/hooks/useBulkImport.ts",
         "apps/web/src/features/import/hooks/useContacts.ts",
         "apps/web/src/features/import/hooks/useImport.ts",
+        "apps/web/src/features/import/hooks/useImportJob.ts",
+        "apps/web/src/features/import/hooks/useImportJobs.ts",
+        "apps/web/src/features/import/hooks/useImportMutations.ts",
         "apps/web/src/features/import/importJob.test.ts",
         "apps/web/src/features/import/importJob.ts",
         "apps/web/src/features/import/index.ts",
+        "apps/web/src/features/import/keys.ts",
         "apps/web/src/features/import/rejectedRowsCsv.ts",
         "apps/web/src/features/import/types.ts"
       ],
@@ -1975,6 +1984,7 @@
       "apps/web/src/lib/eventStream.ts",
       "apps/web/src/lib/pkce.ts",
       "apps/web/src/lib/publicConfig.ts",
+      "apps/web/src/lib/useSessionIdentity.ts",
       "apps/web/src/lib/useSessionRole.ts"
     ],
     "apps/workers": [
