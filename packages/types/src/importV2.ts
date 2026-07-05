@@ -91,6 +91,33 @@ export const IMPORT_QUEUE_PRIORITY = {
   copyChunk: 10,
 } as const;
 
+// ── Outbox topics (09 §6, S-Q3/S-Q4) — the worker_outbox `topic` values an import's terminal tx publishes
+// (ADR-0027; imports become the outbox's first consumer beyond bulk-enrich). Payloads PII-free by contract.
+// Live here so the packages/core producer and the workers-side relay publishers can never drift — the
+// BULK_ENRICHMENT_DRIVE_TOPIC precedent.
+/** Terminal-transition NOTIFY intent (09 §6.3, S-Q4). The publisher looks the recipient (creator) + copy up
+ *  from the durable row, so the payload stays minimal + PII-free; the insert is idempotent (jobId+status). */
+export const IMPORT_NOTIFY_TOPIC = "import.notify";
+/** Terminal ROLLUP intent (09 §6.2, S-Q3). The publisher fans out the idempotent per-workspace dedup /
+ *  firmographics / master-backfill rollups — replacing the best-effort completed-handler enqueues (G06). */
+export const IMPORT_ROLLUPS_TOPIC = "import.rollups";
+/** Commit→drive intent (09 §6.4) — RESERVED. The atomic commit⇒drive move for the copy path / Phase-B fast
+ *  ({jobId, scope}); the Phase-A fast lane keeps its direct enqueue because rows ride the payload and cannot
+ *  enter the PII-free outbox (09 §6.4 — "Fast-mode Phase A keeps its legacy direct enqueue"). Not wired yet. */
+export const IMPORT_DRIVE_TOPIC = "import.drive";
+
+/** import.notify worker_outbox payload (09 §6.3). PII-free — ids + scope + the terminal status only. */
+export const importNotifyPayloadSchema = z.object({
+  jobId: z.string().uuid(),
+  scope: bulkImportScopeSchema,
+  terminalStatus: z.enum(["completed", "partial", "failed", "cancelled"]),
+});
+export type ImportNotifyPayload = z.infer<typeof importNotifyPayloadSchema>;
+
+/** import.rollups worker_outbox payload (09 §6.2). PII-free — the workspace scope only. */
+export const importRollupsPayloadSchema = z.object({ scope: bulkImportScopeSchema });
+export type ImportRollupsPayload = z.infer<typeof importRollupsPayloadSchema>;
+
 /** The fast-mode job's import input, as carried on the queue (Phase A, 08 §1.2): the RunImportInput fields
  *  minus `scope` (the envelope carries it). ROWS TRAVEL IN THE PAYLOAD — the deliberate Phase-A transport
  *  bound (the disk FileStore cannot be load-bearing multi-instance until G07, 08 §1.2; 12 §2.4), exactly as

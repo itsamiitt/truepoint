@@ -20,8 +20,10 @@ import {
   type BulkImportScope,
   type BulkRevealDeadLetter,
   IMPORT_QUEUE_PRIORITY,
+  IMPORT_ROLLUPS_TOPIC,
   type ImportDeadLetter,
   bulkEnrichmentJobDataSchema,
+  importRollupsPayloadSchema,
 } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
@@ -34,7 +36,7 @@ import {
   recordFailed,
   renderPromMetrics,
 } from "./metrics.ts";
-import { type OutboxRelayHandle, startOutboxRelay } from "./outboxRelay.ts";
+import { type OutboxPublisher, type OutboxRelayHandle, startOutboxRelay } from "./outboxRelay.ts";
 import {
   BILLING_RECON_SWEEP_QUEUE,
   type BillingReconSweepJobData,
@@ -314,7 +316,7 @@ function bounded<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
  * systemHealthProbes contract). The per-queue completed/failed counters are fed by instrument().
  */
 export async function collectWorkerMetricsText(): Promise<string> {
-  const specs: ReadonlyArray<{ name: string; queue: Pick<Queue, "getJobCounts"> }> = [
+  const specs: Array<{ name: string; queue: Pick<Queue, "getJobCounts"> }> = [
     { name: IMPORTS_QUEUE, queue: importQueue },
     { name: IMPORTS_DLQ, queue: importDeadLetterQueue },
     { name: ENRICHMENT_QUEUE, queue: enrichmentQueue },
@@ -344,6 +346,15 @@ export async function collectWorkerMetricsText(): Promise<string> {
     { name: DATA_RETENTION_SWEEP_QUEUE, queue: dataRetentionSweepQueue },
     { name: EMAIL_TOKEN_REFRESH_QUEUE, queue: tokenRefreshQueue },
   ];
+  // The UNIFIED import queue + its DLQ are constructed conditionally (gated) inside startWorkers; scrape their
+  // depth via the lifted handles when present (S-Q7) — the DLQ-depth (S2) and queue-depth/age alerts (09 §8)
+  // need them. Absent while the gate is off ⇒ the rows simply don't render (honest absence, no fake zero).
+  if (bulkImportsQueueHandle) {
+    specs.push({ name: BULK_IMPORTS_QUEUE, queue: bulkImportsQueueHandle });
+  }
+  if (bulkImportsDlqHandle) {
+    specs.push({ name: BULK_IMPORTS_DLQ, queue: bulkImportsDlqHandle });
+  }
 
   const settled = await Promise.allSettled(
     specs.map(async (s) => {
@@ -555,6 +566,12 @@ export async function enqueueMasterBackfill(
 // Phase 3 (ADR-0027): the outbox relay handle, set by startWorkers when the bulk-enrichment block runs.
 let outboxRelay: OutboxRelayHandle | undefined;
 
+// S-Q7: the unified import queue + its DLQ are built conditionally inside startWorkers (gated). Their handles
+// are lifted here so collectWorkerMetricsText can scrape their depth for the 09 §8 alerts (queue depth/age +
+// DLQ depth). Undefined while the gate is off — the metrics rows then simply don't render (no fake zero).
+let bulkImportsQueueHandle: Queue<UnifiedImportJobData> | undefined;
+let bulkImportsDlqHandle: Queue<BulkImportDeadLetter> | undefined;
+
 /** Stop background relays (Phase 3): halts the outbox relay's schedule and awaits its in-flight tick. The
  *  entrypoint calls this FIRST in the drain so no new drive publish races the worker close. No-op when the
  *  bulk-enrichment block never started a relay (flag off). Safe to call more than once. */
@@ -600,6 +617,14 @@ export function startWorkers(): Worker[] {
   // Per-mailbox send-rate throttle (WARM-001). Conservative fixed defaults (10 burst, 1/sec ≈ 60/min); the P5
   // warmup ramp makes this per-mailbox/day. A throttled send is deferred (re-enqueued), never dropped.
   const mailboxThrottle = createRedisMailboxThrottle(connection, { capacity: 10, refillPerSec: 1 });
+
+  // S-Q3 (09 §6, ADR-0027): imports become the outbox's first consumer beyond bulk-enrich. Publishers accumulate
+  // here from the import + enrichment blocks below and a SINGLE leaderless relay drains worker_outbox for ALL of
+  // them (one table, FOR UPDATE SKIP LOCKED) — a second relay with a disjoint publisher map would terminally-fail
+  // the other block's topics. The import terminal tx (runFastImport) writes its outbox intents only when the
+  // IMPORT_V2 dual gate's env half is on; gate-off ⇒ no intents + the best-effort handlers fire (byte-identical).
+  const outboxPublishers: Record<string, OutboxPublisher> = {};
+  const importOutboxEnabled = env.IMPORT_V2_ENABLED;
 
   const importsWorker = instrument(
     new Worker<ImportJobData>(
@@ -871,6 +896,9 @@ export function startWorkers(): Worker[] {
     const bulkImportDeadLetterQueue = new Queue<BulkImportDeadLetter>(BULK_IMPORTS_DLQ, {
       connection,
     });
+    // S-Q7: publish these handles for /metrics depth scraping (queue depth/age + DLQ depth alerts, 09 §8).
+    bulkImportsQueueHandle = bulkImportsQueue;
+    bulkImportsDlqHandle = bulkImportDeadLetterQueue;
     // DEV/TEST local-disk store; the prod FileStore (S3, presigned multipart, AV-before-promote) is injected here
     // later (no AWS SDK pulled in). Same env dir the apps/api producer composes against (apps never import apps).
     const bulkFileStore = diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
@@ -906,6 +934,9 @@ export function startWorkers(): Worker[] {
           }),
         );
       },
+      // S-Q3 (09 §6.2, G06): emit the terminal ROLLUP intent onto worker_outbox in the terminal tx (crash-safe,
+      // at-least-once) instead of the completed handler's best-effort enqueue. Gate-off ⇒ the handler fires.
+      emitOutbox: importOutboxEnabled,
       // Copy kinds stay gated by their own env switch even when this worker boots for the fast lane only.
       copyEnabled: env.BULK_IMPORT_ENABLED,
       // Bounded rolling fan-out window K (S-Q2; 0 = ∞ = legacy enqueue-all). Dormant until copy mode runs.
@@ -982,7 +1013,9 @@ export function startWorkers(): Worker[] {
       const r = result as { finalized?: boolean; landed?: boolean; status?: string } | undefined;
       if (!r?.finalized) return;
       const scope = { tenantId: data.scope.tenantId, workspaceId: data.scope.workspaceId };
-      if (r.landed) {
+      // S-Q3: gate-on, the terminal tx's `import.rollups` outbox intent drives these (crash-safe) — the handler
+      // enqueue is RETIRED to avoid a double fan-out. Gate-off (no fast jobs exist) this branch is the fallback.
+      if (r.landed && !importOutboxEnabled) {
         void enqueueDedup(scope).catch((e) =>
           log.error("fast-import: dedup enqueue failed", {
             error: e instanceof Error ? e.message : String(e),
@@ -1020,6 +1053,22 @@ export function startWorkers(): Worker[] {
       }
     });
     workers.push(bulkImportsWorker);
+
+    // S-Q3 (09 §6.2, G06): the `import.rollups` outbox publisher — fans out the SAME idempotent per-workspace
+    // dedup / firmographics / master-backfill rollups the completed handler used to enqueue best-effort, now
+    // driven by the terminal tx's crash-safe intent (at-least-once; the rollup jobs are each idempotent so a
+    // re-publish is harmless). Registered only when the import gate is on (only then are the intents written).
+    // A throw leaves the row `pending` for a later re-claim (all three re-enqueue idempotently); the drained
+    // single relay is started once, after the enrichment block, over `outboxPublishers`.
+    if (importOutboxEnabled) {
+      outboxPublishers[IMPORT_ROLLUPS_TOPIC] = async (payload) => {
+        const { scope } = importRollupsPayloadSchema.parse(payload);
+        const data = { tenantId: scope.tenantId, workspaceId: scope.workspaceId };
+        await enqueueDedup(data);
+        await enqueueFirmographics(data);
+        await enqueueMasterBackfill(data);
+      };
+    }
 
     // S-Q2: the leader-locked `deferred → queued` promotion sweep (09 §2.2) — the scheduler half of the
     // per-workspace cap. Rides the same construction gate as the unified queue (nothing to promote while
@@ -1168,18 +1217,20 @@ export function startWorkers(): Worker[] {
     // Payload is validated against the shared schema before publish; a malformed row burns its attempts cap
     // (bounded) and fails out via the repository, loudly logged each claim. Gated with the consumer: when
     // the kill-switch is off no relay runs and committed intents simply wait, exactly like the dark queue.
-    outboxRelay = startOutboxRelay({
-      publishers: {
-        [BULK_ENRICHMENT_DRIVE_TOPIC]: async (payload) => {
-          const data = bulkEnrichmentJobDataSchema.parse(payload);
-          await bulkEnrichmentQueue.add("drive", data, {
-            jobId: `bulkenrich:drive:${data.jobId}`,
-            attempts: 3,
-            backoff: { type: "exponential", delay: 2000, jitter: 0.5 },
-          });
-        },
-      },
-    });
+    outboxPublishers[BULK_ENRICHMENT_DRIVE_TOPIC] = async (payload) => {
+      const data = bulkEnrichmentJobDataSchema.parse(payload);
+      await bulkEnrichmentQueue.add("drive", data, {
+        jobId: `bulkenrich:drive:${data.jobId}`,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2000, jitter: 0.5 },
+      });
+    };
+  }
+  // Start the SINGLE leaderless outbox relay (ADR-0027) if ANY block registered a publisher — bulk-enrich drive
+  // and/or the import rollups/notify topics (S-Q3/S-Q4). One relay drains worker_outbox for every topic (a
+  // per-block relay would terminally-fail the others' topics). stopBackgroundRelays halts it first in the drain.
+  if (Object.keys(outboxPublishers).length > 0) {
+    outboxRelay = startOutboxRelay({ publishers: outboxPublishers });
   }
   // Async BULK REVEAL consumer — DARK by default (BULK_REVEAL_ENABLED=false; the apps/api producer enqueues
   // nothing while off, so this never runs in prod until the flag is flipped in a CI-gated step). A `drive` job

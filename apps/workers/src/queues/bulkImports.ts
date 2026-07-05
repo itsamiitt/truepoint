@@ -65,6 +65,13 @@ export interface BulkImportProcessDeps {
    * re-enqueue away).
    */
   requeueFastDeferred: (data: ImportFastJobData, nextDeferrals: number) => Promise<void>;
+  /**
+   * S-Q3 (09 §6.2, G06): when true, the fast wrapper's terminal tx enqueues the `import.rollups` worker_outbox
+   * intent ATOMICALLY with the terminal flip (crash-safe, at-least-once), and the completed handler's best-effort
+   * rollup enqueue is retired. The root passes `env.IMPORT_V2_ENABLED` (the per-tenant half already gated the
+   * producer). False ⇒ the handler fires the rollups — byte-identical (T-Q3 flag-off).
+   */
+  emitOutbox: boolean;
 }
 
 /** A copy-kind job claimed while BULK_IMPORT_ENABLED is off (see BulkImportProcessDeps.copyEnabled). */
@@ -124,6 +131,8 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
         // S-I7: the SAME injected object store the copy drive stages through — the fast wrapper writes the
         // repair-CSV + error-report pair through it at the terminal transition when ≥1 row was rejected.
         fileStore: deps.fileStore,
+        // S-Q3: emit the terminal rollup intent onto worker_outbox in-tx (crash-safe) instead of the handler.
+        emitOutbox: deps.emitOutbox,
       });
     }
 

@@ -20,11 +20,17 @@
 import { env } from "@leadwolf/config";
 import {
   importJobRepository,
+  outboxRepository,
   withTenantTx,
   type ImportJobProgressDelta,
   type ImportJobRowInsert,
 } from "@leadwolf/db";
-import { type ImportFastInput, type ImportSummary, rejectReasonToken } from "@leadwolf/types";
+import {
+  IMPORT_ROLLUPS_TOPIC,
+  type ImportFastInput,
+  type ImportSummary,
+  rejectReasonToken,
+} from "@leadwolf/types";
 import type { FileStore } from "../storage/fileStore.ts";
 import { writeImportArtifacts } from "./artifactWriter.ts";
 import { ACTIVE_IMPORT_STATUSES } from "./importFairness.ts";
@@ -53,6 +59,14 @@ export interface RunFastImportInput {
    * post-G07 means the encrypting S3 adapter (encryption-at-rest gap: the dev diskFileStore is plaintext — 13).
    */
   fileStore?: FileStore;
+  /**
+   * S-Q3 (09 §6.2, G06): when true, the terminal tx enqueues the `import.rollups` worker_outbox intent ATOMICALLY
+   * with the status flip (a crash after commit re-delivers via the leaderless relay — at-least-once, idempotent
+   * rollups) instead of relying on the worker's best-effort completed handler. The worker passes
+   * `env.IMPORT_V2_ENABLED`; the per-tenant half already gated at the producer (a fast job only exists gate-on).
+   * Absent/false ⇒ NO outbox write and the completed handler fires the rollups — byte-identical (T-Q3 flag-off).
+   */
+  emitOutbox?: boolean;
 }
 
 /** Non-PII result for per-queue observability (mirrors BulkImportProcessResult's discipline). */
@@ -300,6 +314,19 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
       rejectedArtifactKey: artifactKeys.repairKey ?? undefined,
       options,
     });
+    // S-Q3 (09 §6.2, G06): the per-workspace ROLLUP intent commits ATOMICALLY with the terminal flip — a crash
+    // anywhere after commit re-delivers via the leaderless relay (at-least-once; the dedup/firmographics/
+    // master-backfill rollups are each idempotent). This RETIRES the worker's best-effort completed-handler
+    // rollup enqueues (register.ts) behind the IMPORT_V2 gate. Only when ≥1 row landed (the rollup trigger).
+    // Gate-off (emitOutbox false) ⇒ no intent, the handler fires — byte-identical (09 §Rollout / T-Q3 flag-off).
+    if (args.emitOutbox && landedCount > 0) {
+      await outboxRepository.enqueueInTx(tx, {
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        topic: IMPORT_ROLLUPS_TOPIC,
+        payload: { scope: { tenantId: scope.tenantId, workspaceId: scope.workspaceId } },
+      });
+    }
   });
 
   return {
