@@ -99,6 +99,11 @@ import {
   makeProcessImportPromotionSweep,
 } from "./queues/importPromotionSweep.ts";
 import {
+  IMPORT_REAPER_SWEEP_QUEUE,
+  type ImportReaperSweepJobData,
+  makeProcessImportReaperSweep,
+} from "./queues/importReaperSweep.ts";
+import {
   IMPORTS_DLQ,
   IMPORTS_QUEUE,
   type ImportJobData,
@@ -1051,6 +1056,58 @@ export function startWorkers(): Worker[] {
       )
       .catch((e) =>
         log.error("failed to schedule the import-promotion sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+
+    // S-Q5: the leader-locked IMPORT REAPER (09 §7 row 2 / §8) — the DB-backed recovery + observe spine.
+    // Gate-independent hardening (observe/recover only; never touches the happy path). Constructed under the
+    // SAME gate as the unified queue because it needs the queue handle for liveness + re-drive, and only the
+    // gate's producers create the non-terminal rows it heals. Redis-loss re-enqueue (copy drive re-publish /
+    // fast honest-terminal), stall flag, and the artifact/accounting integrity gauges.
+    const importReaperSweepQueue = new Queue<ImportReaperSweepJobData>(IMPORT_REAPER_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        new Worker<ImportReaperSweepJobData>(
+          IMPORT_REAPER_SWEEP_QUEUE,
+          makeProcessImportReaperSweep(connection, {
+            // Live-job snapshot: all ids on the unified queue this tick (bounded) — the orphan-liveness oracle.
+            snapshotLiveJobIds: async () => {
+              const jobs = await bulkImportsQueue.getJobs(
+                ["waiting", "delayed", "active", "prioritized", "paused"],
+                0,
+                2000,
+              );
+              const ids = new Set<string>();
+              for (const j of jobs) if (j.id) ids.add(j.id);
+              return ids;
+            },
+            // Re-publish an orphaned copy job's drive (stable id → idempotent re-drive; watermark-resumed).
+            reenqueueCopyDrive: async (jobId, scope) => {
+              await bulkImportsQueue.add(
+                "drive",
+                { kind: "drive", jobId, scope },
+                { priority: IMPORT_QUEUE_PRIORITY.copyDrive, jobId: `import-drive:${jobId}` },
+              );
+            },
+            orphanGraceMs: env.IMPORT_REAPER_ORPHAN_GRACE_MS,
+            stallWindowMs: env.IMPORT_REAPER_STALL_WINDOW_MS,
+          }),
+          { connection, ...SWEEP_WORKER_TUNING },
+        ),
+        IMPORT_REAPER_SWEEP_QUEUE,
+      ),
+    );
+    void importReaperSweepQueue
+      .add(
+        "sweep",
+        {},
+        { repeat: { every: env.IMPORT_REAPER_SWEEP_EVERY_MS }, jobId: "import-reaper-sweep" },
+      )
+      .catch((e) =>
+        log.error("failed to schedule the import-reaper sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

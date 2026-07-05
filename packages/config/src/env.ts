@@ -271,6 +271,19 @@ export const appEnvSchema = z
     // payloads carry rows, so the deferred lane re-enqueues with this delay rather than parking without
     // transport — importV2.ts documents the bound).
     IMPORT_DEFER_RECHECK_DELAY_MS: z.coerce.number().int().positive().default(15_000),
+    // Import reaper knobs (import-redesign 09 §7 row 2 / §8, S-Q5): the DB-backed recovery + observe spine
+    // that composes the promotion-sweep idiom. All gate-independent hardening (observe/recover only; the
+    // reaper never changes happy-path behavior) and revert-by-env.
+    //   • sweep cadence — how often the leader-locked reaper tick runs.
+    IMPORT_REAPER_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(60_000),
+    //   • orphan grace — a non-terminal import older than this WITH NO live BullMQ job is a Redis-loss /
+    //     503-shed orphan (drift 16: the "503 shed leaves a visible queued row" edge): copy re-drives from
+    //     the durable row (idempotent, watermark-resumed), fast terminalizes `failed` (rows-in-payload
+    //     unrecoverable in Phase A — honest terminal, no eternal `queued`/`running` row).
+    IMPORT_REAPER_ORPHAN_GRACE_MS: z.coerce.number().int().positive().default(5 * 60_000),
+    //   • stall window — a `running` job whose 7-bucket counters have not advanced for longer than this is
+    //     flagged (metric + log; NEVER auto-killed) — the durable-truth "is it stuck?" signal (09 §8).
+    IMPORT_REAPER_STALL_WINDOW_MS: z.coerce.number().int().positive().default(10 * 60_000),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the

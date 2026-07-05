@@ -41,6 +41,39 @@ export function resetCounters(): void {
   counters.clear();
 }
 
+// ── Import-specific metrics (import-redesign 09 §8, S-Q5/S-Q7) ──────────────────────────────────────────────
+// The reaper (S-Q5) publishes point-in-time GAUGES (recomputed every tick — set, not accumulated) and
+// cumulative COUNTERS. Kept in their own module-global maps so the render reads them exactly like `counters`
+// (no plumbing through collectWorkerMetricsText, which only carries the live queue-depth snapshot). PII rule
+// unchanged: names are static metric strings — never a jobId, tenant, or value.
+const importCounters = new Map<string, number>();
+const importGauges = new Map<string, number>();
+
+/** Add to a cumulative import counter (rendered as `leadwolf_import_<name>`, e.g. `reaper_copy_redrive_total`). */
+export function incrementImportCounter(name: string, by = 1): void {
+  importCounters.set(name, (importCounters.get(name) ?? 0) + by);
+}
+
+/** Set a point-in-time import gauge (rendered as `leadwolf_import_<name>`, e.g. `jobs_stalled`) — the reaper
+ *  overwrites it each tick, so it always reflects the latest census, never an accumulation. */
+export function setImportGauge(name: string, value: number): void {
+  importGauges.set(name, value);
+}
+
+/** Snapshots for tests. */
+export function importCountersSnapshot(): ReadonlyMap<string, number> {
+  return importCounters;
+}
+export function importGaugesSnapshot(): ReadonlyMap<string, number> {
+  return importGauges;
+}
+
+/** Test seam — the import maps are module-global, so tests reset between cases. */
+export function resetImportMetrics(): void {
+  importCounters.clear();
+  importGauges.clear();
+}
+
 /** One queue's live depth reading (gathered by register.ts from its producer handles, bounded). */
 export interface QueueDepth {
   queue: string;
@@ -89,6 +122,18 @@ export function renderPromMetrics(input: WorkerMetricsInput): string {
   if (input.outboxOldestPendingSeconds !== null) {
     lines.push("# TYPE leadwolf_worker_outbox_oldest_pending_seconds gauge");
     lines.push(`leadwolf_worker_outbox_oldest_pending_seconds ${input.outboxOldestPendingSeconds}`);
+  }
+
+  // Import reaper counters + gauges (S-Q5/S-Q7). Rendered from the module-global maps, like the queue counters.
+  // Reserved (defined by the sibling's S-Q4, NOT here — one owner per name): the notify delivery-lag gauge
+  // `leadwolf_import_notify_delivery_lag_seconds`. This renderer must never double-define it.
+  for (const [name, value] of importCounters) {
+    lines.push(`# TYPE leadwolf_import_${name} counter`);
+    lines.push(`leadwolf_import_${name} ${value}`);
+  }
+  for (const [name, value] of importGauges) {
+    lines.push(`# TYPE leadwolf_import_${name} gauge`);
+    lines.push(`leadwolf_import_${name} ${value}`);
   }
 
   return `${lines.join("\n")}\n`;
