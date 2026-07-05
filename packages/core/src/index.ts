@@ -131,6 +131,8 @@ export {
   writeImportArtifacts,
   repairArtifactKey,
   errorReportArtifactKey,
+  neutralizeCell,
+  redactValues,
   type ImportArtifactKeys,
 } from "./import/artifactWriter.ts";
 

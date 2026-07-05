@@ -16,10 +16,18 @@
 // §1) so a unit test asserts the exact bytes; the async writer is best-effort per artifact (a store failure
 // leaves the key unset and the job honestly artifact-less, mirroring runBulkImport's posture).
 //
-// FORMULA-INJECTION NEUTRALIZATION + the error-report `_REDACTED_` pass are S-S3 (the SAME slice, next commit):
-// every cell of BOTH artifacts gets the leading-quote neutralizer per 13 §4.5. Until then the cells are
-// RFC-4180-quoted only — safe because the whole surface is DARK behind IMPORT_V2_ENABLED (no artifact is
-// generated in prod between S-I7 and S-S3).
+// FORMULA-INJECTION NEUTRALIZATION (S-S3, 13 §4.5): every cell of BOTH artifacts whose first character is
+// `=`/`+`/`-`/`@` (or a tab/CR/LF-led variant) is prefixed with a single quote — the OWASP CSV-injection
+// convention — so a hostile cell (`=WEBSERVICE(...)`, `=cmd|...`) uploaded in someone's CSV cannot execute on
+// the desk of the admin who opens the repair file (the repair-CSV half of 13 §11 worst-case #1). Applied to the
+// echoed ORIGINAL columns too — "echo byte-faithfully" (08 §6.2) is amended to "byte-faithful EXCEPT the
+// leading-quote neutralization" (documented, doc 11 owns the UI note). Parse-side strip on repair-CSV re-import
+// (the round-trip half of T-S1) rides the retry-reimport path (S-I10), which does not exist yet.
+//
+// The error report additionally runs the `_REDACTED_` pass (13 §3.3, HubSpot 03 §6.1 [5][18]) on its detail
+// column: value fragments (email-like / long-digit runs) are replaced with `_REDACTED_`. The report's blast
+// radius (small, shareable file) invites forwarding, so — unlike the repair CSV, which already carries the full
+// row under §4's gate — it must never surface a value.
 //
 // ENCRYPTION-AT-REST: artifacts inherit 08 §8 Gate A's SSE-KMS requirement, delivered by the production S3
 // adapter (G07 / Phase 2). The dev `diskFileStore` is PLAINTEXT local disk (no signing, no encryption) — the
@@ -37,14 +45,34 @@ const REPAIR_DETAIL_COLUMN = "tp__error_detail";
 /** Cap the sample line numbers per taxonomy bucket in the error report — a triage aid, not a full list. */
 const ERROR_REPORT_SAMPLE_LINES = 20;
 
+/** CSV formula-injection neutralizer (13 §4.5, OWASP): prefix a single quote when the cell's FIRST character is
+ *  a formula trigger (`=`,`+`,`-`,`@`) or a control char a spreadsheet strips before evaluating (TAB/CR/LF) —
+ *  so `\t=cmd` (tab-led) is caught as well as `=cmd`. Display-safe (`-42`, `+1-555…` open showing a leading
+ *  quote in the cell); the round-trip strip on re-import rides S-I10. Empty string is left untouched. */
+export function neutralizeCell(value: string): string {
+  if (value.length > 0 && /^[=+\-@\t\r\n]/.test(value)) return `'${value}`;
+  return value;
+}
+
+/** Replace value fragments (email-like tokens, 7+-digit runs) with `_REDACTED_` — the error-report scrubber
+ *  (13 §3.3) so a taxonomy detail can never leak a cell value. Codes/columns/counts are untouched (no `@`, no
+ *  long digit runs). Conservative by design: it errs toward redacting, never toward exposing. */
+export function redactValues(text: string): string {
+  return text
+    .replace(/[^\s,@"']+@[^\s,@"']+\.[^\s,@"']+/g, "_REDACTED_") // email-like
+    .replace(/\d{7,}/g, "_REDACTED_"); // phone/id-like digit runs
+}
+
 /** RFC-4180-quote a single cell: wrap in quotes when it contains a comma, quote, CR or LF; double quotes. */
 function csvCell(value: string): string {
   if (/[",\r\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
 }
 
+/** Neutralize (formula-injection) THEN RFC-4180-quote every cell — the order matters: the leading quote is added
+ *  before the field is wrapped, so a neutralized value survives the round-trip intact. */
 function csvLine(cells: string[]): string {
-  return cells.map(csvCell).join(",");
+  return cells.map((v) => csvCell(neutralizeCell(v))).join(",");
 }
 
 /** The deterministic object-store keys for a job's artifacts, under its `imports/<jobId>/` prefix (the same
@@ -107,6 +135,7 @@ export function buildErrorReportCsv(rejectedRows: RejectedRow[]): string {
     column: string;
     count: number;
     lines: number[];
+    detail: string; // the first occurrence's reason, REDACTED (never a raw value)
   }
   const buckets = new Map<string, Bucket>();
   for (const r of rejectedRows) {
@@ -114,16 +143,19 @@ export function buildErrorReportCsv(rejectedRows: RejectedRow[]): string {
     const key = rejectReasonToken(code, r.field);
     let b = buckets.get(key);
     if (!b) {
-      b = { code, column: r.field ?? "", count: 0, lines: [] };
+      // The detail is the FIRST reason for this bucket, value-scrubbed to `_REDACTED_` — a triage hint, never a
+      // cell value (13 §3.3). Generic reasons ("Malformed email address.") survive verbatim; a processing_error
+      // that quoted a value comes through redacted.
+      b = { code, column: r.field ?? "", count: 0, lines: [], detail: redactValues(r.reason) };
       buckets.set(key, b);
     }
     b.count += 1;
     if (b.lines.length < ERROR_REPORT_SAMPLE_LINES) b.lines.push(r.row + 1); // 1-based for humans
   }
-  const header = ["error_code", "column", "impact_count", "sample_lines"];
+  const header = ["error_code", "column", "impact_count", "sample_lines", "sample_detail"];
   const lines = [csvLine(header)];
   for (const b of buckets.values()) {
-    lines.push(csvLine([b.code, b.column, String(b.count), b.lines.join(" ")]));
+    lines.push(csvLine([b.code, b.column, String(b.count), b.lines.join(" "), b.detail]));
   }
   return lines.join("\r\n");
 }
