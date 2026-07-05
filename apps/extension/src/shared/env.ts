@@ -10,8 +10,10 @@ export const ENV = {
 
 export const API_BASE = `${ENV.apiOrigin}/api/v1`;
 
-/** The companion-window handoff page (opened in a popup; runs the real web login). Doc 12 §6.1. NET-NEW page. */
+/** The companion-window handoff page (opened in a popup; runs the real web login). Doc 12 §6.1. */
 export const HANDOFF_URL = `${ENV.appOrigin}/auth/extension`;
 
-/** Extension-scoped token endpoints (Bearer / refresh-token; no cookie). Doc 12 §8. NET-NEW backend. */
-export const EXT_TOKEN_BASE = `${API_BASE}/auth/extension`;
+/** Extension token endpoints — refresh/logout, body-based (no cookie). These live on the AUTH origin
+ *  because minting needs the private signing key (apps/auth only). The SW calls them cross-origin; the
+ *  extension id must be registered in EXTENSION_ORIGINS server-side for CORS to pass. Doc 12 §8. */
+export const EXT_TOKEN_BASE = `${ENV.authOrigin}/auth/extension`;

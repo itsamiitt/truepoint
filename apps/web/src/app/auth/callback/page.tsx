@@ -53,6 +53,14 @@ export default function CallbackPage() {
     completeLogin(code, state)
       .then(() => {
         sessionStorage.removeItem(RECOVERY_KEY); // clean exit — let a future failure recover once
+        // If login was started from the extension companion window, return there to finish the handoff
+        // (ADR-0045) instead of the default work surface.
+        const extReturn = sessionStorage.getItem("tp_ext_return");
+        if (extReturn) {
+          sessionStorage.removeItem("tp_ext_return");
+          window.location.replace(extReturn);
+          return;
+        }
         // Client-side nav (NOT window.location): keeps the just-minted in-memory token alive across the hop
         // so the shell renders signed-in without a redundant silent refresh, and lands on the destination directly.
         router.replace(POST_LOGIN_DESTINATION);
@@ -61,7 +69,10 @@ export default function CallbackPage() {
         const reason = err instanceof Error ? err.message : "unknown";
         // A stale/expired/single-use state can be cleared by a fresh login — auto-restart it, but only once
         // (the flag survives the auth round-trip on this origin) so we never trap the user in a redirect loop.
-        if (recoveryActionFor(reason) === "restart" && sessionStorage.getItem(RECOVERY_KEY) !== "1") {
+        if (
+          recoveryActionFor(reason) === "restart" &&
+          sessionStorage.getItem(RECOVERY_KEY) !== "1"
+        ) {
           sessionStorage.setItem(RECOVERY_KEY, "1");
           try {
             await startLogin();

@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1404,
-  "fileSetHash": "sha256:30309b90546724d71bb3deda71062f96d7249d9e2f79e54e9af2fc6089a2418e",
+  "fileCount": 1408,
+  "fileSetHash": "sha256:906286416e0b32ad3a15a583df7af1abd5f97bd74a939764a5f2c570ed20a4ad",
   "features": {
     "account-search": {
       "web": [],
@@ -1806,6 +1806,9 @@
       "apps/auth/src/app/account/security/page.tsx",
       "apps/auth/src/app/account/security/status.ts",
       "apps/auth/src/app/account/security/stepUp.ts",
+      "apps/auth/src/app/extension/logout/route.ts",
+      "apps/auth/src/app/extension/mint/route.ts",
+      "apps/auth/src/app/extension/refresh/route.ts",
       "apps/auth/src/app/forgot/actions.ts",
       "apps/auth/src/app/forgot/page.tsx",
       "apps/auth/src/app/layout.tsx",
@@ -1964,6 +1967,7 @@
       "apps/web/src/app/(shell)/settings/teams/page.tsx",
       "apps/web/src/app/(shell)/settings/workspace/page.tsx",
       "apps/web/src/app/auth/callback/page.tsx",
+      "apps/web/src/app/auth/extension/page.tsx",
       "apps/web/src/app/import/page.tsx",
       "apps/web/src/app/layout.tsx",
       "apps/web/src/app/page.tsx"
