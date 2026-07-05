@@ -28,8 +28,10 @@ import {
   DEFAULT_CONFLICT_POLICY,
   ForbiddenError,
   IMPORT_FASTPATH_MAX_BYTES,
+  IMPORT_MAX_COMMITS_PER_HOUR,
   IllegalStateError,
   type ImportFastInput,
+  ImportQuotaExceededError,
   type ImportJobDetailV2,
   type ImportJobListItem,
   type ImportJobListResponse,
@@ -660,4 +662,134 @@ importRoutes.post("/:jobId/cancel", async (c) => {
     );
   // noop (already cancelled) and cancelled both answer 200 with the current detail (idempotent verb, 08 §2.3).
   return c.json({ ...toLegacyResponseV2(result.row), ...toImportJobDetailV2(result.row) }, 200);
+});
+
+// ── S-I10: POST /imports/:jobId/retry-failed — the retry-failed CHILD job (08 §6.3, G05 retry half; 09 §2.2).
+// A NEW v2 verb, strict from birth: a legacy (non-uuid) id or a gate-off tenant ⇒ 404 (no legacy retry existed;
+// no existence oracle). Who may retry = creator ∪ elevated (the viewer predicate on the parent read; invisible ⇒
+// 404 — the same S-I4/S-V5 rule). Only a TERMINAL partial/failed parent is retryable (else 409 illegal_state).
+// The child is a fresh `import_jobs` row with `parent_job_id = :id`, mode/mapping/strategy/list INHERITED, and
+// its rows sourced from the parent's failed+unprocessed LEDGER `input` (the durable equivalent of the repair
+// CSV — Phase A has no FileStore in apps/api; Phase B re-extracts by row_index from the stored object). It counts
+// against the per-workspace commit quota (08 §2.3) and sheds to `deferred` at the S-Q2 cap. `import.retry_created`
+// audits in the SAME tx as the create. Idempotency-Key replay returns the same child (createJob's partial unique).
+importRoutes.post("/:jobId/retry-failed", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
+  const tenantId = c.get("tenantId");
+  const claims = c.get("claims");
+  const parentId = c.req.param("jobId");
+  if (!UUID_RE.test(parentId) || !(await isImportV2Enabled(tenantId)))
+    throw new NotFoundError("Import job not found.");
+
+  const viewer = await buildJobViewer({ tenantId, workspaceId, userId: claims.sub });
+  const idempotencyKey = c.req.header("idempotency-key") ?? null;
+  const scope = { tenantId, workspaceId };
+
+  type RetryResult =
+    | { kind: "not_found" }
+    | { kind: "illegal"; status: string }
+    | { kind: "nothing" }
+    | { kind: "replay"; jobId: string }
+    | { kind: "created"; jobId: string; admission: "queued" | "deferred"; input: ImportFastInput };
+
+  const result = await withTenantTx(scope, async (tx): Promise<RetryResult> => {
+    // Creator ∪ elevated (the viewer predicate; invisible/foreign ⇒ 404, no IDOR side-door — S-I4/S-V5 rule).
+    const parent = await importJobRepository.getJob(tx, viewer, parentId);
+    if (!parent || parent.workspaceId !== workspaceId) return { kind: "not_found" };
+    // Only a terminal partial/failed parent is retryable (08 §2.3); anything else ⇒ 409 illegal_state.
+    if (parent.status !== "partial" && parent.status !== "failed")
+      return { kind: "illegal", status: parent.status };
+    // Phase-A source: the parent's failed+unprocessed ledger rows (== the repair CSV, regenerated). Empty ⇒
+    // nothing to retry (a wholly-`failed` fast job wrote no per-row ledger) ⇒ 409 (08 §2.3 "nothing to retry").
+    const rows = await importJobRepository.listRetryableRows(tx, parentId);
+    if (rows.length === 0) return { kind: "nothing" };
+
+    // Admission (S-Q2 cap): at/over the workspace cap ⇒ park `deferred` (visible backpressure), else `queued`.
+    const admission = await decideFastAdmission(tx, workspaceId);
+    // Inherit the parent's mapping + strategy + provider + list target (08 §6.3; a per-child override is future).
+    const mapping = (parent.columnMapping ?? {}) as ColumnMapping;
+    const strategy: ImportStrategy = {
+      mergeMode: parent.mergeMode as ImportStrategy["mergeMode"],
+      preservePopulated: parent.preservePopulated,
+    };
+    const parentConflict = (parent.conflictPolicy ?? undefined) as ConflictPolicy | undefined;
+    const input: ImportFastInput = {
+      importedByUserId: claims.sub,
+      sourceName: parent.sourceName as SourceName,
+      sourceFile: parent.sourceFilename ?? undefined,
+      mapping,
+      conflictPolicy: parentConflict,
+      strategy,
+      rows,
+      target: parent.targetListId ? { listId: parent.targetListId } : undefined,
+    };
+    const { id: childId, created } = await importJobRepository.createJob(tx, {
+      tenantId,
+      workspaceId,
+      createdByUserId: claims.sub,
+      status: admission,
+      // No stored object on the Phase-A fast path (rows travel in the payload); the NOT NULL storage-key column
+      // records an honest inline sentinel, the display filename inherits the parent's.
+      sourceFile: `retry:${randomUUID()}`,
+      sourceName: parent.sourceName,
+      avScanStatus: "skipped",
+      idempotencyKey,
+      columnMapping: mapping,
+      conflictPolicy: parentConflict,
+      targetListId: parent.targetListId ?? null,
+      processingMode: "fast",
+      sourceFilename: parent.sourceFilename ?? null,
+      parentJobId: parentId,
+      mergeMode: strategy.mergeMode,
+      preservePopulated: strategy.preservePopulated,
+    });
+    // Idempotent replay: the same key collapsed onto the existing child — return it, no quota/audit/enqueue.
+    if (!created) return { kind: "replay", jobId: childId };
+    // Commit quota (08 §2.3 / 12 §5), enforced AFTER the create so the new row is included: > cap ⇒ 429,
+    // throwing to roll THIS insert back. Replays never reach here, so the verb stays idempotent at the cap.
+    const cap = IMPORT_MAX_COMMITS_PER_HOUR;
+    if (cap > 0) {
+      const since = new Date(Date.now() - 3_600_000);
+      const recent = await importJobRepository.countJobsCreatedSince(tx, workspaceId, since);
+      if (recent > cap)
+        throw new ImportQuotaExceededError(
+          `This workspace has reached its import limit of ${cap} per hour. Try again shortly.`,
+          3600,
+        );
+    }
+    // In-tx audit (08 §7): a retry that can't record its actor can't commit. metadata is non-PII (ids + count).
+    await writeAudit(tx, {
+      tenantId,
+      workspaceId,
+      actorUserId: viewer.userId,
+      action: "import.retry_created",
+      entityType: "import_job",
+      entityId: childId,
+      metadata: { parentJobId: parentId, retryRows: rows.length },
+    });
+    return { kind: "created", jobId: childId, admission, input };
+  });
+
+  if (result.kind === "not_found") throw new NotFoundError("Import job not found.");
+  if (result.kind === "illegal")
+    throw new IllegalStateError(
+      `An import in state '${result.status}' cannot be retried.`,
+      result.status,
+    );
+  if (result.kind === "nothing")
+    throw new IllegalStateError("This import has no failed rows to retry.", "no_retryable_rows");
+  if (result.kind === "replay") {
+    const body: ImportJobRef = { jobId: result.jobId, status: "queued" };
+    return c.json(body, 202);
+  }
+  // Fresh child: enqueue transport (rows ride the payload — the Phase-A bound). A deferred child carries the
+  // re-check delay; the leader-locked sweep is the DB-truth promoter (S-Q2).
+  await enqueueFastImport(
+    { kind: "fast", jobId: result.jobId, scope, input: result.input },
+    result.admission === "deferred" ? env.IMPORT_DEFER_RECHECK_DELAY_MS : 0,
+  );
+  const body: ImportJobRef = { jobId: result.jobId, status: "queued" };
+  return c.json(body, 202);
 });

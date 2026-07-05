@@ -186,6 +186,24 @@ export class ImportValidationError extends AppError {
   }
 }
 
+/**
+ * The per-workspace import commit quota is exhausted (import-and-data-model-redesign 08 §2.3 / 12 §5, S-I10):
+ * commits (incl. retry-failed children — a retry "counts against the commit quota") per workspace per hour
+ * exceed `IMPORT_MAX_COMMITS_PER_HOUR`. 429 with the stable `import_quota_exceeded` slug; `retryAfterSeconds`
+ * (when known) lets the client back off. Non-PII.
+ */
+export class ImportQuotaExceededError extends AppError {
+  constructor(detail?: string, retryAfterSeconds?: number) {
+    super({
+      status: 429,
+      code: "import_quota_exceeded",
+      title: "Import quota reached",
+      detail,
+      ...(retryAfterSeconds ? { extensions: { retryAfterSeconds } } : {}),
+    });
+  }
+}
+
 /** The tenant credit balance can't cover the reveal — 402 with balance + required so the UI can prompt (09 §6). */
 export class InsufficientCreditsError extends AppError {
   constructor(balance: number, required: number) {

@@ -18,7 +18,7 @@ import type {
   ImportMergeMode,
   JobViewer,
 } from "@leadwolf/types";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { type Tx, db } from "../client.ts";
 import { importJobChunks, importJobRows, importJobs } from "../schema/importJobs.ts";
 import { artifactVisibility, jobVisibility } from "./jobVisibility.ts";
@@ -391,6 +391,125 @@ export const importJobRepository = {
       sql`SELECT DISTINCT tenant_id, workspace_id FROM import_jobs WHERE status = 'deferred' LIMIT ${limit}`,
     )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
     return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
+  },
+
+  // ── Reaper reads (import-redesign 09 §7 row 2 / §8, S-Q5) ─────────────────────────────────────────────
+  // System-level, non-PII, OWNER-connection reads (mirroring listDeferredWorkspaces / the shipped relays'
+  // cross-tenant drain — 13 §5 re-verified: a system drain of control rows, not a new overlay access path).
+  // Control-row columns only (no `import_job_rows`, so no imported-contact PII crosses the boundary). The
+  // reaper opens an RLS-scoped withTenantTx per row when it must WRITE (markFastImportFailed); these reads
+  // only enumerate + count.
+
+  /** Enumerate NON-TERMINAL import jobs (the reaper's recovery + stall candidates), oldest-first, bounded.
+   *  `processed` is the 7-bucket accounting sum — the reaper compares it across ticks (no `updated_at` column
+   *  exists, so counter-movement IS the running-progress signal — 09 §8). */
+  async listNonTerminalImportJobs(limit = 500): Promise<
+    Array<{
+      id: string;
+      tenantId: string;
+      workspaceId: string;
+      status: string;
+      processingMode: string | null;
+      createdAt: Date;
+      rowsTotal: number;
+      processed: number;
+    }>
+  > {
+    const capped = Math.max(1, Math.min(2000, Math.trunc(limit)));
+    const rows = (await db.execute(sql`
+      SELECT id, tenant_id, workspace_id, status, processing_mode, created_at, rows_total,
+             (rows_created + rows_matched + rows_duplicate + rows_skipped + rows_rejected
+              + rows_deduped + rows_unprocessed) AS processed
+      FROM import_jobs
+      WHERE status IN ('queued','validating','staged','running','deferred')
+      ORDER BY created_at ASC
+      LIMIT ${capped}
+    `)) as unknown as Array<{
+      id: string;
+      tenant_id: string;
+      workspace_id: string;
+      status: string;
+      processing_mode: string | null;
+      created_at: Date;
+      rows_total: number;
+      processed: number;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      tenantId: r.tenant_id,
+      workspaceId: r.workspace_id,
+      status: r.status,
+      processingMode: r.processing_mode,
+      createdAt: new Date(r.created_at),
+      rowsTotal: Number(r.rows_total),
+      processed: Number(r.processed),
+    }));
+  },
+
+  /** Count TERMINAL jobs (partial/completed) that have rejected rows but NO artifact key — the artifact
+   *  re-sweep flag (09 §7 row 4 / §3 finalize step). A gauge the reaper publishes; >0 = a terminal job whose
+   *  repair CSV never landed (a store crash mid-finalize). */
+  async countArtifactPendingJobs(): Promise<number> {
+    const rows = (await db.execute(sql`
+      SELECT count(*)::int AS n FROM import_jobs
+      WHERE status IN ('completed','partial') AND rows_rejected > 0 AND rejected_artifact_key IS NULL
+    `)) as unknown as Array<{ n: number }>;
+    return Number(rows[0]?.n ?? 0);
+  },
+
+  /** Count TERMINAL jobs whose 7-bucket accounting identity is VIOLATED (sum ≠ rows_total) — the S1 data-
+   *  integrity gauge (09 §8: "accounting reconciliation … an unreconciled total is itself a defect"). Only
+   *  rows_total>0 are checked (an all-zero job is trivially reconciled). */
+  async countAccountingViolations(): Promise<number> {
+    const rows = (await db.execute(sql`
+      SELECT count(*)::int AS n FROM import_jobs
+      WHERE status IN ('completed','partial','failed','cancelled') AND rows_total > 0
+        AND (rows_created + rows_matched + rows_duplicate + rows_skipped + rows_rejected
+             + rows_deduped + rows_unprocessed) <> rows_total
+    `)) as unknown as Array<{ n: number }>;
+    return Number(rows[0]?.n ?? 0);
+  },
+
+  // ── Commit quota + retry-child sourcing (import-redesign 08 §2.3/§6.3, S-I10) ─────────────────────────
+
+  /** Count a workspace's jobs CREATED since `since` — the per-workspace commit-quota census (08 §2.3 / 12 §5;
+   *  `IMPORT_MAX_COMMITS_PER_HOUR`). Every commit (incl. a retry-failed child) is one `import_jobs` row, so the
+   *  row-creation count is the commit count. Deliberately UNSERIALIZED (soft quota, ±1 under a submit race —
+   *  the same posture as the fairness census). Workspace-scoped via RLS + the explicit predicate. */
+  async countJobsCreatedSince(tx: Tx, workspaceId: string, since: Date): Promise<number> {
+    const rows = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(importJobs)
+      .where(and(eq(importJobs.workspaceId, workspaceId), gt(importJobs.createdAt, since)));
+    return rows[0]?.n ?? 0;
+  },
+
+  /**
+   * The failed+unprocessed rows of a terminal job, as their RAW parsed input — the Phase-A source of a
+   * retry-failed child (08 §6.3). The repair CSV is REGENERATED from these same ledger `input` values
+   * (runFastImport), so sourcing the child from the ledger is byte-equivalent to "re-import the repair CSV"
+   * WITHOUT needing a FileStore in apps/api (Phase B re-extracts by row_index from the stored object instead).
+   * `input` is the raw header-keyed row (core's RawRow); rows without stored `input` are skipped (a wholly-
+   * `failed` fast job writes no per-row ledger, so it yields nothing to retry → the route 409s). Ascending by
+   * row_index so the child's line order matches the parent's. Workspace-scoped via RLS.
+   */
+  async listRetryableRows(tx: Tx, jobId: string): Promise<Array<Record<string, string>>> {
+    const rows = await tx
+      .select({ input: importJobRows.input })
+      .from(importJobRows)
+      .where(
+        and(
+          eq(importJobRows.jobId, jobId),
+          inArray(importJobRows.outcome, ["rejected", "unprocessed"]),
+        ),
+      )
+      .orderBy(asc(importJobRows.rowIndex));
+    const out: Array<Record<string, string>> = [];
+    for (const r of rows) {
+      const input = r.input as Record<string, string> | null;
+      if (input && Object.keys(input).length > 0) out.push(input);
+    }
+    return out;
   },
 
   // ── Chunks ─────────────────────────────────────────────────────────────────────────────────────────
