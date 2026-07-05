@@ -10,6 +10,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -24,6 +25,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { tenants, users, workspaces } from "./auth.ts";
+import { importMappingTemplates } from "./importMappingTemplates.ts";
 
 // Shared column idioms (kept local per the self-contained-schema convention used across this folder).
 const id = () => uuid("id").primaryKey().default(sql`uuid_generate_v7()`);
@@ -72,6 +74,32 @@ export const importJobs = pgTable(
     // Per-job share flag (import-redesign 10 §2.3, S-V1): column now, UX deferred — written by no route,
     // read only by the jobVisibility predicate (constant false ⇒ zero behavior change while unset).
     sharedWithWorkspace: boolean("shared_with_workspace").notNull().default(false),
+    // ── Import v2 unified-job columns (import-redesign 08, S-I1) — ALL unread while the IMPORT_V2_ENABLED
+    // dual gate is off. Written by S-I3+ (dual-write), S-I5 (routing), S-I6 (strategy), S-I8 (draft flow).
+    // Server-side routing verdict at commit/one-shot (08 §1, S-I5): 'fast' | 'copy'; NULL = legacy row.
+    processingMode: varchar("processing_mode", { length: 10 }),
+    // The 08 §5.1 strategy pair (replaces conflict_policy through a compatibility mapping, S-I6). Defaults
+    // mirror import_policy's workspace defaults (importPolicy.ts) so an unconfigured job matches the policy.
+    mergeMode: varchar("merge_mode", { length: 20 }).notNull().default("create_and_update"),
+    preservePopulated: boolean("preserve_populated").notNull().default(false),
+    // Retry-failed child jobs (08 §6.3, S-I10): the child points at the parent it retries. SET NULL — a
+    // deleted parent never cascades into its children's history.
+    parentJobId: uuid("parent_job_id").references((): AnyPgColumn => importJobs.id, {
+      onDelete: "set null",
+    }),
+    // Display filename for history (08 §Contradiction scan): source_name holds the SourceName PROVIDER ENUM,
+    // not the filename, despite its inline comment — never repurposed; this column is the honest filename.
+    sourceFilename: varchar("source_filename", { length: 255 }),
+    // Template provenance (08 §3.1): which saved mapping template seeded this job. SET NULL on delete —
+    // templates are named copies, never live references.
+    mappingTemplateId: uuid("mapping_template_id").references(() => importMappingTemplates.id, {
+      onDelete: "set null",
+    }),
+    // Parse/import options (countryHint, primary-from-column, delimiter…) — shape owned by S-I5/S-I8.
+    options: jsonb("options").notNull().default({}),
+    // Non-PII preview projection cache (08 §4): counts + histogram only, NEVER row values; NULL = never
+    // previewed (sample rows are recomputed per request and never persisted here).
+    previewSummary: jsonb("preview_summary"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -88,13 +116,29 @@ export const importJobs = pgTable(
       t.createdAt.desc(),
       t.id.desc(),
     ),
+    // Keyset list index for GET /imports (07 §4.3, S-I1): newest-first within a workspace, cursor-stable —
+    // the exact ORDER BY listJobsByWorkspace already uses, which had no backing composite before.
+    byWsCreated: index("idx_import_jobs_ws_created").on(
+      t.workspaceId,
+      t.createdAt.desc(),
+      t.id.desc(),
+    ),
     // Submit idempotency: a re-submit carrying the same key into the same workspace collapses onto the job.
     uniqWsIdempotency: uniqueIndex("uniq_import_jobs_ws_idempotency")
       .on(t.workspaceId, t.idempotencyKey)
       .where(sql`${t.idempotencyKey} IS NOT NULL`),
+    // 12-state vocabulary (08 §2.1, S-I1): the shipped 9 + draft/uploading/deferred — additive, none dropped.
     statusEnum: check(
       "import_jobs_status_enum",
-      sql`${t.status} IN ('queued','validating','staged','running','paused','completed','partial','failed','cancelled')`,
+      sql`${t.status} IN ('queued','validating','staged','running','paused','completed','partial','failed','cancelled','draft','uploading','deferred')`,
+    ),
+    processingModeEnum: check(
+      "import_jobs_processing_mode_enum",
+      sql`${t.processingMode} IN ('fast','copy')`,
+    ),
+    mergeModeEnum: check(
+      "import_jobs_merge_mode_enum",
+      sql`${t.mergeMode} IN ('create_and_update','create_only','update_only')`,
     ),
     avScanStatusEnum: check(
       "import_jobs_av_scan_status_enum",

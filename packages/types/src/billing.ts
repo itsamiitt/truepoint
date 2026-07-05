@@ -207,5 +207,14 @@ export const auditAction = z.enum([
   // Import visibility & permissions P0 (import-and-data-model-redesign 10 §3 / 15 ruling M1): the audited
   // per-workspace import-policy change (who_can_import + strategy defaults). Writer lands with S-V4.
   "import.policy_updated",
+  // Import v2 P1 lifecycle verbs (import-and-data-model-redesign 08 §7 / 15 ruling M1, S-I1 train): the
+  // actor-initiated verbs Phase 1's writers emit in-tx with the transition — committed/cancelled at
+  // S-I4/S-I8, retry_created at S-I10, template_saved at the S-V4-gated template upsert, and the audited
+  // artifact download at S-I7. P2's 'import.draft_reaped'/'import.av_infected' ride that phase's train.
+  "import.committed",
+  "import.cancelled",
+  "import.retry_created",
+  "import.template_saved",
+  "import.artifact_downloaded",
 ]);
 export type AuditAction = z.infer<typeof auditAction>;
