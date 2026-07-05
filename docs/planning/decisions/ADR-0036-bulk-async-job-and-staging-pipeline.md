@@ -150,3 +150,40 @@ so it is locked here rather than rediscovered in implementation.
 - `COPY` into UNLOGGED staging is no longer the throughput bottleneck → reconsider partitioned live tables or
   Citus-side bulk paths ([03 §9](../03-database-design.md)).
 - Postgres lifts the RLS `COPY FROM` restriction → the non-RLS staging hop could be simplified.
+
+## Addendum (2026-07-05) — COPY-FROM-STDIN spike verdict (Gate A / G09)
+
+> Required by [import-and-data-model-redesign 12 §3.2](../import-and-data-model-redesign/12-Performance-and-Scalability.md)
+> and 08 §8 (db-mgmt-research/05 AC1): the spike result is recorded HERE. The spike is a CI
+> artifact, never a sandbox claim — this addendum stays "pending" until the CI run fills it.
+
+**What the spike is.** `packages/db/test/bulkImport.pipeline.itest.ts` cases 1 + 5–7 (S-P1,
+15 §M-SEQ seq 39) prove, on real Postgres 16 under Bun, the primitive the whole copy path
+stands on: postgres.js **3.4.5** `ownerClient.unsafe(<COPY … FROM STDIN>).writable()` driven
+through the shipped seam `importStagingRepository.copyRows` (the one sanctioned non-RLS
+bypass, on the owner connection, per-job UNLOGGED staging table). Synthetic prepared rows are
+generated in-process (~500 B/row; no fixtures).
+
+**The four 12 §3.2 criteria → test cases:**
+
+| # | Criterion | Case | Bar |
+|---|---|---|---|
+| 1 | Functional round-trip | case 1 (pre-existing) | backpressure-aware Writable; CSV encoding byte-for-byte (bytea `\x` hex, unquoted-empty NULL, quoted text/json); bytea → Buffer |
+| 2 | Throughput floor | case 5 | ≥ 20 000 prepared rows/s sustained over ≥ 100 000 rows (warmup band excluded from timing; the floor itself undiscounted) |
+| 3 | Memory ceiling | case 6 | producer RSS delta ≤ 128 MB while staging 1 000 000 rows, AND plateau (second-half growth ≤ 32 MB — delta must not correlate with row count) |
+| 4 | Mid-stream cancel | case 7 | copyRows rejects; zero partial rows (COPY atomicity ⇒ re-drive stages exactly once); no lingering server-side COPY backend (pg_stat_activity); owner connection serviceable; staging table droppable |
+
+The `SPIKE_*` env knobs exist for local smoke only — **the G09 verdict is valid solely at the
+defaults above**. Measured figures (rows/s, RSS delta) are printed to the CI log by the tests.
+
+**Red path (pre-agreed, 12 §3.3 / 14 R01):** if any criterion fails, the loader behind the
+`importStagingRepository` seam swaps to batched 1 000-row multi-row `VALUES` INSERT into the
+same staging table; the same itest then measures the fallback's own floor (expected
+5 000–10 000 rows/s); the published rows-per-file ceiling holds at 1M and the 2M raise is
+deferred. No architecture, schema, API, or state-machine change — red is a
+launch-with-lower-ceiling, never a redesign or a delay.
+
+**Verdict: ⏳ pending CI** — this sandbox has no bun/docker; the first CI run of
+`bulkImport.pipeline.itest.ts` (Postgres 16 service container) fills this line with
+green/red + the measured numbers, and doc 16's Gate-state row + 01's L6 ledger row flip
+accordingly (15 §6.2).
