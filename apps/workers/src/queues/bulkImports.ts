@@ -137,6 +137,8 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
         jobId: data.jobId,
         fileStore: deps.fileStore,
         enqueueChunk: deps.enqueueChunk,
+        // S-Q2: the drive enqueues only the first K bands; chunk completions refill (continuation below).
+        chunkWindow: deps.chunkWindow,
       });
       return {
         kind: "drive",
