@@ -5,8 +5,11 @@
 - **Related:** ADR-0009 (Sales-Nav human-in-the-loop link capture, never scrapes), ADR-0016 (dedicated
   auth origin + cross-domain token exchange), ADR-0021 (global master graph + overlay), ADR-0042 (reveal
   experience + async bulk), and the ingestion contract in `packages/types/src/ingestion.ts`.
-- **Detail:** `docs/planning/chrome-extension/` (00–09 — engineering `00–05`, product `06–09`). Builds on
-  the product/compliance spec in `docs/planning/prospect-database-platform/06-Chrome-Extension-Capture.md`.
+- **Detail:** `docs/planning/chrome-extension/` (00–11 — engineering `00–05`, product `06–09`, auth & brand
+  `10–11`). Builds on the product/compliance spec in
+  `docs/planning/prospect-database-platform/06-Chrome-Extension-Capture.md`.
+- **Companion ADR:** [ADR-0044](./ADR-0044-extension-authentication.md) locks the extension's authentication
+  architecture (silent re-auth, no client refresh token).
 
 ## Context
 

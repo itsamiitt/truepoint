@@ -1,7 +1,7 @@
 # 09 — Product / Feature Architecture
 
 > **Series:** [TruePoint Browser Extension](./README.md) · **Doc:** 09 · **Status:** ✅ Drafted
-> · **Prev:** [`08-ux-design-language`](./08-ux-design-language.md)
+> · **Prev:** [`08-ux-design-language`](./08-ux-design-language.md) · **Next:** [`10-extension-authentication`](./10-extension-authentication.md)
 
 `02` is the **system** architecture (service worker, queue, adapters, storage). This doc is the
 **product/feature** architecture: how the catalogued features (`06`) compose into capabilities, how each

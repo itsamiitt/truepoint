@@ -11,10 +11,11 @@ reverse-engineer the installed **Apollo.io** extension (v15.1.1) through read-on
 design a **Manifest V3, least-privilege, compliance-first** architecture for TruePoint that reuses the
 server seam already built.
 
-The series spans two halves: **engineering** (`00–05` + `ADR-0043`) — teardown, MV3 architecture,
-security/perf, standards, roadmap — and **product** (`06–09`) — the feature catalogue, the honest
+The series spans three halves: **engineering** (`00–05` + `ADR-0043`) — teardown, MV3 architecture,
+security/perf, standards, roadmap; **product** (`06–09`) — the feature catalogue, the honest
 market-gap/differentiation analysis, the minimal-modern UX/design language, and the product-level
-(feature) architecture.
+(feature) architecture; and **auth & brand** (`10–11` + `ADR-0044`) — the enterprise authentication
+architecture and the branding/visual-language plan.
 
 ## 0. Read first — do not duplicate
 
@@ -49,7 +50,10 @@ Every design doc below **cites** those rather than restating them.
 | **07** | [`07-market-gap-and-differentiation.md`](./07-market-gap-and-differentiation.md) | **Market gap:** extension-level competitive matrix + the *honest* wedge — the three differentiators that survived adversarial testing, and the five "gaps" that are really table-stakes. |
 | **08** | [`08-ux-design-language.md`](./08-ux-design-language.md) | **Minimal-modern design:** the four in-page surfaces (hover-card, side-panel, popup, inline badge), `--tp-*` tokens, four states, motion, WCAG 2.2 AA, shadow-DOM isolation, and ASCII wireframes. |
 | **09** | [`09-product-architecture.md`](./09-product-architecture.md) | **Product architecture:** the ten feature modules over a shared `subjectKey`, the five-layer narrative, and the entitlement/consent gating spine — with three feature-level Mermaid diagrams. |
-| ADR | [`../decisions/ADR-0043-chrome-extension-architecture.md`](../decisions/ADR-0043-chrome-extension-architecture.md) | The load-bearing, hard-to-reverse decisions. |
+| **10** | [`10-extension-authentication.md`](./10-extension-authentication.md) | **Enterprise auth architecture:** the cross-origin problem, the silent-re-auth model (vs SW-refresh-token), research, full auth lifecycle + every flow (sequence diagrams), security design, backend changes required, and the AuthModule fix-list. |
+| **11** | [`11-extension-branding.md`](./11-extension-branding.md) | **Branding & visual language:** the three-chevron mark + real icon assets, Cobalt/Ink tokens, Geist type, brand voice, and per-surface branding (toolbar, popup, auth pages, states, notifications, onboarding, profile, workspace switcher). |
+| ADR | [`../decisions/ADR-0043-chrome-extension-architecture.md`](../decisions/ADR-0043-chrome-extension-architecture.md) | The MV3 architecture decisions (least-privilege, thin-producer, compliant capture). |
+| ADR | [`../decisions/ADR-0044-extension-authentication.md`](../decisions/ADR-0044-extension-authentication.md) | The auth decisions (silent re-auth, no client refresh token, required backend changes). |
 
 ## 2. Coverage map — the 20 requested deliverables
 
@@ -86,6 +90,18 @@ Every design doc below **cites** those rather than restating them.
 | Minimal & modern design | `08` (four surfaces, tokens, states, motion, a11y, wireframes) |
 | Product / feature-level architecture | `09` (ten modules, five layers, gating spine, diagrams) |
 | Commercial tiering (Free/Pro/Enterprise) | `06` §6–§7 |
+
+### Auth & brand deliverables (added in the `10–11` half)
+
+| Theme | Where |
+|---|---|
+| Enterprise authentication architecture | `10` (silent re-auth vs SW-token, lifecycle, backend changes) |
+| Authentication research (enterprise extensions, OAuth/PKCE/JWT) | `10` Phase 1 |
+| Security model (token storage, rotation, revocation, MFA/SSO future) | `10` Phase 3 |
+| Every authentication flow (sequence diagrams + recovery) | `10` Phase 4 |
+| Auth implementation roadmap + folder structure + tests | `10` Phase 6 |
+| Backend/API changes the extension auth requires | `10` §7 |
+| Branding & visual language (mark, tokens, voice, per-surface) | `11` |
 
 ## 3. Operating rules (carried from `CLAUDE.md`)
 
