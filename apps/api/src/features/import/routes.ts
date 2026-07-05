@@ -14,13 +14,18 @@ import {
   decideFastAdmission,
   deriveImportProgress,
   parseImportFile,
+  writeAudit,
 } from "@leadwolf/core";
 import { type ImportJobRow, importJobRepository, withTenantTx } from "@leadwolf/db";
 import {
   type ColumnMapping,
   DEFAULT_CONFLICT_POLICY,
   ForbiddenError,
+  IllegalStateError,
   type ImportFastInput,
+  type ImportJobDetailV2,
+  type ImportJobListItem,
+  type ImportJobListResponse,
   type ImportJobRef,
   type ImportJobStatus,
   type ImportJobStatusResponse,
@@ -150,6 +155,85 @@ function toLegacyResponseV2(job: ImportJobRow): ImportJobStatusResponse {
     failedReason:
       job.status === "cancelled" ? (job.failedReason ?? "cancelled") : (job.failedReason ?? null),
   };
+}
+
+// ── S-I4 v2 tenant-surface mappers (08 §7) ───────────────────────────────────────────────────────────────
+// The durable list/detail read model. Non-PII: counts + statuses + histogram labels only, never a row value.
+
+/** The 7-bucket accounting view straight off the atomic `rows_*` counters (09 §4 identity). */
+function toImportJobCounts(job: ImportJobRow): ImportJobListItem["counts"] {
+  return {
+    total: job.rowsTotal,
+    created: job.rowsCreated,
+    matched: job.rowsMatched,
+    duplicate: job.rowsDuplicate,
+    skipped: job.rowsSkipped,
+    rejected: job.rowsRejected,
+    deduped: job.rowsDeduped,
+    unprocessed: job.rowsUnprocessed,
+  };
+}
+
+/** One durable job → a `GET /imports` list item (the real 12-state vocabulary; progress via the ONE derivation fn). */
+function toImportJobListItem(job: ImportJobRow): ImportJobListItem {
+  const { percent, stage } = deriveImportProgress(job);
+  return {
+    jobId: String(job.id),
+    status: job.status as ImportJobListItem["status"],
+    mode: (job.processingMode ?? null) as ImportJobListItem["mode"],
+    sourceName: job.sourceName as SourceName,
+    sourceFilename: job.sourceFilename ?? null,
+    createdAt: job.createdAt.toISOString(),
+    startedAt: job.startedAt ? job.startedAt.toISOString() : null,
+    completedAt: job.completedAt ? job.completedAt.toISOString() : null,
+    percent,
+    stage,
+    counts: toImportJobCounts(job),
+    createdBy: { userId: job.createdByUserId ?? null },
+    parentJobId: job.parentJobId ?? null,
+  };
+}
+
+/** The additive v2 members layered onto the legacy detail response (08 §2.4 window): old clients keep
+ *  `status`/`progress`/`summary`; new clients read `statusV2` + these. `addedToList` is intentionally omitted
+ *  (the control row never persists it — see importJobDetailV2Schema). */
+function toImportJobDetailV2(job: ImportJobRow): ImportJobDetailV2 {
+  const item = toImportJobListItem(job);
+  return {
+    statusV2: item.status,
+    mode: item.mode,
+    sourceFilename: item.sourceFilename,
+    createdAt: item.createdAt,
+    startedAt: item.startedAt,
+    completedAt: item.completedAt,
+    percent: item.percent,
+    stage: item.stage,
+    counts: item.counts,
+    createdBy: item.createdBy,
+    parentJobId: item.parentJobId,
+    mergeMode: job.mergeMode as ImportJobDetailV2["mergeMode"],
+    preservePopulated: job.preservePopulated,
+    rejectHistogram: (job.rejectHistogram ?? {}) as Record<string, number>,
+    previewSummary: (job.previewSummary ?? null) as ImportJobDetailV2["previewSummary"],
+  };
+}
+
+/** Opaque keyset cursor over `(created_at, id)` — the exact order of `idx_import_jobs_ws_created`. base64url. */
+function encodeJobCursor(job: ImportJobRow): string {
+  return Buffer.from(`${job.createdAt.toISOString()}|${job.id}`, "utf8").toString("base64url");
+}
+function decodeJobCursor(raw: string): { createdAt: Date; id: string } | null {
+  try {
+    const s = Buffer.from(raw, "base64url").toString("utf8");
+    const sep = s.lastIndexOf("|");
+    if (sep <= 0) return null;
+    const createdAt = new Date(s.slice(0, sep));
+    const id = s.slice(sep + 1);
+    if (Number.isNaN(createdAt.getTime()) || !UUID_RE.test(id)) return null;
+    return { createdAt, id };
+  } catch {
+    return null;
+  }
 }
 
 /** Parse the shared import form fields (file + sourceName + mapping); throws ImportValidationError on bad input. */
@@ -318,6 +402,40 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
   return c.json(body, 202);
 });
 
+// ── S-I4: GET /imports — the durable import history (08 §7, G04). A NEW endpoint, strict from birth (10 §5
+// row 1): it exists ONLY behind the IMPORT_V2 dual gate (legacy imports have no durable list; gate-off ⇒ 404,
+// no existence oracle). Keyset-paginated on `idx_import_jobs_ws_created`; the jobVisibility predicate rides
+// INSIDE the repo read (viewer built from the verified token + resolved role), so members see own+shared and
+// elevated see all — the predicate short-circuits to workspace-wide only while JOB_VISIBILITY_SCOPED is off
+// (RLS still walls the tenant/workspace either way).
+importRoutes.get("/", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
+  const tenantId = c.get("tenantId");
+  if (!(await isImportV2Enabled(tenantId))) throw new NotFoundError("Import history not found.");
+
+  const viewer = await buildJobViewer({ tenantId, workspaceId, userId: c.get("claims").sub });
+  const limitRaw = Number(c.req.query("limit") ?? "50");
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(200, Math.trunc(limitRaw))) : 50;
+  const cursorRaw = c.req.query("cursor");
+  const cursor = cursorRaw ? decodeJobCursor(cursorRaw) : null;
+  if (cursorRaw && !cursor) throw new ImportValidationError("Invalid pagination cursor.");
+
+  // Fetch one extra to know whether a further page exists (the house keyset idiom).
+  const rows = await withTenantTx({ tenantId, workspaceId }, (tx) =>
+    importJobRepository.listJobs(tx, viewer, { limit: limit + 1, cursor }),
+  );
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const body: ImportJobListResponse = {
+    jobs: page.map(toImportJobListItem),
+    nextCursor: hasMore && last ? encodeJobCursor(last) : null,
+  };
+  return c.json(body, 200);
+});
+
 // Poll an import job's status/progress. Tenant-scoped: only the owning workspace may read its job — and,
 // behind the S-V3 dual gate, only the job's CREATOR or an elevated role within it (import-redesign 10 §5
 // row 3: this Redis/BullMQ-backed read has no repository row, so the SAME rule is applied app-side over the
@@ -346,7 +464,10 @@ importRoutes.get("/:jobId", async (c) => {
       importJobRepository.getJob(tx, viewer, jobIdParam),
     );
     if (!row || row.workspaceId !== workspaceId) throw new NotFoundError("Import job not found.");
-    return c.json(toLegacyResponseV2(row), 200);
+    // S-I4: the detail is the legacy poll shape (byte-compat for old clients) PLUS the additive v2 members
+    // (mode, counts, derived percent/stage, attribution, strategy, preview_summary — 08 §7). Additive ⇒ old
+    // clients ignore the new keys; new clients read `statusV2` + `counts` instead of `status`/`progress`.
+    return c.json({ ...toLegacyResponseV2(row), ...toImportJobDetailV2(row) }, 200);
   }
 
   const job = await getImportJob(jobIdParam);
@@ -377,4 +498,68 @@ importRoutes.get("/:jobId", async (c) => {
     failedReason: job.failedReason ?? null,
   };
   return c.json(body, 200);
+});
+
+// ── S-I4: POST /imports/:jobId/cancel — the tenant cancel verb (G05; 08 §2.2 stop-remainder, 09 §5 machinery).
+// A NEW v2 verb, strict from birth (10 §5 row 4): it acts only on durable rows, so a legacy (non-uuid) id or a
+// gate-off tenant ⇒ 404 (no legacy cancel ever existed; no existence oracle). Who may cancel = creator ∪
+// elevated (the viewer predicate on the FOR-UPDATE read; invisible ⇒ 404). Legality (08 §2.1) is checked
+// against the LOCKED row: cancel-on-cancelled = 200 no-op; a terminal/non-cancellable state ⇒ 409
+// illegal_state. The flip + its `import.cancelled` audit row commit in ONE tx; committed rows are NOT rolled
+// back (the worker discovers `cancelled` cooperatively at its next boundary — runFastImport's terminal guard).
+const CANCELLABLE_STATES = new Set([
+  "draft",
+  "queued",
+  "deferred",
+  "validating",
+  "staged",
+  "running",
+]);
+
+importRoutes.post("/:jobId/cancel", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
+  const tenantId = c.get("tenantId");
+  const jobIdParam = c.req.param("jobId");
+  if (!UUID_RE.test(jobIdParam) || !(await isImportV2Enabled(tenantId)))
+    throw new NotFoundError("Import job not found.");
+
+  const viewer = await buildJobViewer({ tenantId, workspaceId, userId: c.get("claims").sub });
+  type CancelResult =
+    | { kind: "not_found" }
+    | { kind: "noop"; row: ImportJobRow }
+    | { kind: "illegal"; status: string }
+    | { kind: "cancelled"; row: ImportJobRow };
+  const result = await withTenantTx({ tenantId, workspaceId }, async (tx): Promise<CancelResult> => {
+    const row = await importJobRepository.getJobForUpdate(tx, viewer, jobIdParam);
+    if (!row || row.workspaceId !== workspaceId) return { kind: "not_found" };
+    if (row.status === "cancelled") return { kind: "noop", row };
+    if (!CANCELLABLE_STATES.has(row.status)) return { kind: "illegal", status: row.status };
+    await importJobRepository.updateJobStatus(tx, jobIdParam, {
+      status: "cancelled",
+      completedAt: new Date(),
+      failedReason: "cancelled",
+    });
+    // In-tx audit (08 §7) — a cancel that can't record its actor can't commit. metadata is non-PII.
+    await writeAudit(tx, {
+      tenantId,
+      workspaceId,
+      actorUserId: viewer.userId,
+      action: "import.cancelled",
+      entityType: "import_job",
+      entityId: jobIdParam,
+      metadata: { fromStatus: row.status },
+    });
+    return { kind: "cancelled", row: { ...row, status: "cancelled", failedReason: "cancelled" } };
+  });
+
+  if (result.kind === "not_found") throw new NotFoundError("Import job not found.");
+  if (result.kind === "illegal")
+    throw new IllegalStateError(
+      `An import in state '${result.status}' cannot be cancelled.`,
+      result.status,
+    );
+  // noop (already cancelled) and cancelled both answer 200 with the current detail (idempotent verb, 08 §2.3).
+  return c.json({ ...toLegacyResponseV2(result.row), ...toImportJobDetailV2(result.row) }, 200);
 });

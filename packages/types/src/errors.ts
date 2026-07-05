@@ -155,6 +155,24 @@ export class ConflictError extends AppError {
   }
 }
 
+/**
+ * A verb was requested against a resource in a state that does not permit it — the 08 §2.1 state-machine
+ * legality violation (e.g. cancelling a terminal or non-cancellable import). 409 with the stable
+ * `illegal_state` slug (the import-redesign series harmonizes on 409, not 422 — 08 §2.1); `currentState` is
+ * a non-PII enum, safe to surface so the client can render the reason.
+ */
+export class IllegalStateError extends AppError {
+  constructor(detail?: string, currentState?: string) {
+    super({
+      status: 409,
+      code: "illegal_state",
+      title: "Action not allowed in the current state",
+      detail,
+      ...(currentState ? { extensions: { currentState } } : {}),
+    });
+  }
+}
+
 /** An import row (or its column mapping) failed validation — carries the offending row index(es). */
 export class ImportValidationError extends AppError {
   constructor(detail?: string, extensions?: Record<string, unknown>) {

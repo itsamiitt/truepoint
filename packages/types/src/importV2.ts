@@ -108,6 +108,77 @@ export const importFastInputSchema = z.object({
 });
 export type ImportFastInput = z.infer<typeof importFastInputSchema>;
 
+// ── v2 tenant-surface DTOs (08 §7, S-I4): the durable list/detail read model. Non-PII by construction —
+// counts + statuses + codes + histogram labels only; never a row value (the shipped rejectLabel discipline).
+/** The seven-plus-total accounting buckets of a job (09 §4 identity: created+matched+duplicate+skipped+
+ *  rejected+deduped+unprocessed = total). Mirrors the `rows_*` columns straight through. */
+export const importJobCountsSchema = z.object({
+  total: z.number().int().nonnegative(),
+  created: z.number().int().nonnegative(),
+  matched: z.number().int().nonnegative(),
+  duplicate: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+  deduped: z.number().int().nonnegative(),
+  unprocessed: z.number().int().nonnegative(),
+});
+export type ImportJobCounts = z.infer<typeof importJobCountsSchema>;
+
+/** Creator attribution (10 §2.1): the userId only in Phase 1 — the display-name join lands with the S-U2
+ *  history UI (the attribution surface). `null` = system/automation job (elevated-only under scoping). */
+export const importJobCreatedBySchema = z.object({ userId: z.string().uuid().nullable() });
+
+/** One row of `GET /imports` (08 §7). Strict-from-birth v2 shape (10 §5 row 1) — no legacy compatibility to
+ *  preserve on the list, so it carries the real 12-state vocabulary + derived progress + counts. */
+export const importJobListItemSchema = z.object({
+  jobId: z.string().uuid(),
+  status: importJobStatusV2,
+  mode: importProcessingMode.nullable(),
+  sourceName: sourceName,
+  sourceFilename: z.string().nullable(),
+  createdAt: z.string(),
+  startedAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  /** deriveImportProgress (09 §4.1's ONE fn) — poll and the future SSE can never disagree. */
+  percent: z.number().min(0).max(1),
+  stage: z.string(),
+  counts: importJobCountsSchema,
+  createdBy: importJobCreatedBySchema,
+  parentJobId: z.string().uuid().nullable(),
+});
+export type ImportJobListItem = z.infer<typeof importJobListItemSchema>;
+
+/** `GET /imports` response — the visible page + an opaque keyset cursor (house contract; null = last page). */
+export const importJobListResponseSchema = z.object({
+  jobs: z.array(importJobListItemSchema),
+  nextCursor: z.string().nullable(),
+});
+export type ImportJobListResponse = z.infer<typeof importJobListResponseSchema>;
+
+/** The additive v2 members `GET /imports/:id` layers ON TOP OF the legacy poll response (08 §2.4 window):
+ *  old clients keep reading `status`/`progress`/`summary` byte-for-byte; new clients read `statusV2` + these.
+ *  `addedToList` is deliberately ABSENT — the non-PII control row never persists the list-membership tally,
+ *  so gate-on cannot report it honestly (deriving it from counters would be a lie); it returns with the S-I7
+ *  artifact/receipt work, not fabricated here (drift logged in 16). */
+export const importJobDetailV2Schema = z.object({
+  statusV2: importJobStatusV2,
+  mode: importProcessingMode.nullable(),
+  sourceFilename: z.string().nullable(),
+  createdAt: z.string(),
+  startedAt: z.string().nullable(),
+  completedAt: z.string().nullable(),
+  percent: z.number().min(0).max(1),
+  stage: z.string(),
+  counts: importJobCountsSchema,
+  createdBy: importJobCreatedBySchema,
+  parentJobId: z.string().uuid().nullable(),
+  mergeMode: importMergeMode,
+  preservePopulated: z.boolean(),
+  rejectHistogram: z.record(z.string(), z.number().int().nonnegative()),
+  previewSummary: importPreviewSummarySchema.nullable(),
+});
+export type ImportJobDetailV2 = z.infer<typeof importJobDetailV2Schema>;
+
 /** The `fast` job kind on the unified `bulk-imports` queue (09 §1.1: a fast import is a drive that skips
  *  staging and completes its single chunk inline). `jobId` = the durable import_jobs.id — the BullMQ job is
  *  NAMED BY it (`import-fast:<jobId>`), so a re-publish dedupes at the queue and the consumer's terminal-skip
