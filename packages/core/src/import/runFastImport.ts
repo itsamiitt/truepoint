@@ -119,7 +119,9 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
 
   // ── Claim: terminal-skip guard + the S-Q2 cap re-check + queued→validating (+ the single chunk row) ────
   const claim = await withTenantTx(scope, async (tx) => {
-    const job = await importJobRepository.getJobSystem(tx, jobId);
+    // FOR UPDATE: lock the row so a concurrent tenant cancel (getJobForUpdate) cannot commit `cancelled`
+    // between this read and the validating UPDATE below — otherwise the unconditional UPDATE would revive it.
+    const job = await importJobRepository.getJobSystemForUpdate(tx, jobId);
     if (!job) throw new Error(`runFastImport: durable job row not found (${jobId})`);
     if (TERMINAL.has(job.status)) {
       // Replay of a settled job (at-least-once transport): a no-op, never a second effect.
@@ -196,7 +198,9 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
   // back to `running` (an illegal cancelled→running revive that the bare UPDATE would otherwise perform). The
   // engine simply never runs; nothing was committed yet, so stop-remainder is trivially satisfied.
   const boundary = await withTenantTx(scope, async (tx) => {
-    const job = await importJobRepository.getJobSystem(tx, jobId);
+    // FOR UPDATE: the cancel verb must not slip a `cancelled` commit between this read and the running UPDATE —
+    // the row lock serializes the two, so a cancelled job is seen as terminal here and never revived to running.
+    const job = await importJobRepository.getJobSystemForUpdate(tx, jobId);
     if (!job || TERMINAL.has(job.status))
       return { proceed: false as const, status: job?.status ?? "failed" };
     await importJobRepository.updateJobStatus(tx, jobId, { status: "running" });
@@ -255,9 +259,11 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
     : { repairKey: null as string | null, errorsKey: null as string | null };
 
   await withTenantTx(scope, async (tx) => {
-    const job = await importJobRepository.getJobSystem(tx, jobId);
-    // Cancel/terminal wins (08 §2.1 legality; the full FOR UPDATE guard is S-I4's cancel verb work): if the
-    // job settled while the engine ran, never overwrite the terminal — committed rows stay (stop-remainder).
+    // FOR UPDATE: lock the row so a cancel that races the engine's tail cannot commit `cancelled` between this
+    // read and the terminal UPDATE below — the unconditional UPDATE would otherwise clobber the cancel back to
+    // completed/partial (a cancel-revive). Cancel/terminal wins (08 §2.1 legality): if the job settled while the
+    // engine ran, never overwrite the terminal — committed rows stay (stop-remainder).
+    const job = await importJobRepository.getJobSystemForUpdate(tx, jobId);
     if (!job || TERMINAL.has(job.status)) return;
     if (!claim.chunkDone) {
       const delta: ImportJobProgressDelta = {
@@ -383,7 +389,9 @@ export async function markFastImportFailed(args: {
 }): Promise<void> {
   const { scope, jobId, failedReason } = args;
   await withTenantTx(scope, async (tx) => {
-    const job = await importJobRepository.getJobSystem(tx, jobId);
+    // FOR UPDATE: serialize against the cancel verb so an exhausted-retry `failed` write can never clobber a
+    // `cancelled` (or any) terminal committed in the read→write window — a terminal row is left untouched.
+    const job = await importJobRepository.getJobSystemForUpdate(tx, jobId);
     if (!job || TERMINAL.has(job.status)) return;
     const total = args.summary?.total ?? args.totalRows ?? 0;
     const rejected = args.summary?.rejected ?? 0;

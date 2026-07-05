@@ -229,6 +229,22 @@ export const importJobRepository = {
     return rows[0] ?? null;
   },
 
+  /** SYSTEM read of a job by id `FOR UPDATE` — the worker's STATUS-MUTATING boundary reads (runFastImport's
+   *  claim / validating→running / terminal txs; markFastImportFailed). Locking the row closes the cancel-revive
+   *  race (09 §5): the tenant cancel verb (getJobForUpdate, also FOR UPDATE) can no longer interleave a
+   *  `cancelled` commit BETWEEN this read and the subsequent unconditional UPDATE — the two verbs serialize on
+   *  the row lock, so a cancelled job is re-read as terminal and never overwritten back to running/completed.
+   *  No viewer (a worker acts on behalf of the job, not a user — 10 §4.3); RLS workspace isolation unchanged. */
+  async getJobSystemForUpdate(tx: Tx, jobId: string): Promise<ImportJobRow | null> {
+    const rows = await tx
+      .select()
+      .from(importJobs)
+      .where(eq(importJobs.id, jobId))
+      .for("update")
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
   /**
    * List the jobs VISIBLE TO THE VIEWER, most-recent first, KEYSET-paginated on the `idx_import_jobs_ws_created`
    * composite `(workspace_id, created_at DESC, id DESC)` (08 S-I1 / 07 §4.3) — the exact ORDER BY, so the scan
