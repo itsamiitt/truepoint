@@ -30,13 +30,15 @@ const TYPE_TONE: Record<NotificationType, Tone> = {
 const TYPE_HREF: Record<NotificationType, string> = {
   low_credits: "/settings/billing",
   reply_received: "/inbox",
-  import_complete: "/import",
+  import_complete: "/imports",
   dsar_update: "/settings",
   system: "/home",
 };
 
 function hrefFor(n: Notification): string {
   if (n.entityType === "contact" && n.entityId) return `/prospect?contact=${n.entityId}`;
+  // An import notification carries entity ('import_job', jobId) — link to that durable job page (S-U5).
+  if (n.entityType === "import_job" && n.entityId) return `/imports/${n.entityId}`;
   return TYPE_HREF[n.type] ?? "/home";
 }
 
