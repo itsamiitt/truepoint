@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1366 source files · 76 code-bearing domains · 21 shared areas · 47 domain-vocabulary warnings · 60
+> **1382 source files · 76 code-bearing domains · 21 shared areas · 47 domain-vocabulary warnings · 59
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
@@ -47,8 +47,8 @@ packages/                       # side-effect-free libraries, each exported via 
   ui/      src/                 # TruePoint design system: tokens/primitives/theme.css + cn + headless kit + shadcn-pattern ui/*
   db/      src/                 # Drizzle schema + RLS + repositories (the ONLY data access)  [LIVE]
     schema/{auth,contacts,billing,intel,compliance,activity,salesnav,outreach,lists,savedSearches,customFields,
-            tags,pipelineStages,email,enrichmentJobs,enrichmentPolicy,importMappingTemplates,featureFlags,
-            platformOps,scim,webhooks}.ts  rls/*.sql (one per schema, applied sorted)
+            tags,pipelineStages,email,enrichmentJobs,enrichmentPolicy,importMappingTemplates,importPolicy,
+            featureFlags,platformOps,scim,webhooks}.ts  rls/*.sql (one per schema, applied sorted)
     client.ts (withTenantTx · withPrivilegedTx · withPlatformTx · closeDb)  applyMigrations.ts  bootstrapAdmin.ts
     repositories/*.ts (one per entity)   test/*.itest.ts (per-DoD, run in separate processes)
   core/    src/                 # domain logic [LIVE]: import · reveal · billing · compliance · enrichment(+bulk) ·
@@ -93,10 +93,18 @@ apps/                           # deployable processes (thin transport adapters)
   `columnMap.ts`, `validateRow.ts` (pure per-row verdict, reused by preview + run), `preview.ts` (valid/rejected/duplicate
   counts + bounded sample), `rejectedRowsCsv.ts`, `templates.ts` (save/load reusable column mappings), `normalize.ts`,
   `blindIndex.ts` (HMAC dedup key), `encryptPii.ts` (AES-GCM, KMS-swappable), `contentHash.ts`
-- **db:** `sourceImportRepository.ts` (per-import provenance + content-hash skip); `importMappingTemplateRepository.ts`
-- **api:** `features/import/` (POST `/imports` → `202` + `jobId`; preview; `queue.ts` BullMQ producer) ·
-  `features/import-mapping-templates/` (mapping-template CRUD) · **workers:** `queues/imports.ts`
-- **web:** `features/import/` — `ImportWizard` (file→map→preview→confirm), `ContactsTable`, `importJob.ts` (poll→UI state), `rejectedRowsCsv.ts`
+- **db:** `sourceImportRepository.ts` (per-import provenance + content-hash skip); `importMappingTemplateRepository.ts`;
+  `importPolicyRepository.ts` (per-workspace `who_can_import` + strategy defaults, P0 of
+  [import-and-data-model-redesign](./planning/import-and-data-model-redesign/README.md)); `jobVisibility.ts`
+  (`JobViewer` owner/elevated predicate shared by import/reveal/enrichment job reads — dual-gated
+  `JOB_VISIBILITY_SCOPED` + `job_visibility_scoped`, flag-off = workspace-wide as before)
+- **api:** `features/import/` (POST `/imports` → `202` + `jobId`; preview; `queue.ts` BullMQ producer; creates gated by
+  `requireImportCreateGrant`) · `features/import-mapping-templates/` (mapping-template CRUD, role-gated manage) ·
+  `features/settings/` (GET/PUT `/settings/import-policy`, owner/admin + in-tx audit) · `middleware/jobViewer.ts`
+  (builds the viewer, fail-closed dual gate) · **workers:** `queues/imports.ts`
+- **web:** `features/import/` — `ImportWizard` (file→map→preview→confirm; the dead-end "Large file" toggle is gone —
+  server will decide the path), `ImportsLanding` (`/imports` scaffold; `/import` → redirect `/imports/new`),
+  `ContactsTable`, `importJob.ts` (poll→UI state), `rejectedRowsCsv.ts`; root `providers.tsx` (TanStack Query seam)
 
 #### enrichment — *M4 provider waterfall + bulk match-first* ([06](./planning/06-enrichment-engine.md), ADR-0037/0038)
 - **core:** `enrichment/` — `providerPort.ts` (the 06 §3 contract; core OWNS the port), `waterfall.ts` (trust÷cost

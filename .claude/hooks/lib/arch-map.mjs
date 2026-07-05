@@ -99,6 +99,9 @@ export const REPO_DOMAIN = {
   sourceImport: "import",
   importJob: "import",
   importStaging: "import",
+  importMappingTemplate: "import",
+  // Per-workspace import policy (who_can_import + strategy defaults; P0 of import-and-data-model-redesign).
+  importPolicy: "import",
   suppression: "compliance",
   retentionPolicy: "compliance",
   retentionRun: "compliance",
