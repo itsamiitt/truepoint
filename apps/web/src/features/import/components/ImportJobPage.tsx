@@ -8,19 +8,21 @@
 "use client";
 
 import { PageHeader } from "@/components/PageHeader";
-import { EmptyState, Progress, Spinner, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
+import { EmptyState, Progress, Spinner, StateSwitch, StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import type { ImportJobCounts } from "@leadwolf/types";
-import { ArrowLeft, Upload } from "lucide-react";
+import { ArrowLeft, Download, Upload } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useImportJob } from "../hooks/useImportJob";
-import { useCancelImport } from "../hooks/useImportMutations";
-import type { ImportJobDetail } from "../apiV2";
+import { useCancelImport, useRetryFailed } from "../hooks/useImportMutations";
+import { type ArtifactKind, type ImportJobDetail, downloadArtifact } from "../apiV2";
 import { rejectedRowsToCsv } from "../rejectedRowsCsv";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import {
   completionCounts,
   isCancellableV2,
+  isRetryableV2,
   isTerminalV2,
   legacyStatusToV2,
   stateHeadline,
@@ -71,9 +73,14 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 }
 
 export function ImportJobPage({ jobId }: { jobId: string }) {
+  const router = useRouter();
+  const toast = useToast();
   const { data: detail, isLoading, isError, error } = useImportJob(jobId);
   const cancel = useCancelImport();
+  const retry = useRetryFailed();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [retryOpen, setRetryOpen] = useState(false);
+  const [downloading, setDownloading] = useState<ArtifactKind | null>(null);
 
   // GET /imports/:jobId works gate-off (the legacy poll shape) and gate-on (adds the v2 members), so the only
   // failure here is a genuinely unknown/aged job → an error, never a "not enabled" empty (that is the LIST's
@@ -100,13 +107,46 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
   const summary = counts ? completionCounts(counts) : null;
   const terminal = status != null && isTerminalV2(status);
   const cancellable = status != null && isCancellableV2(status);
+  const retryable = status != null && isRetryableV2(status);
   const legacyRejected = detail?.summary?.rejectedRows ?? [];
+  // v2 (gate-on) jobs carry `counts` + a `rejectHistogram`; legacy jobs carry only `summary`. The v2 artifact
+  // pair + retry-failed verb only exist for v2 jobs; legacy keeps its client-side rejected-rows download.
+  const isV2 = detail?.counts != null;
+  const histogram = Object.entries(
+    detail?.rejectHistogram ?? detail?.summary?.rejectHistogram ?? {},
+  ).sort((a, b) => b[1] - a[1]);
+  const rejectedCount = counts?.rejected ?? 0;
 
   function onConfirmCancel() {
     cancel.mutate(jobId, {
       onSuccess: () => setConfirmOpen(false),
       onError: () => setConfirmOpen(false),
     });
+  }
+
+  function onConfirmRetry() {
+    retry.mutate(jobId, {
+      onSuccess: (child) => {
+        setRetryOpen(false);
+        toast.success("Retrying failed rows", "We opened the retry import.");
+        router.push(`/imports/${child.jobId}`); // the retry-failed CHILD job's durable page
+      },
+      onError: (e) => {
+        setRetryOpen(false);
+        toast.error("Couldn’t retry", e instanceof Error ? e.message : "Please try again.");
+      },
+    });
+  }
+
+  async function onDownloadArtifact(kind: ArtifactKind) {
+    setDownloading(kind);
+    try {
+      await downloadArtifact(jobId, kind);
+    } catch (e) {
+      toast.error("Couldn’t download the file", e instanceof Error ? e.message : "Please try again.");
+    } finally {
+      setDownloading(null);
+    }
   }
 
   function onDownloadRejected() {
@@ -191,11 +231,69 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
                 </div>
               ) : null}
 
-              {terminal && legacyRejected.length > 0 ? (
+              {terminal && histogram.length > 0 ? (
+                <div>
+                  <span className={styles.sectionLabel}>Why rows need attention</span>
+                  <ul className={styles.mono} style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                    {histogram.map(([label, count]) => (
+                      <li key={label}>
+                        {label}: {count.toLocaleString()}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {terminal && isV2 && rejectedCount > 0 ? (
+                <p className={styles.muted} style={{ margin: 0, fontSize: 13 }}>
+                  These files contain the affected rows’ contact data — handle and share them securely.
+                </p>
+              ) : null}
+
+              {terminal && (rejectedCount > 0 || retryable || legacyRejected.length > 0) ? (
                 <div className={styles.drawerActions}>
-                  <TpButton variant="secondary" size="sm" type="button" onClick={onDownloadRejected}>
-                    Download rejected rows ({legacyRejected.length.toLocaleString()})
-                  </TpButton>
+                  {/* v2 (gate-on) jobs: the PII-bearing artifact pair via the proxied+audited endpoint. */}
+                  {isV2 && rejectedCount > 0 ? (
+                    <>
+                      <TpButton
+                        variant="secondary"
+                        size="sm"
+                        type="button"
+                        leftIcon={<Download size={14} />}
+                        loading={downloading === "repair"}
+                        onClick={() => void onDownloadArtifact("repair")}
+                      >
+                        Download rows to fix
+                      </TpButton>
+                      <TpButton
+                        variant="secondary"
+                        size="sm"
+                        type="button"
+                        leftIcon={<Download size={14} />}
+                        loading={downloading === "errors"}
+                        onClick={() => void onDownloadArtifact("errors")}
+                      >
+                        Download error report
+                      </TpButton>
+                    </>
+                  ) : null}
+                  {/* Legacy jobs keep the client-side rejected-rows CSV (no server artifact). */}
+                  {!isV2 && legacyRejected.length > 0 ? (
+                    <TpButton variant="secondary" size="sm" type="button" onClick={onDownloadRejected}>
+                      Download rejected rows ({legacyRejected.length.toLocaleString()})
+                    </TpButton>
+                  ) : null}
+                  {isV2 && retryable ? (
+                    <TpButton
+                      variant="primary"
+                      size="sm"
+                      type="button"
+                      loading={retry.isPending}
+                      onClick={() => setRetryOpen(true)}
+                    >
+                      Retry failed rows
+                    </TpButton>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -213,6 +311,17 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
         destructive
         busy={cancel.isPending}
         onConfirm={onConfirmCancel}
+      />
+
+      <ConfirmDialog
+        open={retryOpen}
+        onClose={() => setRetryOpen(false)}
+        title="Retry the failed rows?"
+        body="We’ll start a new import with just the rows that didn’t land, using the same mapping and settings. Rows that already imported are untouched."
+        confirmLabel="Retry failed rows"
+        cancelLabel="Not now"
+        busy={retry.isPending}
+        onConfirm={onConfirmRetry}
       />
     </main>
   );
