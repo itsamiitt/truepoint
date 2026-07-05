@@ -5,14 +5,18 @@
 import { beforeEach, expect, test } from "bun:test";
 import {
   countersSnapshot,
+  incrementImportCounter,
   recordCompleted,
   recordFailed,
   renderPromMetrics,
   resetCounters,
+  resetImportMetrics,
+  setImportGauge,
 } from "./metrics.ts";
 
 beforeEach(() => {
   resetCounters();
+  resetImportMetrics();
 });
 
 test("counters accumulate per queue", () => {
@@ -49,4 +53,29 @@ test("label values are escaped per the exposition format", () => {
   recordCompleted('we"ird\\queue\nname');
   const text = renderPromMetrics({ depths: [], outboxOldestPendingSeconds: null });
   expect(text).toContain('queue="we\\"ird\\\\queue\\nname"');
+});
+
+test("import reaper counters + gauges render as leadwolf_import_* families (S-Q5/S-Q7)", () => {
+  incrementImportCounter("reaper_copy_redrive_total", 2);
+  incrementImportCounter("reaper_copy_redrive_total"); // +1 → 3 (cumulative)
+  setImportGauge("jobs_stalled", 1);
+  setImportGauge("jobs_accounting_violations", 0);
+  const text = renderPromMetrics({ depths: [], outboxOldestPendingSeconds: null });
+  expect(text).toContain("# TYPE leadwolf_import_reaper_copy_redrive_total counter");
+  expect(text).toContain("leadwolf_import_reaper_copy_redrive_total 3");
+  expect(text).toContain("# TYPE leadwolf_import_jobs_stalled gauge");
+  expect(text).toContain("leadwolf_import_jobs_stalled 1");
+  // A zero gauge DOES render (a 0-violations reading is a real, asserted signal — unlike the honest-unknown
+  // outbox lag, which omits on null).
+  expect(text).toContain("leadwolf_import_jobs_accounting_violations 0");
+});
+
+test("import metrics gauges are set (overwrite), counters accumulate", () => {
+  setImportGauge("jobs_stalled", 5);
+  setImportGauge("jobs_stalled", 2); // overwrite, not accumulate
+  incrementImportCounter("reaper_fast_orphan_failed_total", 1);
+  incrementImportCounter("reaper_fast_orphan_failed_total", 1); // accumulate
+  const text = renderPromMetrics({ depths: [], outboxOldestPendingSeconds: null });
+  expect(text).toContain("leadwolf_import_jobs_stalled 2");
+  expect(text).toContain("leadwolf_import_reaper_fast_orphan_failed_total 2");
 });

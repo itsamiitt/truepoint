@@ -62,8 +62,10 @@ your orchestrator. Anything load-bearing carries a citation.
 | H | [Deploy / rollback](#runbook-h--deploy--rollback) | Shipping or reverting the workers image | Change |
 | I | [Boot crash from a missing env var](#runbook-i--boot-crash-from-a-missing-env-var) | Workers crash-loop at startup | SEV-1 |
 | J | [Dev Redis wiped repeatables](#runbook-j--dev-redis-wiped-repeatables) | Sweeps stop ticking after a Redis restart (dev) | SEV-3 (dev-only) |
+| K | [Import stall / stuck import + reaper alerts](#runbook-k--import-stall--stuck-import-reaper--alerts-import-redesign-s-q5s-q7) | `import.jobs.stalled` > 0, accounting/artifact-pending gauge > 0, or a stuck-looking import | SEV-1/2 (SEV-1 for accounting violations) |
 
-> There is no Runbook "F"; IDs align to the deliverable spec (A–J, F reserved).
+> There is no Runbook "F"; IDs align to the deliverable spec (A–J, F reserved). Runbook K is added by the
+> import redesign (09 §8 / S-Q5 / S-Q7) — the import reaper's observe/recover surface.
 
 ### 0.4 Shared reference — the topology every runbook uses
 
@@ -707,6 +709,74 @@ redis-cli KEYS 'bull:*:repeat'
 None needed — re-registration is idempotent (stable `jobId` prevents duplicates). To make dev
 survive restarts, mirror prod by setting Redis to `--appendonly yes` locally
 ([RECOMMENDATION]) — but ephemeral dev Redis is the intended default.
+
+---
+
+## Runbook K — Import stall / stuck import, reaper & alerts (import redesign, S-Q5/S-Q7)
+
+Home for the import-redesign observability landed by **S-Q7** (metrics + alert catalog + these entries) on
+top of the **S-Q5** reaper. Everything here is **gate-independent hardening** — the reaper observes/recovers
+the durable `import_jobs` rows the unified queue creates; it never changes the happy path. All metrics are on
+the shipped zero-dep `GET /metrics` (`apps/workers/src/metrics.ts`, rendered by `collectWorkerMetricsText`).
+
+### K.0 The by-design-vs-defect framing still rules (see §0.1)
+
+The unified import queue (`bulk-imports`) and its reaper/promotion sweeps are **only constructed when
+`BULK_IMPORT_ENABLED ∨ IMPORT_V2_ENABLED`** (`apps/workers/src/register.ts`). With both gates off there are no
+non-terminal v2 rows to reap and the `leadwolf_import_*` metrics never move — **that is by design, not a
+defect.** Confirm the gate state before treating a flat/empty import metric as a fault.
+
+### K.1 Import alert catalog (09 §8 — thresholds + severity)
+
+Severity uses the worker-platform 10 §9 scale. "First check" is the one-line triage; the reaper heals most
+recovery cases with **no manual action** — these alerts are mostly *confirm-it-healed*, not *go-fix-it*.
+
+| Alert | Signal (metric) | Threshold | Sev | First check → action |
+|---|---|---|---|---|
+| **Accounting violation** | `leadwolf_import_jobs_accounting_violations` | > 0 | **S1** (data integrity) | A terminal job's 7-bucket sum ≠ `rows_total`. Do **not** self-heal — capture the jobId (worker logs `import reaper: accounting-identity violations`), diff the counters vs ledger, open a data-integrity incident. Never a routine redrive. |
+| **Import DLQ growth** | `leadwolf_worker_queue_jobs{queue="bulk-imports-dlq",state="waiting"}` | > 0 sustained | S2 | PII-free dead-letter records — classify transient vs poison, then [Runbook D](#runbook-d--dlq-growth--redrive). Redrive is idempotent (stable ids). |
+| **Import stall** | `leadwolf_import_jobs_stalled` | > 0 for > 1 scrape | S2 | A `running` job's counters haven't moved past the stall window. Worker up? Redis reachable ([Runbook B](#runbook-b--redis-wedged-buffered-commands-silent-stall))? If the drive/chunk is genuinely gone the reaper re-drives copy / terminalizes fast next tick — confirm the gauge returns to 0. |
+| **Artifact pending** | `leadwolf_import_jobs_artifact_pending` | > 0 sustained | S3 | A terminal job with rejects but no repair-CSV key (store crash mid-finalize). The reaper flags (does not yet re-run — 16 drift); re-generate the artifact via the retry-failed path or accept the honest "expired/unavailable" UI state. |
+| **Relay lag (notify/rollup)** | `leadwolf_worker_outbox_oldest_pending_seconds` | > 60 s (S2); > 10 min (S1) | S2/S1 | Outbox not draining → check worker replicas + `worker_outbox.status='failed'` rows (a wiring bug, not a retry case). Leaderless: any replica's relay drains on recovery. |
+| **Reaper re-drive anomaly** | `leadwolf_import_reaper_copy_redrive_total` / `_fast_orphan_failed_total` | rate spike | S2 | A climbing re-drive/orphan-fail rate = a systemic loss (Redis flush, producer crash-loop). Rule out [Runbook A](#runbook-a--worker-process-down)/[B](#runbook-b--redis-wedged-buffered-commands-silent-stall); the counters are cumulative (rate() over them). |
+| **Backpressure 503s** | (product-cap layer; ~0 in normal op — 09 §1.3) | firing | S2 | The raw shed fired before the product cap — the caps are mis-sized (doc 12). Not a reaper case. |
+
+> **Reserved, not owned here:** the notify delivery-lag gauge `leadwolf_import_notify_delivery_lag_seconds` is
+> defined by S-Q4 (the notify consumer), not S-Q7 — its threshold (p95 terminal→in-app < 60 s) lands with it.
+
+### K.2 Symptom → Diagnosis → Action → Verification → Rollback
+
+**Symptom.** An import looks stuck (customer poll shows `running`/`queued` not advancing), or an import alert
+above fired.
+
+**Diagnosis.**
+1. **Gate check first (K.0).** If both import gates are off, there is nothing to reap — the report is a
+   by-design empty, not a fault.
+2. Scrape `GET /metrics` (port 3002, exec in — §0.4) and read the `leadwolf_import_*` family + the
+   `bulk-imports`/`bulk-imports-dlq` depth rows.
+3. Non-PII DB census (break-glass DBA read; control rows only, never `import_job_rows`):
+   ```bash
+   psql "$DATABASE_URL" -c "SELECT status, count(*) FROM import_jobs GROUP BY status;"
+   ```
+   States waiting on a human/gate (`draft`,`deferred`,`paused`) are **not** "stuck on a worker" (09 §9).
+
+**Action.**
+- **Stall / orphan:** no manual action in the common case — the reaper re-drives copy jobs (stable-id,
+  watermark-resumed) and writes the honest `failed` terminal for orphaned fast jobs (rows-in-payload are
+  unrecoverable in Phase A — 16 drift). If the gauge does not clear, the worker or Redis is down → Runbook
+  A/B. Do **not** hand-edit `import_jobs.status`.
+- **Redis flush:** the reaper is the recovery — verify via `leadwolf_import_reaper_*` climbing then settling;
+  every job reaches a terminal state with **no manual re-submits** (T-Q5 intent).
+- **DLQ growth:** [Runbook D](#runbook-d--dlq-growth--redrive).
+- **Accounting violation (S1):** incident, not a redrive — see K.1.
+
+**Verification.** `leadwolf_import_jobs_stalled` and the integrity gauges return to 0; the `import_jobs` census
+shows no non-terminal rows older than the orphan grace; DLQ drains.
+
+**Rollback.** The reaper only observes + recovers (idempotent re-drive / idempotent terminal write) — nothing
+to roll back. To silence it, flip the import gate off (`IMPORT_V2_ENABLED`/`BULK_IMPORT_ENABLED` = not
+`"true"`) + restart workers; the metrics then read empty (honest absence). Tuning reverts by env
+(`IMPORT_REAPER_SWEEP_EVERY_MS`, `IMPORT_REAPER_ORPHAN_GRACE_MS`, `IMPORT_REAPER_STALL_WINDOW_MS`).
 
 ---
 
