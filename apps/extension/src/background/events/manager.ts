@@ -37,6 +37,10 @@ export class BrowserEventManager {
       await this.scheduler.drain();
     } else if (alarm.name === "flush") {
       await this.ctx.telemetry.flush();
+    } else if (alarm.name === "auth-refresh") {
+      // Silent pre-refresh: wakes the worker if needed and re-mints before the token expires (doc 10 §4.3).
+      await this.ctx.auth.refreshNow();
+      this.ctx.broadcast({ type: "STATE_CHANGED", state: await this.ctx.getState() });
     }
   }
 }

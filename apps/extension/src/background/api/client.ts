@@ -5,7 +5,7 @@ import type { ConsentContext, IngestionEnvelope, RawObservation } from "@leadwol
 import { API_BASE } from "../../shared/env.ts";
 import type { QueueItem } from "../../shared/idb.ts";
 import type { ErrorClass, RevealType, SubjectStatus } from "../../shared/types.ts";
-import type { AuthModule } from "../auth/module.ts";
+import type { AuthModule } from "../auth/index.ts";
 
 export class ApiError extends Error {
   constructor(
@@ -51,6 +51,7 @@ export class ApiClient {
     path: string,
     init: RequestInit,
     opts: { idempotencyKey?: string } = {},
+    retried = false,
   ): Promise<T> {
     const token = await this.auth.getAccessToken();
     if (!token) {
@@ -66,6 +67,13 @@ export class ApiClient {
     }
 
     const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
+
+    // 401 = a revoked/expired token (sid deny-list or expiry). Try ONE silent re-auth + retry (doc 10 §4.4).
+    // The Idempotency-Key makes the retried write safe.
+    if (res.status === 401 && !retried && (await this.auth.refreshNow())) {
+      return this.request<T>(path, init, opts, true);
+    }
+
     if (!res.ok) {
       const problem = (await res.json().catch(() => ({}))) as ProblemDetails;
       throw new ApiError(

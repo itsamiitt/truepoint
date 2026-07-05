@@ -82,6 +82,21 @@ async function handle(
       return state;
     }
 
+    case "SWITCH_WORKSPACE": {
+      const state = await ctx.auth.switchWorkspace(msg.workspaceId);
+      ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
+      return state;
+    }
+
+    case "SWITCH_ORG": {
+      const state = await ctx.auth.switchOrg(msg.tenantId);
+      ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
+      return state;
+    }
+
+    case "LIST_ORGS":
+      return ctx.auth.listOrgs();
+
     case "OPEN_PANEL": {
       try {
         const win = await chrome.windows.getCurrent();

@@ -22,14 +22,33 @@ export const requestMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("REVEAL"), contactId: z.string().min(1), revealType }),
   z.object({ type: z.literal("AUTH_LOGIN") }),
   z.object({ type: z.literal("AUTH_LOGOUT") }),
+  z.object({ type: z.literal("SWITCH_WORKSPACE"), workspaceId: z.string().uuid() }),
+  z.object({ type: z.literal("SWITCH_ORG"), tenantId: z.string().uuid() }),
+  z.object({ type: z.literal("LIST_ORGS") }),
   z.object({ type: z.literal("OPEN_PANEL") }),
 ]);
 export type RequestMessage = z.infer<typeof requestMessage>;
 export type RequestType = RequestMessage["type"];
 
+/** Non-PII account display, fetched from GET /auth/me (the JWT carries no name/email). */
+export interface AccountDisplay {
+  name: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  workspaceName: string | null;
+}
+
+export interface OrgSummary {
+  tenantId: string;
+  tenantName: string;
+  isTenantOwner: boolean;
+}
+
 export interface AuthState {
   status: "signed_in" | "signed_out";
+  /** Display label (email/name from GET /auth/me), or null before it resolves. */
   account: string | null;
+  tenantId: string | null;
   workspaceId: string | null;
   credits: number | null;
 }
@@ -67,10 +86,10 @@ export type ResponseFor<T extends RequestType> = T extends "PING"
         ? CaptureResponse
         : T extends "REVEAL"
           ? RevealResponse
-          : T extends "AUTH_LOGIN"
+          : T extends "AUTH_LOGIN" | "AUTH_LOGOUT" | "SWITCH_WORKSPACE" | "SWITCH_ORG"
             ? AuthState
-            : T extends "AUTH_LOGOUT"
-              ? AuthState
+            : T extends "LIST_ORGS"
+              ? { orgs: OrgSummary[]; activeTenantId: string | null }
               : T extends "OPEN_PANEL"
                 ? { ok: boolean }
                 : never;
