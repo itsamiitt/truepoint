@@ -19,10 +19,12 @@ import {
   type BulkImportDeadLetter,
   type BulkImportScope,
   type BulkRevealDeadLetter,
+  IMPORT_NOTIFY_TOPIC,
   IMPORT_QUEUE_PRIORITY,
   IMPORT_ROLLUPS_TOPIC,
   type ImportDeadLetter,
   bulkEnrichmentJobDataSchema,
+  importNotifyPayloadSchema,
   importRollupsPayloadSchema,
 } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
@@ -57,6 +59,7 @@ import {
   deadLetterFailedBulkImport,
   makeProcessBulkImport,
 } from "./queues/bulkImports.ts";
+import { deliverImportNotification } from "./queues/importNotify.ts";
 import {
   BULK_REVEAL_DLQ,
   BULK_REVEAL_QUEUE,
@@ -996,6 +999,8 @@ export function startWorkers(): Worker[] {
             : `Import failed after retries (${err.name}).`,
           summary,
           totalRows: data.input.rows.length,
+          // S-Q4: the failed terminal writes the `import.notify` intent in-tx (crash-safe) instead of the handler.
+          emitOutbox: importOutboxEnabled,
         }).catch((e) =>
           log.error("bulk-import: fast failed-terminal write failed", {
             error: e instanceof Error ? e.message : String(e),
@@ -1032,8 +1037,11 @@ export function startWorkers(): Worker[] {
           }),
         );
       }
+      // S-Q4: gate-on, the terminal tx's `import.notify` outbox intent drives the notification IDEMPOTENTLY
+      // (crash-safe, exactly-once effect) — the handler insert is RETIRED to avoid a double notify. Gate-off
+      // (no fast jobs exist) this best-effort insert is the fallback, byte-identical.
       const importedBy = data.input.importedByUserId;
-      if (importedBy) {
+      if (importedBy && !importOutboxEnabled) {
         void db
           .transaction((tx) =>
             notificationRepository.create(tx, {
@@ -1067,6 +1075,12 @@ export function startWorkers(): Worker[] {
         await enqueueDedup(data);
         await enqueueFirmographics(data);
         await enqueueMasterBackfill(data);
+      };
+      // S-Q4 (09 §6.3, G06): the `import.notify` publisher — idempotently inserts the importer's in-app
+      // notification (dedup by (import_job, jobId) ⇒ exactly-once effect), hands to the email seam (no-op until
+      // doc 11/14), and records terminal→insert delivery lag. A throw re-claims the intent; the insert dedupes.
+      outboxPublishers[IMPORT_NOTIFY_TOPIC] = async (payload) => {
+        await deliverImportNotification(importNotifyPayloadSchema.parse(payload));
       };
     }
 

@@ -99,6 +99,35 @@ export const notificationRepository = {
     return Boolean(row);
   },
 
+  /** Does a notification for this (type, entity) already exist for the user in this workspace? The
+   *  outbox-driven producer path (import-redesign 09 §6.3, S-Q4) uses this to make delivery IDEMPOTENT: a
+   *  redelivered terminal intent finds the existing (`import_complete`, `import_job`, jobId) row and no-ops ⇒
+   *  exactly-once effect under at-least-once delivery. Explicit tx + workspace/user (the owner-connection
+   *  producer path has no GUC, so the predicates ARE the scope). */
+  async existsForEntity(
+    tx: Tx,
+    workspaceId: string,
+    userId: string,
+    type: NotificationType,
+    entityType: string,
+    entityId: string,
+  ): Promise<boolean> {
+    const [row] = await tx
+      .select({ one: sql<number>`1` })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.workspaceId, workspaceId),
+          eq(notifications.userId, userId),
+          eq(notifications.type, type),
+          eq(notifications.entityType, entityType),
+          eq(notifications.entityId, entityId),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  },
+
   /** A keyset page of the caller's OWN notifications (newest-first), workspace + user scoped. */
   async listForUser(
     scope: TenantScope,

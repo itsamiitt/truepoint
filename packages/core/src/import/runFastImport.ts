@@ -26,6 +26,7 @@ import {
   type ImportJobRowInsert,
 } from "@leadwolf/db";
 import {
+  IMPORT_NOTIFY_TOPIC,
   IMPORT_ROLLUPS_TOPIC,
   type ImportFastInput,
   type ImportSummary,
@@ -327,6 +328,22 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
         payload: { scope: { tenantId: scope.tenantId, workspaceId: scope.workspaceId } },
       });
     }
+    // S-Q4 (09 §6.1/§6.3, G06): the terminal NOTIFY intent commits in the SAME tx — the user-facing "your import
+    // finished" the market never forgives LOSING (§6.1: the trust bug is loss, not slowness). PII-free payload;
+    // the publisher resolves the recipient (createdByUserId) + dedupes (exactly-once effect). RETIRES the
+    // completed handler's best-effort notification behind the gate. Only when a real importer created the job.
+    if (args.emitOutbox && input.importedByUserId != null) {
+      await outboxRepository.enqueueInTx(tx, {
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        topic: IMPORT_NOTIFY_TOPIC,
+        payload: {
+          jobId,
+          scope: { tenantId: scope.tenantId, workspaceId: scope.workspaceId },
+          terminalStatus: status,
+        },
+      });
+    }
   });
 
   return {
@@ -360,6 +377,9 @@ export async function markFastImportFailed(args: {
   summary?: ImportSummary;
   /** Fallback row count when no summary is available (payload rows length). */
   totalRows?: number;
+  /** S-Q4: emit the terminal NOTIFY intent onto worker_outbox in the SAME failed-terminal tx (crash-safe) —
+   *  the worker passes env.IMPORT_V2_ENABLED. False ⇒ no intent (the best-effort handler path, byte-identical). */
+  emitOutbox?: boolean;
 }): Promise<void> {
   const { scope, jobId, failedReason } = args;
   await withTenantTx(scope, async (tx) => {
@@ -388,5 +408,20 @@ export async function markFastImportFailed(args: {
       completedAt: new Date(),
       rejectHistogram: args.summary?.rejectHistogram,
     });
+    // S-Q4 (09 §6.3, G06): the "your import failed" NOTIFY intent commits with the failed terminal — a failed
+    // import is exactly when the importer most needs to hear (§6.1). PII-free; publisher dedupes. Only when a
+    // real importer created the job (a system job has no recipient).
+    if (args.emitOutbox && job.createdByUserId != null) {
+      await outboxRepository.enqueueInTx(tx, {
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        topic: IMPORT_NOTIFY_TOPIC,
+        payload: {
+          jobId,
+          scope: { tenantId: scope.tenantId, workspaceId: scope.workspaceId },
+          terminalStatus: "failed",
+        },
+      });
+    }
   });
 }
