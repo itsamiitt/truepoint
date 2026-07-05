@@ -23,27 +23,30 @@ export interface NavDestination {
 }
 
 /** The primary rail destinations (11 §2). Inbox is a real destination now (was a placeholder page). */
-export const DESTINATIONS: NavDestination[] = [
-  { label: "Home", href: "/home", match: "/home", icon: Home },
-  { label: "Prospect", href: "/prospect", match: "/prospect", icon: Search },
-  { label: "Lists", href: "/lists", match: "/lists", icon: ListChecks },
-  { label: "Sequences", href: "/sequences", match: "/sequences", icon: Send },
-  { label: "Inbox", href: "/inbox", match: "/inbox", icon: Inbox },
-  { label: "Reports", href: "/reports", match: "/reports", icon: BarChart2 },
-  { label: "Data Health", href: "/data-health", match: "/data-health", icon: HeartPulse },
-];
-
-/** The Imports destination (import-redesign 11 §1.1) — the section landing at /imports, single-sourced here.
- *  Deliberately NOT in DESTINATIONS yet: the rail entry stays hidden until S-U2 gives /imports its real
- *  history page behind the IMPORT_V2 dual gate (11 §Rollout); the routes exist and resolve their section
- *  title from this entry meanwhile.
- *  WIRE(S-U2): move into DESTINATIONS (after Lists) when the history page ships. */
+/** The Imports destination (import-redesign 11 §1.1) — the section landing at /imports, single-sourced here so
+ *  the rail entry, the section-title resolver, and the palette all read one object. Railed at S-U2 now that
+ *  /imports is the real durable history dashboard (11 §2).
+ *  NOTE (drift, doc 16): 11 §Rollout wanted the rail entry gated behind the IMPORT_V2 dual gate, but apps/web
+ *  has no per-tenant flag reader yet — so the entry shows for everyone and the history page degrades to an
+ *  honest "not enabled yet" state while the gate is off (GET /imports 404 → ImportsNotEnabledError). Revisit
+ *  at the cohort flip if strict-dark nav is wanted. */
 export const IMPORTS_DESTINATION: NavDestination = {
   label: "Imports",
   href: "/imports",
   match: "/imports",
   icon: Upload,
 };
+
+export const DESTINATIONS: NavDestination[] = [
+  { label: "Home", href: "/home", match: "/home", icon: Home },
+  { label: "Prospect", href: "/prospect", match: "/prospect", icon: Search },
+  { label: "Lists", href: "/lists", match: "/lists", icon: ListChecks },
+  IMPORTS_DESTINATION,
+  { label: "Sequences", href: "/sequences", match: "/sequences", icon: Send },
+  { label: "Inbox", href: "/inbox", match: "/inbox", icon: Inbox },
+  { label: "Reports", href: "/reports", match: "/reports", icon: BarChart2 },
+  { label: "Data Health", href: "/data-health", match: "/data-health", icon: HeartPulse },
+];
 
 /** Pinned Settings entry in the rail. Points at an existing route; the scope sub-nav lives in the settings
  *  layout (driven by SETTINGS_NAV below). */
