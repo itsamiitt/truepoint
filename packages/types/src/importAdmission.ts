@@ -41,3 +41,33 @@ export class UnsupportedMediaTypeError extends AppError {
     });
   }
 }
+
+/** The archive-cap rule an XLSX admission failed on (13 §1.4a–e) — a stable label, never an entry name. */
+export type ArchiveLimitReason =
+  | "expansion_ratio" // uncompressed/compressed above the ratio cap (zip bomb)
+  | "total_uncompressed" // declared total uncompressed size above the absolute cap
+  | "entry_uncompressed" // one entry's declared uncompressed size above the per-entry cap
+  | "entry_count" // more entries than a real workbook could need
+  | "zero_entries" // an "archive" with nothing in it (13's zero-entry edge)
+  | "nested_archive" // an archive inside the archive
+  | "path_traversal" // an entry name escaping the extraction root
+  | "zip64"; // ZIP64 markers — legitimate workbooks under our byte caps never need them
+
+/**
+ * The XLSX (a ZIP container) violates the decompression-hazard caps (import-redesign 13 §1.4, step S-S5),
+ * enforced at central-directory read BEFORE any extraction. 422 with the stable reason code
+ * `archive_limits_exceeded`; the extensions carry the rule label and the cap numbers, NEVER an entry name
+ * or any file content (PII/injection discipline, 13 §3.3).
+ */
+export class ArchiveLimitsExceededError extends AppError {
+  constructor(reason: ArchiveLimitReason, extensions?: Record<string, unknown>) {
+    super({
+      status: 422,
+      code: "archive_limits_exceeded",
+      title: "Spreadsheet archive exceeds safety limits",
+      detail:
+        "The .xlsx container failed a safety check — rebuild the sheet and re-save it as .xlsx, or upload a CSV.",
+      extensions: { reason, ...extensions },
+    });
+  }
+}

@@ -39,7 +39,7 @@ describe("admittedImportFormData — byte-count abort (13 §1.2)", () => {
     await expect(admittedImportFormData(req, 1024)).rejects.toBeInstanceOf(FileTooLargeError);
   });
 
-  test("aborts an over-ceiling STREAM mid-read (a lying Content-Length never buffers past the cap)", async () => {
+  test("aborts an over-ceiling STREAM mid-read (lying Content-Length)", async () => {
     // The oversized-multipart fixture: body bytes exceed the cap; no trustworthy Content-Length.
     const form = new FormData();
     form.set("file", csvFile(`Email\n${"a@x.test\n".repeat(50_000)}`)); // ~450 KB body
@@ -113,7 +113,7 @@ describe("assertBulkUploadAdmissible — the (dark) bulk path is CSV-only", () =
     await expect(assertBulkUploadAdmissible(f)).rejects.toMatchObject({ status: 415 });
   });
 
-  test("rejects a UTF-16 BOM (the drive parser is UTF-8-only — never silent mojibake)", async () => {
+  test("rejects a UTF-16 BOM (the drive parser is UTF-8-only)", async () => {
     const f = new File([new Uint8Array([0xff, 0xfe, 0x41, 0x00, 0x0a, 0x00])], "leads.csv");
     await expect(assertBulkUploadAdmissible(f)).rejects.toBeInstanceOf(ImportValidationError);
   });

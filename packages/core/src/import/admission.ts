@@ -6,7 +6,11 @@
 // load-bearing (13 §1.1). Pure, dependency-free byte-level checks — Node Buffer only, no parser libraries;
 // the callers (apps/api routes pre-store, the worker pre-parse) decide WHERE to enforce.
 
-import { ImportValidationError, UnsupportedMediaTypeError } from "@leadwolf/types";
+import {
+  ArchiveLimitsExceededError,
+  ImportValidationError,
+  UnsupportedMediaTypeError,
+} from "@leadwolf/types";
 
 // ── The ONE local constants spot for admission caps — S-P2 will centralize these as the shared, published
 // limit constants (12 §5). Do not scatter or duplicate these numbers; extend this block only.
@@ -37,6 +41,19 @@ export const IMPORT_CSV_SNIFF_PREFIX_BYTES = 64 * 1024;
  *  draft flow — the legacy path has no warnings channel; recorded drift). */
 export const IMPORT_ENCODING_SUSPECT_MIN = 20;
 export const IMPORT_ENCODING_SUSPECT_RATIO_DENOM = 1_000;
+/** Zip-bomb caps (13 §1.4, step S-S5) — enforced at CENTRAL-DIRECTORY read, before any extraction. */
+/** 13 §1.4c: entry-count cap (≤ 1,000). A real workbook carries a few dozen parts. */
+export const IMPORT_XLSX_MAX_ARCHIVE_ENTRIES = 1_000;
+/** 13 §1.4b: expansion-ratio cap (uncompressed/compressed ≤ 100×, config knob). */
+export const IMPORT_XLSX_MAX_EXPANSION_RATIO = 100;
+/** 13 §1.4a: absolute total-uncompressed cap — 12 §4's ~10× inflation guidance applied to the shipped
+ *  25 MiB compressed ceiling (the memory bound; the ratio cap catches small bombs below it). */
+export const IMPORT_XLSX_MAX_UNCOMPRESSED_BYTES = 250 * 1024 * 1024;
+/** 13 §1.4d: per-entry uncompressed cap (the sheet XML / shared-strings part dominates a real workbook). */
+export const IMPORT_XLSX_MAX_ENTRY_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
+/** The ratio cap applies only above this uncompressed size — tiny, highly-compressible XML parts of a
+ *  LEGITIMATE workbook routinely exceed 100× on a few hundred bytes; the absolute caps bound them anyway. */
+export const IMPORT_XLSX_RATIO_ENFORCE_FLOOR_BYTES = 1024 * 1024;
 // ── end constants block ─────────────────────────────────────────────────────────────────────────────────
 
 /** Known binary magics a "CSV" must NOT present (13 §1.1): ZIP (an XLSX renamed .csv — honest 415, not a
@@ -164,5 +181,133 @@ export function assertXlsxAdmissible(bytes: Uint8Array): void {
     throw new UnsupportedMediaTypeError(
       "The file is a ZIP archive but not an .xlsx workbook.",
     );
+  }
+}
+
+// ── S-S5: zip-bomb / archive caps (13 §1.4) ─────────────────────────────────────────────────────────────
+// An XLSX IS a zip, with a zip's attack surface. These caps are enforced by reading the CENTRAL DIRECTORY
+// only — no entry is ever inflated or extracted here — before SheetJS touches the container. HONEST
+// RESIDUAL (recorded): the central directory carries DECLARED sizes; a hostile stream whose deflate output
+// exceeds its declaration is bounded only by the compressed-byte ceiling (IMPORT_XLSX_MAX_BYTES) until a
+// streaming-inflate cap ships with the scanner era (S-S2). That is 13 §1.4's own placement ("enforced at
+// central-directory read"); the declared-size walk is the market control, not a substitute for AV.
+
+const EOCD_SIG = 0x06054b50; // end-of-central-directory record
+const CD_SIG = 0x02014b50; // central-directory file header
+const EOCD_MIN = 22; // fixed EOCD length (comment excluded)
+const ZIP64_U16 = 0xffff;
+const ZIP64_U32 = 0xffffffff;
+
+/** Entry names that are archives themselves — rejected outright (13 §1.4e); a real workbook has none. */
+const NESTED_ARCHIVE_RE = /\.(zip|jar|war|7z|rar|gz|tgz|bz2|xz|tar|cab|z)$/i;
+
+function corruptArchive(): ImportValidationError {
+  return new ImportValidationError(
+    "The .xlsx file could not be read — it may be corrupt or not a real .xlsx.",
+  );
+}
+
+/** An entry name that could escape an extraction root: `..` segments, absolute paths, drive letters,
+ *  or backslash separators (OOXML names are always forward-slash relative). Fail closed. */
+function isTraversalName(name: string): boolean {
+  if (name.startsWith("/") || name.includes("\\") || name.includes(":")) return true;
+  return name.split("/").includes("..");
+}
+
+/**
+ * Enforce the 13 §1.4 decompression-hazard caps on an XLSX container, at central-directory read and before
+ * any extraction: (a) total declared uncompressed ≤ IMPORT_XLSX_MAX_UNCOMPRESSED_BYTES; (b) expansion
+ * ratio ≤ IMPORT_XLSX_MAX_EXPANSION_RATIO (total and per-entry, above the enforce floor); (c) entry count
+ * ≤ IMPORT_XLSX_MAX_ARCHIVE_ENTRIES (and ≥ 1 — the zero-entry edge); (d) per-entry uncompressed ≤
+ * IMPORT_XLSX_MAX_ENTRY_UNCOMPRESSED_BYTES; (e) no nested archives, no traversal names. ZIP64 markers are
+ * rejected outright — a legitimate workbook under our compressed-byte ceiling never needs them.
+ * Violations throw `ArchiveLimitsExceededError` (422, stable code `archive_limits_exceeded`, PII-free —
+ * reason label + cap numbers only, never an entry name); structural garbage throws the same corrupt-file
+ * error the parser uses. Names are decoded latin1 purely for the safety checks and never surface.
+ */
+export function assertXlsxArchiveWithinLimits(bytes: Uint8Array): void {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const len = bytes.byteLength;
+  if (len < EOCD_MIN) throw corruptArchive();
+
+  // Locate the EOCD record: scan backwards over the maximum comment span (64 KiB + 22).
+  let eocd = -1;
+  const scanFloor = Math.max(0, len - EOCD_MIN - 0xffff);
+  for (let i = len - EOCD_MIN; i >= scanFloor; i--) {
+    if (view.getUint32(i, true) === EOCD_SIG) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd === -1) throw corruptArchive();
+
+  const totalEntries = view.getUint16(eocd + 10, true);
+  const cdSize = view.getUint32(eocd + 12, true);
+  const cdOffset = view.getUint32(eocd + 16, true);
+  if (totalEntries === ZIP64_U16 || cdSize === ZIP64_U32 || cdOffset === ZIP64_U32) {
+    throw new ArchiveLimitsExceededError("zip64");
+  }
+  if (totalEntries === 0) throw new ArchiveLimitsExceededError("zero_entries");
+  if (totalEntries > IMPORT_XLSX_MAX_ARCHIVE_ENTRIES) {
+    throw new ArchiveLimitsExceededError("entry_count", {
+      maxEntries: IMPORT_XLSX_MAX_ARCHIVE_ENTRIES,
+    });
+  }
+  if (cdOffset + cdSize > len) throw corruptArchive();
+
+  const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let p = cdOffset;
+  const cdEnd = cdOffset + cdSize;
+  let totalCompressed = 0;
+  let totalUncompressed = 0;
+  let walked = 0;
+
+  for (; walked < totalEntries; walked++) {
+    if (p + 46 > cdEnd || view.getUint32(p, true) !== CD_SIG) throw corruptArchive();
+    const compressed = view.getUint32(p + 20, true);
+    const uncompressed = view.getUint32(p + 24, true);
+    const nameLen = view.getUint16(p + 28, true);
+    const extraLen = view.getUint16(p + 30, true);
+    const commentLen = view.getUint16(p + 32, true);
+    if (p + 46 + nameLen > cdEnd) throw corruptArchive();
+    if (compressed === ZIP64_U32 || uncompressed === ZIP64_U32) {
+      throw new ArchiveLimitsExceededError("zip64");
+    }
+
+    const name = buf.toString("latin1", p + 46, p + 46 + nameLen);
+    if (NESTED_ARCHIVE_RE.test(name)) throw new ArchiveLimitsExceededError("nested_archive");
+    if (isTraversalName(name)) throw new ArchiveLimitsExceededError("path_traversal");
+
+    if (uncompressed > IMPORT_XLSX_MAX_ENTRY_UNCOMPRESSED_BYTES) {
+      throw new ArchiveLimitsExceededError("entry_uncompressed", {
+        maxEntryUncompressedBytes: IMPORT_XLSX_MAX_ENTRY_UNCOMPRESSED_BYTES,
+      });
+    }
+    if (
+      uncompressed > IMPORT_XLSX_RATIO_ENFORCE_FLOOR_BYTES &&
+      uncompressed > Math.max(compressed, 1) * IMPORT_XLSX_MAX_EXPANSION_RATIO
+    ) {
+      throw new ArchiveLimitsExceededError("expansion_ratio", {
+        maxRatio: IMPORT_XLSX_MAX_EXPANSION_RATIO,
+      });
+    }
+
+    totalCompressed += compressed;
+    totalUncompressed += uncompressed;
+    if (totalUncompressed > IMPORT_XLSX_MAX_UNCOMPRESSED_BYTES) {
+      throw new ArchiveLimitsExceededError("total_uncompressed", {
+        maxUncompressedBytes: IMPORT_XLSX_MAX_UNCOMPRESSED_BYTES,
+      });
+    }
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+
+  if (
+    totalUncompressed > IMPORT_XLSX_RATIO_ENFORCE_FLOOR_BYTES &&
+    totalUncompressed > Math.max(totalCompressed, 1) * IMPORT_XLSX_MAX_EXPANSION_RATIO
+  ) {
+    throw new ArchiveLimitsExceededError("expansion_ratio", {
+      maxRatio: IMPORT_XLSX_MAX_EXPANSION_RATIO,
+    });
   }
 }

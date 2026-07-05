@@ -5,14 +5,21 @@ import { describe, expect, test } from "bun:test";
 // unsupported_media_type otherwise, per 08 §2.3's slug), a "CSV" must match no known binary magic, carry no
 // NUL bytes outside BOM-declared UTF-16, and decode without SYSTEMIC mojibake (whole-file 422).
 
-import { ImportValidationError, UnsupportedMediaTypeError } from "@leadwolf/types";
+import {
+  ArchiveLimitsExceededError,
+  ImportValidationError,
+  UnsupportedMediaTypeError,
+} from "@leadwolf/types";
 import * as XLSX from "xlsx";
 import {
+  IMPORT_XLSX_MAX_ARCHIVE_ENTRIES,
   assertCsvPrefixAdmissible,
   assertXlsxAdmissible,
+  assertXlsxArchiveWithinLimits,
   decodeAdmittedCsv,
   hasZipMagic,
 } from "./admission.ts";
+import { parseXlsx } from "./parseXlsx.ts";
 
 /** A real (tiny) OOXML workbook, built the same way the parseXlsx tests build theirs. */
 function realXlsxBytes(): Uint8Array {
@@ -139,5 +146,180 @@ describe("assertCsvPrefixAdmissible (bulk streaming admission)", () => {
     expect(() => assertCsvPrefixAdmissible(new Uint8Array([0x41, 0x00, 0x42]))).toThrow(
       UnsupportedMediaTypeError,
     );
+  });
+});
+
+// ── S-S5: zip-bomb / archive caps (13 §1.4; T-S2 bomb fixtures) ─────────────────────────────────────────
+// The fixtures are HAND-BUILT zip containers so the central-directory DECLARED sizes are fully under test
+// control (the walker never inflates anything — a bomb here is a lie in the directory, exactly the attack).
+
+interface ZipEntrySpec {
+  name: string;
+  data?: Uint8Array; // stored (method 0)
+  declaredUncompressed?: number; // central-directory lie — what a hostile container declares
+  declaredCompressed?: number;
+}
+
+/** Build a minimal, structurally valid zip: local headers + stored data, central directory, EOCD. */
+function zipBytes(entries: ZipEntrySpec[]): Uint8Array {
+  const chunks: Uint8Array[] = [];
+  const central: Uint8Array[] = [];
+  let offset = 0;
+  const ascii = (s: string) => new TextEncoder().encode(s);
+  const u16 = (b: DataView, o: number, v: number) => b.setUint16(o, v, true);
+  const u32 = (b: DataView, o: number, v: number) => b.setUint32(o, v, true);
+
+  for (const e of entries) {
+    const name = ascii(e.name);
+    const data = e.data ?? new Uint8Array(0);
+    const local = new Uint8Array(30 + name.length);
+    const lv = new DataView(local.buffer);
+    u32(lv, 0, 0x04034b50);
+    u16(lv, 4, 20);
+    u32(lv, 18, data.length); // compressed (stored)
+    u32(lv, 22, data.length); // uncompressed
+    u16(lv, 26, name.length);
+    local.set(name, 30);
+    chunks.push(local, data);
+
+    const cd = new Uint8Array(46 + name.length);
+    const cv = new DataView(cd.buffer);
+    u32(cv, 0, 0x02014b50);
+    u16(cv, 4, 20);
+    u16(cv, 6, 20);
+    u32(cv, 20, e.declaredCompressed ?? data.length);
+    u32(cv, 24, e.declaredUncompressed ?? data.length);
+    u16(cv, 28, name.length);
+    u32(cv, 42, offset); // local header offset
+    cd.set(name, 46);
+    central.push(cd);
+    offset += local.length + data.length;
+  }
+
+  const cdSize = central.reduce((n, c) => n + c.length, 0);
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  u32(ev, 0, 0x06054b50);
+  u16(ev, 8, entries.length);
+  u16(ev, 10, entries.length);
+  u32(ev, 12, cdSize);
+  u32(ev, 16, offset);
+
+  const total = new Uint8Array(offset + cdSize + 22);
+  let p = 0;
+  for (const c of [...chunks, ...central, eocd]) {
+    total.set(c, p);
+    p += c.length;
+  }
+  return total;
+}
+
+function expectArchiveReject(bytes: Uint8Array, reason: string): void {
+  try {
+    assertXlsxArchiveWithinLimits(bytes);
+    throw new Error(`expected archive rejection (${reason})`);
+  } catch (err) {
+    expect(err).toBeInstanceOf(ArchiveLimitsExceededError);
+    const e = err as ArchiveLimitsExceededError;
+    expect(e.status).toBe(422);
+    expect(e.code).toBe("archive_limits_exceeded");
+    expect(e.extensions.reason).toBe(reason);
+  }
+}
+
+const CONTENT_TYPES = { name: "[Content_Types].xml", data: new TextEncoder().encode("<Types/>") };
+const MIB = 1024 * 1024;
+
+describe("assertXlsxArchiveWithinLimits (13 §1.4, S-S5)", () => {
+  test("admits a REAL workbook (no false positive on small high-compression parts)", () => {
+    expect(() => assertXlsxArchiveWithinLimits(realXlsxBytes())).not.toThrow();
+  });
+
+  test("rejects a high-expansion-ratio bomb at central-directory read", () => {
+    // Declares 150 MiB inflating from ~1 KiB — a classic bomb shape; never extracted.
+    const bomb = zipBytes([
+      CONTENT_TYPES,
+      {
+        name: "xl/worksheets/sheet1.xml",
+        declaredCompressed: 1024,
+        declaredUncompressed: 150 * MIB,
+      },
+    ]);
+    expectArchiveReject(bomb, "expansion_ratio");
+  });
+
+  test("rejects a per-entry uncompressed cap violation", () => {
+    const bomb = zipBytes([
+      {
+        name: "xl/sharedStrings.xml",
+        declaredCompressed: 100 * MIB,
+        declaredUncompressed: 201 * MIB,
+      },
+    ]);
+    expectArchiveReject(bomb, "entry_uncompressed");
+  });
+
+  test("rejects a total-uncompressed cap violation (entries individually under caps)", () => {
+    const bomb = zipBytes([
+      { name: "xl/a.xml", declaredCompressed: 100 * MIB, declaredUncompressed: 150 * MIB },
+      { name: "xl/b.xml", declaredCompressed: 100 * MIB, declaredUncompressed: 150 * MIB },
+    ]);
+    expectArchiveReject(bomb, "total_uncompressed");
+  });
+
+  test("rejects an over-cap entry count", () => {
+    const names = Array.from({ length: IMPORT_XLSX_MAX_ARCHIVE_ENTRIES + 1 }, (_, i) => ({
+      name: `xl/p${i}.xml`,
+    }));
+    expectArchiveReject(zipBytes(names), "entry_count");
+  });
+
+  test("rejects a zero-entry archive (13's zero-entry edge)", () => {
+    expectArchiveReject(zipBytes([]), "zero_entries");
+  });
+
+  test("rejects nested archives", () => {
+    expectArchiveReject(
+      zipBytes([CONTENT_TYPES, { name: "xl/media/payload.zip" }]),
+      "nested_archive",
+    );
+  });
+
+  test("rejects path-traversal entry names", () => {
+    expectArchiveReject(zipBytes([CONTENT_TYPES, { name: "../evil.xml" }]), "path_traversal");
+    expectArchiveReject(zipBytes([CONTENT_TYPES, { name: "/abs.xml" }]), "path_traversal");
+    expectArchiveReject(zipBytes([CONTENT_TYPES, { name: "a\\b.xml" }]), "path_traversal");
+  });
+
+  test("rejects ZIP64 markers outright", () => {
+    const z = zipBytes([
+      CONTENT_TYPES,
+      { name: "xl/big.xml", declaredCompressed: 1024, declaredUncompressed: 0xffffffff },
+    ]);
+    expectArchiveReject(z, "zip64");
+  });
+
+  test("treats structural garbage as the corrupt-file error, not a crash", () => {
+    expect(() =>
+      assertXlsxArchiveWithinLimits(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 9, 9])),
+    ).toThrow(ImportValidationError);
+  });
+
+  test("parseXlsx runs the gate BEFORE extraction — a bomb never reaches SheetJS", () => {
+    const bomb = zipBytes([
+      CONTENT_TYPES,
+      {
+        name: "xl/worksheets/sheet1.xml",
+        declaredCompressed: 512,
+        declaredUncompressed: 200 * MIB,
+      },
+    ]);
+    try {
+      parseXlsx(bomb);
+      throw new Error("expected rejection");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ArchiveLimitsExceededError);
+      expect((err as ArchiveLimitsExceededError).code).toBe("archive_limits_exceeded");
+    }
   });
 });

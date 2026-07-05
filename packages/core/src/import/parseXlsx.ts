@@ -24,6 +24,7 @@ import {
   IMPORT_XLSX_MAX_BYTES as MAX_BYTES,
   IMPORT_XLSX_MAX_COLS as MAX_COLS,
   IMPORT_XLSX_MAX_ROWS as MAX_ROWS,
+  assertXlsxArchiveWithinLimits,
 } from "./admission.ts";
 import type { ParsedCsv, RawRow } from "./columnMap.ts";
 
@@ -63,6 +64,10 @@ export function parseXlsx(bytes: Uint8Array): ParsedCsv {
       "The .xlsx file could not be read — it may be corrupt or not a real .xlsx.",
     );
   }
+  // S-S5 (13 §1.4): zip-bomb/archive caps at central-directory read, STRICTLY BEFORE XLSX.read inflates
+  // the container — expansion ratio, entry count, per-entry/total uncompressed, nested archives,
+  // traversal names, ZIP64. Throws ArchiveLimitsExceededError (422 `archive_limits_exceeded`).
+  assertXlsxArchiveWithinLimits(bytes);
 
   let workbook: XLSX.WorkBook;
   try {

@@ -17,6 +17,7 @@ export {
   IMPORT_XLSX_MAX_BYTES,
   assertCsvPrefixAdmissible,
   assertXlsxAdmissible,
+  assertXlsxArchiveWithinLimits,
   decodeAdmittedCsv,
   hasZipMagic,
 } from "./import/admission.ts";
