@@ -53,6 +53,16 @@ export {
   type FastAdmission,
   type PromotedImportJob,
 } from "./import/importFairness.ts";
+// Progress contract (import-redesign 09 §4, S-Q6): the counter-delta cadence constants + THE one
+// derivation function feeding the poll response and, when wired, the SSE payloads + staff console.
+export {
+  IMPORT_PROGRESS_BATCH_ROWS,
+  IMPORT_PROGRESS_MAX_DELTAS_PER_CHUNK,
+  IMPORT_PROGRESS_MIN_INTERVAL_MS,
+  deriveImportProgress,
+  type DerivedImportProgress,
+  type ImportProgressSource,
+} from "./import/importProgress.ts";
 export type { RawRow } from "./import/columnMap.ts";
 // Fast-path dual-write wrapper (import-redesign 08 §1.2 Phase A / 09 §1.1, S-I3): durable state transitions +
 // atomic counter deltas + the rejected-rows ledger AROUND the unchanged runImport. DARK while the

@@ -12,6 +12,7 @@ import {
   assertListInWorkspace,
   buildImportPreview,
   decideFastAdmission,
+  deriveImportProgress,
   parseImportFile,
 } from "@leadwolf/core";
 import { type ImportJobRow, importJobRepository, withTenantTx } from "@leadwolf/db";
@@ -104,19 +105,13 @@ function toLegacyStatusV2(status: string): ImportJobStatus {
 }
 
 /** Build the legacy poll response from the DURABLE row (G03's fix: the DB answers for the row's lifetime,
- *  never `Job.getState()`). Progress/summary derive from the atomic counters; the rejected-row DETAIL
+ *  never `Job.getState()`). Progress/summary derive from the atomic counters through core's ONE
+ *  derivation fn (S-Q6, 09 §4.1 — poll and the future SSE can never disagree); the rejected-row DETAIL
  *  (errors/rejectedRows) is not persisted on the non-PII control plane — it arrives with the S-I7 artifact
  *  pair, so gate-on terminal summaries carry counts + histogram with empty detail arrays. */
 function toLegacyResponseV2(job: ImportJobRow): ImportJobStatusResponse {
   const status = toLegacyStatusV2(job.status);
-  const processed =
-    job.rowsCreated +
-    job.rowsMatched +
-    job.rowsDuplicate +
-    job.rowsSkipped +
-    job.rowsRejected +
-    job.rowsDeduped +
-    job.rowsUnprocessed;
+  const { processedRows } = deriveImportProgress(job);
   // Mirror the legacy worker's progress lanes: skipped = not-newly-landed (idempotent skips + held-back
   // duplicates), failed = rejected. Null while nothing has run yet (the legacy pre-first-update shape).
   const progress: ImportProgress | null =
@@ -124,7 +119,7 @@ function toLegacyResponseV2(job: ImportJobRow): ImportJobStatusResponse {
       ? null
       : {
           total: job.rowsTotal,
-          processed,
+          processed: processedRows,
           created: job.rowsCreated,
           matched: job.rowsMatched,
           skipped: job.rowsSkipped + job.rowsDuplicate + job.rowsDeduped,

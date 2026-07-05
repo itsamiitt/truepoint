@@ -257,6 +257,49 @@ describe("S-I3 T5 — 3-level idempotency on the fast path", () => {
     expect(await contactNames(wsFast)).toEqual(contactsBefore);
   }, 120_000);
 
+  test("S-Q6 cadence (riding T1/T4, 15 seq 14): one delta set per fast run, inside the chunk budget; the shared derivation matches the durable row", async () => {
+    // Constants keep 09 §4.2's contract: a 10k chunk can never exceed the delta budget.
+    expect(Math.ceil(10_000 / core.IMPORT_PROGRESS_BATCH_ROWS)).toBeLessThanOrEqual(
+      core.IMPORT_PROGRESS_MAX_DELTAS_PER_CHUNK,
+    );
+
+    const { id: jobId } = await createFastJob();
+    await core.runFastImport({
+      scope: { tenantId: tenantA, workspaceId: wsFast },
+      jobId,
+      input: { sourceName: "manual", mapping: MAPPING, conflictPolicy: "skip", rows: ROWS },
+    });
+    const row = await jobRow(jobId);
+    // The fast wrapper applies exactly ONE delta set, committed with the terminal tx — so the counters
+    // equal one summary application (no per-attempt double count): the accounting identity at terminal.
+    const sum =
+      row.rows_created +
+      row.rows_matched +
+      row.rows_duplicate +
+      row.rows_skipped +
+      row.rows_rejected +
+      row.rows_deduped +
+      row.rows_unprocessed;
+    expect(sum).toBe(row.rows_total);
+
+    // THE one derivation fn (poll + future SSE + staff read the same math): terminal ⇒ 1, identity-honest.
+    const derived = core.deriveImportProgress({
+      status: row.status,
+      rowsTotal: row.rows_total,
+      rowsCreated: row.rows_created,
+      rowsMatched: row.rows_matched,
+      rowsDuplicate: row.rows_duplicate,
+      rowsSkipped: row.rows_skipped,
+      rowsRejected: row.rows_rejected,
+      rowsDeduped: row.rows_deduped,
+      rowsUnprocessed: row.rows_unprocessed,
+      completedChunks: row.completed_chunks,
+      totalChunks: row.total_chunks,
+    });
+    expect(derived.percent).toBe(1);
+    expect(derived.processedRows).toBe(row.rows_total);
+  }, 120_000);
+
   test("row level: a content-hash re-import in a NEW job lands as `skipped`, never a duplicate contact", async () => {
     const contactsBefore = await contactNames(wsFast);
     const { id: jobId } = await createFastJob();
