@@ -106,6 +106,11 @@ import {
   makeProcessImportPromotionSweep,
 } from "./queues/importPromotionSweep.ts";
 import {
+  IMPORT_ARTIFACT_SWEEP_QUEUE,
+  type ImportArtifactSweepJobData,
+  makeProcessImportArtifactSweep,
+} from "./queues/importArtifactSweep.ts";
+import {
   IMPORT_REAPER_SWEEP_QUEUE,
   type ImportReaperSweepJobData,
   makeProcessImportReaperSweep,
@@ -1202,6 +1207,40 @@ export function startWorkers(): Worker[] {
       )
       .catch((e) =>
         log.error("failed to schedule the import-reaper sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+
+    // S-S7 (13 §4.4): the leader-locked ARTIFACT LIFECYCLE sweep — TTL-expires the PII-bearing error
+    // artifacts (objects deleted, keys nulled ⇒ honest "expired" UI state). Rides the same construction
+    // gate (artifacts only exist once a producer gate opened) and the SAME env-selected FileStore the
+    // pipeline writes through. Job hard-purge prefix deletion is core's purgeImportJobObjects seam, owned
+    // by the future row-purger (retention deleter / S-S8 DSAR) — not this sweep.
+    const importArtifactSweepQueue = new Queue<ImportArtifactSweepJobData>(
+      IMPORT_ARTIFACT_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<ImportArtifactSweepJobData>(
+          IMPORT_ARTIFACT_SWEEP_QUEUE,
+          makeProcessImportArtifactSweep(connection, {
+            fileStore: bulkFileStore,
+            ttlDays: env.IMPORT_ARTIFACT_TTL_DAYS,
+          }),
+          { connection, ...SWEEP_WORKER_TUNING },
+        ),
+        IMPORT_ARTIFACT_SWEEP_QUEUE,
+      ),
+    );
+    void importArtifactSweepQueue
+      .add(
+        "sweep",
+        {},
+        { repeat: { every: env.IMPORT_ARTIFACT_SWEEP_EVERY_MS }, jobId: "import-artifact-sweep" },
+      )
+      .catch((e) =>
+        log.error("failed to schedule the import-artifact sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

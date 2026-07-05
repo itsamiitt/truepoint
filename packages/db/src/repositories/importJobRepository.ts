@@ -486,6 +486,62 @@ export const importJobRepository = {
     return Number(rows[0]?.n ?? 0);
   },
 
+  /** S-S7 (13 §4.4) — the artifact-TTL sweep's census: TERMINAL jobs past the cutoff still holding an
+   *  artifact key (the repair column and/or `options.errorReportKey`). Owner-connection read, control-row
+   *  columns only (keys are opaque non-PII paths); the sweep opens an RLS-scoped tx per row to WRITE
+   *  (clearArtifactKeys) — the exact reaper-reads posture above. Oldest-first, bounded. */
+  async listArtifactExpiryCandidates(
+    cutoff: Date,
+    limit = 200,
+  ): Promise<
+    Array<{
+      id: string;
+      tenantId: string;
+      workspaceId: string;
+      rejectedArtifactKey: string | null;
+      errorReportKey: string | null;
+    }>
+  > {
+    const capped = Math.max(1, Math.min(1000, Math.trunc(limit)));
+    const rows = (await db.execute(sql`
+      SELECT id, tenant_id, workspace_id, rejected_artifact_key,
+             (options ->> 'errorReportKey') AS error_report_key
+      FROM import_jobs
+      WHERE status IN ('completed','partial','failed','cancelled')
+        AND completed_at IS NOT NULL AND completed_at < ${cutoff}
+        AND (rejected_artifact_key IS NOT NULL OR (options ->> 'errorReportKey') IS NOT NULL)
+      ORDER BY completed_at ASC
+      LIMIT ${capped}
+    `)) as unknown as Array<{
+      id: string;
+      tenant_id: string;
+      workspace_id: string;
+      rejected_artifact_key: string | null;
+      error_report_key: string | null;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      tenantId: r.tenant_id,
+      workspaceId: r.workspace_id,
+      rejectedArtifactKey: r.rejected_artifact_key,
+      errorReportKey: r.error_report_key,
+    }));
+  },
+
+  /** S-S7 key-nulling (13 §4.4): after the objects lapse, null `rejected_artifact_key` and drop
+   *  `options.errorReportKey` so the UI shows the honest "expired" state instead of a dead link (the
+   *  artifact route already 404s on a null key). Tenant-scoped write (RLS); status untouched. */
+  async clearArtifactKeys(tx: Tx, jobId: string): Promise<void> {
+    await tx
+      .update(importJobs)
+      .set({
+        rejectedArtifactKey: null,
+        // jsonb `-` drops the key; a NULL options stays NULL (NULL - text = NULL).
+        options: sql`${importJobs.options} - 'errorReportKey'`,
+      })
+      .where(eq(importJobs.id, jobId));
+  },
+
   /** S-S2 (13 §2.3) — the NO-NEW-'skipped' monitor's census: uploads recorded `av_scan_status='skipped'`
    *  within the look-back window. `retry:%` children are EXCLUDED (they carry no new bytes and INHERIT the
    *  parent's verdict — a retry of a pre-scanner parent is not a scan bypass). Owner-connection count of

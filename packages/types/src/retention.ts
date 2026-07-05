@@ -31,6 +31,14 @@ export const retentionDataClass = z.enum([
   "consent_records",
   "contacts",
   "audit_log",
+  // OBJECT-STORE class (import-redesign 13 §4.4, S-S7): the import error-artifact pair (repair CSV + error
+  // report) — 90 d, enforced by the FILESTORE LIFECYCLE SWEEP (importArtifactSweep) + key-nulling, NOT by the
+  // DB retention engine (there is no artifact table; the class is registered so the retention surface stays
+  // ONE inventory — 16's posture). Deliberately NOT in DEFAULT_RETENTION_POLICIES below: the seed rows in
+  // 0025_retention_engine.sql must match that constant exactly, so the policy row rides the NEXT migration
+  // train together with a DEFAULT entry (doc-16 drift row records it). The sweep runs off env
+  // (IMPORT_ARTIFACT_TTL_DAYS, default 90) either way — enforcement never waited on the seed.
+  "import_artifacts",
 ]);
 export type RetentionDataClass = z.infer<typeof retentionDataClass>;
 

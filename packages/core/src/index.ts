@@ -77,6 +77,13 @@ export {
 // Object-store seam (15-bulk-import-design §3/§4): the FileStore port the bulk pipeline writes through + a
 // dev/test local-disk adapter. The prod S3 adapter is injected at the app composition root (kept out of core).
 export { diskFileStore, type FileStore } from "./storage/fileStore.ts";
+// Artifact/object lifecycle seam (import-redesign 13 §4.4, S-S7): the one job-object prefix + the
+// hard-purge deleter every import purge path (retention deleter, S-S8 DSAR fan-out) composes.
+export {
+  importJobObjectPrefix,
+  legacyRejectedRowsKey,
+  purgeImportJobObjects,
+} from "./import/artifactLifecycle.ts";
 // Malware-scanner seam (import-redesign 13 §2, S-S2 — the G08/Gate C port): core declares the contract +
 // the explicit stub default; the ClamAV clamd adapter lives in @leadwolf/integrations, env-selected at the
 // api/workers composition roots (MALWARE_SCANNER=clamav|stub). Fail-closed on a real engine's error.

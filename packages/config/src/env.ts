@@ -273,6 +273,13 @@ export const appEnvSchema = z
     // ceiling at the sidecar's throughput; clamd's own StreamMaxLength must be ≥ the upload ceiling
     // (13 §2.1: a file too big to scan is a file too big to accept).
     CLAMAV_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+    // ── S-S7 (13 §4.4): the import ARTIFACT lifecycle. TTL for the PII-bearing error-artifact pair
+    // (repair CSV + error report) — after this many days past the job's terminal, the leader-locked
+    // importArtifactSweep deletes the objects and NULLS the job row's artifact keys (the UI then shows the
+    // honest "expired" state; the artifact route already 404s a null key). The SOURCE object is NOT
+    // TTL'd here — it follows the job's own purge horizon. Sweep cadence below; both revert by env.
+    IMPORT_ARTIFACT_TTL_DAYS: z.coerce.number().int().positive().default(90),
+    IMPORT_ARTIFACT_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(6 * 3_600_000),
     // The sync→bulk promotion threshold (rows): an import larger than this is steered onto the bulk pipeline
     // rather than the inline `imports` queue. Consumed by the promotion logic; a sensible default until tuned.
     BULK_IMPORT_THRESHOLD_ROWS: z.coerce.number().int().positive().default(5000),
