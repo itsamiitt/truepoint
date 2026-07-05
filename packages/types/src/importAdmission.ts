@@ -27,6 +27,37 @@ export class FileTooLargeError extends AppError {
 }
 
 /**
+ * The measured import exceeds a published FAST-PATH ceiling at server-side routing (08 §1 / 12 §5, step S-I5):
+ * too many rows, or too many bytes, for the fast lane — and copy mode is not engaged yet (G07+G09 uncleared),
+ * so the honest answer is a refusal, not a dead-end toggle. 413 with the 12 §5 stable slug (`file_too_large`
+ * by default; `xlsx_too_large` for a spreadsheet). Carries the RFC-9457 quota members `limit` + `current`
+ * (+ `unit`) so the client renders the real ceiling and the overage (12 §5: "published in every rejecting
+ * problem response"). PII-free by construction — counts and a unit label only.
+ */
+export class ImportTooLargeError extends AppError {
+  constructor(args: {
+    limit: number;
+    current: number;
+    unit: "rows" | "bytes";
+    code?: FileTooLargeCode;
+    detail?: string;
+  }) {
+    const asMb = (n: number) => Math.floor(n / (1024 * 1024));
+    super({
+      status: 413,
+      code: args.code ?? "file_too_large",
+      title: "Import too large",
+      detail:
+        args.detail ??
+        (args.unit === "rows"
+          ? `This import has ${args.current.toLocaleString()} rows — above the ${args.limit.toLocaleString()}-row fast-path limit. Split the file and re-import.`
+          : `This upload is ${asMb(args.current)} MB — above the ${asMb(args.limit)} MB fast-path limit. Split the file and re-import.`),
+      extensions: { limit: args.limit, current: args.current, unit: args.unit },
+    });
+  }
+}
+
+/**
  * The upload's CONTENT is not an accepted format (13 §1.1: admission is by magic-byte sniffing, never the
  * extension or the declared Content-Type): a "CSV" presenting a known binary magic or NUL bytes, or an
  * ".xlsx" that is not an OOXML ZIP workbook. 415 with 08 §2.3's stable slug.

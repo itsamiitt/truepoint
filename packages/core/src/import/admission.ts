@@ -8,22 +8,28 @@
 
 import {
   ArchiveLimitsExceededError,
+  IMPORT_MAX_CSV_BYTES,
+  IMPORT_MAX_XLSX_BYTES,
+  IMPORT_MAX_XLSX_COLS,
+  IMPORT_MAX_XLSX_ROWS,
   ImportValidationError,
   UnsupportedMediaTypeError,
 } from "@leadwolf/types";
 
-// ── The ONE local constants spot for admission caps — S-P2 will centralize these as the shared, published
-// limit constants (12 §5). Do not scatter or duplicate these numbers; extend this block only.
-/** Max CSV file bytes — doc 12 §5's published launch ceiling (250 MB; between Salesforce 150 MB and HubSpot 512 MB). */
-export const IMPORT_CSV_MAX_BYTES = 250 * 1024 * 1024;
-/** Max XLSX (compressed workbook) bytes. SHIPPED-CODE-WINS drift note: 12 §5 publishes 10 MB for the
- *  fast-path pair, but that pair rides 08 S-I5's server-side routing (not shipped); the shipped parseXlsx
- *  ceiling is 25 MiB and stays authoritative until S-I5/S-P2 reconcile the published number. */
-export const IMPORT_XLSX_MAX_BYTES = 25 * 1024 * 1024;
-/** Max XLSX data rows (excludes the header) — shipped parseXlsx cap, unchanged by S-S1 (row ceilings ride 08 S-I5). */
-export const IMPORT_XLSX_MAX_ROWS = 100_000;
-/** Max XLSX header columns — shipped parseXlsx cap, unchanged. */
-export const IMPORT_XLSX_MAX_COLS = 256;
+// ── Admission caps. The published-product ceilings (12 §5) now live in the ONE shared source
+// `@leadwolf/types/importLimits.ts` (S-P2, TP-7) so admission and the web upload UI consume the SAME number;
+// these re-exports keep the local names (parseXlsx / uploadAdmission import them from here) byte-identical
+// while centralizing the value. The hardening caps BELOW (multipart / sniff / encoding / zip-bomb) are
+// admission-internal SECURITY controls — not published product limits — so they stay local to this file.
+/** Max CSV file bytes — 12 §5 launch ceiling (re-exported from the single source). */
+export const IMPORT_CSV_MAX_BYTES = IMPORT_MAX_CSV_BYTES;
+/** Max XLSX (compressed workbook) bytes — the shipped 25 MiB admission cap (12 §5 drift documented in
+ *  importLimits.ts; SHIPPED-CODE-WINS until the S-P4 soak reconciles the published 10 MB). */
+export const IMPORT_XLSX_MAX_BYTES = IMPORT_MAX_XLSX_BYTES;
+/** Max XLSX data rows (excludes the header). */
+export const IMPORT_XLSX_MAX_ROWS = IMPORT_MAX_XLSX_ROWS;
+/** Max XLSX header columns. */
+export const IMPORT_XLSX_MAX_COLS = IMPORT_MAX_XLSX_COLS;
 /** Whole-request byte ceiling for the import multipart body: the largest admissible file + form overhead
  *  (mapping JSON, policy fields, multipart framing). Enforced on Content-Length AND by counting bytes on
  *  the stream, aborting at ceiling+1 — a lying Content-Length never buffers past the cap (13 §1.2). */
