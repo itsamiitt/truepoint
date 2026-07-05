@@ -24,8 +24,7 @@ import {
   type ImportJobProgressDelta,
   type ImportJobRowInsert,
 } from "@leadwolf/db";
-import type { ImportFastInput, ImportSummary } from "@leadwolf/types";
-import { rejectReasonToken } from "@leadwolf/types";
+import { type ImportFastInput, type ImportSummary, rejectReasonToken } from "@leadwolf/types";
 import type { FileStore } from "../storage/fileStore.ts";
 import { writeImportArtifacts } from "./artifactWriter.ts";
 import { ACTIVE_IMPORT_STATUSES } from "./importFairness.ts";

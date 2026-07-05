@@ -34,8 +34,7 @@
 // honest gap 13 acknowledges; artifacts are only ever generated while the dual gate is on, which in prod means
 // after G07's encrypting adapter lands. Recorded here so the gap is never silently assumed closed.
 
-import type { RejectedRow } from "@leadwolf/types";
-import { rejectReasonToken } from "@leadwolf/types";
+import { type RejectedRow, rejectReasonToken } from "@leadwolf/types";
 import type { FileStore } from "../storage/fileStore.ts";
 
 /** The appended repair-CSV columns (the Salesforce `sf__Error` convention, 03 §6.1 [58]). `tp__` namespaced so
