@@ -14,6 +14,7 @@ import {
   lowBalanceQuerySchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
+import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
 
@@ -156,8 +157,7 @@ billingRoutes.get("/economics/by-tenant/export", async (c) => {
       ].join(","),
     );
   }
-  c.header("content-type", "text/csv; charset=utf-8");
-  c.header("content-disposition", 'attachment; filename="billing-economics-by-tenant.csv"');
+  setCsvDownloadHeaders(c, "billing-economics-by-tenant.csv");
   return c.body(lines.join("\r\n"));
 });
 

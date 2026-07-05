@@ -35,6 +35,7 @@ import {
   validationRuleSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
+import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
 import { bulkFileStore } from "../import/bulkStore.ts";
@@ -557,8 +558,7 @@ dataRoutes.get("/approvals/:id/export", requireCapability("data:export"), async 
   } catch {
     throw new NotFoundError("Export artifact not found.");
   }
-  c.header("content-type", "text/csv; charset=utf-8");
-  c.header("content-disposition", `attachment; filename="staff-export-${id}.csv"`);
+  setCsvDownloadHeaders(c, `staff-export-${id}.csv`);
   // Merged-types fallout: c.body's Data type rejects a Buffer/Uint8Array here — hand it a fresh ArrayBuffer
   // slice (exact bytes; runtime behavior unchanged). See contacts-bulk export for the same shape.
   return c.body(

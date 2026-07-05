@@ -37,6 +37,7 @@ import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueBulkImportDrive } from "./bulkQueue.ts";
 import { bulkFileStore } from "./bulkStore.ts";
 import { requireImportCreateGrant } from "./createGrant.ts";
+import { admittedImportFormData, assertBulkUploadAdmissible } from "./uploadAdmission.ts";
 
 export const bulkImportRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -152,8 +153,13 @@ bulkImportRoutes.post("/", requireImportCreateGrant(), async (c) => {
   if (!tenantEnabled)
     throw new ForbiddenError("bulk_import_disabled", "Bulk import is not enabled.");
 
-  const form = await c.req.formData();
+  // S-S1 admission envelope (13 §1): byte-count-capped multipart parse (a lying Content-Length aborts
+  // mid-stream, never buffers past the ceiling) + multipart hardening, then per-file content admission —
+  // the bulk drive parses CSV only, so .xlsx/ZIP-magic/binary uploads are refused HERE with an honest
+  // 415/413/422 instead of being streamed to the store and failed in the worker.
+  const form = await admittedImportFormData(c.req.raw);
   const { file, sourceName: src, mapping } = await parseBulkImportForm(form);
+  await assertBulkUploadAdmissible(file);
 
   // Explicit conflict policy (G-IMP-5) — default `skip` (no silent overwrite) when the field is absent.
   const policyRaw = form.get("conflictPolicy");

@@ -20,12 +20,15 @@
 
 import { ImportValidationError } from "@leadwolf/types";
 import * as XLSX from "xlsx";
+import {
+  IMPORT_XLSX_MAX_BYTES as MAX_BYTES,
+  IMPORT_XLSX_MAX_COLS as MAX_COLS,
+  IMPORT_XLSX_MAX_ROWS as MAX_ROWS,
+} from "./admission.ts";
 import type { ParsedCsv, RawRow } from "./columnMap.ts";
 
-/** Footprint caps (truepoint-security / list-plan/03 §6 "Footprint caps"). Reject before materializing. */
-const MAX_ROWS = 100_000; // data rows (excludes the header)
-const MAX_COLS = 256; // header columns
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MiB compressed workbook — a worker-safe ceiling
+// Footprint caps (truepoint-security / list-plan/03 §6 "Footprint caps") now live in admission.ts — the ONE
+// constants spot for the S-S1 upload envelope (S-P2 will centralize) — and are aliased to the original names.
 
 /** Strip a leading spreadsheet-formula trigger so a re-exported value can't execute (CSV-injection class). */
 function neutralizeFormula(value: string): string {

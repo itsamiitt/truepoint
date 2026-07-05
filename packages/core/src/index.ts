@@ -6,6 +6,20 @@
 export { runImport, type RunImportInput } from "./import/runImport.ts";
 export { parseImportFile, parseCsv, isXlsxFile, type ParsedCsv } from "./import/parseFile.ts";
 export { parseXlsx } from "./import/parseXlsx.ts";
+// Upload-admission envelope (import-redesign 13 §1, S-S1): content sniffing (magic bytes, encoding, NUL),
+// the admission cap constants (the ONE local spot — S-P2 centralizes), consumed by the api upload routes.
+export {
+  IMPORT_CSV_MAX_BYTES,
+  IMPORT_CSV_SNIFF_PREFIX_BYTES,
+  IMPORT_MULTIPART_MAX_FIELD_BYTES,
+  IMPORT_MULTIPART_MAX_PARTS,
+  IMPORT_UPLOAD_REQUEST_MAX_BYTES,
+  IMPORT_XLSX_MAX_BYTES,
+  assertCsvPrefixAdmissible,
+  assertXlsxAdmissible,
+  decodeAdmittedCsv,
+  hasZipMagic,
+} from "./import/admission.ts";
 // Constant-memory streaming CSV reader for the bulk-import drive path (15-bulk-import-design §3) — parses
 // byte-identically to the sync parseCsv (the quoting state machine mirrors parseFile.ts parseMatrix). CSV only.
 export { streamParseCsv } from "./import/streamParse.ts";

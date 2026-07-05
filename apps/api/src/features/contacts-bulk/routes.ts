@@ -32,6 +32,7 @@ import {
   bulkTagsSchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
+import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
@@ -192,8 +193,7 @@ contactsBulkRoutes.post("/export", async (c) => {
     contactIds: parsed.data.contactIds,
     criteria: parsed.data.criteria,
   });
-  c.header("content-type", "text/csv; charset=utf-8");
-  c.header("content-disposition", `attachment; filename="contacts-export-${affected}.csv"`);
+  setCsvDownloadHeaders(c, `contacts-export-${affected}.csv`);
   c.header("x-affected-count", String(affected));
   return c.body(csv, 200);
 });
@@ -254,8 +254,7 @@ contactsBulkRoutes.get("/export/revealed/:exportId", async (c) => {
   } catch {
     throw new NotFoundError("Export not found.");
   }
-  c.header("content-type", "text/csv; charset=utf-8");
-  c.header("content-disposition", `attachment; filename="contacts-revealed-${exportId}.csv"`);
+  setCsvDownloadHeaders(c, `contacts-revealed-${exportId}.csv`);
   // Merged-types fallout: c.body's Data type rejects a Buffer/Uint8Array here — hand it a fresh ArrayBuffer
   // slice (exact bytes; runtime behavior unchanged).
   return c.body(

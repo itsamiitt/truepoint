@@ -6,12 +6,7 @@
 // workspace is taken from the VERIFIED token via the tenancy middleware, never the request body (16 §7); the
 // client-supplied listId is validated against that workspace before enqueue (list-plan D4 — never trusted).
 
-import {
-  assertListInWorkspace,
-  buildImportPreview,
-  isXlsxFile,
-  parseImportFile,
-} from "@leadwolf/core";
+import { assertListInWorkspace, buildImportPreview, parseImportFile } from "@leadwolf/core";
 import {
   type ColumnMapping,
   DEFAULT_CONFLICT_POLICY,
@@ -37,6 +32,7 @@ import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { requireImportCreateGrant } from "./createGrant.ts";
 import { enqueueImport, getImportJob } from "./queue.ts";
+import { admittedImportFormData, readAdmittedImportContent } from "./uploadAdmission.ts";
 
 export const importRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -90,14 +86,9 @@ async function parseImportForm(form: FormData): Promise<{
   return { file, sourceName: parsedSource.data, mapping: parsedMapping.data };
 }
 
-/**
- * Read the upload as the right shape for its format (list-plan/03 §2.1): an .xlsx file flows as BYTES
- * (`arrayBuffer`), CSV flows as TEXT. `parseImportFile` dispatches on the same filename, so the two always
- * agree — the parser rejects a binary buffer for a .csv (or text for an .xlsx) cleanly rather than mis-parsing.
- */
-async function readImportContent(file: File): Promise<string | Uint8Array> {
-  return isXlsxFile(file.name) ? new Uint8Array(await file.arrayBuffer()) : file.text();
-}
+// Reading the upload (bytes for .xlsx, decoded text for CSV) now runs through the S-S1 admission envelope
+// (uploadAdmission.ts `readAdmittedImportContent`): per-format byte caps, magic-byte sniffing, and the
+// BOM-aware encoding gate — 13 §1.1–§1.3. `parseImportFile` still dispatches on the same filename.
 
 /**
  * The optional "import into list" target (list-plan/03 §2.2). Returns the validated `listId` (uuid) or
@@ -120,9 +111,10 @@ importRoutes.post("/preview", requireImportCreateGrant(), async (c) => {
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
 
-  const form = await c.req.formData();
+  // S-S1 admission envelope: byte-count-capped multipart parse + hardening caps, then content sniffing.
+  const form = await admittedImportFormData(c.req.raw);
   const { file, mapping } = await parseImportForm(form);
-  const parsed = parseImportFile(await readImportContent(file), file.name);
+  const parsed = parseImportFile(await readAdmittedImportContent(file), file.name);
   const preview: ImportPreview = buildImportPreview(parsed.rows, mapping);
   return c.json(preview, 200);
 });
@@ -136,7 +128,8 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
   const tenantId = c.get("tenantId");
   const claims = c.get("claims");
 
-  const form = await c.req.formData();
+  // S-S1 admission envelope: byte-count-capped multipart parse + hardening caps, then content sniffing.
+  const form = await admittedImportFormData(c.req.raw);
   const { file, sourceName: src, mapping } = await parseImportForm(form);
 
   // Explicit conflict policy (G-IMP-5) — default `skip` (no silent overwrite) when the field is absent.
@@ -154,7 +147,7 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
   const listId = parseListTarget(form);
   if (listId) await assertListInWorkspace({ scope: { tenantId, workspaceId }, listId });
 
-  const parsed = parseImportFile(await readImportContent(file), file.name);
+  const parsed = parseImportFile(await readAdmittedImportContent(file), file.name);
   const jobId = await enqueueImport({
     scope: { tenantId, workspaceId },
     importedByUserId: claims.sub,

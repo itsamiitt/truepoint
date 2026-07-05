@@ -34,6 +34,7 @@ import {
   usageQuerySchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
+import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
@@ -350,8 +351,7 @@ creditsRoutes.get("/usage", requireRole("owner", "admin", "member", "viewer"), a
         ].join(","),
       );
     }
-    c.header("content-type", "text/csv; charset=utf-8");
-    c.header("content-disposition", 'attachment; filename="credit-usage.csv"');
+    setCsvDownloadHeaders(c, "credit-usage.csv");
     return c.body(lines.join("\r\n"));
   }
 
