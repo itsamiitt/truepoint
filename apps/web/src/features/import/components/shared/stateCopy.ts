@@ -85,6 +85,10 @@ export function stateHeadline(
   }
 }
 
+/** The pinned stop-remainder cancel-confirm body (11 §4.2 — carried verbatim; 08 §2.2 cancellation ≠ undo). */
+export const CANCEL_CONFIRM_BODY =
+  "Stops the remaining rows. Contacts already imported are kept — cancelling doesn’t undo them.";
+
 /** Terminal = the poll should stop; the row will not change further. */
 export function isTerminalV2(status: ImportJobStatusV2): boolean {
   return (

@@ -8,6 +8,8 @@
 "use client";
 
 import { PageHeader } from "@/components/PageHeader";
+import { useSessionIdentity } from "@/lib/useSessionIdentity";
+import { isWorkspaceAdmin } from "@/lib/useSessionRole";
 import { EmptyState, Progress, Spinner, StateSwitch, StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import type { ImportJobCounts } from "@leadwolf/types";
 import { ArrowLeft, Download, Upload } from "lucide-react";
@@ -20,6 +22,7 @@ import { type ArtifactKind, type ImportJobDetail, downloadArtifact } from "../ap
 import { rejectedRowsToCsv } from "../rejectedRowsCsv";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import {
+  CANCEL_CONFIRM_BODY,
   completionCounts,
   isCancellableV2,
   isRetryableV2,
@@ -92,26 +95,43 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
         : "Could not load this import"
       : undefined;
 
+  const { userId, role } = useSessionIdentity();
+
   const status = detail
     ? detail.statusV2 ?? legacyStatusToV2(detail.status)
     : null;
   const counts = toCounts(detail);
+  const terminal = status != null && isTerminalV2(status);
+  // v2 (gate-on) jobs carry `counts` + a `rejectHistogram`; legacy jobs carry only `summary`. The v2 artifact
+  // pair + cancel/retry-failed verbs only exist for v2 jobs (a legacy/non-uuid id 404s server-side); legacy
+  // keeps its client-side rejected-rows download.
+  const isV2 = detail?.counts != null;
+  // Percent: v2 rows carry the derived `percent`; a RUNNING legacy job has only the poll `progress` lanes —
+  // use them so the gate-off hand-off page never sits at 0% while rows land. No NaN: totals guarded > 0.
+  const legacyProgress = detail?.progress ?? null;
   const percent =
     detail?.percent ??
-    (status != null && isTerminalV2(status)
+    (terminal
       ? 1
-      : counts && counts.total > 0
-        ? (counts.total - counts.unprocessed) / counts.total
-        : 0);
+      : legacyProgress && legacyProgress.total > 0
+        ? legacyProgress.processed / legacyProgress.total
+        : counts && counts.total > 0
+          ? (counts.total - counts.unprocessed) / counts.total
+          : 0);
   const filename = detail?.sourceFilename ?? "Import";
   const summary = counts ? completionCounts(counts) : null;
-  const terminal = status != null && isTerminalV2(status);
-  const cancellable = status != null && isCancellableV2(status);
-  const retryable = status != null && isRetryableV2(status);
+  // 10 §2.1 verb×role, mirrored so no role ever sees a button the server would refuse (server-enforced either
+  // way): cancel/retry = creator ∪ elevated (creator honored regardless of role; system jobs elevated-only);
+  // artifacts = creator (member+, viewers never) ∪ elevated — never widened by sharing. Fails closed while
+  // the best-effort identity probe is unresolved.
+  const elevated = isWorkspaceAdmin(role);
+  const creatorId = detail?.createdBy?.userId ?? null;
+  const isCreator = userId != null && creatorId === userId;
+  const mayAct = elevated || isCreator;
+  const mayDownloadArtifacts = elevated || (isCreator && role != null && role !== "viewer");
+  const cancellable = isV2 && mayAct && status != null && isCancellableV2(status);
+  const retryable = isV2 && mayAct && status != null && isRetryableV2(status);
   const legacyRejected = detail?.summary?.rejectedRows ?? [];
-  // v2 (gate-on) jobs carry `counts` + a `rejectHistogram`; legacy jobs carry only `summary`. The v2 artifact
-  // pair + retry-failed verb only exist for v2 jobs; legacy keeps its client-side rejected-rows download.
-  const isV2 = detail?.counts != null;
   const histogram = Object.entries(
     detail?.rejectHistogram ?? detail?.summary?.rejectHistogram ?? {},
   ).sort((a, b) => b[1] - a[1]);
@@ -120,7 +140,10 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
   function onConfirmCancel() {
     cancel.mutate(jobId, {
       onSuccess: () => setConfirmOpen(false),
-      onError: () => setConfirmOpen(false),
+      onError: (e) => {
+        setConfirmOpen(false);
+        toast.error("Couldn’t cancel", e instanceof Error ? e.message : "Please try again.");
+      },
     });
   }
 
@@ -245,15 +268,25 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
               ) : null}
 
               {terminal && isV2 && rejectedCount > 0 ? (
-                <p className={styles.muted} style={{ margin: 0, fontSize: 13 }}>
-                  These files contain the affected rows’ contact data — handle and share them securely.
-                </p>
+                mayDownloadArtifacts ? (
+                  <p className={styles.muted} style={{ margin: 0, fontSize: 13 }}>
+                    These files contain the affected rows’ contact data — handle and share them securely.
+                  </p>
+                ) : (
+                  // 10 §2.1 artifact gate (creator ∪ elevated, member+): an honest line, not a hidden section.
+                  <p className={styles.muted} style={{ margin: 0, fontSize: 13 }}>
+                    Only the importer or a workspace admin can download the error files.
+                  </p>
+                )
               ) : null}
 
-              {terminal && (rejectedCount > 0 || retryable || legacyRejected.length > 0) ? (
+              {terminal &&
+              ((isV2 && rejectedCount > 0 && mayDownloadArtifacts) ||
+                retryable ||
+                (!isV2 && legacyRejected.length > 0)) ? (
                 <div className={styles.drawerActions}>
                   {/* v2 (gate-on) jobs: the PII-bearing artifact pair via the proxied+audited endpoint. */}
-                  {isV2 && rejectedCount > 0 ? (
+                  {isV2 && rejectedCount > 0 && mayDownloadArtifacts ? (
                     <>
                       <TpButton
                         variant="secondary"
@@ -283,7 +316,7 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
                       Download rejected rows ({legacyRejected.length.toLocaleString()})
                     </TpButton>
                   ) : null}
-                  {isV2 && retryable ? (
+                  {retryable ? (
                     <TpButton
                       variant="primary"
                       size="sm"
@@ -305,7 +338,7 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         title="Cancel this import?"
-        body="We’ll stop processing the remaining rows. Rows already imported are kept — cancelling doesn’t undo them."
+        body={CANCEL_CONFIRM_BODY}
         confirmLabel="Cancel import"
         cancelLabel="Keep running"
         destructive

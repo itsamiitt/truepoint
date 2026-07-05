@@ -7,6 +7,8 @@
 // action land here at S-U6. Public slice component.
 "use client";
 
+import { useSessionIdentity } from "@/lib/useSessionIdentity";
+import { isWorkspaceAdmin } from "@/lib/useSessionRole";
 import { Drawer, Progress, Spinner, StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import type { ImportJobListItem } from "@leadwolf/types";
 import { useState } from "react";
@@ -14,6 +16,7 @@ import { useImportJob } from "../hooks/useImportJob";
 import { useCancelImport } from "../hooks/useImportMutations";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import {
+  CANCEL_CONFIRM_BODY,
   completionCounts,
   isCancellableV2,
   legacyStatusToV2,
@@ -54,6 +57,7 @@ export function ImportJobDrawer({
   const toast = useToast();
   const cancel = useCancelImport();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const { userId, role } = useSessionIdentity();
 
   // Fresh detail preferred; the clicked row keeps the drawer populated while it loads.
   const { data: fresh } = useImportJob(open ? jobId : null);
@@ -67,7 +71,12 @@ export function ImportJobDrawer({
   const completedAt = fresh?.completedAt ?? fallback?.completedAt ?? null;
 
   const summary = counts ? completionCounts(counts) : null;
-  const cancellable = status != null && isCancellableV2(status);
+  // Cancel = creator ∪ elevated (10 §2.1; creator honored regardless of role, system jobs elevated-only).
+  // Server-enforced either way — this only avoids offering a button the server would refuse. Fails closed
+  // while the best-effort identity probe is unresolved.
+  const creatorId = fresh?.createdBy?.userId ?? fallback?.createdBy.userId ?? null;
+  const mayCancel = isWorkspaceAdmin(role) || (userId != null && creatorId === userId);
+  const cancellable = status != null && isCancellableV2(status) && mayCancel;
 
   function onConfirmCancel() {
     if (jobId == null) return;
@@ -157,7 +166,7 @@ export function ImportJobDrawer({
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         title="Cancel this import?"
-        body="We’ll stop processing the remaining rows. Rows already imported are kept — cancelling doesn’t undo them."
+        body={CANCEL_CONFIRM_BODY}
         confirmLabel="Cancel import"
         cancelLabel="Keep running"
         destructive

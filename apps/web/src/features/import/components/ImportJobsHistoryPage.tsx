@@ -8,7 +8,8 @@
 "use client";
 
 import { PageHeader } from "@/components/PageHeader";
-import { isWorkspaceAdmin, useSessionIdentity } from "@/lib/useSessionIdentity";
+import { useSessionIdentity } from "@/lib/useSessionIdentity";
+import { isWorkspaceAdmin } from "@/lib/useSessionRole";
 import { DataTable, EmptyState, Progress, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
 import type { Column } from "@leadwolf/ui";
 import type { ImportJobListItem } from "@leadwolf/types";
