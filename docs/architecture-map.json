@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1403,
-  "fileSetHash": "sha256:0df47733e68ec028882b62f49cb74cb534676fae56b051ccb7b59238612780c0",
+  "fileCount": 1407,
+  "fileSetHash": "sha256:d8b2c4efea0ee240303d62520b652abc55e30712b1edef7e078c8143f4a525cd",
   "features": {
     "account-search": {
       "web": [],
@@ -580,6 +580,7 @@
         "packages/core/src/enrichment/waterfallBulk.test.ts"
       ],
       "db": [
+        "packages/db/src/repositories/eventOutboxRepository.ts",
         "packages/db/src/repositories/outboxRepository.ts",
         "packages/db/src/repositories/providerCallRepository.ts"
       ],
@@ -764,6 +765,7 @@
         "packages/core/src/import/prepareContact.ts",
         "packages/core/src/import/preview.test.ts",
         "packages/core/src/import/preview.ts",
+        "packages/core/src/import/rejectReason.test.ts",
         "packages/core/src/import/rejectedRowsCsv.test.ts",
         "packages/core/src/import/rejectedRowsCsv.ts",
         "packages/core/src/import/runBulkImport.ts",
@@ -783,6 +785,9 @@
       ],
       "workers": [
         "apps/workers/src/queues/bulkImports.ts",
+        "apps/workers/src/queues/importNotify.ts",
+        "apps/workers/src/queues/importPromotionSweep.ts",
+        "apps/workers/src/queues/importReaperSweep.ts",
         "apps/workers/src/queues/imports.ts"
       ],
       "integrations": []
@@ -2308,7 +2313,7 @@
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/erSweep.ts",
     "apps/workers/src/queues/firmographics.ts",
-    "apps/workers/src/queues/importPromotionSweep.ts",
+    "apps/workers/src/queues/importReaperSweep.test.ts",
     "apps/workers/src/queues/masterBackfill.test.ts",
     "apps/workers/src/queues/masterBackfill.ts",
     "apps/workers/src/queues/masterBackfillSweep.ts",
@@ -2331,7 +2336,6 @@
     "packages/db/src/repositories/enrichmentJobRepository.ts",
     "packages/db/src/repositories/enrichmentPolicyRepository.ts",
     "packages/db/src/repositories/erRepository.ts",
-    "packages/db/src/repositories/eventOutboxRepository.ts",
     "packages/db/src/repositories/evidenceRepository.ts",
     "packages/db/src/repositories/featureFlagRepository.ts",
     "packages/db/src/repositories/impersonationRepository.ts",

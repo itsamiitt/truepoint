@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1403 source files · 76 code-bearing domains · 22 shared areas · 47 domain-vocabulary warnings · 60
+> **1407 source files · 76 code-bearing domains · 22 shared areas · 47 domain-vocabulary warnings · 59
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
@@ -100,8 +100,12 @@ apps/                           # deployable processes (thin transport adapters)
   `JOB_VISIBILITY_SCOPED` + `job_visibility_scoped`, flag-off = workspace-wide as before)
 - **api:** `features/import/` (POST `/imports` → `202` + `jobId`; preview; `queue.ts` BullMQ producer; creates gated by
   `requireImportCreateGrant`) · `features/import-mapping-templates/` (mapping-template CRUD, role-gated manage) ·
-  `features/settings/` (GET/PUT `/settings/import-policy`, owner/admin + in-tx audit) · `middleware/jobViewer.ts`
-  (builds the viewer, fail-closed dual gate) · **workers:** `queues/imports.ts`
+  `features/settings/` (GET/PUT `/settings/import-policy`, owner/admin + in-tx audit) · `features/import/artifactRoutes.ts`
+  (gated proxied download of the repair-CSV/error-report pair) · `middleware/jobViewer.ts` (builds the viewer, fail-closed
+  dual gate) · **workers:** `queues/imports.ts` · `queues/bulkImports.ts` (fast kind) · `queues/importReaperSweep.ts`
+  (orphan recovery + stall) · `queues/importPromotionSweep.ts` (deferred→queued) · `queues/importNotify.ts` (outbox
+  `import.notify` consumer → in-app notification, S-Q4). Import lifecycle now rides the ADR-0027 transactional outbox
+  (`import.rollups`/`import.notify`, G06) — all Phase-1 additions dark behind `IMPORT_V2_ENABLED`
 - **web:** `features/import/` — `ImportWizard` (file→map→preview→confirm; the dead-end "Large file" toggle is gone —
   server will decide the path), `ImportsLanding` (`/imports` scaffold; `/import` → redirect `/imports/new`),
   `ContactsTable`, `importJob.ts` (poll→UI state), `rejectedRowsCsv.ts`; root `providers.tsx` (TanStack Query seam)

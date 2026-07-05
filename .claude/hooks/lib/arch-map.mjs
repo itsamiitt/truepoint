@@ -67,6 +67,9 @@ export const QUEUE_DOMAIN = {
   scoring: "scoring",
   imports: "import",
   bulkImports: "import",
+  importNotify: "import",
+  importReaperSweep: "import",
+  importPromotionSweep: "import",
   dataRetentionSweep: "compliance",
   "crm-sync": "crm-sync",
   outreach: "outreach",
@@ -119,9 +122,11 @@ export const REPO_DOMAIN = {
   intent_signal: "scoring",
   providerCall: "enrichment",
   provider_call: "enrichment",
-  // The transactional outbox (worker_outbox, ADR-0027): generic mechanism, but its only topic today is the
-  // bulk-enrichment confirm→drive publish — re-home if a second domain adopts it.
+  // The transactional outbox (worker_outbox + event_outbox, ADR-0027): generic mechanism. Originally only the
+  // bulk-enrichment confirm→drive publish; import now co-adopts it (import.rollups/import.notify, S-Q3/S-Q4).
+  // Shared infra in practice; kept under enrichment (first + primary producer) since the map has no "shared repo".
   outbox: "enrichment",
+  eventOutbox: "enrichment",
   reveal: "reveal",
   credit: "billing",
   stripeCustomer: "billing",
