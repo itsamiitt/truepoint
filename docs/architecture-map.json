@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1366,
-  "fileSetHash": "sha256:a61f3a87e097172f78dbc3fa029f4c7cebfce57a1562ab0a59d9dbf018b4d12d",
+  "fileCount": 1399,
+  "fileSetHash": "sha256:cb17e6d333d0d3fff5a76c6fe15be59ee880403c346a8b3b2a7b2291a3e3cfb8",
   "features": {
     "account-search": {
       "web": [],
@@ -1879,6 +1879,51 @@
       "apps/auth/src/shared/OtpInput.tsx",
       "apps/auth/src/shared/SubmitButton.tsx",
       "apps/auth/src/shared/TurnstileWidget.tsx"
+    ],
+    "apps/extension": [
+      "apps/extension/manifest.config.ts",
+      "apps/extension/scripts/gen-icons.mjs",
+      "apps/extension/vite.config.ts"
+    ],
+    "apps/extension/background": [
+      "apps/extension/src/background/api/client.ts",
+      "apps/extension/src/background/auth/module.ts",
+      "apps/extension/src/background/bus/index.ts",
+      "apps/extension/src/background/config/remoteConfig.ts",
+      "apps/extension/src/background/context.ts",
+      "apps/extension/src/background/eventStream.ts",
+      "apps/extension/src/background/events/manager.ts",
+      "apps/extension/src/background/index.ts",
+      "apps/extension/src/background/queue/captureQueue.ts",
+      "apps/extension/src/background/queue/scheduler.ts",
+      "apps/extension/src/background/telemetry/telemetry.ts"
+    ],
+    "apps/extension/content": [
+      "apps/extension/src/content/adapters/linkedin/index.ts",
+      "apps/extension/src/content/adapters/registry.ts",
+      "apps/extension/src/content/adapters/types.ts",
+      "apps/extension/src/content/extract/dom.ts",
+      "apps/extension/src/content/hovercard/index.ts",
+      "apps/extension/src/content/index.ts",
+      "apps/extension/src/content/observer.ts"
+    ],
+    "apps/extension/i18n": [
+      "apps/extension/src/i18n/index.ts",
+      "apps/extension/src/i18n/locales/en.ts"
+    ],
+    "apps/extension/shared": [
+      "apps/extension/src/shared/client.ts",
+      "apps/extension/src/shared/env.ts",
+      "apps/extension/src/shared/idb.ts",
+      "apps/extension/src/shared/messages.ts",
+      "apps/extension/src/shared/storage.ts",
+      "apps/extension/src/shared/types.ts"
+    ],
+    "apps/extension/ui": [
+      "apps/extension/src/ui/panel/Panel.tsx",
+      "apps/extension/src/ui/panel/main.tsx",
+      "apps/extension/src/ui/popup/Popup.tsx",
+      "apps/extension/src/ui/popup/main.tsx"
     ],
     "apps/web/app": [
       "apps/web/src/app/(public)/pricing/page.tsx",
