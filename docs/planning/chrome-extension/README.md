@@ -14,8 +14,9 @@ server seam already built.
 The series spans three halves: **engineering** (`00–05` + `ADR-0043`) — teardown, MV3 architecture,
 security/perf, standards, roadmap; **product** (`06–09`) — the feature catalogue, the honest
 market-gap/differentiation analysis, the minimal-modern UX/design language, and the product-level
-(feature) architecture; and **auth & brand** (`10–11` + `ADR-0044`) — the enterprise authentication
-architecture and the branding/visual-language plan.
+(feature) architecture; and **auth & brand** (`10–12` + `ADR-0044/0045`) — the enterprise authentication
+architecture (`10`), the branding/visual-language plan (`11`), and the auth gap analysis + companion-window
+remediation (`12`, the corrected auth design).
 
 ## 0. Read first — do not duplicate
 
@@ -50,10 +51,12 @@ Every design doc below **cites** those rather than restating them.
 | **07** | [`07-market-gap-and-differentiation.md`](./07-market-gap-and-differentiation.md) | **Market gap:** extension-level competitive matrix + the *honest* wedge — the three differentiators that survived adversarial testing, and the five "gaps" that are really table-stakes. |
 | **08** | [`08-ux-design-language.md`](./08-ux-design-language.md) | **Minimal-modern design:** the four in-page surfaces (hover-card, side-panel, popup, inline badge), `--tp-*` tokens, four states, motion, WCAG 2.2 AA, shadow-DOM isolation, and ASCII wireframes. |
 | **09** | [`09-product-architecture.md`](./09-product-architecture.md) | **Product architecture:** the ten feature modules over a shared `subjectKey`, the five-layer narrative, and the entitlement/consent gating spine — with three feature-level Mermaid diagrams. |
-| **10** | [`10-extension-authentication.md`](./10-extension-authentication.md) | **Enterprise auth architecture:** the cross-origin problem, the silent-re-auth model (vs SW-refresh-token), research, full auth lifecycle + every flow (sequence diagrams), security design, backend changes required, and the AuthModule fix-list. |
+| **10** | [`10-extension-authentication.md`](./10-extension-authentication.md) | **Enterprise auth architecture (⚠ Model A superseded by `12`):** the cross-origin problem, research, full auth lifecycle + every flow (sequence diagrams), security design, backend changes required. Its launchWebAuthFlow primary is superseded — read `12`. |
 | **11** | [`11-extension-branding.md`](./11-extension-branding.md) | **Branding & visual language:** the three-chevron mark + real icon assets, Cobalt/Ink tokens, Geist type, brand voice, and per-surface branding (toolbar, popup, auth pages, states, notifications, onboarding, profile, workspace switcher). |
+| **12** | [`12-extension-auth-gap-analysis-and-remediation.md`](./12-extension-auth-gap-analysis-and-remediation.md) | **Auth gap analysis & fix:** why auth fails today (launchWebAuthFlow never captures the code; the "tab" symptom), how enterprise extensions really authenticate, the ranked gap register, and the **companion-window** remediation (popup web login + `externally_connectable` handoff + rotating SW refresh token). |
 | ADR | [`../decisions/ADR-0043-chrome-extension-architecture.md`](../decisions/ADR-0043-chrome-extension-architecture.md) | The MV3 architecture decisions (least-privilege, thin-producer, compliant capture). |
-| ADR | [`../decisions/ADR-0044-extension-authentication.md`](../decisions/ADR-0044-extension-authentication.md) | The auth decisions (silent re-auth, no client refresh token, required backend changes). |
+| ADR | [`../decisions/ADR-0044-extension-authentication.md`](../decisions/ADR-0044-extension-authentication.md) | ⚠ **Superseded by ADR-0045.** The original launchWebAuthFlow silent-re-auth decision. |
+| ADR | [`../decisions/ADR-0045-extension-auth-companion-window.md`](../decisions/ADR-0045-extension-auth-companion-window.md) | The corrected auth decision: companion-window login + `externally_connectable` handoff + extension-scoped rotating refresh token. |
 
 ## 2. Coverage map — the 20 requested deliverables
 
@@ -91,16 +94,17 @@ Every design doc below **cites** those rather than restating them.
 | Product / feature-level architecture | `09` (ten modules, five layers, gating spine, diagrams) |
 | Commercial tiering (Free/Pro/Enterprise) | `06` §6–§7 |
 
-### Auth & brand deliverables (added in the `10–11` half)
+### Auth & brand deliverables (added in the `10–12` half)
 
 | Theme | Where |
 |---|---|
-| Enterprise authentication architecture | `10` (silent re-auth vs SW-token, lifecycle, backend changes) |
-| Authentication research (enterprise extensions, OAuth/PKCE/JWT) | `10` Phase 1 |
-| Security model (token storage, rotation, revocation, MFA/SSO future) | `10` Phase 3 |
-| Every authentication flow (sequence diagrams + recovery) | `10` Phase 4 |
-| Auth implementation roadmap + folder structure + tests | `10` Phase 6 |
-| Backend/API changes the extension auth requires | `10` §7 |
+| Enterprise authentication architecture | `10` (⚠ launchWebAuthFlow primary superseded by `12`) |
+| Authentication research (enterprise extensions, OAuth/PKCE/JWT) | `10` Phase 1, `12` §3 |
+| Security model (token storage, rotation, revocation, MFA/SSO future) | `10` Phase 3, `12` §7 |
+| Every authentication flow (sequence diagrams + recovery) | `10` Phase 4, `12` §6 |
+| **Why auth fails today + the fix (companion window)** | **`12`** (root cause, gap register, remediation) |
+| Backend/API changes the extension auth requires | `10` §7, `12` §8 |
+| The corrected auth decision | `ADR-0045` (supersedes `ADR-0044`) |
 | Branding & visual language (mark, tokens, voice, per-surface) | `11` |
 
 ## 3. Operating rules (carried from `CLAUDE.md`)

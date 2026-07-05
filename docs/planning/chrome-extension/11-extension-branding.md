@@ -1,7 +1,7 @@
 # 11 — Extension Branding & Visual Language
 
 > **Series:** [TruePoint Browser Extension](./README.md) · **Doc:** 11 · **Status:** ✅ Drafted
-> · **Prev:** [`10-extension-authentication`](./10-extension-authentication.md)
+> · **Prev:** [`10-extension-authentication`](./10-extension-authentication.md) · **Next:** [`12-extension-auth-gap-analysis-and-remediation`](./12-extension-auth-gap-analysis-and-remediation.md)
 
 The branding plan for `apps/extension`, so it reads as a **native part of TruePoint** — the same tokens,
 mark, type, and voice as `app.truepoint.in`. This complements the design-language doc

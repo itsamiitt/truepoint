@@ -1,6 +1,13 @@
 # ADR-0044 — Chrome extension authentication: silent re-auth against the dedicated IdP, no client refresh token
 
-- **Status:** Accepted
+> ⚠️ **Superseded by [ADR-0045](./ADR-0045-extension-auth-companion-window.md).** The primary decision here
+> (Model A — `chrome.identity.launchWebAuthFlow` silent re-auth) was proven unworkable against the real
+> multi-step IdP: the auth server never redirects the code to `chromiumapp.org`, so the flow can never
+> complete (see `docs/planning/chrome-extension/12-extension-auth-gap-analysis-and-remediation.md`).
+> ADR-0045 pivots to a companion-window login + `externally_connectable` handoff. The security *principles*
+> below (in-memory access token, tenancy from claims, sid revocation, least privilege) still hold.
+
+- **Status:** Superseded by ADR-0045
 - **Date:** 2026-07-05
 - **Related:** ADR-0016 (dedicated auth origin + cross-domain token exchange), ADR-0018 (auth policy / MFA),
   ADR-0019 (global identity + tenant membership / org-switch as token re-issue), ADR-0040 (auth source-of-truth

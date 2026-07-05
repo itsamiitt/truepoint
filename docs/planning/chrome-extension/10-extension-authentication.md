@@ -1,7 +1,15 @@
 # 10 — Extension Authentication Architecture
 
-> **Series:** [TruePoint Browser Extension](./README.md) · **Doc:** 10 · **Status:** ✅ Drafted
+> **Series:** [TruePoint Browser Extension](./README.md) · **Doc:** 10 · **Status:** 🔶 Partly superseded
 > · **Prev:** [`09-product-architecture`](./09-product-architecture.md) · **Next:** [`11-extension-branding`](./11-extension-branding.md)
+
+> ⚠️ **The primary "silent re-auth via `launchWebAuthFlow`" model below (and ADR-0044) is SUPERSEDED.** It
+> was proven unworkable against the real multi-step IdP (the server never redirects the code to
+> `chromiumapp.org`, so the flow can never complete). See
+> [`12-extension-auth-gap-analysis-and-remediation`](./12-extension-auth-gap-analysis-and-remediation.md) +
+> [`ADR-0045`](../decisions/ADR-0045-extension-auth-companion-window.md) for the corrected **companion-window**
+> design. The research, threat model, lifecycle, and security *principles* here still hold; only the login
+> transport changed.
 
 Enterprise auth architecture for `apps/extension`. It authenticates against the dedicated IdP
 `auth.truepoint.in`, calls `api.truepoint.in`, and stays consistent with the web app on `app.truepoint.in`
