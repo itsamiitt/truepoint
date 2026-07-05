@@ -25,11 +25,13 @@ import { Hono } from "hono";
 import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import { authn } from "../../middleware/authn.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
-import { getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
+import { tenancy } from "../../middleware/tenancy.ts";
 import { bulkFileStore } from "./bulkStore.ts";
 
-export const importArtifactRoutes = new Hono<{ Variables: TenancyVariables }>();
+// Typed with RoleVariables (TenancyVariables + the requireRole-stashed `role`) so getWorkspaceRole(c) resolves —
+// the artifact route always runs a member+ role guard before reading the role.
+export const importArtifactRoutes = new Hono<{ Variables: RoleVariables }>();
 
 importArtifactRoutes.use("*", authn);
 importArtifactRoutes.use("*", tenancy);
