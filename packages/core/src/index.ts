@@ -43,6 +43,16 @@ export {
   type FinalizeResult,
 } from "./import/runBulkImport.ts";
 export type { RawRow } from "./import/columnMap.ts";
+// Fast-path dual-write wrapper (import-redesign 08 §1.2 Phase A / 09 §1.1, S-I3): durable state transitions +
+// atomic counter deltas + the rejected-rows ledger AROUND the unchanged runImport. DARK while the
+// IMPORT_V2_ENABLED dual gate is off (the api producer enqueues no `fast` jobs while gated).
+export {
+  runFastImport,
+  markFastImportFailed,
+  FastImportFailedError,
+  type RunFastImportInput,
+  type FastImportResult,
+} from "./import/runFastImport.ts";
 // Object-store seam (15-bulk-import-design §3/§4): the FileStore port the bulk pipeline writes through + a
 // dev/test local-disk adapter. The prod S3 adapter is injected at the app composition root (kept out of core).
 export { diskFileStore, type FileStore } from "./storage/fileStore.ts";

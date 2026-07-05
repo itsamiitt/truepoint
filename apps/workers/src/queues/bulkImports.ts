@@ -9,16 +9,20 @@
 
 import {
   type EnqueueChunk,
+  type FastImportResult,
   type FileStore,
   bulkProcessChunk,
   finalizeIfLastChunk,
   runBulkImport,
+  runFastImport,
 } from "@leadwolf/core";
 import {
   type BulkImportDeadLetter,
   type BulkImportJobData,
   type BulkImportScope,
+  type ImportFastJobData,
   bulkImportJobDataSchema,
+  importFastJobDataSchema,
 } from "@leadwolf/types";
 import type { Job, Queue } from "bullmq";
 
@@ -26,6 +30,10 @@ import type { Job, Queue } from "bullmq";
 // apps/api producer never drift (and apps never import apps). Re-exported for register.ts (the composition root).
 export { BULK_IMPORTS_QUEUE, BULK_IMPORTS_DLQ } from "@leadwolf/types";
 export type { BulkImportJobData } from "@leadwolf/types";
+
+/** The unified `bulk-imports` payload union (09 §1.1, S-I3): legacy drive/chunk + the v2 `fast` lane. The
+ *  legacy discriminated union in bulkImport.ts stays byte-untouched; the fast kind lives in importV2.ts. */
+export type UnifiedImportJobData = BulkImportJobData | ImportFastJobData;
 
 /** The dependencies the composition root injects so core never imports BullMQ/Redis/an object store directly. */
 export interface BulkImportProcessDeps {
@@ -59,7 +67,8 @@ export type BulkImportProcessResult =
       duplicate: number;
       finalized: boolean;
       firedRollups: boolean;
-    };
+    }
+  | FastImportResult;
 
 /**
  * Build the bulk-imports processor with its injected deps. A `drive` job stages the file + fans out chunk jobs; a
@@ -69,8 +78,18 @@ export type BulkImportProcessResult =
  */
 export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
   return async function processBulkImport(
-    job: Job<BulkImportJobData>,
+    job: Job<UnifiedImportJobData>,
   ): Promise<BulkImportProcessResult> {
+    // v2 FAST lane (S-I3, 09 §1.1): the durable dual-write wrapper around the UNCHANGED runImport. The fast
+    // kind rides the IMPORT_V2 dual gate at the PRODUCER (a fast job only exists if the tenant's gate was on
+    // at submit); the consumer never re-checks env so an in-flight job still terminalizes after a mid-flight
+    // flip-off (15 §R-P1 rehearsal (a)). Rows travel in this payload — the Phase-A transport bound
+    // (importV2.ts) — so the DLQ path below must never copy `input` into a record.
+    if ((job.data as { kind?: string }).kind === "fast") {
+      const fast = importFastJobDataSchema.parse(job.data);
+      return runFastImport({ scope: fast.scope, jobId: fast.jobId, input: fast.input });
+    }
+
     // Defense in depth: re-validate + narrow the queue payload (the producer is trusted, but the discriminated
     // union guards a malformed/stale job). bulkImportJobDataSchema narrows `kind` → drive | chunk.
     const data = bulkImportJobDataSchema.parse(job.data);
@@ -130,13 +149,18 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
  */
 export async function deadLetterFailedBulkImport(
   deadLetterQueue: Queue<BulkImportDeadLetter>,
-  job: Job<BulkImportJobData> | undefined,
+  job: Job<UnifiedImportJobData> | undefined,
   err: Error,
 ): Promise<void> {
   if (!job) return;
   const maxAttempts = job.opts.attempts ?? 1;
   if (job.attemptsMade < maxAttempts) return; // retries remain — not dead yet
-  const parsed = bulkImportJobDataSchema.safeParse(job.data);
+  // The fast payload CARRIES ROWS (Phase-A transport bound) — extract scope/ids ONLY; the record stays
+  // PII-free like every dead letter (the rows die with the queue job, never copied anywhere).
+  const isFast = (job.data as { kind?: string }).kind === "fast";
+  const parsed = isFast
+    ? importFastJobDataSchema.safeParse(job.data)
+    : bulkImportJobDataSchema.safeParse(job.data);
   if (!parsed.success) return; // unparseable payload — nothing safe (or useful) to record
   const { kind, jobId, scope } = parsed.data;
   const record: BulkImportDeadLetter = {

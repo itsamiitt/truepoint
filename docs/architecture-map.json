@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1382,
-  "fileSetHash": "sha256:f38ce01e6d602c62b4d5f500d41a9d85b0b61e48ad2f39b6382f62751abe0564",
+  "fileCount": 1389,
+  "fileSetHash": "sha256:ed8560549b6de981f8dec728a81bcc900dc451fdd8d58a0f1041699ea8ff4e83",
   "features": {
     "account-search": {
       "web": [],
@@ -731,9 +731,13 @@
         "apps/api/src/features/import/index.ts",
         "apps/api/src/features/import/queue.ts",
         "apps/api/src/features/import/queueBackpressure.ts",
-        "apps/api/src/features/import/routes.ts"
+        "apps/api/src/features/import/routes.ts",
+        "apps/api/src/features/import/uploadAdmission.test.ts",
+        "apps/api/src/features/import/uploadAdmission.ts"
       ],
       "core": [
+        "packages/core/src/import/admission.test.ts",
+        "packages/core/src/import/admission.ts",
         "packages/core/src/import/blindIndex.ts",
         "packages/core/src/import/bulkProcessChunk.ts",
         "packages/core/src/import/bulkStage.ts",
@@ -1778,6 +1782,9 @@
       "apps/api/src/instrumentation.ts",
       "apps/api/src/server.ts"
     ],
+    "apps/api/lib": [
+      "apps/api/src/lib/csvDownload.ts"
+    ],
     "apps/api/middleware": [
       "apps/api/src/middleware/authn.ts",
       "apps/api/src/middleware/error.ts",
@@ -2206,8 +2213,10 @@
       "packages/types/src/home.test.ts",
       "packages/types/src/home.ts",
       "packages/types/src/identityProvisioning.ts",
+      "packages/types/src/importAdmission.ts",
       "packages/types/src/importPolicy.ts",
       "packages/types/src/importTemplates.ts",
+      "packages/types/src/importV2.ts",
       "packages/types/src/index.ts",
       "packages/types/src/ingestion.ts",
       "packages/types/src/intel.ts",

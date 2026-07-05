@@ -4,9 +4,11 @@
 
 import { env } from "@leadwolf/config";
 import {
+  FastImportFailedError,
   defaultEmailVerifier,
   defaultPhoneVerifier,
   diskFileStore,
+  markFastImportFailed,
   registerEmailProviders,
 } from "@leadwolf/core";
 import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
@@ -48,6 +50,7 @@ import {
   BULK_IMPORTS_DLQ,
   BULK_IMPORTS_QUEUE,
   type BulkImportJobData,
+  type UnifiedImportJobData,
   deadLetterFailedBulkImport,
   makeProcessBulkImport,
 } from "./queues/bulkImports.ts";
@@ -846,7 +849,7 @@ export function startWorkers(): Worker[] {
   // merges one staged band, and the LAST chunk's finalize fires the dedup/firmographics/masterBackfill rollups
   // ONCE — the SAME idempotent per-workspace rollups the sync import kicks on completion (best-effort).
   if (env.BULK_IMPORT_ENABLED) {
-    const bulkImportsQueue = new Queue<BulkImportJobData>(BULK_IMPORTS_QUEUE, { connection });
+    const bulkImportsQueue = new Queue<UnifiedImportJobData>(BULK_IMPORTS_QUEUE, { connection });
     const bulkImportDeadLetterQueue = new Queue<BulkImportDeadLetter>(BULK_IMPORTS_DLQ, {
       connection,
     });
@@ -854,7 +857,7 @@ export function startWorkers(): Worker[] {
     // later (no AWS SDK pulled in). Same env dir the apps/api producer composes against (apps never import apps).
     const bulkFileStore = diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
     const bulkImportsWorker = instrument(
-      new Worker<BulkImportJobData>(
+      new Worker<UnifiedImportJobData>(
         BULK_IMPORTS_QUEUE,
         makeProcessBulkImport({
           fileStore: bulkFileStore,
@@ -896,6 +899,74 @@ export function startWorkers(): Worker[] {
           error: e instanceof Error ? e.message : String(e),
         }),
       );
+      // v2 FAST lane (S-I3): exhausted attempts flip the DURABLE row to the honest `failed` terminal so the
+      // poll/history never show a job stuck `running` after the queue gave up (the accounting identity holds
+      // with `unprocessed` absorbing the un-landed remainder). Idempotent — a terminal row is left untouched.
+      // The stored reason is a BUCKETED, PII-free constant (a raw err.message may quote row values).
+      const data = job?.data as UnifiedImportJobData | undefined;
+      if (job && data?.kind === "fast" && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+        const summary = err instanceof FastImportFailedError ? err.summary : undefined;
+        void markFastImportFailed({
+          scope: data.scope,
+          jobId: data.jobId,
+          failedReason: summary
+            ? "Import failed: no rows could be imported."
+            : `Import failed after retries (${err.name}).`,
+          summary,
+          totalRows: data.input.rows.length,
+        }).catch((e) =>
+          log.error("bulk-import: fast failed-terminal write failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      }
+    });
+    // v2 FAST lane completion side-effects — BYTE-PARALLEL with the legacy imports handler above (S-Q3
+    // retires both onto the transactional outbox later; until then the fast path must not silently lose the
+    // rollups or the importer's notification the legacy path delivers). Fires ONLY on a fresh terminal
+    // (result.finalized) — a terminal-skip replay re-fires nothing.
+    bulkImportsWorker.on("completed", (job, result) => {
+      const data = job?.data as UnifiedImportJobData | undefined;
+      if (data?.kind !== "fast") return;
+      const r = result as { finalized?: boolean; landed?: boolean; status?: string } | undefined;
+      if (!r?.finalized) return;
+      const scope = { tenantId: data.scope.tenantId, workspaceId: data.scope.workspaceId };
+      if (r.landed) {
+        void enqueueDedup(scope).catch((e) =>
+          log.error("fast-import: dedup enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        void enqueueFirmographics(scope).catch((e) =>
+          log.error("fast-import: firmographics enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        void enqueueMasterBackfill(scope).catch((e) =>
+          log.error("fast-import: master-backfill enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      }
+      const importedBy = data.input.importedByUserId;
+      if (importedBy) {
+        void db
+          .transaction((tx) =>
+            notificationRepository.create(tx, {
+              tenantId: scope.tenantId,
+              workspaceId: scope.workspaceId,
+              userId: importedBy,
+              type: "import_complete",
+              title: "Import finished",
+              body: `Your ${data.input.sourceName} import is ready — contacts are in your workspace.`,
+            }),
+          )
+          .catch((e) =>
+            log.error("fast-import: import-complete notification failed", {
+              error: e instanceof Error ? e.message : String(e),
+            }),
+          );
+      }
     });
     workers.push(bulkImportsWorker);
   }

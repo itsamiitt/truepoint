@@ -6,6 +6,8 @@
 // transport contract stays in bulkImport.ts untouched (old clients keep the §2.4 compatibility mapping).
 
 import { z } from "zod";
+import { bulkImportScopeSchema } from "./bulkImport.ts";
+import { columnMappingSchema, conflictPolicy, importTargetSchema, sourceName } from "./contacts.ts";
 import { importMergeMode } from "./importPolicy.ts";
 
 // ── Rollout gate ─────────────────────────────────────────────────────────────────────────────────────────
@@ -78,3 +80,45 @@ export const importPreviewSummarySchema = z.object({
   perColumn: z.array(importPreviewColumnFeedbackSchema),
 });
 export type ImportPreviewSummary = z.infer<typeof importPreviewSummarySchema>;
+
+// ── Unified-queue transport (09 §1, S-I3/S-Q1) ───────────────────────────────────────────────────────────
+/** Priority bands on the unified `bulk-imports` queue (09 §1.1; BullMQ: LOWER number = served first): fast
+ *  jobs jump every waiting copy chunk; copy drives outrank copy chunks so a new job's staging starts before
+ *  a whale's tail bands. Retry-child jobs inherit their mode's band (08 §6.3). Within a band, FIFO. */
+export const IMPORT_QUEUE_PRIORITY = {
+  fast: 1,
+  copyDrive: 5,
+  copyChunk: 10,
+} as const;
+
+/** The fast-mode job's import input, as carried on the queue (Phase A, 08 §1.2): the RunImportInput fields
+ *  minus `scope` (the envelope carries it). ROWS TRAVEL IN THE PAYLOAD — the deliberate Phase-A transport
+ *  bound (the disk FileStore cannot be load-bearing multi-instance until G07, 08 §1.2; 12 §2.4), exactly as
+ *  the legacy `imports` queue does today. This is the ONE sanctioned exception to 09 §1.2's PII-free-payload
+ *  rule and it retires at Phase B, when the payload slims to `{jobId, scope}`. */
+export const importFastInputSchema = z.object({
+  importedByUserId: z.string().uuid().optional(),
+  sourceName: sourceName,
+  sourceFile: z.string().max(255).optional(),
+  mapping: columnMappingSchema,
+  conflictPolicy: conflictPolicy.optional(),
+  /** The parsed CSV/XLSX rows, keyed by trimmed header (core's RawRow). */
+  rows: z.array(z.record(z.string(), z.string())),
+  target: importTargetSchema.optional(),
+});
+export type ImportFastInput = z.infer<typeof importFastInputSchema>;
+
+/** The `fast` job kind on the unified `bulk-imports` queue (09 §1.1: a fast import is a drive that skips
+ *  staging and completes its single chunk inline). `jobId` = the durable import_jobs.id — the BullMQ job is
+ *  NAMED BY it (`import-fast:<jobId>`), so a re-publish dedupes at the queue and the consumer's terminal-skip
+ *  makes any replay a no-op. Lives here (not bulkImport.ts) so the legacy 9-state transport contract stays
+ *  byte-untouched; the worker accepts the union of both. */
+export const importFastJobDataSchema = z.object({
+  kind: z.literal("fast"),
+  jobId: z.string().uuid(),
+  scope: bulkImportScopeSchema,
+  input: importFastInputSchema,
+  /** How many times this job has been re-enqueued by the deferred/cap loop (S-Q2). Absent = 0. */
+  deferrals: z.number().int().nonnegative().optional(),
+});
+export type ImportFastJobData = z.infer<typeof importFastJobDataSchema>;

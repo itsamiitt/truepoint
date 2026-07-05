@@ -8,7 +8,12 @@
 // injected enqueueChunk); the API only ever enqueues the initial drive.
 
 import { env } from "@leadwolf/config";
-import { BULK_IMPORTS_QUEUE, type BulkImportJobData } from "@leadwolf/types";
+import {
+  BULK_IMPORTS_QUEUE,
+  type BulkImportJobData,
+  IMPORT_QUEUE_PRIORITY,
+  type ImportFastJobData,
+} from "@leadwolf/types";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 import { assertQueueCapacity } from "./queueBackpressure.ts";
@@ -16,15 +21,19 @@ import { assertQueueCapacity } from "./queueBackpressure.ts";
 /** Only the API enqueues the DRIVE variant; the worker enqueues the chunk variant onto the same queue. */
 type BulkImportDriveJobData = Extract<BulkImportJobData, { kind: "drive" }>;
 
+/** The unified `bulk-imports` payload union (09 §1.1): the legacy drive/chunk kinds + the v2 `fast` lane
+ *  (importV2.ts, S-I3). One queue, priority bands — never a second import execution queue. */
+type UnifiedImportJobData = BulkImportJobData | ImportFastJobData;
+
 // Lazily opened on first use so merely importing this module (e.g. mounting the router) never dials Redis — the
 // feature is DARK until the bulk gate opens (the global env.BULK_IMPORT_ENABLED kill-switch AND the per-tenant
 // `bulk_import_enabled` flag), and the route gates on BOTH before ever calling the producer, so the producer is
 // never reached while gated. BullMQ requires maxRetriesPerRequest: null on its connection.
-let queue: Queue<BulkImportJobData> | undefined;
-function bulkImportQueue(): Queue<BulkImportJobData> {
+let queue: Queue<UnifiedImportJobData> | undefined;
+function bulkImportQueue(): Queue<UnifiedImportJobData> {
   if (!queue) {
     const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
-    queue = new Queue<BulkImportJobData>(BULK_IMPORTS_QUEUE, {
+    queue = new Queue<UnifiedImportJobData>(BULK_IMPORTS_QUEUE, {
       connection,
       defaultJobOptions: {
         // Retry transient/systemic failures with exponential backoff + jitter (de-correlates retries under a
@@ -50,6 +59,30 @@ export async function enqueueBulkImportDrive(data: BulkImportDriveJobData): Prom
   const q = bulkImportQueue();
   await assertQueueCapacity(q, BULK_IMPORTS_QUEUE, MAX_WAITING_DRIVES);
   const job = await q.add("drive", data);
+  return String(job.id);
+}
+
+/** Above this many already-waiting jobs on the unified queue, fast submissions shed with a typed 503 — the
+ *  legacy `imports` queue's posture carried over (fast payloads carry rows, so an unbounded backlog is a
+ *  Redis-memory risk exactly as it is there; the Phase-A transport bound, importV2.ts). */
+const MAX_WAITING_FAST = 10_000;
+
+/**
+ * Enqueue a v2 FAST import onto the unified `bulk-imports` queue (09 §1.1, S-I3) — priority band `fast`
+ * (jumps every waiting copy chunk), STABLE jobId `import-fast:<jobId>` so an at-least-once re-publish
+ * dedupes at the queue (the consumer's terminal-skip catches the rest). Called ONLY behind the
+ * IMPORT_V2_ENABLED dual gate — the legacy path never reaches this producer. `delayMs` is the S-Q2
+ * deferred-lane re-check delay (0 = claimable immediately).
+ */
+export async function enqueueFastImport(data: ImportFastJobData, delayMs = 0): Promise<string> {
+  const q = bulkImportQueue();
+  await assertQueueCapacity(q, BULK_IMPORTS_QUEUE, MAX_WAITING_FAST);
+  const job = await q.add("fast", data, {
+    priority: IMPORT_QUEUE_PRIORITY.fast,
+    // Deferral re-enqueues carry a suffixed id (a completed stable id would otherwise dedupe them away).
+    jobId: data.deferrals ? `import-fast:${data.jobId}:r${data.deferrals}` : `import-fast:${data.jobId}`,
+    delay: delayMs > 0 ? delayMs : undefined,
+  });
   return String(job.id);
 }
 

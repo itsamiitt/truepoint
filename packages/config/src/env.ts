@@ -245,6 +245,18 @@ export const appEnvSchema = z
     // The sync→bulk promotion threshold (rows): an import larger than this is steered onto the bulk pipeline
     // rather than the inline `imports` queue. Consumed by the promotion logic; a sensible default until tuned.
     BULK_IMPORT_THRESHOLD_ROWS: z.coerce.number().int().positive().default(5000),
+    // Unified durable import pipeline v2 (import-and-data-model-redesign 08/09; S-I3 onward). GLOBAL
+    // kill-switch of the dual gate: effective v2 = (this === "true") AND the per-tenant `import_v2_enabled`
+    // flag (seeded off in 0054). While off, every import surface keeps its shipped behavior BYTE-IDENTICALLY
+    // (T1 parity is the proof): POST /imports enqueues the legacy `imports` queue job and GET /imports/:jobId
+    // reads BullMQ — no durable row is created or read. Flipping it off at any point is the instant
+    // fleet-wide rollback lever (15 §R-P1); executed imports KEEP their durable rows (data is never rolled
+    // back by a flag). Same explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can
+    // never read truthy.
+    IMPORT_V2_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the

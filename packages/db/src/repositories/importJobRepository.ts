@@ -47,6 +47,11 @@ export interface ImportJobCreateValues {
   conflictPolicy?: ConflictPolicy;
   targetListId?: string | null;
   stagingTable?: string | null;
+  // ── Import v2 unified-job columns (S-I1; written from S-I3 on, unread while the dual gate is off) ──
+  /** The SERVER's routing verdict at commit/one-shot (08 §1): 'fast' | 'copy'. Absent = legacy row. */
+  processingMode?: "fast" | "copy";
+  /** The honest DISPLAY filename (source_name holds the SourceName provider enum — 08 §Contradiction scan). */
+  sourceFilename?: string | null;
 }
 
 /**
