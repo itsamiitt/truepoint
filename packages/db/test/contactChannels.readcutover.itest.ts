@@ -16,6 +16,13 @@
 //      owned claim; gate-off the value arrays are ABSENT (byte-identical to the pre-S-CH4 payload).
 //   5. SEARCH FACET PARITY (§5 / doc-16 drift): the `company` facet COUNT grouping stays on the flat primary
 //      domain either way (the secondary domain never appears as a facet value).
+//   6. S-CH4b READ-SIBLING AGREEMENT (doc-16 2026-07-06 gate-on consistency gap): the PAGE, the select-all
+//      COUNT (core.searchCount), the bulk/reveal id-RESOLVE (resolveVisibleIds), and DYNAMIC-LIST MEMBERSHIP
+//      (core.listListMembers) all consume the SAME child-presence predicates — a CHILD-ONLY-PRESENCE contact
+//      (flat email NULL, one live child row) surfaces in ALL FOUR gate-on and NONE gate-off; the four agree.
+//   7. S-CH4b REVEAL NARROWING RIDER: gate-on getRevealedContact fetches child ciphertext ONLY for the
+//      channel(s) the workspace OWNS a claim for — an email-only claim still returns the owned email values,
+//      the unowned phone channel stays absent (output identical to fetching both; the fetch is just narrower).
 //
 // Gate composition (05 §5): effective read-from-child = CHANNEL_READ_FROM_CHILD env AND the S-CH2 dual gate
 // (CHANNEL_DUAL_WRITE env + channels_dual_write flag) AND the channels_read flag — read IMPLIES dual-write.
@@ -279,5 +286,158 @@ describe("S-CH4 §5 — the company facet COUNT grouping stays flat (primary dom
     const acme = facets.find((f) => f.value === "acme.com");
     expect(acme?.count).toBe(2);
     void gate;
+  });
+});
+
+// ── S-CH4b: the read siblings agree gate-on; flat gate-off (doc-16 2026-07-06 GATE-ON CONSISTENCY GAP) ──────
+// The shipped S-CH4 cut the search PAGE over to the child-presence predicates but left the select-all COUNT,
+// the bulk/reveal id-RESOLVE, and DYNAMIC-LIST MEMBERSHIP reading FLAT — so with channels_read on, a
+// has_email-filtered page could disagree with "Select all N", the ids a bulk op mutates, and a dynamic list's
+// members. S-CH4b threads the SAME composed gate into all three. Fixture: a CHILD-ONLY-PRESENCE contact
+// (flat email_enc NULL + one live contact_emails row) — has_email is true ONLY via the child rung, so it is
+// the exact probe that separates the child path from the flat path across every surface.
+
+const HAS_EMAIL = (): ContactQuery =>
+  query({ filters: [{ kind: "bool", field: "has_email", value: true }] });
+const RESOLVE_CAP = 1000;
+
+/** A contact with NO flat email (email_enc NULL) but ONE live child email row — the no-primary child-only
+ *  edge state the child rung sees and the flat rung cannot. Inserted directly (no writer maintains the flat
+ *  cache here — that divergence IS the fixture). */
+async function seedChildOnlyEmail(
+  tenantId: string,
+  workspaceId: string,
+  firstName: string,
+  email: string,
+  domain: string,
+): Promise<string> {
+  const [c] = await admin`
+    INSERT INTO contacts (tenant_id, workspace_id, first_name)
+    VALUES (${tenantId}, ${workspaceId}, ${firstName}) RETURNING id`;
+  const cid = (c as { id: string }).id;
+  await admin`
+    INSERT INTO contact_emails
+      (tenant_id, workspace_id, contact_id, value_enc, blind_index, email_domain, type, is_primary, status, source)
+    VALUES (${tenantId}, ${workspaceId}, ${cid}, ${core.encryptPii(email)}, ${core.blindIndex(email)},
+            ${domain}, 'work', true, 'unverified', 'provider:test')`;
+  return cid;
+}
+
+/** Seed a saved has_email search + a DYNAMIC list backed by it (membership = its live query result). */
+async function seedDynamicHasEmailList(
+  tenantId: string,
+  workspaceId: string,
+  ownerId: string,
+): Promise<string> {
+  const saved = await db.withTenantTx(scope(tenantId, workspaceId), (tx) =>
+    db.savedSearchRepository.insert(tx, {
+      tenantId,
+      workspaceId,
+      ownerUserId: ownerId,
+      name: "has-email",
+      filters: HAS_EMAIL(),
+      visibility: "workspace",
+    }),
+  );
+  const list = await core.createDynamicList({
+    scope: scope(tenantId, workspaceId),
+    callerUserId: ownerId,
+    name: "Has email (dynamic)",
+    savedSearchId: saved.id,
+  });
+  return list.id;
+}
+
+/** Collect the four read surfaces' id sets for a tenant, evaluating the composed gate EXACTLY as each shipped
+ *  caller does: searchPortProvider (the page), core.searchCount (select-all count), the reveal/bulk resolve
+ *  two-liner (resolveVisibleIds), core.listListMembers (dynamic membership). */
+async function fourSurfaces(t: string, ws: string, ownerId: string, listId: string) {
+  const gate = await core.channelReadFromChildEnabledForScope(scope(t, ws));
+  const page = await db.searchRepository.searchContacts(scope(t, ws), HAS_EMAIL(), {
+    channelsFromChild: gate,
+  });
+  const count = await core.searchCount(scope(t, ws), HAS_EMAIL());
+  const resolved = await db.withTenantTx(scope(t, ws), (tx) =>
+    db.searchRepository.resolveVisibleIds(tx, HAS_EMAIL(), RESOLVE_CAP, { channelsFromChild: gate }),
+  );
+  const list = await core.listListMembers({
+    scope: scope(t, ws),
+    callerUserId: ownerId,
+    listId,
+    limit: 200,
+  });
+  return {
+    gate,
+    pageIds: new Set(page.hits.map((h) => h.id)),
+    count: count.total,
+    resolveIds: new Set(resolved),
+    memberIds: new Set(list.members.map((m) => m.id)),
+  };
+}
+
+describe("S-CH4b — page / count / resolve / dynamic-membership agree gate-on; flat gate-off", () => {
+  let childOnlyOn = "";
+  let childOnlyOff = "";
+  let listOnId = "";
+  let listOffId = "";
+
+  beforeAll(async () => {
+    childOnlyOn = await seedChildOnlyEmail(tOn, wsOn, "ChildOnlyOn", "child@onlyon.io", "onlyon.io");
+    childOnlyOff = await seedChildOnlyEmail(tOff, wsOff, "ChildOnlyOff", "child@onlyoff.io", "onlyoff.io");
+    listOnId = await seedDynamicHasEmailList(tOn, wsOn, ownerOn);
+    listOffId = await seedDynamicHasEmailList(tOff, wsOff, ownerOff);
+  }, 60_000);
+
+  test("gate-on: the child-only-presence contact appears in ALL FOUR surfaces, which agree", async () => {
+    const s = await fourSurfaces(tOn, wsOn, ownerOn, listOnId);
+    expect(s.gate).toBe(true); // composed gate ON for tenantOn
+    // Child-only presence: flat email NULL, one live child row ⇒ has_email is true ONLY via the child rung.
+    expect(s.pageIds.has(childOnlyOn)).toBe(true);
+    expect(s.resolveIds.has(childOnlyOn)).toBe(true);
+    expect(s.memberIds.has(childOnlyOn)).toBe(true);
+    // AGREEMENT: page ≡ resolve ≡ membership (as sets) and count = |page| — no surface can disagree with another.
+    expect(s.resolveIds).toEqual(s.pageIds);
+    expect(s.memberIds).toEqual(s.pageIds);
+    expect(s.count).toBe(s.pageIds.size);
+  });
+
+  test("gate-off: the child-only-presence contact is ABSENT from all four (flat), which still agree", async () => {
+    const s = await fourSurfaces(tOff, wsOff, ownerOff, listOffId);
+    expect(s.gate).toBe(false); // read gate OFF for tenantOff (channels_read never enabled)
+    // Flat rung only ⇒ the child-only contact never surfaces (byte-identical to the pre-S-CH4 flat path).
+    expect(s.pageIds.has(childOnlyOff)).toBe(false);
+    expect(s.resolveIds.has(childOnlyOff)).toBe(false);
+    expect(s.memberIds.has(childOnlyOff)).toBe(false);
+    // The flat siblings still agree with each other (count/resolve/membership never diverge from the page).
+    expect(s.resolveIds).toEqual(s.pageIds);
+    expect(s.memberIds).toEqual(s.pageIds);
+    expect(s.count).toBe(s.pageIds.size);
+  });
+});
+
+describe("S-CH4b — getRevealedContact fetches ONLY owned-channel child ciphertext (narrowing rider)", () => {
+  let mailClaimId = "";
+
+  beforeAll(async () => {
+    // A live email child owned by an EMAIL-only claim (no phone claim). Gate-on, the reveal read must STILL
+    // fetch + decrypt the OWNED email channel (the narrowing must not skip it), while the UNOWNED phone channel
+    // is never fetched and stays absent — output is identical to fetching both, the fetch is merely narrower.
+    mailClaimId = await seedChildOnlyEmail(tOn, wsOn, "MailClaim", "mail.claim@narrow.io", "narrow.io");
+    await admin`
+      INSERT INTO contact_reveals (tenant_id, workspace_id, contact_id, revealed_by_user_id, reveal_type, data_source, credits_consumed)
+      VALUES (${tOn}, ${wsOn}, ${mailClaimId}, ${ownerOn}, 'email', 'internal', 0)`;
+  }, 60_000);
+
+  test("email-only claim: owned email values present (from child); unowned phone omitted", async () => {
+    const r = await core.getRevealedContact(scope(tOn, wsOn), mailClaimId);
+    expect(r).not.toBeNull();
+    // OWNED channel: fetched + decrypted from the child (the narrowing kept the owned fetch — the regression guard).
+    expect(r!.emails).toBeDefined();
+    expect(r!.emails!.length).toBe(1);
+    expect(r!.emails![0].value).toBe("mail.claim@narrow.io");
+    expect(r!.emails![0].isPrimary).toBe(true);
+    // UNOWNED channel: no phone claim ⇒ the phone child is never fetched and the arrays/scalar stay absent/null.
+    expect(r!.phones).toBeUndefined();
+    expect(r!.phone).toBeNull();
   });
 });
