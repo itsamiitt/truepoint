@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1418,
-  "fileSetHash": "sha256:9fbe8cda0cc6e275ee9605340c72327513aa20a54f37a6d97c1aeac9d8691f19",
+  "fileCount": 1420,
+  "fileSetHash": "sha256:00ba97c2bbecac02e7472b9e234ca820f910168532c445be2b230ecdba42690e",
   "features": {
     "account-search": {
       "web": [],
@@ -2066,6 +2066,8 @@
       "packages/auth/src/refresh.ts",
       "packages/auth/src/registration.ts",
       "packages/auth/src/revocation.ts",
+      "packages/auth/src/revocationLog.test.ts",
+      "packages/auth/src/revocationLog.ts",
       "packages/auth/src/scopeGuard.test.ts",
       "packages/auth/src/scopeGuard.ts",
       "packages/auth/src/secrets.ts",
