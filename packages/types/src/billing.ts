@@ -35,9 +35,36 @@ export const revealHistoryEntrySchema = z.object({
 });
 export type RevealHistoryEntry = z.infer<typeof revealHistoryEntrySchema>;
 
+/** One decrypted email VALUE on the post-reveal read (import-redesign 05 §5, S-CH4): an owned `email` claim
+ *  unmasks ALL live email values of the contact — reveal stays contact × reveal_type grained, per-value
+ *  metering is explicitly deferred. Primary-first ordering is the contract. */
+export const revealedEmailValueSchema = z.object({
+  value: z.string(),
+  type: z.string(), // usage context (work|personal|other)
+  status: z.string(), // per-value verification grade (emailStatus vocabulary)
+  isPrimary: z.boolean(),
+});
+export type RevealedEmailValue = z.infer<typeof revealedEmailValueSchema>;
+
+/** One decrypted phone VALUE on the post-reveal read — the phone twin (line type = the TCPA dial-risk badge
+ *  for the per-call picker; extension rides outside the E.164 core). Primary-first. */
+export const revealedPhoneValueSchema = z.object({
+  value: z.string(),
+  type: z.string(),
+  status: z.string().nullable(),
+  lineType: z.string().nullable(),
+  extension: z.string().nullable(),
+  isPrimary: z.boolean(),
+});
+export type RevealedPhoneValue = z.infer<typeof revealedPhoneValueSchema>;
+
 /** GET /contacts/:id/revealed — the NO-CHARGE view of a contact's ALREADY-OWNED reveal data (Phase 1 read
  *  primitive). `email`/`phone` are decrypted ONLY for the reveal_types this workspace owns (null otherwise);
- *  statuses/line-type mirror that ownership; `linkedinUrl` is a clear-text public URL. Never charges credits. */
+ *  statuses/line-type mirror that ownership; `linkedinUrl` is a clear-text public URL. Never charges credits.
+ *  S-CH4 (import-redesign 05 §5): behind the composed channel read gate the payload ADDITIVELY gains the
+ *  full per-value lists (`emails`/`phones`, primary-first) for owned types — the scalar `email`/`phone` keep
+ *  meaning THE PRIMARY value (byte-identical to the flat cache by CH-INV-1), so no consumer changes;
+ *  gate-off the arrays are ABSENT and the payload is byte-identical to the pre-S-CH4 shape. */
 export const revealedContactSchema = z.object({
   contactId: z.string().uuid(),
   email: z.string().nullable(),
@@ -46,6 +73,10 @@ export const revealedContactSchema = z.object({
   emailStatus: z.string().nullable(),
   phoneStatus: z.string().nullable(),
   phoneLineType: z.string().nullable(),
+  /** ALL live email values (owned `email`/`full_profile` claim only), primary-first — S-CH4 gate-on only. */
+  emails: z.array(revealedEmailValueSchema).optional(),
+  /** ALL live phone values (owned `phone`/`full_profile` claim only), primary-first — S-CH4 gate-on only. */
+  phones: z.array(revealedPhoneValueSchema).optional(),
   /** Which reveal_types this workspace owns (drives the "reveal more" affordance + status). */
   ownedTypes: z.array(revealType),
   /** Which PII fields resolved to a value (email/phone) — the record actually holds + owns them. */

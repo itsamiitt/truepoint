@@ -39,6 +39,7 @@ import {
   channelDualWriteEnabledForScope,
   countryHintOf,
 } from "../channels/channelDualWrite.ts";
+import { channelReadFromChildEnabledForScope } from "../channels/channelRead.ts";
 import { writeAudit } from "../compliance/writeAudit.ts";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
 import { markConflicts } from "../prospect/conflictDetect.ts";
@@ -305,6 +306,7 @@ async function importOneRow(
   hash: Uint8Array,
   strategy: ImportStrategy,
   channelDualWrite: boolean,
+  channelReadFromChild: boolean,
 ): Promise<RowLanding> {
   const { tenantId, workspaceId } = input.scope;
   const listId = input.target?.listId;
@@ -331,7 +333,9 @@ async function importOneRow(
   // existing identity would just throw a unique-constraint violation, so we resolve the conflict in app code.
   // Computed BEFORE the account upsert + master resolution so a held-back duplicate touches NEITHER (a row
   // that does not land never mints a master node nor stamps an account — resolve only on landing rows).
-  const match = await contactRepository.findByDedupKeys(tx, workspaceId, prepared.dedupKeys);
+  const match = await contactRepository.findByDedupKeys(tx, workspaceId, prepared.dedupKeys, {
+    channelsFromChild: channelReadFromChild,
+  });
 
   // create_only (08 §5 — and the legacy skip/keep_both that maps to it): a matched contact is a held-back
   // DUPLICATE — kept untouched, counted as a duplicate (no provenance row appended), but still added to the
@@ -539,6 +543,10 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
   // the flag per row; fail-closed on error). env.CHANNEL_DUAL_WRITE off ⇒ false with ZERO queries — the
   // gate-off run is cost-identical as well as byte-identical (T-CH parity).
   const channelDualWrite = await channelDualWriteEnabledForScope(input.scope);
+  // S-CH4 read cutover (05 §6), evaluated ONCE per run (fail-closed on error ⇒ flat dedup; env off ⇒ zero
+  // queries). Gate-on the email dedup rung resolves via contact_emails.blind_index so a duplicate carrying a
+  // SECONDARY email lands on the contact that already holds it (the G15/G16 payoff); gate-off byte-identical.
+  const channelReadFromChild = await channelReadFromChildEnabledForScope(input.scope);
 
   const errors: ImportRowError[] = [];
   const rejectedRows: RejectedRow[] = [];
@@ -596,7 +604,7 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
       const prepared = prepareContact(mapped);
       const hash = contentHash({ mapped, sourceName: input.sourceName });
       const landing = await withTenantTx(input.scope, (tx) =>
-        importOneRow(tx, input, raw, prepared, hash, strategy, channelDualWrite),
+        importOneRow(tx, input, raw, prepared, hash, strategy, channelDualWrite, channelReadFromChild),
       );
       if (landing.outcome === "created") created++;
       else if (landing.outcome === "matched") matched++;

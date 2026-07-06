@@ -5,7 +5,7 @@
 // row stored as "Chief Executive Officer". Workspace isolation is enforced in the repo via withTenantTx (RLS).
 // This replaces the bounded in-memory candidate set (the 500-row cap) with a real, index-backed query path.
 
-import { planTitleFilter } from "@leadwolf/core";
+import { channelReadFromChildEnabledForScope, planTitleFilter } from "@leadwolf/core";
 import { searchRepository } from "@leadwolf/db";
 import type {
   ContactHit,
@@ -37,9 +37,15 @@ export async function buildWorkspaceSearchPort(scope: {
   tenantId: string;
   workspaceId: string;
 }): Promise<SearchPort> {
+  // S-CH4 composed read gate, evaluated ONCE per port build (env-off ⇒ zero queries; fail-closed on error).
+  // Gate-on the masked hits gain `channels` summaries + has_email/has_phone/company resolve from live child
+  // rows; gate-off every read is byte-identical to the pre-S-CH4 flat-column path.
+  const channelsFromChild = await channelReadFromChildEnabledForScope(scope);
   return {
     async searchContacts(query: ContactQuery): Promise<SearchPage<ContactHit>> {
-      const page = await searchRepository.searchContacts(scope, expandTitleFilters(query));
+      const page = await searchRepository.searchContacts(scope, expandTitleFilters(query), {
+        channelsFromChild,
+      });
       return { hits: page.hits, nextCursor: page.nextCursor };
     },
     async suggest(req: SuggestQuery): Promise<Suggestion[]> {

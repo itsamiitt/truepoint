@@ -18,23 +18,13 @@
 // domains are PII-adjacent and stay masked until a reveal claim exists; an `email` claim unmasks ALL live
 // email values of that contact (reveal stays contact × reveal_type grained).
 //
-// STATUS: vocabulary only — S-CH1 ships no reader/writer. Wiring these summaries into
-// maskedContactSchema is the read-cutover work (S-C7/S-CH4); the write path is S-CH2's.
+// STATUS at S-CH4: the summaries ARE wired into maskedContactSchema (contacts.ts) behind the composed read
+// gate. The usage-type enums + masked summary schemas MOVED to contacts.ts at S-CH4 (maskedContactSchema
+// embeds them and this file imports contacts.ts — keeping them here would cycle); the @leadwolf/types
+// barrel exports are unchanged, so no consumer moved. This file remains the channel layer's home for the
+// flag keys, the per-contact cap, and line_type_source.
 
 import { z } from "zod";
-import { emailStatus, phoneLineType, phoneStatus } from "./contacts.ts";
-
-// ── The per-value `type` (usage-context) vocabularies (05 §1.4) ─────────────────────────────────────────
-/** Email usage context. RFC 9553 `contexts` + the Merge/Apideck interop core — lossless egress guaranteed. */
-export const contactEmailType = z.enum(["work", "personal", "other"]);
-export type ContactEmailType = z.infer<typeof contactEmailType>;
-
-/** Phone usage context: the interop core (work|personal|mobile|other) + the sales-intelligence kinds
- *  `direct`/`hq` every SI dataset ships. `type` answers "what is this value FOR"; `line_type` (the
- *  phoneLineType union, contacts.ts) answers "what kind of line is it"; `status` answers "is it any good"
- *  — the three RFC 9553 axes, with `is_primary` as the degenerate two-level `pref`. */
-export const contactPhoneType = z.enum(["work", "personal", "mobile", "direct", "hq", "other"]);
-export type ContactPhoneType = z.infer<typeof contactPhoneType>;
 
 /** How a phone's line_type was determined (05 §1.3) — the mandatory companion, because offline typing is
  *  inherently ambiguous (`fixed_line_or_mobile`): carrier lookup (authoritative) vs offline heuristic vs
@@ -59,34 +49,3 @@ export const CHANNELS_READ_FLAG_KEY = "channels_read";
 /** Max live values per channel per contact (25 emails / 25 phones): generous × any legitimate dataset,
  *  blocks a hostile 10⁶-row fanout on one contact. Import rows exceeding it append up to the cap + warn. */
 export const MAX_CHANNEL_VALUES_PER_CONTACT = 25;
-
-// ── Masked per-value summaries (05 §5 — non-PII: types, statuses, flags; NEVER values or domains) ───────
-/** One live email value, masked: usage type + verification status + primary flag. No value, no domain. */
-export const contactEmailSummarySchema = z.object({
-  type: contactEmailType,
-  status: emailStatus,
-  isPrimary: z.boolean(),
-});
-export type ContactEmailSummary = z.infer<typeof contactEmailSummarySchema>;
-
-/** One live phone value, masked: usage type + status grade + carrier line type (the TCPA dial-risk badge
- *  for the per-call picker) + primary flag. No value, ever. */
-export const contactPhoneSummarySchema = z.object({
-  type: contactPhoneType,
-  status: phoneStatus.nullable(),
-  lineType: phoneLineType.nullable(),
-  isPrimary: z.boolean(),
-});
-export type ContactPhoneSummary = z.infer<typeof contactPhoneSummarySchema>;
-
-/** The masked channel projection a contact read carries once S-C7/S-CH4 wire it into maskedContactSchema
- *  (additive, optional-populated like `dataHealth`/`revealedTypes` — only surfaces that compute it send it):
- *  live-row counts + per-value summaries. `emailDomain`/`emailStatus`/`phoneStatus`/`phoneLineType` on the
- *  masked contact keep meaning THE PRIMARY's facets (CH-INV-1), so no existing consumer changes. */
-export const contactChannelSummariesSchema = z.object({
-  emailCount: z.number().int().min(0), // live contact_emails rows
-  phoneCount: z.number().int().min(0), // live contact_phones rows
-  emailSummaries: z.array(contactEmailSummarySchema).optional(),
-  phoneSummaries: z.array(contactPhoneSummarySchema).optional(),
-});
-export type ContactChannelSummaries = z.infer<typeof contactChannelSummariesSchema>;

@@ -5,8 +5,23 @@
 // scopes every read to the workspace; the decrypt happens IN core (the ciphertext never leaves the server).
 // No credit is spent.
 
-import { type TenantScope, contactRepository, revealRepository, withTenantTx } from "@leadwolf/db";
-import type { RevealDataSource, RevealType, RevealedContact } from "@leadwolf/types";
+import {
+  type LiveEmailChannelRow,
+  type LivePhoneChannelRow,
+  type TenantScope,
+  contactChannelRepository,
+  contactRepository,
+  revealRepository,
+  withTenantTx,
+} from "@leadwolf/db";
+import type {
+  RevealDataSource,
+  RevealType,
+  RevealedContact,
+  RevealedEmailValue,
+  RevealedPhoneValue,
+} from "@leadwolf/types";
+import { isChannelReadFromChildEnabled } from "../channels/channelRead.ts";
 import { decryptPii } from "../import/encryptPii.ts";
 
 type Claim = {
@@ -26,11 +41,19 @@ type RevealView = {
   linkedinUrl: string | null;
 };
 
+/** All live child rows for one contact (S-CH4 gate-on) — passed in so buildRevealedContact stays the single
+ *  ownership boundary that decrypts them. Undefined gate-off ⇒ the additive value arrays are absent. */
+interface LiveChannelValues {
+  emails?: LiveEmailChannelRow[];
+  phones?: LivePhoneChannelRow[];
+}
+
 /** Assemble the RevealedContact from a contact's claims + ciphertext view, decrypting ONLY owned fields. */
 function buildRevealedContact(
   contactId: string,
   claims: Claim[],
   view: RevealView,
+  live?: LiveChannelValues,
 ): RevealedContact {
   const ownedEmail = claims.some(
     (c) => c.revealType === "email" || c.revealType === "full_profile",
@@ -43,6 +66,30 @@ function buildRevealedContact(
   const email = ownedEmail && view.emailEnc ? decryptPii(view.emailEnc) : null;
   const phone = ownedPhone && view.phoneEnc ? decryptPii(view.phoneEnc) : null;
 
+  // S-CH4 (05 §5): an owned email/phone claim unmasks ALL live values of that channel, primary-first (the
+  // repo's ordering). ADDITIVE + gate-on only — `live` is undefined gate-off ⇒ `emails`/`phones` are absent
+  // and the payload is byte-identical; the scalar `email`/`phone` above keep meaning THE PRIMARY (CH-INV-1).
+  const emails: RevealedEmailValue[] | undefined =
+    ownedEmail && live?.emails
+      ? live.emails.map((r) => ({
+          value: decryptPii(r.valueEnc),
+          type: r.type,
+          status: r.status,
+          isPrimary: r.isPrimary,
+        }))
+      : undefined;
+  const phones: RevealedPhoneValue[] | undefined =
+    ownedPhone && live?.phones
+      ? live.phones.map((r) => ({
+          value: decryptPii(r.valueEnc),
+          type: r.type,
+          status: r.status,
+          lineType: r.lineType,
+          extension: r.extension,
+          isPrimary: r.isPrimary,
+        }))
+      : undefined;
+
   const revealedFields: string[] = [];
   if (email) revealedFields.push("email");
   if (phone) revealedFields.push("phone");
@@ -53,6 +100,8 @@ function buildRevealedContact(
     contactId,
     email,
     phone,
+    ...(emails ? { emails } : {}),
+    ...(phones ? { phones } : {}),
     // linkedinUrl is a clear-text public URL (not encrypted / charged), but the masked list only ever exposed
     // a `hasLinkedin` boolean — so gate the URL behind the EMAIL (identity) reveal, not any claim: a phone-only
     // reveal must not hand back the LinkedIn URL for free.
@@ -81,7 +130,15 @@ export async function getRevealedContact(
     const claims = await revealRepository.listContactClaims(tx, scope.workspaceId, contactId);
     const view = await revealRepository.getRevealView(tx, contactId);
     if (!view) return null; // contact gone (tombstoned / never existed in this workspace)
-    return buildRevealedContact(contactId, claims, view);
+    // S-CH4 composed read gate, evaluated in the SAME tx (shares its fate; env off ⇒ zero queries). Gate-on
+    // the reveal read gains ALL live email/phone values primary-first (from the child); gate-off byte-identical.
+    let live: LiveChannelValues | undefined;
+    if (await isChannelReadFromChildEnabled(tx, scope.tenantId)) {
+      const emails = await contactChannelRepository.listLiveEmailValuesByContactIds(tx, [contactId]);
+      const phones = await contactChannelRepository.listLivePhoneValuesByContactIds(tx, [contactId]);
+      live = { emails: emails.get(contactId) ?? [], phones: phones.get(contactId) ?? [] };
+    }
+    return buildRevealedContact(contactId, claims, view, live);
   });
 }
 
@@ -111,13 +168,25 @@ export async function getRevealedContactsBatch(
     }
     const viewById = new Map(views.map((v) => [v.id, v]));
 
+    // S-CH4 gate (05 §5), evaluated ONCE in this tx: gate-on, batch-load ALL live channel values for the
+    // visible page (ONE query per table, no N+1); gate-off ⇒ zero child reads, byte-identical output.
+    let liveEmailsById: Map<string, LiveEmailChannelRow[]> | undefined;
+    let livePhonesById: Map<string, LivePhoneChannelRow[]> | undefined;
+    if (await isChannelReadFromChildEnabled(tx, scope.tenantId)) {
+      liveEmailsById = await contactChannelRepository.listLiveEmailValuesByContactIds(tx, visible);
+      livePhonesById = await contactChannelRepository.listLivePhoneValuesByContactIds(tx, visible);
+    }
+
     const out: RevealedContact[] = [];
     for (const id of visible) {
       const view = viewById.get(id);
       const cs = claimsByContact.get(id);
       // Only hydrate rows that actually own a reveal (skip masked rows — nothing to show).
       if (!view || !cs || cs.length === 0) continue;
-      out.push(buildRevealedContact(id, cs, view));
+      const live: LiveChannelValues | undefined = liveEmailsById
+        ? { emails: liveEmailsById.get(id) ?? [], phones: livePhonesById?.get(id) ?? [] }
+        : undefined;
+      out.push(buildRevealedContact(id, cs, view, live));
     }
     return out;
   });

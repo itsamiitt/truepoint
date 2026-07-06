@@ -14,8 +14,10 @@
 // selection; a large export should share one tx via an extracted reveal core (see the audit). Bounded by the
 // caller's selection cap.
 
-import { type TenantScope, contactRepository, withTenantTx } from "@leadwolf/db";
+import { contactChannelRepository, contactRepository, type TenantScope, withTenantTx } from "@leadwolf/db";
 import { ForbiddenError, SuppressedError, type WorkspaceRole } from "@leadwolf/types";
+import { channelReadFromChildEnabledForScope } from "../channels/channelRead.ts";
+import { decryptPii } from "../import/encryptPii.ts";
 import type { FileStore } from "../storage/fileStore.ts";
 import { revealContact } from "./revealContact.ts";
 
@@ -40,6 +42,14 @@ const REVEALED_EXPORT_COLUMNS = [
   "locationCountry",
   "locationCity",
   "createdAt",
+] as const;
+
+/** S-CH4 gate-on additive columns (05 §5 — export flattens to the primary column PLUS a semicolon-joined
+ *  "additional" column): the contact's SECONDARY (non-primary) live values, primary already in email/phone. */
+const REVEALED_EXPORT_COLUMNS_CHILD = [
+  ...REVEALED_EXPORT_COLUMNS,
+  "additionalEmails",
+  "additionalPhones",
 ] as const;
 
 /** Serialize rows to RFC-4180 CSV (always-quoted, CRLF) over the given columns. */
@@ -125,6 +135,29 @@ export async function bulkRevealExport(
     }
   }
 
+  // 2b) S-CH4 read cutover (05 §5), evaluated ONCE (env off ⇒ zero queries; fail-closed ⇒ flat). Gate-on the
+  //     export gains the contact's SECONDARY live values (primary already rides email/phone by CH-INV-1), read
+  //     primary-first from the child in ONE batched query per table. Reading ALL live values is sanctioned:
+  //     the contact revealed with `full_profile` above (owns email+phone) — an owned claim unmasks all values.
+  const channelsFromChild = await channelReadFromChildEnabledForScope(input.scope);
+  const additionalEmailsById = new Map<string, string>();
+  const additionalPhonesById = new Map<string, string>();
+  if (channelsFromChild && revealedById.size > 0) {
+    const ids = [...revealedById.keys()];
+    await withTenantTx(input.scope, async (tx) => {
+      const emails = await contactChannelRepository.listLiveEmailValuesByContactIds(tx, ids);
+      const phones = await contactChannelRepository.listLivePhoneValuesByContactIds(tx, ids);
+      for (const [id, rows] of emails) {
+        const extra = rows.filter((r) => !r.isPrimary).map((r) => decryptPii(r.valueEnc));
+        if (extra.length > 0) additionalEmailsById.set(id, extra.join(";"));
+      }
+      for (const [id, rows] of phones) {
+        const extra = rows.filter((r) => !r.isPrimary).map((r) => decryptPii(r.valueEnc));
+        if (extra.length > 0) additionalPhonesById.set(id, extra.join(";"));
+      }
+    });
+  }
+
   // 3) Build the CSV rows — only the contacts that revealed (suppressed ones are absent entirely, masked fields
   //    included), merging the decrypted email/phone onto the masked row.
   const rows = (masked as Array<Record<string, unknown> & { id: string }>)
@@ -136,9 +169,16 @@ export async function bulkRevealExport(
         email: rev?.email ?? "",
         phone: rev?.phone ?? "",
         emailStatus: rev?.emailStatus,
+        // Gate-on only — the columns are absent from the header gate-off, so the file is byte-identical.
+        ...(channelsFromChild
+          ? {
+              additionalEmails: additionalEmailsById.get(m.id) ?? "",
+              additionalPhones: additionalPhonesById.get(m.id) ?? "",
+            }
+          : {}),
       };
     });
-  const csv = toCsv(rows, REVEALED_EXPORT_COLUMNS);
+  const csv = toCsv(rows, channelsFromChild ? REVEALED_EXPORT_COLUMNS_CHILD : REVEALED_EXPORT_COLUMNS);
 
   // 4) Write through the FileStore port + hand back a download URL (signed + expiring in prod; file:// in dev).
   await input.fileStore.putArtifact(input.exportKey, new TextEncoder().encode(csv));
