@@ -13,11 +13,15 @@ import {
   assertListInWorkspace,
   buildDraftPreviewSummary,
   buildImportPreview,
+  copySourceExt,
   decideFastAdmission,
+  decideImportRouting,
   decodeAdmittedCsv,
   deriveImportProgress,
+  type ImportRoutingVerdict,
   isXlsxFile,
   parseImportFile,
+  submitCopyImport,
   suggestColumnMapping,
   writeAudit,
 } from "@leadwolf/core";
@@ -70,10 +74,11 @@ import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
-import { enqueueFastImport } from "./bulkQueue.ts";
+import { enqueueBulkImportDrive, enqueueFastImport } from "./bulkQueue.ts";
 import { bulkFileStore } from "./bulkStore.ts";
 import { requireImportCreateGrant } from "./createGrant.ts";
-import { isImportV2Enabled } from "./importV2Gate.ts";
+import { isCopyModeEngaged, isImportV2Enabled } from "./importV2Gate.ts";
+import { toLegacyStatusV2 } from "./legacyStatus.ts";
 import { scanImportUpload } from "./malwareScan.ts";
 import { enqueueImport, getImportJob } from "./queue.ts";
 import { admittedImportFormData, readAdmittedImportContent } from "./uploadAdmission.ts";
@@ -109,30 +114,8 @@ function toImportJobStatus(state: string): ImportJobStatus {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** 08 §2.4 legacy status mapping: v2 durable states → the shipped public enum. `cancelled → failed` with
- *  failedReason "cancelled" (the legacy enum predates the verb); draft/uploading never occur in Phase A. */
-function toLegacyStatusV2(status: string): ImportJobStatus {
-  switch (status) {
-    case "queued":
-    case "deferred":
-    case "draft":
-    case "uploading":
-      return "queued";
-    case "validating":
-    case "staged":
-    case "running":
-    case "paused":
-      return "active";
-    case "completed":
-    case "partial":
-      return "completed";
-    case "failed":
-    case "cancelled":
-      return "failed";
-    default:
-      return "unknown";
-  }
-}
+// The 08 §2.4 legacy status mapping lives in legacyStatus.ts (S-I9 verified it covers the copy-only
+// `staged` state — unit-tested there); this file consumes it for every legacy-shaped read.
 
 /** Build the legacy poll response from the DURABLE row (G03's fix: the DB answers for the row's lifetime,
  *  never `Job.getState()`). Progress/summary derive from the atomic counters through core's ONE
@@ -261,33 +244,74 @@ function decodeJobCursor(raw: string): { createdAt: Date; id: string } | null {
   }
 }
 
-// ── S-I5: server-side routing pre-gate (08 §1, G10 routing half) ────────────────────────────────────────
-// The SERVER decides fast vs copy from MEASURED facts (row count + byte size), never a client hint. Copy mode
-// is not engaged until the enable-gates clear (G07+G09), so an over-threshold file gets an honest
-// `file_too_large`/`xlsx_too_large` refusal NAMING the ceiling (12 §5) — never a dead-end toggle (14's
-// standing fallback). Copy engagement + its UX are S-I9/Phase 2. Called ONLY inside the IMPORT_V2 gate, so the
-// legacy path is byte-identical (a 100k-row CSV still runs on the legacy engine, unrefused, gate-off).
-function assertFastPathRouting(fileName: string, byteSize: number, rowCount: number): void {
-  const isXlsx = /\.xlsx$/i.test(fileName);
-  const rowCeiling = env.BULK_IMPORT_THRESHOLD_ROWS;
-  if (rowCeiling > 0 && rowCount > rowCeiling) {
-    throw new ImportTooLargeError({
-      limit: rowCeiling,
-      current: rowCount,
-      unit: "rows",
-      code: isXlsx ? "xlsx_too_large" : "file_too_large",
-    });
-  }
-  // XLSX bytes are already hard-capped at admission (IMPORT_XLSX_MAX_BYTES); the fast-path BYTE ceiling here is
-  // the CSV routing limit (12 §5's 10 MB pair-half). Above it ⇒ copy territory ⇒ honest refusal until Phase 2.
-  if (!isXlsx && byteSize > IMPORT_FASTPATH_MAX_BYTES) {
-    throw new ImportTooLargeError({
-      limit: IMPORT_FASTPATH_MAX_BYTES,
-      current: byteSize,
-      unit: "bytes",
-      code: "file_too_large",
-    });
-  }
+// ── S-I5 → S-I9: server-side routing (08 §1, G10 routing half) ─────────────────────────────────────────
+// The SERVER decides fast vs copy from MEASURED facts (row count + byte size), never a client hint — core's
+// ONE decision fn (`decideImportRouting`), fed the env knob here. `copyEngaged=false` ⇒ an over-threshold
+// file gets the shipped honest `file_too_large`/`xlsx_too_large` refusal NAMING the ceiling (12 §5) — 15
+// §R-P2's standing fallback, byte-identical to the S-I5 pre-gate. `copyEngaged=true` (isCopyModeEngaged —
+// the graduated BULK pair, evaluated ONLY inside the IMPORT_V2 gate) ⇒ an over-threshold CSV returns 'copy'
+// and the caller stores + drives it (S-I9: "the same commit call silently starts routing those files to
+// copy mode" — the ceiling lifts, the contract doesn't change). XLSX over-threshold refuses in EVERY gate
+// state (the copy drive stages CSV only — 08 §1's XLSX exception). Legacy gate-off paths never call this.
+function routeImport(
+  fileName: string,
+  byteSize: number,
+  rowCount: number,
+  copyEngaged: boolean,
+): ImportRoutingVerdict {
+  return decideImportRouting({
+    fileName,
+    byteSize,
+    rowCount,
+    rowCeiling: env.BULK_IMPORT_THRESHOLD_ROWS,
+    copyEngaged,
+  });
+}
+
+// ── S-I9: the one-shot COPY submission (08 §1 Phase C) ─────────────────────────────────────────────────
+// The over-threshold one-shot must STORE THE OBJECT FIRST — the drive re-reads it in the worker; rows never
+// ride the payload on the copy path. core's submitCopyImport IS the POST /imports/bulk internals (create
+// control row `processing_mode='copy'` → stream to the FileStore → enqueue the drive, idempotency-first),
+// extracted so the two surfaces cannot diverge (08 §2.4's delegation window). The 202 ref is the fast
+// lane's — the user-visible contract never changes, only the ceiling lifts. No `import.committed` audit
+// row here: the one-shot writes none in fast mode either (08 §2.3 treats it as upload+commit combined; the
+// draft COMMIT verb is the audited one) — parity, recorded in doc 16.
+async function submitOneShotCopy(
+  c: Context<{ Variables: TenancyVariables }>,
+  args: {
+    scope: { tenantId: string; workspaceId: string };
+    userId: string;
+    file: File;
+    sourceName: SourceName;
+    mapping: ColumnMapping;
+    conflictPolicy: ConflictPolicy;
+    strategy: ImportStrategy;
+    listId: string | undefined;
+    avScan: AvScanStatus;
+    idempotencyKey: string | null;
+  },
+): Promise<Response> {
+  const { jobId } = await submitCopyImport({
+    scope: args.scope,
+    createdByUserId: args.userId,
+    sourceName: args.sourceName,
+    fileName: args.file.name,
+    fileSize: args.file.size,
+    // Blob-backed and re-readable — a fresh stream even after admission/scan consumed a read.
+    body: () => args.file.stream(),
+    avScanStatus: args.avScan,
+    idempotencyKey: args.idempotencyKey,
+    columnMapping: args.mapping,
+    conflictPolicy: args.conflictPolicy,
+    targetListId: args.listId ?? null,
+    // S-I6: the resolved strategy persists on the copy row too — history/detail reflects HOW it merges.
+    mergeMode: args.strategy.mergeMode,
+    preservePopulated: args.strategy.preservePopulated,
+    fileStore: bulkFileStore(),
+    enqueueDrive: (jobId, scope) => enqueueBulkImportDrive({ kind: "drive", jobId, scope }),
+  });
+  const body: ImportJobRef = { jobId, status: "queued" };
+  return c.json(body, 202);
 }
 
 // ── S-I6: resolve the 08 §5 merge strategy for a gate-on job (request → template → import_policy default) ─
@@ -389,13 +413,6 @@ function parseListTarget(form: FormData): string | undefined {
 // today; the S3 adapter transparently when the Gate-B env lands — bulkStore.ts is the one selection seam),
 // and is CANARY-ONLY until Gate C clears (15 §M-SEQ row 35).
 
-/** Sanitized lowercase extension for the source object key — the filename is NEVER trusted in a path
- *  (alnum only; mirrors bulkRoutes.ts sourceExt — keep the two in sync). Defaults to `csv`. */
-function draftSourceExt(name: string): string {
-  const ext = (name.split(".").pop() ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return ext || "csv";
-}
-
 /**
  * Buffer a stored draft source object. BOUNDED BY CONSTRUCTION: callers pre-gate CSV bytes at the
  * fast-path ceiling (10 MiB) off the row's `file_size` BEFORE reading, and XLSX was admission-capped at
@@ -480,10 +497,10 @@ async function createImportDraft(
   if (avScan === "infected")
     throw new ImportValidationError("The uploaded file did not pass the malware scan.");
 
-  // Fast-path ceiling AT UPLOAD (08 §1: until the copy gates clear, an over-threshold file is refused at
-  // upload — a truthful product limit, and the byte half fires BEFORE the buffer/parse so the draft path
-  // never does more request-thread work than commit would admit). When G07+G09 clear, the draft upload
-  // starts admitting above this and only commit's routing lifts — the user contract never changes shape.
+  // CSV byte cap AT UPLOAD (the draft-verb request-thread BOUND): kept unconditional even with copy
+  // engaged — every draft verb buffers the object (preview's full pass included), so the byte half stays
+  // the upload bound until 08 §4's constant-memory streaming preview exists (doc-16 drift row). Over-BYTE
+  // CSVs enter copy via the one-shot POST or /imports/bulk, which never re-buffer for preview.
   assertDraftReadable(file.name, file.size);
 
   // Parse verdict at upload (08 §2.1: draft = "file uploaded and stored, parse verdict + AV verdict
@@ -491,13 +508,17 @@ async function createImportDraft(
   // The parsed headers feed the auto-map proposal; the ROWS are deliberately discarded (the draft's truth
   // is the stored object; preview/commit re-read it — nothing PII rides the control row or this closure).
   const parsed = parseImportFile(await readAdmittedImportContent(file), file.name);
-  // The row half of the pre-gate (measured, post-parse — the same S-I5 ceiling commit re-asserts).
-  assertFastPathRouting(file.name, file.size, parsed.rows.length);
+  // The ROW half (measured, post-parse): with copy ENGAGED (S-I9) an over-row draft is ADMITTED — the
+  // mode is still decided ONCE, at commit (processing_mode stays unset here); not engaged ⇒ the shipped
+  // honest refusal. XLSX over-threshold refuses either way (verdict discarded — routing is commit's).
+  const copyEngaged = await isCopyModeEngaged(tenantId);
+  routeImport(file.name, file.size, parsed.rows.length, copyEngaged);
   const suggestedMapping = suggestColumnMapping(parsed.headers);
 
-  // Deterministic object key, minted BEFORE create (the bulkRoutes idiom: createJob assigns the jobId from
-  // the DB default, and source_file is NOT NULL at insert). Ext sanitized — the filename is untrusted.
-  const sourceKey = `imports/${randomUUID()}/source.${draftSourceExt(file.name)}`;
+  // Deterministic object key, minted BEFORE create (the bulk/copy idiom: createJob assigns the jobId from
+  // the DB default, and source_file is NOT NULL at insert). Ext sanitized via core's ONE copySourceExt —
+  // the filename is untrusted, never a path.
+  const sourceKey = `imports/${randomUUID()}/source.${copySourceExt(file.name)}`;
   const idempotencyKey = c.req.header("idempotency-key") ?? null;
 
   const viewer = await buildJobViewer({ tenantId, workspaceId, userId });
@@ -623,21 +644,63 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
   if (avScan === "infected")
     throw new ImportValidationError("The uploaded file did not pass the malware scan.");
 
-  const parsed = parseImportFile(await readAdmittedImportContent(file), file.name);
-
   // ── S-I3 fork: the IMPORT_V2 dual gate (env kill-switch AND per-tenant flag; importV2Gate.ts). ─────────
-  // GATE ON: the one-shot submit creates the DURABLE import_jobs row (processing_mode='fast') and enqueues
-  // a `fast` job on the unified bulk-imports queue — jobId = import_jobs.id, the poll reads the DB row
-  // (G03 closes). GATE OFF: the legacy branch below is the shipped code, byte-identical (T1 parity) — the
-  // Redis enqueue, the BullMQ jobId, the 202 body, everything.
+  // GATE ON: the one-shot submit creates the DURABLE import_jobs row and enqueues onto the unified
+  // bulk-imports queue — jobId = import_jobs.id, the poll reads the DB row (G03 closes). Routing is the
+  // server's, from measured facts: within the fast pair ⇒ `fast` (rows in the payload, unchanged); over
+  // threshold ⇒ S-I9's decision — copy ENGAGED routes to `copy` (store the object, enqueue the drive), NOT
+  // engaged keeps the shipped honest refusal (§R-P2 fallback). GATE OFF: the legacy branch below is the
+  // shipped code, byte-identical (T1 parity) — the Redis enqueue, the BullMQ jobId, the 202 body, everything.
   if (importV2) {
-    // S-I5: measured server-side routing. Over-threshold ⇒ honest refusal (copy mode is dark until Phase 2);
-    // otherwise the verdict is `fast` (processing_mode below). Gate-on only — the legacy path never refuses.
-    assertFastPathRouting(file.name, file.size, parsed.rows.length);
     const scope = { tenantId, workspaceId };
+    // Job-level idempotency (08 §1.1 level 1): the same Idempotency-Key collapses onto the existing job via
+    // the shipped partial unique (workspace_id, idempotency_key) — in EITHER mode (fast create / copy submit).
+    const idempotencyKey = c.req.header("idempotency-key") ?? null;
+    // S-I9: copy engagement — the graduated BULK pair (env BULK_IMPORT_ENABLED + per-tenant
+    // bulk_import_enabled), evaluated ONCE per request inside the IMPORT_V2 gate (15 row 40's trio; env off
+    // ⇒ zero extra queries). Off ⇒ everything below is the shipped S-I5/S-I3 fast lane, byte-identical.
+    const copyEngaged = await isCopyModeEngaged(tenantId);
     // S-I6: resolve the 08 §5 merge strategy (request → import_policy default; legacy conflictPolicy mapped).
     // It rides the payload (supersedes conflictPolicy in the engine) AND is persisted on the job row below.
     const strategy = await resolveImportStrategy(form, scope, parsedPolicy.data, policyRaw != null);
+
+    // S-I9 byte-half short-circuit (08 §1): an over-byte CSV with copy engaged routes to copy WITHOUT a
+    // request-thread parse — measured bytes alone are an over-threshold fact; the drive stream-parses the
+    // stored object in the worker. Not engaged keeps the shipped parse-then-refuse order below.
+    if (copyEngaged && !isXlsxFile(file.name) && file.size > IMPORT_FASTPATH_MAX_BYTES) {
+      return submitOneShotCopy(c, {
+        scope,
+        userId: claims.sub,
+        file,
+        sourceName: src,
+        mapping,
+        conflictPolicy: parsedPolicy.data,
+        strategy,
+        listId,
+        avScan,
+        idempotencyKey,
+      });
+    }
+
+    const parsed = parseImportFile(await readAdmittedImportContent(file), file.name);
+    // S-I5 → S-I9: THE routing decision, once, from measured facts (parsed rows + bytes). Over-threshold:
+    // engaged ⇒ copy; not engaged ⇒ the honest refusal (unchanged); XLSX over-threshold refuses always.
+    const verdict = routeImport(file.name, file.size, parsed.rows.length, copyEngaged);
+    if (verdict === "copy") {
+      return submitOneShotCopy(c, {
+        scope,
+        userId: claims.sub,
+        file,
+        sourceName: src,
+        mapping,
+        conflictPolicy: parsedPolicy.data,
+        strategy,
+        listId,
+        avScan,
+        idempotencyKey,
+      });
+    }
+
     const input: ImportFastInput = {
       importedByUserId: claims.sub,
       sourceName: src,
@@ -648,21 +711,20 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
       rows: parsed.rows,
       target: listId ? { listId } : undefined,
     };
-    // Job-level idempotency (08 §1.1 level 1): the same Idempotency-Key collapses onto the existing job via
-    // the shipped partial unique (workspace_id, idempotency_key) — the replay returns the SAME jobId and
-    // enqueues nothing (levels 2/3 — the single chunk row + source_imports.content_hash — live below).
-    const idempotencyKey = c.req.header("idempotency-key") ?? null;
+    // Replay semantics (08 §1.1 levels 2/3 — the single chunk row + source_imports.content_hash — live
+    // below; the job-level key was hoisted above so both modes share it).
     // S-Q2 per-workspace cap (09 §2.2): the census + the row creation share ONE tx — at/over the cap the
     // job parks in `deferred` (the visible-backpressure state; the legacy response shape maps it to
     // `queued`, 08 §2.4) and its queue job carries the recheck delay; the leader-locked sweep promotes
     // oldest-first as slots free. Cap 0 = disabled = always `queued` (legacy).
     const { id: jobId, created, admission } = await withTenantTx(scope, async (tx) => {
-      const verdict = await decideFastAdmission(tx, workspaceId);
+      // (named to avoid shadowing the outer ROUTING verdict — this is the S-Q2 ADMISSION verdict)
+      const admissionVerdict = await decideFastAdmission(tx, workspaceId);
       const res = await importJobRepository.createJob(tx, {
         tenantId,
         workspaceId,
         createdByUserId: claims.sub,
-        status: verdict,
+        status: admissionVerdict,
         // No stored object exists on the Phase-A fast path (rows travel in the payload until G07); the
         // NOT NULL storage-key column records an honest inline sentinel, and the DISPLAY filename lands in
         // the S-I1 source_filename column (source_name keeps the provider enum — 08 §Contradiction scan).
@@ -676,15 +738,15 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
         columnMapping: mapping,
         conflictPolicy: parsedPolicy.data,
         targetListId: listId ?? null,
-        // S-I1 v2 columns, written by their first writer: the server's routing verdict (Phase A: always
-        // fast — copy engagement is S-I5/S-I9) + the honest display filename.
+        // S-I1 v2 columns: the server's routing verdict — 'fast' by construction here (an over-threshold
+        // verdict already returned via submitOneShotCopy above) + the honest display filename.
         processingMode: "fast",
         sourceFilename: file.name,
         // S-I6: persist the resolved 08 §5 strategy so history/detail reflects HOW the job merged.
         mergeMode: strategy.mergeMode,
         preservePopulated: strategy.preservePopulated,
       });
-      return { ...res, admission: verdict };
+      return { ...res, admission: admissionVerdict };
     });
     if (created) {
       // A deferred job STILL gets transport (rows live in the payload until G07 — Phase-A bound): the
@@ -698,6 +760,10 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
     return c.json(body, 202);
   }
 
+  // LEGACY branch (gate off): parse on the request thread and enqueue rows onto the legacy queue — the
+  // shipped code, byte-identical (the parse moved inside each branch with S-I9 so an engaged over-byte
+  // copy submit never pays a request-thread parse; order and errors here are unchanged).
+  const parsed = parseImportFile(await readAdmittedImportContent(file), file.name);
   const jobId = await enqueueImport({
     scope: { tenantId, workspaceId },
     importedByUserId: claims.sub,
@@ -1150,9 +1216,11 @@ importRoutes.post("/:jobId/preview", async (c) => {
   assertDraftReadable(filename, job.fileSize);
   const bytes = await readDraftSourceObject(job.sourceFile);
   const parsed = parseDraftSource(bytes, filename);
-  // The same measured ceiling commit enforces (S-I5) — an over-threshold draft learns it here, honestly,
-  // instead of after mapping work; also the preview's own scan bound (nothing above the pair is scanned).
-  assertFastPathRouting(filename, job.fileSize ?? bytes.byteLength, parsed.rows.length);
+  // The same routing decision commit makes (S-I5→S-I9), engagement-aware so preview never refuses a draft
+  // commit would accept: engaged, an over-ROW draft previews (full pass still bounded by the unconditional
+  // CSV byte cap above — the preview-scan bound); not engaged ⇒ the honest refusal, unchanged.
+  const copyEngaged = await isCopyModeEngaged(tenantId);
+  routeImport(filename, job.fileSize ?? bytes.byteLength, parsed.rows.length, copyEngaged);
 
   // Full pass + batched dedup lookups under ONE RLS-scoped tx; the non-PII summary caches on the row in
   // the same tx (draft-pinned write — a raced commit just drops the cache, the projection is re-derivable).
@@ -1168,11 +1236,12 @@ importRoutes.post("/:jobId/preview", async (c) => {
   return c.json(body, 200);
 });
 
-// ── S-I8: POST /imports/:jobId/commit — draft → queued/deferred (08 §2.3). The S-I5 routing pre-gate runs
-// HERE, at commit, from measured facts (re-parsed rows + recorded bytes — never a client hint); admission
-// (S-Q2 cap), the commit quota, the enqueue, and the payload shape are EXACTLY the one-shot's fast lane
-// (Phase A: rows travel in the BullMQ payload — the sanctioned transport bound, memory-capped by the same
-// fast-path pair the routing gate enforces; Phase B slims it to {jobId, scope}). Idempotency-Key REQUIRED
+// ── S-I8/S-I9: POST /imports/:jobId/commit — draft → queued/deferred (08 §2.3). THE routing decision runs
+// HERE, at commit, from measured facts (re-parsed rows + recorded bytes — never a client hint): within the
+// fast pair ⇒ the one-shot's fast lane EXACTLY (S-Q2 admission, commit quota, rows-in-payload transport —
+// the Phase-A bound; Phase B slims it to {jobId, scope}); over threshold + the BULK pair ENGAGED ⇒ the job
+// converts to `processing_mode='copy'` and ONE drive re-reads the stored object (S-I9 — no rows ever ride
+// the payload on the copy path); over threshold + NOT engaged ⇒ the honest refusal. Idempotency-Key REQUIRED
 // (08 §2.3): the key is recorded on the row (`options.commitIdempotencyKey`) and a replay returns the same
 // 202 without a second transition/enqueue (BullMQ's stable `import-fast:<jobId>` id dedupes transport
 // anyway). Draft-only against the LOCKED row: 409 illegal_state otherwise (422 while no mapping is saved);
@@ -1216,28 +1285,46 @@ importRoutes.post("/:jobId/commit", async (c) => {
     throw new ImportValidationError("Save a column mapping before committing.");
 
   const filename = job.sourceFilename ?? job.sourceFile;
-  assertDraftReadable(filename, job.fileSize);
-  const bytes = await readDraftSourceObject(job.sourceFile);
-  const parsed = parseDraftSource(bytes, filename);
-  // S-I5: the server's routing decision, once, at commit. Over-threshold ⇒ the honest refusal until the
-  // copy gates clear (the draft STAYS a draft — re-uploadable smaller, cancellable, or reaped at TTL).
-  assertFastPathRouting(filename, job.fileSize ?? bytes.byteLength, parsed.rows.length);
+  // S-I9: copy engagement — the graduated BULK pair, evaluated inside the IMPORT_V2 gate (checked above).
+  const copyEngaged = await isCopyModeEngaged(tenantId);
+
+  // S-I5 → S-I9: the server's routing decision, ONCE, at commit, from measured facts (08 §1). Engaged +
+  // over-BYTE CSV short-circuits to copy WITHOUT reading the object — the drive re-reads + stream-parses
+  // it in the worker, so commit's request thread never buffers past the fast pair. Otherwise the bounded
+  // read/parse feeds the row half: over-row + engaged ⇒ copy; over-threshold + NOT engaged ⇒ the shipped
+  // honest refusal (the draft STAYS a draft — re-uploadable smaller, cancellable, or reaped at TTL).
+  let verdict: ImportRoutingVerdict;
+  let measuredRows: ImportFastInput["rows"] | null = null;
+  if (copyEngaged && !isXlsxFile(filename) && (job.fileSize ?? 0) > IMPORT_FASTPATH_MAX_BYTES) {
+    verdict = "copy";
+  } else {
+    assertDraftReadable(filename, job.fileSize);
+    const bytes = await readDraftSourceObject(job.sourceFile);
+    const parsed = parseDraftSource(bytes, filename);
+    verdict = routeImport(filename, job.fileSize ?? bytes.byteLength, parsed.rows.length, copyEngaged);
+    measuredRows = parsed.rows;
+  }
 
   const strategy: ImportStrategy = {
     mergeMode: job.mergeMode as ImportMergeMode,
     preservePopulated: job.preservePopulated,
   };
-  const input: ImportFastInput = {
-    // Attribution stays the draft's creator (the committer is the creator ∪ elevated by the viewer gate).
-    importedByUserId: job.createdByUserId ?? claims.sub,
-    sourceName: job.sourceName as SourceName,
-    sourceFile: job.sourceFilename ?? undefined,
-    mapping,
-    conflictPolicy: (job.conflictPolicy ?? undefined) as ConflictPolicy | undefined,
-    strategy,
-    rows: parsed.rows,
-    target: job.targetListId ? { listId: job.targetListId } : undefined,
-  };
+  // The FAST lane's transport payload (rows measured above — the Phase-A bound). A copy commit carries NO
+  // rows: its transport is one drive job re-reading the stored draft object (payload = {jobId, scope}).
+  const input: ImportFastInput | null =
+    verdict === "fast" && measuredRows
+      ? {
+          // Attribution stays the draft's creator (the committer is creator ∪ elevated by the viewer gate).
+          importedByUserId: job.createdByUserId ?? claims.sub,
+          sourceName: job.sourceName as SourceName,
+          sourceFile: job.sourceFilename ?? undefined,
+          mapping,
+          conflictPolicy: (job.conflictPolicy ?? undefined) as ConflictPolicy | undefined,
+          strategy,
+          rows: measuredRows,
+          target: job.targetListId ? { listId: job.targetListId } : undefined,
+        }
+      : null;
 
   type CommitResult =
     | { kind: "not_found" }
@@ -1263,18 +1350,23 @@ importRoutes.post("/:jobId/commit", async (c) => {
           3600,
         );
     }
-    // S-Q2 admission: at/over the workspace cap the job parks `deferred` (visible backpressure).
-    const admission = await decideFastAdmission(tx, workspaceId);
+    // S-Q2 admission is the FAST lane's backpressure (deferred parking + the promotion sweep). A copy
+    // commit goes straight to `queued`: the copy lane's backpressure is the drive queue's shed + the
+    // reaper's copy_redrive healer (the shipped bulk posture — S-Q2's census never counted copy drives).
+    const admission =
+      verdict === "copy" ? ("queued" as const) : await decideFastAdmission(tx, workspaceId);
     await importJobRepository.updateJobStatus(tx, jobIdParam, {
       status: admission,
-      // The routing verdict, recorded where it was decided (Phase A: always fast — copy is S-I9's).
-      processingMode: "fast",
+      // The routing verdict, recorded where it was decided (08 §1) — S-I9: 'copy' above threshold when
+      // the BULK pair is engaged; 'fast' otherwise (the shipped Phase-A value).
+      processingMode: verdict,
       options: {
         ...((row.options as Record<string, unknown> | null) ?? {}),
         commitIdempotencyKey: idempotencyKey,
       },
     });
-    // In-tx audit (08 §7): a commit that can't record its actor can't commit. Metadata is non-PII.
+    // In-tx audit (08 §7): a commit that can't record its actor can't commit. Metadata is non-PII —
+    // counts + mode only (a byte-routed copy commit has no measured row count; the drive counts at staging).
     await writeAudit(tx, {
       tenantId,
       workspaceId,
@@ -1282,7 +1374,11 @@ importRoutes.post("/:jobId/commit", async (c) => {
       action: "import.committed",
       entityType: "import_job",
       entityId: jobIdParam,
-      metadata: { rows: parsed.rows.length, mode: "fast", admission },
+      metadata: {
+        ...(measuredRows ? { rows: measuredRows.length } : {}),
+        mode: verdict,
+        admission,
+      },
     });
     return { kind: "committed", admission };
   });
@@ -1294,11 +1390,18 @@ importRoutes.post("/:jobId/commit", async (c) => {
       result.status,
     );
   if (result.kind === "committed") {
-    // Transport exactly like the one-shot (a deferred job still gets its delayed cooperative re-check).
-    await enqueueFastImport(
-      { kind: "fast", jobId: jobIdParam, scope, input },
-      result.admission === "deferred" ? env.IMPORT_DEFER_RECHECK_DELAY_MS : 0,
-    );
+    if (verdict === "copy") {
+      // S-I9 transport: ONE drive job re-reading the stored draft object (a draft always stores a real
+      // key — never an inline:/retry: sentinel); stable id `import-drive:<jobId>` dedupes replays at the
+      // queue. A backpressure shed here leaves the row honestly `queued` for the reaper's copy_redrive.
+      await enqueueBulkImportDrive({ kind: "drive", jobId: jobIdParam, scope });
+    } else if (input) {
+      // Transport exactly like the one-shot (a deferred job still gets its delayed cooperative re-check).
+      await enqueueFastImport(
+        { kind: "fast", jobId: jobIdParam, scope, input },
+        result.admission === "deferred" ? env.IMPORT_DEFER_RECHECK_DELAY_MS : 0,
+      );
+    }
   }
   const body: ImportJobRef = { jobId: jobIdParam, status: "queued" };
   return c.json(body, 202);

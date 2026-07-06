@@ -7,9 +7,8 @@
 // trust boundary as the sync route: the workspace comes from the VERIFIED token (tenancy middleware), never the
 // body; the client listId is validated against that workspace before enqueue (list-plan D4 — never trusted).
 
-import { randomUUID } from "node:crypto";
 import { env } from "@leadwolf/config";
-import { assertListInWorkspace, isFlagEnabledForTenant } from "@leadwolf/core";
+import { assertListInWorkspace, isFlagEnabledForTenant, submitCopyImport } from "@leadwolf/core";
 import { type ImportJobRow, importJobRepository, withTenantTx } from "@leadwolf/db";
 import {
   BULK_IMPORT_FLAG_KEY,
@@ -58,6 +57,18 @@ bulkImportRoutes.use("*", async (_c, next) => {
     throw new ForbiddenError("bulk_import_disabled", "Bulk import is not enabled.");
   }
   await next();
+});
+
+// ── S-I9: the 08 §1.2 Phase-C DELEGATION WINDOW — with unified routing shipped, this surface is a THIN
+// DELEGATE over core's submitCopyImport (the exact trio the unified POST /imports drives when copy is
+// engaged: same control row, same object key idiom, same drive) kept "for one release window, then
+// retired" (retirement = 15 §M-SEQ seq 43's drain, never a quiet 404). Successful responses carry the
+// standard deprecation signal (RFC 9745 `Deprecation` + a successor Link) so window-era clients can see
+// the clock; behavior is otherwise untouched, and while the env gate above is closed nothing here runs.
+bulkImportRoutes.use("*", async (c, next) => {
+  await next();
+  c.res.headers.set("Deprecation", "true");
+  c.res.headers.set("Link", '</api/v1/imports>; rel="successor-version"');
 });
 
 /** Map a stored control row's row-accounting columns to the public, non-PII counts DTO (rows_in = the sum). */
@@ -112,13 +123,6 @@ function parseBulkListTarget(form: FormData): string | undefined {
   const parsed = importTargetSchema.safeParse({ listId: String(raw) });
   if (!parsed.success) throw new ImportValidationError("'listId' must be a valid list id.");
   return parsed.data.listId;
-}
-
-/** A sanitized lowercase extension for the deterministic source key — the filename is NEVER trusted in a path
- *  (alnum only; the disk adapter is traversal-guarded too). Defaults to `csv`. */
-function sourceExt(name: string): string {
-  const ext = (name.split(".").pop() ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return ext || "csv";
 }
 
 // AV-scan SEAM (G-IMP-6 → S-S2/G08, wire point 1): scanImportUpload runs the env-selected MalwareScannerPort
@@ -178,56 +182,32 @@ bulkImportRoutes.post("/", requireImportCreateGrant(), async (c) => {
   if (avScan === "infected")
     throw new ImportValidationError("The uploaded file did not pass the malware scan.");
 
-  // Deterministic object-store key for the SOURCE upload, keyed by a fresh upload id (NOT the jobId): createJob
-  // assigns the jobId from the DB default and the db repo exposes no setter to rewrite source_file post-insert, so
-  // the key is computed BEFORE create (put → create → enqueue). The ext is sanitized — the filename is untrusted.
-  // (The rejected-rows artifact is jobId-based, written by core's runBulkImport — see the GET handler.)
-  const sourceKey = `imports/${randomUUID()}/source.${sourceExt(file.name)}`;
-
   // Idempotency-Key (09 §5): a re-submit carrying the same key collapses onto the existing job via the partial-
   // unique (workspace_id, idempotency_key) index in createJob — never a duplicate import.
   const idempotencyKey = c.req.header("idempotency-key") ?? null;
 
-  // Create the control row FIRST (short tx) so an idempotent re-submit is detected BEFORE we stream the upload or
-  // enqueue a duplicate drive. source_file points at sourceKey; we write those bytes immediately after (and only
-  // for a freshly-created job), BEFORE the drive is enqueued — so the worker never reads a not-yet-written object.
-  const { id: jobId, created } = await withTenantTx(scope, (tx) =>
-    importJobRepository.createJob(tx, {
-      tenantId,
-      workspaceId,
-      createdByUserId: claims.sub,
-      // source_file = the object-store KEY (core's bulkStage reads the upload from it); source_name = the
-      // SourceName PROVIDER enum (core casts `job.sourceName as SourceName` for the content hash + the
-      // `import:<source>` provenance stamp, byte-identical to the sync path — NOT the display filename, despite
-      // the schema's inline comment). The original filename is carried only inside the object key here.
-      sourceFile: sourceKey,
-      sourceName: src,
-      fileSize: file.size,
-      avScanStatus: avScan,
-      idempotencyKey,
-      columnMapping: mapping,
-      conflictPolicy: parsedPolicy.data,
-      targetListId: listId ?? null,
-    }),
-  );
-
-  if (created) {
-    // Stream the raw upload to the FileStore (constant memory — File.stream() is a ReadableStream<Uint8Array>),
-    // THEN enqueue the single drive job. On a storage failure mark the job failed (best-effort) and surface it.
-    try {
-      await bulkFileStore().putObject(sourceKey, file.stream());
-    } catch (err) {
-      await withTenantTx(scope, (tx) =>
-        importJobRepository.updateJobStatus(tx, jobId, {
-          status: "failed",
-          failedReason: "Failed to store the uploaded file.",
-          completedAt: new Date(),
-        }),
-      ).catch(() => undefined);
-      throw err;
-    }
-    await enqueueBulkImportDrive({ kind: "drive", jobId, scope });
-  }
+  // S-I9 delegation (08 §1.2 Phase C): core's submitCopyImport IS this route's former inline body,
+  // extracted — create the control row FIRST (short tx, idempotent re-submit detected before any bytes
+  // move), stream the upload to the FileStore, THEN enqueue the single drive. The row is now marked
+  // IDENTICALLY to the unified surface's copy jobs (`processing_mode='copy'` + the display
+  // `source_filename` — it IS the same trio; source_name keeps the SourceName PROVIDER enum for the
+  // content hash + the `import:<source>` provenance stamp, exactly as before). No strategy pair here:
+  // the legacy bulk engine keeps reading `conflictPolicy`; the columns take their policy-matching defaults.
+  const { jobId } = await submitCopyImport({
+    scope,
+    createdByUserId: claims.sub,
+    sourceName: src,
+    fileName: file.name,
+    fileSize: file.size,
+    body: () => file.stream(),
+    avScanStatus: avScan,
+    idempotencyKey,
+    columnMapping: mapping,
+    conflictPolicy: parsedPolicy.data,
+    targetListId: listId ?? null,
+    fileStore: bulkFileStore(),
+    enqueueDrive: (id, s) => enqueueBulkImportDrive({ kind: "drive", jobId: id, scope: s }),
+  });
 
   // The accept-status is always `queued` (the sync route's posture); the client polls GET for the real status —
   // which, for an idempotent re-submit, reflects wherever the original job already is.

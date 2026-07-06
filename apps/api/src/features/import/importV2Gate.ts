@@ -10,7 +10,7 @@
 import { env } from "@leadwolf/config";
 import { isFlagEnabledForTenant } from "@leadwolf/core";
 import { withTenantTx } from "@leadwolf/db";
-import { IMPORT_V2_FLAG_KEY } from "@leadwolf/types";
+import { BULK_IMPORT_FLAG_KEY, IMPORT_V2_FLAG_KEY } from "@leadwolf/types";
 
 /** Evaluate the dual gate for a tenant. Either layer off ⇒ false (legacy path, byte-identical). */
 export async function isImportV2Enabled(tenantId: string): Promise<boolean> {
@@ -19,5 +19,22 @@ export async function isImportV2Enabled(tenantId: string): Promise<boolean> {
   // LAYER 2 — per-tenant rollout flag (fail-closed: unknown flag evaluates off).
   return withTenantTx({ tenantId }, (tx) =>
     isFlagEnabledForTenant(tx, tenantId, IMPORT_V2_FLAG_KEY),
+  );
+}
+
+/**
+ * S-I9: is COPY MODE ENGAGED for this tenant — the GRADUATED bulk pair (15 §M-SEQ row 40 "graduates the
+ * existing `BULK_IMPORT_ENABLED` + `bulk_import_enabled` pair"; db-mgmt rule 3: NO new flag): the global
+ * env kill-switch AND the per-tenant rollout flag, the exact same two layers `POST /imports/bulk` gates
+ * on. Callers evaluate this only INSIDE the IMPORT_V2 dual gate, making the engagement trio env+flag+v2 —
+ * false ⇒ the routing decision falls back to the honest over-threshold refusal (15 §R-P2: copy off
+ * per-tenant or fleet-wide ⇒ fast path + honest ceiling, the program's standing fallback). Fail-closed
+ * (unknown/unreadable flag ⇒ off) and ZERO queries while the env layer is off — a copy-dark request is
+ * cost-identical as well as byte-identical.
+ */
+export async function isCopyModeEngaged(tenantId: string): Promise<boolean> {
+  if (!env.BULK_IMPORT_ENABLED) return false;
+  return withTenantTx({ tenantId }, (tx) =>
+    isFlagEnabledForTenant(tx, tenantId, BULK_IMPORT_FLAG_KEY),
   );
 }

@@ -44,6 +44,24 @@ export {
   type FinalizeIfLastChunkInput,
   type FinalizeResult,
 } from "./import/runBulkImport.ts";
+// THE fast-vs-copy routing decision (import-redesign 08 §1; S-I5 pre-gate → S-I9 engagement): pure +
+// env-free — the api passes the measured facts + the threshold knob + the copy-engagement verdict;
+// over-threshold refuses honestly unless copy is engaged (15 §R-P2's standing fallback).
+export {
+  decideImportRouting,
+  type ImportRoutingFacts,
+  type ImportRoutingVerdict,
+} from "./import/routing.ts";
+// The ONE store-then-enqueue copy submission (import-redesign 08 §1.2 Phase C, S-I9): control row
+// (processing_mode='copy') → stream the upload to the FileStore → enqueue the drive. Extracted from
+// POST /imports/bulk so the bulk route is a thin delegate and the unified one-shot POST reuses it.
+// Dependency-injected (FileStore + enqueue) like runBulkImport — core stays BullMQ/SDK-free.
+export {
+  copySourceExt,
+  submitCopyImport,
+  type SubmitCopyImportInput,
+  type SubmitCopyImportResult,
+} from "./import/submitCopyImport.ts";
 // Tenant fairness for the unified import queue (import-redesign 09 §2, S-Q2): per-workspace job cap →
 // `deferred` admission + the leader-locked sweep's per-workspace promotion pass. Knobs revert by env.
 export {
