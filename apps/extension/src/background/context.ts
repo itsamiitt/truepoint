@@ -4,12 +4,14 @@ import type { AppState, BroadcastMessage } from "../shared/messages.ts";
 import type { ApiClient } from "./api/client.ts";
 import type { AuthModule } from "./auth/index.ts";
 import type { RemoteConfig } from "./config/remoteConfig.ts";
+import type { CreditsStore } from "./credits/store.ts";
 import type { CaptureQueue } from "./queue/captureQueue.ts";
 import type { Telemetry } from "./telemetry/telemetry.ts";
 
 export interface RuntimeContext {
   api: ApiClient;
   auth: AuthModule;
+  credits: CreditsStore;
   queue: CaptureQueue;
   config: RemoteConfig;
   telemetry: Telemetry;

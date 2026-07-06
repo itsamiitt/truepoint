@@ -29,8 +29,16 @@ async function handle(
     case "PING":
       return { pong: true };
 
-    case "GET_STATE":
+    case "GET_STATE": {
+      // Return the cached state now; if signed in, kick a staleness-bounded credits refresh and re-broadcast
+      // when the balance changes (the popup/panel subscribe to STATE_CHANGED).
+      if (ctx.auth.tenantId) {
+        void ctx.credits
+          .refresh()
+          .then(async () => ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() }));
+      }
       return ctx.getState();
+    }
 
     case "LOOKUP":
       // TODO: wire POST /search/contacts for a real owned/known check
@@ -53,6 +61,9 @@ async function handle(
       try {
         const data = await ctx.api.reveal(msg.contactId, msg.revealType, crypto.randomUUID());
         await ctx.telemetry.event("reveal_result", { outcome: "revealed" });
+        // The reveal charged credits — update the pill from the server-authoritative post-charge balance.
+        ctx.credits.applyReveal(data.balanceAfter);
+        ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
         return { ok: true, revealType: msg.revealType, email: data.email, phone: data.phone };
       } catch (error) {
         const errorClass = error instanceof ApiError ? error.errorClass : "unexpected";
@@ -78,18 +89,21 @@ async function handle(
 
     case "AUTH_LOGOUT": {
       const state = await ctx.auth.logout();
+      ctx.credits.clear();
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
       return state;
     }
 
     case "SWITCH_WORKSPACE": {
       const state = await ctx.auth.switchWorkspace(msg.workspaceId);
+      await ctx.credits.refresh(true); // balance is tenant-scoped — re-pull after a scope change
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
       return state;
     }
 
     case "SWITCH_ORG": {
       const state = await ctx.auth.switchOrg(msg.tenantId);
+      await ctx.credits.refresh(true);
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
       return state;
     }

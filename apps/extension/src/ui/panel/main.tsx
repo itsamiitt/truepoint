@@ -1,4 +1,4 @@
-import "@leadwolf/ui/tokens.css";
+import "../brand.css";
 import { createRoot } from "react-dom/client";
 import { Panel } from "./Panel.tsx";
 

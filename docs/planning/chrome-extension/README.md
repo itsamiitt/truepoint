@@ -14,9 +14,10 @@ server seam already built.
 The series spans three halves: **engineering** (`00–05` + `ADR-0043`) — teardown, MV3 architecture,
 security/perf, standards, roadmap; **product** (`06–09`) — the feature catalogue, the honest
 market-gap/differentiation analysis, the minimal-modern UX/design language, and the product-level
-(feature) architecture; and **auth & brand** (`10–12` + `ADR-0044/0045`) — the enterprise authentication
-architecture (`10`), the branding/visual-language plan (`11`), and the auth gap analysis + companion-window
-remediation (`12`, the corrected auth design).
+(feature) architecture; and **auth & brand** (`10–13` + `ADR-0044/0045`) — the enterprise authentication
+architecture (`10`), the branding/visual-language plan (`11`), the auth gap analysis + companion-window
+remediation (`12`, the corrected auth design), and the **brand + live-credits build record** (`13`, what
+actually shipped in `apps/extension`).
 
 ## 0. Read first — do not duplicate
 
@@ -54,6 +55,7 @@ Every design doc below **cites** those rather than restating them.
 | **10** | [`10-extension-authentication.md`](./10-extension-authentication.md) | **Enterprise auth architecture (⚠ Model A superseded by `12`):** the cross-origin problem, research, full auth lifecycle + every flow (sequence diagrams), security design, backend changes required. Its launchWebAuthFlow primary is superseded — read `12`. |
 | **11** | [`11-extension-branding.md`](./11-extension-branding.md) | **Branding & visual language:** the three-chevron mark + real icon assets, Cobalt/Ink tokens, Geist type, brand voice, and per-surface branding (toolbar, popup, auth pages, states, notifications, onboarding, profile, workspace switcher). |
 | **12** | [`12-extension-auth-gap-analysis-and-remediation.md`](./12-extension-auth-gap-analysis-and-remediation.md) | **Auth gap analysis & fix:** why auth fails today (launchWebAuthFlow never captures the code; the "tab" symptom), how enterprise extensions really authenticate, the ranked gap register, and the **companion-window** remediation (popup web login + `externally_connectable` handoff + rotating SW refresh token). |
+| **13** | [`13-brand-and-credits.md`](./13-brand-and-credits.md) | **Brand + live-credits build record:** the brand→token/font mapping that shipped in `apps/extension` (tokens via `@leadwolf/ui`, self-hosted Geist, the mark/lockup, mark icons) and the credits data-flow (`GET /credits/balance`, the SW `CreditsStore`, refresh triggers + the reveal `balanceAfter` delta). |
 | ADR | [`../decisions/ADR-0043-chrome-extension-architecture.md`](../decisions/ADR-0043-chrome-extension-architecture.md) | The MV3 architecture decisions (least-privilege, thin-producer, compliant capture). |
 | ADR | [`../decisions/ADR-0044-extension-authentication.md`](../decisions/ADR-0044-extension-authentication.md) | ⚠ **Superseded by ADR-0045.** The original launchWebAuthFlow silent-re-auth decision. |
 | ADR | [`../decisions/ADR-0045-extension-auth-companion-window.md`](../decisions/ADR-0045-extension-auth-companion-window.md) | The corrected auth decision: companion-window login + `externally_connectable` handoff + extension-scoped rotating refresh token. |

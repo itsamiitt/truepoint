@@ -1,8 +1,14 @@
-// Side panel (08 §3.2) — the tabbed workspace. The Captured tab reads the local `recent` store and
-// renders all four StateSwitch states (loading skeleton / empty / error+retry / populated). Token-driven.
+// Side panel (08 §3.2) — the tabbed workspace, brand-first. The header carries the TruePoint lockup + the
+// live credit balance; the Captured tab reads the local `recent` store and renders all four StateSwitch states
+// (loading / empty / error+retry / populated) as brand rows (mono initials + mono outcome label). Token-driven
+// (04 §3): "Cobalt fills, Ink type" — the active tab is a soft Cobalt fill, everything else is ink + hairline.
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n/index.ts";
+import { onBroadcast, send } from "../../shared/client.ts";
 import { type RecentItem, db } from "../../shared/idb.ts";
+import type { AppState } from "../../shared/messages.ts";
+import { CreditsPill } from "../brand/CreditsPill.tsx";
+import { Lockup } from "../brand/Mark.tsx";
 
 type Tab = "captured" | "reveal" | "lists" | "sequences" | "ai";
 type Load<T> = { status: "loading" } | { status: "error" } | { status: "ready"; data: T };
@@ -24,12 +30,12 @@ const shell: React.CSSProperties = {
   flexDirection: "column",
 };
 const bar: React.CSSProperties = {
-  height: 44,
+  height: 52,
   display: "flex",
   alignItems: "center",
+  justifyContent: "space-between",
   padding: "0 var(--tp-space-4, 16px)",
   borderBottom: "1px solid var(--tp-hairline-2, #e5e7eb)",
-  fontWeight: 600,
 };
 const tabsRow: React.CSSProperties = {
   display: "flex",
@@ -43,6 +49,13 @@ const body: React.CSSProperties = {
   padding: "var(--tp-space-4, 16px)",
 };
 const muted: React.CSSProperties = { color: "var(--tp-ink-3, #6b7280)", fontSize: 13 };
+const monoOutcome: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 10.5,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color: "var(--tp-ink-4, #9ca3af)",
+};
 
 function tabStyle(active: boolean): React.CSSProperties {
   return {
@@ -50,11 +63,20 @@ function tabStyle(active: boolean): React.CSSProperties {
     background: active ? "var(--tp-cobalt-50, #e9f0fc)" : "transparent",
     color: active ? "var(--tp-cobalt-700, #1e4fa3)" : "var(--tp-ink-3, #6b7280)",
     borderRadius: "var(--tp-radius-sm, 6px)",
-    padding: "4px 10px",
+    padding: "5px 11px",
     fontSize: 13,
+    fontWeight: 500,
     cursor: "pointer",
     fontFamily: "inherit",
   };
+}
+
+/** Two-letter initials for the row avatar (mono, per the Brand-Kit lead rows). */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
+  return (first + last).toUpperCase() || "?";
 }
 
 function EmptyState({ title, hint }: { title: string; hint: string }): React.ReactElement {
@@ -77,6 +99,7 @@ function CapturedTab(): React.ReactElement {
       .catch(() => setLoad({ status: "error" }));
   }, []);
 
+  // reload is a stable useCallback([]) — run once on mount.
   useEffect(reload, []);
 
   if (load.status === "loading") {
@@ -102,17 +125,56 @@ function CapturedTab(): React.ReactElement {
           key={item.contactId}
           style={{
             display: "flex",
-            justifyContent: "space-between",
             alignItems: "center",
-            minHeight: 44,
+            gap: 12,
+            minHeight: 48,
+            padding: "8px 0",
             borderBottom: "1px solid var(--tp-hairline, #f0f0f0)",
           }}
         >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>{item.name}</div>
-            {item.company ? <div style={muted}>{item.company}</div> : null}
+          <span
+            style={{
+              width: 32,
+              height: 32,
+              flexShrink: 0,
+              borderRadius: "50%",
+              background: "var(--tp-surface-3, #f4f5f7)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: "var(--font-mono)",
+              fontSize: 12,
+              color: "var(--tp-ink-3, #6b7280)",
+            }}
+          >
+            {initials(item.name)}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 500,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {item.name}
+            </div>
+            {item.company ? (
+              <div
+                style={{
+                  ...muted,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {item.company}
+              </div>
+            ) : null}
           </div>
-          <span style={muted}>{item.outcome}</span>
+          <span style={monoOutcome}>{item.outcome}</span>
         </div>
       ))}
     </div>
@@ -121,10 +183,25 @@ function CapturedTab(): React.ReactElement {
 
 export function Panel(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("captured");
+  const [state, setState] = useState<AppState | null>(null);
+
+  useEffect(() => {
+    void send({ type: "GET_STATE" }).then(setState);
+    return onBroadcast((msg) => {
+      if (msg.type === "STATE_CHANGED") {
+        setState(msg.state);
+      }
+    });
+  }, []);
+
+  const signedIn = state?.auth.status === "signed_in";
 
   return (
     <div style={shell}>
-      <div style={bar}>{t("app.name")}</div>
+      <div style={bar}>
+        <Lockup markSize={22} wordSize={16} />
+        {signedIn ? <CreditsPill credits={state?.auth.credits ?? null} compact /> : null}
+      </div>
       <div style={tabsRow}>
         {TABS.map((entry) => (
           <button

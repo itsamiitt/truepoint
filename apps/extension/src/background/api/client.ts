@@ -4,7 +4,7 @@
 import type { ConsentContext, IngestionEnvelope, RawObservation } from "@leadwolf/types";
 import { API_BASE } from "../../shared/env.ts";
 import type { QueueItem } from "../../shared/idb.ts";
-import type { ErrorClass, RevealType, SubjectStatus } from "../../shared/types.ts";
+import type { ErrorClass, RevealCosts, RevealType, SubjectStatus } from "../../shared/types.ts";
 import type { AuthModule } from "../auth/index.ts";
 
 export class ApiError extends Error {
@@ -126,23 +126,36 @@ export class ApiClient {
     return { contactId: null, known: true, owned: false, outcome: "saved" };
   }
 
-  /** Metered reveal — requires an Idempotency-Key; charge + suppression are enforced server-side. */
+  /** Metered reveal — requires an Idempotency-Key; charge + suppression are enforced server-side. The server
+   *  returns the authoritative post-charge balance (`balanceAfter`) so the client updates the pill without a
+   *  round-trip (billing.revealResponseSchema). */
   async reveal(
     contactId: string,
     revealType: RevealType,
     idempotencyKey: string,
-  ): Promise<{ email?: string; phone?: string }> {
-    return this.request<{ email?: string; phone?: string }>(
+  ): Promise<{ email?: string; phone?: string; creditsCharged?: number; balanceAfter?: number }> {
+    return this.request(
       `/contacts/${encodeURIComponent(contactId)}/reveal`,
       { method: "POST", body: JSON.stringify({ reveal_type: revealType }) },
       { idempotencyKey },
     );
   }
 
+  /** The tenant's credit balance — GET /credits/balance → { balance }. Tenant-scoped server-side; null on any
+   *  failure (offline / signed-out / 401) so the pill degrades to "—" instead of crashing. */
   async credits(): Promise<number | null> {
     try {
-      const data = await this.request<{ balance?: number }>("/credits/me", { method: "GET" });
+      const data = await this.request<{ balance?: number }>("/credits/balance", { method: "GET" });
       return typeof data.balance === "number" ? data.balance : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Per-reveal_type credit cost (tenant-agnostic pricing) so the UI can show "Reveal email · N cr". */
+  async revealCosts(): Promise<RevealCosts | null> {
+    try {
+      return await this.request<RevealCosts>("/credits/reveal-costs", { method: "GET" });
     } catch {
       return null;
     }

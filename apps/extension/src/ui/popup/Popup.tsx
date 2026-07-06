@@ -1,14 +1,17 @@
-// Action popup (08 §3.3) — auth state, live credits, and a jump into the side panel. Token-driven
-// inline styles only (no hardcoded hex/px beyond the token fallbacks; 08 §1 rule 6). React 19.
+// Action popup (08 §3.3) — brand-first: the TruePoint lockup, a live credit balance, and a jump into the
+// side panel. "Cobalt fills, Ink type" — the primary button + all type are Ink; the only accent is the mark's
+// apex and the connected check; the credit number is Geist Mono. Token-driven (04 §3); React 19.
 import { useEffect, useState } from "react";
 import { t } from "../../i18n/index.ts";
 import { onBroadcast, send } from "../../shared/client.ts";
 import type { AppState } from "../../shared/messages.ts";
+import { CreditsPill } from "../brand/CreditsPill.tsx";
+import { Lockup, Mark } from "../brand/Mark.tsx";
 
 const wrap: React.CSSProperties = {
-  width: 360,
+  width: 320,
   boxSizing: "border-box",
-  padding: "var(--tp-space-4, 16px)",
+  padding: "var(--tp-space-5, 20px)",
   fontFamily: "var(--font-sans, system-ui)",
   color: "var(--tp-ink, #111827)",
   background: "var(--tp-surface, #fff)",
@@ -17,22 +20,22 @@ const primaryBtn: React.CSSProperties = {
   width: "100%",
   border: 0,
   borderRadius: "var(--radius, 8px)",
-  padding: "8px 12px",
+  padding: "10px 14px",
   fontSize: 13,
   fontWeight: 600,
+  fontFamily: "inherit",
   cursor: "pointer",
   color: "var(--tp-on-fill, #fff)",
   background: "var(--tp-btn, #111827)",
 };
-const pill: React.CSSProperties = {
-  fontSize: 11,
-  borderRadius: "var(--tp-radius-sm, 6px)",
-  padding: "2px 8px",
-  color: "var(--success, #16a34a)",
-  border: "1px solid var(--tp-hairline-2, #e5e7eb)",
+const account: React.CSSProperties = {
+  fontSize: 13,
+  color: "var(--tp-ink-3, #6b7280)",
+  marginTop: 12,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 };
-const label: React.CSSProperties = { fontSize: 13, color: "var(--tp-ink-3, #6b7280)" };
-const value: React.CSSProperties = { fontVariantNumeric: "tabular-nums", fontWeight: 600 };
 
 async function openPanel(): Promise<void> {
   try {
@@ -44,6 +47,39 @@ async function openPanel(): Promise<void> {
   } catch {
     void send({ type: "OPEN_PANEL" });
   }
+}
+
+// "Connected" as a machine-verified mono tag with the single Cobalt check (brand: verified label pattern).
+function ConnectedTag(): React.ReactElement {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        fontFamily: "var(--font-mono)",
+        fontSize: 10.5,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        color: "var(--tp-ink-3, #6b7280)",
+      }}
+    >
+      <svg
+        width={12}
+        height={12}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="var(--tp-cobalt, #2563c9)"
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+      {t("popup.connected")}
+    </span>
+  );
 }
 
 export function Popup(): React.ReactElement {
@@ -60,9 +96,23 @@ export function Popup(): React.ReactElement {
 
   if (!state || state.auth.status === "signed_out") {
     return (
-      <div style={wrap}>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>{t("app.name")}</div>
-        <div style={{ ...label, margin: "8px 0 16px" }}>{t("popup.signedOutHint")}</div>
+      <div style={{ ...wrap, textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center", marginTop: 6 }}>
+          <Mark size={44} />
+        </div>
+        <div style={{ fontSize: 22, letterSpacing: "-0.02em", fontWeight: 600, marginTop: 14 }}>
+          {t("app.tagline")}
+        </div>
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--tp-ink-3, #6b7280)",
+            margin: "8px 0 20px",
+            lineHeight: 1.5,
+          }}
+        >
+          {t("popup.signedOutHint")}
+        </div>
         <button type="button" style={primaryBtn} onClick={() => void send({ type: "AUTH_LOGIN" })}>
           {t("popup.signIn")}
         </button>
@@ -73,22 +123,18 @@ export function Popup(): React.ReactElement {
   return (
     <div style={wrap}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontWeight: 600 }}>{state.auth.account ?? t("app.name")}</span>
-        <span style={pill}>{t("popup.connected")}</span>
+        <Lockup markSize={20} wordSize={15} />
+        <ConnectedTag />
       </div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          margin: "16px 0",
-          paddingTop: 12,
-          borderTop: "1px solid var(--tp-hairline-2, #e5e7eb)",
-        }}
+      {state.auth.account ? <div style={account}>{state.auth.account}</div> : null}
+      <div style={{ marginTop: 14 }}>
+        <CreditsPill credits={state.auth.credits} />
+      </div>
+      <button
+        type="button"
+        style={{ ...primaryBtn, marginTop: 16 }}
+        onClick={() => void openPanel()}
       >
-        <span style={label}>{t("popup.credits")}</span>
-        <span style={value}>{state.auth.credits ?? "—"}</span>
-      </div>
-      <button type="button" style={primaryBtn} onClick={() => void openPanel()}>
         {t("popup.openWorkspace")}
       </button>
     </div>

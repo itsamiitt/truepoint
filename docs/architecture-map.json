@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1408,
-  "fileSetHash": "sha256:62e1961cbad8d555f42618a5a3973892ece0fbc524f8feae9b6d75ac7f0da4b1",
+  "fileCount": 1411,
+  "fileSetHash": "sha256:0ff1f792494a401296f95fa9adad33c628aba6799aeb76b540932d9c0b8544c2",
   "features": {
     "account-search": {
       "web": [],
@@ -1899,6 +1899,7 @@
       "apps/extension/src/background/bus/index.ts",
       "apps/extension/src/background/config/remoteConfig.ts",
       "apps/extension/src/background/context.ts",
+      "apps/extension/src/background/credits/store.ts",
       "apps/extension/src/background/eventStream.ts",
       "apps/extension/src/background/events/manager.ts",
       "apps/extension/src/background/index.ts",
@@ -1928,6 +1929,8 @@
       "apps/extension/src/shared/types.ts"
     ],
     "apps/extension/ui": [
+      "apps/extension/src/ui/brand/CreditsPill.tsx",
+      "apps/extension/src/ui/brand/Mark.tsx",
       "apps/extension/src/ui/panel/Panel.tsx",
       "apps/extension/src/ui/panel/main.tsx",
       "apps/extension/src/ui/popup/Popup.tsx",

@@ -11,10 +11,11 @@ export default defineManifest({
   name: "TruePoint — Prospect Capture",
   short_name: "TruePoint",
   version: pkg.version,
-  description: pkg.description,
+  // User-facing (chrome://extensions + store) — brand voice: find/reveal/score/pursue, verified, precise.
+  description: "Find, reveal, score and pursue — capture verified prospects from anywhere.",
   minimum_chrome_version: "116",
   action: {
-    default_title: "TruePoint",
+    default_title: "TruePoint — Aim true.",
     default_popup: "src/ui/popup/index.html",
   },
   background: {
@@ -52,6 +53,7 @@ export default defineManifest({
   },
   // Strict CSP — bundled scripts only, no remote code, no localhost devtools ports (cf. Apollo, 01 §1.3).
   content_security_policy: {
-    extension_pages: "script-src 'self'; object-src 'self'",
+    // Self-hosted Geist woff2 load as 'self' (MV3 blocks remote fonts); no remote code.
+    extension_pages: "script-src 'self'; object-src 'self'; font-src 'self'",
   },
 });

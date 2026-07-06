@@ -2,9 +2,11 @@
 // Keys are dot-namespaced by surface; interpolation uses {name} placeholders.
 export const en = {
   "app.name": "TruePoint",
+  "app.tagline": "Aim true.",
   "popup.signIn": "Sign in to TruePoint",
   "popup.connected": "Connected",
   "popup.credits": "Credits",
+  "popup.lowBalance": "Low balance",
   "popup.quickSearch": "Quick search TruePoint…",
   "popup.openWorkspace": "Open workspace",
   "popup.capturedOnPage": "{count} captured on this page",

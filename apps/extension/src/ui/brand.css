@@ -1,0 +1,34 @@
+/* brand.css — the TruePoint extension brand layer: the shared design tokens + self-hosted Geist. MV3's CSP
+   blocks remote fonts, so the two variable woff2 ship in the bundle and load as 'self'. The token VALUES live
+   in @leadwolf/ui/tokens.css — never fork them; this file only pulls them in, loads the fonts, and sets a thin
+   base. Imported once per surface (popup/panel main.tsx). Brand: "Cobalt fills, Ink type", Geist + Geist Mono. */
+@import "@leadwolf/ui/tokens.css";
+
+@font-face {
+  font-family: "Geist";
+  src: url("../assets/fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("../assets/fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+html,
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

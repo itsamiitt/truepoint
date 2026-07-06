@@ -51,6 +51,13 @@ export type SubjectStatus = z.infer<typeof subjectStatus>;
 export const revealType = z.enum(["email", "phone", "full_profile"]);
 export type RevealType = z.infer<typeof revealType>;
 
+/** Per-reveal_type credit cost from GET /credits/reveal-costs — lets the UI show "Reveal email · N cr". */
+export interface RevealCosts {
+  email: number;
+  phone: number;
+  full_profile: number;
+}
+
 /** The classes the error framework maps every failure onto (02 §11 / 03 §1.10). */
 export type ErrorClass =
   | "auth"

@@ -7,6 +7,7 @@ import { AuthModule } from "./auth/index.ts";
 import { registerBus } from "./bus/index.ts";
 import { RemoteConfig } from "./config/remoteConfig.ts";
 import type { RuntimeContext } from "./context.ts";
+import { CreditsStore } from "./credits/store.ts";
 import { EventStream } from "./eventStream.ts";
 import { BrowserEventManager } from "./events/manager.ts";
 import { CaptureQueue } from "./queue/captureQueue.ts";
@@ -39,15 +40,21 @@ const queue = new CaptureQueue();
 const config = new RemoteConfig();
 const telemetry = new Telemetry();
 const api = new ApiClient(auth);
+const credits = new CreditsStore(api);
 
 const ctx: RuntimeContext = {
   api,
   auth,
+  credits,
   queue,
   config,
   telemetry,
   async getState() {
-    return { auth: auth.getState(), queueDepth: await queue.depth() };
+    // Merge the SW-cached balance onto the auth state (auth.getState() carries a null credits placeholder).
+    return {
+      auth: { ...auth.getState(), credits: credits.balance },
+      queueDepth: await queue.depth(),
+    };
   },
   broadcast(message) {
     void chrome.runtime.sendMessage(message).catch(() => undefined);
@@ -82,6 +89,7 @@ chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => 
       await auth.activatePendingTab();
     } else {
       await auth.applyHandoff(classified.tokens);
+      await credits.refresh(true); // pull the balance the moment we're signed in
       broadcastAuthState();
     }
     sendResponse({ ok: true });
@@ -101,4 +109,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 void (async () => {
   await config.load();
   await auth.init();
+  // If a session survived (refresh token in storage.session), prime the credits pill for the first open.
+  if (auth.tenantId) {
+    await credits.refresh(true);
+    broadcastAuthState();
+  }
 })();
