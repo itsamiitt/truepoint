@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1416,
-  "fileSetHash": "sha256:30a3d4a8cb15a2927f7ffc3b3da3dd5d0f1dc99f4e29484131b54f5ff0102c14",
+  "fileCount": 1418,
+  "fileSetHash": "sha256:9fbe8cda0cc6e275ee9605340c72327513aa20a54f37a6d97c1aeac9d8691f19",
   "features": {
     "account-search": {
       "web": [],
@@ -1872,6 +1872,8 @@
       "apps/auth/src/lib/finishLogin.ts",
       "apps/auth/src/lib/magicCarry.test.ts",
       "apps/auth/src/lib/magicCarry.ts",
+      "apps/auth/src/lib/mailTransport.test.ts",
+      "apps/auth/src/lib/mailTransport.ts",
       "apps/auth/src/lib/mailer.ts",
       "apps/auth/src/lib/requireUser.ts",
       "apps/auth/src/lib/sessionGuard.ts",
