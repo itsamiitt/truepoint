@@ -197,6 +197,14 @@ export interface EmailBlindIndexHit {
   blindIndex: Uint8Array;
 }
 
+/** A live-child phone E.164 blind-index hit — the S-C6 phone-SIGNAL probe row (04 §2 act layer). Carries the
+ *  owning contact id only (never a value); the caller writes a duplicate_of_contact_id SUGGESTION toward it,
+ *  never an upsert/merge (phones are a dedup key nowhere — 05 §2.2). */
+export interface PhoneE164BlindIndexHit {
+  contactId: string;
+  e164BlindIndex: Uint8Array;
+}
+
 // ── S-CH5 reconcile family (05 §3.4/§5 — the permanent CH-INV-1 drift sweep) ────────────────────────────
 
 /** One drift candidate of the WHERE-drift keyset walk: the flat channel columns + per-channel drift flags
@@ -977,6 +985,38 @@ export const contactChannelRepository = {
           isNull(contactEmails.deletedAt),
         ),
       );
+  },
+
+  /**
+   * S-C6 phone-SIGNAL probe (04 §2 act layer): the live contacts in the workspace whose phone (primary OR
+   * secondary) matches any of the given E.164 blind indexes. Backed by idx_contact_phones_ws_e164 — the
+   * NON-unique match-SIGNAL index (phones are a dedup key NOWHERE; shared HQ/switchboard lines are legal —
+   * 05 §2.2). A hit is a REVIEW signal ONLY, never an upsert/merge/block target (the MATCH-vs-ACT split,
+   * 03 §2.1 [34]): the caller writes a duplicate_of_contact_id suggestion toward the signalled contact and
+   * lets the row land per policy. Workspace-scoped explicitly atop RLS (findContactIdsByEmailBlindIndexes'
+   * posture); live rows only. MAY return >1 contact per key (a shared line) — every case is a suggestion the
+   * human resolves in the review queue, never an automatic action.
+   */
+  async findContactIdsByPhoneE164BlindIndexes(
+    tx: Tx,
+    workspaceId: string,
+    keys: Uint8Array[],
+  ): Promise<PhoneE164BlindIndexHit[]> {
+    if (keys.length === 0) return [];
+    const rows = await tx
+      .select({ contactId: contactPhones.contactId, e164BlindIndex: contactPhones.e164BlindIndex })
+      .from(contactPhones)
+      .where(
+        and(
+          eq(contactPhones.workspaceId, workspaceId),
+          inArray(contactPhones.e164BlindIndex, keys),
+          isNull(contactPhones.deletedAt),
+        ),
+      );
+    // e164_blind_index is nullable, but inArray over non-null keys only matches non-null rows; narrow anyway.
+    return rows.flatMap((r) =>
+      r.e164BlindIndex ? [{ contactId: r.contactId, e164BlindIndex: r.e164BlindIndex }] : [],
+    );
   },
 
   // ── S-CH5 reconcile / drift sweep (05 §3.4/§5) — the permanent CH-INV-1 fixture ────────────────────────

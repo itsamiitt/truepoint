@@ -470,9 +470,9 @@ Per `truepoint-architecture/references/pre-build-thinking.md`; answers cite the 
 | S-C3 | Seed `contact_merge_enabled` per-tenant flag (off) + `CONTACT_MERGE_ENABLED` env kill-switch (dual-gate, 01 §7.3 pattern) | 🔲 |
 | S-C4 | Core merge engine (`packages/core`): pure plan (survivor/loser/decisions → write-set via `planFieldWrite`/`planUserEdit`) + tx executor with the §3.4 inventory | 🔲 (depends on 05's S-CH1–S-CH4 child tables) |
 | S-C5 | API verb `POST /contacts/:id/merge` + preview endpoint; merge DTOs in `@leadwolf/types` (§6) | 🔲 |
-| S-C6 | Match-time ladder extension (any-value email resolve + phone-signal marker writes, §2) in `findByDedupKeys` + bulk staging equivalents | 🔲 (after 05) |
-| S-C7 | Masked-DTO channel summary + read projection (§6) | 🔲 (after 05) |
-| S-C8 | Cache↔child reconcile sweep (count metric + gated repair) | 🔲 |
+| S-C6 | Match-time ladder extension (any-value email resolve + phone-signal marker writes, §2) in `findByDedupKeys` + bulk staging equivalents | 🌒 built, dark (rides S-CH4 read gate; any-value email resolve already shipped by S-CH4, phone-signal + cross-key email-collision → `duplicate_of_contact_id` SUGGESTIONS in `runImport`; sync path only — bulk equiv blocked; 16 drift rows) |
+| S-C7 | Masked-DTO channel summary + read projection (§6) | 🌒 SUBSUMED by S-CH4 (`maskedContactSchema.channels` + read projection already shipped; 16 drift) |
+| S-C8 | Cache↔child reconcile sweep (count metric + gated repair) | 🌒 SUBSUMED by S-CH5 (permanent CH-INV-1 sweep covers the merge-facing invariant + T4; 16 drift) |
 | S-C9 | Surface-1 wrapper: staff merge via maker-checker calling the same engine (§3.5) | 🔲 (after S-C4) |
 
 Dedup-marker re-point of rows aiming at the loser, and the review-queue read model, ride S-C4

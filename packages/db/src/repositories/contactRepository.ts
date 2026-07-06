@@ -980,6 +980,29 @@ export const contactRepository = {
   },
 
   /**
+   * S-C6 (import-and-data-model-redesign 04 §2 act layer): write ONE match-time duplicate SUGGESTION —
+   * point `contactId` at `canonicalId` via duplicate_of_contact_id — feeding the review queue (G21, doc 11).
+   * The MATCH-vs-ACT split (03 §2.1 [34]): a match-time signal (a secondary-value / phone-line collision the
+   * primary-key ladder can't express as a conflict) NEVER updates, merges, or blocks the row — it lands per
+   * policy and this pointer is the only side effect. GUARDED to stay a pure SUGGESTION: it writes ONLY when
+   * the contact has NO existing pointer (never clobbers the dedup sweep's marker or a stronger signal) and
+   * never self-references (the `contactId === canonicalId` short-circuit + the predicate). Like flagDuplicates
+   * this is a derived annotation → updatedAt is intentionally NOT bumped. The marker is reversible/transient
+   * (the dedup sweep re-derives markers wholesale on its next run — 04 §3.5); the DURABLE signal home is I5
+   * `match_links`, out of scope here. RLS scopes the write to the caller's workspace. Returns whether a
+   * pointer was written.
+   */
+  async markDuplicateSuggestion(tx: Tx, contactId: string, canonicalId: string): Promise<boolean> {
+    if (contactId === canonicalId) return false;
+    const rows = await tx
+      .update(contacts)
+      .set({ duplicateOfContactId: canonicalId })
+      .where(and(eq(contacts.id, contactId), isNull(contacts.duplicateOfContactId)))
+      .returning({ id: contacts.id });
+    return rows.length > 0;
+  },
+
+  /**
    * List the workspace's DUPLICATE contacts (duplicate_of_contact_id set) paired with the canonical each was
    * auto-pointed at — the within-workspace dedup REVIEW read (database-management-research G09). RLS scopes BOTH
    * sides to the caller's workspace (the alias is the same RLS-scoped `contacts` table, so no cross-workspace

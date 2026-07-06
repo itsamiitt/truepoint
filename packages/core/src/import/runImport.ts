@@ -244,14 +244,24 @@ function conflictPolicyToStrategy(policy: ConflictPolicy): ImportStrategy {
 }
 
 /**
- * S-CH2 channel dual-write (05 §5/§6), called on LANDING rows only, gate-on only, INSIDE the same per-row
- * withTenantTx as the flat write — CH-INV-1's same-tx rule. The email child row reuses the EXACT prepared
- * ciphertext/blind-index bytes the flat write carried (byte-identical projection); the phone child row is
- * built from the cleaned plaintext prepareContact carried (raw-digits blind index + derived E.164; country
- * hint = the row's ISO-2 locationCountry when present — 05 §4.2's S-CH2 slice). Outcomes are data
- * (collision/capped skip silently at this grain — the review-queue signal is S-C6's); a genuine DB error
- * aborts the row's tx WITH the flat write, atomically. The import bulk path writes NO per-row channel audit
- * (05 §3.3: import never flips a primary; channel_* audit actions are the user-verb writers', doc 04).
+ * S-CH2 channel dual-write (05 §5/§6) + S-C6 match-time duplicate SIGNALS (04 §2), called on LANDING rows
+ * only, gate-on only, INSIDE the same per-row withTenantTx as the flat write — CH-INV-1's same-tx rule. The
+ * email child row reuses the EXACT prepared ciphertext/blind-index bytes the flat write carried (byte-identical
+ * projection); the phone child row is built from the cleaned plaintext prepareContact carried (raw-digits blind
+ * index + derived E.164; country hint = the row's ISO-2 locationCountry when present — 05 §4.2's S-CH2 slice).
+ * A genuine DB error aborts the row's tx WITH the flat write, atomically. The import bulk path writes NO per-row
+ * channel audit (05 §3.3: import never flips a primary; channel_* audit actions are the user-verb writers').
+ *
+ * S-C6 warning band (`markSignals`, rides the S-CH4 read gate — 15 §M-SEQ seq 50): when the child tables are
+ * authoritative, two match-time signals the three-partial-unique ladder CANNOT express as a conflict are
+ * surfaced as duplicate_of_contact_id SUGGESTIONS (never an upsert/merge/block — the MATCH-vs-ACT split,
+ * 03 §2.1 [34]) toward the signalled contact, feeding the review queue (G21, doc 11):
+ *   • cross-key EMAIL collision (05 §2.2): the row's email value is live on ANOTHER contact than the one this
+ *     row landed on (the email ws-unique is held elsewhere) ⇒ suggest the landed contact is a dup of the owner.
+ *   • phone-signal-ONLY match (04 §2 act layer): a NEWLY created contact (`matched` false) whose phone E.164
+ *     matches an existing contact — phone is a dedup key nowhere (shared lines legal), so it never matched the
+ *     ladder, but the shared line is a review signal. Skipped for matched rows (an update already resolved
+ *     identity) and when the phone is unparseable (no E.164 blind index to probe).
  */
 async function writeChannelRows(
   tx: Tx,
@@ -259,16 +269,20 @@ async function writeChannelRows(
   prepared: PreparedContact,
   contactId: string,
   sourceImportId: string | null,
+  markSignals: boolean,
+  matched: boolean,
 ): Promise<void> {
   const source = `import:${input.sourceName}`;
   const v = prepared.values;
+  const { workspaceId } = input.scope;
   if (v.emailEnc && v.emailBlindIndex && v.emailDomain) {
+    const emailBlindIndex = v.emailBlindIndex;
     const outcome = await contactChannelRepository.applyChannelWrite(tx, input.scope, {
       kind: "email_upsert",
       contactId,
       value: {
         valueEnc: v.emailEnc,
-        blindIndex: v.emailBlindIndex,
+        blindIndex: emailBlindIndex,
         emailDomain: v.emailDomain,
         type: "work", // the import's single mapped email column is the work-email slot (05 §6 mapping)
         source,
@@ -276,9 +290,18 @@ async function writeChannelRows(
       },
     });
     if (outcome.result === "collision" || outcome.result === "capped") {
-      // Non-PII operational signal only (contact id + outcome — never a value). The 08 §4 per-row
-      // WARNING band (channel_capped / the A↔B duplicate signal for the review queue) is S-C6's wiring.
+      // Non-PII operational signal only (contact id + outcome — never a value).
       console.warn(`[import] channel email ${outcome.result} (contact ${contactId})`);
+    }
+    // S-C6 cross-key email collision → duplicate suggestion toward the value's owner (never an act).
+    if (markSignals && outcome.result === "collision") {
+      const owners = await contactChannelRepository.findContactIdsByEmailBlindIndexes(tx, workspaceId, [
+        emailBlindIndex,
+      ]);
+      const owner = owners.find((h) => h.contactId !== contactId);
+      if (owner && (await contactRepository.markDuplicateSuggestion(tx, contactId, owner.contactId))) {
+        console.warn(`[import] dup signal: email collision (contact ${contactId} → ${owner.contactId})`);
+      }
     }
   }
   if (prepared.phoneRaw && v.phoneEnc) {
@@ -294,6 +317,21 @@ async function writeChannelRows(
     });
     if (outcome.result === "capped") {
       console.warn(`[import] channel phone capped (contact ${contactId})`);
+    }
+    // S-C6 phone-signal-ONLY match → duplicate suggestion toward the other holder of this E.164. Only for a
+    // NEWLY created contact (a matched row already resolved identity); needs a parseable E.164 to probe. The
+    // just-written row on `contactId` is filtered out; a hit on any OTHER live contact is the shared-line
+    // signal the human reviews (never an upsert — phones are a dedup key nowhere, 05 §2.2).
+    if (markSignals && !matched && built.e164BlindIndex) {
+      const holders = await contactChannelRepository.findContactIdsByPhoneE164BlindIndexes(
+        tx,
+        workspaceId,
+        [built.e164BlindIndex],
+      );
+      const other = holders.find((h) => h.contactId !== contactId);
+      if (other && (await contactRepository.markDuplicateSuggestion(tx, contactId, other.contactId))) {
+        console.warn(`[import] dup signal: phone match (contact ${contactId} → ${other.contactId})`);
+      }
     }
   }
 }
@@ -478,9 +516,11 @@ async function importOneRow(
   });
 
   // S-CH2 channel dual-write — LANDING rows only (a held-back duplicate/idempotent skip wrote no flat
-  // channel value, so it writes no child row either — 05 §3 cache coherence), gate-on only, same tx.
+  // channel value, so it writes no child row either — 05 §3 cache coherence), gate-on only, same tx. The
+  // S-C6 match-time duplicate SIGNALS ride the S-CH4 read gate (`channelReadFromChild` — 15 §M-SEQ seq 50);
+  // `!!match` tells writeChannelRows whether this row created a new contact (phone-signal-only fires there).
   if (channelDualWrite) {
-    await writeChannelRows(tx, input, prepared, contactId, sourceImportId);
+    await writeChannelRows(tx, input, prepared, contactId, sourceImportId, channelReadFromChild, !!match);
   }
 
   // A landed row (created or overwritten match) joins the target list, linked to THIS import's provenance row.
