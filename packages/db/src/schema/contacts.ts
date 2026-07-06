@@ -243,8 +243,8 @@ export const contacts = pgTable(
 // STORAGE PARAMS (S-P5, migration 0056; comment-only — Drizzle can't express them): append-only autovacuum
 // posture per import-redesign 12 §6.2 (scale factors 0.01 + insert threshold 100k — visibility map/freeze
 // sized for 100M rows and import bursts). Reversible via ALTER … RESET. The other two §6.2 tables,
-// contact_emails/contact_phones, are unshipped (05 S-CH1) — 0056 guards them with to_regclass and S-CH1's
-// migration MUST (re)state the same parameters (16 drift row carries this).
+// contact_emails/contact_phones, shipped with S-CH1 (schema/contactChannels.ts) — migration 0058 (re)states
+// the same parameters unguarded, closing 0056's to_regclass tripwire (16 drift row resolved).
 export const sourceImports = pgTable(
   "source_imports",
   {
