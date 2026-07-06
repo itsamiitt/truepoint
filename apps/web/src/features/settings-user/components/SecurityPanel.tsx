@@ -11,15 +11,17 @@
 // `GET enrolled-methods` read here is the tracked follow-up the P1-02 spec flags ("once the methods GET lands").
 "use client";
 
+import { authSecurityUrl } from "@/lib/authLink";
+import { AUTH_ORIGIN } from "@/lib/publicConfig";
 import { FormSection, Icon, StatusBadge } from "@leadwolf/ui";
 import { ExternalLink, History, KeyRound, Monitor, ShieldCheck } from "lucide-react";
-import { AUTH_ORIGIN } from "@/lib/publicConfig";
-import type { MfaMethodStatus } from "../types";
 import styles from "../settings-user.module.css";
+import type { MfaMethodStatus } from "../types";
 
-/** Deep-link to a section of the auth-origin account-security screen (17 §10). */
+/** Deep-link to a section of the auth-origin account-security screen (17 §10). The auth app serves under the
+ *  "/auth" basePath, so authSecurityUrl adds it — without the prefix these links 404 (AUTH-062). */
 function authLink(section: string): string {
-  return `${AUTH_ORIGIN}/account/security${section ? `#${section}` : ""}`;
+  return authSecurityUrl(AUTH_ORIGIN, section);
 }
 
 /** The documented MFA factor catalogue (17 §10) shown as a read-only status list. */
@@ -41,9 +43,8 @@ export function SecurityPanel() {
           <Icon icon={ShieldCheck} size={18} />
         </span>
         <span>
-          Your sign-in security is managed on the secure sign-in site
-          (auth.truepoint.in). Use the links below to update your password, two-step methods, sessions,
-          and devices there.
+          Your sign-in security is managed on the secure sign-in site (auth.truepoint.in). Use the
+          links below to update your password, two-step methods, sessions, and devices there.
         </span>
       </div>
 

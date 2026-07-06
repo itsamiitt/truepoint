@@ -4,6 +4,7 @@
 // redirect to /forgot?sent=1 and its confirmation are identical whether or not the account exists.
 "use server";
 
+import { authUrl } from "@/lib/authUrl";
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { passwordResetEmail } from "@/lib/emails";
 import { sendAuthEmail } from "@/lib/mailer";
@@ -37,7 +38,8 @@ export async function requestReset(formData: FormData): Promise<void> {
   // case; otherwise we silently do nothing. The user-facing outcome below is identical either way.
   const { code } = await requestPasswordReset({ email, ipAddress: ip });
   if (code) {
-    const link = `${env.AUTH_ORIGIN}/reset?${new URLSearchParams({ email, code })}`;
+    // AUTH-062: the reset page serves under the "/auth" basePath — authUrl() adds it so the mailed link resolves.
+    const link = authUrl(env.AUTH_ORIGIN, `/reset?${new URLSearchParams({ email, code })}`);
     await sendAuthEmail({ to: email, ...passwordResetEmail({ link }) });
   }
 

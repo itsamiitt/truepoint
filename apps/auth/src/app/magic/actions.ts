@@ -4,6 +4,7 @@
 // transaction store) for the confirm route to recover. The code never appears in logs or error text.
 "use server";
 
+import { authUrl } from "@/lib/authUrl";
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { setMagicTxnCookie } from "@/lib/cookies";
 import { magicLinkEmail } from "@/lib/emails";
@@ -48,7 +49,8 @@ export async function sendMagic(formData: FormData): Promise<void> {
   // confirm route. clientIp is re-derived from headers there, so it is not stashed here.
   await setMagicTxnCookie(encodeMagicCarry({ appOrigin, codeChallenge, state }));
 
-  const link = `${env.AUTH_ORIGIN}/magic/confirm?${new URLSearchParams({ email, code })}`;
+  // AUTH-062: the confirm route serves under the "/auth" basePath — authUrl() adds it so the mailed link resolves.
+  const link = authUrl(env.AUTH_ORIGIN, `/magic/confirm?${new URLSearchParams({ email, code })}`);
   await sendAuthEmail({ to: email, ...magicLinkEmail({ link }) });
 
   redirect(`/magic?${carry.toString()}&sent=1`);
