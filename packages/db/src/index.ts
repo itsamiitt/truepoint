@@ -89,6 +89,19 @@ export {
   type UnresolvedContactRow,
 } from "./repositories/contactRepository.ts";
 export {
+  contactChannelRepository,
+  type ChannelWriteOp,
+  type ChannelWriteOutcome,
+  type ChannelWriteScope,
+  type EmailChannelValue,
+  type PhoneChannelValue,
+} from "./repositories/contactChannelRepository.ts";
+export {
+  planChannelUpsert,
+  type ChannelUpsertState,
+  type ChannelUpsertVerdict,
+} from "./repositories/contactChannelPlan.ts";
+export {
   verificationJobRepository,
   type VerificationJobRecord,
   type VerificationJobRow,

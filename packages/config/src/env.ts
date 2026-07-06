@@ -327,6 +327,19 @@ export const appEnvSchema = z
     //   • stall window — a `running` job whose 7-bucket counters have not advanced for longer than this is
     //     flagged (metric + log; NEVER auto-killed) — the durable-truth "is it stuck?" signal (09 §8).
     IMPORT_REAPER_STALL_WINDOW_MS: z.coerce.number().int().positive().default(10 * 60_000),
+    // Multi-value channel DUAL-WRITE (import-and-data-model-redesign 05, S-CH2) — the GLOBAL kill-switch half
+    // of the dual gate (the name doc 05 pins): effective dual-write = (this === "true") AND the per-tenant
+    // `channels_dual_write` flag (seeded off in 0059). While off, every email/phone writer (import, enrichment,
+    // reveal verify, re-verification) keeps its shipped flat-column behavior BYTE-IDENTICALLY — zero flag reads,
+    // zero child-table writes (T-CH parity is the proof). With both halves on, those writers ALSO maintain
+    // `contact_emails`/`contact_phones` rows via `applyChannelWrite` in the SAME withTenantTx (CH-INV-1); the
+    // flat columns remain the source of truth until S-CH4. Flipping this off at any point is the instant
+    // fleet-wide §R-P3 rollback lever — already-written child rows stay inert (nothing reads them until S-CH4)
+    // and are never rolled back by a flag. Same explicit-"true"-only posture as BULK_IMPORT_ENABLED.
+    CHANNEL_DUAL_WRITE: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the

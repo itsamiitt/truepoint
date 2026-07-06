@@ -42,6 +42,12 @@ export type ContactPhoneType = z.infer<typeof contactPhoneType>;
 export const lineTypeSource = z.enum(["carrier_lookup", "libphonenumber", "provider", "import"]);
 export type LineTypeSource = z.infer<typeof lineTypeSource>;
 
+// ── The S-CH2 dual-write per-tenant flag key (05 §Implementation Steps / §Rollout) ──────────────────────
+/** Per-tenant half of the channel dual-write DUAL GATE (S-CH2). Effective dual-write = the global
+ *  `CHANNEL_DUAL_WRITE` env kill-switch (the name doc 05 pins) AND this flag (seeded off/off in 0059).
+ *  Mirrors IMPORT_V2_FLAG_KEY (importV2.ts) — the shared key lives here so api/workers can never drift. */
+export const CHANNELS_DUAL_WRITE_FLAG_KEY = "channels_dual_write";
+
 // ── Per-contact cap (05 §Misuse — APP-LAYER, enforced at the API edge; deliberately no DB constraint) ───
 /** Max live values per channel per contact (25 emails / 25 phones): generous × any legitimate dataset,
  *  blocks a hostile 10⁶-row fanout on one contact. Import rows exceeding it append up to the cap + warn. */

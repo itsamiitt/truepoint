@@ -939,3 +939,16 @@ export {
   runRetentionSweepForTenant,
   type RetentionSweepResult,
 } from "./retention/runRetentionSweep.ts";
+
+// Multi-value channel dual-write (import-and-data-model-redesign 05, S-CH2): the dual-gate evaluator
+// (CHANNEL_DUAL_WRITE env + `channels_dual_write` per-tenant flag, fail-closed) + the phone channel-value
+// builder (DM1: shipped toE164/blindIndex/encryptPii, zero new normalizers). The write path itself is
+// @leadwolf/db's contactChannelRepository.applyChannelWrite (CH-INV-1's single sanctioned writer).
+export {
+  isChannelDualWriteEnabled,
+  channelDualWriteEnabledForScope,
+  buildPhoneChannelValue,
+  countryHintOf,
+  phoneRawIndexForm,
+  type BuildPhoneChannelInput,
+} from "./channels/channelDualWrite.ts";
