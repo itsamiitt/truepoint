@@ -479,7 +479,7 @@ function runSearch(
 ) {
   // Gate-on the hasEmail/hasPhone projection columns resolve from live child rows ("∃ live row"); gate-off
   // they stay the flat-column presence, so the SELECT is byte-identical (the MaskedRow keys are unchanged).
-  const select = opts.channelsFromChild
+  const select: typeof MASKED = opts.channelsFromChild
     ? { ...MASKED, hasEmail: hasEmailChild, hasPhone: hasPhoneChild }
     : { ...MASKED };
   const base = tx
