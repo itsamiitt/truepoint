@@ -987,3 +987,12 @@ export {
   type ChannelReconcileWorkspaceResult,
   type ReconcileDirection,
 } from "./channels/channelReconcile.ts";
+
+// S-A2 account-domain dual-write GATE (import-and-data-model-redesign 06 §1/§Rollout): the dual gate
+// (ACCOUNT_DOMAINS_DUAL_WRITE env + `account_domains_dual_write` per-tenant flag, fail-closed) the account
+// writers evaluate before composing accountChildRepository.applyAccountDomainWrite (@leadwolf/db owns the
+// single write path). The pair is minted for S-A2 (06 names only the S-A6 read gate) — doc 16 drift row.
+export {
+  isAccountDomainsDualWriteEnabled,
+  accountDomainsDualWriteEnabledForScope,
+} from "./accounts/accountDualWrite.ts";

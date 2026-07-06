@@ -87,3 +87,12 @@ export const MAX_DOMAINS_PER_ACCOUNT = 50;
 export const MAX_LOCATIONS_PER_ACCOUNT = 200;
 /** Hierarchy depth ceiling (06 §2): D&B's 9-level code + practical CRM cap; keeps the cycle-guard CTE bounded. */
 export const ACCOUNT_HIERARCHY_MAX_DEPTH = 10;
+
+// ── The S-A2 domain dual-write per-tenant flag key (06 §1 / §Rollout; 15 §M-SEQ seq 54) ─────────────────
+/** Per-tenant half of the account-domain dual-write DUAL GATE (S-A2). Effective dual-write = the global
+ *  `ACCOUNT_DOMAINS_DUAL_WRITE` env kill-switch AND this flag (seeded off/off in 0062). While either half is
+ *  off every account writer keeps its shipped flat-column behavior BYTE-IDENTICALLY (the S-A2 parity gate) and
+ *  the account_domains child table stays unwritten. 06 names no dual-write flag (only the S-A6 read-cutover
+ *  gate) so this pair is MINTED here, mirroring CHANNELS_DUAL_WRITE_FLAG_KEY — the shared key lives in @types so
+ *  api/workers/db-tests can never drift (doc 16 drift row records the mint). */
+export const ACCOUNT_DOMAINS_DUAL_WRITE_FLAG_KEY = "account_domains_dual_write";

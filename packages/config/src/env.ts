@@ -397,6 +397,35 @@ export const appEnvSchema = z
     // selection is the watermark).
     CHANNEL_RECONCILE_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
     CHANNEL_RECONCILE_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
+    // Account-domain DUAL-WRITE (import-and-data-model-redesign 06 §1 / §Rollout, S-A2; 15 §M-SEQ seq 54) —
+    // the global kill-switch half of the S-A2 dual gate. Effective dual-write = this AND the per-tenant
+    // `account_domains_dual_write` feature flag (seeded off in 0062). While the ENV layer is off every account
+    // writer (import upsert; later enrichment/manual) keeps its shipped flat-column behavior BYTE-IDENTICALLY
+    // and performs ZERO flag reads (cost-identical) — the account_domains child table stays unwritten. Flipping
+    // it off at any point is the instant §R-P4 rollback lever: writers revert to flat-only, the flat accounts.
+    // domain cache stays authoritative (reads never move until S-A6), and already-written child rows stay inert
+    // and are never rolled back by a flag. 06 names no dual-write flag (only the S-A6 read cutover) — this pair
+    // is minted here (doc 16 drift row). Explicit-"true"-only posture (house 01 §7.3).
+    ACCOUNT_DOMAINS_DUAL_WRITE: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Account child BACKFILL (import-and-data-model-redesign 06 S-A1/S-A3, 15 §2.2 / §M-SEQ seq 55–56) — the
+    // job-level enable for the leader-locked account backfill sweep (domain pass = the mandated S-A1 re-run
+    // closing the write-gap tail; HQ pass = S-A3's best-effort location synthesis). Registered ONLY when this
+    // AND ACCOUNT_DOMAINS_DUAL_WRITE both read "true" (the backfill runs strictly after S-A2, the S-CH3 train
+    // posture). Per-tenant selection + the batch-boundary abort ride the SAME `account_domains_dual_write` flag
+    // (re-evaluated fail-closed in-tx per batch). Self-terminating + idempotent (WHERE-missing selection is the
+    // watermark) ⇒ safe to leave scheduled. Off ⇒ nothing is built. Explicit-"true"-only posture.
+    ACCOUNT_BACKFILL_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // S-A1/S-A3 batch knobs (mirror the S-CH3 per-workspace batch control): accounts per keyset batch (one tx
+    // per batch) and batches per workspace per sweep tick (bounds one tick's work under the leader-lock TTL; a
+    // whale workspace drains across ticks — resumable by construction).
+    ACCOUNT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
+    ACCOUNT_BACKFILL_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the

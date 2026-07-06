@@ -435,6 +435,13 @@
       "when": 1785500000000,
       "tag": "0061_account_children_and_hierarchy",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1785600000000,
+      "tag": "0062_account_domains_dual_write_flag",
+      "breakpoints": true
     }
   ]
 }

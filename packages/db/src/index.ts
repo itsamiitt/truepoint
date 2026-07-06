@@ -58,6 +58,21 @@ export {
   type AccountFirmographicsPatch,
   type AccountUpsertInput,
 } from "./repositories/accountRepository.ts";
+// Company-overlay child write path (import-and-data-model-redesign 06 §1/§3, S-A2 dual-write + S-A1/S-A3
+// backfills) — the accounts sibling of contactChannelRepository: `applyAccountDomainWrite` (child + flat
+// accounts.domain cache in one withTenantTx) plus the WHERE-missing backfill selection/insert/census/count.
+export {
+  accountChildRepository,
+  type AccountChildScope,
+  type AccountDomainValue,
+  type AccountDomainWriteOp,
+  type AccountDomainWriteOutcome,
+} from "./repositories/accountChildRepository.ts";
+export {
+  planAccountDomainWrite,
+  type AccountDomainUpsertState,
+  type AccountDomainVerdict,
+} from "./repositories/accountChildPlan.ts";
 // Layer-0 master graph (ADR-0021; prospect-company-data PLAN_01 §4) — deterministic MATCH-AGAINST resolve-for-
 // import. Reads/co-op-safe-mints the system-owned golden graph; always run within withErTx (the leadwolf_er role).
 export {
