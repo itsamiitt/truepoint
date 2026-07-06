@@ -5,6 +5,7 @@ export * from "./importLimits.ts";
 export * from "./importReject.ts";
 export * from "./auth.ts";
 export * from "./contacts.ts";
+export * from "./contactChannels.ts";
 export * from "./pipelineStages.ts";
 export * from "./customFields.ts";
 export * from "./fieldProvenance.ts";

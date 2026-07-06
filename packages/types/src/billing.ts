@@ -222,5 +222,13 @@ export const auditAction = z.enum([
   // draft reaper's TTL delete (importReaperSweep job 4; facets: jobId + age). actor_user_id = null.
   "import.av_infected",
   "import.draft_reaped",
+  // Multi-value channel ops P3 (import-and-data-model-redesign 05 §7 / 15 ruling M1 — the S-CH1 train,
+  // 0058): every applyChannelWrite op audits in-tx (actor, action, contact id, channel-row id — NEVER the
+  // value). Written by NOBODY until S-CH2 lands the write path; landed with the phase's DDL train so the
+  // first writer never fails the DB CHECK. P4's 'contact.merge' rides S-C2's train.
+  "channel_added",
+  "channel_promoted",
+  "channel_deleted",
+  "channel_primary_demoted",
 ]);
 export type AuditAction = z.infer<typeof auditAction>;

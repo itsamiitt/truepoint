@@ -35,9 +35,31 @@ export type EmailStatus = z.infer<typeof emailStatus>;
 export const phoneStatus = z.enum(["direct", "mobile", "hq", "unknown", "valid", "invalid"]);
 export type PhoneStatus = z.infer<typeof phoneStatus>;
 
-/** Carrier line type (Twilio Lookup line_type_intelligence) — the TCPA mobile-vs-landline gating signal
- *  (01 §5.3), distinct from phone_status (the reachability/kind grade). `unknown` = couldn't classify. */
-export const phoneLineType = z.enum(["mobile", "landline", "voip", "unknown"]);
+/** Carrier line type — the TCPA mobile-vs-landline gating signal (01 §5.3), distinct from phone_status (the
+ *  reachability/kind grade). `unknown` = couldn't classify. WIDENED IN PLACE (additively) to the
+ *  import-redesign 05 §1.5 union taxonomy at S-CH1 — DM1: ONE vocabulary; this symbol stays the single
+ *  symbol of record, shared by the flat `contacts.phone_line_type` cache and `contact_phones.line_type`:
+ *  the original four (backwards-compatible; the only values today's verifiers emit) ∪ Twilio Lookup's
+ *  carrier-live set (the fraud/TCPA-relevant fixed/non-fixed VOIP split, toll_free, premium_rate,
+ *  shared_cost, personal, pager, uan, voicemail) ∪ libphonenumber's honest offline-US ambiguity value
+ *  `fixed_line_or_mobile` (store it, don't guess — `contact_phones.line_type_source` records HOW it was
+ *  determined). `voip` remains for legacy rows and providers that don't distinguish fixed/non-fixed. */
+export const phoneLineType = z.enum([
+  "mobile",
+  "landline",
+  "fixed_voip",
+  "non_fixed_voip",
+  "voip",
+  "toll_free",
+  "premium_rate",
+  "shared_cost",
+  "personal",
+  "pager",
+  "uan",
+  "voicemail",
+  "fixed_line_or_mobile",
+  "unknown",
+]);
 export type PhoneLineType = z.infer<typeof phoneLineType>;
 
 export const seniorityLevel = z.enum(["c_suite", "vp", "director", "manager", "ic", "other"]);
