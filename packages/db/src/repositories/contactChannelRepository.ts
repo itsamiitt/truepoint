@@ -197,6 +197,48 @@ export interface EmailBlindIndexHit {
   blindIndex: Uint8Array;
 }
 
+// ── S-CH5 reconcile family (05 §3.4/§5 — the permanent CH-INV-1 drift sweep) ────────────────────────────
+
+/** One drift candidate of the WHERE-drift keyset walk: the flat channel columns + per-channel drift flags
+ *  (so the runner repairs ONLY the drifting channel). Email bytes travel VERBATIM (never decrypted — the
+ *  flat-wins email repair copies flat bytes onto the child); the worker decrypts ONLY the phone when a
+ *  flat-wins phone repair needs to re-derive its blind-index/E.164 material (the S-CH3 posture reused). */
+export interface ChannelDriftRow {
+  id: string;
+  emailDrifts: boolean;
+  phoneDrifts: boolean;
+  emailEnc: Uint8Array | null;
+  emailBlindIndex: Uint8Array | null;
+  emailDomain: string | null;
+  emailStatus: string;
+  phoneEnc: Uint8Array | null;
+  phoneStatus: string | null;
+  phoneLineType: string | null;
+  locationCountry: string | null;
+}
+
+/** A live email child row as the reconcile runner reads it (the state the pure decider classifies). */
+export interface ReconcileEmailRow {
+  id: string;
+  blindIndex: Uint8Array;
+  valueEnc: Uint8Array;
+  emailDomain: string;
+  status: string;
+  isPrimary: boolean;
+  firstSeenAt: Date;
+}
+
+/** A live phone child row as the reconcile runner reads it. */
+export interface ReconcilePhoneRow {
+  id: string;
+  blindIndex: Uint8Array;
+  valueEnc: Uint8Array;
+  status: string | null;
+  lineType: string | null;
+  isPrimary: boolean;
+  firstSeenAt: Date;
+}
+
 /** Primary-first, stable within: primary row first (≤1 live primary by the partial unique), then oldest
  *  first_seen_at, then id — deterministic for exports and the per-call phone picker. */
 const emailReadOrder = [
@@ -223,6 +265,52 @@ const noLiveEmailChild = sql`NOT EXISTS (SELECT 1 FROM ${contactEmails} WHERE ${
 const noLivePhoneChild = sql`NOT EXISTS (SELECT 1 FROM ${contactPhones} WHERE ${contactPhones.contactId} = ${contacts.id} AND ${contactPhones.deletedAt} IS NULL)`;
 const emailMissing = sql`(${contacts.emailBlindIndex} IS NOT NULL AND ${noLiveEmailChild})`;
 const phoneMissing = sql`(${contacts.phoneEnc} IS NOT NULL AND ${noLivePhoneChild})`;
+
+// ── S-CH5 reconcile / drift predicates (05 §3.4 — CH-INV-1's checkable form) ─────────────────────────────
+// CH-INV-1: the flat channel columns are a byte-exact projection of the single live is_primary child row —
+// or all-NULL when no live child row exists. A contact DRIFTS on a channel when any of these hold (one
+// predicate, three readers — the in-tx batch selection, the owner census, and the owner count — so the
+// gauge can never disagree with the walker, the S-CH3 discipline):
+//   (a) flat present but NO live child row at all         → degenerate-1 (legacy flat write since backfill)
+//   (b) flat absent but a live primary child EXISTS        → degenerate-2 (a post-cutover verb; flat unfilled)
+//   (c) flat present AND the live primary child DISAGREES  → the coherence gap (05 §3.4; doc-16 S-CH2 row)
+//   (d) flat present AND live child rows exist but NONE is primary → primary vacuum (05 §Edge)
+// Email disagreement is the blind-index/byte/domain/status compare (the S-CH3 byte-projection form). Phone
+// has NO flat blind index, so disagreement is the value_enc byte compare + status/line_type (the flat phone
+// slot is phone_enc/phone_status/phone_line_type). IS DISTINCT FROM makes every leg NULL-safe.
+const liveEmailPrimary = sql`EXISTS (SELECT 1 FROM ${contactEmails} WHERE ${contactEmails.contactId} = ${contacts.id} AND ${contactEmails.isPrimary} AND ${contactEmails.deletedAt} IS NULL)`;
+const liveEmailChild = sql`EXISTS (SELECT 1 FROM ${contactEmails} WHERE ${contactEmails.contactId} = ${contacts.id} AND ${contactEmails.deletedAt} IS NULL)`;
+const emailPrimaryDivergent = sql`EXISTS (SELECT 1 FROM ${contactEmails} WHERE ${contactEmails.contactId} = ${contacts.id} AND ${contactEmails.isPrimary} AND ${contactEmails.deletedAt} IS NULL AND (${contactEmails.blindIndex} IS DISTINCT FROM ${contacts.emailBlindIndex} OR ${contactEmails.valueEnc} IS DISTINCT FROM ${contacts.emailEnc} OR ${contactEmails.emailDomain} IS DISTINCT FROM ${contacts.emailDomain} OR ${contactEmails.status} IS DISTINCT FROM ${contacts.emailStatus}))`;
+const emailDrift = sql`(
+  (${contacts.emailBlindIndex} IS NOT NULL AND NOT ${liveEmailChild})
+  OR (${contacts.emailBlindIndex} IS NULL AND ${liveEmailPrimary})
+  OR (${contacts.emailBlindIndex} IS NOT NULL AND ${emailPrimaryDivergent})
+  OR (${contacts.emailBlindIndex} IS NOT NULL AND ${liveEmailChild} AND NOT ${liveEmailPrimary})
+)`;
+const livePhonePrimary = sql`EXISTS (SELECT 1 FROM ${contactPhones} WHERE ${contactPhones.contactId} = ${contacts.id} AND ${contactPhones.isPrimary} AND ${contactPhones.deletedAt} IS NULL)`;
+const livePhoneChild = sql`EXISTS (SELECT 1 FROM ${contactPhones} WHERE ${contactPhones.contactId} = ${contacts.id} AND ${contactPhones.deletedAt} IS NULL)`;
+const phonePrimaryDivergent = sql`EXISTS (SELECT 1 FROM ${contactPhones} WHERE ${contactPhones.contactId} = ${contacts.id} AND ${contactPhones.isPrimary} AND ${contactPhones.deletedAt} IS NULL AND (${contactPhones.valueEnc} IS DISTINCT FROM ${contacts.phoneEnc} OR ${contactPhones.status} IS DISTINCT FROM ${contacts.phoneStatus} OR ${contactPhones.lineType} IS DISTINCT FROM ${contacts.phoneLineType}))`;
+const phoneDrift = sql`(
+  (${contacts.phoneEnc} IS NOT NULL AND NOT ${livePhoneChild})
+  OR (${contacts.phoneEnc} IS NULL AND ${livePhonePrimary})
+  OR (${contacts.phoneEnc} IS NOT NULL AND ${phonePrimaryDivergent})
+  OR (${contacts.phoneEnc} IS NOT NULL AND ${livePhoneChild} AND NOT ${livePhonePrimary})
+)`;
+
+// The owner-connection census + count use the SAME predicate in raw form (aliased `c` — the
+// listWorkspacesMissingChannelProjection pattern; drizzle column refs render "contacts"."id", which the
+// aliased owner query does not expose). Kept byte-for-byte parallel to the drizzle fragments above.
+const EMAIL_DRIFT_RAW = `(
+  (c.email_blind_index IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contact_emails ce WHERE ce.contact_id=c.id AND ce.deleted_at IS NULL))
+  OR (c.email_blind_index IS NULL AND EXISTS (SELECT 1 FROM contact_emails ce WHERE ce.contact_id=c.id AND ce.is_primary AND ce.deleted_at IS NULL))
+  OR (c.email_blind_index IS NOT NULL AND EXISTS (SELECT 1 FROM contact_emails ce WHERE ce.contact_id=c.id AND ce.is_primary AND ce.deleted_at IS NULL AND (ce.blind_index IS DISTINCT FROM c.email_blind_index OR ce.value_enc IS DISTINCT FROM c.email_enc OR ce.email_domain IS DISTINCT FROM c.email_domain OR ce.status IS DISTINCT FROM c.email_status)))
+  OR (c.email_blind_index IS NOT NULL AND EXISTS (SELECT 1 FROM contact_emails ce WHERE ce.contact_id=c.id AND ce.deleted_at IS NULL) AND NOT EXISTS (SELECT 1 FROM contact_emails ce WHERE ce.contact_id=c.id AND ce.is_primary AND ce.deleted_at IS NULL)))`;
+const PHONE_DRIFT_RAW = `(
+  (c.phone_enc IS NOT NULL AND NOT EXISTS (SELECT 1 FROM contact_phones cp WHERE cp.contact_id=c.id AND cp.deleted_at IS NULL))
+  OR (c.phone_enc IS NULL AND EXISTS (SELECT 1 FROM contact_phones cp WHERE cp.contact_id=c.id AND cp.is_primary AND cp.deleted_at IS NULL))
+  OR (c.phone_enc IS NOT NULL AND EXISTS (SELECT 1 FROM contact_phones cp WHERE cp.contact_id=c.id AND cp.is_primary AND cp.deleted_at IS NULL AND (cp.value_enc IS DISTINCT FROM c.phone_enc OR cp.status IS DISTINCT FROM c.phone_status OR cp.line_type IS DISTINCT FROM c.phone_line_type)))
+  OR (c.phone_enc IS NOT NULL AND EXISTS (SELECT 1 FROM contact_phones cp WHERE cp.contact_id=c.id AND cp.deleted_at IS NULL) AND NOT EXISTS (SELECT 1 FROM contact_phones cp WHERE cp.contact_id=c.id AND cp.is_primary AND cp.deleted_at IS NULL)))`;
+const CHANNEL_DRIFT_RAW = `(${EMAIL_DRIFT_RAW} OR ${PHONE_DRIFT_RAW})`;
 
 const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean =>
   Buffer.from(a).equals(Buffer.from(b));
@@ -889,5 +977,231 @@ export const contactChannelRepository = {
           isNull(contactEmails.deletedAt),
         ),
       );
+  },
+
+  // ── S-CH5 reconcile / drift sweep (05 §3.4/§5) — the permanent CH-INV-1 fixture ────────────────────────
+  // The batch selection + the two owner-conn census methods share the ONE drift predicate above; the runner
+  // (core's runChannelReconcileForWorkspace) composes the low-level repair primitives below inside the
+  // caller's withTenantTx (per-contact all-or-nothing: a genuine DB error aborts the whole batch, the S-CH3
+  // posture). Repair DIRECTION is the caller's (phase rule; read gate); this layer only executes primitives.
+
+  /**
+   * S-CH5 batch selection: keyset walk (id ASC, cursor = last id) over LIVE contacts that DRIFT on at least
+   * one channel. RLS scopes it to ONE workspace via the caller's GUC (no explicit workspace predicate — the
+   * findContactsMissingChannelProjection precedent). Returns the flat bytes/grades + per-channel drift flags;
+   * email bytes travel verbatim (never decrypted), the worker decrypts ONLY the phone when a flat-wins phone
+   * repair needs it.
+   */
+  async findContactsWithChannelDrift(
+    tx: Tx,
+    cursor: string | null,
+    limit: number,
+  ): Promise<ChannelDriftRow[]> {
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        emailDrifts: sql<boolean>`${emailDrift}`,
+        phoneDrifts: sql<boolean>`${phoneDrift}`,
+        emailEnc: contacts.emailEnc,
+        emailBlindIndex: contacts.emailBlindIndex,
+        emailDomain: contacts.emailDomain,
+        emailStatus: contacts.emailStatus,
+        phoneEnc: contacts.phoneEnc,
+        phoneStatus: contacts.phoneStatus,
+        phoneLineType: contacts.phoneLineType,
+        locationCountry: contacts.locationCountry,
+      })
+      .from(contacts)
+      .where(
+        and(
+          isNull(contacts.deletedAt),
+          sql`(${emailDrift} OR ${phoneDrift})`,
+          cursor === null ? undefined : gt(contacts.id, cursor),
+        ),
+      )
+      .orderBy(asc(contacts.id))
+      .limit(limit);
+    return rows.map((r) => ({
+      ...r,
+      emailEnc: r.emailEnc ?? null,
+      emailBlindIndex: r.emailBlindIndex ?? null,
+      emailDomain: r.emailDomain ?? null,
+      phoneEnc: r.phoneEnc ?? null,
+      phoneStatus: r.phoneStatus ?? null,
+      phoneLineType: r.phoneLineType ?? null,
+      locationCountry: r.locationCountry ?? null,
+    }));
+  },
+
+  /** SYSTEM census for the leader-locked reconcile sweep: (tenantId, workspaceId) of every workspace still
+   *  holding a drifting contact. OWNER connection (intentionally cross-workspace, non-PII ids only — the
+   *  listWorkspacesMissingChannelProjection twin); NOT reachable from a tenant request. */
+  async listWorkspacesWithChannelDrift(
+    limit = 1000,
+  ): Promise<Array<{ tenantId: string; workspaceId: string }>> {
+    const rows = (await db.execute(
+      sql`SELECT DISTINCT tenant_id, workspace_id FROM contacts c
+          WHERE c.deleted_at IS NULL AND ${sql.raw(CHANNEL_DRIFT_RAW)}
+          LIMIT ${limit}`,
+    )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
+    return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
+  },
+
+  /** THE S-CH5 DRIFT GAUGE (`leadwolf_channel_drift_remaining`): the fleet-wide count of live contacts that
+   *  violate CH-INV-1 on some channel. Target 0 after burn-in (05 §Success); > 0 = the S2 alert (runbook §K).
+   *  Owner connection, non-PII count — the same predicate the walker uses, so the gauge never lies. */
+  async countContactsWithChannelDrift(): Promise<number> {
+    const rows = (await db.execute(
+      sql`SELECT count(*)::int AS n FROM contacts c
+          WHERE c.deleted_at IS NULL AND ${sql.raw(CHANNEL_DRIFT_RAW)}`,
+    )) as unknown as Array<{ n: number }>;
+    return rows[0]?.n ?? 0;
+  },
+
+  /** Live email child rows for one contact — the reconcile runner's state read (bounded by the 25-cap;
+   *  index-backed under the RLS workspace predicate). */
+  async loadLiveEmailRowsForReconcile(tx: Tx, contactId: string): Promise<ReconcileEmailRow[]> {
+    return tx
+      .select({
+        id: contactEmails.id,
+        blindIndex: contactEmails.blindIndex,
+        valueEnc: contactEmails.valueEnc,
+        emailDomain: contactEmails.emailDomain,
+        status: contactEmails.status,
+        isPrimary: contactEmails.isPrimary,
+        firstSeenAt: contactEmails.firstSeenAt,
+      })
+      .from(contactEmails)
+      .where(and(eq(contactEmails.contactId, contactId), isNull(contactEmails.deletedAt)));
+  },
+
+  /** Live phone child rows for one contact — the reconcile runner's state read. */
+  async loadLivePhoneRowsForReconcile(tx: Tx, contactId: string): Promise<ReconcilePhoneRow[]> {
+    return tx
+      .select({
+        id: contactPhones.id,
+        blindIndex: contactPhones.blindIndex,
+        valueEnc: contactPhones.valueEnc,
+        status: contactPhones.status,
+        lineType: contactPhones.lineType,
+        isPrimary: contactPhones.isPrimary,
+        firstSeenAt: contactPhones.firstSeenAt,
+      })
+      .from(contactPhones)
+      .where(and(eq(contactPhones.contactId, contactId), isNull(contactPhones.deletedAt)));
+  },
+
+  // Repair primitives (05 §3.4). Ordered by the caller so a swap demotes the old primary BEFORE promoting the
+  // new one (the non-deferrable uniq_*_primary demands demote-then-promote in one tx, 05 §2.1).
+
+  /** Demote a live primary child row (is_primary=false) — the first half of a flat-wins swap. */
+  async demoteEmailRow(tx: Tx, rowId: string): Promise<void> {
+    await tx
+      .update(contactEmails)
+      .set({ isPrimary: false, updatedAt: new Date() })
+      .where(eq(contactEmails.id, rowId));
+  },
+  /** Promote a live child row WITHOUT touching its bytes — child-wins primary-vacuum repair (keep the child's
+   *  own value; the flat cache is then projected from it). */
+  async promoteEmailRow(tx: Tx, rowId: string): Promise<void> {
+    await tx
+      .update(contactEmails)
+      .set({ isPrimary: true, updatedAt: new Date() })
+      .where(eq(contactEmails.id, rowId));
+  },
+  /** Make `rowId` the live primary AND byte-refresh it from the flat bytes (flat-wins refresh/rewrite/promote
+   *  target). Sets all four projected columns so CH-INV-1 holds by construction. */
+  async writeEmailPrimaryFromBytes(
+    tx: Tx,
+    rowId: string,
+    bytes: { valueEnc: Uint8Array; blindIndex: Uint8Array; emailDomain: string; status: string },
+  ): Promise<void> {
+    await tx
+      .update(contactEmails)
+      .set({
+        isPrimary: true,
+        valueEnc: bytes.valueEnc,
+        blindIndex: bytes.blindIndex,
+        emailDomain: bytes.emailDomain,
+        status: bytes.status,
+        updatedAt: new Date(),
+      })
+      .where(eq(contactEmails.id, rowId));
+  },
+  /** Child-wins email projection: rewrite the flat email columns FROM the live primary child's bytes. */
+  async projectEmailChildToFlat(
+    tx: Tx,
+    contactId: string,
+    bytes: { valueEnc: Uint8Array; blindIndex: Uint8Array; emailDomain: string; status: string },
+  ): Promise<void> {
+    await tx
+      .update(contacts)
+      .set({
+        emailEnc: bytes.valueEnc,
+        emailBlindIndex: bytes.blindIndex,
+        emailDomain: bytes.emailDomain,
+        emailStatus: bytes.status,
+        updatedAt: new Date(),
+      })
+      .where(eq(contacts.id, contactId));
+  },
+
+  async demotePhoneRow(tx: Tx, rowId: string): Promise<void> {
+    await tx
+      .update(contactPhones)
+      .set({ isPrimary: false, updatedAt: new Date() })
+      .where(eq(contactPhones.id, rowId));
+  },
+  async promotePhoneRow(tx: Tx, rowId: string): Promise<void> {
+    await tx
+      .update(contactPhones)
+      .set({ isPrimary: true, updatedAt: new Date() })
+      .where(eq(contactPhones.id, rowId));
+  },
+  /** Make `rowId` the live primary AND byte-refresh it from the built flat-derived payload (value_enc verbatim
+   *  from the flat cache; E.164 material re-derived in-worker; grades mirrored flat-wins). */
+  async writePhonePrimaryFromBuilt(
+    tx: Tx,
+    rowId: string,
+    built: {
+      valueEnc: Uint8Array;
+      e164Enc: Uint8Array | null;
+      e164BlindIndex: Uint8Array | null;
+      countryHint: string | null;
+      status: string | null;
+      lineType: string | null;
+      lineTypeSource: string | null;
+    },
+  ): Promise<void> {
+    await tx
+      .update(contactPhones)
+      .set({
+        isPrimary: true,
+        valueEnc: built.valueEnc,
+        e164Enc: built.e164Enc,
+        e164BlindIndex: built.e164BlindIndex,
+        countryHint: built.countryHint,
+        status: built.status,
+        lineType: built.lineType,
+        lineTypeSource: built.lineTypeSource,
+        updatedAt: new Date(),
+      })
+      .where(eq(contactPhones.id, rowId));
+  },
+  /** Child-wins phone projection: rewrite the flat phone columns FROM the live primary child. */
+  async projectPhoneChildToFlat(
+    tx: Tx,
+    contactId: string,
+    bytes: { valueEnc: Uint8Array; status: string | null; lineType: string | null },
+  ): Promise<void> {
+    await tx
+      .update(contacts)
+      .set({
+        phoneEnc: bytes.valueEnc,
+        phoneStatus: bytes.status,
+        phoneLineType: bytes.lineType,
+        updatedAt: new Date(),
+      })
+      .where(eq(contacts.id, contactId));
   },
 };

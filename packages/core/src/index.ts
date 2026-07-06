@@ -973,3 +973,17 @@ export {
   type ChannelBackfillWorkspaceResult,
   type ContactChannelBackfillPlan,
 } from "./channels/channelBackfill.ts";
+
+// S-CH5 permanent reconcile / drift sweep (import-and-data-model-redesign 05 §3.4/§5): the per-workspace
+// runner — WHERE-drift keyset batches, the dual gate re-checked per batch as tenant-select + abort, the READ
+// gate picking the PHASE-DEPENDENT repair direction (read off ⇒ flat wins; read on ⇒ child wins). Driven by
+// apps/workers' leader-locked channelReconcileSweep; the drift count/gauge is contactChannelRepository's.
+export {
+  decideChannelReconcile,
+  runChannelReconcileForWorkspace,
+  type ChannelReconcileAction,
+  type ChannelReconcileOptions,
+  type ChannelReconcileState,
+  type ChannelReconcileWorkspaceResult,
+  type ReconcileDirection,
+} from "./channels/channelReconcile.ts";

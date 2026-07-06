@@ -74,12 +74,16 @@ export function resetImportMetrics(): void {
   importGauges.clear();
 }
 
-// ── Channel-family metrics (import-redesign 05/15 §2.1 — S-CH3 backfill instrumentation) ───────────────────
+// ── Channel-family metrics (import-redesign 05/15 §2.1 — S-CH3 backfill + S-CH5 reconcile) ─────────────────
 // Same shape as the import maps (cumulative counters + point-in-time gauges, rendered as
-// `leadwolf_channel_<name>`): the backfill sweep feeds `backfill_contacts_total` / `backfill_emails_total` /
-// `backfill_phones_total` / `backfill_phone_unparseable_total` / `backfill_conflicts_total` /
-// `backfill_skipped_total` and overwrites the `backfill_remaining` gauge (the S-CH4 completeness number)
-// each tick. PII rule unchanged: names are static strings — never a tenant, contact id, or value.
+// `leadwolf_channel_<name>`): the S-CH3 backfill sweep feeds `backfill_contacts_total` /
+// `backfill_emails_total` / `backfill_phones_total` / `backfill_phone_unparseable_total` /
+// `backfill_conflicts_total` / `backfill_skipped_total` and overwrites the `backfill_remaining` gauge (the
+// S-CH4 completeness number) each tick. The S-CH5 reconcile sweep (05 §3.4) feeds `drift_detected_total` +
+// the direction-labelled `drift_repaired_flat_total` / `drift_repaired_child_total` (flat-wins vs child-wins;
+// the direction is name-encoded — the zero-dep renderer has no label support) + `drift_skipped_total`, and
+// overwrites the `drift_remaining` gauge (the CH-INV-1 drift count; > 0 after burn-in = the S2 alert, runbook
+// §K). PII rule unchanged: names are static strings — never a tenant, contact id, or value.
 const channelCounters = new Map<string, number>();
 const channelGauges = new Map<string, number>();
 

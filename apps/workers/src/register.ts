@@ -11,6 +11,7 @@ import {
   markFastImportFailed,
   registerEmailProviders,
   runChannelBackfillForWorkspace,
+  runChannelReconcileForWorkspace,
   stubMalwareScanner,
 } from "@leadwolf/core";
 import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
@@ -67,6 +68,11 @@ import {
   type ChannelBackfillSweepJobData,
   makeProcessChannelBackfillSweep,
 } from "./queues/channelBackfillSweep.ts";
+import {
+  CHANNEL_RECONCILE_SWEEP_QUEUE,
+  type ChannelReconcileSweepJobData,
+  makeProcessChannelReconcileSweep,
+} from "./queues/channelReconcileSweep.ts";
 import { deliverImportNotification } from "./queues/importNotify.ts";
 import {
   BULK_REVEAL_DLQ,
@@ -1568,6 +1574,36 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "channel-backfill-sweep" })
       .catch((e) =>
         log.error("failed to schedule the channel-backfill sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // S-CH5 channel reconcile / drift sweep (import-redesign 05 §3.4/§5, 15 §M-SEQ seq 48) — DARK by default,
+  // double env-gated: CHANNEL_DUAL_WRITE (the train needs dual-write to be meaningful) AND
+  // CHANNEL_RECONCILE_ENABLED (05's S-CH5 job-level enable). When off, nothing is built. Per-tenant selection
+  // + the batch-boundary abort ride the `channels_dual_write` flag inside core's runner; the READ gate picks
+  // the phase-dependent repair direction. Unlike the self-terminating S-CH3 backfill this is PERMANENT — the
+  // operator enables it and leaves it; `leadwolf_channel_drift_remaining` at 0 is the steady state (a nonzero
+  // reading after burn-in is the S2 alert, runbook §K).
+  if (env.CHANNEL_DUAL_WRITE && env.CHANNEL_RECONCILE_ENABLED) {
+    const channelReconcileQueue = new Queue<ChannelReconcileSweepJobData>(
+      CHANNEL_RECONCILE_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<ChannelReconcileSweepJobData>(
+          CHANNEL_RECONCILE_SWEEP_QUEUE,
+          makeProcessChannelReconcileSweep(connection, runChannelReconcileForWorkspace),
+          { connection },
+        ),
+        CHANNEL_RECONCILE_SWEEP_QUEUE,
+      ),
+    );
+    void channelReconcileQueue
+      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "channel-reconcile-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the channel-reconcile sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

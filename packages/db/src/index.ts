@@ -95,6 +95,7 @@ export {
   type BackfillPhoneChild,
   type ChannelWriteOp,
   type ChannelWriteOutcome,
+  type ChannelDriftRow,
   type ChannelWriteScope,
   type EmailBlindIndexHit,
   type EmailChannelValue,
@@ -102,6 +103,8 @@ export {
   type LivePhoneChannelRow,
   type MissingChannelProjectionRow,
   type PhoneChannelValue,
+  type ReconcileEmailRow,
+  type ReconcilePhoneRow,
 } from "./repositories/contactChannelRepository.ts";
 export {
   planChannelUpsert,

@@ -375,6 +375,28 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Multi-value channel PERMANENT RECONCILE / DRIFT SWEEP (import-and-data-model-redesign 05 §3.4/§5,
+    // 15 §M-SEQ seq 48, S-CH5) — the job-level enable for the CH-INV-1 drift sweep. It is part of the
+    // channel train, so the leader-locked sweep is registered ONLY when this AND `CHANNEL_DUAL_WRITE` both
+    // read "true" (a reconcile is meaningful only where child rows are maintained — the same env-pair posture
+    // the S-CH3 backfill uses). Off ⇒ nothing is built. Per-tenant SELECTION + the batch-boundary abort ride
+    // the SAME `channels_dual_write` flag (re-evaluated fail-closed in-tx per batch, the S-CH3 mechanism);
+    // the per-tenant READ gate (`CHANNEL_READ_FROM_CHILD` + `channels_read`, evaluated in-tx per batch) then
+    // picks the PHASE-DEPENDENT repair direction — read-gate OFF ⇒ FLAT wins (re-project the child primary
+    // from flat), read-gate ON ⇒ CHILD wins (re-project the flat cache from the child primary). Unlike the
+    // self-terminating S-CH3 backfill this NEVER retires (05 §5): drift = 0 is the steady state it holds
+    // forever. Explicit-"true"-only posture (house 01 §7.3). Alert: `leadwolf_channel_drift_remaining` > 0
+    // after burn-in = S2 (runbook §K) — a spike is the writer-bug signature (05 §worst-case).
+    CHANNEL_RECONCILE_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // S-CH5 batch knobs (mirror the S-CH3 per-workspace batch control): contacts per keyset batch (one tx per
+    // batch) and batches per workspace per sweep tick (bounds one tick's work under the leader-lock TTL; a
+    // whale workspace's residual drift simply drains across ticks — resumable by construction, the WHERE-drift
+    // selection is the watermark).
+    CHANNEL_RECONCILE_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
+    CHANNEL_RECONCILE_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the
