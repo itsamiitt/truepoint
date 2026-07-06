@@ -29,9 +29,11 @@
 > least-privilege, compliant-capture client (Vite + CRXJS) that reuses the shipped `/api/v1` ingestion/reveal
 > seam and holds no DB/provider access; design in [`docs/planning/chrome-extension/`](./planning/chrome-extension/)
 > (00–09) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md).
-> **1411 source files · 76 code-bearing domains · 27 shared areas · 47 domain-vocabulary warnings · 60
+> **1417 source files · 77 code-bearing domains · 27 shared areas · 48 domain-vocabulary warnings · 61
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
-> `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
+> `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
+> feature (`apps/api/src/features/master-sync`, the Forge `/api/v1/master-sync` receiver) + `forgeSyncRepository`
+> whose entity isn't in `REPO_DOMAIN` — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
 > reflect the merged tree including the parallel `feat/data-mgmt` work; its new domains' prose is owned by that
 > track). Design refs: [04](./planning/04-ui-ux-design.md),
