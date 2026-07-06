@@ -134,13 +134,25 @@ async function emailUpsert(
     cap: MAX_CHANNEL_VALUES_PER_CONTACT,
   });
 
-  if (verdict === "keep_existing") return { result: "existing", rowId: match!.id, promoted: false };
+  if (verdict === "keep_existing") {
+    // Dual-write byte-refresh (CH-INV-1): a dedup hit on the PRIMARY row means the caller just re-wrote
+    // the same value flat — with fresh AES-GCM bytes (random IV) and possibly a different storage form
+    // (plus-tag variants share an index). The primary projection must track the flat bytes exactly, so
+    // refresh value_enc; SECONDARIES keep their first-seen bytes (05 §Edge — flat doesn't hold them).
+    if (match!.isPrimary) {
+      await tx
+        .update(contactEmails)
+        .set({ valueEnc: value.valueEnc, updatedAt: new Date() })
+        .where(eq(contactEmails.id, match!.id));
+    }
+    return { result: "existing", rowId: match!.id, promoted: false };
+  }
   if (verdict === "capped") return { result: "capped" };
 
   if (verdict === "promote_existing") {
     await tx
       .update(contactEmails)
-      .set({ isPrimary: true, updatedAt: new Date() })
+      .set({ isPrimary: true, valueEnc: value.valueEnc, updatedAt: new Date() })
       .where(eq(contactEmails.id, match!.id));
     await projectEmailToFlat(tx, contactId, value);
     return { result: "existing", rowId: match!.id, promoted: true };
@@ -230,13 +242,34 @@ async function phoneUpsert(
     cap: MAX_CHANNEL_VALUES_PER_CONTACT,
   });
 
-  if (verdict === "keep_existing") return { result: "existing", rowId: match!.id, promoted: false };
+  if (verdict === "keep_existing") {
+    // Dual-write byte-refresh on a PRIMARY dedup hit (see the email twin): value_enc tracks the flat
+    // bytes; the derived E.164 material upgrades ONLY when the op carries it (05 §4 — a later write that
+    // parsed successfully upgrades the row in place; a hint-less unparseable retry never downgrades it).
+    if (match!.isPrimary) {
+      await tx
+        .update(contactPhones)
+        .set({
+          valueEnc: value.valueEnc,
+          ...(value.e164Enc && value.e164BlindIndex
+            ? {
+                e164Enc: value.e164Enc,
+                e164BlindIndex: value.e164BlindIndex,
+                countryHint: value.countryHint ?? null,
+              }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(contactPhones.id, match!.id));
+    }
+    return { result: "existing", rowId: match!.id, promoted: false };
+  }
   if (verdict === "capped") return { result: "capped" };
 
   if (verdict === "promote_existing") {
     await tx
       .update(contactPhones)
-      .set({ isPrimary: true, updatedAt: new Date() })
+      .set({ isPrimary: true, valueEnc: value.valueEnc, updatedAt: new Date() })
       .where(eq(contactPhones.id, match!.id));
     await projectPhoneToFlat(tx, contactId, value);
     return { result: "existing", rowId: match!.id, promoted: true };

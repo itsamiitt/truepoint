@@ -262,7 +262,7 @@ async function writeChannelRows(
   const source = `import:${input.sourceName}`;
   const v = prepared.values;
   if (v.emailEnc && v.emailBlindIndex && v.emailDomain) {
-    await contactChannelRepository.applyChannelWrite(tx, input.scope, {
+    const outcome = await contactChannelRepository.applyChannelWrite(tx, input.scope, {
       kind: "email_upsert",
       contactId,
       value: {
@@ -274,6 +274,11 @@ async function writeChannelRows(
         sourceImportId,
       },
     });
+    if (outcome.result === "collision" || outcome.result === "capped") {
+      // Non-PII operational signal only (contact id + outcome — never a value). The 08 §4 per-row
+      // WARNING band (channel_capped / the A↔B duplicate signal for the review queue) is S-C6's wiring.
+      console.warn(`[import] channel email ${outcome.result} (contact ${contactId})`);
+    }
   }
   if (prepared.phoneRaw && v.phoneEnc) {
     const built = buildPhoneChannelValue({
@@ -281,11 +286,14 @@ async function writeChannelRows(
       phoneEnc: v.phoneEnc,
       countryHint: countryHintOf(v.locationCountry),
     });
-    await contactChannelRepository.applyChannelWrite(tx, input.scope, {
+    const outcome = await contactChannelRepository.applyChannelWrite(tx, input.scope, {
       kind: "phone_upsert",
       contactId,
       value: { ...built, type: "work", source, sourceImportId },
     });
+    if (outcome.result === "capped") {
+      console.warn(`[import] channel phone capped (contact ${contactId})`);
+    }
   }
 }
 
