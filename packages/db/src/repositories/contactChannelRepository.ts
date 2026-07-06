@@ -26,14 +26,29 @@
 // comment for why applyChannelWrite's shape must not be reused there), and the owner-conn census +
 // completeness count (the S-CH4 gate). None of these run on live traffic; the sweep worker is the only caller.
 //
+// S-CH4 (read cutover, 05 §5/§6): the repo family also carries the READ side — the batched masked channel
+// summaries for list surfaces (one IN-list query per table for N contacts, no N+1; counts + type/status/
+// lineType/isPrimary ONLY — never a value, never a domain), the primary-first full value lists for
+// reveal/export (encrypted bytes out; core decrypts, ownership-gated), and the workspace-scoped email
+// blind-index probe the dedup ladder's email rung retargets to (contact_emails.blind_index — the §2.2
+// ws-unique guarantees ≤1 live row per key). Every read method is LIVE-rows-only (`deleted_at IS NULL`) and
+// runs under the caller's RLS tx; callers invoke them ONLY when the composed S-CH4 read gate (core's
+// isChannelReadFromChildEnabled: CHANNEL_READ_FROM_CHILD env + `channels_read` flag, implying the S-CH2
+// dual gate) evaluated ON — gate-off performs zero child-table reads by construction.
+//
 // STATUS MIRROR (flat wins while S-CH2/S-CH3 are the world, 05 §3.4): on primary designation the child row's
 // status columns are stamped FROM the contact's flat status columns (email_status / phone_status /
 // phone_line_type) so CH-INV-1 holds including statuses at write time; the verify ops keep them in step
 // afterwards. Residual drift (e.g. the shipped writers not resetting flat status on a value change) is the
 // S-CH5 sweep's flat-wins repair case.
 
-import { MAX_CHANNEL_VALUES_PER_CONTACT } from "@leadwolf/types";
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import {
+  type ContactChannelSummaries,
+  type ContactEmailSummary,
+  type ContactPhoneSummary,
+  MAX_CHANNEL_VALUES_PER_CONTACT,
+} from "@leadwolf/types";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { db, type Tx } from "../client.ts";
 import { contactEmails, contactPhones } from "../schema/contactChannels.ts";
 import { contacts } from "../schema/contacts.ts";
@@ -150,6 +165,50 @@ export interface BackfillPhoneChild {
   lineType: string | null; // mirrored from contacts.phone_line_type (05 §Edge: out-of-union → 'unknown')
   lineTypeSource: string | null;
 }
+
+// ── S-CH4 read family (05 §5/§6 — the cutover's read shapes) ────────────────────────────────────────────
+
+/** One live email value for reveal/export reads — ENCRYPTED bytes out (core decrypts, ownership-gated).
+ *  Primary-first ordering is the repo's contract (05 §5: dial/export/sync pick primary-first). */
+export interface LiveEmailChannelRow {
+  id: string;
+  contactId: string;
+  valueEnc: Uint8Array;
+  type: string;
+  status: string;
+  isPrimary: boolean;
+}
+
+/** One live phone value for reveal/export reads — encrypted bytes out; primary-first. */
+export interface LivePhoneChannelRow {
+  id: string;
+  contactId: string;
+  valueEnc: Uint8Array;
+  type: string;
+  status: string | null;
+  lineType: string | null;
+  extension: string | null;
+  isPrimary: boolean;
+}
+
+/** A live-child email blind-index hit — the S-CH4 dedup email rung's row shape (05 §6). */
+export interface EmailBlindIndexHit {
+  contactId: string;
+  blindIndex: Uint8Array;
+}
+
+/** Primary-first, stable within: primary row first (≤1 live primary by the partial unique), then oldest
+ *  first_seen_at, then id — deterministic for exports and the per-call phone picker. */
+const emailReadOrder = [
+  desc(contactEmails.isPrimary),
+  asc(contactEmails.firstSeenAt),
+  asc(contactEmails.id),
+];
+const phoneReadOrder = [
+  desc(contactPhones.isPrimary),
+  asc(contactPhones.firstSeenAt),
+  asc(contactPhones.id),
+];
 
 export interface BackfillContactChannelsResult {
   emailInserted: boolean;
@@ -671,5 +730,164 @@ export const contactChannelRepository = {
                     SELECT 1 FROM contact_phones cp WHERE cp.contact_id = c.id AND cp.deleted_at IS NULL)))`,
     )) as unknown as Array<{ n: number }>;
     return rows[0]?.n ?? 0;
+  },
+
+  // ── S-CH4 reads (05 §5/§6) — called ONLY when the composed read gate evaluated ON ──────────────────────
+
+  /**
+   * Batched MASKED channel summaries for a page of contacts (the list/search projection's `channels` field,
+   * 05 §5): live-row counts + per-value `{type, status[, lineType], isPrimary}` — NEVER a value, NEVER a
+   * domain (secondary email domains are PII-adjacent and stay masked until reveal; only the primary's domain
+   * rides maskedContact.emailDomain, from the flat cache, unchanged). One IN-list SELECT per table for N
+   * contacts (no N+1; bounded by N × the 25-value cap); primary-first ordering inside each contact. RLS on
+   * the caller's tx is the isolation wall. Ids with no live rows are simply ABSENT from the map — callers
+   * default to zero-counts.
+   */
+  async channelSummariesForContacts(
+    tx: Tx,
+    contactIds: string[],
+  ): Promise<Map<string, ContactChannelSummaries>> {
+    const out = new Map<string, ContactChannelSummaries>();
+    if (contactIds.length === 0) return out;
+    const entry = (id: string): ContactChannelSummaries => {
+      let e = out.get(id);
+      if (!e) {
+        e = { emailCount: 0, phoneCount: 0, emailSummaries: [], phoneSummaries: [] };
+        out.set(id, e);
+      }
+      return e;
+    };
+    const emailRows = await tx
+      .select({
+        contactId: contactEmails.contactId,
+        type: contactEmails.type,
+        status: contactEmails.status,
+        isPrimary: contactEmails.isPrimary,
+      })
+      .from(contactEmails)
+      .where(and(inArray(contactEmails.contactId, contactIds), isNull(contactEmails.deletedAt)))
+      .orderBy(...emailReadOrder);
+    for (const r of emailRows) {
+      const e = entry(r.contactId);
+      e.emailCount += 1;
+      e.emailSummaries!.push({
+        type: r.type,
+        status: r.status,
+        isPrimary: r.isPrimary,
+      } as ContactEmailSummary);
+    }
+    const phoneRows = await tx
+      .select({
+        contactId: contactPhones.contactId,
+        type: contactPhones.type,
+        status: contactPhones.status,
+        lineType: contactPhones.lineType,
+        isPrimary: contactPhones.isPrimary,
+      })
+      .from(contactPhones)
+      .where(and(inArray(contactPhones.contactId, contactIds), isNull(contactPhones.deletedAt)))
+      .orderBy(...phoneReadOrder);
+    for (const r of phoneRows) {
+      const e = entry(r.contactId);
+      e.phoneCount += 1;
+      e.phoneSummaries!.push({
+        type: r.type,
+        status: r.status,
+        lineType: r.lineType,
+        isPrimary: r.isPrimary,
+      } as ContactPhoneSummary);
+    }
+    return out;
+  },
+
+  /**
+   * The LIVE email values for a batch of contacts, primary-first — the reveal/export read (05 §5: an owned
+   * `email` claim unmasks ALL live email values of the contact; reveal stays contact × reveal_type grained).
+   * Returns ENCRYPTED bytes — decryption happens in core, strictly behind the reveal-ownership check (the
+   * masked-until-reveal boundary is the claim, never this layer). RLS-scoped via the caller's tx.
+   */
+  async listLiveEmailValuesByContactIds(
+    tx: Tx,
+    contactIds: string[],
+  ): Promise<Map<string, LiveEmailChannelRow[]>> {
+    const out = new Map<string, LiveEmailChannelRow[]>();
+    if (contactIds.length === 0) return out;
+    const rows = await tx
+      .select({
+        id: contactEmails.id,
+        contactId: contactEmails.contactId,
+        valueEnc: contactEmails.valueEnc,
+        type: contactEmails.type,
+        status: contactEmails.status,
+        isPrimary: contactEmails.isPrimary,
+      })
+      .from(contactEmails)
+      .where(and(inArray(contactEmails.contactId, contactIds), isNull(contactEmails.deletedAt)))
+      .orderBy(...emailReadOrder);
+    for (const r of rows) {
+      const list = out.get(r.contactId);
+      if (list) list.push(r);
+      else out.set(r.contactId, [r]);
+    }
+    return out;
+  },
+
+  /** The LIVE phone values for a batch of contacts, primary-first — the phone twin (an owned `phone` claim
+   *  unmasks all live phone values). Encrypted bytes out; core decrypts behind the ownership check. */
+  async listLivePhoneValuesByContactIds(
+    tx: Tx,
+    contactIds: string[],
+  ): Promise<Map<string, LivePhoneChannelRow[]>> {
+    const out = new Map<string, LivePhoneChannelRow[]>();
+    if (contactIds.length === 0) return out;
+    const rows = await tx
+      .select({
+        id: contactPhones.id,
+        contactId: contactPhones.contactId,
+        valueEnc: contactPhones.valueEnc,
+        type: contactPhones.type,
+        status: contactPhones.status,
+        lineType: contactPhones.lineType,
+        extension: contactPhones.extension,
+        isPrimary: contactPhones.isPrimary,
+      })
+      .from(contactPhones)
+      .where(and(inArray(contactPhones.contactId, contactIds), isNull(contactPhones.deletedAt)))
+      .orderBy(...phoneReadOrder);
+    for (const r of rows) {
+      const list = out.get(r.contactId);
+      if (list) list.push(r);
+      else out.set(r.contactId, [r]);
+    }
+    return out;
+  },
+
+  /**
+   * The S-CH4 dedup email rung's probe (05 §6): resolve email blind indexes → contact ids through the LIVE
+   * child rows. Workspace-scoped explicitly (defence-in-depth atop RLS, mirroring findByDedupKeysBatch's
+   * flat SELECT); the §2.2 partial ws-unique guarantees ≤1 live row per key, so precedence semantics are
+   * preserved exactly — and secondaries now resolve too (the G15/G16 payoff: a duplicate carrying a
+   * secondary email lands on the contact that already holds it). One IN-list SELECT per chunk. NOTE the
+   * deliberate live-rows-only asymmetry vs the flat rung (which matches soft-archived CONTACTS): archiving a
+   * contact does not tombstone its child rows, so archived contacts still match here — parity holds; only an
+   * explicit channel soft-delete (a doc-04 user verb) releases a key, which is the §Edge "all values
+   * deleted → dedup keys release" contract.
+   */
+  async findContactIdsByEmailBlindIndexes(
+    tx: Tx,
+    workspaceId: string,
+    keys: Uint8Array[],
+  ): Promise<EmailBlindIndexHit[]> {
+    if (keys.length === 0) return [];
+    return tx
+      .select({ contactId: contactEmails.contactId, blindIndex: contactEmails.blindIndex })
+      .from(contactEmails)
+      .where(
+        and(
+          eq(contactEmails.workspaceId, workspaceId),
+          inArray(contactEmails.blindIndex, keys),
+          isNull(contactEmails.deletedAt),
+        ),
+      );
   },
 };

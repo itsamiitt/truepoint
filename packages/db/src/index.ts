@@ -96,7 +96,10 @@ export {
   type ChannelWriteOp,
   type ChannelWriteOutcome,
   type ChannelWriteScope,
+  type EmailBlindIndexHit,
   type EmailChannelValue,
+  type LiveEmailChannelRow,
+  type LivePhoneChannelRow,
   type MissingChannelProjectionRow,
   type PhoneChannelValue,
 } from "./repositories/contactChannelRepository.ts";

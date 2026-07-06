@@ -48,6 +48,13 @@ export type LineTypeSource = z.infer<typeof lineTypeSource>;
  *  Mirrors IMPORT_V2_FLAG_KEY (importV2.ts) — the shared key lives here so api/workers can never drift. */
 export const CHANNELS_DUAL_WRITE_FLAG_KEY = "channels_dual_write";
 
+// ── The S-CH4 read-cutover per-tenant flag key (05 §Implementation Steps / §Rollout) ────────────────────
+/** Per-tenant half of the channel READ-CUTOVER gate (S-CH4). Effective read-from-child = the global
+ *  `CHANNEL_READ_FROM_CHILD` env kill-switch (the name doc 05's S-CH4 row pins) AND this flag AND the full
+ *  S-CH2 dual-write gate — read IMPLIES dual-write (05 §5 ordering; a cutover atop an unmaintained cache is
+ *  unsound), fail-closed. Seeded off in 0060. The key lives here so api/workers/db tests can never drift. */
+export const CHANNELS_READ_FLAG_KEY = "channels_read";
+
 // ── Per-contact cap (05 §Misuse — APP-LAYER, enforced at the API edge; deliberately no DB constraint) ───
 /** Max live values per channel per contact (25 emails / 25 phones): generous × any legitimate dataset,
  *  blocks a hostile 10⁶-row fanout on one contact. Import rows exceeding it append up to the cap + warn. */

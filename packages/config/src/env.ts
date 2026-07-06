@@ -357,6 +357,24 @@ export const appEnvSchema = z
     // the leader-lock TTL; a whale workspace simply drains across ticks — resumable by construction).
     CHANNEL_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
     CHANNEL_BACKFILL_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
+    // Multi-value channel READ CUTOVER (import-and-data-model-redesign 05 §Implementation Steps, S-CH4) —
+    // THE NAME DOC 05's S-CH4 row pins. Env half of the composed read gate: effective read-from-child =
+    // this AND the full S-CH2 dual gate (CHANNEL_DUAL_WRITE env + `channels_dual_write` tenant flag) AND
+    // the `channels_read` tenant flag (0060) — read IMPLIES dual-write (05 §5 ordering), fail-closed if any
+    // layer is off. While off, every read surface keeps its shipped flat-column behavior BYTE-IDENTICALLY
+    // with zero extra queries: masked list/search projections + has_email/has_phone/email_domain facets,
+    // the dedup email rung (contacts.email_blind_index), reveal reads, and the revealed export. With all
+    // layers on, the child tables become the read truth (05 §3.4 phase flip): masked reads gain per-value
+    // channel summaries (counts + type/status/lineType/isPrimary — NEVER values or secondary domains, G16),
+    // secondaries count toward has_email/has_phone and dedup (the email rung retargets to
+    // contact_emails.blind_index), and reveal/export read primary-first from child rows. Flipping this off
+    // is the instant §R-P3 read rollback — reads return to the flat primary cache (permanently dual-write-
+    // maintained); secondaries merely go invisible, nothing is lost. FLIP PRECONDITIONS (05 §Rollout / 15
+    // §T-P3): parity itests green in CI + backfill completeness = 0 + drift = 0. Explicit-"true"-only.
+    CHANNEL_READ_FROM_CHILD: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the

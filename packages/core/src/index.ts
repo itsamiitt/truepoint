@@ -953,6 +953,15 @@ export {
   type BuildPhoneChannelInput,
 } from "./channels/channelDualWrite.ts";
 
+// S-CH4 read cutover (import-and-data-model-redesign 05 §5/§Implementation Steps): the COMPOSED read gate —
+// env CHANNEL_READ_FROM_CHILD AND the full S-CH2 dual-write gate AND the `channels_read` tenant flag (read
+// implies dual-write, fail-closed at every layer). Every cut-over read surface consults exactly this
+// decision; gate-off every read is byte- and cost-identical to the shipped flat-column path.
+export {
+  isChannelReadFromChildEnabled,
+  channelReadFromChildEnabledForScope,
+} from "./channels/channelRead.ts";
+
 // S-CH3 channel backfill (import-and-data-model-redesign 15 §2.1): the per-workspace runner — withTenantTx
 // keyset batches (email bytes verbatim, phones decrypt→E.164 in-worker), WHERE-missing selection as the
 // watermark, the dual gate re-checked per batch as the abort. Driven by apps/workers' leader-locked
