@@ -6,6 +6,7 @@ export * from "./importReject.ts";
 export * from "./auth.ts";
 export * from "./contacts.ts";
 export * from "./contactChannels.ts";
+export * from "./accountChildren.ts";
 export * from "./pipelineStages.ts";
 export * from "./customFields.ts";
 export * from "./fieldProvenance.ts";
