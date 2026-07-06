@@ -21,6 +21,11 @@
 // deliberately NOT ws-unique (shared HQ/switchboard lines are legal); the cross-contact E.164 duplicate
 // SIGNAL (the review-queue rung) is S-C6's, not written here.
 //
+// S-CH3 (backfill, 15 §2.1): the repo family also carries the backfill's WHERE-missing keyset selection, the
+// dedicated verbatim-bytes projection insert (`backfillContactChannels` — sanctioned by 15 §2; see its
+// comment for why applyChannelWrite's shape must not be reused there), and the owner-conn census +
+// completeness count (the S-CH4 gate). None of these run on live traffic; the sweep worker is the only caller.
+//
 // STATUS MIRROR (flat wins while S-CH2/S-CH3 are the world, 05 §3.4): on primary designation the child row's
 // status columns are stamped FROM the contact's flat status columns (email_status / phone_status /
 // phone_line_type) so CH-INV-1 holds including statuses at write time; the verify ops keep them in step
@@ -28,8 +33,8 @@
 // S-CH5 sweep's flat-wins repair case.
 
 import { MAX_CHANNEL_VALUES_PER_CONTACT } from "@leadwolf/types";
-import { and, eq, isNull } from "drizzle-orm";
-import type { Tx } from "../client.ts";
+import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import { db, type Tx } from "../client.ts";
 import { contactEmails, contactPhones } from "../schema/contactChannels.ts";
 import { contacts } from "../schema/contacts.ts";
 import { planChannelUpsert } from "./contactChannelPlan.ts";
@@ -99,6 +104,66 @@ export type ChannelWriteOutcome =
   | { result: "verified"; rowId: string }
   /** A verify op found no live primary row (pre-backfill) — nothing to mirror. */
   | { result: "noop" };
+
+// ── S-CH3 backfill family (15 §2.1 — the executable contract) ───────────────────────────────────────────
+// The backfill's selection predicate IS its watermark: a contact is "missing" per channel when it holds the
+// flat key and NO live child row of that channel exists — so any batch is re-runnable, a crash resumes by
+// re-selecting, and a done contact is never touched again (idempotent no-op by construction; no stored
+// cursor table needed). The predicate is 15 §2.1's completeness query verbatim (email leg keys on
+// email_blind_index; phone leg on phone_enc), shared by the in-tx batch selection, the owner-conn census,
+// and the S-CH4 gate count — one predicate, three readers, so the gate can never disagree with the walker.
+
+/** One selected contact of the WHERE-missing keyset walk (flat bytes travel VERBATIM; the worker decrypts
+ *  ONLY the phone — email ciphertext is never decrypted, CH-INV-1's byte-projection guarantee). */
+export interface MissingChannelProjectionRow {
+  id: string;
+  /** Flat email key present AND no live contact_emails row. */
+  needsEmail: boolean;
+  /** Flat phone present AND no live contact_phones row. */
+  needsPhone: boolean;
+  emailEnc: Uint8Array | null;
+  emailBlindIndex: Uint8Array | null;
+  emailDomain: string | null;
+  emailStatus: string;
+  phoneEnc: Uint8Array | null;
+  phoneStatus: string | null;
+  phoneLineType: string | null;
+  locationCountry: string | null;
+}
+
+/** The email child payload the backfill inserts — flat bytes VERBATIM (no re-encrypt, no re-normalize). */
+export interface BackfillEmailChild {
+  valueEnc: Uint8Array;
+  blindIndex: Uint8Array;
+  emailDomain: string;
+  status: string; // mirrored from contacts.email_status (flat wins during S-CH2/S-CH3)
+}
+
+/** The phone child payload — value_enc = flat bytes VERBATIM; E.164 material derived in-worker (core). */
+export interface BackfillPhoneChild {
+  valueEnc: Uint8Array;
+  blindIndex: Uint8Array;
+  e164Enc: Uint8Array | null; // NULL exactly when unparseable (kept raw + flagged, never skipped)
+  e164BlindIndex: Uint8Array | null;
+  countryHint: string | null;
+  status: string | null; // mirrored from contacts.phone_status
+  lineType: string | null; // mirrored from contacts.phone_line_type (05 §Edge: out-of-union → 'unknown')
+  lineTypeSource: string | null;
+}
+
+export interface BackfillContactChannelsResult {
+  emailInserted: boolean;
+  phoneInserted: boolean;
+  /** Payloads that hit ON CONFLICT DO NOTHING — a concurrent S-CH2 write won the partial unique (race
+   *  backstop, 15 §2.1); counted, never an error. */
+  conflicts: number;
+}
+
+// The per-channel "no live child row" legs, shared verbatim between the tx selection and the owner reads.
+const noLiveEmailChild = sql`NOT EXISTS (SELECT 1 FROM ${contactEmails} WHERE ${contactEmails.contactId} = ${contacts.id} AND ${contactEmails.deletedAt} IS NULL)`;
+const noLivePhoneChild = sql`NOT EXISTS (SELECT 1 FROM ${contactPhones} WHERE ${contactPhones.contactId} = ${contacts.id} AND ${contactPhones.deletedAt} IS NULL)`;
+const emailMissing = sql`(${contacts.emailBlindIndex} IS NOT NULL AND ${noLiveEmailChild})`;
+const phoneMissing = sql`(${contacts.phoneEnc} IS NOT NULL AND ${noLivePhoneChild})`;
 
 const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean =>
   Buffer.from(a).equals(Buffer.from(b));
@@ -445,5 +510,166 @@ export const contactChannelRepository = {
         return rows[0] ? { result: "verified", rowId: rows[0].id } : { result: "noop" };
       }
     }
+  },
+
+  /**
+   * S-CH3 batch selection (15 §2.1): keyset walk (id ASC, `cursor` = last id of the previous batch; null =
+   * start) over LIVE contacts still missing a child projection on at least one channel. RLS scopes it to ONE
+   * workspace via the caller's withTenantTx GUC (no explicit workspace predicate — isolation rides the tx,
+   * the findStaleRevealedForReverify precedent; the NOT EXISTS legs run under the same GUC). Returns the
+   * encrypted flat bytes: email travels verbatim (never decrypted); the worker decrypts ONLY the phone to
+   * derive its blind index + E.164 material (plaintext never leaves the worker).
+   */
+  async findContactsMissingChannelProjection(
+    tx: Tx,
+    cursor: string | null,
+    limit: number,
+  ): Promise<MissingChannelProjectionRow[]> {
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        needsEmail: sql<boolean>`${emailMissing}`,
+        needsPhone: sql<boolean>`${phoneMissing}`,
+        emailEnc: contacts.emailEnc,
+        emailBlindIndex: contacts.emailBlindIndex,
+        emailDomain: contacts.emailDomain,
+        emailStatus: contacts.emailStatus,
+        phoneEnc: contacts.phoneEnc,
+        phoneStatus: contacts.phoneStatus,
+        phoneLineType: contacts.phoneLineType,
+        locationCountry: contacts.locationCountry,
+      })
+      .from(contacts)
+      .where(
+        and(
+          isNull(contacts.deletedAt),
+          sql`(${emailMissing} OR ${phoneMissing})`,
+          cursor === null ? undefined : gt(contacts.id, cursor),
+        ),
+      )
+      .orderBy(asc(contacts.id))
+      .limit(limit);
+    return rows.map((r) => ({
+      ...r,
+      emailEnc: r.emailEnc ?? null,
+      emailBlindIndex: r.emailBlindIndex ?? null,
+      emailDomain: r.emailDomain ?? null,
+      phoneEnc: r.phoneEnc ?? null,
+      phoneStatus: r.phoneStatus ?? null,
+      phoneLineType: r.phoneLineType ?? null,
+      locationCountry: r.locationCountry ?? null,
+    }));
+  },
+
+  /**
+   * S-CH3's dedicated write entry — the 15 §2 sanctioned sibling of `applyChannelWrite`, NOT a second write
+   * path for live traffic: it exists because the backfill's shape is the one applyChannelWrite must never
+   * have — it NEVER touches the flat cache (flat is the source being projected FROM; rewriting it would
+   * churn every contact's updated_at fleet-wide) and it must be a strict no-op on re-runs (applyChannelWrite's
+   * primary byte-refresh would rewrite updated_at on every pass). Inserts the `is_primary=true` projection
+   * row per channel WHERE the upstream selection said none exists; `ON CONFLICT DO NOTHING` on the 05 §2.2
+   * partial uniques is the race backstop against a concurrent S-CH2 dual-write (its row wins; ours is
+   * counted as a conflict, never an error — the contact ends correctly projected either way). Existing child
+   * rows are never read, never updated, never demoted. Runs inside the caller's withTenantTx batch tx: a
+   * genuine DB error aborts the WHOLE batch, so a contact's email+phone projections commit together or not
+   * at all (no-partial-visibility, 15 §2.1).
+   */
+  async backfillContactChannels(
+    tx: Tx,
+    scope: ChannelWriteScope,
+    contactId: string,
+    plan: { email?: BackfillEmailChild; phone?: BackfillPhoneChild },
+  ): Promise<BackfillContactChannelsResult> {
+    let emailInserted = false;
+    let phoneInserted = false;
+    let conflicts = 0;
+    if (plan.email) {
+      const rows = await tx
+        .insert(contactEmails)
+        .values({
+          tenantId: scope.tenantId,
+          workspaceId: scope.workspaceId,
+          contactId,
+          valueEnc: plan.email.valueEnc, // flat ciphertext VERBATIM — CH-INV-1 by construction
+          blindIndex: plan.email.blindIndex, // flat blind index VERBATIM
+          emailDomain: plan.email.emailDomain,
+          type: "other", // usage context unknowable for pre-channel values — the 05 §1.4 default, honest
+          isPrimary: true,
+          status: plan.email.status, // status mirror (flat wins during S-CH2/S-CH3)
+          source: "backfill", // provenance label: the S-CH3 projection pass, not a data origin claim
+          sourceImportId: null, // lineage unknowable at backfill grain (the flat slot kept no pointer)
+        })
+        .onConflictDoNothing()
+        .returning({ id: contactEmails.id });
+      if (rows[0]) emailInserted = true;
+      else conflicts += 1;
+    }
+    if (plan.phone) {
+      const rows = await tx
+        .insert(contactPhones)
+        .values({
+          tenantId: scope.tenantId,
+          workspaceId: scope.workspaceId,
+          contactId,
+          valueEnc: plan.phone.valueEnc, // flat ciphertext VERBATIM (raw original IS the flat value)
+          blindIndex: plan.phone.blindIndex,
+          e164Enc: plan.phone.e164Enc, // NULL exactly when unparseable — kept raw, flagged, never skipped
+          e164BlindIndex: plan.phone.e164BlindIndex,
+          rawOriginalEnc: null, // value_enc IS the flat original; stored only when it differs (05 §1.3)
+          countryHint: plan.phone.countryHint,
+          extension: null,
+          lineType: plan.phone.lineType,
+          lineTypeSource: plan.phone.lineTypeSource,
+          type: "other",
+          isPrimary: true,
+          status: plan.phone.status,
+          source: "backfill",
+          sourceImportId: null,
+        })
+        .onConflictDoNothing()
+        .returning({ id: contactPhones.id });
+      if (rows[0]) phoneInserted = true;
+      else conflicts += 1;
+    }
+    return { emailInserted, phoneInserted, conflicts };
+  },
+
+  /**
+   * SYSTEM-LEVEL census for the leader-locked backfill sweep: the (tenantId, workspaceId) of every workspace
+   * still holding contacts missing a channel projection. OWNER connection (no leadwolf_app drop — the set is
+   * intentionally cross-workspace; mirrors listWorkspacesWithUnresolvedContacts); returns ONLY non-PII ids;
+   * NOT reachable from a tenant request — only the sweep worker calls it. `limit`-capped fan-out.
+   */
+  async listWorkspacesMissingChannelProjection(
+    limit = 1000,
+  ): Promise<Array<{ tenantId: string; workspaceId: string }>> {
+    const rows = (await db.execute(
+      sql`SELECT DISTINCT tenant_id, workspace_id FROM contacts c
+          WHERE c.deleted_at IS NULL
+            AND ((c.email_blind_index IS NOT NULL AND NOT EXISTS (
+                    SELECT 1 FROM contact_emails ce WHERE ce.contact_id = c.id AND ce.deleted_at IS NULL))
+              OR (c.phone_enc IS NOT NULL AND NOT EXISTS (
+                    SELECT 1 FROM contact_phones cp WHERE cp.contact_id = c.id AND cp.deleted_at IS NULL)))
+          LIMIT ${limit}`,
+    )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
+    return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
+  },
+
+  /**
+   * THE S-CH4 GATE (15 §2.1's verification query, verbatim predicate): live contacts with a flat channel
+   * value and no live child row of that channel. **S-CH4 does not flip until this reads 0** after the
+   * post-dual-write re-run (and the S-CH5 drift metric reads 0 — S-CH5's own row). Owner connection —
+   * fleet-wide, non-PII count; also the sweep's `backfill_remaining` gauge.
+   */
+  async countContactsMissingChannelProjection(): Promise<number> {
+    const rows = (await db.execute(
+      sql`SELECT count(*)::int AS n FROM contacts c
+          WHERE c.deleted_at IS NULL
+            AND ((c.email_blind_index IS NOT NULL AND NOT EXISTS (
+                    SELECT 1 FROM contact_emails ce WHERE ce.contact_id = c.id AND ce.deleted_at IS NULL))
+              OR (c.phone_enc IS NOT NULL AND NOT EXISTS (
+                    SELECT 1 FROM contact_phones cp WHERE cp.contact_id = c.id AND cp.deleted_at IS NULL)))`,
+    )) as unknown as Array<{ n: number }>;
+    return rows[0]?.n ?? 0;
   },
 };

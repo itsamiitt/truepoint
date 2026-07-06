@@ -74,6 +74,39 @@ export function resetImportMetrics(): void {
   importGauges.clear();
 }
 
+// ── Channel-family metrics (import-redesign 05/15 §2.1 — S-CH3 backfill instrumentation) ───────────────────
+// Same shape as the import maps (cumulative counters + point-in-time gauges, rendered as
+// `leadwolf_channel_<name>`): the backfill sweep feeds `backfill_contacts_total` / `backfill_emails_total` /
+// `backfill_phones_total` / `backfill_phone_unparseable_total` / `backfill_conflicts_total` /
+// `backfill_skipped_total` and overwrites the `backfill_remaining` gauge (the S-CH4 completeness number)
+// each tick. PII rule unchanged: names are static strings — never a tenant, contact id, or value.
+const channelCounters = new Map<string, number>();
+const channelGauges = new Map<string, number>();
+
+/** Add to a cumulative channel counter (rendered as `leadwolf_channel_<name>`). */
+export function incrementChannelCounter(name: string, by = 1): void {
+  channelCounters.set(name, (channelCounters.get(name) ?? 0) + by);
+}
+
+/** Set a point-in-time channel gauge (rendered as `leadwolf_channel_<name>`) — overwritten per tick. */
+export function setChannelGauge(name: string, value: number): void {
+  channelGauges.set(name, value);
+}
+
+/** Snapshots for tests. */
+export function channelCountersSnapshot(): ReadonlyMap<string, number> {
+  return channelCounters;
+}
+export function channelGaugesSnapshot(): ReadonlyMap<string, number> {
+  return channelGauges;
+}
+
+/** Test seam — the channel maps are module-global, so tests reset between cases. */
+export function resetChannelMetrics(): void {
+  channelCounters.clear();
+  channelGauges.clear();
+}
+
 /** One queue's live depth reading (gathered by register.ts from its producer handles, bounded). */
 export interface QueueDepth {
   queue: string;
@@ -134,6 +167,16 @@ export function renderPromMetrics(input: WorkerMetricsInput): string {
   for (const [name, value] of importGauges) {
     lines.push(`# TYPE leadwolf_import_${name} gauge`);
     lines.push(`leadwolf_import_${name} ${value}`);
+  }
+
+  // Channel-family counters + gauges (S-CH3 backfill) — same module-global-map rendering.
+  for (const [name, value] of channelCounters) {
+    lines.push(`# TYPE leadwolf_channel_${name} counter`);
+    lines.push(`leadwolf_channel_${name} ${value}`);
+  }
+  for (const [name, value] of channelGauges) {
+    lines.push(`# TYPE leadwolf_channel_${name} gauge`);
+    lines.push(`leadwolf_channel_${name} ${value}`);
   }
 
   return `${lines.join("\n")}\n`;

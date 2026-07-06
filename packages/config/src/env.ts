@@ -340,6 +340,23 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Multi-value channel BACKFILL (import-and-data-model-redesign 05/15 §2.1, S-CH3) — the job-level flag
+    // 05's S-CH3 row mandates. The leader-locked sweep is registered ONLY when BOTH this AND
+    // CHANNEL_DUAL_WRITE read "true" (S-CH3 runs strictly after S-CH2 in the rollout train, 15 §M-SEQ);
+    // per-tenant selection then rides the SAME `channels_dual_write` flag, re-evaluated fail-closed at every
+    // batch boundary — which is also the dynamic abort lever (flip the tenant flag off ⇒ that tenant's
+    // backfill halts at the next batch; flip this env off ⇒ the sweep stops scheduling at the next restart,
+    // the leader-lock TTL bounding any in-flight tick). Re-runs are idempotent no-ops on done contacts
+    // (WHERE-missing selection), so stop/resume is always safe (§R-P3). Explicit-"true"-only posture.
+    CHANNEL_BACKFILL_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // S-CH3 batch knobs (05's "per-workspace batch control"): contacts per keyset batch (one tx per batch —
+    // 15 §2.1's 1k default) and batches processed per workspace per sweep tick (bounds one tick's work under
+    // the leader-lock TTL; a whale workspace simply drains across ticks — resumable by construction).
+    CHANNEL_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
+    CHANNEL_BACKFILL_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the

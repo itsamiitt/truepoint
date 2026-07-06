@@ -10,6 +10,7 @@ import {
   diskFileStore,
   markFastImportFailed,
   registerEmailProviders,
+  runChannelBackfillForWorkspace,
   stubMalwareScanner,
 } from "@leadwolf/core";
 import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
@@ -61,6 +62,11 @@ import {
   deadLetterFailedBulkImport,
   makeProcessBulkImport,
 } from "./queues/bulkImports.ts";
+import {
+  CHANNEL_BACKFILL_SWEEP_QUEUE,
+  type ChannelBackfillSweepJobData,
+  makeProcessChannelBackfillSweep,
+} from "./queues/channelBackfillSweep.ts";
 import { deliverImportNotification } from "./queues/importNotify.ts";
 import {
   BULK_REVEAL_DLQ,
@@ -1532,6 +1538,36 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "ledger-backfill-sweep" })
       .catch((e) =>
         log.error("failed to schedule the ledger-backfill sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // S-CH3 channel-backfill sweep (import-redesign 15 §M-SEQ seq 46, mechanics 15 §2.1) — DARK by default,
+  // double env-gated: CHANNEL_DUAL_WRITE (S-CH3 runs strictly after S-CH2 in the rollout train) AND
+  // CHANNEL_BACKFILL_ENABLED (05's job-level flag). When off, nothing is built. Per-tenant selection +
+  // the batch-boundary abort ride the `channels_dual_write` flag inside core's runner (fail-closed).
+  // Self-terminating (no-ops once the completeness census is empty) and idempotent, so it is safe to leave
+  // scheduled — the operator enables it, watches `leadwolf_channel_backfill_remaining` drain to 0 (the
+  // S-CH4 gate), re-runs after dual-write is on fleet-wide to close the write-gap tail, then turns it off.
+  if (env.CHANNEL_DUAL_WRITE && env.CHANNEL_BACKFILL_ENABLED) {
+    const channelBackfillQueue = new Queue<ChannelBackfillSweepJobData>(
+      CHANNEL_BACKFILL_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<ChannelBackfillSweepJobData>(
+          CHANNEL_BACKFILL_SWEEP_QUEUE,
+          makeProcessChannelBackfillSweep(connection, runChannelBackfillForWorkspace),
+          { connection },
+        ),
+        CHANNEL_BACKFILL_SWEEP_QUEUE,
+      ),
+    );
+    void channelBackfillQueue
+      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "channel-backfill-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the channel-backfill sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

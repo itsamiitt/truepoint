@@ -952,3 +952,15 @@ export {
   phoneRawIndexForm,
   type BuildPhoneChannelInput,
 } from "./channels/channelDualWrite.ts";
+
+// S-CH3 channel backfill (import-and-data-model-redesign 15 §2.1): the per-workspace runner — withTenantTx
+// keyset batches (email bytes verbatim, phones decrypt→E.164 in-worker), WHERE-missing selection as the
+// watermark, the dual gate re-checked per batch as the abort. Driven by apps/workers' leader-locked
+// channelBackfillSweep; the completeness count (the S-CH4 gate) is contactChannelRepository's.
+export {
+  planContactChannelBackfill,
+  runChannelBackfillForWorkspace,
+  type ChannelBackfillOptions,
+  type ChannelBackfillWorkspaceResult,
+  type ContactChannelBackfillPlan,
+} from "./channels/channelBackfill.ts";

@@ -90,10 +90,14 @@ export {
 } from "./repositories/contactRepository.ts";
 export {
   contactChannelRepository,
+  type BackfillContactChannelsResult,
+  type BackfillEmailChild,
+  type BackfillPhoneChild,
   type ChannelWriteOp,
   type ChannelWriteOutcome,
   type ChannelWriteScope,
   type EmailChannelValue,
+  type MissingChannelProjectionRow,
   type PhoneChannelValue,
 } from "./repositories/contactChannelRepository.ts";
 export {
