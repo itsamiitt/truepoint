@@ -2,6 +2,7 @@
 export * from "./auth.ts";
 export * from "./contacts.ts";
 export * from "./contactChannels.ts";
+export * from "./accountChildren.ts";
 export * from "./masterGraph.ts";
 export * from "./customFields.ts";
 export * from "./tags.ts";

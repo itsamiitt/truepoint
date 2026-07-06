@@ -10,11 +10,13 @@ import {
   char,
   check,
   customType,
+  foreignKey,
   index,
   integer,
   jsonb,
   pgTable,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
   varchar,
@@ -71,6 +73,18 @@ export const accounts = pgTable(
     // Per-field provenance/confidence seam (C6, PLAN_03 §3.3 / PLAN_00 §5.3): which source/run set each
     // overlay field, for merge precedence + reconciliation against Layer-0. Empty {} until first enrichment.
     fieldProvenance: jsonb("field_provenance").notNull().default({}),
+    // ── Company hierarchy + soft-delete (import-and-data-model-redesign 06 §2/§4; S-A4/S-A5, migration 0061).
+    // DEAD SCHEMA until the account write path (S-A2) and read cutover (S-A6): nothing writes or reads these.
+    // Workspace-local single-parent pointer; guarded by the COMPOSITE same-workspace FK below (a plain FK to
+    // accounts.id would bypass RLS — 06 §2). Self-parent CHECK is the DB backstop; the cycle guard + depth-10
+    // cap + root recompute are APP-LAYER at write time (the write-path step, NOT this schema).
+    parentAccountId: uuid("parent_account_id"),
+    // Denormalized ultimate-parent (family key = COALESCE(root_account_id, id)). NO FK (07 §2.2 draws it
+    // FK-less): it is a recomputed cache, and an FK would add overhead on every subtree root recompute.
+    rootAccountId: uuid("root_account_id"),
+    // Soft-delete / merge-loser tombstone (G18), symmetric with contacts.deleted_at. Read paths exclude
+    // deleted_at IS NOT NULL; children tombstone in the same tx; hierarchy children splice to the grandparent.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -79,10 +93,32 @@ export const accounts = pgTable(
     masterIdx: index("idx_accounts_master")
       .on(t.masterCompanyId)
       .where(sql`${t.masterCompanyId} IS NOT NULL`),
-    // Per-workspace dedup on domain (partial — only rows that carry a domain).
+    // Per-workspace dedup on domain — S-A5 adds `AND deleted_at IS NULL` so a tombstoned account RELEASES its
+    // domain (06 §4). Behaviour-neutral until the S-A5 write path writes deleted_at (until then always NULL).
     uniqWsDomain: uniqueIndex("uniq_accounts_ws_domain")
       .on(t.workspaceId, t.domain)
-      .where(sql`${t.domain} IS NOT NULL`),
+      .where(sql`${t.domain} IS NOT NULL AND ${t.deletedAt} IS NULL`),
+    // FK-target unique CONSTRAINT (not a bare index — a composite FK requires a unique/PK on its referenced
+    // columns) for the same-workspace parent FK below (S-A4, 06 §2 / 07 §4.1).
+    uniqWsId: unique("uniq_accounts_ws_id").on(t.workspaceId, t.id),
+    // Composite same-workspace self-FK: (workspace_id, parent_account_id) → accounts(workspace_id, id). Makes a
+    // cross-workspace parent structurally impossible. onDelete("set null") is the Drizzle-expressible form; the
+    // hand-written 0061 uses the PG15+ COLUMN-TARGETED `SET NULL (parent_account_id)` (a plain SET NULL would
+    // try to null the NOT NULL workspace_id and error) — see 0061 + doc 16 drift row.
+    parentFk: foreignKey({
+      columns: [t.workspaceId, t.parentAccountId],
+      foreignColumns: [t.workspaceId, t.id],
+      name: "accounts_ws_parent_account_fk",
+    }).onDelete("set null"),
+    // Self-parent block (Salesforce write-time self-reference block, 06 §2); the app validation rejects first.
+    parentNotSelf: check(
+      "accounts_parent_not_self",
+      sql`${t.parentAccountId} IS NULL OR ${t.parentAccountId} <> ${t.id}`,
+    ),
+    // Family reads without recursive CTEs (07 §4.2); live-hierarchy nodes only.
+    wsRootIdx: index("idx_accounts_ws_root")
+      .on(t.workspaceId, t.rootAccountId)
+      .where(sql`${t.rootAccountId} IS NOT NULL`),
     icpRange: check(
       "accounts_icp_fit_range",
       sql`${t.icpFitScore} IS NULL OR ${t.icpFitScore} BETWEEN 0 AND 100`,

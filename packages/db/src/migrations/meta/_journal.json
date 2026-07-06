@@ -428,6 +428,13 @@
       "when": 1785400000000,
       "tag": "0060_channels_read_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785500000000,
+      "tag": "0061_account_children_and_hierarchy",
+      "breakpoints": true
     }
   ]
 }
