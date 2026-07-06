@@ -4,7 +4,13 @@
 // isolation. The stall-window boundary (T-Q8) is proven at the decider's `stalled` input contract.
 
 import { expect, test } from "bun:test";
-import { type ReaperCandidate, decideReaperAction, hasLiveFastJob } from "./importReaperSweep.ts";
+import {
+  type ReaperCandidate,
+  decideReaperAction,
+  draftReapCutoff,
+  hasLiveFastJob,
+  isDraftSourceObjectKey,
+} from "./importReaperSweep.ts";
 
 const GRACE = 5 * 60_000;
 const now = 1_000_000_000_000;
@@ -138,4 +144,35 @@ test("copy: fast-orphan terminal is never chosen for a copy job (rows are recons
       stalled: false,
     }),
   ).not.toBe("fast_orphan_fail");
+});
+
+// ── S-I8 draft-reap deciders (T12's unit leg — the cutoff + the object-key discriminator) ──────────────
+
+test("draftReapCutoff: exactly TTL ago is NOT yet reapable; a moment older is", () => {
+  const ttl = 48 * 3_600_000; // the 08 §Edge cases default (IMPORT_DRAFT_TTL_HOURS = 48)
+  const cutoff = draftReapCutoff(now, ttl);
+  expect(cutoff.getTime()).toBe(now - ttl);
+  // The census predicate is created_at < cutoff (strict): the boundary instant survives one more tick.
+  expect(new Date(now - ttl).getTime() < cutoff.getTime()).toBe(false);
+  expect(new Date(now - ttl - 1).getTime() < cutoff.getTime()).toBe(true);
+});
+
+test("draft: never reaped by the orphan decider (drafts are the DRAFT reap's, never fast_orphan_fail)", () => {
+  // listNonTerminalImportJobs never enumerates drafts, but the decider must also be safe by construction.
+  expect(
+    decideReaperAction(job({ status: "draft", processingMode: null, createdAt: old }), {
+      liveIds: NONE,
+      now,
+      orphanGraceMs: GRACE,
+      stalled: false,
+    }),
+  ).toBe("none");
+});
+
+test("isDraftSourceObjectKey: real store keys yes; inline:/retry: sentinels never", () => {
+  expect(isDraftSourceObjectKey("imports/0e8a4c1e/source.csv")).toBe(true);
+  expect(isDraftSourceObjectKey("imports/0e8a4c1e/source.xlsx")).toBe(true);
+  expect(isDraftSourceObjectKey("inline:0e8a4c1e-uuid")).toBe(false);
+  expect(isDraftSourceObjectKey("retry:0e8a4c1e-uuid")).toBe(false);
+  expect(isDraftSourceObjectKey("")).toBe(false);
 });
