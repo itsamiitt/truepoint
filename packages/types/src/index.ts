@@ -19,6 +19,7 @@ export * from "./bulkImport.ts";
 export * from "./jobVisibility.ts";
 export * from "./importPolicy.ts";
 export * from "./importV2.ts";
+export * from "./scheduledImports.ts";
 export * from "./billing.ts";
 export * from "./platformAudit.ts";
 export * from "./intel.ts";

@@ -327,6 +327,22 @@ export const appEnvSchema = z
     //   • stall window — a `running` job whose 7-bucket counters have not advanced for longer than this is
     //     flagged (metric + log; NEVER auto-killed) — the durable-truth "is it stuck?" signal (09 §8).
     IMPORT_REAPER_STALL_WINDOW_MS: z.coerce.number().int().positive().default(10 * 60_000),
+    // Scheduled imports (import-and-data-model-redesign 08 §9; P5). GLOBAL kill-switch of the dual gate:
+    // effective = (this === "true") AND the per-tenant `scheduled_imports_enabled` flag (seeded off in 0063)
+    // AND the import_v2 dual gate on for the tenant (a fired run rides the unified durable pipeline). While
+    // off, the CRUD verbs 404 and the leader-locked sweep is NOT constructed — the table stays inert. Same
+    // explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy. The
+    // remote-URL / connected-source branch (08 §9) is NOT built here (13 §8 SSRF forward-guard, deferred);
+    // only the STORED-object branch ships, so nothing here opens an outbound-fetch surface.
+    SCHEDULED_IMPORTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // How often the leader-locked scheduled-import sweep ticks (fires due schedules). Revert-by-env.
+    SCHEDULED_IMPORT_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(60_000),
+    // N consecutive FIRE-TIME failures (grant loss / submission error) that auto-disable a schedule (it turns
+    // itself off + notifies the creator rather than firing forever). Default mirrors the shared type constant.
+    SCHEDULED_IMPORT_MAX_CONSECUTIVE_FAILURES: z.coerce.number().int().positive().default(5),
     // Multi-value channel DUAL-WRITE (import-and-data-model-redesign 05, S-CH2) — the GLOBAL kill-switch half
     // of the dual gate (the name doc 05 pins): effective dual-write = (this === "true") AND the per-tenant
     // `channels_dual_write` flag (seeded off in 0059). While off, every email/phone writer (import, enrichment,

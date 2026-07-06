@@ -442,6 +442,13 @@
       "when": 1785600000000,
       "tag": "0062_account_domains_dual_write_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1785700000000,
+      "tag": "0063_scheduled_imports",
+      "breakpoints": true
     }
   ]
 }
