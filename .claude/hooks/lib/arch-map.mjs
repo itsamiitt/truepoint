@@ -71,6 +71,8 @@ export const QUEUE_DOMAIN = {
   importReaperSweep: "import",
   importPromotionSweep: "import",
   importArtifactSweep: "import",
+  channelBackfillSweep: "reveal",
+  channelReconcileSweep: "reveal",
   dataRetentionSweep: "compliance",
   "crm-sync": "crm-sync",
   outreach: "outreach",
@@ -99,6 +101,9 @@ export const REPO_DOMAIN = {
   outreach_log: "outreach",
   salesNavLink: "sales-navigator",
   sales_nav_link: "sales-navigator",
+  // Contact-channel overlay (contact_emails/contact_phones, import-and-data-model-redesign S-CH1+):
+  // rides the contact/reveal domain like the contact repo itself.
+  contactChannel: "reveal",
   source_import: "import",
   sourceImport: "import",
   importJob: "import",

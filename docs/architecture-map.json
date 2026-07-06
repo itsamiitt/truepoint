@@ -97,8 +97,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1463,
-  "fileSetHash": "sha256:dadb7b52e5e9e57378ef286adf2401129ceb53ac55d90df5f9e9eedcd509da00",
+  "fileCount": 1469,
+  "fileSetHash": "sha256:a2abb74c3d5aef7e1068881c97bf62fa2e9c1a4cfeb6c6fb54670b10ac955466",
   "features": {
     "account-search": {
       "web": [],
@@ -284,7 +284,10 @@
         "packages/core/src/channels/channelBackfill.test.ts",
         "packages/core/src/channels/channelBackfill.ts",
         "packages/core/src/channels/channelDualWrite.test.ts",
-        "packages/core/src/channels/channelDualWrite.ts"
+        "packages/core/src/channels/channelDualWrite.ts",
+        "packages/core/src/channels/channelRead.ts",
+        "packages/core/src/channels/channelReconcile.test.ts",
+        "packages/core/src/channels/channelReconcile.ts"
       ],
       "db": [],
       "workers": [],
@@ -1255,10 +1258,14 @@
       ],
       "db": [
         "packages/db/src/repositories/accountRepository.ts",
+        "packages/db/src/repositories/contactChannelRepository.ts",
         "packages/db/src/repositories/contactRepository.ts",
         "packages/db/src/repositories/revealRepository.ts"
       ],
-      "workers": [],
+      "workers": [
+        "apps/workers/src/queues/channelBackfillSweep.ts",
+        "apps/workers/src/queues/channelReconcileSweep.ts"
+      ],
       "integrations": []
     },
     "sales-navigator": {
@@ -2197,6 +2204,8 @@
       "packages/db/test/compliance.itest.ts",
       "packages/db/test/contactChannels.backfill.itest.ts",
       "packages/db/test/contactChannels.dualwrite.itest.ts",
+      "packages/db/test/contactChannels.readcutover.itest.ts",
+      "packages/db/test/contactChannels.reconcile.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
       "packages/db/test/emailAnalytics.itest.ts",
@@ -2387,7 +2396,6 @@
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/bulkEnrichment.ts",
     "apps/workers/src/queues/bulkReveal.ts",
-    "apps/workers/src/queues/channelBackfillSweep.ts",
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/erSweep.ts",
     "apps/workers/src/queues/firmographics.ts",
@@ -2402,7 +2410,6 @@
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/announcementRepository.ts",
     "packages/db/src/repositories/authPolicyRepository.ts",
-    "packages/db/src/repositories/contactChannelRepository.ts",
     "packages/db/src/repositories/creditPackRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/domainRepository.ts",
