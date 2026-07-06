@@ -97,8 +97,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1470,
-  "fileSetHash": "sha256:af023a77d99d92de86c5e027a8de668df5874f3265d7c8e18a4eac4a59657299",
+  "fileCount": 1472,
+  "fileSetHash": "sha256:ce8bc49fb03b99ba10af606b86acba88ab41c48056467952065d64f0a001659e",
   "features": {
     "account-search": {
       "web": [],
@@ -2156,6 +2156,7 @@
       "packages/db/src/repositories/platformTrustReads.ts",
       "packages/db/src/repositories/subscriptionResetMath.test.ts",
       "packages/db/src/repositories/subscriptionResetMath.ts",
+      "packages/db/src/schema/accountChildren.ts",
       "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/aiRequests.ts",
       "packages/db/src/schema/auth.ts",
@@ -2282,6 +2283,7 @@
       "packages/search/src/index.ts"
     ],
     "packages/types": [
+      "packages/types/src/accountChildren.ts",
       "packages/types/src/accountHold.ts",
       "packages/types/src/accountsSearch.ts",
       "packages/types/src/activity.ts",
