@@ -19,6 +19,7 @@ import { useState } from "react";
 import { useImportJobs } from "../hooks/useImportJobs";
 import { isTerminalV2, stateShortLabel, stateTone } from "./shared/stateCopy";
 import { formatPercent, formatRelative } from "./format";
+import { ImportDraftsBanner } from "./ImportDraftsBanner";
 import { ImportJobDrawer } from "./ImportJobDrawer";
 import styles from "./ImportJobsHistoryPage.module.css";
 
@@ -149,6 +150,9 @@ export function ImportJobsHistoryPage() {
           </TpButton>
         </div>
       ) : null}
+
+      {/* S-U7: unfinished drafts resume here (gate-on only; renders nothing while IMPORT_V2 is off). */}
+      <ImportDraftsBanner />
 
       <section className={styles.card}>
         <StateSwitch
