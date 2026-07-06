@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1431 source files · 77 code-bearing domains · 22 shared areas · 48 domain-vocabulary warnings · 58
+> **1474 source files · 78 code-bearing domains · 22 shared areas · 49 domain-vocabulary warnings · 58
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
@@ -157,6 +157,20 @@ apps/                           # deployable processes (thin transport adapters)
   ONLY the fields the workspace owns a claim for
 - **db:** `{account,contact}Repository.ts` (overlay reads/writes, masked list — `searchRepository` projects
   `revealedTypes`); `revealRepository.ts` (claim + usage + owned-field / claim reads + batched hydration)
+- **multi-value channels (import-and-data-model-redesign Phase 3 — dark behind the `CHANNEL_DUAL_WRITE` /
+  `CHANNEL_READ_FROM_CHILD` dual-gate pairs):** `contact_emails`/`contact_phones` child tables
+  (`schema/contactChannels.ts`, encrypted + blind-indexed, one-live-primary, E.164 on phones) ·
+  `contactChannelRepository.ts` + `packages/core/src/channels/` (`applyChannelWrite` = the CH-INV-1 single
+  write path: child upsert + flat primary-cache projection in one tx; backfill + reconcile runners) · worker
+  sweeps `queues/channelBackfillSweep.ts` (flat→child projection, WHERE-missing watermark) and
+  `queues/channelReconcileSweep.ts` (permanent drift repair, phase-rule direction). Gate-on, masked contact
+  DTOs carry channel summaries, `has_email`/`has_phone` count secondaries, the dedup email rung reads
+  `contact_emails.blind_index`, and reveal/export go primary-first — uniformly across search/count/resolve/
+  dynamic-list membership. Flat columns remain the permanent primary-value cache (never dropped)
+- **company children (Phase 4, DDL landed dark — migration 0061):** `account_domains` (clear citext,
+  live-unique per workspace) + `account_locations` (hq/branch/office) child tables (`schema/accountChildren.ts`)
+  + `accounts.parent_account_id`/`root_account_id` (composite same-workspace FK) + `accounts.deleted_at` (G18);
+  write paths/backfills ride the in-flight S-A2 train
 - **api:** `features/reveal/*` (masked `/contacts` list; POST `/contacts/:id/reveal` behind Idempotency-Key
   replay, role-gated + burst-limited; GET `/contacts/:id/revealed` + POST `/contacts/revealed/batch` no-charge
   reads; `/credits/reveal-costs`)

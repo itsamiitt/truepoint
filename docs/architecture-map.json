@@ -97,8 +97,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1472,
-  "fileSetHash": "sha256:ce8bc49fb03b99ba10af606b86acba88ab41c48056467952065d64f0a001659e",
+  "fileCount": 1474,
+  "fileSetHash": "sha256:d9b5de98a040f1e985db406d52b7daa42c1d0f86e6cd3dfc3677362149004ed0",
   "features": {
     "account-search": {
       "web": [],
@@ -2141,6 +2141,8 @@
       "packages/db/src/client.ts",
       "packages/db/src/index.ts",
       "packages/db/src/migrate.ts",
+      "packages/db/src/repositories/accountChildPlan.test.ts",
+      "packages/db/src/repositories/accountChildPlan.ts",
       "packages/db/src/repositories/contactChannelPlan.test.ts",
       "packages/db/src/repositories/contactChannelPlan.ts",
       "packages/db/src/repositories/jobVisibility.test.ts",
