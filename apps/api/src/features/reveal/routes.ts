@@ -12,6 +12,7 @@ import {
   editContactFields,
   getRevealedContact,
   getRevealedContactsBatch,
+  isChannelReadFromChildEnabled,
   revealContact,
 } from "@leadwolf/core";
 import {
@@ -175,9 +176,15 @@ revealRoutes.post("/reveal-jobs", requireRole("owner", "admin", "member"), async
   // Select-all-matching → materialize the visible ids server-side (capped). This is what makes bulk reveal work
   // across an entire search result, which the synchronous client loop could not.
   const contactIds = parsed.data.criteria
-    ? await withTenantTx(scope, (tx) =>
-        searchRepository.resolveVisibleIds(tx, parsed.data.criteria!, BULK_SELECTION_CAP),
-      )
+    ? await withTenantTx(scope, async (tx) => {
+        // S-CH4b: resolve the select-all-matching ids with the SAME child-presence predicates the search page
+        // used, so a channels_read-on bulk reveal targets exactly the rows the filtered page showed. Evaluated
+        // in this tx (env-off ⇒ zero queries, byte-identical gate-off).
+        const channelsFromChild = await isChannelReadFromChildEnabled(tx, scope.tenantId);
+        return searchRepository.resolveVisibleIds(tx, parsed.data.criteria!, BULK_SELECTION_CAP, {
+          channelsFromChild,
+        });
+      })
     : (parsed.data.contactIds ?? []);
   if (contactIds.length === 0) throw new ValidationError("No contacts match the selection.");
 

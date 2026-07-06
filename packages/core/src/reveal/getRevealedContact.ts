@@ -132,11 +132,28 @@ export async function getRevealedContact(
     if (!view) return null; // contact gone (tombstoned / never existed in this workspace)
     // S-CH4 composed read gate, evaluated in the SAME tx (shares its fate; env off ⇒ zero queries). Gate-on
     // the reveal read gains ALL live email/phone values primary-first (from the child); gate-off byte-identical.
+    // S-CH4b narrowing: fetch child ciphertext ONLY for the channel(s) this workspace actually OWNS a claim
+    // for — buildRevealedContact decrypts an unowned channel's values NEVER, so fetching them is pure waste
+    // (wasteful, not leaky). Output is identical to fetching both (the unowned arrays were dropped anyway).
     let live: LiveChannelValues | undefined;
     if (await isChannelReadFromChildEnabled(tx, scope.tenantId)) {
-      const emails = await contactChannelRepository.listLiveEmailValuesByContactIds(tx, [contactId]);
-      const phones = await contactChannelRepository.listLivePhoneValuesByContactIds(tx, [contactId]);
-      live = { emails: emails.get(contactId) ?? [], phones: phones.get(contactId) ?? [] };
+      const ownedEmail = claims.some(
+        (c) => c.revealType === "email" || c.revealType === "full_profile",
+      );
+      const ownedPhone = claims.some(
+        (c) => c.revealType === "phone" || c.revealType === "full_profile",
+      );
+      const emails = ownedEmail
+        ? (await contactChannelRepository.listLiveEmailValuesByContactIds(tx, [contactId])).get(
+            contactId,
+          ) ?? []
+        : [];
+      const phones = ownedPhone
+        ? (await contactChannelRepository.listLivePhoneValuesByContactIds(tx, [contactId])).get(
+            contactId,
+          ) ?? []
+        : [];
+      live = { emails, phones };
     }
     return buildRevealedContact(contactId, claims, view, live);
   });

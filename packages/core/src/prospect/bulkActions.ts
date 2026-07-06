@@ -39,6 +39,10 @@ import {
   type OutreachStatus,
   type WorkspaceRole,
 } from "@leadwolf/types";
+import {
+  channelReadFromChildEnabledForScope,
+  isChannelReadFromChildEnabled,
+} from "../channels/channelRead.ts";
 import { writeAudit } from "../compliance/writeAudit.ts";
 // Title-canonical synonym expansion (shared with the dynamic-list resolver) so a `criteria` selection resolves
 // the SAME ids the user saw in the results grid (e.g. "CEO" matches "Chief Executive Officer").
@@ -67,12 +71,22 @@ interface BulkActor {
  * visibility gap. Explicit ids are filtered to the visible subset (cross-workspace guard); a `criteria` is
  * resolved via searchRepository, capped at BULK_SELECTION_CAP. Returns ids that are guaranteed live + visible.
  */
-async function resolveVisibleSelection(tx: Tx, selection: BulkSelectionInput): Promise<string[]> {
+async function resolveVisibleSelection(
+  tx: Tx,
+  tenantId: string,
+  selection: BulkSelectionInput,
+): Promise<string[]> {
   if (selection.criteria) {
+    // S-CH4b: the select-all-across-search id-resolve MUST consume the SAME child-presence predicates the
+    // search PAGE did (searchPortProvider), or a channels_read-on filtered page could disagree with the ids a
+    // bulk op mutates. Evaluated IN this tx (env-off ⇒ zero queries, byte-identical gate-off). The explicit-id
+    // branch below carries no search predicate, so it needs no gate.
+    const channelsFromChild = await isChannelReadFromChildEnabled(tx, tenantId);
     return searchRepository.resolveVisibleIds(
       tx,
       expandTitleFilters(selection.criteria),
       BULK_SELECTION_CAP,
+      { channelsFromChild },
     );
   }
   return contactRepository.visibleContactIds(tx, selection.contactIds ?? []);
@@ -111,7 +125,7 @@ export async function assignOwner(input: BulkAssignOwnerInput): Promise<{ affect
         throw new NotFoundError("The chosen owner is not a member of this workspace.");
       }
     }
-    const ids = await resolveVisibleSelection(tx, input);
+    const ids = await resolveVisibleSelection(tx, input.scope.tenantId, input);
     const affected = await contactRepository.assignOwner(tx, ids, ownerUserId);
     if (affected > 0) {
       await writeAudit(tx, {
@@ -140,7 +154,7 @@ export interface BulkTagsInput extends BulkActor, BulkSelectionInput {
 export async function bulkAssignTags(input: BulkTagsInput): Promise<{ affected: number }> {
   return withBulkTx(input.scope, async (tx) => {
     await assertTagsExist(tx, input.tagIds);
-    const ids = await resolveVisibleSelection(tx, input);
+    const ids = await resolveVisibleSelection(tx, input.scope.tenantId, input);
     for (const tagId of input.tagIds) {
       for (const recordId of ids) {
         await tagRepository.assign(tx, {
@@ -171,7 +185,7 @@ export async function bulkAssignTags(input: BulkTagsInput): Promise<{ affected: 
 export async function bulkRemoveTags(input: BulkTagsInput): Promise<{ affected: number }> {
   return withBulkTx(input.scope, async (tx) => {
     await assertTagsExist(tx, input.tagIds);
-    const ids = await resolveVisibleSelection(tx, input);
+    const ids = await resolveVisibleSelection(tx, input.scope.tenantId, input);
     for (const tagId of input.tagIds) {
       for (const recordId of ids) {
         await tagRepository.unassign(tx, tagId, "contact", recordId);
@@ -207,7 +221,7 @@ export interface BulkStatusInput extends BulkActor, BulkSelectionInput {
 /** Bulk set outreach_status over the visible selection (value validated at the edge). Audits `contact.update`. */
 export async function bulkChangeStatus(input: BulkStatusInput): Promise<{ affected: number }> {
   return withBulkTx(input.scope, async (tx) => {
-    const ids = await resolveVisibleSelection(tx, input);
+    const ids = await resolveVisibleSelection(tx, input.scope.tenantId, input);
     const affected = await contactRepository.setOutreachStatus(tx, ids, input.outreachStatus);
     if (affected > 0) {
       await writeAudit(tx, {
@@ -233,7 +247,7 @@ export async function bulkArchive(
   input: BulkActor & BulkSelectionInput,
 ): Promise<{ affected: number }> {
   return withBulkTx(input.scope, async (tx) => {
-    const ids = await resolveVisibleSelection(tx, input);
+    const ids = await resolveVisibleSelection(tx, input.scope.tenantId, input);
     const affected = await contactRepository.archive(tx, ids);
     if (affected > 0) {
       await writeAudit(tx, {
@@ -267,7 +281,7 @@ export async function bulkEnroll(input: BulkEnrollInput): Promise<BulkEnrollResu
   return withBulkTx(input.scope, async (tx) => {
     const sequence = await sequenceRepository.getById(tx, input.sequenceId);
     if (!sequence) throw new NotFoundError("Sequence not found in this workspace.");
-    const ids = await resolveVisibleSelection(tx, input);
+    const ids = await resolveVisibleSelection(tx, input.scope.tenantId, input);
 
     let enrolled = 0;
     let alreadyEnrolled = 0;
@@ -338,7 +352,7 @@ export async function bulkEnrich(
   input: BulkEnrichInput,
 ): Promise<{ affected: number; jobId: string }> {
   // Resolve the visible ids in their own short tx (createJob opens its own withTenantTx).
-  const ids = await withBulkTx(input.scope, (tx) => resolveVisibleSelection(tx, input));
+  const ids = await withBulkTx(input.scope, (tx) => resolveVisibleSelection(tx, input.scope.tenantId, input));
   if (ids.length === 0) {
     // Nothing visible to enrich — surface 404 rather than create an empty job.
     throw new NotFoundError("No matching contacts to enrich in this workspace.");
@@ -381,7 +395,7 @@ export async function bulkExportCsv(
     throw new ForbiddenError("insufficient_role", "Your role does not allow exporting contacts.");
   }
   return withBulkTx(input.scope, async (tx) => {
-    const ids = await resolveVisibleSelection(tx, input);
+    const ids = await resolveVisibleSelection(tx, input.scope.tenantId, input);
     const rows = await contactRepository.listMaskedByIds(tx, ids);
     await writeAudit(tx, {
       tenantId: input.scope.tenantId,
@@ -429,7 +443,13 @@ export async function searchCount(
   scope: WorkspaceScope,
   query: ContactQuery,
 ): Promise<{ total: number }> {
-  const total = await searchRepository.countContacts(scope, expandTitleFilters(query));
+  // S-CH4b: the "Select all N" total MUST use the SAME child-presence predicates the search page did — else the
+  // count could disagree with the visible page once channels_read flips. Evaluated once per call in its own tx
+  // (env-off ⇒ zero queries, fail-closed ⇒ flat), exactly the searchPortProvider posture.
+  const channelsFromChild = await channelReadFromChildEnabledForScope(scope);
+  const total = await searchRepository.countContacts(scope, expandTitleFilters(query), {
+    channelsFromChild,
+  });
   return { total };
 }
 
@@ -457,7 +477,7 @@ export interface BulkEstimateInput extends BulkActor, BulkSelectionInput {
  */
 export async function estimateBulkSpend(input: BulkEstimateInput): Promise<BulkSpendEstimate> {
   return withBulkTx(input.scope, async (tx) => {
-    const ids = await resolveVisibleSelection(tx, input);
+    const ids = await resolveVisibleSelection(tx, input.scope.tenantId, input);
     const balance = await creditRepository.currentBalance(tx, input.scope.tenantId);
     const selectionCount = ids.length;
 
