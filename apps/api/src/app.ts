@@ -28,6 +28,7 @@ import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
 import { bulkImportRoutes, importRoutes } from "./features/import/index.ts";
 import { ingestRoutes } from "./features/ingest/index.ts";
+import { masterSyncRoutes } from "./features/master-sync/index.ts";
 import { listsRoutes } from "./features/lists/index.ts";
 import { notificationsRoutes } from "./features/notifications/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
@@ -126,6 +127,9 @@ app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + r
 app.route("/api/v1/lists", listsRoutes); // 24: static prospect lists (bulk add-to-list)
 // Unified ingestion entry (prospect-database-platform Phase 03 / I2) — one idempotent envelope for every source.
 app.route("/api/v1/ingest", ingestRoutes);
+// Machine-only Forge master-sync ingress (docs/planning/forge/11, ADR-0047) — its own scope-gated principal,
+// NOT the human authn→tenancy→requireRole chain.
+app.route("/api/v1/master-sync", masterSyncRoutes);
 app.route("/api/v1/ai-search", aiSearchRoutes); // 23/ADR-0023: NL → validated filter (for confirmation)
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/custom-fields", customFieldsRoutes); // ADR-0028: field definitions + typed-jsonb values

@@ -2,6 +2,7 @@
 export * from "./auth.ts";
 export * from "./contacts.ts";
 export * from "./masterGraph.ts";
+export * from "./processedSyncEvents.ts";
 export * from "./customFields.ts";
 export * from "./tags.ts";
 export * from "./billing.ts";
