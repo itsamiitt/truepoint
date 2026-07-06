@@ -26,7 +26,8 @@ export class ImportsNotEnabledError extends Error {
   }
 }
 
-async function problemMessage(res: Response, fallback: string): Promise<string> {
+/** RFC-9457 problem body → a human message (shared with the S-U7 draft fetchers in apiDrafts.ts). */
+export async function problemMessage(res: Response, fallback: string): Promise<string> {
   const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
   return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
 }

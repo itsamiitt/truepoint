@@ -8,4 +8,7 @@ export const importKeys = {
   list: () => ["imports", "list"] as const,
   /** One durable job's detail (the drawer + the job page share this entry). */
   detail: (jobId: string) => ["imports", "detail", jobId] as const,
+  /** The viewer's live DRAFTS (`GET /imports?state=draft` — the 08 §7 wizard-resume opt-in). One entry
+   *  serves both S-U7 surfaces: the wizard's gate probe and the history page's resume banner. */
+  drafts: () => ["imports", "drafts"] as const,
 };
