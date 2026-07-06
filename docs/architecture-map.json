@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1451,
-  "fileSetHash": "sha256:0a7ce2b9b4fc636097d7392e1725da73de4139988bf88a1ad68c5a8f3496db4f",
+  "fileCount": 1453,
+  "fileSetHash": "sha256:50ae4321ae912df9185a827b9eda97875c98e836a85d4a0d8b25c0f9f67cab4d",
   "features": {
     "account-search": {
       "web": [],
@@ -2137,6 +2137,7 @@
       "packages/db/src/schema/auth.ts",
       "packages/db/src/schema/billing.ts",
       "packages/db/src/schema/compliance.ts",
+      "packages/db/src/schema/contactChannels.ts",
       "packages/db/src/schema/contacts.ts",
       "packages/db/src/schema/customFields.ts",
       "packages/db/src/schema/dataQualitySnapshots.ts",
@@ -2270,6 +2271,7 @@
       "packages/types/src/bulkReveal.ts",
       "packages/types/src/compliance.ts",
       "packages/types/src/complianceAdmin.ts",
+      "packages/types/src/contactChannels.ts",
       "packages/types/src/contacts.test.ts",
       "packages/types/src/contacts.ts",
       "packages/types/src/customFields.ts",
