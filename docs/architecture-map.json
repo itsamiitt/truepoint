@@ -97,8 +97,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1459,
-  "fileSetHash": "sha256:6a1d7e6d3a480f0996dd80b459c7bfb64145dd7005f193d3bd7818598f39d8f0",
+  "fileCount": 1463,
+  "fileSetHash": "sha256:dadb7b52e5e9e57378ef286adf2401129ceb53ac55d90df5f9e9eedcd509da00",
   "features": {
     "account-search": {
       "web": [],
@@ -281,6 +281,8 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/channels/channelBackfill.test.ts",
+        "packages/core/src/channels/channelBackfill.ts",
         "packages/core/src/channels/channelDualWrite.test.ts",
         "packages/core/src/channels/channelDualWrite.ts"
       ],
@@ -2193,6 +2195,7 @@
       "packages/db/test/bootstrapAdmin.itest.ts",
       "packages/db/test/bulkImport.pipeline.itest.ts",
       "packages/db/test/compliance.itest.ts",
+      "packages/db/test/contactChannels.backfill.itest.ts",
       "packages/db/test/contactChannels.dualwrite.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
@@ -2384,6 +2387,7 @@
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/bulkEnrichment.ts",
     "apps/workers/src/queues/bulkReveal.ts",
+    "apps/workers/src/queues/channelBackfillSweep.ts",
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/erSweep.ts",
     "apps/workers/src/queues/firmographics.ts",
