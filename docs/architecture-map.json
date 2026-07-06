@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1411,
-  "fileSetHash": "sha256:0ff1f792494a401296f95fa9adad33c628aba6799aeb76b540932d9c0b8544c2",
+  "fileCount": 1412,
+  "fileSetHash": "sha256:7f382fd360bcbcb922c68c5c7202fdc952f9cdef118ec7512b4bebde0617b444",
   "features": {
     "account-search": {
       "web": [],
@@ -2090,6 +2090,7 @@
     ],
     "packages/db": [
       "packages/db/drizzle.config.ts",
+      "packages/db/drizzle.worktree.config.ts",
       "packages/db/src/applyMigrations.ts",
       "packages/db/src/bootstrapAdmin.ts",
       "packages/db/src/client.ts",
