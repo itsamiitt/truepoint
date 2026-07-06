@@ -612,11 +612,11 @@ export const importJobRepository = {
     cutoff: Date,
     limit = 200,
   ): Promise<
-    Array<{ id: string; tenantId: string; workspaceId: string; sourceFile: string }>
+    Array<{ id: string; tenantId: string; workspaceId: string; sourceFile: string; createdAt: Date }>
   > {
     const capped = Math.max(1, Math.min(1000, Math.trunc(limit)));
     const rows = (await db.execute(sql`
-      SELECT id, tenant_id, workspace_id, source_file
+      SELECT id, tenant_id, workspace_id, source_file, created_at
       FROM import_jobs
       WHERE status = 'draft' AND created_at < ${cutoff}
       ORDER BY created_at ASC
@@ -626,12 +626,15 @@ export const importJobRepository = {
       tenant_id: string;
       workspace_id: string;
       source_file: string;
+      created_at: Date | string;
     }>;
     return rows.map((r) => ({
       id: r.id,
       tenantId: r.tenant_id,
       workspaceId: r.workspace_id,
       sourceFile: r.source_file,
+      // Feeds the reaper's `import.draft_reaped` audit facet (non-PII: the draft's age at reap — 08 §2.1).
+      createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
     }));
   },
 

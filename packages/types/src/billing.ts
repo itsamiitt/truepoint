@@ -216,5 +216,11 @@ export const auditAction = z.enum([
   "import.retry_created",
   "import.template_saved",
   "import.artifact_downloaded",
+  // Import v2 P2 system terminals (import-and-data-model-redesign 08 §7 / 13 §2.2 / 15 ruling M1 —
+  // the S-I9 train, 0057): the two SYSTEM-actor events wired in-tx with their transitions — the copy
+  // drive's infected terminal (runBulkImport failInfected; facets: jobId + signature label) and the
+  // draft reaper's TTL delete (importReaperSweep job 4; facets: jobId + age). actor_user_id = null.
+  "import.av_infected",
+  "import.draft_reaped",
 ]);
 export type AuditAction = z.infer<typeof auditAction>;

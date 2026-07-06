@@ -37,17 +37,16 @@
 //      matches 0 rows and the object is left alone), THEN its stored source object. Row-before-object is
 //      deliberate (the opposite order could destroy a just-committed job's source under the race); the
 //      crash window between the two leaves a bounded orphaned object, logged + countered, cleaned by the
-//      bucket's job-purge horizon. ⚠ AUDIT GAP (DDL TODO — rides S-I9's P2 audit-CHECK train, ruling M1):
-//      `import.draft_reaped` is NOT in the 0054 audit-action CHECK, so a writer today would fail the DB
-//      CHECK at runtime — the durable record is the log line + `draft_reaped_total` counter until the P2
-//      CHECK extension lands (the exact S-S2 `import.av_infected` precedent, doc 16).
+//      bucket's job-purge horizon. Each reap writes `import.draft_reaped` IN THE SAME TX as the row
+//      delete (08 §2.1 "audited"; the action entered the audit CHECK with 0057 — ruling M1's P2 train,
+//      closing the doc-16 2026-07-06 deferral). Actor = null (system); facets are non-PII (jobId + age).
 //
 // Plus two integrity gauges the same owner-connection pass computes cheaply: accounting-identity violations
 // (S1) and the artifact-pending count. Leader-locked (mirrors the promotion sweep) so exactly one instance
 // reaps per tick; constructed under the SAME gate as the unified queue (it needs the queue handle to
 // re-enqueue, and only the gate's producers create the rows it heals — drafts included).
 
-import { type FileStore, markFastImportFailed } from "@leadwolf/core";
+import { type FileStore, markFastImportFailed, writeAudit } from "@leadwolf/core";
 import { importJobRepository, withTenantTx } from "@leadwolf/db";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
@@ -315,9 +314,10 @@ export function makeProcessImportReaperSweep(redis: IORedis, deps: ImportReaperD
 
       // ── 4. DRAFT REAP (S-I8; 08 §2.1 "reaped") — expired drafts: row first (draft-pinned tenant tx;
       // a raced commit/cancel wins and nothing is touched), then the stored source object. Best-effort
-      // per candidate; a failed candidate is re-examined next tick (the census only shrinks). ⚠ DDL TODO
-      // (S-I9 P2 audit-CHECK train): write `import.draft_reaped` in the SAME tx as the row delete once the
-      // action enters the audit CHECK — until then the log + counter below are the operational record.
+      // per candidate; a failed candidate is re-examined next tick (the census only shrinks). The
+      // `import.draft_reaped` audit row commits IN THE SAME TX as the row delete (08 §7 in-tx discipline;
+      // in the CHECK since 0057) — a reap that can't record itself doesn't happen. Facets are non-PII:
+      // the job id + the draft's age; actor null = system (nobody "did" a TTL lapse).
       const draftCutoff = draftReapCutoff(Date.now(), deps.draftTtlMs);
       const reapable = await importJobRepository
         .listReapableDrafts(draftCutoff, MAX_CANDIDATES_PER_SWEEP)
@@ -328,7 +328,23 @@ export function makeProcessImportReaperSweep(redis: IORedis, deps: ImportReaperD
         try {
           const deleted = await withTenantTx(
             { tenantId: draft.tenantId, workspaceId: draft.workspaceId },
-            (tx) => importJobRepository.deleteDraftJob(tx, draft.id),
+            async (tx) => {
+              const ok = await importJobRepository.deleteDraftJob(tx, draft.id);
+              if (ok) {
+                await writeAudit(tx, {
+                  tenantId: draft.tenantId,
+                  workspaceId: draft.workspaceId,
+                  actorUserId: null,
+                  action: "import.draft_reaped",
+                  entityType: "import_job",
+                  entityId: draft.id,
+                  metadata: {
+                    ageHours: Math.floor((Date.now() - draft.createdAt.getTime()) / 3_600_000),
+                  },
+                });
+              }
+              return ok;
+            },
           );
           if (!deleted) continue; // committed/cancelled since the census — not ours to touch
           if (isDraftSourceObjectKey(draft.sourceFile)) {

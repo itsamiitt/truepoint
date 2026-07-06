@@ -14,6 +14,7 @@ import {
   withTenantTx,
 } from "@leadwolf/db";
 import type { BulkImportScope, BulkImportJobStatus } from "@leadwolf/types";
+import { writeAudit } from "../compliance/writeAudit.ts";
 import { assertListInWorkspace } from "../prospect/lists.ts";
 import type { MalwareScannerPort } from "../security/malwareScanner.ts";
 import type { FileStore } from "../storage/fileStore.ts";
@@ -158,21 +159,29 @@ export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkI
   // stored object now. Stub/absent ⇒ proceed exactly as today (dark, byte-identical).
   if (job.avScanStatus !== "clean") {
     const failInfected = async (signature?: string): Promise<RunBulkImportResult> => {
-      await withTenantTx(scope, (tx) =>
-        importJobRepository.updateJobStatus(tx, jobId, {
+      await withTenantTx(scope, async (tx) => {
+        await importJobRepository.updateJobStatus(tx, jobId, {
           status: "failed",
           avScanStatus: "infected",
           // The STABLE code, never the filename or raw scanner output (13 §2.2); the signature name is
           // non-PII and aids the quarantine-review runbook, carried only when the engine issued one.
           failedReason: signature ? `av_infected:${signature}` : "av_infected",
           completedAt: new Date(),
-        }),
-      );
-      // NOTE: no `import.av_infected` audit row yet — the P2 audit-action CHECK extension has not ridden a
-      // migration train (0054 shipped the P1 list only; ruling M1). Writing the action today would fail the
-      // DB CHECK at runtime. The failed terminal + av_scan_status ARE the durable record; the audit row
-      // lands with the next migration train (recorded as doc-16 drift). DDL TODO(P2-train): extend the
-      // audit_log action CHECK with 'import.draft_reaped','import.av_infected', then audit here in-tx.
+        });
+        // In-tx audit of the infected terminal (13 §2.2/§2.3, 08 §7 discipline) — the action entered the
+        // audit CHECK with 0057 (ruling M1's P2 train; closes the doc-16 2026-07-05 deferral). Actor is
+        // null = system (the drive acts for the job, not a user); facets are NON-PII by construction: the
+        // job id + the engine's signature LABEL only — never the filename, never raw scanner output.
+        await writeAudit(tx, {
+          tenantId: scope.tenantId,
+          workspaceId: scope.workspaceId,
+          actorUserId: null,
+          action: "import.av_infected",
+          entityType: "import_job",
+          entityId: jobId,
+          metadata: signature ? { signature } : {},
+        });
+      });
       return { jobId, status: "failed", totalChunks: 0, enqueuedChunks: 0, resumed: false, infected: true };
     };
     if (job.avScanStatus === "infected") return failInfected();
