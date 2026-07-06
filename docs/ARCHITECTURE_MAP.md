@@ -25,7 +25,7 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1407 source files · 76 code-bearing domains · 22 shared areas · 47 domain-vocabulary warnings · 59
+> **1431 source files · 77 code-bearing domains · 22 shared areas · 48 domain-vocabulary warnings · 58
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
@@ -104,8 +104,13 @@ apps/                           # deployable processes (thin transport adapters)
   (gated proxied download of the repair-CSV/error-report pair) · `middleware/jobViewer.ts` (builds the viewer, fail-closed
   dual gate) · **workers:** `queues/imports.ts` · `queues/bulkImports.ts` (fast kind) · `queues/importReaperSweep.ts`
   (orphan recovery + stall) · `queues/importPromotionSweep.ts` (deferred→queued) · `queues/importNotify.ts` (outbox
-  `import.notify` consumer → in-app notification, S-Q4). Import lifecycle now rides the ADR-0027 transactional outbox
-  (`import.rollups`/`import.notify`, G06) — all Phase-1 additions dark behind `IMPORT_V2_ENABLED`
+  `import.notify` consumer → in-app notification, S-Q4) · `queues/importArtifactSweep.ts` (artifact TTL key-nulling,
+  S-S7). Import lifecycle now rides the ADR-0027 transactional outbox
+  (`import.rollups`/`import.notify`, G06) — all Phase-1 additions dark behind `IMPORT_V2_ENABLED`. **Phase-2 gate
+  code (dark, env-selected):** `packages/integrations/src/storage/s3FileStore.ts` (dependency-free SigV4
+  S3-compatible FileStore — Gate B) · `packages/core/src/security/malwareScanner.ts` +
+  `packages/integrations/src/security/clamdScanner.ts` (MalwareScannerPort, fail-closed — Gate C) · the Gate-A COPY
+  spike in `packages/db/test/bulkImport.pipeline.itest.ts` + nightly soaks (S-P1/S-P4)
 - **web:** `features/import/` — `ImportWizard` (file→map→preview→confirm; the dead-end "Large file" toggle is gone —
   server will decide the path), `ImportsLanding` (`/imports` scaffold; `/import` → redirect `/imports/new`),
   `ContactsTable`, `importJob.ts` (poll→UI state), `rejectedRowsCsv.ts`; root `providers.tsx` (TanStack Query seam)

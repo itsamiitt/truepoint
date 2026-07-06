@@ -69,6 +69,7 @@
     "scim",
     "scoring",
     "search",
+    "security",
     "sequences",
     "settings",
     "settings-billing",
@@ -95,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1418,
-  "fileSetHash": "sha256:ec448c2346ae1eeab2b23cf0c4ada4bd4cd011bd30492110b83c679bc69743dc",
+  "fileCount": 1431,
+  "fileSetHash": "sha256:e753aeee696f0fa313c158a3e84ab2f67febf71dfff47fe8489cb12a7f07a9fc",
   "features": {
     "account-search": {
       "web": [],
@@ -742,6 +743,8 @@
         "apps/api/src/features/import/createGrant.ts",
         "apps/api/src/features/import/importV2Gate.ts",
         "apps/api/src/features/import/index.ts",
+        "apps/api/src/features/import/malwareScan.test.ts",
+        "apps/api/src/features/import/malwareScan.ts",
         "apps/api/src/features/import/queue.ts",
         "apps/api/src/features/import/queueBackpressure.ts",
         "apps/api/src/features/import/routes.ts",
@@ -752,6 +755,7 @@
         "packages/core/src/import/admission.limits.test.ts",
         "packages/core/src/import/admission.test.ts",
         "packages/core/src/import/admission.ts",
+        "packages/core/src/import/artifactLifecycle.ts",
         "packages/core/src/import/artifactWriter.test.ts",
         "packages/core/src/import/artifactWriter.ts",
         "packages/core/src/import/blindIndex.ts",
@@ -795,8 +799,11 @@
       ],
       "workers": [
         "apps/workers/src/queues/bulkImports.ts",
+        "apps/workers/src/queues/importArtifactSweep.test.ts",
+        "apps/workers/src/queues/importArtifactSweep.ts",
         "apps/workers/src/queues/importNotify.ts",
         "apps/workers/src/queues/importPromotionSweep.ts",
+        "apps/workers/src/queues/importReaperSweep.test.ts",
         "apps/workers/src/queues/importReaperSweep.ts",
         "apps/workers/src/queues/imports.ts"
       ],
@@ -1322,6 +1329,17 @@
         "packages/core/src/search/planTitleFilter.test.ts",
         "packages/core/src/search/planTitleFilter.ts",
         "packages/core/src/search/titleTaxonomy.ts"
+      ],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "security": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/security/malwareScanner.ts"
       ],
       "db": [],
       "workers": [],
@@ -2012,6 +2030,7 @@
       "apps/workers/src/withDeadline.ts",
       "apps/workers/test/importFairness.itest.ts",
       "apps/workers/test/importFast.parity.itest.ts",
+      "apps/workers/test/importSoak.fairness.nightly.itest.ts",
       "apps/workers/test/imports.conflict.itest.ts",
       "apps/workers/test/imports.queue.itest.ts",
       "apps/workers/test/imports.resilience.itest.ts"
@@ -2154,6 +2173,7 @@
       "packages/db/test/importJobs.itest.ts",
       "packages/db/test/importPinRespect.itest.ts",
       "packages/db/test/importPolicy.itest.ts",
+      "packages/db/test/importSoak.nightly.itest.ts",
       "packages/db/test/importTemplates.itest.ts",
       "packages/db/test/intel.itest.ts",
       "packages/db/test/itestDb.ts",
@@ -2197,6 +2217,11 @@
       "packages/integrations/src/enrichment/providers.test.ts",
       "packages/integrations/src/enrichment/providers.ts",
       "packages/integrations/src/index.ts",
+      "packages/integrations/src/security/clamdScanner.test.ts",
+      "packages/integrations/src/security/clamdScanner.ts",
+      "packages/integrations/src/storage/s3FileStore.itest.ts",
+      "packages/integrations/src/storage/s3FileStore.test.ts",
+      "packages/integrations/src/storage/s3FileStore.ts",
       "packages/integrations/src/stripe/stripeAdapter.test.ts",
       "packages/integrations/src/stripe/stripeAdapter.ts"
     ],
@@ -2324,7 +2349,6 @@
     "apps/workers/src/queues/dedup.ts",
     "apps/workers/src/queues/erSweep.ts",
     "apps/workers/src/queues/firmographics.ts",
-    "apps/workers/src/queues/importReaperSweep.test.ts",
     "apps/workers/src/queues/masterBackfill.test.ts",
     "apps/workers/src/queues/masterBackfill.ts",
     "apps/workers/src/queues/masterBackfillSweep.ts",
@@ -2406,6 +2430,7 @@
     "undeclared domain 'saved-searches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'savedSearches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'scim' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'security' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-developer' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-enrichment' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

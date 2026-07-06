@@ -70,6 +70,7 @@ export const QUEUE_DOMAIN = {
   importNotify: "import",
   importReaperSweep: "import",
   importPromotionSweep: "import",
+  importArtifactSweep: "import",
   dataRetentionSweep: "compliance",
   "crm-sync": "crm-sync",
   outreach: "outreach",
@@ -269,8 +270,9 @@ export function classify(p) {
   }
   if (/^packages\/db\//.test(p)) return { kind: "shared", area: "packages/db" };
 
-  // worker queues -> domain via QUEUE_DOMAIN; rest of workers is shared.
-  if ((m = p.match(/^apps\/workers\/src\/queues\/([^/]+)\.(c|m)?[tj]sx?$/))) {
+  // worker queues -> domain via QUEUE_DOMAIN; rest of workers is shared. Colocated `.test`/`.itest`
+  // files place with their queue (strip the suffix before lookup).
+  if ((m = p.match(/^apps\/workers\/src\/queues\/([^/]+?)(?:\.i?test)?\.(c|m)?[tj]sx?$/))) {
     const domain = QUEUE_DOMAIN[m[1]];
     return domain ? { kind: "feature", domain, bucket: "workers" } : { kind: "unassigned" };
   }
