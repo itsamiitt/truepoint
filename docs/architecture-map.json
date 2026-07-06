@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1412,
-  "fileSetHash": "sha256:7f382fd360bcbcb922c68c5c7202fdc952f9cdef118ec7512b4bebde0617b444",
+  "fileCount": 1416,
+  "fileSetHash": "sha256:30a3d4a8cb15a2927f7ffc3b3da3dd5d0f1dc99f4e29484131b54f5ff0102c14",
   "features": {
     "account-search": {
       "web": [],
@@ -1852,6 +1852,8 @@
     "apps/auth/lib": [
       "apps/auth/src/lib/authFailure.test.ts",
       "apps/auth/src/lib/authFailure.ts",
+      "apps/auth/src/lib/authUrl.test.ts",
+      "apps/auth/src/lib/authUrl.ts",
       "apps/auth/src/lib/bootstrapAdmin.test.ts",
       "apps/auth/src/lib/bootstrapAdmin.ts",
       "apps/auth/src/lib/clientIp.test.ts",
@@ -1998,6 +2000,8 @@
     "apps/web/lib": [
       "apps/web/src/lib/authClient.test.ts",
       "apps/web/src/lib/authClient.ts",
+      "apps/web/src/lib/authLink.test.ts",
+      "apps/web/src/lib/authLink.ts",
       "apps/web/src/lib/eventStream.ts",
       "apps/web/src/lib/pkce.ts",
       "apps/web/src/lib/publicConfig.ts",
