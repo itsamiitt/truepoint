@@ -97,8 +97,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1469,
-  "fileSetHash": "sha256:a2abb74c3d5aef7e1068881c97bf62fa2e9c1a4cfeb6c6fb54670b10ac955466",
+  "fileCount": 1470,
+  "fileSetHash": "sha256:af023a77d99d92de86c5e027a8de668df5874f3265d7c8e18a4eac4a59657299",
   "features": {
     "account-search": {
       "web": [],
@@ -2204,6 +2204,7 @@
       "packages/db/test/compliance.itest.ts",
       "packages/db/test/contactChannels.backfill.itest.ts",
       "packages/db/test/contactChannels.dualwrite.itest.ts",
+      "packages/db/test/contactChannels.dupsignals.itest.ts",
       "packages/db/test/contactChannels.readcutover.itest.ts",
       "packages/db/test/contactChannels.reconcile.itest.ts",
       "packages/db/test/customFields.itest.ts",
