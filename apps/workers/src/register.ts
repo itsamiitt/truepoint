@@ -1193,6 +1193,10 @@ export function startWorkers(): Worker[] {
             // S-S2 no-new-'skipped' monitor (13 §2.3): armed ONLY when a real scanner is configured —
             // any fresh 'skipped' row then means the G08 gate failed open (S2 alert; §K catalog).
             scannerConfigured: env.MALWARE_SCANNER !== "stub",
+            // S-I8 draft reap (08 §2.1/§Edge cases): the SAME env-selected store the api's draft upload
+            // writes through (bulkStore.ts selects identically), + the 48 h-default TTL in ms.
+            fileStore: bulkFileStore,
+            draftTtlMs: env.IMPORT_DRAFT_TTL_HOURS * 3_600_000,
           }),
           { connection, ...SWEEP_WORKER_TUNING },
         ),

@@ -846,7 +846,7 @@ importRoutes.post("/:jobId/cancel", async (c) => {
     | { kind: "not_found" }
     | { kind: "noop"; row: ImportJobRow }
     | { kind: "illegal"; status: string }
-    | { kind: "cancelled"; row: ImportJobRow };
+    | { kind: "cancelled"; row: ImportJobRow; fromStatus: string; sourceKey: string };
   const result = await withTenantTx({ tenantId, workspaceId }, async (tx): Promise<CancelResult> => {
     const row = await importJobRepository.getJobForUpdate(tx, viewer, jobIdParam);
     if (!row || row.workspaceId !== workspaceId) return { kind: "not_found" };
@@ -867,7 +867,12 @@ importRoutes.post("/:jobId/cancel", async (c) => {
       entityId: jobIdParam,
       metadata: { fromStatus: row.status },
     });
-    return { kind: "cancelled", row: { ...row, status: "cancelled", failedReason: "cancelled" } };
+    return {
+      kind: "cancelled",
+      row: { ...row, status: "cancelled", failedReason: "cancelled" },
+      fromStatus: row.status,
+      sourceKey: row.sourceFile,
+    };
   });
 
   if (result.kind === "not_found") throw new NotFoundError("Import job not found.");
@@ -876,6 +881,21 @@ importRoutes.post("/:jobId/cancel", async (c) => {
       `An import in state '${result.status}' cannot be cancelled.`,
       result.status,
     );
+  // S-I8: cancel-from-draft ≡ DISCARD (08 §2.1/§2.2 — nothing ever ran): the stored source object is
+  // deleted best-effort AFTER the transition committed (never inside the tx — a store hiccup must not
+  // roll back the cancel). The auditable cancelled row is KEPT (only the reaper deletes rows); a failed
+  // object delete leaves a bounded orphan cleaned by the job-purge horizon (doc 16 drift row). Sentinel
+  // keys (inline:/retry:) name no object and are skipped.
+  if (
+    result.kind === "cancelled" &&
+    result.fromStatus === "draft" &&
+    result.sourceKey.includes("/") &&
+    !result.sourceKey.includes(":")
+  ) {
+    await bulkFileStore()
+      .deleteObject(result.sourceKey)
+      .catch(() => undefined);
+  }
   // noop (already cancelled) and cancelled both answer 200 with the current detail (idempotent verb, 08 §2.3).
   return c.json({ ...toLegacyResponseV2(result.row), ...toImportJobDetailV2(result.row) }, 200);
 });

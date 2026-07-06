@@ -603,6 +603,50 @@ export const importJobRepository = {
       .where(eq(importJobs.id, jobId));
   },
 
+  /** S-I8 (08 §2.1 draft exit "reaped") — the draft reaper's census: `draft` rows older than the TTL
+   *  cutoff, oldest-first, bounded. Owner-connection read of CONTROL-ROW columns only (id/scope/object
+   *  key — the reaper-reads posture above; `source_file` is an opaque store key, non-PII). The reaper
+   *  then hard-deletes each row through a draft-pinned tenant tx (deleteDraftJob) — a draft that commits
+   *  between census and delete survives untouched. */
+  async listReapableDrafts(
+    cutoff: Date,
+    limit = 200,
+  ): Promise<
+    Array<{ id: string; tenantId: string; workspaceId: string; sourceFile: string }>
+  > {
+    const capped = Math.max(1, Math.min(1000, Math.trunc(limit)));
+    const rows = (await db.execute(sql`
+      SELECT id, tenant_id, workspace_id, source_file
+      FROM import_jobs
+      WHERE status = 'draft' AND created_at < ${cutoff}
+      ORDER BY created_at ASC
+      LIMIT ${capped}
+    `)) as unknown as Array<{
+      id: string;
+      tenant_id: string;
+      workspace_id: string;
+      source_file: string;
+    }>;
+    return rows.map((r) => ({
+      id: r.id,
+      tenantId: r.tenant_id,
+      workspaceId: r.workspace_id,
+      sourceFile: r.source_file,
+    }));
+  },
+
+  /** S-I8: hard-delete ONE reaped draft row (08 §2.1 "reaped (sweep; row deleted…)"). PINS `status='draft'`
+   *  in the WHERE so a draft that committed/cancelled after the census is NEVER deleted — the reaper skips
+   *  its object too when this returns false. Tenant-scoped (compose inside withTenantTx; RLS applies).
+   *  Ledger/chunk children cascade by FK (a draft has none — nothing ever ran). */
+  async deleteDraftJob(tx: Tx, jobId: string): Promise<boolean> {
+    const rows = await tx
+      .delete(importJobs)
+      .where(and(eq(importJobs.id, jobId), eq(importJobs.status, "draft")))
+      .returning({ id: importJobs.id });
+    return rows.length > 0;
+  },
+
   /** S-S2 (13 §2.3) — the NO-NEW-'skipped' monitor's census: uploads recorded `av_scan_status='skipped'`
    *  within the look-back window. `retry:%` children are EXCLUDED (they carry no new bytes and INHERIT the
    *  parent's verdict — a retry of a pre-scanner parent is not a scan bypass). Owner-connection count of

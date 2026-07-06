@@ -280,6 +280,11 @@ export const appEnvSchema = z
     // TTL'd here — it follows the job's own purge horizon. Sweep cadence below; both revert by env.
     IMPORT_ARTIFACT_TTL_DAYS: z.coerce.number().int().positive().default(90),
     IMPORT_ARTIFACT_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(6 * 3_600_000),
+    // S-I8 (08 §2.1/§Edge cases): the DRAFT TTL. A draft older than this is REAPED by the import reaper
+    // sweep — the row hard-deleted (drafts never entered execution and appear in no history; a tombstone
+    // would pollute retention for zero forensic value) and its stored source object deleted. 08 fixes the
+    // default at 48 h. Reverts by env; raising it only delays future reaps (never resurrects a reaped draft).
+    IMPORT_DRAFT_TTL_HOURS: z.coerce.number().int().positive().default(48),
     // The sync→bulk promotion threshold (rows): an import larger than this is steered onto the bulk pipeline
     // rather than the inline `imports` queue. Consumed by the promotion logic; a sensible default until tuned.
     BULK_IMPORT_THRESHOLD_ROWS: z.coerce.number().int().positive().default(5000),

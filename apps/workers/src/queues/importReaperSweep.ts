@@ -27,17 +27,28 @@
 //
 //   3. ARTIFACT RE-SWEEP (09 §7 row 4). Terminal jobs with rejected>0 but no artifact key are FLAGGED
 //      (`import.jobs.artifact_pending` gauge) — a store crash mid-finalize left the repair CSV unwritten.
-//      The reaper flags rather than re-runs the writer: re-running needs a FileStore injected into the
-//      reaper + RejectedRow[] reconstructed from the ledger (a heavier surface); the flag gives operators
-//      the signal today (09 §7 row 4 "re-run OR flagged"). Recorded as deferred in doc 16.
+//      The reaper flags rather than re-runs the writer: re-running needs RejectedRow[] reconstructed from
+//      the ledger (a heavier surface); the flag gives operators the signal today (09 §7 row 4 "re-run OR
+//      flagged"). Recorded as deferred in doc 16.
+//
+//   4. DRAFT REAP (S-I8; 08 §2.1 draft exit "reaped (sweep; row deleted, audited)" / §Edge cases 48 h).
+//      A `draft` older than IMPORT_DRAFT_TTL_HOURS is hard-deleted — ROW FIRST through a draft-pinned
+//      tenant tx (a draft that committed/cancelled after the census is untouched: the pinned DELETE
+//      matches 0 rows and the object is left alone), THEN its stored source object. Row-before-object is
+//      deliberate (the opposite order could destroy a just-committed job's source under the race); the
+//      crash window between the two leaves a bounded orphaned object, logged + countered, cleaned by the
+//      bucket's job-purge horizon. ⚠ AUDIT GAP (DDL TODO — rides S-I9's P2 audit-CHECK train, ruling M1):
+//      `import.draft_reaped` is NOT in the 0054 audit-action CHECK, so a writer today would fail the DB
+//      CHECK at runtime — the durable record is the log line + `draft_reaped_total` counter until the P2
+//      CHECK extension lands (the exact S-S2 `import.av_infected` precedent, doc 16).
 //
 // Plus two integrity gauges the same owner-connection pass computes cheaply: accounting-identity violations
 // (S1) and the artifact-pending count. Leader-locked (mirrors the promotion sweep) so exactly one instance
 // reaps per tick; constructed under the SAME gate as the unified queue (it needs the queue handle to
-// re-enqueue, and only the gate's producers create the rows it heals).
+// re-enqueue, and only the gate's producers create the rows it heals — drafts included).
 
-import { markFastImportFailed } from "@leadwolf/core";
-import { importJobRepository } from "@leadwolf/db";
+import { type FileStore, markFastImportFailed } from "@leadwolf/core";
+import { importJobRepository, withTenantTx } from "@leadwolf/db";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
 import { withLeaderLock } from "../leaderLock.ts";
@@ -117,6 +128,19 @@ export function decideReaperAction(
   return "none";
 }
 
+/** The draft-reap TTL cutoff: drafts created before this instant lapse (08 §Edge cases — 48 h default,
+ *  `IMPORT_DRAFT_TTL_HOURS`). Pure (unit-tested). */
+export function draftReapCutoff(now: number, ttlMs: number): Date {
+  return new Date(now - ttlMs);
+}
+
+/** True when a job's `source_file` is a real object-store key the reaper must delete — drafts always
+ *  store one (`imports/<uuid>/source.<ext>`); the fast/retry sentinels (`inline:…`/`retry:…`) name no
+ *  object (deleting them would be a traversal-guard error on the disk adapter, a no-op on S3). Pure. */
+export function isDraftSourceObjectKey(key: string): boolean {
+  return key.includes("/") && !key.includes(":");
+}
+
 export interface ImportReaperDeps {
   /** All live job ids on the unified queue this tick (waiting+delayed+active+prioritized+paused) — the
    *  liveness oracle for orphan detection. Injected so the reaper never constructs a queue handle itself. */
@@ -137,6 +161,11 @@ export interface ImportReaperDeps {
    * (honest absence — 'skipped' is the truthful record while no scanner exists).
    */
   scannerConfigured: boolean;
+  /** S-I8 draft reap: the SAME env-selected store the draft upload wrote through (register.ts composes one
+   *  per boot — api and workers select identically, so the reaper always deletes from the right backend). */
+  fileStore: FileStore;
+  /** IMPORT_DRAFT_TTL_HOURS at the root, in ms (default 48 h — 08 §2.1/§Edge cases). */
+  draftTtlMs: number;
 }
 
 /** The monitor's look-back / staleness windows (13 §2.3's "new skipped / pending older than SLA"). */
@@ -283,6 +312,48 @@ export function makeProcessImportReaperSweep(redis: IORedis, deps: ImportReaperD
           });
         }
       }
+
+      // ── 4. DRAFT REAP (S-I8; 08 §2.1 "reaped") — expired drafts: row first (draft-pinned tenant tx;
+      // a raced commit/cancel wins and nothing is touched), then the stored source object. Best-effort
+      // per candidate; a failed candidate is re-examined next tick (the census only shrinks). ⚠ DDL TODO
+      // (S-I9 P2 audit-CHECK train): write `import.draft_reaped` in the SAME tx as the row delete once the
+      // action enters the audit CHECK — until then the log + counter below are the operational record.
+      const draftCutoff = draftReapCutoff(Date.now(), deps.draftTtlMs);
+      const reapable = await importJobRepository
+        .listReapableDrafts(draftCutoff, MAX_CANDIDATES_PER_SWEEP)
+        .catch(() => []);
+      setImportGauge("draft_reap_candidates", reapable.length);
+      let reaped = 0;
+      for (const draft of reapable) {
+        try {
+          const deleted = await withTenantTx(
+            { tenantId: draft.tenantId, workspaceId: draft.workspaceId },
+            (tx) => importJobRepository.deleteDraftJob(tx, draft.id),
+          );
+          if (!deleted) continue; // committed/cancelled since the census — not ours to touch
+          if (isDraftSourceObjectKey(draft.sourceFile)) {
+            // Idempotent delete; a failure here leaves a bounded orphaned object (logged) — never a
+            // live job's data (the row is already gone, so nothing points at the key).
+            await deps.fileStore.deleteObject(draft.sourceFile).catch((e: unknown) => {
+              log.warn("import reaper: reaped draft's source object delete failed (orphaned)", {
+                jobId: draft.id,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            });
+          }
+          reaped += 1;
+          log.info("import reaper: reaped expired draft", {
+            jobId: draft.id,
+            workspaceId: draft.workspaceId,
+          });
+        } catch (e) {
+          log.error("import reaper: draft reap failed", {
+            jobId: draft.id,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+      if (reaped > 0) incrementImportCounter("draft_reaped_total", reaped);
     });
   };
 }
