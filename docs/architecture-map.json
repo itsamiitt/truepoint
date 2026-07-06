@@ -24,6 +24,7 @@
     "audit-log",
     "auth",
     "billing",
+    "channels",
     "compliance",
     "contacts-bulk",
     "contacts-dedup",
@@ -96,8 +97,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1453,
-  "fileSetHash": "sha256:50ae4321ae912df9185a827b9eda97875c98e836a85d4a0d8b25c0f9f67cab4d",
+  "fileCount": 1459,
+  "fileSetHash": "sha256:6a1d7e6d3a480f0996dd80b459c7bfb64145dd7005f193d3bd7818598f39d8f0",
   "features": {
     "account-search": {
       "web": [],
@@ -273,6 +274,18 @@
         "apps/workers/src/queues/subscriptionDunningSweep.ts",
         "apps/workers/src/queues/subscriptionGrantSweep.ts"
       ],
+      "integrations": []
+    },
+    "channels": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/channels/channelDualWrite.test.ts",
+        "packages/core/src/channels/channelDualWrite.ts"
+      ],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "compliance": {
@@ -2119,6 +2132,8 @@
       "packages/db/src/client.ts",
       "packages/db/src/index.ts",
       "packages/db/src/migrate.ts",
+      "packages/db/src/repositories/contactChannelPlan.test.ts",
+      "packages/db/src/repositories/contactChannelPlan.ts",
       "packages/db/src/repositories/jobVisibility.test.ts",
       "packages/db/src/repositories/jobVisibility.ts",
       "packages/db/src/repositories/leaseAccounting.test.ts",
@@ -2178,6 +2193,7 @@
       "packages/db/test/bootstrapAdmin.itest.ts",
       "packages/db/test/bulkImport.pipeline.itest.ts",
       "packages/db/test/compliance.itest.ts",
+      "packages/db/test/contactChannels.dualwrite.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
       "packages/db/test/emailAnalytics.itest.ts",
@@ -2382,6 +2398,7 @@
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/announcementRepository.ts",
     "packages/db/src/repositories/authPolicyRepository.ts",
+    "packages/db/src/repositories/contactChannelRepository.ts",
     "packages/db/src/repositories/creditPackRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/domainRepository.ts",
@@ -2426,6 +2443,7 @@
     "undeclared domain 'admin' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'announcements' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'audit-log' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'channels' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-bulk' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-dedup' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'content' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
