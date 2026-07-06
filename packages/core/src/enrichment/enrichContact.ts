@@ -7,6 +7,7 @@ import { env } from "@leadwolf/config";
 import {
   type ContactWriteValues,
   type TenantScope,
+  contactChannelRepository,
   contactRepository,
   providerCallRepository,
   revealRepository,
@@ -21,6 +22,7 @@ import {
   ProviderBudgetExceededError,
   sourceName as sourceNameEnum,
 } from "@leadwolf/types";
+import { buildPhoneChannelValue, isChannelDualWriteEnabled } from "../channels/channelDualWrite.ts";
 import { blindIndex } from "../import/blindIndex.ts";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
@@ -198,8 +200,9 @@ export async function enrichContact(input: EnrichContactInput): Promise<EnrichCo
       ...(verifiedPii ? { lastVerifiedAt: new Date() } : {}),
     });
     const provenanceSource = sourceNameEnum.safeParse(outcome.provider);
+    let sourceImportId: string | null = null;
     if (provenanceSource.success) {
-      await sourceImportRepository.append(tx, {
+      sourceImportId = await sourceImportRepository.append(tx, {
         tenantId: input.scope.tenantId,
         workspaceId: input.scope.workspaceId,
         contactId: input.contactId,
@@ -207,6 +210,42 @@ export async function enrichContact(input: EnrichContactInput): Promise<EnrichCo
         sourceName: provenanceSource.data,
         rawData: (outcome.result.rawPayload ?? {}) as Record<string, unknown>,
       });
+    }
+
+    // S-CH2 channel dual-write (05 §5 — "enrichment writers migrate onto applyChannelWrite during S-CH2"):
+    // gate-on, the provider's email/phone fills ALSO land as child rows in THIS SAME tx — the exact bytes
+    // just written flat (byte-identical projection, CH-INV-1), row-level provenance `provider:<name>`.
+    // Existing primaries are never flipped (05 §3.3): a second verified channel appends as a secondary —
+    // the paid data that used to be discarded (02 §RC-4). Gate-off: zero flag reads, zero child writes.
+    if (await isChannelDualWriteEnabled(tx, input.scope.tenantId)) {
+      const source = `provider:${outcome.provider}`;
+      for (const f of outcome.result.fields) {
+        if (f.field === "email" && writeValues.emailEnc && writeValues.emailBlindIndex) {
+          if (!writeValues.emailDomain) continue; // degenerate provider value — no well-formed domain facet
+          await contactChannelRepository.applyChannelWrite(tx, input.scope, {
+            kind: "email_upsert",
+            contactId: input.contactId,
+            value: {
+              valueEnc: writeValues.emailEnc,
+              blindIndex: writeValues.emailBlindIndex,
+              emailDomain: writeValues.emailDomain,
+              type: "work",
+              source,
+              sourceImportId,
+            },
+          });
+        } else if (f.field === "phone" && writeValues.phoneEnc) {
+          const built = buildPhoneChannelValue({
+            cleaned: f.value.trim(),
+            phoneEnc: writeValues.phoneEnc,
+          });
+          await contactChannelRepository.applyChannelWrite(tx, input.scope, {
+            kind: "phone_upsert",
+            contactId: input.contactId,
+            value: { ...built, type: "work", source, sourceImportId },
+          });
+        }
+      }
     }
 
     return {

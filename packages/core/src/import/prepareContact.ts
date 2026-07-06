@@ -25,6 +25,11 @@ export interface PreparedContact {
   dedupKeys: DedupKeys;
   accountName?: string;
   accountDomain?: string;
+  /** The cleaned as-entered phone PLAINTEXT (the exact string `values.phoneEnc` encrypts) — carried for the
+   *  S-CH2 channel dual-write, whose child row needs the raw-digits blind index + E.164 derivation
+   *  (05 §4; the doc-sanctioned prepareContact EXTENSION, never a fork). Absent when the row has no phone.
+   *  In-memory only: never staged, never logged (bulkStage.toStagingRow picks fields explicitly). */
+  phoneRaw?: string;
 }
 
 export function coerceSeniority(raw: string | undefined): string | null {
@@ -73,5 +78,6 @@ export function prepareContact(mapped: MappedRow): PreparedContact {
     },
     accountName: normalizeText(mapped.accountName),
     accountDomain: normalizeDomain(mapped.accountDomain),
+    phoneRaw: phone,
   };
 }

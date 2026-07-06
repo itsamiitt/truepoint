@@ -9,6 +9,7 @@ import { env } from "@leadwolf/config";
 import {
   type ContactForReveal,
   type TenantScope,
+  contactChannelRepository,
   contactRepository,
   creditRepository,
   eventOutboxRepository,
@@ -26,6 +27,7 @@ import {
   type RevealType,
   SuppressedError,
 } from "@leadwolf/types";
+import { isChannelDualWriteEnabled } from "../channels/channelDualWrite.ts";
 import { assertNotSuppressed } from "../compliance/assertNotSuppressed.ts";
 import { writeAudit } from "../compliance/writeAudit.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "../data-health/emailVerifier.ts";
@@ -145,12 +147,40 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
       // Persist the verification outcome on the workspace copy (06 §9) whatever the charge turns out to be.
       // Stamp `last_verified_at` so the Data Health freshness clock resets (list-plan/06 §3.3) — a reveal
       // verifies the field(s), so the record is now freshly graded.
+      const verifiedAt = new Date();
       await contactRepository.update(tx, contact.id, {
         emailStatus: verified.emailStatus,
         ...(verified.phoneStatus ? { phoneStatus: verified.phoneStatus } : {}),
         ...(verified.phoneLineType ? { phoneLineType: verified.phoneLineType } : {}),
-        lastVerifiedAt: new Date(),
+        lastVerifiedAt: verifiedAt,
       });
+
+      // S-CH2 channel dual-write (05 §5): mirror the SAME grades just written flat onto the live PRIMARY
+      // child row(s), in this same tx — the verify-update op keeps CH-INV-1's status half in step. Mirrors
+      // the flat writes' own conditionality: email only when this reveal actually verified an email value;
+      // phone only when the verifier graded one. No-op pre-backfill (no child rows yet — S-CH3's tail).
+      // Gate-off: zero flag reads, zero child writes (T-CH parity). The row lock the update above took
+      // already serializes concurrent same-contact reveals over these rows too.
+      if (await isChannelDualWriteEnabled(tx, input.scope.tenantId)) {
+        if (verified.email) {
+          await contactChannelRepository.applyChannelWrite(tx, input.scope, {
+            kind: "email_verify",
+            contactId: contact.id,
+            status: verified.emailStatus,
+            lastVerifiedAt: verifiedAt,
+          });
+        }
+        if (verified.phoneStatus || verified.phoneLineType) {
+          await contactChannelRepository.applyChannelWrite(tx, input.scope, {
+            kind: "phone_verify",
+            contactId: contact.id,
+            ...(verified.phoneStatus ? { status: verified.phoneStatus } : {}),
+            lineType: verified.phoneLineType,
+            lineTypeSource: verified.phoneLineType ? "carrier_lookup" : null,
+            lastVerifiedAt: verifiedAt,
+          });
+        }
+      }
 
       // Cross-reveal-type dedup (07 §3): read what this workspace already owns, then charge ONLY for the
       // field(s) this reveal NEWLY uncovers — a prior email reveal is never re-billed by a later full_profile

@@ -11,6 +11,7 @@ import {
   type ContactWriteValues,
   type Tx,
   accountRepository,
+  contactChannelRepository,
   contactRepository,
   evidenceRepository,
   listRepository,
@@ -33,6 +34,11 @@ import type {
   SourceName,
 } from "@leadwolf/types";
 import { CONTACT_PROVENANCE_FIELDS, DEFAULT_CONFLICT_POLICY } from "@leadwolf/types";
+import {
+  buildPhoneChannelValue,
+  channelDualWriteEnabledForScope,
+  countryHintOf,
+} from "../channels/channelDualWrite.ts";
 import { writeAudit } from "../compliance/writeAudit.ts";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
 import { markConflicts } from "../prospect/conflictDetect.ts";
@@ -236,6 +242,53 @@ function conflictPolicyToStrategy(policy: ConflictPolicy): ImportStrategy {
   return { mergeMode, preservePopulated: false };
 }
 
+/**
+ * S-CH2 channel dual-write (05 §5/§6), called on LANDING rows only, gate-on only, INSIDE the same per-row
+ * withTenantTx as the flat write — CH-INV-1's same-tx rule. The email child row reuses the EXACT prepared
+ * ciphertext/blind-index bytes the flat write carried (byte-identical projection); the phone child row is
+ * built from the cleaned plaintext prepareContact carried (raw-digits blind index + derived E.164; country
+ * hint = the row's ISO-2 locationCountry when present — 05 §4.2's S-CH2 slice). Outcomes are data
+ * (collision/capped skip silently at this grain — the review-queue signal is S-C6's); a genuine DB error
+ * aborts the row's tx WITH the flat write, atomically. The import bulk path writes NO per-row channel audit
+ * (05 §3.3: import never flips a primary; channel_* audit actions are the user-verb writers', doc 04).
+ */
+async function writeChannelRows(
+  tx: Tx,
+  input: RunImportInput,
+  prepared: PreparedContact,
+  contactId: string,
+  sourceImportId: string | null,
+): Promise<void> {
+  const source = `import:${input.sourceName}`;
+  const v = prepared.values;
+  if (v.emailEnc && v.emailBlindIndex && v.emailDomain) {
+    await contactChannelRepository.applyChannelWrite(tx, input.scope, {
+      kind: "email_upsert",
+      contactId,
+      value: {
+        valueEnc: v.emailEnc,
+        blindIndex: v.emailBlindIndex,
+        emailDomain: v.emailDomain,
+        type: "work", // the import's single mapped email column is the work-email slot (05 §6 mapping)
+        source,
+        sourceImportId,
+      },
+    });
+  }
+  if (prepared.phoneRaw && v.phoneEnc) {
+    const built = buildPhoneChannelValue({
+      cleaned: prepared.phoneRaw,
+      phoneEnc: v.phoneEnc,
+      countryHint: countryHintOf(v.locationCountry),
+    });
+    await contactChannelRepository.applyChannelWrite(tx, input.scope, {
+      kind: "phone_upsert",
+      contactId,
+      value: { ...built, type: "work", source, sourceImportId },
+    });
+  }
+}
+
 async function importOneRow(
   tx: Tx,
   input: RunImportInput,
@@ -243,6 +296,7 @@ async function importOneRow(
   prepared: PreparedContact,
   hash: Uint8Array,
   strategy: ImportStrategy,
+  channelDualWrite: boolean,
 ): Promise<RowLanding> {
   const { tenantId, workspaceId } = input.scope;
   const listId = input.target?.listId;
@@ -411,6 +465,12 @@ async function importOneRow(
     contentHash: hash,
   });
 
+  // S-CH2 channel dual-write — LANDING rows only (a held-back duplicate/idempotent skip wrote no flat
+  // channel value, so it writes no child row either — 05 §3 cache coherence), gate-on only, same tx.
+  if (channelDualWrite) {
+    await writeChannelRows(tx, input, prepared, contactId, sourceImportId);
+  }
+
   // A landed row (created or overwritten match) joins the target list, linked to THIS import's provenance row.
   const addedToList = listId
     ? await addLandedToList(tx, input, listId, contactId, sourceImportId)
@@ -466,6 +526,11 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
   // The global custom data-quality rules (database-management-research 06), loaded ONCE. Empty unless staff have
   // authored rules → no behaviour change for an import with none. Reject-on-fail, additive to validateRow below.
   const validationRules = await loadEnabledValidationRules(input.scope);
+
+  // S-CH2 dual gate (05 §Implementation Steps), evaluated ONCE per run (a 10k-row import must not re-read
+  // the flag per row; fail-closed on error). env.CHANNEL_DUAL_WRITE off ⇒ false with ZERO queries — the
+  // gate-off run is cost-identical as well as byte-identical (T-CH parity).
+  const channelDualWrite = await channelDualWriteEnabledForScope(input.scope);
 
   const errors: ImportRowError[] = [];
   const rejectedRows: RejectedRow[] = [];
@@ -523,7 +588,7 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
       const prepared = prepareContact(mapped);
       const hash = contentHash({ mapped, sourceName: input.sourceName });
       const landing = await withTenantTx(input.scope, (tx) =>
-        importOneRow(tx, input, raw, prepared, hash, strategy),
+        importOneRow(tx, input, raw, prepared, hash, strategy, channelDualWrite),
       );
       if (landing.outcome === "created") created++;
       else if (landing.outcome === "matched") matched++;
