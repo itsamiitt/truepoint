@@ -139,6 +139,13 @@ export {
   type RowIdentity,
 } from "./import/validateRow.ts";
 export { buildImportPreview, type PreviewOptions } from "./import/preview.ts";
+// S-I8 draft flow (08 §3.2/§4): the server-side auto-map alias table + the full-pass preview projection.
+export { normalizeHeaderKey, suggestColumnMapping } from "./import/headerAliases.ts";
+export {
+  buildDraftPreviewSummary,
+  type DraftPreviewOptions,
+  type DraftPreviewResult,
+} from "./import/draftPreview.ts";
 export { rejectedRowsToCsv } from "./import/rejectedRowsCsv.ts";
 // The S-I7 server-side artifact pair (repair CSV + taxonomy-grouped error report) + their deterministic keys.
 export {

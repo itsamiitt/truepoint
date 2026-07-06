@@ -7,7 +7,13 @@
 
 import { z } from "zod";
 import { bulkImportScopeSchema } from "./bulkImport.ts";
-import { columnMappingSchema, conflictPolicy, importTargetSchema, sourceName } from "./contacts.ts";
+import {
+  columnMappingSchema,
+  conflictPolicy,
+  importTargetSchema,
+  rejectedRowSchema,
+  sourceName,
+} from "./contacts.ts";
 import { importMergeMode } from "./importPolicy.ts";
 
 // ── Rollout gate ─────────────────────────────────────────────────────────────────────────────────────────
@@ -80,6 +86,52 @@ export const importPreviewSummarySchema = z.object({
   perColumn: z.array(importPreviewColumnFeedbackSchema),
 });
 export type ImportPreviewSummary = z.infer<typeof importPreviewSummarySchema>;
+
+// ── S-I8 draft-flow DTOs (08 §2.3's upload/mapping/preview/commit verbs; all dark behind IMPORT_V2) ──────
+/** The upload-once draft ref `POST /imports` (no `mapping` form field, gate-on) answers with: the durable
+ *  draft's id + the parsed HEADER ROW + the server's auto-map proposal (08 §3.2 — binary mapped/unmapped
+ *  from the alias table, no confidence percentages) so the wizard pre-fills its column mapper without a
+ *  second round-trip. `status` is normally `draft`; an Idempotency-Key replay reports the collapsed job's
+ *  REAL state (a committed draft replays as `queued`/`running`/…). Headers are the user's own column names
+ *  (they exist client-side already — this is not a PII expansion; nothing here persists beyond the row). */
+export const importDraftRefSchema = z.object({
+  jobId: z.string().uuid(),
+  status: importJobStatusV2,
+  sourceFilename: z.string(),
+  headers: z.array(z.string()),
+  suggestedMapping: columnMappingSchema,
+});
+export type ImportDraftRef = z.infer<typeof importDraftRefSchema>;
+
+/** `PUT /imports/:id/mapping` (draft-only; full replace — naturally idempotent, 08 §2.3): the mapping
+ *  (inline or via a saved template) + the optional 08 §5 strategy pair (absent fields resolve to the
+ *  workspace `import_policy` default — the S-I6 request→template→policy precedence; the TEMPLATE strategy
+ *  layer waits on S-I2's strategy block) + the optional list target. `listId` semantics: absent = keep the
+ *  draft's current target, null = clear it. */
+export const importDraftMappingRequestSchema = z
+  .object({
+    mapping: columnMappingSchema.optional(),
+    /** A saved `import_mapping_templates` ref — its stored mapping applies when `mapping` is absent, and
+     *  the id is recorded as `mapping_template_id` provenance (08 §3.1). */
+    templateId: z.string().uuid().optional(),
+    mergeMode: importMergeMode.optional(),
+    preservePopulated: z.boolean().optional(),
+    listId: z.string().uuid().nullable().optional(),
+  })
+  .refine((v) => v.mapping != null || v.templateId != null, {
+    message: "Provide a mapping or a templateId.",
+  });
+export type ImportDraftMappingRequest = z.infer<typeof importDraftMappingRequestSchema>;
+
+/** `POST /imports/:id/preview` (draft-only, read-shaped): the full-pass NON-PII projection (cached on the
+ *  row as `preview_summary`) + a BOUNDED sample of rejected rows with typed reasons — recomputed per
+ *  request, NEVER persisted (08 §4; the sample rows are the one place row values legally appear, in the
+ *  transient response to the file's own uploader). */
+export const importDraftPreviewResponseSchema = z.object({
+  summary: importPreviewSummarySchema,
+  sampleRejectedRows: z.array(rejectedRowSchema),
+});
+export type ImportDraftPreviewResponse = z.infer<typeof importDraftPreviewResponseSchema>;
 
 // ── Unified-queue transport (09 §1, S-I3/S-Q1) ───────────────────────────────────────────────────────────
 /** Priority bands on the unified `bulk-imports` queue (09 §1.1; BullMQ: LOWER number = served first): fast

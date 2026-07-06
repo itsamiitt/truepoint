@@ -18,7 +18,7 @@ import type {
   ImportMergeMode,
   JobViewer,
 } from "@leadwolf/types";
-import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, notInArray, sql } from "drizzle-orm";
 import { type Tx, db } from "../client.ts";
 import { importJobChunks, importJobRows, importJobs } from "../schema/importJobs.ts";
 import { artifactVisibility, jobVisibility } from "./jobVisibility.ts";
@@ -78,6 +78,10 @@ export interface ImportJobStatusUpdate {
   stagingTable?: string | null;
   totalChunks?: number;
   byteOffset?: number;
+  /** The server's routing verdict, written by the COMMIT transition (08 §1, S-I8: a draft is created with
+   *  the mode UNSET — the server routes once, at commit, from measured facts; the one-shot path still sets
+   *  it at create). Optional + additive: every existing caller is unchanged. */
+  processingMode?: "fast" | "copy";
   /** NON-PII reject breakdown (stable label → count) — a full SET (not a counter delta), so it rides this
    *  lifecycle patch rather than updateJobProgress. The drive phase writes it once, on the `staged` transition. */
   rejectHistogram?: Record<string, number>;
@@ -257,13 +261,23 @@ export const importJobRepository = {
   async listJobs(
     tx: Tx,
     viewer: JobViewer,
-    opts: { limit?: number; cursor?: { createdAt: Date; id: string } | null } = {},
+    opts: {
+      limit?: number;
+      cursor?: { createdAt: Date; id: string } | null;
+      /** 08 §7: DRAFTS (and the dead `uploading` state) are excluded from history by DEFAULT; `"only"` is
+       *  the wizard-resume opt-in (`GET /imports?state=draft`) listing a viewer's drafts exclusively. */
+      drafts?: "exclude" | "only";
+    } = {},
   ): Promise<ImportJobRow[]> {
     const capped = Math.max(1, Math.min(200, Math.trunc(opts.limit ?? 50)));
     const predicate = jobVisibility(viewer, {
       createdByUserId: importJobs.createdByUserId,
       sharedWithWorkspace: importJobs.sharedWithWorkspace,
     });
+    const draftTerm =
+      opts.drafts === "only"
+        ? eq(importJobs.status, "draft")
+        : notInArray(importJobs.status, ["draft", "uploading"]);
     // Row-value keyset: `(created_at, id) < (cursor.createdAt, cursor.id)` matches the composite index order
     // exactly. `and(...)` drops the `undefined` visibility term (elevated / gate-off) — never widens scope.
     const keyset = opts.cursor
@@ -272,7 +286,7 @@ export const importJobRepository = {
     return tx
       .select()
       .from(importJobs)
-      .where(and(predicate, keyset))
+      .where(and(predicate, draftTerm, keyset))
       .orderBy(desc(importJobs.createdAt), desc(importJobs.id))
       .limit(capped);
   },
@@ -304,6 +318,53 @@ export const importJobRepository = {
   /** Transition a job's lifecycle status (+ the matching timestamp / staging / chunk-plan fields). Scoped. */
   async updateJobStatus(tx: Tx, jobId: string, patch: ImportJobStatusUpdate): Promise<void> {
     await tx.update(importJobs).set(definedOnly(patch)).where(eq(importJobs.id, jobId));
+  },
+
+  // ── Draft-flow writes (import-redesign 08 §2.1/§3, S-I8) — every one PINS `status='draft'` in the WHERE
+  // so a raced commit/cancel can never be overwritten by a stale wizard call: 0 rows updated ⇒ the caller
+  // answers 409 illegal_state against the row's REAL state (the server-side legality rule, 08 §2.1).
+
+  /**
+   * Save the draft's mapping document (full replace — PUT semantics, 08 §2.3): the column mapping, the
+   * resolved 08 §5 strategy pair, the template provenance, and the optional list target. `undefined`
+   * fields are left untouched (definedOnly); pass an explicit `null` to clear a nullable column. Returns
+   * false when the row is no longer a draft (or absent) — the caller 409s/404s off its own locked read.
+   */
+  async updateDraftMapping(
+    tx: Tx,
+    jobId: string,
+    patch: {
+      columnMapping?: Record<string, unknown>;
+      mergeMode?: ImportMergeMode;
+      preservePopulated?: boolean;
+      mappingTemplateId?: string | null;
+      targetListId?: string | null;
+    },
+  ): Promise<boolean> {
+    const set = definedOnly(patch);
+    if (Object.keys(set).length === 0) return true;
+    const rows = await tx
+      .update(importJobs)
+      .set(set)
+      .where(and(eq(importJobs.id, jobId), eq(importJobs.status, "draft")))
+      .returning({ id: importJobs.id });
+    return rows.length > 0;
+  },
+
+  /** Cache the NON-PII full-pass projection on the draft row (08 §4 `preview_summary` — counts + codes +
+   *  line numbers only; sample rows are recomputed per request and NEVER persisted). Draft-pinned like the
+   *  mapping write; a raced commit simply drops the cache write (the projection is re-derivable). */
+  async savePreviewSummary(
+    tx: Tx,
+    jobId: string,
+    summary: Record<string, unknown>,
+  ): Promise<boolean> {
+    const rows = await tx
+      .update(importJobs)
+      .set({ previewSummary: summary })
+      .where(and(eq(importJobs.id, jobId), eq(importJobs.status, "draft")))
+      .returning({ id: importJobs.id });
+    return rows.length > 0;
   },
 
   /**
@@ -573,13 +634,22 @@ export const importJobRepository = {
 
   /** Count a workspace's jobs CREATED since `since` — the per-workspace commit-quota census (08 §2.3 / 12 §5;
    *  `IMPORT_MAX_COMMITS_PER_HOUR`). Every commit (incl. a retry-failed child) is one `import_jobs` row, so the
-   *  row-creation count is the commit count. Deliberately UNSERIALIZED (soft quota, ±1 under a submit race —
-   *  the same posture as the fairness census). Workspace-scoped via RLS + the explicit predicate. */
+   *  row-creation count is the commit count. DRAFTS (and the dead `uploading` state) are EXCLUDED (S-I8): an
+   *  uncommitted draft is not a commit — it consumes quota only once the commit verb flips it (08 §2.3: the
+   *  quota is the COMMIT quota; upload has its own rate bucket). Deliberately UNSERIALIZED (soft quota, ±1
+   *  under a submit race — the same posture as the fairness census; a committed draft's created_at also
+   *  pre-dates its commit, an accepted under-count recorded in doc 16). Workspace-scoped via RLS + predicate. */
   async countJobsCreatedSince(tx: Tx, workspaceId: string, since: Date): Promise<number> {
     const rows = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(importJobs)
-      .where(and(eq(importJobs.workspaceId, workspaceId), gt(importJobs.createdAt, since)));
+      .where(
+        and(
+          eq(importJobs.workspaceId, workspaceId),
+          gt(importJobs.createdAt, since),
+          notInArray(importJobs.status, ["draft", "uploading"]),
+        ),
+      );
     return rows[0]?.n ?? 0;
   },
 
