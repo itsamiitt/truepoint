@@ -996,3 +996,17 @@ export {
   isAccountDomainsDualWriteEnabled,
   accountDomainsDualWriteEnabledForScope,
 } from "./accounts/accountDualWrite.ts";
+
+// S-A1/S-A3 account backfill (import-and-data-model-redesign 15 §2.2): the per-workspace runner — withTenantTx
+// keyset batches over accounts (domain pass = the mandated S-A1 re-run; HQ pass = S-A3's best-effort location
+// synthesis, freetext country → ISO alpha-2 via countryToIso, unmappable → NULL). WHERE-missing selection is
+// the watermark; the dual gate re-checked per batch as tenant-select + abort. Driven by apps/workers'
+// leader-locked accountBackfillSweep; the completeness counts (the S-A6/C2 gate) are accountChildRepository's.
+export {
+  planAccountHqBackfill,
+  runAccountBackfillForWorkspace,
+  type AccountBackfillOptions,
+  type AccountBackfillWorkspaceResult,
+  type AccountHqBackfillPlan,
+} from "./accounts/accountBackfill.ts";
+export { countryToIso } from "./accounts/countryToIso.ts";

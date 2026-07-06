@@ -67,6 +67,9 @@ export {
   type AccountDomainValue,
   type AccountDomainWriteOp,
   type AccountDomainWriteOutcome,
+  type BackfillAccountChildResult,
+  type MissingAccountDomainRow,
+  type MissingAccountHqRow,
 } from "./repositories/accountChildRepository.ts";
 export {
   planAccountDomainWrite,

@@ -22,9 +22,9 @@
 // The whole-set `uniq_account_domains_ws_domain` partial unique is the DB race backstop, never the control
 // flow. There is NO per-account cap here (domain caps are app-layer at the API edge — 06 §Misuse).
 
-import { and, eq, isNull } from "drizzle-orm";
-import type { Tx } from "../client.ts";
-import { accountDomains } from "../schema/accountChildren.ts";
+import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import { db, type Tx } from "../client.ts";
+import { accountDomains, accountLocations } from "../schema/accountChildren.ts";
 import { accounts } from "../schema/contacts.ts";
 import { planAccountDomainWrite } from "./accountChildPlan.ts";
 
@@ -62,6 +62,47 @@ interface LiveDomainRow {
   id: string;
   domain: string;
   isPrimary: boolean;
+}
+
+// ── S-A1/S-A3 backfill family (15 §2.2 — the executable contract; the S-CH3 backfillContactChannels sibling) ──
+// The backfill's selection predicate IS its watermark: an account is "missing" a domain child when it holds
+// the flat `domain` and NO live account_domains row exists — so any batch is re-runnable, a crash resumes by
+// re-selecting, and a done account is never touched again (idempotent no-op by construction; no stored cursor).
+// The predicate is 15 §2.2's completeness query verbatim, shared by the in-tx batch selection, the owner-conn
+// census, and the S-A6/C2 gate count — one predicate, three readers, so the gate can never disagree with the
+// walker. The HQ pass is the analog over account_locations (best-effort, count-only — never a gate, 15 §2.2).
+
+/** One selected account of the WHERE-missing domain walk (flat cache = the source projected FROM — verbatim). */
+export interface MissingAccountDomainRow {
+  id: string;
+  domain: string; // the flat accounts.domain (guaranteed non-null by the selection predicate)
+}
+
+/** One selected account of the WHERE-missing HQ-location walk (S-A3 best-effort synthesis input). */
+export interface MissingAccountHqRow {
+  id: string;
+  hqCountry: string | null; // freetext ("United States") — the runner maps to ISO alpha-2 best-effort
+  hqCity: string | null;
+}
+
+// The per-child "no live row" legs, shared verbatim between the tx selection (drizzle) and the owner census/count
+// (raw, aliased `a`). Kept byte-for-byte parallel — the S-CH3 discipline (the gauge can never disagree).
+const noLiveDomainChild = sql`NOT EXISTS (SELECT 1 FROM ${accountDomains} WHERE ${accountDomains.accountId} = ${accounts.id} AND ${accountDomains.deletedAt} IS NULL)`;
+const noLiveLocation = sql`NOT EXISTS (SELECT 1 FROM ${accountLocations} WHERE ${accountLocations.accountId} = ${accounts.id} AND ${accountLocations.deletedAt} IS NULL)`;
+const domainMissing = sql`(${accounts.domain} IS NOT NULL AND ${accounts.deletedAt} IS NULL AND ${noLiveDomainChild})`;
+const hqMissing = sql`((${accounts.hqCountry} IS NOT NULL OR ${accounts.hqCity} IS NOT NULL) AND ${accounts.deletedAt} IS NULL AND ${noLiveLocation})`;
+
+// Raw analogs (aliased `a`) for the owner-connection census + counts — the drizzle refs above render
+// "accounts"."id", which the aliased owner query does not expose (the listWorkspacesMissingChannelProjection
+// pattern). Kept parallel to the fragments above so the gauge never lies.
+const DOMAIN_MISSING_RAW = `(a.domain IS NOT NULL AND a.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_domains ad WHERE ad.account_id = a.id AND ad.deleted_at IS NULL))`;
+const HQ_MISSING_RAW = `((a.hq_country IS NOT NULL OR a.hq_city IS NOT NULL) AND a.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_locations al WHERE al.account_id = a.id AND al.deleted_at IS NULL))`;
+
+export interface BackfillAccountChildResult {
+  inserted: boolean;
+  /** Hit ON CONFLICT DO NOTHING — a concurrent S-A2 write won the partial unique (race backstop, 15 §2.2);
+   *  counted, never an error. */
+  conflict: boolean;
 }
 
 /** Flat-cache projection (the write half of the 05-shared sync contract): accounts.domain is REWRITTEN from
@@ -178,5 +219,142 @@ export const accountChildRepository = {
     op: AccountDomainWriteOp,
   ): Promise<AccountDomainWriteOutcome> {
     return domainUpsert(tx, scope, op.accountId, op.value);
+  },
+
+  // ── S-A1 domain backfill (15 §2.2, the mandated re-run — seq 55) ───────────────────────────────────────
+
+  /** WHERE-missing keyset walk (id ASC, cursor = last id; null = start) over LIVE accounts holding a flat
+   *  `domain` with NO live account_domains child. RLS scopes it to ONE workspace via the caller's withTenantTx
+   *  GUC (no explicit workspace predicate — the findContactsMissingChannelProjection precedent). */
+  async findAccountsMissingDomainChild(
+    tx: Tx,
+    cursor: string | null,
+    limit: number,
+  ): Promise<MissingAccountDomainRow[]> {
+    const rows = await tx
+      .select({ id: accounts.id, domain: accounts.domain })
+      .from(accounts)
+      .where(and(sql`${domainMissing}`, cursor === null ? undefined : gt(accounts.id, cursor)))
+      .orderBy(asc(accounts.id))
+      .limit(limit);
+    // domainMissing guarantees domain non-null; narrow for the type.
+    return rows.flatMap((r) => (r.domain ? [{ id: r.id, domain: r.domain }] : []));
+  },
+
+  /** S-A1's dedicated backfill insert — the 15 §2.2 sibling of applyAccountDomainWrite, NOT a second live
+   *  write path: it NEVER touches the flat accounts.domain cache (flat is the source projected FROM; rewriting
+   *  it would churn every account's updated_at) and must be a strict no-op on re-runs. Inserts the
+   *  `is_primary=true` primary domain row WHERE the selection said none exists; `ON CONFLICT DO NOTHING` on the
+   *  06 §1 partial uniques backstops a concurrent S-A2 dual-write (its row wins; ours is a conflict, counted).
+   *  `source='import'` (NOT 'backfill' — the account_domains_source_enum CHECK forbids 'backfill'; 06 §Steps
+   *  S-A1 pins 'import'; doc 16 drift row records the divergence from the S-CH3 'backfill' label). */
+  async backfillAccountDomain(
+    tx: Tx,
+    scope: AccountChildScope,
+    accountId: string,
+    domain: string,
+  ): Promise<BackfillAccountChildResult> {
+    const rows = await tx
+      .insert(accountDomains)
+      .values({
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        accountId,
+        domain,
+        isPrimary: true,
+        source: "import", // 06 §Steps S-A1; the CHECK forbids 'backfill' (drift row)
+        sourceImportId: null, // lineage unknowable at backfill grain (the flat slot kept no pointer)
+        pinned: false,
+        verifiedAt: null,
+      })
+      .onConflictDoNothing()
+      .returning({ id: accountDomains.id });
+    return { inserted: rows[0] !== undefined, conflict: rows[0] === undefined };
+  },
+
+  // ── S-A3 HQ-location backfill (15 §2.2, best-effort — seq 56) ──────────────────────────────────────────
+
+  /** WHERE-missing keyset walk over LIVE accounts holding a flat hq_country/hq_city with NO live
+   *  account_locations child. RLS-scoped via the caller's tx (the domain-pass precedent). */
+  async findAccountsMissingHqLocation(
+    tx: Tx,
+    cursor: string | null,
+    limit: number,
+  ): Promise<MissingAccountHqRow[]> {
+    const rows = await tx
+      .select({ id: accounts.id, hqCountry: accounts.hqCountry, hqCity: accounts.hqCity })
+      .from(accounts)
+      .where(and(sql`${hqMissing}`, cursor === null ? undefined : gt(accounts.id, cursor)))
+      .orderBy(asc(accounts.id))
+      .limit(limit);
+    return rows.map((r) => ({ id: r.id, hqCountry: r.hqCountry ?? null, hqCity: r.hqCity ?? null }));
+  },
+
+  /** S-A3's dedicated backfill insert: the primary `hq` location synthesized from the flat cache. NEVER
+   *  touches the flat hq_country/hq_city (flat is the source projected FROM). `country` is the runner's
+   *  best-effort ISO alpha-2 (NULL when the freetext hq_country was unmappable — 06 §3 backfill honesty).
+   *  `source='import'` (CHECK-valid; true origin unknowable at backfill grain — doc 16 drift row).
+   *  `ON CONFLICT DO NOTHING` on `uniq_account_locations_primary` backstops a race. */
+  async backfillAccountHqLocation(
+    tx: Tx,
+    scope: AccountChildScope,
+    accountId: string,
+    loc: { city: string | null; country: string | null },
+  ): Promise<BackfillAccountChildResult> {
+    const rows = await tx
+      .insert(accountLocations)
+      .values({
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        accountId,
+        type: "hq",
+        city: loc.city,
+        country: loc.country,
+        isPrimary: true,
+        source: "import",
+        pinned: false,
+      })
+      .onConflictDoNothing()
+      .returning({ id: accountLocations.id });
+    return { inserted: rows[0] !== undefined, conflict: rows[0] === undefined };
+  },
+
+  // ── System-level census + gates (owner connection — intentionally cross-workspace, non-PII ids/counts) ──
+
+  /** SYSTEM-LEVEL census for the leader-locked account-backfill sweep: the (tenantId, workspaceId) of every
+   *  workspace still holding an account that needs EITHER pass (missing domain child OR missing hq location).
+   *  OWNER connection (no leadwolf_app drop — the set is intentionally cross-workspace; the
+   *  listWorkspacesMissingChannelProjection precedent); NON-PII ids only; NOT reachable from a tenant request.
+   *  `limit`-capped fan-out. */
+  async listWorkspacesNeedingAccountBackfill(
+    limit = 1000,
+  ): Promise<Array<{ tenantId: string; workspaceId: string }>> {
+    const rows = (await db.execute(
+      sql`SELECT DISTINCT tenant_id, workspace_id FROM accounts a
+          WHERE ${sql.raw(DOMAIN_MISSING_RAW)} OR ${sql.raw(HQ_MISSING_RAW)}
+          LIMIT ${limit}`,
+    )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
+    return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
+  },
+
+  /** THE S-A6/C2 GATE (15 §2.2's verification query, the domainMissing predicate verbatim): live accounts with
+   *  a flat `domain` and no live account_domains row. **S-A6's C2 rung must not activate until this reads 0**
+   *  after the post-dual-write re-run (07 §8 edge; 15 §M-SEQ seq 55). Owner connection — fleet-wide non-PII
+   *  count; also the sweep's `backfill_domain_remaining` gauge. */
+  async countAccountsMissingDomainChild(): Promise<number> {
+    const rows = (await db.execute(
+      sql`SELECT count(*)::int AS n FROM accounts a WHERE ${sql.raw(DOMAIN_MISSING_RAW)}`,
+    )) as unknown as Array<{ n: number }>;
+    return rows[0]?.n ?? 0;
+  },
+
+  /** The HQ-pass completeness count — COUNT-ONLY, NEVER a gate (15 §2.2: S-A3's backfill is best-effort;
+   *  unmappable-country rows still get a location with `country NULL`, so this converges to 0, but nothing
+   *  blocks on it). Exposed as the `backfill_hq_remaining` gauge. Owner connection, non-PII count. */
+  async countAccountsMissingHqLocation(): Promise<number> {
+    const rows = (await db.execute(
+      sql`SELECT count(*)::int AS n FROM accounts a WHERE ${sql.raw(HQ_MISSING_RAW)}`,
+    )) as unknown as Array<{ n: number }>;
+    return rows[0]?.n ?? 0;
   },
 };

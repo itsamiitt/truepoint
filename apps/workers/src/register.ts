@@ -10,6 +10,7 @@ import {
   diskFileStore,
   markFastImportFailed,
   registerEmailProviders,
+  runAccountBackfillForWorkspace,
   runChannelBackfillForWorkspace,
   runChannelReconcileForWorkspace,
   stubMalwareScanner,
@@ -43,6 +44,11 @@ import {
   renderPromMetrics,
 } from "./metrics.ts";
 import { type OutboxPublisher, type OutboxRelayHandle, startOutboxRelay } from "./outboxRelay.ts";
+import {
+  ACCOUNT_BACKFILL_SWEEP_QUEUE,
+  type AccountBackfillSweepJobData,
+  makeProcessAccountBackfillSweep,
+} from "./queues/accountBackfillSweep.ts";
 import {
   BILLING_RECON_SWEEP_QUEUE,
   type BillingReconSweepJobData,
@@ -1604,6 +1610,35 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "channel-reconcile-sweep" })
       .catch((e) =>
         log.error("failed to schedule the channel-reconcile sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // S-A1/S-A3 account-backfill sweep (import-redesign 15 §M-SEQ seq 55/56, mechanics 15 §2.2) — DARK by
+  // default, double env-gated: ACCOUNT_DOMAINS_DUAL_WRITE (the backfill runs strictly after S-A2, the S-CH3
+  // train posture) AND ACCOUNT_BACKFILL_ENABLED (the job-level flag). When off, nothing is built. Per-tenant
+  // selection + the batch-boundary abort ride the `account_domains_dual_write` flag inside core's runner
+  // (fail-closed). Self-terminating (no-ops once the census is empty) and idempotent, so it is safe to leave
+  // scheduled — the operator enables it, watches `leadwolf_account_backfill_domain_remaining` drain to 0
+  // (the S-A6/C2 gate), re-runs after dual-write is on fleet-wide to close the write-gap tail, then off.
+  if (env.ACCOUNT_DOMAINS_DUAL_WRITE && env.ACCOUNT_BACKFILL_ENABLED) {
+    const accountBackfillQueue = new Queue<AccountBackfillSweepJobData>(ACCOUNT_BACKFILL_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        new Worker<AccountBackfillSweepJobData>(
+          ACCOUNT_BACKFILL_SWEEP_QUEUE,
+          makeProcessAccountBackfillSweep(connection, runAccountBackfillForWorkspace),
+          { connection },
+        ),
+        ACCOUNT_BACKFILL_SWEEP_QUEUE,
+      ),
+    );
+    void accountBackfillQueue
+      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "account-backfill-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the account-backfill sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

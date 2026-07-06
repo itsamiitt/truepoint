@@ -111,6 +111,39 @@ export function resetChannelMetrics(): void {
   channelGauges.clear();
 }
 
+// Account-backfill family (S-A1/S-A3; rendered as `leadwolf_account_<name>`): the leader-locked
+// accountBackfillSweep feeds `backfill_domains_scanned_total` / `backfill_domains_created_total` /
+// `backfill_domain_conflicts_total` (domain pass = the mandated S-A1 re-run) + `backfill_hq_scanned_total` /
+// `backfill_hq_created_total` / `backfill_hq_unmapped_total` / `backfill_hq_conflicts_total` (HQ pass), and
+// overwrites the `backfill_domain_remaining` gauge (THE S-A6/C2 gate, 15 §2.2) + `backfill_hq_remaining`
+// (count-only) each tick. Same PII rule: names are static strings — never a tenant, account id, or value.
+const accountCounters = new Map<string, number>();
+const accountGauges = new Map<string, number>();
+
+/** Add to a cumulative account counter (rendered as `leadwolf_account_<name>`). */
+export function incrementAccountCounter(name: string, by = 1): void {
+  accountCounters.set(name, (accountCounters.get(name) ?? 0) + by);
+}
+
+/** Set a point-in-time account gauge (rendered as `leadwolf_account_<name>`) — overwritten per tick. */
+export function setAccountGauge(name: string, value: number): void {
+  accountGauges.set(name, value);
+}
+
+/** Snapshots for tests. */
+export function accountCountersSnapshot(): ReadonlyMap<string, number> {
+  return accountCounters;
+}
+export function accountGaugesSnapshot(): ReadonlyMap<string, number> {
+  return accountGauges;
+}
+
+/** Test seam — the account maps are module-global, so tests reset between cases. */
+export function resetAccountMetrics(): void {
+  accountCounters.clear();
+  accountGauges.clear();
+}
+
 /** One queue's live depth reading (gathered by register.ts from its producer handles, bounded). */
 export interface QueueDepth {
   queue: string;
@@ -181,6 +214,16 @@ export function renderPromMetrics(input: WorkerMetricsInput): string {
   for (const [name, value] of channelGauges) {
     lines.push(`# TYPE leadwolf_channel_${name} gauge`);
     lines.push(`leadwolf_channel_${name} ${value}`);
+  }
+
+  // Account-backfill family (S-A1/S-A3) — same module-global-map rendering.
+  for (const [name, value] of accountCounters) {
+    lines.push(`# TYPE leadwolf_account_${name} counter`);
+    lines.push(`leadwolf_account_${name} ${value}`);
+  }
+  for (const [name, value] of accountGauges) {
+    lines.push(`# TYPE leadwolf_account_${name} gauge`);
+    lines.push(`leadwolf_account_${name} ${value}`);
   }
 
   return `${lines.join("\n")}\n`;

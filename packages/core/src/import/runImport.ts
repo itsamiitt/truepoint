@@ -10,6 +10,7 @@ import { env } from "@leadwolf/config";
 import {
   type ContactWriteValues,
   type Tx,
+  accountChildRepository,
   accountRepository,
   contactChannelRepository,
   contactRepository,
@@ -34,6 +35,7 @@ import type {
   SourceName,
 } from "@leadwolf/types";
 import { CONTACT_PROVENANCE_FIELDS, DEFAULT_CONFLICT_POLICY } from "@leadwolf/types";
+import { accountDomainsDualWriteEnabledForScope } from "../accounts/accountDualWrite.ts";
 import {
   buildPhoneChannelValue,
   channelDualWriteEnabledForScope,
@@ -345,6 +347,7 @@ async function importOneRow(
   strategy: ImportStrategy,
   channelDualWrite: boolean,
   channelReadFromChild: boolean,
+  accountDualWrite: boolean,
 ): Promise<RowLanding> {
   const { tenantId, workspaceId } = input.scope;
   const listId = input.target?.listId;
@@ -523,6 +526,24 @@ async function importOneRow(
     await writeChannelRows(tx, input, prepared, contactId, sourceImportId, channelReadFromChild, !!match);
   }
 
+  // S-A2 account-domain dual-write — the account writer (upsertByDomain above) that sets accounts.domain also
+  // maintains the child domain row + the flat primary cache via the ONE write path, same tx, gate-on only
+  // (06 §1). LANDING rows that carry a domain only (a held-back duplicate/idempotent skip returned earlier and
+  // stamped no account). A domain live on ANOTHER account ⇒ `collision` (06 §1 match signal — never an error,
+  // never a move; the C2 ladder rung that resolves it is S-A6's). Gate-off ⇒ this block is skipped entirely
+  // (zero child-table queries — the flat account write above is byte-identical to today).
+  if (accountDualWrite && accountId && prepared.accountDomain) {
+    const outcome = await accountChildRepository.applyAccountDomainWrite(tx, input.scope, {
+      kind: "domain_upsert",
+      accountId,
+      value: { domain: prepared.accountDomain, source: "import", sourceImportId },
+    });
+    if (outcome.result === "collision") {
+      // Non-PII operational signal only (account id + outcome — never a value).
+      console.warn(`[import] account domain collision (account ${accountId})`);
+    }
+  }
+
   // A landed row (created or overwritten match) joins the target list, linked to THIS import's provenance row.
   const addedToList = listId
     ? await addLandedToList(tx, input, listId, contactId, sourceImportId)
@@ -587,6 +608,10 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
   // queries). Gate-on the email dedup rung resolves via contact_emails.blind_index so a duplicate carrying a
   // SECONDARY email lands on the contact that already holds it (the G15/G16 payoff); gate-off byte-identical.
   const channelReadFromChild = await channelReadFromChildEnabledForScope(input.scope);
+  // S-A2 account-domain dual gate (06 §1), evaluated ONCE per run (a 10k-row import must not re-read the flag
+  // per row; fail-closed on error). env.ACCOUNT_DOMAINS_DUAL_WRITE off ⇒ false with ZERO queries — the
+  // gate-off run's account writes are cost-identical as well as byte-identical (the T-P4 parity gate).
+  const accountDualWrite = await accountDomainsDualWriteEnabledForScope(input.scope);
 
   const errors: ImportRowError[] = [];
   const rejectedRows: RejectedRow[] = [];
@@ -644,7 +669,17 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
       const prepared = prepareContact(mapped);
       const hash = contentHash({ mapped, sourceName: input.sourceName });
       const landing = await withTenantTx(input.scope, (tx) =>
-        importOneRow(tx, input, raw, prepared, hash, strategy, channelDualWrite, channelReadFromChild),
+        importOneRow(
+          tx,
+          input,
+          raw,
+          prepared,
+          hash,
+          strategy,
+          channelDualWrite,
+          channelReadFromChild,
+          accountDualWrite,
+        ),
       );
       if (landing.outcome === "created") created++;
       else if (landing.outcome === "matched") matched++;
