@@ -38,6 +38,16 @@ import { contactEmails, contactPhones } from "../schema/contactChannels.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
 import { contactChannelRepository } from "./contactChannelRepository.ts";
 
+// 06 §4: a contact whose account is soft-deleted renders COMPANY-LESS — the account leftJoin filters tombstones
+// so company text/facets never resolve through a tombstoned account row (the contact itself still returns; the
+// join simply yields NULL company fields). Applied GATE-INDEPENDENTLY + BEHAVIOUR-NEUTRALLY: nothing writes
+// `accounts.deleted_at` yet, so `deleted_at IS NULL` is identically true for every account and the result set
+// is unchanged; it becomes load-bearing when the soft-delete verb lands (doc 04/11 slice).
+const ACCOUNT_JOIN_LIVE: SQL = and(
+  eq(accounts.id, contacts.accountId),
+  sql`${accounts.deletedAt} IS NULL`,
+) as SQL;
+
 /** S-CH4 read options threaded from the caller-evaluated composed gate (default: flat, byte-identical). */
 export interface SearchReadOpts {
   channelsFromChild?: boolean;
@@ -389,7 +399,7 @@ export const searchRepository = {
     const rows = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(contacts)
-      .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+      .leftJoin(accounts, ACCOUNT_JOIN_LIVE)
       .where(where);
     return rows[0]?.n ?? 0;
   },
@@ -411,7 +421,7 @@ export const searchRepository = {
     const rows = await tx
       .select({ id: contacts.id })
       .from(contacts)
-      .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+      .leftJoin(accounts, ACCOUNT_JOIN_LIVE)
       .where(where)
       .orderBy(sql`${contacts.createdAt} DESC, ${contacts.id} DESC`)
       .limit(limit);
@@ -436,7 +446,7 @@ export const searchRepository = {
         const rows = await tx
           .select({ value: sql<string>`${expr}::text`, count: sql<number>`count(*)::int` })
           .from(contacts)
-          .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+          .leftJoin(accounts, ACCOUNT_JOIN_LIVE)
           .where(where)
           .groupBy(expr)
           .orderBy(desc(sql`count(*)`))
@@ -456,7 +466,7 @@ export const searchRepository = {
       const rows = await tx
         .select({ value: sql<string>`${expr}::text`, count: sql<number>`count(*)::int` })
         .from(contacts)
-        .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+        .leftJoin(accounts, ACCOUNT_JOIN_LIVE)
         .where(
           and(sql`${contacts.deletedAt} IS NULL`, sql`${expr} ILIKE ${`${req.prefix}%`}`) as SQL,
         )
@@ -485,7 +495,7 @@ function runSearch(
   const base = tx
     .select(select)
     .from(contacts)
-    .leftJoin(accounts, eq(accounts.id, contacts.accountId));
+    .leftJoin(accounts, ACCOUNT_JOIN_LIVE);
 
   let seek: SQL | undefined;
   let order: SQL;

@@ -63,10 +63,13 @@ export {
 // accounts.domain cache in one withTenantTx) plus the WHERE-missing backfill selection/insert/census/count.
 export {
   accountChildRepository,
+  AccountHierarchyError,
+  type AccountChildProjection,
   type AccountChildScope,
   type AccountDomainValue,
   type AccountDomainWriteOp,
   type AccountDomainWriteOutcome,
+  type AccountHierarchyErrorCode,
   type BackfillAccountChildResult,
   type MissingAccountDomainRow,
   type MissingAccountHqRow,

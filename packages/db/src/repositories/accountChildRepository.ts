@@ -22,11 +22,41 @@
 // The whole-set `uniq_account_domains_ws_domain` partial unique is the DB race backstop, never the control
 // flow. There is NO per-account cap here (domain caps are app-layer at the API edge — 06 §Misuse).
 
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import type {
+  AccountChildSource,
+  AccountDomain,
+  AccountLocation,
+  AccountLocationType,
+} from "@leadwolf/types";
+import { ACCOUNT_HIERARCHY_MAX_DEPTH } from "@leadwolf/types";
+import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { db, type Tx } from "../client.ts";
 import { accountDomains, accountLocations } from "../schema/accountChildren.ts";
 import { accounts } from "../schema/contacts.ts";
 import { planAccountDomainWrite } from "./accountChildPlan.ts";
+
+/** The S-A4 hierarchy cycle-guard's typed rejection (06 §2). `self_parent`/`cycle`/`depth_cap` are the write-time
+ *  validation verdicts (the Salesforce CIRCULAR_DEPENDENCY analog); `not_found` guards a parent/child id that is
+ *  not a LIVE account visible in the caller's workspace (RLS + `deleted_at IS NULL`) — the API verb (doc 04/11)
+ *  maps it to a 404 before this ever fires, but the repo is defensive. Thrown, never returned — a cycle must
+ *  abort the caller's tx. */
+export type AccountHierarchyErrorCode = "self_parent" | "cycle" | "depth_cap" | "not_found";
+export class AccountHierarchyError extends Error {
+  constructor(
+    readonly code: AccountHierarchyErrorCode,
+    message?: string,
+  ) {
+    super(message ?? `account hierarchy: ${code}`);
+    this.name = "AccountHierarchyError";
+  }
+}
+
+/** The S-A6 account-detail overlay read projection (06 §API): the live domains[] + locations[] child sets for an
+ *  account, DTO-shaped (non-PII clear values — the deliberate contrast with contactChannels' masked summaries). */
+export interface AccountChildProjection {
+  domains: AccountDomain[];
+  locations: AccountLocation[];
+}
 
 /** Tenancy stamp for new child rows (denormalized NOT NULL on every row — DM4). RLS on the caller's tx is the
  *  wall; these are the column values, never a trust boundary. */
@@ -111,6 +141,28 @@ export interface BackfillAccountChildResult {
  *  coincidental (the general write path may attach a NEW primary that differs, e.g. a future promote verb). */
 async function projectDomainToFlat(tx: Tx, accountId: string, domain: string): Promise<void> {
   await tx.update(accounts).set({ domain, updatedAt: new Date() }).where(eq(accounts.id, accountId));
+}
+
+/** Recompute `root_account_id` for every DESCENDANT of `accountId` (the moved node itself is set by the caller).
+ *  Every node in a family shares one ultimate root (06 §2's denormalized-ultimate-parent pattern, family key =
+ *  COALESCE(root_account_id, id)): on attach `descendantRoot` is the parent's family key; on clear it is the
+ *  moved node's own id (it becomes the family root). Bounded by family size (06 §2: depth ≤ 10, families small);
+ *  the acyclicity the cycle guard maintains keeps the downward walk finite. RLS scopes the CTE to the workspace
+ *  via the caller's tx. */
+async function recomputeSubtreeRoot(
+  tx: Tx,
+  accountId: string,
+  descendantRoot: string,
+): Promise<void> {
+  await tx.execute(sql`
+    WITH RECURSIVE sub AS (
+      SELECT id FROM accounts WHERE id = ${accountId}::uuid
+      UNION ALL
+      SELECT a.id FROM accounts a JOIN sub ON a.parent_account_id = sub.id
+    )
+    UPDATE accounts SET root_account_id = ${descendantRoot}::uuid, updated_at = now()
+    WHERE id IN (SELECT id FROM sub) AND id <> ${accountId}::uuid
+  `);
 }
 
 async function domainUpsert(
@@ -260,6 +312,193 @@ export const accountChildRepository = {
       )
       .limit(1);
     return rows[0]?.accountId ?? null;
+  },
+
+  // ── S-A6 read cutover: account-detail overlay projection (06 §API) ──────────────────────────────────────
+
+  /**
+   * Batch-resolve the live domains[] + locations[] child sets for a set of accounts (the S-A6 account-detail
+   * overlay read — 06 §API `AccountSchema` gains `domains`/`locations`). ONE query per child table for the whole
+   * page (never N+1 — the channelSummariesForContacts precedent), live rows only (`deleted_at IS NULL`), primary
+   * first then created_at/id for a deterministic order. NON-PII: domains + office addresses are clear
+   * firmographics (06 §1/§3), so the DTOs carry the ACTUAL values (no masking/reveal gate — the contrast with
+   * channel summaries). Callers invoke this ONLY when the S-A6 read gate is ON; gate-off the account-detail read
+   * stays on the flat `accounts.domain`/`hq_*` caches, byte-identical. RLS on the caller's tx is the workspace
+   * wall — a cross-workspace accountId simply yields no child rows (proven by the RLS itest).
+   */
+  async overlayExtensionsForAccounts(
+    tx: Tx,
+    accountIds: string[],
+  ): Promise<Map<string, AccountChildProjection>> {
+    const out = new Map<string, AccountChildProjection>();
+    if (accountIds.length === 0) return out;
+    const entry = (id: string): AccountChildProjection => {
+      let e = out.get(id);
+      if (!e) {
+        e = { domains: [], locations: [] };
+        out.set(id, e);
+      }
+      return e;
+    };
+    const domainRows = await tx
+      .select({
+        id: accountDomains.id,
+        accountId: accountDomains.accountId,
+        domain: accountDomains.domain,
+        isPrimary: accountDomains.isPrimary,
+        verifiedAt: accountDomains.verifiedAt,
+        source: accountDomains.source,
+        pinned: accountDomains.pinned,
+      })
+      .from(accountDomains)
+      .where(and(inArray(accountDomains.accountId, accountIds), isNull(accountDomains.deletedAt)))
+      .orderBy(desc(accountDomains.isPrimary), asc(accountDomains.createdAt), asc(accountDomains.id));
+    for (const r of domainRows) {
+      entry(r.accountId).domains.push({
+        id: r.id,
+        domain: r.domain,
+        isPrimary: r.isPrimary,
+        verifiedAt: r.verifiedAt ? r.verifiedAt.toISOString() : null,
+        source: r.source as AccountChildSource,
+        pinned: r.pinned,
+      });
+    }
+    const locationRows = await tx
+      .select({
+        id: accountLocations.id,
+        accountId: accountLocations.accountId,
+        type: accountLocations.type,
+        line1: accountLocations.line1,
+        line2: accountLocations.line2,
+        city: accountLocations.city,
+        region: accountLocations.region,
+        postalCode: accountLocations.postalCode,
+        country: accountLocations.country,
+        isPrimary: accountLocations.isPrimary,
+        source: accountLocations.source,
+        pinned: accountLocations.pinned,
+      })
+      .from(accountLocations)
+      .where(and(inArray(accountLocations.accountId, accountIds), isNull(accountLocations.deletedAt)))
+      .orderBy(
+        desc(accountLocations.isPrimary),
+        asc(accountLocations.createdAt),
+        asc(accountLocations.id),
+      );
+    for (const r of locationRows) {
+      entry(r.accountId).locations.push({
+        id: r.id,
+        type: r.type as AccountLocationType,
+        line1: r.line1,
+        line2: r.line2,
+        city: r.city,
+        region: r.region,
+        postalCode: r.postalCode,
+        country: r.country,
+        isPrimary: r.isPrimary,
+        source: r.source as AccountChildSource,
+        pinned: r.pinned,
+      });
+    }
+    return out;
+  },
+
+  // ── S-A4 hierarchy cycle guard (06 §2 — the write-path validation, NOT the 0061 DDL) ────────────────────
+
+  /**
+   * Set (or clear, when `parentAccountId` is null) an account's `parent_account_id`, enforcing the 06 §2 write-
+   * time hierarchy invariants INSIDE the caller's withTenantTx (RLS scopes every walk to the workspace):
+   *   1. Lock the two endpoint rows `FOR UPDATE` in deterministic id order — closes the concurrent A→B / B→A
+   *      race (06 §2 step 1); residual multi-edit races are caught by the nightly detector.
+   *   2. Walk the proposed parent's ancestors by recursive CTE (depth-capped so a pre-existing corrupt cycle
+   *      never infinite-loops) — if the child appears, it is a CYCLE (the child is already an ancestor of the
+   *      parent) ⇒ `AccountHierarchyError('cycle')` (the Salesforce CIRCULAR_DEPENDENCY analog, 06 §2 step 2).
+   *   3. Reject if `parent_depth + subtree_depth(child) > ACCOUNT_HIERARCHY_MAX_DEPTH` (10) ⇒ `depth_cap`
+   *      (06 §2 step 3 / §Depth cap).
+   *   4. Same-tx `root_account_id` recompute for the moved node AND its entire subtree (06 §2 "every
+   *      parent_account_id change must recompute root_account_id for the moved node and its entire subtree in
+   *      the same tx"): family key = COALESCE(root_account_id, id); attach ⇒ the parent's family key; clear ⇒
+   *      the node itself becomes the family root (its own root_account_id NULL, descendants point at it).
+   * Self-parent is rejected first (`self_parent`; the DB CHECK is the backstop). A parent/child that is not a
+   * LIVE account visible in this workspace (RLS + tombstone) ⇒ `not_found`. NO API verb ships in this task — the
+   * guard lands as this repo method + its tests; the `PATCH /accounts/:id` parent verb rides doc 04/11's account
+   * UI slice (doc 16 drift row). Cross-workspace parentage is additionally impossible at the DB (the composite
+   * same-workspace FK, 0061).
+   */
+  async setParentAccount(
+    tx: Tx,
+    scope: AccountChildScope,
+    args: { accountId: string; parentAccountId: string | null },
+  ): Promise<void> {
+    const { accountId, parentAccountId } = args;
+    if (parentAccountId !== null && parentAccountId === accountId) {
+      throw new AccountHierarchyError("self_parent");
+    }
+
+    // 1 — lock endpoints FOR UPDATE in deterministic id order (live rows only; RLS scopes to the workspace).
+    const lockIds =
+      parentAccountId === null ? [accountId] : [accountId, parentAccountId].sort();
+    const idList = sql.join(
+      lockIds.map((i) => sql`${i}::uuid`),
+      sql`, `,
+    );
+    const locked = (await tx.execute(sql`
+      SELECT id::text AS id, root_account_id::text AS root_account_id
+      FROM accounts
+      WHERE workspace_id = ${scope.workspaceId}::uuid AND deleted_at IS NULL AND id IN (${idList})
+      ORDER BY id
+      FOR UPDATE
+    `)) as unknown as Array<{ id: string; root_account_id: string | null }>;
+
+    if (!locked.some((r) => r.id === accountId)) throw new AccountHierarchyError("not_found");
+
+    if (parentAccountId === null) {
+      // Clear: the node becomes its own family root (root_account_id NULL); its subtree re-points at it.
+      await tx.execute(
+        sql`UPDATE accounts SET parent_account_id = NULL, root_account_id = NULL, updated_at = now() WHERE id = ${accountId}::uuid`,
+      );
+      await recomputeSubtreeRoot(tx, accountId, accountId);
+      return;
+    }
+
+    const parentRow = locked.find((r) => r.id === parentAccountId);
+    if (!parentRow) throw new AccountHierarchyError("not_found");
+
+    // 2 — ancestor walk of the proposed parent (depth-capped); the child appearing ⇒ cycle.
+    const walk = (await tx.execute(sql`
+      WITH RECURSIVE anc AS (
+        SELECT id, parent_account_id, 1 AS depth FROM accounts WHERE id = ${parentAccountId}::uuid
+        UNION ALL
+        SELECT a.id, a.parent_account_id, anc.depth + 1
+          FROM accounts a JOIN anc ON a.id = anc.parent_account_id
+         WHERE anc.depth < ${ACCOUNT_HIERARCHY_MAX_DEPTH}
+      )
+      SELECT bool_or(id = ${accountId}::uuid) AS cycle, max(depth) AS parent_depth FROM anc
+    `)) as unknown as Array<{ cycle: boolean | null; parent_depth: number | null }>;
+    if (walk[0]?.cycle) throw new AccountHierarchyError("cycle");
+    const parentDepth = Number(walk[0]?.parent_depth ?? 1);
+
+    // 3 — subtree depth of the child (downward walk); reject if the joined tree would exceed the cap.
+    const sub = (await tx.execute(sql`
+      WITH RECURSIVE sub AS (
+        SELECT id, 1 AS d FROM accounts WHERE id = ${accountId}::uuid
+        UNION ALL
+        SELECT a.id, sub.d + 1 FROM accounts a JOIN sub ON a.parent_account_id = sub.id
+         WHERE sub.d < ${ACCOUNT_HIERARCHY_MAX_DEPTH}
+      )
+      SELECT max(d) AS subtree_depth FROM sub
+    `)) as unknown as Array<{ subtree_depth: number | null }>;
+    const subtreeDepth = Number(sub[0]?.subtree_depth ?? 1);
+    if (parentDepth + subtreeDepth > ACCOUNT_HIERARCHY_MAX_DEPTH) {
+      throw new AccountHierarchyError("depth_cap");
+    }
+
+    // 4 — set the edge + recompute roots. family key of the parent = COALESCE(parent.root, parent.id).
+    const newRoot = parentRow.root_account_id ?? parentAccountId;
+    await tx.execute(
+      sql`UPDATE accounts SET parent_account_id = ${parentAccountId}::uuid, root_account_id = ${newRoot}::uuid, updated_at = now() WHERE id = ${accountId}::uuid`,
+    );
+    await recomputeSubtreeRoot(tx, accountId, newRoot);
   },
 
   // ── S-A1 domain backfill (15 §2.2, the mandated re-run — seq 55) ───────────────────────────────────────
