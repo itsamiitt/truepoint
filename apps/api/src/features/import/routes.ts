@@ -17,6 +17,7 @@ import {
   decideFastAdmission,
   decideImportRouting,
   decodeAdmittedCsv,
+  deltaImportsEnabledForScope,
   deriveImportProgress,
   type ImportRoutingVerdict,
   isXlsxFile,
@@ -663,6 +664,15 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
     // S-I6: resolve the 08 §5 merge strategy (request → import_policy default; legacy conflictPolicy mapped).
     // It rides the payload (supersedes conflictPolicy in the engine) AND is persisted on the job row below.
     const strategy = await resolveImportStrategy(form, scope, parsedPolicy.data, policyRaw != null);
+    // P5 DELTA (08 §9 layer 3): honor `externalIdUpsert` ONLY when the client asked for it AND the DELTA_IMPORTS
+    // dual gate is on for this tenant (env kill-switch + `delta_imports_enabled` flag; fail-closed). Off ⇒ the
+    // option is dropped and the engine runs the shipped ladder byte-identically (it never rides the payload).
+    // Evaluated only inside the IMPORT_V2 gate; the gate short-circuits to false env-off (zero extra queries).
+    // NOTE: this rides the FAST lane only — the copy path (submitOneShotCopy below) does NOT carry it, so an
+    // over-threshold delta import is NOT external-id-upserted (copy delta deferred — doc 16 drift, mirroring the
+    // S-CH2/S-A6 bulk-scope pattern). A mapped `externalId` with the gate off is inert (never read/written).
+    const externalIdUpsert =
+      form.get("externalIdUpsert") === "true" && (await deltaImportsEnabledForScope(scope));
 
     // S-I9 byte-half short-circuit (08 §1): an over-byte CSV with copy engaged routes to copy WITHOUT a
     // request-thread parse — measured bytes alone are an over-threshold fact; the drive stream-parses the
@@ -708,6 +718,10 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
       mapping,
       conflictPolicy: parsedPolicy.data,
       strategy,
+      // P5 delta (08 §9 layer 3): true only when the client opted in AND the dual gate is on (resolved above);
+      // absent/false ⇒ the engine's shipped dedup ladder, byte-identical. Omitted when false so the payload of a
+      // non-delta job is unchanged from today.
+      ...(externalIdUpsert ? { externalIdUpsert: true } : {}),
       rows: parsed.rows,
       target: listId ? { listId } : undefined,
     };

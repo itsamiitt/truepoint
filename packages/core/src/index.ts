@@ -158,6 +158,12 @@ export {
   isScheduledImportsEnabled,
   scheduledImportsEnabledForScope,
 } from "./import/scheduledImportGate.ts";
+// P5 DELTA-imports DUAL GATE (DELTA_IMPORTS_ENABLED env + `delta_imports_enabled` tenant flag; 08 §9 layer 3)
+// — the in-tx eval + the fail-closed forScope check (api route pre-enqueue). Fail-closed; off ⇒ zero queries.
+export {
+  isDeltaImportsEnabled,
+  deltaImportsEnabledForScope,
+} from "./import/deltaImportsGate.ts";
 export { blindIndex } from "./import/blindIndex.ts";
 export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 // Pre-commit validation preview + rejected-rows artifact + conflict policy (30 §4, ADR-0036; G-IMP-1/5).

@@ -13,6 +13,7 @@ import {
   accountChildRepository,
   accountRepository,
   contactChannelRepository,
+  contactExternalIdRepository,
   contactRepository,
   evidenceRepository,
   listRepository,
@@ -68,6 +69,12 @@ export interface RunImportInput {
    *  when present; expressed through the CANONICAL `planFieldWrite` path (never SQL). Absent ⇒ the legacy
    *  `conflictPolicy` mapping drives the engine, byte-identically. */
   strategy?: ImportStrategy;
+  /** P5 delta imports (08 §9 layer 3, S-I-delta). When true, a row's mapped `externalId` (the caller's stable
+   *  key) is the TOP dedup rung — resolved BEFORE the email→linkedin→sales-nav ladder (Salesforce-style
+   *  upsert-on-external-id) — and is fill-blank-stamped onto the landed contact. The api route sets this ONLY
+   *  when the DELTA_IMPORTS dual gate is on, so a gate-off/legacy run never carries it ⇒ the shipped ladder,
+   *  byte-identical (the engine never reads or writes contacts.external_id). Additive + default-off. */
+  externalIdUpsert?: boolean;
   /**
    * Optional "import into list" target (list-plan/03 §2.2, Phase 2). When set, every landed contact (created,
    * overwritten-match, AND a held-back duplicate / idempotent-skip that resolved to an existing workspace
@@ -376,9 +383,23 @@ async function importOneRow(
   // existing identity would just throw a unique-constraint violation, so we resolve the conflict in app code.
   // Computed BEFORE the account upsert + master resolution so a held-back duplicate touches NEITHER (a row
   // that does not land never mints a master node nor stamps an account — resolve only on landing rows).
-  const match = await contactRepository.findByDedupKeys(tx, workspaceId, prepared.dedupKeys, {
-    channelsFromChild: channelReadFromChild,
-  });
+  //
+  // P5 DELTA rung (08 §9 layer 3): when `externalIdUpsert` is on (the DELTA_IMPORTS dual gate resolved to true
+  // in the route) AND the row carries a mapped `externalId`, the caller's stable key is the TOP dedup rung —
+  // probed BEFORE the email→linkedin→sales-nav ladder (Salesforce-style upsert-on-external-id: the caller
+  // declared THIS is the record's identity). A hit resolves the row to that contact directly; a miss FALLS
+  // THROUGH to the shipped ladder unchanged (the row still needs an intrinsic identity key to land — the
+  // overlay has no external-id-only contact, prepareContact throws otherwise; doc 16 caveat). Gate-off/absent
+  // ⇒ this probe is skipped entirely and the ladder runs byte-identically (zero external_id queries).
+  const externalMatch =
+    input.externalIdUpsert && prepared.externalId
+      ? await contactExternalIdRepository.findIdByExternalId(tx, workspaceId, prepared.externalId)
+      : null;
+  const match =
+    externalMatch ??
+    (await contactRepository.findByDedupKeys(tx, workspaceId, prepared.dedupKeys, {
+      channelsFromChild: channelReadFromChild,
+    }));
 
   // create_only (08 §5 — and the legacy skip/keep_both that maps to it): a matched contact is a held-back
   // DUPLICATE — kept untouched, counted as a duplicate (no provenance row appended), but still added to the
@@ -536,6 +557,16 @@ async function importOneRow(
     values.fieldProvenance = provenance;
     contactId = await contactRepository.insert(tx, values);
     outcome = "created";
+  }
+
+  // P5 DELTA (08 §9 layer 3): fill-blank-stamp the caller's external key onto the landed contact (insert OR
+  // update). FILL-BLANK — never overwrites a populated/different key (08 §9 conflict deference); a new insert
+  // (external_id NULL) gets it, a row matched BY external_id already holds it (no-op), a row matched by email
+  // whose contact has a different key keeps the stored one. Same-tx as the write. Only runs with the option on
+  // AND a mapped key ⇒ gate-off is a no-op (zero writes). A workspace collision on a fresh stamp throws at the
+  // partial unique and aborts THIS row's tx (surfaced as a per-row processing_error — the correct outcome).
+  if (input.externalIdUpsert && prepared.externalId) {
+    await contactExternalIdRepository.setExternalId(tx, contactId, prepared.externalId);
   }
 
   const sourceImportId = await sourceImportRepository.append(tx, {

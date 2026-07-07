@@ -467,6 +467,12 @@ its visibility gap.
 
 Mirrors the `16-Implementation-Audit.md` format; doc `16` takes over tracking from here.
 
+> **2026-07-07 (16→01 protocol note):** this ledger is the AS-IS at series open (2026-07-04) and is
+> deliberately NOT rewritten. Much of it has since changed — Phases 0–3 are built dark, 4–5 largely so
+> (e.g. L3's durable job rows/history now exist behind `IMPORT_V2_ENABLED`; L5/L6/L8's gate CODE is built
+> with provisioning/CI user-owed). The live truth is [`16`](16-Implementation-Audit.md)'s subsystem table
+> + gate tracker; the roadmap-level rollup is `14 §At a glance`.
+
 | # | Artifact | Where | Status | Verified |
 |---|---|---|---|---|
 | L1 | Sync import pipeline (route → queue → worker → `runImport`) | `routes.ts` / `queue.ts` / `imports.ts` / `runImport.ts` | ✅ live | §2.1 |

@@ -109,6 +109,7 @@ export {
   type HotLeadRow,
   type UnresolvedContactRow,
 } from "./repositories/contactRepository.ts";
+export { contactExternalIdRepository } from "./repositories/contactExternalIdRepository.ts";
 export {
   contactChannelRepository,
   type BackfillContactChannelsResult,
@@ -127,6 +128,11 @@ export {
   type ReconcileEmailRow,
   type ReconcilePhoneRow,
 } from "./repositories/contactChannelRepository.ts";
+export {
+  contactMergeRepository,
+  type ContactMergeRow,
+  type SurvivorWriteSet,
+} from "./repositories/contactMergeRepository.ts";
 export {
   planChannelUpsert,
   type ChannelUpsertState,

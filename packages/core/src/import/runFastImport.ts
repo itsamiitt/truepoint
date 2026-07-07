@@ -234,6 +234,9 @@ export async function runFastImport(args: RunFastImportInput): Promise<FastImpor
     // 08 §5 strategy triad (S-I6): the server-resolved strategy rides the payload and supersedes conflictPolicy
     // in the engine; absent (a job submitted before S-I6) ⇒ runImport maps conflictPolicy onto the triad.
     strategy: input.strategy,
+    // P5 delta (08 §9 layer 3): the route sets this ONLY when the DELTA_IMPORTS gate is on, so a legacy/gate-off
+    // job carries it absent ⇒ runImport runs the shipped ladder byte-identically. Rides the payload like strategy.
+    externalIdUpsert: input.externalIdUpsert,
     rows: input.rows,
     target: input.target,
   };

@@ -30,6 +30,11 @@ export interface PreparedContact {
    *  (05 §4; the doc-sanctioned prepareContact EXTENSION, never a fork). Absent when the row has no phone.
    *  In-memory only: never staged, never logged (bulkStage.toStagingRow picks fields explicitly). */
   phoneRaw?: string;
+  /** P5 delta imports (08 §9 layer 3): the caller's normalized STABLE external key (their CRM/source row id),
+   *  when an `externalId` column is mapped. Always derived here (cheap, pure); `runImport` only CONSULTS it
+   *  (as the top dedup rung) and WRITES it when the DELTA gate + `externalIdUpsert` opt-in are both on — so a
+   *  gate-off import carries the value but never reads/writes it (byte-identical). Absent when unmapped/blank. */
+  externalId?: string;
 }
 
 export function coerceSeniority(raw: string | undefined): string | null {
@@ -79,5 +84,7 @@ export function prepareContact(mapped: MappedRow): PreparedContact {
     accountName: normalizeText(mapped.accountName),
     accountDomain: normalizeDomain(mapped.accountDomain),
     phoneRaw: phone,
+    // P5 delta (08 §9 layer 3): normalize the mapped external key the same way as every other text field.
+    externalId: normalizeText(mapped.externalId) ?? undefined,
   };
 }

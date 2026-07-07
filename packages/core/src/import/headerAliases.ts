@@ -101,6 +101,11 @@ const HEADER_ALIASES: Readonly<Record<CanonicalField, readonly string[]>> = {
     "websiteurl",
     "webdomain",
   ],
+  // P5 delta imports (08 §9 layer 3): the caller's stable external key. SPECIFIC aliases only — deliberately
+  // NO bare "id" (a generic id column must never auto-claim the external key; a stray external-id mapping with
+  // the delta gate on would silently change dedup precedence). Auto-mapping it is harmless when the delta gate
+  // is off (the field is inert), and the user confirms every mapping regardless (binary + override, 03 §1.3).
+  externalId: ["externalid", "externalkey", "externalrecordid", "crmid", "sourceid", "recordid"],
 };
 
 /**
