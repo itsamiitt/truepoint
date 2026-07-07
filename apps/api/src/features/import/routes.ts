@@ -20,6 +20,7 @@ import {
   deltaImportsEnabledForScope,
   deriveImportProgress,
   type ImportRoutingVerdict,
+  isDeltaImportsEnabled,
   isXlsxFile,
   parseImportFile,
   submitCopyImport,
@@ -759,6 +760,10 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
         // S-I6: persist the resolved 08 §5 strategy so history/detail reflects HOW the job merged.
         mergeMode: strategy.mergeMode,
         preservePopulated: strategy.preservePopulated,
+        // P5 delta (08 §9 layer 3): persist the resolved opt-in so a retry-failed CHILD can re-honor it (S-I10
+        // re-checks the gate at retry — it never trusts the persisted flag). Omitted when false ⇒ options stays
+        // {} (byte-identical: a non-delta job's row is unchanged, and gate-off never sets externalIdUpsert true).
+        ...(externalIdUpsert ? { options: { externalIdUpsert: true } } : {}),
       });
       return { ...res, admission: admissionVerdict };
     });
@@ -1022,6 +1027,16 @@ importRoutes.post("/:jobId/retry-failed", async (c) => {
     const rows = await importJobRepository.listRetryableRows(tx, parentId);
     if (rows.length === 0) return { kind: "nothing" };
 
+    // P5 delta (08 §9 layer 3): a delta parent persisted `{ externalIdUpsert: true }` in its options. Re-honor
+    // it on the CHILD only when the DELTA_IMPORTS gate is STILL on for the tenant (re-checked IN-TX, fail-closed
+    // via the env short-circuit) — the gate may have flipped off since the parent ran, and the route must
+    // evaluate the gate before honoring the option (never trust the persisted flag). Off/absent ⇒ the child runs
+    // the shipped email→linkedin→sales-nav ladder, byte-identical (no external_id read/write). Env-off ⇒ the &&
+    // short-circuits with zero queries (the common dark path: no parent ever set the flag).
+    const parentWantedDelta =
+      (parent.options as Record<string, unknown> | null)?.externalIdUpsert === true;
+    const externalIdUpsert = parentWantedDelta && (await isDeltaImportsEnabled(tx, tenantId));
+
     // Admission (S-Q2 cap): at/over the workspace cap ⇒ park `deferred` (visible backpressure), else `queued`.
     const admission = await decideFastAdmission(tx, workspaceId);
     // Inherit the parent's mapping + strategy + provider + list target (08 §6.3; a per-child override is future).
@@ -1038,6 +1053,9 @@ importRoutes.post("/:jobId/retry-failed", async (c) => {
       mapping,
       conflictPolicy: parentConflict,
       strategy,
+      // P5 delta (08 §9 layer 3): thread the re-honored opt-in onto the child payload so the retried rows
+      // resolve on the external-id TOP rung exactly as the parent did (absent ⇒ the shipped ladder).
+      ...(externalIdUpsert ? { externalIdUpsert: true } : {}),
       rows,
       target: parent.targetListId ? { listId: parent.targetListId } : undefined,
     };
@@ -1063,6 +1081,9 @@ importRoutes.post("/:jobId/retry-failed", async (c) => {
       parentJobId: parentId,
       mergeMode: strategy.mergeMode,
       preservePopulated: strategy.preservePopulated,
+      // P5 delta (08 §9 layer 3): persist the re-honored opt-in on the child too, so a retry-of-a-retry chain
+      // re-honors it (each link re-checks the gate). Omitted when false ⇒ options stays {} (byte-identical).
+      ...(externalIdUpsert ? { options: { externalIdUpsert: true } } : {}),
     });
     // Idempotent replay: the same key collapsed onto the existing child — return it, no quota/audit/enqueue.
     if (!created) return { kind: "replay", jobId: childId };

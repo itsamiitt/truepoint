@@ -18,12 +18,15 @@ export const contactExternalIdRepository = {
   /**
    * Resolve a contact by the caller's stable external key within the workspace (the TOP dedup rung when the
    * DELTA gate + `externalIdUpsert` opt-in are on). Workspace-scoped explicitly (belt-and-suspenders with the
-   * RLS tx GUC, mirroring `findByDedupKeys`); the partial unique guarantees ≤1 LIVE row per key so `.limit(1)`
-   * is exact. Does NOT exclude soft-deleted rows in the predicate — the live-only partial unique already
-   * ensures at most one non-tombstoned holder, and a tombstoned holder's key is released (deleted_at set), so
-   * it cannot be returned (its row would only match if it were the sole holder, which the WHERE below allows —
-   * so we additionally require the row to be live to never resolve onto a DSAR tombstone, matching the
-   * addLandedToList soft-delete guard posture).
+   * RLS tx GUC). Does NOT exclude soft-deleted rows in the predicate — DELIBERATELY mirroring `findByDedupKeys`,
+   * whose email/linkedin/sales-nav rungs also match tombstoned contacts (runImport: "the dedup lookups don't
+   * exclude soft-deleted contacts"), so the external rung stays ladder-consistent. Tombstoning sets `deleted_at`
+   * but does NOT null `external_id`, so a tombstoned holder's key IS still returnable here — the same posture as
+   * the shipped ladder; the `addLandedToList` soft-delete guard is what stops a matched tombstone from being
+   * re-linked on the duplicate/skip paths. The LIVE-only partial unique guarantees ≤1 LIVE holder per key, so
+   * `.limit(1)` is exact whenever a live holder exists; the only non-uniqueness is the narrow live+tombstone
+   * coexistence (a new key re-used after a tombstone), where the un-ORDERed `.limit(1)` is non-deterministic —
+   * the same inherited property as every live-only-partial-unique rung, out of this additive slice's scope.
    */
   async findIdByExternalId(
     tx: Tx,
