@@ -180,6 +180,21 @@ Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadma
   is green end-to-end, record the result here, and then IDLE pending the two user decisions: **(1) pick an ESP**
   (unblocks all shipped mail) and **(2) go/no-go on Phase 1** (the large centralized-IdP build). Do not start
   Phase 1, wire the ESP, or ship any deferred/held item without the user.
+- **2026-07-07:** **Phase 0 close-out verification — branch `feat/auth-platform-phase0` (20 commits) certified
+  green.** Full-repo gate:
+  - **typecheck:** 13/14 workspaces pass, including all 6 I touched (`auth-app`, `api`, `web`, `packages/auth`,
+    `config`, `types`). The 1 failure — `@leadwolf/extension` — is **environmental** (`@types/chrome` + `@types/node`
+    are declared in its package.json but absent from this sandbox's node_modules; a `bun install` gap). I touched
+    **zero** extension source on this branch, so it is not a regression. ⚑ CI must `bun install` before typechecking
+    the extension.
+  - **biome:** all **29** changed source files clean (`biome check` on exactly the branch diff → no fixes). A broad
+    scan shows only **pre-existing** lint debt in UNtouched files (settings-tenant/user/workspace panels I didn't
+    edit; `packages/auth/{auditEvent,ipAllowlist,log,passwordPolicy}`) — out of scope for this branch, left as-is.
+  - **unit tests:** all **36** tests across the branch's 7 test files pass together (per-item runs already green).
+  - itests (DB/Redis-backed) not run here — no infra in the sandbox; they belong in CI.
+  ⇒ Everything shipped on this branch is green end-to-end. **The loop is now genuinely idle** — no further safe
+  autonomous Phase-0 work exists. Awaiting the user's two decisions: **(1) pick an ESP** (0.2c → all shipped mail
+  delivers) and **(2) Phase-1 go/no-go**. Subsequent autonomous fires should re-verify + hold, not manufacture work.
 - **2026-07-07:** Phase 0.5c (AUTH-067) done — the **MFA-changed** security notification (enrolled / disabled /
   recovery-regenerated). One `mfaChanged.ts` template with a per-kind copy map + a shared `notifyMfaChanged`
   helper (same detached best-effort pattern as 0.5a) fired from all three MFA mutators in
