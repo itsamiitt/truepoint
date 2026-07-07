@@ -340,7 +340,7 @@ export const appEnvSchema = z
       .transform((v) => v === "true"),
     // Incremental / DELTA imports (import-and-data-model-redesign 08 §9 layer 3; P5). GLOBAL kill-switch of the
     // delta dual gate: effective external-id upsert = (this === "true") AND the per-tenant `delta_imports_enabled`
-    // flag (seeded off in 0067) AND the per-import `externalIdUpsert` opt-in (a mapped `externalId` column).
+    // flag (seeded off in 0068) AND the per-import `externalIdUpsert` opt-in (a mapped `externalId` column).
     // While off, every import keeps its shipped content-hash idempotent-skip + email→linkedin→sales-nav dedup
     // ladder BYTE-IDENTICALLY and never reads or writes contacts.external_id (the gate is evaluated in the api
     // route; a gate-off job never carries the option onto the payload). The `modified_since` timestamp-cursor

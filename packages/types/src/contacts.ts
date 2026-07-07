@@ -144,6 +144,11 @@ export const canonicalField = z.enum([
   "locationCity",
   "accountName",
   "accountDomain",
+  // P5 delta imports (08 §9 layer 3): the caller's STABLE external key (their CRM/source row id). Mapping it
+  // is the per-import opt-in that, under the DELTA_IMPORTS gate, makes it the TOP dedup rung. Additive: an
+  // import that never maps it is byte-identical to the shipped email→linkedin→sales-nav ladder. Wizard/auto-map
+  // exposure is DEFERRED to a doc-11 UI slice (doc 16 drift) — the field is mappable by contract, dark in the UI.
+  "externalId",
 ]);
 export type CanonicalField = z.infer<typeof canonicalField>;
 
@@ -171,6 +176,9 @@ export const canonicalContactRowSchema = z.object({
   locationCity: z.string().max(100).optional(),
   accountName: z.string().max(255).optional(),
   accountDomain: z.string().max(255).optional(),
+  // P5 delta imports (08 §9 layer 3): the caller's stable external key; max mirrors the contacts.external_id
+  // varchar(255). Optional like every canonical field — only present when the caller maps an externalId column.
+  externalId: z.string().max(255).optional(),
 });
 export type CanonicalContactRow = z.infer<typeof canonicalContactRowSchema>;
 

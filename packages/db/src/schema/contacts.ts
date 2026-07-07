@@ -161,6 +161,11 @@ export const contacts = pgTable(
     linkedinPublicId: varchar("linkedin_public_id", { length: 255 }),
     salesNavProfileUrl: varchar("sales_nav_profile_url", { length: 500 }),
     salesNavLeadId: varchar("sales_nav_lead_id", { length: 255 }),
+    // P5 delta imports (08 §9 layer 3): the caller's STABLE external key (their CRM/source row id), mapped as
+    // an `externalId` column and used as the TOP dedup rung under the DELTA_IMPORTS gate. Additive dead schema
+    // (0068) — NULL until a gate-on external-id upsert writes it; the flat email/linkedin/sales-nav ladder is
+    // unchanged when unset. Per-workspace uniqueness is the partial `uniq_contacts_ws_external_id` index below.
+    externalId: varchar("external_id", { length: 255 }),
     jobTitle: varchar("job_title", { length: 255 }),
     seniorityLevel: varchar("seniority_level", { length: 50 }),
     department: varchar("department", { length: 100 }),
@@ -239,6 +244,12 @@ export const contacts = pgTable(
     uniqWsSalesNav: uniqueIndex("uniq_contacts_ws_salesnav")
       .on(t.workspaceId, t.salesNavLeadId)
       .where(sql`${t.salesNavLeadId} IS NOT NULL`),
+    // P5 delta imports (08 §9 layer 3, migration 0068): the caller's stable external key — per-workspace
+    // unique among LIVE rows (a tombstoned contact never blocks re-use of its external id). Same partial-unique
+    // shape as the three identity keys above; inert until a gate-on external-id upsert populates the column.
+    uniqWsExternalId: uniqueIndex("uniq_contacts_ws_external_id")
+      .on(t.workspaceId, t.externalId)
+      .where(sql`${t.externalId} IS NOT NULL AND ${t.deletedAt} IS NULL`),
     emailStatusEnum: check(
       "contacts_email_status_enum",
       sql`${t.emailStatus} IN ('unverified','valid','risky','invalid','catch_all','unknown')`,

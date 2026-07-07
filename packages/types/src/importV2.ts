@@ -23,6 +23,14 @@ import { importMergeMode } from "./importPolicy.ts";
  *  BULK_IMPORT_FLAG_KEY (bulkImport.ts) — the shared key lives here so api/workers/web can never drift. */
 export const IMPORT_V2_FLAG_KEY = "import_v2_enabled";
 
+/** Per-tenant feature-flag key for P5 incremental/DELTA imports (08 §9 layer 3 — external_id upsert). The
+ *  THREE-layer opt-in: the global `env.DELTA_IMPORTS_ENABLED` kill-switch AND this per-tenant flag AND the
+ *  per-import `externalIdUpsert` opt-in (a mapped `externalId` column) must all be on before the caller's
+ *  external key becomes the top dedup rung. Off at every layer ⇒ the shipped email→linkedin→sales-nav ladder,
+ *  byte-identical. Seeded off in migration 0068; fail-closed. Mirrors IMPORT_V2_FLAG_KEY / SCHEDULED_IMPORTS_
+ *  FLAG_KEY — the shared key lives here so api/workers/web can never drift on the string. */
+export const DELTA_IMPORTS_FLAG_KEY = "delta_imports_enabled";
+
 // ── Vocabulary (mirrors the 0054 import_jobs CHECKs) ─────────────────────────────────────────────────────
 /** Server-side routing verdict (08 §1, S-I5): 'fast' = inline row engine; 'copy' = COPY-staging chunk
  *  pipeline. The SERVER decides at commit/one-shot; the client never picks a pipeline. Absent/null on a
@@ -185,6 +193,12 @@ export const importFastInputSchema = z.object({
    *  SUPERSEDES `conflictPolicy` in the engine; absent (legacy/gate-off) ⇒ conflictPolicy maps onto the triad
    *  (byte-identical internal path). */
   strategy: importStrategySchema.optional(),
+  /** P5 delta imports (08 §9 layer 3): when true (and the DELTA_IMPORTS gate is on), a mapped `externalId`
+   *  column becomes the TOP dedup rung — an incoming row resolves to the contact holding that external key
+   *  BEFORE the email→linkedin→sales-nav ladder (Salesforce-style upsert-on-external-id), and the key is
+   *  stamped onto newly created contacts. Absent/false ⇒ the shipped ladder, byte-identical (the column is
+   *  never read or written). The route only sets this when the gate is on, so a gate-off job never carries it. */
+  externalIdUpsert: z.boolean().optional(),
   /** The parsed CSV/XLSX rows, keyed by trimmed header (core's RawRow). */
   rows: z.array(z.record(z.string(), z.string())),
   target: importTargetSchema.optional(),
