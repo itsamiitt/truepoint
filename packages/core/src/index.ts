@@ -152,6 +152,12 @@ export {
   deriveScheduleIdempotencyKey,
   evaluateScheduleFireGrant,
 } from "./import/scheduledImport.ts";
+// P5 scheduled-imports DUAL GATE (SCHEDULED_IMPORTS_ENABLED env + `scheduled_imports_enabled` tenant flag) —
+// the in-tx re-check (worker sweep) + the fail-closed forScope check (api verbs, gate-on-404). Fail-closed.
+export {
+  isScheduledImportsEnabled,
+  scheduledImportsEnabledForScope,
+} from "./import/scheduledImportGate.ts";
 export { blindIndex } from "./import/blindIndex.ts";
 export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 // Pre-commit validation preview + rejected-rows artifact + conflict policy (30 §4, ADR-0036; G-IMP-1/5).

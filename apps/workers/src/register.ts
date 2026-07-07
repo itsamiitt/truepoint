@@ -134,6 +134,11 @@ import {
   makeProcessImportReaperSweep,
 } from "./queues/importReaperSweep.ts";
 import {
+  SCHEDULED_IMPORT_SWEEP_QUEUE,
+  type ScheduledImportSweepJobData,
+  makeProcessScheduledImportSweep,
+} from "./queues/scheduledImportSweep.ts";
+import {
   IMPORTS_DLQ,
   IMPORTS_QUEUE,
   type ImportJobData,
@@ -1266,6 +1271,58 @@ export function startWorkers(): Worker[] {
           error: e instanceof Error ? e.message : String(e),
         }),
       );
+
+    // P5 (08 §9): the leader-locked SCHEDULED-IMPORT sweep — fires due schedules by enqueuing an ordinary
+    // fast-lane job onto THIS unified queue (so it rides the unified-queue construction gate — a scheduled
+    // fire has no consumer without the fast lane). Sub-gated on SCHEDULED_IMPORTS_ENABLED so it stays dark
+    // even with the unified queue up (the per-tenant `scheduled_imports_enabled` flag is the second half).
+    // Reuses the SAME env-selected FileStore the api's schedule-create wrote the source object through.
+    if (env.SCHEDULED_IMPORTS_ENABLED) {
+      const scheduledImportSweepQueue = new Queue<ScheduledImportSweepJobData>(
+        SCHEDULED_IMPORT_SWEEP_QUEUE,
+        { connection },
+      );
+      workers.push(
+        instrument(
+          new Worker<ScheduledImportSweepJobData>(
+            SCHEDULED_IMPORT_SWEEP_QUEUE,
+            makeProcessScheduledImportSweep(connection, {
+              fileStore: bulkFileStore,
+              // Enqueue the fired fast job EXACTLY like the commit verb: stable id (re-publish dedupes), fast
+              // band, and the deferred re-check delay when admission parked it deferred.
+              enqueueFastImport: async (jobId, scope, input, admission) => {
+                await bulkImportsQueue.add(
+                  "fast",
+                  { kind: "fast", jobId, scope, input },
+                  {
+                    priority: IMPORT_QUEUE_PRIORITY.fast,
+                    jobId: `import-fast:${jobId}`,
+                    delay: admission === "deferred" ? env.IMPORT_DEFER_RECHECK_DELAY_MS : 0,
+                  },
+                );
+              },
+              maxFailures: env.SCHEDULED_IMPORT_MAX_CONSECUTIVE_FAILURES,
+            }),
+            { connection, ...SWEEP_WORKER_TUNING },
+          ),
+          SCHEDULED_IMPORT_SWEEP_QUEUE,
+        ),
+      );
+      void scheduledImportSweepQueue
+        .add(
+          "sweep",
+          {},
+          {
+            repeat: { every: env.SCHEDULED_IMPORT_SWEEP_EVERY_MS },
+            jobId: "scheduled-import-sweep",
+          },
+        )
+        .catch((e) =>
+          log.error("failed to schedule the scheduled-import sweep", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+    }
   }
   // Bulk (existing-contact) re-enrich money path (prospect-database-platform I3 / audit A3/P08) — GATED DARK behind
   // BULK_ENRICHMENT_ENABLED (default false). Purely ADDITIVE: when off, the queue/worker are never constructed and
