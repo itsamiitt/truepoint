@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1417,
-  "fileSetHash": "sha256:ad306495c2dde9d87f2260887037030d169fe30ba5395f47916bfec399176ce5",
+  "fileCount": 1425,
+  "fileSetHash": "sha256:362450ab9718c184a46b32d5c1f941b26405b4ebe32cb07c319b77b02bf5857b",
   "features": {
     "account-search": {
       "web": [],
@@ -1950,6 +1950,16 @@
       "apps/extension/src/ui/popup/Popup.tsx",
       "apps/extension/src/ui/popup/main.tsx"
     ],
+    "apps/forge-api": [
+      "apps/forge-api/src/server.ts"
+    ],
+    "apps/forge-worker": [
+      "apps/forge-worker/src/index.ts"
+    ],
+    "apps/forge/app": [
+      "apps/forge/src/app/layout.tsx",
+      "apps/forge/src/app/page.tsx"
+    ],
     "apps/web/app": [
       "apps/web/src/app/(public)/pricing/page.tsx",
       "apps/web/src/app/(shell)/data-health/page.tsx",
@@ -2133,6 +2143,7 @@
       "packages/db/src/schema/enrichmentPolicy.ts",
       "packages/db/src/schema/eventOutbox.ts",
       "packages/db/src/schema/featureFlags.ts",
+      "packages/db/src/schema/forge.ts",
       "packages/db/src/schema/importJobs.ts",
       "packages/db/src/schema/importMappingTemplates.ts",
       "packages/db/src/schema/index.ts",
@@ -2336,6 +2347,7 @@
     "apps/admin/next.config.mjs",
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
+    "apps/forge/next.config.mjs",
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/bulkEnrichment.ts",
     "apps/workers/src/queues/bulkReveal.ts",
@@ -2393,7 +2405,9 @@
     "packages/db/src/repositories/supportNoteRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",
     "packages/db/src/repositories/validationRuleRepository.ts",
-    "packages/db/src/repositories/webhookRepository.ts"
+    "packages/db/src/repositories/webhookRepository.ts",
+    "packages/forge-capture-sdk/src/index.ts",
+    "packages/forge-core/src/index.ts"
   ],
   "warnings": [
     "undeclared domain 'account-search' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

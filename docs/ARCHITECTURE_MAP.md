@@ -29,11 +29,12 @@
 > least-privilege, compliant-capture client (Vite + CRXJS) that reuses the shipped `/api/v1` ingestion/reveal
 > seam and holds no DB/provider access; design in [`docs/planning/chrome-extension/`](./planning/chrome-extension/)
 > (00–09) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md).
-> **1417 source files · 77 code-bearing domains · 27 shared areas · 48 domain-vocabulary warnings · 61
+> **1425 source files · 77 code-bearing domains · 30 shared areas · 48 domain-vocabulary warnings · 64
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
-> feature (`apps/api/src/features/master-sync`, the Forge `/api/v1/master-sync` receiver) + `forgeSyncRepository`
-> whose entity isn't in `REPO_DOMAIN` — see the generated
+> feature (`apps/api/src/features/master-sync`) + the **nested TruePoint Forge** apps/packages
+> (`apps/forge`, `apps/forge-api`, `apps/forge-worker`, `packages/forge-core`, `packages/forge-capture-sdk`,
+> the `forge` DB schema) being ported in from the standalone repo — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
 > reflect the merged tree including the parallel `feat/data-mgmt` work; its new domains' prose is owned by that
 > track). Design refs: [04](./planning/04-ui-ux-design.md),
