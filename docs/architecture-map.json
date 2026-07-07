@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1426,
-  "fileSetHash": "sha256:bf8f1ed6706c631d9c0a3f6cd76b0bb38133c78d7422182568bdc6779fef8067",
+  "fileCount": 1427,
+  "fileSetHash": "sha256:84a832b2ad58b42a1313865b59f670835700c756ea8789d2b577f28e931c76c4",
   "features": {
     "account-search": {
       "web": [],
@@ -1872,6 +1872,7 @@
       "apps/auth/src/lib/emails/layout.ts",
       "apps/auth/src/lib/emails/magicLink.ts",
       "apps/auth/src/lib/emails/mfaChanged.ts",
+      "apps/auth/src/lib/emails/newSignIn.ts",
       "apps/auth/src/lib/emails/passwordChanged.ts",
       "apps/auth/src/lib/emails/passwordReset.ts",
       "apps/auth/src/lib/emails/verificationCode.ts",
