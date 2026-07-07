@@ -294,6 +294,39 @@ export const tenantAuthPolicies = pgTable("tenant_auth_policies", {
   updatedAt: updatedAt(),
 });
 
+// auth_policies (doc 11 §2-4) — the generalized effective-policy store that SUBSUMES tenant_auth_policies: one
+// row per (scope, tenant, workspace, key). A `platform` row carries a NULL tenant_id (the platform default); an
+// `org` row a tenant_id; a `workspace` row both. The resolver composes platform → org → workspace (strictest-wins
+// for security keys). RLS (rls/auth.sql): a tenant READS its own rows + the platform (NULL) defaults, and WRITES
+// only its own — the platform defaults are owner-only (withPlatformTx). The NULLS-NOT-DISTINCT unique index lives
+// in the migration (0053): drizzle-kit generate is blocked by the snapshot debt, so the SQL migration is the
+// source of truth and this def is kept in hand-sync with it. Phase 1, AUTH effective-policy engine (doc 12).
+export const authPolicies = pgTable(
+  "auth_policies",
+  {
+    id: id(),
+    scope: varchar("scope", { length: 12 }).notNull(), // platform | org | workspace
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // NULL = platform default
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
+    key: varchar("key", { length: 64 }).notNull(),
+    value: jsonb("value").notNull(),
+    version: integer("version").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => ({
+    scopeChk: check("auth_policies_scope_enum", sql`${t.scope} IN ('platform','org','workspace')`),
+    // scope ↔ tenant/workspace presence must agree (platform: neither; org: tenant only; workspace: both).
+    consistencyChk: check(
+      "auth_policies_scope_consistency",
+      sql`(${t.scope} = 'platform' AND ${t.tenantId} IS NULL AND ${t.workspaceId} IS NULL)
+       OR (${t.scope} = 'org' AND ${t.tenantId} IS NOT NULL AND ${t.workspaceId} IS NULL)
+       OR (${t.scope} = 'workspace' AND ${t.tenantId} IS NOT NULL AND ${t.workspaceId} IS NOT NULL)`,
+    ),
+  }),
+);
+
 // Pending invitations to join an org/workspace (accepted at registration → tenant_member + workspace_member).
 export const invitations = pgTable("invitations", {
   id: id(),

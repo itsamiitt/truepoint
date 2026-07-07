@@ -59,6 +59,24 @@ CREATE POLICY tenant_auth_policy_isolation ON tenant_auth_policies
   USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
   WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
+-- auth_policies (doc 11 §3-4, Phase 1 effective-policy engine): the generalized policy store. tenant_id is
+-- NULLABLE — a NULL row is a PLATFORM DEFAULT. So the read predicate admits the active tenant's rows AND the
+-- platform (NULL) rows (the resolver composes platform → org → workspace), while the write predicate admits
+-- ONLY the active tenant's rows: a NULL-tenant (platform) row fails `NULL = <guc>`, so leadwolf_app can never
+-- write a platform default — those are written solely by the owner connection (withPlatformTx), which ENABLE
+-- (not FORCE) RLS leaves exempt. This is the pattern doc 11 §4 mandates ("only withPlatformTx may write the
+-- NULL-tenant rows"). Cross-tenant isolation + the write-check are proven by test/authPolicyIsolation.itest.ts.
+ALTER TABLE auth_policies ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS auth_policies_isolation ON auth_policies;
+CREATE POLICY auth_policies_isolation ON auth_policies
+  USING (
+    tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+    OR tenant_id IS NULL
+  )
+  WITH CHECK (
+    tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+  );
+
 -- tenant_members + invitations: tenant-scoped for the app role (read under withTenantTx).
 ALTER TABLE tenant_members ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_members_isolation ON tenant_members;

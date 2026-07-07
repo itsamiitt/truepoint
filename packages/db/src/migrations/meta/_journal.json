@@ -372,6 +372,13 @@
       "when": 1784600000000,
       "tag": "0052_worker_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1784700000000,
+      "tag": "0053_auth_policies",
+      "breakpoints": true
     }
   ]
 }

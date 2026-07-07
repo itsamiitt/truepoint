@@ -85,8 +85,27 @@ All work is on `feat/auth-platform-phase0`, **committed locally, NOT pushed**. E
 treating Phase 0 as fully closed. (d) **Phase 1** (centralized-IdP consolidation, doc 12) is a large new build — begin
 only after you've reviewed this exit state. The next autonomous fire will pick up **0.5b** unless redirected.
 
-## Phases 1–5
-Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadmap.md). Do not start until Phase 0 is complete.
+## Phase 1 — Foundation: effective-policy engine + admin console shell
+
+> Started 2026-07-07 on the user's "go for next phase". **Constraint:** this sandbox has NO database, so the DB
+> data-path work is authored **blind** (user-approved) — schema + hand-authored SQL migration + RLS + a
+> cross-tenant isolation itest — and **must be validated by a DB/CI run before deploy** (`bun test
+> packages/db/test/*.itest.ts` on Postgres 16 + `applyMigrations`). The snapshot debt (meta stops at 0028) only
+> breaks `drizzle-kit generate`; `migrate()` is journal-driven, so migrations are HAND-AUTHORED (the established
+> 0029–0052 pattern) and journaled — no blind snapshot-reconciliation attempted.
+
+| # | Item | Effort | Status | Notes |
+|---|---|---|---|---|
+| 1.1a | **`auth_policies` table foundation** — the generalized effective-policy store (subsumes `tenant_auth_policies`): `(scope, tenant_id?, workspace_id?, key, value jsonb, version, updated_by)` + scope↔tenant/workspace CHECK + NULLS-NOT-DISTINCT unique | part of L | ✅ **authored (needs DB/CI validation)** | Schema def (`schema/auth.ts`) + migration `0053_auth_policies.sql` + journal entry + RLS (`rls/auth.sql`: read own-tenant **or** platform-NULL, write own-tenant only → platform defaults owner-only) + `test/authPolicyIsolation.itest.ts` (5 raw-SQL RLS assertions). typecheck ✓ biome ✓ json ✓; **migration/RLS/itest unrun (no DB here)**. No data migration + no behavior change yet (additive table). |
+| 1.1b | Effective-policy **resolver** (platform→org→workspace, strictest-wins, versioned, Redis-cached w/ write-invalidation) + repository + backfill `tenant_auth_policies` → `auth_policies` | L | ◻ next | Reads `auth_policies` via withTenantTx (own+platform rows); strictest-wins for security keys; resolver correctness tests (doc 11 §testing). |
+| 1.2 | Config **write path**: `withPlatformTx`-audited, staff-RBAC-gated, cannot loosen a security minimum (env as floor) | M (AUTH-021) | ◻ todo | Doc 04; the platform-default writes the RLS reserves for the owner. |
+| 1.3 | Admin console **auth module** (policy config UI in the existing `admin.truepoint.in` shell) | M | ◻ todo | **Shell already exists** (`apps/admin/(shell)` ~18 sections) — needs the auth-policy pages, not the shell. |
+| 1.4 | Allowed-origins/callback URLs as **managed config** (`auth_allowed_origins`, env as floor) | M (AUTH-036) | ◻ todo | Doc 08 §3; builds on 1.1/1.2. New table → same blind-authoring + DB-validation caveat. |
+| 1.5 | Auth **observability** + SLIs + dashboards (pre-req for any enforcement flip) | L (AUTH-012/022) | ◻ todo | Code-level metric/log emission is partly DB-free/verifiable; dashboards need infra. |
+| 1.6 | Drizzle **snapshot-debt stitch** (meta 0028→0053) for clean `drizzle-kit generate` | M | ◻ todo | Genuinely needs a DB to verify the regenerated snapshot matches reality; NOT attempted blind. Hand-authoring (1.1a) sidesteps the immediate need. |
+
+## Phases 2–5
+Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadmap.md).
 
 ## Log
 - **2026-07-06:** Phase 0.1 (AUTH-062) done — the basePath fix that resolves two of the three reported failures
