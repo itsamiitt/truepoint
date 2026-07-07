@@ -24,6 +24,7 @@ import {
   NotFoundError,
   ValidationError,
 } from "@leadwolf/types";
+import { contactMergeEnabledForScope } from "./contactMergeGate.ts";
 import { type MergeScalars, planContactMerge } from "./contactMergePlan.ts";
 
 export interface RunContactMergeInput {
@@ -188,4 +189,42 @@ export async function runContactMerge(input: RunContactMergeInput): Promise<Merg
 
     return { survivorContactId, loserContactId, repointed, auditEventId };
   });
+}
+
+/**
+ * Surface-1 (staff, maker-checker) contact true-merge (04 §3.5; S-C9) — the wrapper over the SAME core engine
+ * the customer verb uses (DM1: ONE value-moving merge implementation, TWO entry surfaces). It supersedes the
+ * grain-A `dedup_merge` executor FOR VALUE MOVING only — that executor keeps its shipped marker-only semantics
+ * (a reversible staff annotation); this one runs the irreversible engine on the target tenant's withTenantTx
+ * (RLS-correct — NOT the owner path). "Rides the merge gate + maker-checker" (15 seq 65): the tenant's merge
+ * dual gate must be ON, and the caller (the approval executor) has already enforced maker≠checker.
+ *
+ * SEAM CAVEAT (recorded in doc 16): the engine commits in its OWN tenant tx, so it is not rolled back by a
+ * later failure in the owner-path approval tx. To keep a re-approve after a partial SAFE, an already-merged
+ * loser (merged into THIS survivor) is treated as an idempotent success rather than a hard 409.
+ */
+export async function runStaffContactMerge(input: RunContactMergeInput): Promise<MergeResult> {
+  if (!(await contactMergeEnabledForScope(input.scope))) {
+    throw new ValidationError(
+      "Contact merge is not enabled for this tenant — flip the merge gate before approving a true merge.",
+    );
+  }
+  try {
+    return await runContactMerge(input);
+  } catch (err) {
+    // Idempotent replay of our OWN prior (partially-committed) merge: the loser is already merged into this
+    // survivor → treat as done so the approval can be marked executed on retry (not wedged forever).
+    if (
+      err instanceof ContactMergedError &&
+      err.extensions?.mergedInto === input.survivorContactId
+    ) {
+      return {
+        survivorContactId: input.survivorContactId,
+        loserContactId: input.loserContactId,
+        repointed: {},
+        auditEventId: null,
+      };
+    }
+    throw err;
+  }
 }

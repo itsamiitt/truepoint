@@ -5,6 +5,7 @@
 // it runs. Backed by the platform-owned `approval_requests` table (schema/platformOps.ts, rls/platformOps.sql).
 
 import { z } from "zod";
+import { mergeFieldDecisionSchema } from "./contactMerge.ts";
 import { retentionDataClass } from "./retention.ts";
 
 /** The closed set of high-risk operations that require maker-checker approval. Extend as ops are gated.
@@ -12,7 +13,8 @@ import { retentionDataClass } from "./retention.ts";
  *  (a different billing operator approves), NOT data:review — see apps/api billing approvals queue. */
 export const dataApprovalOperation = z.enum([
   "bulk_delete", // delete records in bulk (large blast radius)
-  "dedup_merge", // merge entities from the dedup / ER review queue
+  "dedup_merge", // GRAIN A marker-only annotation (duplicate_of) — REVERSIBLE (kept; NOT superseded)
+  "contact_true_merge", // Surface-1 VALUE-MOVING true merge via the SAME core engine (04 §3.5; S-C9) — IRREVERSIBLE
   "retention_enforce", // flip a retention class from shadow to enforce (arms real deletion)
   "bulk_export", // initiate an audited cross-tenant data export (PII egress)
   "credit_adjust", // manual credit grant/adjustment on a tenant (delta sign = grant vs debit)
@@ -25,6 +27,7 @@ export const MONEY_APPROVAL_OPERATIONS = ["credit_adjust", "credit_refund"] as c
 export const DATA_APPROVAL_OPERATIONS = [
   "bulk_delete",
   "dedup_merge",
+  "contact_true_merge",
   "retention_enforce",
   "bulk_export",
 ] as const;
@@ -98,6 +101,23 @@ export const dedupMergeParamsSchema = z
   })
   .refine((p) => p.survivorContactId !== p.loserContactId, "survivor and loser must differ");
 export type DedupMergeParams = z.infer<typeof dedupMergeParamsSchema>;
+
+/** Params a `contact_true_merge` approval carries — the Surface-1 VALUE-MOVING true merge (04 §3.5; S-C9),
+ *  the maker-checker wrapper over the SAME core merge engine the customer verb uses (DM1 — one implementation,
+ *  two entry surfaces). IRREVERSIBLE (unlike dedup_merge's reversible marker): field union, type-aware channel
+ *  demotion, the full Class-A child re-point inventory, a loser tombstone. ONE pair per request; the survivor
+ *  keeps its id. `decisions` mirror the customer verb's per-field picks (closed field allowlist enforced by
+ *  the engine). NO master-graph write — grain B stays security-review-gated. */
+export const contactTrueMergeParamsSchema = z
+  .object({
+    tenantId: z.string().uuid(),
+    workspaceId: z.string().uuid(),
+    survivorContactId: z.string().uuid(),
+    loserContactId: z.string().uuid(),
+    decisions: z.array(mergeFieldDecisionSchema).default([]),
+  })
+  .refine((p) => p.survivorContactId !== p.loserContactId, "survivor and loser must differ");
+export type ContactTrueMergeParams = z.infer<typeof contactTrueMergeParamsSchema>;
 
 /** Params a `bulk_delete` approval carries — a BOUNDED explicit id set (≤1000, design §4.4) in ONE declared
  *  tenant+workspace. SOFT delete only (deleted_at tombstone — the customer-grade delete; PII nulling stays the

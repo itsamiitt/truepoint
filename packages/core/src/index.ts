@@ -833,6 +833,7 @@ export {
 // inventory. Both surfaces (customer verb S-C5, Surface-1 staff wrapper S-C9) call runContactMerge.
 export {
   runContactMerge,
+  runStaffContactMerge,
   type RunContactMergeInput,
 } from "./prospect/mergeContact.ts";
 export {
