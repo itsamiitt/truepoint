@@ -164,6 +164,12 @@ export {
   isDeltaImportsEnabled,
   deltaImportsEnabledForScope,
 } from "./import/deltaImportsGate.ts";
+// P5 API-PUSH imports DUAL GATE (API_IMPORTS_ENABLED env + `api_imports_enabled` tenant flag; 08 §9) — the
+// in-tx eval + the fail-closed forScope check (the POST /imports/rows gate-on-404). Fail-closed; off ⇒ zero queries.
+export {
+  isApiImportsEnabled,
+  apiImportsEnabledForScope,
+} from "./import/apiImportsGate.ts";
 export { blindIndex } from "./import/blindIndex.ts";
 export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 // Pre-commit validation preview + rejected-rows artifact + conflict policy (30 §4, ADR-0036; G-IMP-1/5).

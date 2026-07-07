@@ -9,6 +9,7 @@
 import { randomUUID } from "node:crypto";
 import { env } from "@leadwolf/config";
 import {
+  apiImportsEnabledForScope,
   applyMappingTemplate,
   assertListInWorkspace,
   buildDraftPreviewSummary,
@@ -62,6 +63,8 @@ import {
   ImportValidationError,
   NotFoundError,
   type SourceName,
+  apiPushImportSchema,
+  canonicalField,
   columnMappingSchema,
   conflictPolicy,
   importDraftMappingRequestSchema,
@@ -793,6 +796,155 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
     rows: parsed.rows,
     target: listId ? { listId } : undefined,
   });
+  const body: ImportJobRef = { jobId, status: "queued" };
+  return c.json(body, 202);
+});
+
+// ── P5 API-PUSH imports (08 §9): POST /imports/rows — the JSON body variant of the one-shot. A caller submits
+// ALREADY-STRUCTURED canonical contact rows (no multipart file) onto the SAME fast-lane durable pipeline the
+// multipart POST uses (createJob + enqueueFastImport → the unchanged runFastImport engine). NEW additive route,
+// strict-from-birth behind the API-PUSH dual gate (env API_IMPORTS_ENABLED + per-tenant api_imports_enabled) —
+// gate-off ⇒ 404 (no existence oracle), every other surface byte-identical. There is NO stored object: rows ride
+// the payload (Phase-A fast bound), so over the fast-row ceiling ⇒ an honest 413 (no copy fallback — nothing to
+// stage). Idempotency-Key is REQUIRED (programmatic caller). Public-API key packaging/scopes/docs are 08 §9's
+// doc-14 future — this ships the body/limits/idempotency CONTRACT on the existing session-authed surface.
+//
+// Identity column-mapping: the rows are already canonical (keyed by canonical field), so the mapping is the
+// identity map (each canonical field → itself); runImport's per-row dedup ladder + strategy engine are unchanged.
+const IDENTITY_MAPPING: ColumnMapping = Object.fromEntries(
+  canonicalField.options.map((f) => [f, f]),
+) as ColumnMapping;
+
+importRoutes.post("/rows", requireImportCreateGrant(), async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId)
+    throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
+  const tenantId = c.get("tenantId");
+  const claims = c.get("claims");
+  const scope = { tenantId, workspaceId };
+
+  // Gate-on-404 (the S-I8 no-existence-oracle posture): while the API-PUSH dual gate is off the verb is
+  // invisible — indistinguishable from an unmounted route — so a dark tenant learns nothing.
+  if (!(await apiImportsEnabledForScope(scope)))
+    throw new NotFoundError("Not found.");
+
+  // Idempotency-Key is REQUIRED for a programmatic caller (a network retry must not double-import) — the
+  // multipart one-shot's key is optional (a human clicks once); the push contract mandates it.
+  const idempotencyKey = c.req.header("idempotency-key");
+  if (!idempotencyKey)
+    throw new ImportValidationError("An 'Idempotency-Key' header is required for API-push imports.");
+
+  // Read the JSON body (malformed JSON ⇒ a clean 400 rather than a 500), then STRICT safeParse it — the global
+  // onError renders only AppError, so a raw ZodError would 500; surfacing the first issue as an
+  // ImportValidationError (an AppError → RFC-9457 400) tells a programmatic caller exactly what it mistyped.
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    throw new ImportValidationError("The request body must be valid JSON.");
+  }
+  const parsed = apiPushImportSchema.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    throw new ImportValidationError(
+      issue
+        ? `${issue.path.join(".") || "body"}: ${issue.message}`
+        : "Invalid API-push import request body.",
+    );
+  }
+  const parsedBody = parsed.data;
+
+  // The row ceiling is the fast-path bound: rows ride the payload (no stored object to route to copy mode), so
+  // over the threshold is an honest 413 (env BULK_IMPORT_THRESHOLD_ROWS; 0/negative disables the ceiling).
+  const rowCeiling = env.BULK_IMPORT_THRESHOLD_ROWS;
+  if (rowCeiling > 0 && parsedBody.rows.length > rowCeiling)
+    throw new ImportTooLargeError({
+      limit: rowCeiling,
+      current: parsedBody.rows.length,
+      unit: "rows",
+      detail: `An API-push import is limited to ${rowCeiling.toLocaleString()} rows. Split the payload into smaller batches.`,
+    });
+
+  // Optional "import into list" target — validated against the VERIFIED token's workspace before enqueue
+  // (list-plan D4 — never trusted); runImport re-validates under RLS.
+  const listId = parsedBody.listId;
+  if (listId) await assertListInWorkspace({ scope, listId });
+
+  // Reuse the ONE strategy authority (resolveImportStrategy) via a FormData shim built from the JSON body, so
+  // the request→policy-default precedence can never drift from the multipart path (08 §5).
+  const strategyForm = new FormData();
+  if (parsedBody.mergeMode != null) strategyForm.set("mergeMode", parsedBody.mergeMode);
+  if (parsedBody.preservePopulated != null)
+    strategyForm.set("preservePopulated", String(parsedBody.preservePopulated));
+  const conflictPolicyData = parsedBody.conflictPolicy ?? DEFAULT_CONFLICT_POLICY;
+  const strategy = await resolveImportStrategy(
+    strategyForm,
+    scope,
+    conflictPolicyData,
+    parsedBody.conflictPolicy != null,
+  );
+
+  // P5 delta (08 §9 layer 3): honor `externalIdUpsert` ONLY when the client opted in AND the DELTA_IMPORTS dual
+  // gate is on (fail-closed); off ⇒ dropped, the engine runs the shipped ladder. Mirrors the one-shot exactly.
+  const externalIdUpsert =
+    parsedBody.externalIdUpsert === true && (await deltaImportsEnabledForScope(scope));
+
+  const input: ImportFastInput = {
+    importedByUserId: claims.sub,
+    sourceName: parsedBody.sourceName,
+    sourceFile: "api-push",
+    mapping: IDENTITY_MAPPING,
+    conflictPolicy: conflictPolicyData,
+    strategy,
+    ...(externalIdUpsert ? { externalIdUpsert: true } : {}),
+    rows: parsedBody.rows,
+    target: listId ? { listId } : undefined,
+  };
+
+  // Same durable create + fast enqueue as the multipart one-shot (S-I3): the idempotency key collapses a
+  // retried push onto the existing job via the (workspace_id, idempotency_key) partial unique; the S-Q2
+  // admission verdict is the create status; enqueue post-commit (a deferred job still gets its recheck delay).
+  const { id: jobId, created, admission } = await withTenantTx(scope, async (tx) => {
+    // Commit quota (08 §2.3 / 12 §5): one push = +1, the same soft posture as the one-shot/commit verbs.
+    const cap = IMPORT_MAX_COMMITS_PER_HOUR;
+    if (cap > 0) {
+      const since = new Date(Date.now() - 3_600_000);
+      const recent = await importJobRepository.countJobsCreatedSince(tx, workspaceId, since);
+      if (recent + 1 > cap)
+        throw new ImportQuotaExceededError(
+          `This workspace has reached its import limit of ${cap} per hour. Try again shortly.`,
+          3600,
+        );
+    }
+    const admissionVerdict = await decideFastAdmission(tx, workspaceId);
+    const res = await importJobRepository.createJob(tx, {
+      tenantId,
+      workspaceId,
+      createdByUserId: claims.sub,
+      status: admissionVerdict,
+      // No stored object (rows ride the payload) — the honest inline sentinel, mirroring the one-shot fast path.
+      sourceFile: `apipush:${randomUUID()}`,
+      sourceName: parsedBody.sourceName,
+      fileSize: 0,
+      avScanStatus: "skipped", // JSON body, no file to scan (the AV wire point is the multipart upload)
+      idempotencyKey,
+      columnMapping: IDENTITY_MAPPING,
+      conflictPolicy: conflictPolicyData,
+      targetListId: listId ?? null,
+      processingMode: "fast",
+      sourceFilename: "api-push",
+      mergeMode: strategy.mergeMode,
+      preservePopulated: strategy.preservePopulated,
+      ...(externalIdUpsert ? { options: { externalIdUpsert: true } } : {}),
+    });
+    return { ...res, admission: admissionVerdict };
+  });
+  if (created) {
+    await enqueueFastImport(
+      { kind: "fast", jobId, scope, input },
+      admission === "deferred" ? env.IMPORT_DEFER_RECHECK_DELAY_MS : 0,
+    );
+  }
   const body: ImportJobRef = { jobId, status: "queued" };
   return c.json(body, 202);
 });
