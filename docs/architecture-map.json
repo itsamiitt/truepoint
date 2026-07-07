@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1431,
-  "fileSetHash": "sha256:f9e642c0d7bab21c8d80d123353e8a2a28716841cf0d6ec93407c422577dc9f9",
+  "fileCount": 1433,
+  "fileSetHash": "sha256:70e19f3a3d455d64039f5ef58d8f201071dc0ac24ab581ec1919498809bd3e1e",
   "features": {
     "account-search": {
       "web": [],
@@ -2097,6 +2097,8 @@
       "packages/config/src/index.ts",
       "packages/config/src/internalAuthOrigin.test.ts",
       "packages/config/src/keyMaterial.test.ts",
+      "packages/config/src/managedOrigins.test.ts",
+      "packages/config/src/managedOrigins.ts",
       "packages/config/src/originAllowlist.test.ts",
       "packages/config/src/originConsistency.test.ts",
       "packages/config/src/workerSurface.test.ts"
