@@ -816,6 +816,13 @@ export {
   type ContactFieldEdits,
 } from "./prospect/editContact.ts";
 
+// Contact TRUE-MERGE dual gate (import-and-data-model-redesign 04 §3.1, S-C3): env CONTACT_MERGE_ENABLED +
+// per-tenant `contact_merge_enabled` flag. Off ⇒ the merge verb 404s + the engine is never constructed.
+export {
+  isContactMergeEnabled,
+  contactMergeEnabledForScope,
+} from "./prospect/contactMergeGate.ts";
+
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";
 export {

@@ -338,6 +338,19 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Incremental / DELTA imports (import-and-data-model-redesign 08 §9 layer 3; P5). GLOBAL kill-switch of the
+    // delta dual gate: effective external-id upsert = (this === "true") AND the per-tenant `delta_imports_enabled`
+    // flag (seeded off in 0067) AND the per-import `externalIdUpsert` opt-in (a mapped `externalId` column).
+    // While off, every import keeps its shipped content-hash idempotent-skip + email→linkedin→sales-nav dedup
+    // ladder BYTE-IDENTICALLY and never reads or writes contacts.external_id (the gate is evaluated in the api
+    // route; a gate-off job never carries the option onto the payload). The `modified_since` timestamp-cursor
+    // for CONNECTED sources is NOT built here (connected sources are deferred — 08 §9; doc 16 P5 rows); the
+    // stored-object/scheduled delta case is served by the shipped content_hash skip. Same explicit-"true"-only
+    // posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy.
+    DELTA_IMPORTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // How often the leader-locked scheduled-import sweep ticks (fires due schedules). Revert-by-env.
     SCHEDULED_IMPORT_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(60_000),
     // N consecutive FIRE-TIME failures (grant loss / submission error) that auto-disable a schedule (it turns
@@ -388,6 +401,19 @@ export const appEnvSchema = z
     // maintained); secondaries merely go invisible, nothing is lost. FLIP PRECONDITIONS (05 §Rollout / 15
     // §T-P3): parity itests green in CI + backfill completeness = 0 + drift = 0. Explicit-"true"-only.
     CHANNEL_READ_FROM_CHILD: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Contact TRUE-MERGE (import-and-data-model-redesign 04 §3.1, S-C3) — the GLOBAL kill-switch half of the
+    // merge dual gate (the name doc 04 pins): effective merge = (this === "true") AND the per-tenant
+    // `contact_merge_enabled` flag (seeded off in 0067). While EITHER half is off the merge verb 404s (dark)
+    // and the engine is never constructed — flag-off is byte-identical current behavior (nothing merges). With
+    // both on, the maker-confirmed customer verb (Surface 2) + the Surface-1 staff wrapper (S-C9) call the
+    // SAME core merge engine on withTenantTx. Merge is IRREVERSIBLE: flipping this off halts NEW merges but
+    // NEVER rolls back executed ones (§R-P4 — the guardrail, not an unmerge). PRECONDITIONS (04 §Rollout):
+    // 05's channel tables live + backfill complete (demotion needs somewhere to demote to) + S-A5. Same
+    // explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy.
+    CONTACT_MERGE_ENABLED: z
       .string()
       .optional()
       .transform((v) => v === "true"),
