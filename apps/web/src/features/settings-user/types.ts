@@ -3,8 +3,6 @@
 // 12 §2 / 17 §10) and are rendered here as read-only status + deep links, never faked mutations. We re-export
 // the shared auth enums from @leadwolf/types so factor labels stay in lockstep with the contracts.
 
-import type { MfaMethodType } from "@leadwolf/types";
-
 export type { MfaMethodType } from "@leadwolf/types";
 
 // ── Profile ─────────────────────────────────────────────────────────────────────────────────────────
@@ -42,13 +40,3 @@ export type NotificationPref = Record<NotificationChannel, boolean>;
 
 /** GET/PUT /api/v1/settings/user/notifications — the full prefs map (12 §2). */
 export type NotificationPrefs = Record<NotificationEvent, NotificationPref>;
-
-// ── Security (read-only mirror of the auth-origin state) ────────────────────────────────────────────────
-/** One MFA factor as reported by the auth origin; managed on auth.truepoint.in (12 §2). */
-export interface MfaMethodStatus {
-  type: MfaMethodType | "recovery_codes";
-  label: string;
-  enrolled: boolean;
-  /** A muted detail line, e.g. "2 of 10 recovery codes remaining". */
-  detail?: string;
-}
