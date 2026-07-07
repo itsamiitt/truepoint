@@ -194,6 +194,14 @@ export const appEnvSchema = z
     // coerced truthy.
     AUTH_POLICY_ENFORCEMENT_ENABLED: z.string().optional(),
 
+    // AUTH-065: restrict an extension-scoped access token (scope:["extension"]) to the prospecting/ingestion
+    // route allow-list in apps/api (extensionScope.ts), deny-by-default. LOCKOUT-CAPABLE (a wrong allow-list
+    // would 403 the live Chrome extension), so it ships OBSERVE-first: with this UNSET the guard only LOGS an
+    // out-of-scope call (validate the allow-list against real traffic), and only "true" flips it to enforce
+    // (403 insufficient_scope). String, not z.coerce.boolean(), so ONLY "true" arms it. Web/admin tokens carry
+    // scope:[] and are never affected either way.
+    EXTENSION_SCOPE_ENFORCE: z.string().optional(),
+
     TYPESENSE_URL: z.string().url().optional(),
     TYPESENSE_API_KEY: z.string().optional(),
     SMTP_URL: z.string().optional(),
