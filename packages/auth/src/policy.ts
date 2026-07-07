@@ -64,6 +64,37 @@ export function isMethodAllowed(policy: AuthPolicy, method: AuthMethod): boolean
   return policy.allowedMethods.includes(method);
 }
 
+// Set-aware equality for a policy value: allowedMethods / ipAllowlist are unordered sets, everything else is a
+// scalar compared by ===. Used only to detect whether the strictest-wins clamp changed a proposed value.
+function samePolicyValue(a: unknown, b: unknown): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    const bs = new Set(b);
+    return a.every((x) => bs.has(x));
+  }
+  return a === b;
+}
+
+/**
+ * AUTH-021 write-time guard — the security keys a proposed policy write may NOT loosen below `floor` (the
+ * security MINIMUM: the env/code floor, or a staff-app hardening baseline). Reuses the strictest-wins resolver:
+ * resolveEffectivePolicy(floor, proposed) CLAMPS any loosening back up to the floor, so any key whose clamped
+ * value differs from what `proposed` asked for is a downgrade attempt. Returns the offending keys (empty = the
+ * write is within the floor). Pure — the write path calls this BEFORE persisting and rejects a non-empty result,
+ * so a config change can never create a vulnerability by loosening a security key below the minimum.
+ */
+export function findFloorViolations(
+  proposed: Partial<AuthPolicy>,
+  floor: AuthPolicy,
+): Array<keyof AuthPolicy> {
+  const clamped = resolveEffectivePolicy(floor, proposed);
+  const violations: Array<keyof AuthPolicy> = [];
+  for (const key of Object.keys(proposed) as Array<keyof AuthPolicy>) {
+    if (!samePolicyValue(clamped[key], proposed[key])) violations.push(key);
+  }
+  return violations;
+}
+
 // ── Phase 1: the platform → org → workspace effective-policy engine (doc 11 §3, doc 12) ──────────────────────
 
 /**

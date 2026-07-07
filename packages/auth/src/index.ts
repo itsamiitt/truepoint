@@ -120,6 +120,7 @@ export {
   composeEffectivePolicy,
   assembleScopePolicy,
   resolvePolicyFromRows,
+  findFloorViolations,
 } from "./policy.ts";
 export type { AuthPolicyRow } from "./policy.ts";
 export { recordAuthEvent, recordPlatformAuthEvent } from "./auditEvent.ts";

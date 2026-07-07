@@ -7,6 +7,7 @@ import {
   type AuthPolicyRow,
   assembleScopePolicy,
   composeEffectivePolicy,
+  findFloorViolations,
   isMethodAllowed,
   resolveEffectivePolicy,
   resolvePolicyFromRows,
@@ -186,6 +187,58 @@ describe("resolvePolicyFromRows (scope partition + platform override + tighten)"
     const eff = resolvePolicyFromRows(rows, "ws-A", floor);
     expect(eff.sessionTimeoutSeconds).toBe(3600); // shortest across platform/org/workspace
     expect(eff.requireSso).toBe(true);
+  });
+});
+
+describe("findFloorViolations (AUTH-021: cannot loosen a security minimum)", () => {
+  // A hardened floor: MFA required, only phishing-resistant methods, SSO required, a 1h session cap.
+  const floor: AuthPolicy = {
+    mfaEnforcement: "required",
+    allowedMethods: ["sso", "passkey"],
+    disableSocial: true,
+    requireSso: true,
+    ipAllowlist: ["10.0.0.0/8"],
+    sessionTimeoutSeconds: 3600,
+  };
+
+  it("empty proposal, or a proposal that only TIGHTENS, has no violations", () => {
+    expect(findFloorViolations({}, floor)).toEqual([]);
+    expect(findFloorViolations({ sessionTimeoutSeconds: 900 }, floor)).toEqual([]); // shorter = stricter
+    expect(findFloorViolations({ allowedMethods: ["passkey"] }, floor)).toEqual([]); // subset = stricter
+    expect(findFloorViolations({ mfaEnforcement: "required" }, floor)).toEqual([]); // equal
+  });
+
+  it("flags a loosened MFA level", () => {
+    expect(findFloorViolations({ mfaEnforcement: "optional" }, floor)).toEqual(["mfaEnforcement"]);
+    expect(findFloorViolations({ mfaEnforcement: "off" }, floor)).toEqual(["mfaEnforcement"]);
+  });
+
+  it("flags re-allowing a disallowed method (adding beyond the floor's allow-set)", () => {
+    expect(findFloorViolations({ allowedMethods: ["sso", "passkey", "password"] }, floor)).toEqual([
+      "allowedMethods",
+    ]);
+  });
+
+  it("flags turning OFF a mandated boolean, and lengthening a capped timeout", () => {
+    expect(findFloorViolations({ requireSso: false }, floor)).toEqual(["requireSso"]);
+    expect(findFloorViolations({ disableSocial: false }, floor)).toEqual(["disableSocial"]);
+    expect(findFloorViolations({ sessionTimeoutSeconds: 7200 }, floor)).toEqual([
+      "sessionTimeoutSeconds",
+    ]);
+  });
+
+  it("flags widening the IP allow-list beyond the floor", () => {
+    expect(findFloorViolations({ ipAllowlist: ["10.0.0.0/8", "0.0.0.0/0"] }, floor)).toEqual([
+      "ipAllowlist",
+    ]);
+  });
+
+  it("reports EVERY offending key in one pass", () => {
+    const v = findFloorViolations(
+      { mfaEnforcement: "off", requireSso: false, sessionTimeoutSeconds: 99999 },
+      floor,
+    );
+    expect(v.sort()).toEqual(["mfaEnforcement", "requireSso", "sessionTimeoutSeconds"]);
   });
 });
 
