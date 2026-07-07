@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1424,
-  "fileSetHash": "sha256:6839f1bcbba44f79214505e51b826386f00f794c34121b00030070f338812ced",
+  "fileCount": 1426,
+  "fileSetHash": "sha256:bf8f1ed6706c631d9c0a3f6cd76b0bb38133c78d7422182568bdc6779fef8067",
   "features": {
     "account-search": {
       "web": [],
@@ -1808,6 +1808,8 @@
       "apps/auth/src/app/account/security/page.tsx",
       "apps/auth/src/app/account/security/status.ts",
       "apps/auth/src/app/account/security/stepUp.ts",
+      "apps/auth/src/app/account/security/stepUpEligibility.test.ts",
+      "apps/auth/src/app/account/security/stepUpEligibility.ts",
       "apps/auth/src/app/extension/logout/route.ts",
       "apps/auth/src/app/extension/mint/route.ts",
       "apps/auth/src/app/extension/refresh/route.ts",
