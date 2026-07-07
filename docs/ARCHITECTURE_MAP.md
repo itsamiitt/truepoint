@@ -29,7 +29,7 @@
 > least-privilege, compliant-capture client (Vite + CRXJS) that reuses the shipped `/api/v1` ingestion/reveal
 > seam and holds no DB/provider access; design in [`docs/planning/chrome-extension/`](./planning/chrome-extension/)
 > (00–09) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md).
-> **1422 source files · 76 code-bearing domains · 27 shared areas · 47 domain-vocabulary warnings · 60
+> **1423 source files · 76 code-bearing domains · 27 shared areas · 47 domain-vocabulary warnings · 60
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
