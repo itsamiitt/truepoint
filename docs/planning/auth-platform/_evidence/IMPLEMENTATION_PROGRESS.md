@@ -18,7 +18,8 @@
 | 0.3 | Extension scope enforcement: API middleware reads `claims.scope`, restricts extension-audience tokens to a prospecting allow-list, deny-by-default | AUTH-065 | ✅ **done (observe-first)** | `apps/api/src/middleware/extensionScope.ts` (pure `isExtensionToken` + method-aware `extensionRouteAllowed` allow-list + alertable `[authz] extension-scope` marker, 7 tests) wired into `authn.ts`. Discriminator = `scope.includes("extension")` (web/admin tokens carry `scope:[]` → total no-op, zero blast radius). Allow-list derived from `apps/extension/src/background` (ingest, per-contact reveal + read, credits balance/costs, me, orgs). **Ships OBSERVE-first**: out-of-scope calls are logged but ALLOWED until `EXTENSION_SCOPE_ENFORCE="true"` flips to 403 `insufficient_scope` — a config flip, not a redeploy — so a wrong allow-list can't silently 403 the live extension. typecheck ✓ biome ✓ tests 7/7 (+26 middleware regression ✓). **Follow-up (0.3b): validate the allow-list against real extension traffic, then flip the flag on.** |
 | 0.4 | Deny-list observability: alert on revocation read/write failure; optional in-process fallback | AUTH-066 | ✅ **done** | `revocationLog.ts` (pure alertable `[revocation] DEGRADED` marker, 4 tests, no PII) wired into both catch paths of `revocation.ts`; per-request `check` path throttled to 1 line/10s so an outage doesn't flood logs; fail-OPEN behaviour unchanged. typecheck ✓ biome ✓ tests ✓. Optional in-process fallback cache NOT done (adds state/risk) — deferred. |
 | 0.5a | Security-notification email: **password-changed** — fires on both change paths (authenticated `/account/security` change + completed forgot-password reset) | AUTH-067 | ✅ **done** | New `passwordChanged.ts` template (branded, "if this wasn't you" secure-CTA to `/auth/forgot`, 2 tests) fired DETACHED + best-effort (`void …catch`, the `void recordAuthEvent` precedent) from `reset/actions.ts` + `account/security/actions.ts:changePassword` — never fails/delays the change, failure log carries no PII. Rides the current inline `sendAuthEmail` (same path as reset/verify; the durable queue 0.2b is deferred). typecheck ✓ biome ✓ tests 6/6 ✓. |
-| 0.5b | Security-notification email: **new-sign-in** (new device/location) | AUTH-067 | ◻ todo | Fire from the login-finalize path with device/IP context. CARE: must not spam on every token refresh/exchange — key on a new durable session (createSession), not on mint. Needs a "known device" heuristic or it's noisy. |
+| 0.5b-tpl | new-sign-in email **template** (device/IP context, escaped, secure CTA) | AUTH-067 | ✅ **done** | `newSignIn.ts` (+3 tests: with-context, no-context degrades cleanly, and the UA-derived device string is HTML-escaped). Presentational — the caller decides WHEN to send + formats the device string. typecheck ✓ biome ✓ tests 9/9 ✓. |
+| 0.5b-wire | **Fire** new-sign-in on a real new sign-in (not every login) | AUTH-067 | ⏸ **deferred (design + gated)** | Correct architecture is EVENT-DRIVEN: `finalizeLogin` (flow.ts) already emits `login.success` for every method (password/magic/SSO) OFF the hot path — react to THAT via the events consumer (covers all methods, no login-path risk, and packages/auth can't reach the app mailer anyway) rather than firing inline from N login actions. Needs (a) a new-device heuristic so it isn't alert-fatigue spam — cheapest is a long-lived device cookie on the auth origin: absent/unknown → new device → notify + set; present → skip (no per-user store) — and (b) delivery via the mail path. So it PAIRS with 0.2b (worker/queue) + 0.2c (ESP) and wants a design pass. Do under review, NOT on the autonomous timer. |
 | 0.5c | Security-notification email: **MFA-changed** (enrolled / disabled / recovery-codes regenerated) | AUTH-067 | ✅ **done** | New `mfaChanged.ts` template (3 kinds via a `MfaChangeKind` copy map, brand-correct, secure-CTA, 2 tests) fired via a shared `notifyMfaChanged(email, kind)` helper (detached + best-effort, PII-free failure log) from all three fire sites in `account/security/actions.ts`: `verifyTotpEnroll` ("enrolled"), `disableMfaMethod` ("disabled", **only when `removed>0`** — a foreign methodId stays a no-op/non-oracle), `regenerateRecoveryCodes` ("recovery_regenerated"). typecheck ✓ biome ✓ tests 7/7 ✓. Rides inline `sendAuthEmail` (delivers when 0.2c wires a real ESP). |
 | 0.6a | Remove the FAKE `enrolled:false` MFA badges in apps/web SecurityPanel (stop asserting a state it can't know) | AUTH-068 | ✅ **done** | The hard-coded 5-factor catalogue rendered "Not set up" for everyone — so a user WITH two-step on saw "Not set up" (a lie). Replaced with a single honest description + the existing "Manage two-step methods" deep-link (now consistent with the Sessions/History sections, which never fake state). Removed the dead `MFA_METHODS` const, `MfaMethodStatus` type, `StatusBadge` import, and the now-unused `MfaMethodType` local import. typecheck (apps/web) ✓ biome ✓ (display-only — no unit test applies). |
 | 0.6b | **Real** cross-origin MFA-status read (auth→app-API `GET enrolled-methods`) so apps/web can show true On/Off | AUTH-068 | ◻ todo | The security-reviewed endpoint (must not leak factor presence cross-tenant) + wire the panel to it. Bigger; needs an auth-origin read API + apps/web fetch. Not blocking Phase 0 exit (0.6a removed the lie). |
@@ -60,10 +61,12 @@ All work is on `feat/auth-platform-phase0`, **committed locally, NOT pushed**. E
 **⏭️ Descoped — 1:** 0.1b (edge-only redirect, marginal value — see the row).
 
 **Remaining net-new features — 2 (enhancements, NOT fixes to the reported breakage):**
-- **0.5b** (AUTH-067) — new-sign-in notification (needs the login-finalize/device context + a "new device"
-  heuristic so it doesn't notify on every refresh).
+- **0.5b** (AUTH-067) — new-sign-in notification. TEMPLATE **shipped** (`newSignIn.ts`, tested). The FIRING is
+  deferred (0.5b-wire): event-driven off the existing `login.success` event + a device-cookie heuristic; pairs
+  with 0.2b (worker) + 0.2c (ESP). See the 0.5b-wire row.
 - **0.6b** (AUTH-068) — real cross-origin MFA-status read (a security-reviewed auth→app-API endpoint that can't
-  leak factor presence cross-tenant) to show true On/Off in apps/web.
+  leak factor presence cross-tenant) to show true On/Off in apps/web. Not blocked on the ESP — the one remaining
+  item with standalone value that can be built autonomously, but it needs a security-design pass (do design-first).
 
 **Verdict on the three reported-broken areas:**
 1. **Forgot Password** — both structural breaks fixed: the link 404 (0.1) and the silent MailHog non-delivery
@@ -152,6 +155,16 @@ Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadma
   redirect-URI surface (doc 08) is Phase-1+ and may need its own audit if it was the reported break. **NEXT fire:
   0.5b (new-sign-in notification)** — the last unblocked item — unless the user redirects toward the ESP wiring
   (0.2c) or Phase 1.
+- **2026-07-07:** Phase 0.5b — shipped the **template** (`newSignIn.ts` + 3 tests), **deferred the wiring**
+  (0.5b-wire) with a concrete event-driven design (react to the existing `login.success` event + a device-cookie
+  new-device heuristic; pairs with 0.2b/0.2c). This was the last "unblocked" item, and its only genuinely-safe,
+  self-contained slice was the template — the firing is a login-hot-path + heuristic change whose user value is
+  gated on the ESP anyway. **⚑ Phase 0's safe autonomous work is now COMPLETE.** Everything left is: blocked-on-you
+  (0.2c ESP), deferred-for-supervision (0.2b, 0.7b, 0.5b-wire), descoped (0.1b), or a security-reviewed net-new
+  feature (0.6b). **NEXT fire: begin 0.6b (real cross-origin MFA-status read) DESIGN-FIRST** — it's the one
+  remaining item with standalone value that isn't ESP-blocked; I'll draft the endpoint's cross-tenant-safe
+  contract before writing code. But the highest-leverage action is still yours: **pick an ESP (0.2c)** to make all
+  the shipped mail actually deliver, and give a **go/no-go on Phase 1** (the large centralized-IdP build).
 - **2026-07-07:** Phase 0.5c (AUTH-067) done — the **MFA-changed** security notification (enrolled / disabled /
   recovery-regenerated). One `mfaChanged.ts` template with a per-kind copy map + a shared `notifyMfaChanged`
   helper (same detached best-effort pattern as 0.5a) fired from all three MFA mutators in

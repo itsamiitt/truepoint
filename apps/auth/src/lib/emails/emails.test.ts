@@ -6,6 +6,7 @@ import {
   type MfaChangeKind,
   magicLinkEmail,
   mfaChangedEmail,
+  newSignInEmail,
   passwordChangedEmail,
   passwordResetEmail,
   verificationCodeEmail,
@@ -82,6 +83,30 @@ describe("transactional auth email templates", () => {
     expect(mfaChangedEmail({ change: "recovery_regenerated" }).html).toContain("no longer work");
   });
 
+  it("new sign-in: carries device + IP context, secure CTA, and escapes the device string", () => {
+    const secureUrl = "https://auth.example.com/auth/forgot";
+    const m = newSignInEmail({ device: "Chrome on macOS", ipAddress: "203.0.113.7", secureUrl });
+    expect(m.subject).toBe("New sign-in to your TruePoint account");
+    expect(m.html).toContain("Chrome on macOS");
+    expect(m.html).toContain("IP 203.0.113.7");
+    expect(m.html).toContain(secureUrl);
+    expect(m.html).not.toContain("LeadWolf");
+    expect(m.text).toContain("203.0.113.7");
+    expect(m.text).toContain("San Francisco"); // footer
+    // a user-agent-derived device string is attacker-influenced → must be HTML-escaped
+    const evil = newSignInEmail({ device: "<script>x</script>" });
+    expect(evil.html).not.toContain("<script>x</script>");
+    expect(evil.html).toContain("&lt;script&gt;");
+  });
+
+  it("new sign-in: no context renders cleanly (no 'undefined', no dangling separator)", () => {
+    const m = newSignInEmail();
+    expect(m.html.startsWith("<!doctype html>")).toBe(true);
+    expect(m.html).not.toContain("undefined");
+    expect(m.html).not.toContain(" — .");
+    expect(m.text).not.toContain("undefined");
+  });
+
   it("every template renders an html document and a non-empty plaintext fallback", () => {
     for (const m of [
       verificationCodeEmail({ code: "000000" }),
@@ -89,6 +114,7 @@ describe("transactional auth email templates", () => {
       passwordResetEmail({ link: "https://x.test/r" }),
       passwordChangedEmail({ secureUrl: "https://x.test/forgot" }),
       mfaChangedEmail({ change: "enrolled", secureUrl: "https://x.test/forgot" }),
+      newSignInEmail({ device: "Firefox on Windows", ipAddress: "198.51.100.2" }),
     ]) {
       expect(m.html.startsWith("<!doctype html>")).toBe(true);
       expect(m.text.length).toBeGreaterThan(0);
