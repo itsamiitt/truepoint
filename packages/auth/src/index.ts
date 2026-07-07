@@ -26,6 +26,13 @@ export {
 export { issueCode, exchangeCode, validateBinding, type CodeBinding } from "./code.ts";
 export { normalizeIp, clientIpMatches, type IpBindMode } from "./ipBinding.ts";
 export { log } from "./log.ts";
+export {
+  recordAuthMetric,
+  renderAuthMetrics,
+  __resetAuthMetrics,
+  type AuthMetricName,
+  type AuthMetricLabels,
+} from "./authMetrics.ts";
 export { authenticatePassword, type AuthenticatedUser } from "./login.ts";
 export {
   createLoginTransaction,
