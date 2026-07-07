@@ -477,6 +477,13 @@
       "when": 1786100000000,
       "tag": "0067_seed_contact_merge_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1786200000000,
+      "tag": "0068_contact_external_id_delta",
+      "breakpoints": true
     }
   ]
 }
