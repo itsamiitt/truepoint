@@ -19,7 +19,7 @@
 | 0.4 | Deny-list observability: alert on revocation read/write failure; optional in-process fallback | AUTH-066 | ✅ **done** | `revocationLog.ts` (pure alertable `[revocation] DEGRADED` marker, 4 tests, no PII) wired into both catch paths of `revocation.ts`; per-request `check` path throttled to 1 line/10s so an outage doesn't flood logs; fail-OPEN behaviour unchanged. typecheck ✓ biome ✓ tests ✓. Optional in-process fallback cache NOT done (adds state/risk) — deferred. |
 | 0.5a | Security-notification email: **password-changed** — fires on both change paths (authenticated `/account/security` change + completed forgot-password reset) | AUTH-067 | ✅ **done** | New `passwordChanged.ts` template (branded, "if this wasn't you" secure-CTA to `/auth/forgot`, 2 tests) fired DETACHED + best-effort (`void …catch`, the `void recordAuthEvent` precedent) from `reset/actions.ts` + `account/security/actions.ts:changePassword` — never fails/delays the change, failure log carries no PII. Rides the current inline `sendAuthEmail` (same path as reset/verify; the durable queue 0.2b is deferred). typecheck ✓ biome ✓ tests 6/6 ✓. |
 | 0.5b | Security-notification email: **new-sign-in** (new device/location) | AUTH-067 | ◻ todo | Fire from the login-finalize path with device/IP context. CARE: must not spam on every token refresh/exchange — key on a new durable session (createSession), not on mint. Needs a "known device" heuristic or it's noisy. |
-| 0.5c | Security-notification email: **MFA-changed** (enrolled / disabled / recovery-codes regenerated) | AUTH-067 | ◻ todo | Fire from `account/security/actions.ts` (verifyTotpEnroll / disableMfaMethod / regenerateRecoveryCodes) — same detached best-effort pattern as 0.5a; add an `mfaChanged` template. |
+| 0.5c | Security-notification email: **MFA-changed** (enrolled / disabled / recovery-codes regenerated) | AUTH-067 | ✅ **done** | New `mfaChanged.ts` template (3 kinds via a `MfaChangeKind` copy map, brand-correct, secure-CTA, 2 tests) fired via a shared `notifyMfaChanged(email, kind)` helper (detached + best-effort, PII-free failure log) from all three fire sites in `account/security/actions.ts`: `verifyTotpEnroll` ("enrolled"), `disableMfaMethod` ("disabled", **only when `removed>0`** — a foreign methodId stays a no-op/non-oracle), `regenerateRecoveryCodes` ("recovery_regenerated"). typecheck ✓ biome ✓ tests 7/7 ✓. Rides inline `sendAuthEmail` (delivers when 0.2c wires a real ESP). |
 | 0.6 | In-product true MFA state (or remove fake `enrolled:false` badges) | AUTH-068 | ◻ todo | Needs the security-reviewed cross-origin enrolled-methods read, or drop badges. |
 | 0.7 | Passwordless enrollment path (fresh-proof step-up) + hide unusable "Begin setup" | AUTH-069 | ◻ todo | `apps/auth/src/app/account/security/stepUp.ts` + MfaSection UI. |
 
@@ -68,3 +68,12 @@ Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadma
   **NEXT fire: Phase 0.5c (MFA-changed)** — cleanest next slice (same file, same detached pattern, one new
   template); then 0.7 (passwordless enrollment UI) or 0.1b. 0.5b (new-sign-in) needs the login-finalize/device
   context; 0.6 needs the cross-origin enrolled-methods read.
+- **2026-07-07:** Phase 0.5c (AUTH-067) done — the **MFA-changed** security notification (enrolled / disabled /
+  recovery-regenerated). One `mfaChanged.ts` template with a per-kind copy map + a shared `notifyMfaChanged`
+  helper (same detached best-effort pattern as 0.5a) fired from all three MFA mutators in
+  `account/security/actions.ts`; the disable path notifies only on a real removal (no foreign-id oracle). With
+  0.5a + 0.5c done, **AUTH-067 is substantially covered** — only 0.5b (new-sign-in) remains, and it's the odd
+  one out (needs the login-finalize/device context + a "new device" heuristic to avoid notifying on every
+  refresh). **NEXT fire: Phase 0.7 (AUTH-069, passwordless enrollment + hide the unusable "Begin setup")** —
+  self-contained in the account/security surface, no external dep; then 0.1b (un-prefixed redirect, small) and
+  0.5b. Remaining after 0.7: 0.1b, 0.2b⏸, 0.2c(ESP), 0.5b, 0.6. Then Phase 0 exit review.

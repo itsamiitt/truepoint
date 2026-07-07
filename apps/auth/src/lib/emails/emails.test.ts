@@ -3,7 +3,9 @@
 // its code/link, and ship the compliance footer (postal address). Pure unit test — no transport.
 import { describe, expect, it } from "bun:test";
 import {
+  type MfaChangeKind,
   magicLinkEmail,
+  mfaChangedEmail,
   passwordChangedEmail,
   passwordResetEmail,
   verificationCodeEmail,
@@ -63,12 +65,30 @@ describe("transactional auth email templates", () => {
     expect(m.text.length).toBeGreaterThan(0);
   });
 
+  it("mfa changed: each kind is brand-correct, distinct, and carries the secure CTA", () => {
+    const secureUrl = "https://auth.example.com/auth/forgot";
+    const kinds: MfaChangeKind[] = ["enrolled", "disabled", "recovery_regenerated"];
+    const subjects = new Set<string>();
+    for (const change of kinds) {
+      const m = mfaChangedEmail({ change, secureUrl });
+      subjects.add(m.subject);
+      expect(m.subject).toContain("TruePoint");
+      expect(m.html).toContain(secureUrl);
+      expect(m.html).not.toContain("LeadWolf");
+      expect(m.text).toContain(secureUrl);
+      expect(m.html).toContain("San Francisco"); // compliance footer
+    }
+    expect(subjects.size).toBe(3); // the three kinds are distinguishable
+    expect(mfaChangedEmail({ change: "recovery_regenerated" }).html).toContain("no longer work");
+  });
+
   it("every template renders an html document and a non-empty plaintext fallback", () => {
     for (const m of [
       verificationCodeEmail({ code: "000000" }),
       magicLinkEmail({ link: "https://x.test/m" }),
       passwordResetEmail({ link: "https://x.test/r" }),
       passwordChangedEmail({ secureUrl: "https://x.test/forgot" }),
+      mfaChangedEmail({ change: "enrolled", secureUrl: "https://x.test/forgot" }),
     ]) {
       expect(m.html.startsWith("<!doctype html>")).toBe(true);
       expect(m.text.length).toBeGreaterThan(0);

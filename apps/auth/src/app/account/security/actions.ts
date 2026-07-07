@@ -12,7 +12,7 @@
 
 import { authUrl } from "@/lib/authUrl";
 import { clientIpFromHeaders } from "@/lib/clientIp";
-import { passwordChangedEmail } from "@/lib/emails";
+import { type MfaChangeKind, mfaChangedEmail, passwordChangedEmail } from "@/lib/emails";
 import { sendAuthEmail } from "@/lib/mailer";
 import { requireUser } from "@/lib/requireUser";
 import {
@@ -197,6 +197,9 @@ export async function verifyTotpEnroll(formData: FormData): Promise<void> {
     });
   }
 
+  // AUTH-067: notify the owner a new second factor was added (an attacker with the password + step-up could too).
+  notifyMfaChanged(acct.user.email, "enrolled");
+
   redirect("/account/security/enroll?done=1");
 }
 
@@ -223,6 +226,8 @@ export async function disableMfaMethod(formData: FormData): Promise<void> {
     if (!remaining.some((m) => m.verifiedAt)) {
       await userRepository.replaceRecoveryCodes(acct.userId, []);
     }
+    // AUTH-067: notify only on an ACTUAL removal (a foreign/no-op methodId → removed===0 → no mail, no oracle).
+    notifyMfaChanged(acct.user.email, "disabled");
   }
   // CONFIRM (audit PENDING): same as enroll — no declared `mfa.disable`/`mfa.method.removed` action exists in
   // the closed audit enums, so the removal audit stays PENDING (do not emit an undeclared action).
@@ -245,6 +250,9 @@ export async function regenerateRecoveryCodes(formData: FormData): Promise<void>
     acct.userId,
     codes.map((c) => hashRecoveryCode(c)),
   );
+
+  // AUTH-067: notify the owner their recovery codes were regenerated (the old set no longer works).
+  notifyMfaChanged(acct.user.email, "recovery_regenerated");
 
   (await cookies()).set(ENROLL_RESULT_COOKIE, JSON.stringify({ kind: "recovery", codes }), {
     httpOnly: true,
@@ -292,6 +300,19 @@ export async function finishEnroll(): Promise<void> {
   await requireUser(); // still gate it to the authenticated user
   (await cookies()).delete(ENROLL_RESULT_COOKIE);
   redirect("/account/security?mfa=enrolled#mfa");
+}
+
+// Fire an MFA-change security notification (AUTH-067) to the account's OWN email — detached + best-effort, so
+// it never fails or delays the MFA action (mirrors the `void recordAuthEvent` precedent); the failure log
+// carries no PII. The "if this wasn't you" CTA points at the forgot-password flow (the strongest re-secure lever).
+function notifyMfaChanged(email: string, change: MfaChangeKind): void {
+  const secureUrl = authUrl(env.AUTH_ORIGIN, "/forgot");
+  void sendAuthEmail({ to: email, ...mfaChangedEmail({ change, secureUrl }) }).catch((e) =>
+    console.error(
+      "[auth-mail] mfa-changed notification failed:",
+      e instanceof Error ? e.message : e,
+    ),
+  );
 }
 
 // Emit the declared `session.revoked` audit when the current session resolves to a tenant (the audit_log
