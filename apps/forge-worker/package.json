@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "LEADWOLF_SURFACE=worker bun run --hot src/index.ts",
     "start": "LEADWOLF_SURFACE=worker bun run src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@leadwolf/config": "workspace:*",

@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1460,
-  "fileSetHash": "sha256:a9db9a3cf2f63f06597eccda80df98ef9f1a99c0380611cd38a68e9771bc149e",
+  "fileCount": 1517,
+  "fileSetHash": "sha256:18cdde7f0fda1da51a96d53d7d66458b2111f982ee8fbb04612fa2bac534f823",
   "features": {
     "account-search": {
       "web": [],
@@ -1951,14 +1951,41 @@
       "apps/extension/src/ui/popup/main.tsx"
     ],
     "apps/forge-api": [
+      "apps/forge-api/src/app.ts",
       "apps/forge-api/src/server.ts"
     ],
     "apps/forge-worker": [
-      "apps/forge-worker/src/index.ts"
+      "apps/forge-worker/src/deadLetter.ts",
+      "apps/forge-worker/src/index.ts",
+      "apps/forge-worker/src/leaderLock.ts",
+      "apps/forge-worker/src/retryPolicies.ts",
+      "apps/forge-worker/src/tuning.ts",
+      "apps/forge-worker/src/withDeadline.ts"
     ],
     "apps/forge/app": [
+      "apps/forge/src/app/(shell)/captures/page.tsx",
+      "apps/forge/src/app/(shell)/layout.tsx",
+      "apps/forge/src/app/(shell)/overview/page.tsx",
+      "apps/forge/src/app/(shell)/parsers/page.tsx",
+      "apps/forge/src/app/(shell)/review/page.tsx",
+      "apps/forge/src/app/(shell)/sync-status/page.tsx",
+      "apps/forge/src/app/auth/callback/page.tsx",
       "apps/forge/src/app/layout.tsx",
       "apps/forge/src/app/page.tsx"
+    ],
+    "apps/forge/components": [
+      "apps/forge/src/components/shell/Brandmark.tsx",
+      "apps/forge/src/components/shell/ForgeShell.tsx",
+      "apps/forge/src/components/shell/Sidebar.tsx",
+      "apps/forge/src/components/shell/TopBar.tsx",
+      "apps/forge/src/components/shell/navConfig.ts"
+    ],
+    "apps/forge/lib": [
+      "apps/forge/src/lib/authClient.ts",
+      "apps/forge/src/lib/forgeGate.ts",
+      "apps/forge/src/lib/pkce.ts",
+      "apps/forge/src/lib/publicConfig.ts",
+      "apps/forge/src/lib/staffMe.tsx"
     ],
     "apps/web/app": [
       "apps/web/src/app/(public)/pricing/page.tsx",
@@ -2233,6 +2260,8 @@
       "packages/integrations/src/enrichment/providers.test.ts",
       "packages/integrations/src/enrichment/providers.ts",
       "packages/integrations/src/forgeAnthropicExtraction.ts",
+      "packages/integrations/src/forgeObjectStore.ts",
+      "packages/integrations/src/forgeRateLimiter.ts",
       "packages/integrations/src/index.ts",
       "packages/integrations/src/stripe/stripeAdapter.test.ts",
       "packages/integrations/src/stripe/stripeAdapter.ts"
@@ -2351,7 +2380,39 @@
     "apps/admin/next.config.mjs",
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
+    "apps/forge-api/src/features/captures/routes.ts",
+    "apps/forge-api/src/features/dashboard-bff/routes.ts",
+    "apps/forge-api/src/features/review/routes.ts",
+    "apps/forge-api/src/features/review/schema.ts",
+    "apps/forge-api/src/middleware/auth.ts",
+    "apps/forge-api/src/middleware/capability.ts",
+    "apps/forge-worker/test/primitives.test.ts",
     "apps/forge/next.config.mjs",
+    "apps/forge/src/features/captures/api.ts",
+    "apps/forge/src/features/captures/components/CapturesPage.tsx",
+    "apps/forge/src/features/captures/hooks/useCaptures.ts",
+    "apps/forge/src/features/captures/index.ts",
+    "apps/forge/src/features/captures/types.ts",
+    "apps/forge/src/features/overview/api.ts",
+    "apps/forge/src/features/overview/components/OverviewPage.tsx",
+    "apps/forge/src/features/overview/hooks/useOverview.ts",
+    "apps/forge/src/features/overview/index.ts",
+    "apps/forge/src/features/overview/types.ts",
+    "apps/forge/src/features/parsers/api.ts",
+    "apps/forge/src/features/parsers/components/ParsersPage.tsx",
+    "apps/forge/src/features/parsers/hooks/useParsers.ts",
+    "apps/forge/src/features/parsers/index.ts",
+    "apps/forge/src/features/parsers/types.ts",
+    "apps/forge/src/features/review/api.ts",
+    "apps/forge/src/features/review/components/ReviewPage.tsx",
+    "apps/forge/src/features/review/hooks/useReview.ts",
+    "apps/forge/src/features/review/index.ts",
+    "apps/forge/src/features/review/types.ts",
+    "apps/forge/src/features/sync-status/api.ts",
+    "apps/forge/src/features/sync-status/components/SyncStatusPage.tsx",
+    "apps/forge/src/features/sync-status/hooks/useSyncStatus.ts",
+    "apps/forge/src/features/sync-status/index.ts",
+    "apps/forge/src/features/sync-status/types.ts",
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/bulkEnrichment.ts",
     "apps/workers/src/queues/bulkReveal.ts",
