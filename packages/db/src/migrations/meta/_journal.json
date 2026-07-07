@@ -379,6 +379,13 @@
       "when": 1784700000000,
       "tag": "0053_auth_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1784800000000,
+      "tag": "0054_auth_allowed_origins",
+      "breakpoints": true
     }
   ]
 }

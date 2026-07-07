@@ -77,6 +77,22 @@ CREATE POLICY auth_policies_isolation ON auth_policies
     tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
   );
 
+-- auth_allowed_origins (doc 11 §2, AUTH-036): the managed callback-origin allow-list. Same nullable-tenant
+-- shape as auth_policies — a NULL row is a PLATFORM-wide managed origin. So a tenant READS its own rows + the
+-- platform (NULL) rows (the resolver unions env-floor ∪ platform ∪ org managed origins), and WRITES only its
+-- own — a NULL-tenant (platform) origin is owner-only (withPlatformTx), which ENABLE-not-FORCE RLS leaves
+-- exempt. Isolation proven by test/authAllowedOriginsIsolation.itest.ts.
+ALTER TABLE auth_allowed_origins ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS auth_allowed_origins_isolation ON auth_allowed_origins;
+CREATE POLICY auth_allowed_origins_isolation ON auth_allowed_origins
+  USING (
+    tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+    OR tenant_id IS NULL
+  )
+  WITH CHECK (
+    tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+  );
+
 -- tenant_members + invitations: tenant-scoped for the app role (read under withTenantTx).
 ALTER TABLE tenant_members ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_members_isolation ON tenant_members;

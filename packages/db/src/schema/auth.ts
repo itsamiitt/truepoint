@@ -327,6 +327,35 @@ export const authPolicies = pgTable(
   }),
 );
 
+// auth_allowed_origins (doc 11 §2, AUTH-036) — the MANAGED callback/redirect-origin allow-list, with env as the
+// FLOOR: the resolver (@leadwolf/config resolveAllowedOrigins) unions the env origins with these managed rows.
+// A `platform` row (NULL tenant_id) is a platform-wide managed origin; an `org` row is tenant-specific. `origin`
+// is a canonical https origin (validated + normalised by canonicalManagedOrigin at write time). RLS mirrors
+// auth_policies exactly: a tenant reads its own + the platform (NULL) rows and writes only its own; platform rows
+// are owner-only (withPlatformTx). NULLS-NOT-DISTINCT unique (scope, tenant_id, origin) lives in the migration
+// (0054) — the SQL is source-of-truth while drizzle-kit generate is snapshot-blocked; this def is hand-synced.
+export const authAllowedOrigins = pgTable(
+  "auth_allowed_origins",
+  {
+    id: id(),
+    scope: varchar("scope", { length: 12 }).notNull(), // platform | org
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // NULL = platform
+    origin: varchar("origin", { length: 255 }).notNull(), // canonical https origin
+    kind: varchar("kind", { length: 20 }).notNull().default("callback"), // callback | cors
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    scopeChk: check("auth_allowed_origins_scope_enum", sql`${t.scope} IN ('platform','org')`),
+    // scope ↔ tenant presence must agree (platform: no tenant; org: a tenant).
+    consistencyChk: check(
+      "auth_allowed_origins_scope_consistency",
+      sql`(${t.scope} = 'platform' AND ${t.tenantId} IS NULL)
+       OR (${t.scope} = 'org' AND ${t.tenantId} IS NOT NULL)`,
+    ),
+  }),
+);
+
 // Pending invitations to join an org/workspace (accepted at registration → tenant_member + workspace_member).
 export const invitations = pgTable("invitations", {
   id: id(),
