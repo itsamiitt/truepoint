@@ -22,7 +22,7 @@
 | 0.5b-wire | **Fire** new-sign-in on a real new sign-in (not every login) | AUTH-067 | ⏸ **deferred (design + gated)** | Correct architecture is EVENT-DRIVEN: `finalizeLogin` (flow.ts) already emits `login.success` for every method (password/magic/SSO) OFF the hot path — react to THAT via the events consumer (covers all methods, no login-path risk, and packages/auth can't reach the app mailer anyway) rather than firing inline from N login actions. Needs (a) a new-device heuristic so it isn't alert-fatigue spam — cheapest is a long-lived device cookie on the auth origin: absent/unknown → new device → notify + set; present → skip (no per-user store) — and (b) delivery via the mail path. So it PAIRS with 0.2b (worker/queue) + 0.2c (ESP) and wants a design pass. Do under review, NOT on the autonomous timer. |
 | 0.5c | Security-notification email: **MFA-changed** (enrolled / disabled / recovery-codes regenerated) | AUTH-067 | ✅ **done** | New `mfaChanged.ts` template (3 kinds via a `MfaChangeKind` copy map, brand-correct, secure-CTA, 2 tests) fired via a shared `notifyMfaChanged(email, kind)` helper (detached + best-effort, PII-free failure log) from all three fire sites in `account/security/actions.ts`: `verifyTotpEnroll` ("enrolled"), `disableMfaMethod` ("disabled", **only when `removed>0`** — a foreign methodId stays a no-op/non-oracle), `regenerateRecoveryCodes` ("recovery_regenerated"). typecheck ✓ biome ✓ tests 7/7 ✓. Rides inline `sendAuthEmail` (delivers when 0.2c wires a real ESP). |
 | 0.6a | Remove the FAKE `enrolled:false` MFA badges in apps/web SecurityPanel (stop asserting a state it can't know) | AUTH-068 | ✅ **done** | The hard-coded 5-factor catalogue rendered "Not set up" for everyone — so a user WITH two-step on saw "Not set up" (a lie). Replaced with a single honest description + the existing "Manage two-step methods" deep-link (now consistent with the Sessions/History sections, which never fake state). Removed the dead `MFA_METHODS` const, `MfaMethodStatus` type, `StatusBadge` import, and the now-unused `MfaMethodType` local import. typecheck (apps/web) ✓ biome ✓ (display-only — no unit test applies). |
-| 0.6b | **Real** cross-origin MFA-status read (auth→app-API `GET enrolled-methods`) so apps/web can show true On/Off | AUTH-068 | ◻ todo | The security-reviewed endpoint (must not leak factor presence cross-tenant) + wire the panel to it. Bigger; needs an auth-origin read API + apps/web fetch. Not blocking Phase 0 exit (0.6a removed the lie). |
+| 0.6b | **Real** cross-origin MFA-status read so apps/web can show true On/Off | AUTH-068 | 📐 **design done, impl held for security review** | Design: [`0.6b-mfa-status-read-design.md`](0.6b-mfa-status-read-design.md). Read-first killed the naive apps/api endpoint: `user_mfa_methods` is **auth-service-owned + has no `tenant_id`**, so `leadwolf_app` (apps/api) can't/shouldn't read it (rls/auth.sql:73–78). Correct design = a token-authed, self-scoped (`claims.sub`), **booleans-only** read on the AUTH origin, consumed by apps/web. That is a NEW cross-origin auth-factor-presence exposure → needs the human security review the plan flags; not shippable unsupervised from the loop. 0.6a already removed the actual bug (the lie), so no urgency. |
 | 0.7a | Stop offering an **unusable** "Begin setup" to passwordless-and-factorless users + give them a real path | AUTH-069 | ✅ **done** | Pure `canStepUp({hasPassword,hasVerifiedTotp})` predicate (mirrors verifyStepUp's contract, 3 tests) drives `MfaSection`: when a user can't step up (no password, no verified TOTP) the enroll form — whose credential field asked for an authenticator code they can't have — is replaced by guidance + a "Set a password" link to the reset flow (`AUTH_BASE_PATH/forgot`, root-relative). `hasPassword` stays a server-derived boolean (passwordHash never reaches the client). typecheck ✓ biome ✓ tests 3/3 ✓. |
 | 0.7b | **Direct** passwordless first-factor enrollment (fresh-proof step-up: session-freshness OR an email/OTP re-verification) so they needn't set a password first | AUTH-069 | ⏸ **deferred (needs supervision)** | The real "fresh-proof" mechanism. Session-freshness is unverifiable-here (refresh-rotation makes `createdAt`/auth-time semantics unclear — a wrong window is a lockout or a weak bootstrap); the email/OTP variant depends on the blocked mail path (0.2c). Both are security-sensitive; do under review. 0.7a already unblocks these users via the existing set-password path. NOTE: guiding an SSO-mandated user to set a local password may interact with org SSO-enforcement policy — revisit when that policy lands. |
 
@@ -64,9 +64,11 @@ All work is on `feat/auth-platform-phase0`, **committed locally, NOT pushed**. E
 - **0.5b** (AUTH-067) — new-sign-in notification. TEMPLATE **shipped** (`newSignIn.ts`, tested). The FIRING is
   deferred (0.5b-wire): event-driven off the existing `login.success` event + a device-cookie heuristic; pairs
   with 0.2b (worker) + 0.2c (ESP). See the 0.5b-wire row.
-- **0.6b** (AUTH-068) — real cross-origin MFA-status read (a security-reviewed auth→app-API endpoint that can't
-  leak factor presence cross-tenant) to show true On/Off in apps/web. Not blocked on the ESP — the one remaining
-  item with standalone value that can be built autonomously, but it needs a security-design pass (do design-first).
+- **0.6b** (AUTH-068) — real cross-origin MFA-status read to show true On/Off in apps/web. **Design done**
+  ([`0.6b-mfa-status-read-design.md`](0.6b-mfa-status-read-design.md)); **implementation held for security review.**
+  Read-first showed the read can't live on apps/api (`user_mfa_methods` is auth-service-owned, no `tenant_id`, so
+  `leadwolf_app` can't read it) — the correct auth-origin endpoint is a NEW cross-origin factor-presence exposure
+  the plan flags for review, so it's not shippable unsupervised from the loop.
 
 **Verdict on the three reported-broken areas:**
 1. **Forgot Password** — both structural breaks fixed: the link 404 (0.1) and the silent MailHog non-delivery
@@ -165,6 +167,19 @@ Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadma
   remaining item with standalone value that isn't ESP-blocked; I'll draft the endpoint's cross-tenant-safe
   contract before writing code. But the highest-leverage action is still yours: **pick an ESP (0.2c)** to make all
   the shipped mail actually deliver, and give a **go/no-go on Phase 1** (the large centralized-IdP build).
+- **2026-07-07:** Phase 0.6b — **design done, implementation held for security review**
+  ([`0.6b-mfa-status-read-design.md`](0.6b-mfa-status-read-design.md)). Read-first found a hard constraint that
+  makes the obvious approach wrong: `user_mfa_methods` is auth-service-owned with no `tenant_id`, so apps/api's
+  `leadwolf_app` role can't/shouldn't read it — the correct design is a token-authed, self-scoped, booleans-only
+  read on the AUTH origin consumed by apps/web, which is a new cross-origin auth-factor-presence exposure the plan
+  flags for security review. Producing the reviewed design (not a rushed endpoint) is the right output.
+  **⚑⚑ Every remaining Phase-0 item is now blocked-on-you (0.2c ESP), deferred-for-supervision (0.2b, 0.7b,
+  0.5b-wire), descoped (0.1b), or held-for-security-review (0.6b). There is no further SAFE autonomous Phase-0
+  work to do.** The loop should stop manufacturing marginal changes. **NEXT fire: run a full-branch close-out
+  verification** (whole-repo `typecheck` + `biome` + `test`, not just per-item) to certify `feat/auth-platform-phase0`
+  is green end-to-end, record the result here, and then IDLE pending the two user decisions: **(1) pick an ESP**
+  (unblocks all shipped mail) and **(2) go/no-go on Phase 1** (the large centralized-IdP build). Do not start
+  Phase 1, wire the ESP, or ship any deferred/held item without the user.
 - **2026-07-07:** Phase 0.5c (AUTH-067) done — the **MFA-changed** security notification (enrolled / disabled /
   recovery-regenerated). One `mfaChanged.ts` template with a per-kind copy map + a shared `notifyMfaChanged`
   helper (same detached best-effort pattern as 0.5a) fired from all three MFA mutators in
