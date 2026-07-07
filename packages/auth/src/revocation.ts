@@ -11,6 +11,7 @@
 
 import { env } from "@leadwolf/config";
 import Redis from "ioredis";
+import { recordAuthMetric } from "./authMetrics.ts";
 import { denyListDegradedLog } from "./revocationLog.ts";
 
 // Lazy: constructing ioredis opens a socket + retry loop. Defer it so importing this module is side-effect-free
@@ -51,7 +52,9 @@ export async function markManyRevoked(sessionIds: readonly string[]): Promise<vo
  */
 export async function isRevoked(sessionId: string): Promise<boolean> {
   try {
-    return (await redis().exists(key(sessionId))) === 1;
+    const revoked = (await redis().exists(key(sessionId))) === 1;
+    recordAuthMetric("auth_revocation_check_total", { result: revoked ? "revoked" : "allowed" });
+    return revoked;
   } catch (err) {
     // Fail OPEN (see the doc comment). Surface a throttled DEGRADED marker (AUTH-066) so a silent deny-list
     // outage — during which logged-out/deprovisioned tokens keep working to expiry — is visible to on-call.
@@ -60,6 +63,7 @@ export async function isRevoked(sessionId: string): Promise<boolean> {
       _lastCheckDegradedLogMs = now;
       console.error(denyListDegradedLog("check", err));
     }
+    recordAuthMetric("auth_revocation_check_total", { result: "degraded" });
     return false;
   }
 }

@@ -5,6 +5,7 @@
 import { env } from "@leadwolf/config";
 import { type AccessTokenClaims, accessTokenClaimsSchema } from "@leadwolf/types";
 import { SignJWT, createRemoteJWKSet, exportJWK, importPKCS8, importSPKI, jwtVerify } from "jose";
+import { recordAuthMetric } from "./authMetrics.ts";
 
 const ALG = "EdDSA";
 
@@ -58,6 +59,7 @@ export async function mintAccessToken(
     .setIssuedAt()
     .setExpirationTime(`${expiresIn}s`)
     .sign(await privateKey());
+  recordAuthMetric("auth_token_mint_total", { result: "success" });
   return { token, expiresIn };
 }
 
