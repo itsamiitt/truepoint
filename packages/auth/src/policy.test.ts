@@ -4,10 +4,12 @@
 import { describe, expect, it } from "bun:test";
 import type { AuthPolicy } from "@leadwolf/types";
 import {
+  type AuthPolicyRow,
   assembleScopePolicy,
   composeEffectivePolicy,
   isMethodAllowed,
   resolveEffectivePolicy,
+  resolvePolicyFromRows,
   strictestMfa,
 } from "./policy.ts";
 
@@ -117,6 +119,73 @@ describe("assembleScopePolicy (auth_policies rows → typed partial)", () => {
     const platform: AuthPolicy = { ...base, mfaEnforcement: "optional" };
     const orgPartial = assembleScopePolicy([{ key: "mfa_enforcement", value: "required" }]);
     expect(composeEffectivePolicy(platform, orgPartial).mfaEnforcement).toBe("required");
+  });
+});
+
+describe("resolvePolicyFromRows (scope partition + platform override + tighten)", () => {
+  const floor = base; // hardcoded platform floor supplied by the repository
+  const row = (
+    scope: string,
+    key: string,
+    value: unknown,
+    workspaceId: string | null = null,
+  ): AuthPolicyRow => ({
+    scope,
+    workspaceId,
+    key,
+    value,
+  });
+
+  it("empty rows → the floor is returned unchanged", () => {
+    expect(resolvePolicyFromRows([], undefined, floor)).toEqual(floor);
+  });
+
+  it("PLATFORM rows OVERRIDE the floor (a platform admin can set the baseline, even looser)", () => {
+    // floor mfa is 'off' already; use a floor with 'required' to show platform can LOOSEN it (override, not tighten).
+    const strictFloor = { ...floor, mfaEnforcement: "required" as const };
+    const eff = resolvePolicyFromRows(
+      [row("platform", "mfa_enforcement", "optional")],
+      undefined,
+      strictFloor,
+    );
+    expect(eff.mfaEnforcement).toBe("optional"); // override wins at the platform layer
+  });
+
+  it("ORG can only TIGHTEN the platform default, never loosen it", () => {
+    const rows = [
+      row("platform", "mfa_enforcement", "optional"),
+      row("org", "mfa_enforcement", "required"), // tighten
+    ];
+    expect(resolvePolicyFromRows(rows, undefined, floor).mfaEnforcement).toBe("required");
+
+    const loosenAttempt = [
+      row("platform", "mfa_enforcement", "required"),
+      row("org", "mfa_enforcement", "off"), // loosen attempt → rejected by strictest-wins
+    ];
+    expect(resolvePolicyFromRows(loosenAttempt, undefined, floor).mfaEnforcement).toBe("required");
+  });
+
+  it("applies ONLY the requested workspace's rows (a sibling workspace's rows are ignored)", () => {
+    const rows = [
+      row("org", "session_timeout_seconds", 7200),
+      row("workspace", "session_timeout_seconds", 3600, "ws-A"),
+      row("workspace", "session_timeout_seconds", 60, "ws-B"), // a stricter sibling — must NOT leak in
+    ];
+    expect(resolvePolicyFromRows(rows, "ws-A", floor).sessionTimeoutSeconds).toBe(3600);
+    // with no workspace in scope, only org applies
+    expect(resolvePolicyFromRows(rows, undefined, floor).sessionTimeoutSeconds).toBe(7200);
+  });
+
+  it("full chain: floor → platform → org → workspace, strictest-wins across the tighten layers", () => {
+    const rows = [
+      row("platform", "session_timeout_seconds", 86400),
+      row("org", "session_timeout_seconds", 7200),
+      row("workspace", "session_timeout_seconds", 3600, "ws-A"),
+      row("org", "require_sso", true),
+    ];
+    const eff = resolvePolicyFromRows(rows, "ws-A", floor);
+    expect(eff.sessionTimeoutSeconds).toBe(3600); // shortest across platform/org/workspace
+    expect(eff.requireSso).toBe(true);
   });
 });
 

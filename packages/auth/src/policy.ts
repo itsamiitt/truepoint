@@ -128,3 +128,40 @@ export function assembleScopePolicy(
   }
   return out;
 }
+
+/** One stored effective-policy row — the shape the repository returns (the value is raw jsonb, hence unknown). */
+export interface AuthPolicyRow {
+  scope: string; // 'platform' | 'org' | 'workspace'
+  workspaceId: string | null;
+  key: string;
+  value: unknown;
+}
+
+/**
+ * Resolve the effective policy for a (tenant, workspace) from the raw `auth_policies` rows the tenant can SEE —
+ * its own rows plus the platform-NULL defaults (RLS guarantees no OTHER tenant's rows ever reach here). Pure:
+ * the repository supplies `rows` + the hardcoded `floor`; this does no I/O.
+ *
+ * Composition model (doc 11 §3): the PLATFORM rows OVERRIDE the `floor` to form the platform default — the
+ * platform admin *sets* the baseline, so this layer is a plain override (a platform row of `off` really means
+ * off) — and then the ORG rows, then the MATCHING WORKSPACE's rows, can only TIGHTEN it (strictest-wins). A
+ * tenant with several workspaces sees all their rows via RLS, so we filter to the requested `workspaceId`; with
+ * no workspace in scope, workspace rows are ignored.
+ */
+export function resolvePolicyFromRows(
+  rows: ReadonlyArray<AuthPolicyRow>,
+  workspaceId: string | undefined,
+  floor: AuthPolicy,
+): AuthPolicy {
+  const platform = rows.filter((r) => r.scope === "platform");
+  const org = rows.filter((r) => r.scope === "org");
+  const workspace = workspaceId
+    ? rows.filter((r) => r.scope === "workspace" && r.workspaceId === workspaceId)
+    : [];
+  const platformDefault: AuthPolicy = { ...floor, ...assembleScopePolicy(platform) };
+  return composeEffectivePolicy(
+    platformDefault,
+    assembleScopePolicy(org),
+    assembleScopePolicy(workspace),
+  );
+}

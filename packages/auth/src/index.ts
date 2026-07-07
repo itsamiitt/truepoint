@@ -119,7 +119,9 @@ export {
   isMethodAllowed,
   composeEffectivePolicy,
   assembleScopePolicy,
+  resolvePolicyFromRows,
 } from "./policy.ts";
+export type { AuthPolicyRow } from "./policy.ts";
 export { recordAuthEvent, recordPlatformAuthEvent } from "./auditEvent.ts";
 export {
   PASSWORD_MIN_LENGTH,
