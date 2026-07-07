@@ -156,6 +156,35 @@ export class ConflictError extends AppError {
 }
 
 /**
+ * Contact TRUE-MERGE legality — a merge input is already merged/tombstoned (import-and-data-model-redesign
+ * 04 §API/§pre-build edge): loser already merged, or survivor tombstoned. 409 `contact_merged` carrying a
+ * `mergedInto` extension member so a stale reference resolves to the survivor (the same code a 410-style
+ * detail read of a merged id returns). Merge is irreversible — this is a hard stop, never a retry.
+ */
+export class ContactMergedError extends AppError {
+  constructor(mergedInto: string | null, detail?: string) {
+    super({
+      status: 409,
+      code: "contact_merged",
+      title: "Contact already merged",
+      detail,
+      ...(mergedInto ? { extensions: { mergedInto } } : {}),
+    });
+  }
+}
+
+/**
+ * Contact TRUE-MERGE per-workspace daily cap reached (04 §3.1 — the FinOps-style brake against a runaway or
+ * abusive merge loop of an irreversible, destructive verb). 409 `merge_daily_cap`; the cap resets at UTC
+ * midnight. A guardrail, not an error the client should auto-retry.
+ */
+export class ContactMergeCapError extends AppError {
+  constructor(detail?: string) {
+    super({ status: 409, code: "merge_daily_cap", title: "Daily merge limit reached", detail });
+  }
+}
+
+/**
  * A verb was requested against a resource in a state that does not permit it — the 08 §2.1 state-machine
  * legality violation (e.g. cancelling a terminal or non-cancellable import). 409 with the stable
  * `illegal_state` slug (the import-redesign series harmonizes on 409, not 422 — 08 §2.1); `currentState` is

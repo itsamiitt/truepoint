@@ -417,6 +417,10 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Contact TRUE-MERGE per-workspace DAILY CAP (04 §3.1 — the FinOps-style brake on an irreversible,
+    // destructive verb; the cap value is a doc-14 rollout knob). Counted against committed `contact.merge`
+    // audit events in the workspace since UTC midnight. 0 = unlimited (kept low during canary — 04 §Rollout).
+    CONTACT_MERGE_DAILY_CAP: z.coerce.number().int().min(0).default(100),
     // Multi-value channel PERMANENT RECONCILE / DRIFT SWEEP (import-and-data-model-redesign 05 §3.4/§5,
     // 15 §M-SEQ seq 48, S-CH5) — the job-level enable for the CH-INV-1 drift sweep. It is part of the
     // channel train, so the leader-locked sweep is registered ONLY when this AND `CHANNEL_DUAL_WRITE` both

@@ -828,6 +828,19 @@ export {
   isContactMergeEnabled,
   contactMergeEnabledForScope,
 } from "./prospect/contactMergeGate.ts";
+// Contact TRUE-MERGE engine (import-and-data-model-redesign 04 §3, S-C4): the ONE value-moving merge
+// implementation (DM1) — the pure field-union planner + the tx executor with the §3.4 child re-point
+// inventory. Both surfaces (customer verb S-C5, Surface-1 staff wrapper S-C9) call runContactMerge.
+export {
+  runContactMerge,
+  type RunContactMergeInput,
+} from "./prospect/mergeContact.ts";
+export {
+  planContactMerge,
+  type MergeScalars,
+  type PlanContactMergeInput,
+  type PlanContactMergeResult,
+} from "./prospect/contactMergePlan.ts";
 
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";
