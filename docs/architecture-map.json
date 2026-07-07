@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1520,
-  "fileSetHash": "sha256:0d002ac8064135510875269350a1623a5fe7b766293b11d3a5d7e48283da8ff8",
+  "fileCount": 1522,
+  "fileSetHash": "sha256:8bfb78d36b71c9f2cb4f0760f4d6deefa98006fbeeaa60001a65151eafb290b6",
   "features": {
     "account-search": {
       "web": [],
@@ -1958,6 +1958,8 @@
       "apps/forge-worker/src/deadLetter.ts",
       "apps/forge-worker/src/index.ts",
       "apps/forge-worker/src/leaderLock.ts",
+      "apps/forge-worker/src/processors.ts",
+      "apps/forge-worker/src/register.ts",
       "apps/forge-worker/src/retryPolicies.ts",
       "apps/forge-worker/src/tuning.ts",
       "apps/forge-worker/src/withDeadline.ts"
