@@ -58,6 +58,14 @@ contactsMergeRoutes.post(
     const scope = { tenantId: c.get("tenantId"), workspaceId };
     if (!(await contactMergeEnabledForScope(scope))) throw new NotFoundError();
 
+    // Idempotency-Key is REQUIRED on this irreversible, destructive verb (04 §API) — enforced explicitly here,
+    // AFTER the 404 gate (so a dark tenant still 404s and the header check never leaks the endpoint's
+    // existence). The shared `idempotency` middleware is a convenience replay layer that no-ops without a key;
+    // requiring it here mirrors the import-commit verb and guarantees a clean first-result replay instead of a
+    // confusing 409 on an accidental double-submit. (The loser tombstone remains the real double-merge guard.)
+    if (!c.req.header("idempotency-key"))
+      throw new ValidationError("An Idempotency-Key header is required to execute a contact merge.");
+
     const parsed = mergeRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success)
       throw new ValidationError("Body must be { loserContactId, decisions?: [{field, winner}] }.");

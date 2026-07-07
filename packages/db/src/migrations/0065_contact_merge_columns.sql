@@ -14,6 +14,7 @@
 ALTER TABLE contacts
   ADD COLUMN IF NOT EXISTS merged_into_contact_id uuid,
   ADD COLUMN IF NOT EXISTS merged_at timestamptz;
+--> statement-breakpoint
 
 DO $$
 BEGIN
@@ -25,6 +26,7 @@ BEGIN
       FOREIGN KEY (merged_into_contact_id) REFERENCES contacts(id) ON DELETE SET NULL;
   END IF;
 END $$;
+--> statement-breakpoint
 
 -- Partial index on the tombstoned-loser set only (04 §1): tiny (merged rows are a fraction of the table),
 -- serves the "resolve a merged id → survivor" traversal (the 410-style detail read) + the merge-audit metrics.

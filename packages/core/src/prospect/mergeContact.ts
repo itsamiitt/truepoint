@@ -93,8 +93,12 @@ export async function runContactMerge(input: RunContactMergeInput): Promise<Merg
     }
     // Legality (04 §3.1/§edge): neither side already merged; survivor must be live.
     if (loser.deletedAt || loser.mergedIntoContactId) {
+      // Carry the loser's ACTUAL supersession pointer (null when it was soft-deleted but never merged) — never a
+      // best-effort `survivor.id` fallback: the S-C9 staff wrapper keys its idempotent re-approve on
+      // `mergedInto === survivorId`, so a fabricated survivor pointer would let a deleted-not-merged loser
+      // falsely report an idempotent success (a merge that never moved values marked "done"). 04 §edge.
       throw new ContactMergedError(
-        loser.mergedIntoContactId ?? survivor.id,
+        loser.mergedIntoContactId,
         "The loser contact is already merged or deleted.",
       );
     }

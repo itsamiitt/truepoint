@@ -456,6 +456,27 @@
       "when": 1785800000000,
       "tag": "0064_account_read_from_child_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1785900000000,
+      "tag": "0065_contact_merge_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0066_contact_merge_audit_action",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1786100000000,
+      "tag": "0067_seed_contact_merge_flag",
+      "breakpoints": true
     }
   ]
 }
