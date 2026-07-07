@@ -120,6 +120,77 @@ export const contactMergeRepository = {
     return { survivor: map.get(survivorContactId), loser: map.get(loserContactId) };
   },
 
+  /** Read-only pair load for the merge PREVIEW (no FOR UPDATE — a GET must not lock). RLS-scoped; a foreign
+   *  id is absent. Same shape as lockAndLoadPair. */
+  async loadPairForPreview(
+    tx: Tx,
+    survivorContactId: string,
+    loserContactId: string,
+  ): Promise<{ survivor?: ContactMergeRow; loser?: ContactMergeRow }> {
+    const rows = await tx
+      .select({
+        id: contacts.id,
+        tenantId: contacts.tenantId,
+        workspaceId: contacts.workspaceId,
+        deletedAt: contacts.deletedAt,
+        mergedIntoContactId: contacts.mergedIntoContactId,
+        accountId: contacts.accountId,
+        ownerUserId: contacts.ownerUserId,
+        masterPersonId: contacts.masterPersonId,
+        isRevealed: contacts.isRevealed,
+        revealedByUserId: contacts.revealedByUserId,
+        revealedAt: contacts.revealedAt,
+        lastActivityAt: contacts.lastActivityAt,
+        customFields: contacts.customFields,
+        fieldProvenance: contacts.fieldProvenance,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        jobTitle: contacts.jobTitle,
+        seniorityLevel: contacts.seniorityLevel,
+        department: contacts.department,
+        locationCountry: contacts.locationCountry,
+        locationCity: contacts.locationCity,
+      })
+      .from(contacts)
+      .where(inArray(contacts.id, [survivorContactId, loserContactId]));
+    const map = new Map(rows.map((r) => [r.id, r as unknown as ContactMergeRow]));
+    return { survivor: map.get(survivorContactId), loser: map.get(loserContactId) };
+  },
+
+  /** Read-only child-impact counts for the merge preview (04 §6): how many live rows would re-point per table
+   *  if the loser merged into a survivor. RLS-scoped via the caller's tx. Same table set as repointChildren's
+   *  tallies (channels count LIVE rows). */
+  async countLoserChildren(
+    tx: Tx,
+    loserId: string,
+    scope: { workspaceId: string },
+  ): Promise<Record<string, number>> {
+    const rows = (await tx.execute(sql`
+      SELECT
+        (SELECT count(*) FROM contact_emails WHERE contact_id = ${loserId}::uuid AND deleted_at IS NULL) AS contact_emails,
+        (SELECT count(*) FROM contact_phones WHERE contact_id = ${loserId}::uuid AND deleted_at IS NULL) AS contact_phones,
+        (SELECT count(*) FROM list_members WHERE contact_id = ${loserId}::uuid) AS list_members,
+        (SELECT count(*) FROM source_imports WHERE contact_id = ${loserId}::uuid) AS source_imports,
+        (SELECT count(*) FROM activities WHERE contact_id = ${loserId}::uuid) AS activities,
+        (SELECT count(*) FROM record_tags WHERE entity = 'contact' AND record_id = ${loserId}::uuid) AS record_tags,
+        (SELECT count(*) FROM contact_reveals WHERE contact_id = ${loserId}::uuid) AS contact_reveals,
+        (SELECT count(*) FROM suppression_list WHERE match_type = 'contact_id' AND contact_id = ${loserId}::uuid) AS suppression_list,
+        (SELECT count(*) FROM consent_records WHERE contact_id = ${loserId}::uuid) AS consent_records,
+        (SELECT count(*) FROM outreach_log WHERE contact_id = ${loserId}::uuid) AS outreach_log,
+        (SELECT count(*) FROM email_thread WHERE contact_id = ${loserId}::uuid) AS email_thread,
+        (SELECT count(*) FROM email_message WHERE contact_id = ${loserId}::uuid) AS email_message,
+        (SELECT count(*) FROM email_event WHERE contact_id = ${loserId}::uuid) AS email_event,
+        (SELECT count(*) FROM sales_nav_links WHERE contact_id = ${loserId}::uuid) AS sales_nav_links,
+        (SELECT count(*) FROM scores WHERE contact_id = ${loserId}::uuid) AS scores,
+        (SELECT count(*) FROM intent_signals WHERE contact_id = ${loserId}::uuid) AS intent_signals,
+        (SELECT count(*) FROM contacts WHERE duplicate_of_contact_id = ${loserId}::uuid AND workspace_id = ${scope.workspaceId}::uuid) AS duplicate_markers
+    `)) as unknown as Array<Record<string, number | string>>;
+    const r = rows[0] ?? {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(r)) out[k] = Number(v) || 0;
+    return out;
+  },
+
   /** Per-workspace daily-cap gauge (04 §3.1): committed `contact.merge` audit events in this workspace since
    *  `since`. RLS-scoped via the caller's tx (the audit rows carry workspace_id). */
   async countMergesSince(tx: Tx, workspaceId: string, since: Date): Promise<number> {

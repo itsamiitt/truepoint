@@ -15,6 +15,7 @@ import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
 import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
 import { contactsDedupRoutes } from "./features/contacts-dedup/index.ts";
+import { contactsMergeRoutes } from "./features/contacts-merge/index.ts";
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
 import {
   emailConnectRoutes,
@@ -128,6 +129,9 @@ app.route("/api/v1/contacts/bulk", contactsBulkRoutes); // 24 Phase-3: owner/tag
 // Within-workspace dedup review (database-management-research G09) — the literal `duplicates` segment registers
 // BEFORE the reveal router so it is never captured as a contact `:id` (same first-match pattern as /contacts/bulk).
 app.route("/api/v1/contacts/duplicates", contactsDedupRoutes);
+// True-merge verb + preview (S-C5): /:id/merge + /:id/merge-preview — no path overlap with reveal/scores/
+// activities. Dual-gated 404-off (dark until the merge flag flips).
+app.route("/api/v1/contacts", contactsMergeRoutes);
 app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal
 app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path overlap either

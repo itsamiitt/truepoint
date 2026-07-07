@@ -841,6 +841,10 @@ export {
   type PlanContactMergeInput,
   type PlanContactMergeResult,
 } from "./prospect/contactMergePlan.ts";
+export {
+  previewContactMerge,
+  type PreviewContactMergeInput,
+} from "./prospect/mergePreview.ts";
 
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";
