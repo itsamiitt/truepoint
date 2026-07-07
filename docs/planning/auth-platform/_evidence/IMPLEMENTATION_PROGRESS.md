@@ -195,6 +195,12 @@ Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadma
   ⇒ Everything shipped on this branch is green end-to-end. **The loop is now genuinely idle** — no further safe
   autonomous Phase-0 work exists. Awaiting the user's two decisions: **(1) pick an ESP** (0.2c → all shipped mail
   delivers) and **(2) Phase-1 go/no-go**. Subsequent autonomous fires should re-verify + hold, not manufacture work.
+- **2026-07-07:** **20-min `/loop` (cron `d2b375cd`) STOPPED.** After the close-out certification, a further fire
+  confirmed no change (HEAD still `eb0d51e`, no new direction) — the loop was firing on a completed task with no
+  safe work left, so it was cancelled to stop burning tokens on empty holds. Reversible: re-run `/loop …` or just
+  reply with a direction to resume. Resume points when you're ready: **(1)** wire an ESP → 0.2c; **(2)** greenlight
+  a deferred/held item (0.2b queue, 0.7b direct-passwordless, 0.5b-wire, 0.6b MFA-read) for a supervised build;
+  or **(3)** Phase-1 go/no-go. Branch `feat/auth-platform-phase0` is green, 21 commits, **local (unpushed)**.
 - **2026-07-07:** Phase 0.5c (AUTH-067) done — the **MFA-changed** security notification (enrolled / disabled /
   recovery-regenerated). One `mfaChanged.ts` template with a per-kind copy map + a shared `notifyMfaChanged`
   helper (same detached best-effort pattern as 0.5a) fired from all three MFA mutators in
