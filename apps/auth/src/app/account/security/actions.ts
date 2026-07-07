@@ -10,7 +10,10 @@
 // middleware.ts is preserved unchanged (09 "Strict CSP preserved on new auth-origin client code").
 "use server";
 
+import { authUrl } from "@/lib/authUrl";
 import { clientIpFromHeaders } from "@/lib/clientIp";
+import { passwordChangedEmail } from "@/lib/emails";
+import { sendAuthEmail } from "@/lib/mailer";
 import { requireUser } from "@/lib/requireUser";
 import {
   checkPasswordAcceptable,
@@ -25,6 +28,7 @@ import {
   recordPlatformAuthEvent,
   verifyTotp,
 } from "@leadwolf/auth";
+import { env } from "@leadwolf/config";
 import { sessionRepository, tenantMemberRepository, userRepository } from "@leadwolf/db";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -93,6 +97,17 @@ export async function changePassword(formData: FormData): Promise<void> {
       metadata: { via: "account_security" },
     });
   }
+
+  // Security notification (AUTH-067): tell the owner their password was changed, so an unauthorized change is
+  // noticed. To the SESSION's own email (acct.user.email — never a request value). Best-effort + DETACHED so it
+  // never fails or delays the change; the failure log carries no PII (the mailer logs its own transport state).
+  const secureUrl = authUrl(env.AUTH_ORIGIN, "/forgot");
+  void sendAuthEmail({ to: acct.user.email, ...passwordChangedEmail({ secureUrl }) }).catch((e) =>
+    console.error(
+      "[auth-mail] password-changed notification failed:",
+      e instanceof Error ? e.message : e,
+    ),
+  );
 
   back("changed");
 }

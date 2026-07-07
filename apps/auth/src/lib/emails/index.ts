@@ -3,5 +3,6 @@
 // sendAuthEmail. Add new auth-email templates here.
 export { BRAND, type RenderedEmail } from "./layout.ts";
 export { type MagicLinkInput, magicLinkEmail } from "./magicLink.ts";
+export { type PasswordChangedInput, passwordChangedEmail } from "./passwordChanged.ts";
 export { type PasswordResetInput, passwordResetEmail } from "./passwordReset.ts";
 export { type VerificationCodeInput, verificationCodeEmail } from "./verificationCode.ts";

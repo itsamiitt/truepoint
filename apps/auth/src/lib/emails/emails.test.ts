@@ -2,7 +2,12 @@
 // render a branded HTML part AND a plaintext fallback, carry the TruePoint brand (never "LeadWolf"), include
 // its code/link, and ship the compliance footer (postal address). Pure unit test — no transport.
 import { describe, expect, it } from "bun:test";
-import { magicLinkEmail, passwordResetEmail, verificationCodeEmail } from "./index.ts";
+import {
+  magicLinkEmail,
+  passwordChangedEmail,
+  passwordResetEmail,
+  verificationCodeEmail,
+} from "./index.ts";
 
 describe("transactional auth email templates", () => {
   it("verification code: html + text carry the code, never say LeadWolf", () => {
@@ -36,11 +41,34 @@ describe("transactional auth email templates", () => {
     expect(m.text).toContain(link);
   });
 
+  it("password changed: security notification carries the brand + secure CTA, never LeadWolf", () => {
+    const secureUrl = "https://auth.example.com/auth/forgot";
+    const m = passwordChangedEmail({ secureUrl });
+    expect(m.subject).toBe("Your TruePoint password was changed");
+    expect(m.html).toContain("was just changed");
+    expect(m.html).toContain(secureUrl);
+    expect(m.html).toContain("TruePoint");
+    expect(m.html).not.toContain("LeadWolf");
+    expect(m.text).toContain(secureUrl);
+    // compliance footer present in both parts
+    expect(m.html).toContain("San Francisco");
+    expect(m.text).toContain("San Francisco");
+  });
+
+  it("password changed: renders a valid document with no secure link (no CTA)", () => {
+    const m = passwordChangedEmail();
+    expect(m.html.startsWith("<!doctype html>")).toBe(true);
+    expect(m.html).toContain("TruePoint");
+    expect(m.html).not.toContain("LeadWolf");
+    expect(m.text.length).toBeGreaterThan(0);
+  });
+
   it("every template renders an html document and a non-empty plaintext fallback", () => {
     for (const m of [
       verificationCodeEmail({ code: "000000" }),
       magicLinkEmail({ link: "https://x.test/m" }),
       passwordResetEmail({ link: "https://x.test/r" }),
+      passwordChangedEmail({ secureUrl: "https://x.test/forgot" }),
     ]) {
       expect(m.html.startsWith("<!doctype html>")).toBe(true);
       expect(m.text.length).toBeGreaterThan(0);

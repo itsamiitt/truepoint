@@ -4,14 +4,17 @@
 // re-renders /reset with a neutral error. The reset code never appears in logs or the error text.
 "use server";
 
+import { authUrl } from "@/lib/authUrl";
 import { clientIpFromHeaders } from "@/lib/clientIp";
+import { passwordChangedEmail } from "@/lib/emails";
+import { sendAuthEmail } from "@/lib/mailer";
 import {
   assertCredentialNotLocked,
   completePasswordReset,
   recordCredentialFailure,
   recordCredentialSuccess,
 } from "@leadwolf/auth";
-import { isAllowedOrigin } from "@leadwolf/config";
+import { env, isAllowedOrigin } from "@leadwolf/config";
 import { ValidationError } from "@leadwolf/types";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -57,6 +60,17 @@ export async function completeReset(formData: FormData): Promise<void> {
     back("1"); // invalid_token → "This reset link is invalid or expired."
   }
   await recordCredentialSuccess(resetKey);
+
+  // Security notification (AUTH-067): tell the account owner their password was changed, so an unauthorized
+  // reset is noticed. Best-effort + DETACHED (the `void recordAuthEvent` precedent) — a notification must never
+  // fail or delay the reset completion. `email` is the account's own address; the failure log carries no PII.
+  const secureUrl = authUrl(env.AUTH_ORIGIN, "/forgot");
+  void sendAuthEmail({ to: email, ...passwordChangedEmail({ secureUrl }) }).catch((e) =>
+    console.error(
+      "[auth-mail] password-changed notification failed:",
+      e instanceof Error ? e.message : e,
+    ),
+  );
 
   // Only forward an allowlisted return origin to /login — an un-validated app_origin must never propagate
   // into the subsequent sign-in's cross-domain handoff. reset=1 drives the "password updated" notice.
