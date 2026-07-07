@@ -11,7 +11,7 @@
 | # | Item | AUTH | Status | Commit / notes |
 |---|---|---|---|---|
 | 0.1 | Add `/auth` basePath to all constructed auth URLs (reset + magic email links, `/account/security` deep links) + link-shape tests | AUTH-062 | ✅ **done** | `authUrl` helper (apps/auth) + `authSecurityUrl` (apps/web), both tested (9 tests); wired forgot/magic actions + SecurityPanel. typecheck ✓ biome ✓ tests ✓ |
-| 0.1b | Redirect from the un-prefixed `/account/security` etc. (belt-and-braces) — optional | AUTH-062 | ⏳ next | apps/auth middleware or a redirect route; low priority (links are the real break, now fixed) |
+| 0.1b | Redirect from the un-prefixed `/account/security` etc. (belt-and-braces) — optional | AUTH-062 | ⏭️ **descoped (edge-only, low value)** | NOT fixable in app code: with `basePath: "/auth"`, Next auto-prefixes the middleware matcher, so an un-prefixed request 404s at the basePath boundary before reaching this app's middleware. The redirect must live at the EDGE (`deploy/Caddyfile`). Value is marginal — 0.1 already prefixed every CONSTRUCTED link; only stale pre-fix bookmarks/emails (expire in 15 min) or manual typos benefit. Editing prod TLS/edge config for that on the autonomous timer is high-blast-radius + unverifiable here (redirect-loop / healthcheck / JWKS / ACME footguns). **Safe recipe (supervised)** — in the `auth.truepoint.in {}` block: `@unprefixed { not path /auth/* /.well-known/* }` then `redir @unprefixed /auth{uri}`; then verify: no loop on `/auth/*`, `/auth/.well-known/jwks.json` still 200s, the container healthcheck path still 200s, ACME renewal unaffected. |
 | 0.2a | Transport-visibility hardening: mailer flags an unset (AUTH-063) or dev-capture/MailHog (AUTH-061) transport with a stable alertable `MISCONFIGURED` marker in prod (no throw → no caller 500s); deploy template no longer defaults prod SMTP to MailHog | AUTH-061/063 | ✅ **done** | `mailTransport.ts` (pure `devCaptureHost`/`isDevCaptureTransport`, 4 tests) + `mailer.ts` + `deploy/env.production.template`. typecheck ✓ biome ✓ tests ✓. Chose log-loud-not-throw to keep all 4 `sendAuthEmail` callers 500-safe and preserve staging MailHog capture. |
 | 0.2b | Durable send: move `sendAuthEmail` onto a BullMQ `auth_email` queue (producer in apps/auth, consumer in apps/workers) — retry + DLQ + **uniform-fast response that closes the AUTH-064 timing/enumeration oracle** (inline send on the account-exists branch is still a timing oracle) | AUTH-064/061/063 | ⏸ **deferred (needs supervision)** | High blast radius on the CRITICAL auth-email send path + can't be exercised end-to-end here (no live Redis+worker+SMTP) — flipping the 4 callers from inline to a queue that may not yet be consumed risks silently stalling all auth mail. Its user-visible payoff (real delivery) is gated on 0.2c's ESP anyway. Do under review with live-infra verification, not on the autonomous timer. Clean template exists: `apps/api/src/features/import/queue.ts` (producer) + `apps/workers/src/queues/*` (consumer). Design: producer renders the template + enqueues the rendered `{to,subject,text,html}` (dev/test keeps the console path, no Redis); worker owns the nodemailer send + the `mailTransport` misconfig markers; queue name in `@leadwolf/types`. |
 | 0.2c | Bounce/complaint handling for auth mail (reuse the M12 ESP webhook pattern) + a real ESP wired in deploy (needs the user's ESP choice + credentials — record as blocked-on-user) | AUTH-040/061 | ◻ todo | Deploy-config; the ESP credential is a user decision. |
@@ -27,6 +27,58 @@
 
 **Phase 0 exit:** forgot-password delivers a working reset; `/account/security` reachable + usable by every user class;
 extension token actually scoped; revocation outages visible.
+
+## Phase 0 — Exit Review (2026-07-07)
+
+All work is on `feat/auth-platform-phase0`, **committed locally, NOT pushed**. Every shipped item passed its gate
+(scoped `typecheck` + `biome` + colocated `bun test`).
+
+**Shipped — 8 items (all the safe, unblocked fixes to the reported breakage):**
+| Item | AUTH | What it fixed |
+|---|---|---|
+| 0.1 | 062 | `/auth` basePath on every constructed reset/magic/security link (reset-link 404 + unreachable security settings) |
+| 0.2a | 061/063 | Mailer flags an unset / dev-capture (MailHog) transport LOUDLY; deploy template no longer defaults prod SMTP to MailHog |
+| 0.3 | 065 | Extension-scoped tokens confined to a route allow-list (observe-first behind `EXTENSION_SCOPE_ENFORCE`) |
+| 0.4 | 066 | Revocation deny-list fail-open now emits a throttled, alertable `DEGRADED` marker |
+| 0.5a | 067 | Password-changed security-notification email (both change paths) |
+| 0.5c | 067 | MFA-changed security-notification email (enroll / disable / regenerate) |
+| 0.6a | 068 | Removed the FAKE `enrolled:false` MFA badges in apps/web (stopped asserting unknown state) |
+| 0.7a | 069 | Passwordless users no longer shown an unusable "Begin setup" — guided to set a password |
+
+**⛔ Blocked on you — 1 (the single most important unblock):**
+- **0.2c — a real transactional email provider (ESP) + credentials.** Until this is wired, every reset /
+  verification / magic / notification email above is code-complete + tested but **does not reach inboxes**. All the
+  mail work lands the moment this does. *Decision needed:* which ESP (SendGrid / Amazon SES / Resend / Postmark) and
+  its credentials, injected as `SMTP_URL` (see `deploy/env.production.template`).
+
+**⏸ Deferred for supervision — 2 (need live-infra verification; unsafe to flip on the autonomous timer):**
+- **0.2b** (AUTH-064) — durable BullMQ auth-email queue (retry/DLQ + closes the inline-send timing/enumeration
+  oracle). High blast radius on the critical mail path; needs live Redis + worker + SMTP to verify end-to-end.
+- **0.7b** (AUTH-069) — DIRECT passwordless first-factor enrollment (fresh-proof step-up). Session-freshness
+  semantics are unverifiable here (refresh-rotation); the email-OTP variant depends on 0.2c.
+
+**⏭️ Descoped — 1:** 0.1b (edge-only redirect, marginal value — see the row).
+
+**Remaining net-new features — 2 (enhancements, NOT fixes to the reported breakage):**
+- **0.5b** (AUTH-067) — new-sign-in notification (needs the login-finalize/device context + a "new device"
+  heuristic so it doesn't notify on every refresh).
+- **0.6b** (AUTH-068) — real cross-origin MFA-status read (a security-reviewed auth→app-API endpoint that can't
+  leak factor presence cross-tenant) to show true On/Off in apps/web.
+
+**Verdict on the three reported-broken areas:**
+1. **Forgot Password** — both structural breaks fixed: the link 404 (0.1) and the silent MailHog non-delivery
+   (0.2a). Actual inbox delivery is gated on 0.2c (ESP). Hardening (durable queue + timing-oracle close) is 0.2b.
+2. **User Security Settings** — reachable (0.1), honest for passwordless users (0.7a), and honest about MFA state
+   in apps/web (0.6a). Real cross-origin MFA status is the 0.6b enhancement.
+3. **Callback URL Management** — only the **extension-token scope** slice (0.3) was in Phase 0's P0 bundle. The
+   BROADER callback / redirect-URI management surface (doc 08 — registered callback URLs, OAuth client config) was
+   **NOT built in Phase 0**; it is Phase-1+ work. ⚠️ If "Callback URL Management" was reported broken in a way 0.3
+   doesn't cover, that needs its own audit pass — flag for the user.
+
+**Recommended sequence:** (a) You choose an ESP → I wire **0.2c** (unblocks ALL mail, the highest-leverage move).
+(b) I do **0.5b** (the last unblocked notification). (c) Confirm the Callback-URL-Management scope (⚠️ above) before
+treating Phase 0 as fully closed. (d) **Phase 1** (centralized-IdP consolidation, doc 12) is a large new build — begin
+only after you've reviewed this exit state. The next autonomous fire will pick up **0.5b** unless redirected.
 
 ## Phases 1–5
 Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadmap.md). Do not start until Phase 0 is complete.
@@ -91,6 +143,15 @@ Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadma
   (un-prefixed `/account/security` redirect, belt-and-braces) — the last safe Phase-0 fix — then a Phase 0
   exit-review summary** (shipped vs deferred vs blocked) before touching Phase 1. Everything left in Phase 0 is
   either deferred-for-supervision (0.2b, 0.7b), blocked-on-ESP (0.2c), or a net-new feature (0.5b, 0.6b).
+- **2026-07-07:** Phase 0.1b **descoped** (see the row) — architecturally edge-only (basePath hides un-prefixed
+  paths from the app middleware) + high-blast-radius on prod TLS config + marginal value; left a safe supervised
+  Caddy recipe. That was the last "safe fix" slot, so wrote the **Phase 0 — Exit Review** above (8 shipped, 1
+  blocked-on-ESP, 2 deferred-for-supervision, 1 descoped, 2 net-new remaining). All three reported-broken areas
+  addressed in code, with two honest caveats surfaced to the user: (1) mail delivery is gated on the ESP choice
+  (0.2c), and (2) "Callback URL Management" was only covered by the extension-scope slice (0.3) — the broader
+  redirect-URI surface (doc 08) is Phase-1+ and may need its own audit if it was the reported break. **NEXT fire:
+  0.5b (new-sign-in notification)** — the last unblocked item — unless the user redirects toward the ESP wiring
+  (0.2c) or Phase 1.
 - **2026-07-07:** Phase 0.5c (AUTH-067) done — the **MFA-changed** security notification (enrolled / disabled /
   recovery-regenerated). One `mfaChanged.ts` template with a per-kind copy map + a shared `notifyMfaChanged`
   helper (same detached best-effort pattern as 0.5a) fired from all three MFA mutators in
