@@ -351,6 +351,18 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // API-PUSH imports (import-and-data-model-redesign 08 §9 "API-push imports"; P5). GLOBAL kill-switch of the
+    // push dual gate: effective push = (this === "true") AND the per-tenant `api_imports_enabled` flag (seeded
+    // off in 0069). While off, `POST /imports/rows` 404s (strict-from-birth, no existence oracle) and the JSON
+    // pipeline is never constructed — every OTHER import surface is byte-identical (a NEW additive route). With
+    // both on, a caller may submit already-structured canonical rows as JSON onto the SAME fast-lane durable
+    // pipeline (createJob + enqueueFastImport) the multipart one-shot uses, Idempotency-Key required. Body-
+    // carried data ONLY — no remote-URL / connected-source fetch (13 §7/§8 SSRF forward-guard; that branch is
+    // deferred). Same explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset never truthy.
+    API_IMPORTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // How often the leader-locked scheduled-import sweep ticks (fires due schedules). Revert-by-env.
     SCHEDULED_IMPORT_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(60_000),
     // N consecutive FIRE-TIME failures (grant loss / submission error) that auto-disable a schedule (it turns

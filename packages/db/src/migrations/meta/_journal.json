@@ -484,6 +484,13 @@
       "when": 1786200000000,
       "tag": "0068_contact_external_id_delta",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1786300000000,
+      "tag": "0069_seed_api_imports_flag",
+      "breakpoints": true
     }
   ]
 }
