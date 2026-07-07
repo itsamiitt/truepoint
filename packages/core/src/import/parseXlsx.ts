@@ -9,10 +9,11 @@
 //   • ZIP MAGIC — a real .xlsx is an OOXML ZIP; non-ZIP bytes are rejected before parse (SheetJS otherwise
 //     mis-reads arbitrary bytes as a 1-cell sheet).
 //   • BOUNDED INPUT — the COMPRESSED upload is capped at MAX_BYTES and the parse is capped at MAX_ROWS via
-//     `sheetRows`; columns are capped after the header is read. NOTE: `XLSX.read` still decompresses the OOXML
-//     container (sheet XML + shared-strings) into memory before `sheetRows` truncates, so the compressed-byte
-//     cap — not a decompressed-size cap — is the real ceiling; a hostile high-ratio zip is a known residual to
-//     harden at the scale/streaming step (list-plan/03 §6). Over-cap → a clean ImportValidationError, no crash.
+//     `sheetRows`; columns are capped after the header is read. The decompressed-size hazard `XLSX.read` would
+//     otherwise pose (it inflates the OOXML container — sheet XML + shared-strings — into memory before
+//     `sheetRows` truncates) is now closed by S-S5: `assertXlsxArchiveWithinLimits` reads the central directory
+//     and enforces the declared-uncompressed / expansion-ratio / entry-count caps STRICTLY BEFORE `XLSX.read`,
+//     so a hostile high-ratio zip is refused (422) before it inflates. Over-cap → a clean error, no crash.
 //   • CSV-INJECTION — a leading formula trigger (= + - @, incl. after a tab/CR) is neutralized so a value that
 //     is later re-exported to a spreadsheet can't execute. This matches the OWASP CSV-injection guidance and is
 //     applied at the parse seam so both the preview and the stored raw row are clean.
