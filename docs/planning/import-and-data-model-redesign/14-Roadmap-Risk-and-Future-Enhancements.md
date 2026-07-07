@@ -87,6 +87,13 @@ gaps are placed, not re-analyzed (§Gap-coverage checklist).
 
 ### At a glance
 
+> **Implementation status (2026-07-07 — the living record is [`16`](16-Implementation-Audit.md); this note
+> follows the 16 → 01 → 02 → 14 update protocol):** Phases **0–3 are BUILT, dark** (every step + adversarial
+> verification; flags off/off; CI gates + the three infra gates remain user-owed). Phase **4 partial** (06-family
+> DDL 0061 + S-A2 dual-write/backfills built dark + verified; S-A6 in flight; merge train + S-U8 pending).
+> Phase **5 partial** (scheduled imports: DDL 0063 + pure core + repository built; sweep/verbs in flight;
+> delta/API-push pending). Per-step commits, gate states, and drifts live in `16`.
+
 | Phase | Theme | Gaps closed | Headline flags | Effort | Ships schema? |
 |---|---|---|---|---|---|
 | **0** | Stop the bleeding: visibility fix + kill the dead end | G01 G02 · G10 (toggle half) · G04 (hazard half) | `JOB_VISIBILITY_SCOPED` + `job_visibility_scoped` | **M** | Additive DDL only (S-V1 + the P0 audit-action CHECK rider, 15 ruling M1) |

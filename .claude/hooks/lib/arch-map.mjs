@@ -73,6 +73,8 @@ export const QUEUE_DOMAIN = {
   importArtifactSweep: "import",
   channelBackfillSweep: "reveal",
   channelReconcileSweep: "reveal",
+  accountBackfillSweep: "reveal",
+  scheduledImportSweep: "import",
   dataRetentionSweep: "compliance",
   "crm-sync": "crm-sync",
   outreach: "outreach",
@@ -111,6 +113,10 @@ export const REPO_DOMAIN = {
   importMappingTemplate: "import",
   // Per-workspace import policy (who_can_import + strategy defaults; P0 of import-and-data-model-redesign).
   importPolicy: "import",
+  // P5 scheduled imports (import-and-data-model-redesign 08 §9): the recurring-import definition + fires.
+  scheduledImport: "import",
+  // 06-family company children (account_domains/account_locations/hierarchy; Phase 4) — reveal, like accounts.
+  accountChild: "reveal",
   suppression: "compliance",
   retentionPolicy: "compliance",
   retentionRun: "compliance",

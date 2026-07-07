@@ -98,8 +98,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1487,
-  "fileSetHash": "sha256:c6b4c4f0b00234119276ef6e6f4876274b9f239a6ba6d13c3a18c92a4a4f297d",
+  "fileCount": 1489,
+  "fileSetHash": "sha256:c6f06656eb54f8d07ef26922ae2d6f3169af52e3edf4550b362cc9c8feeba785",
   "features": {
     "account-search": {
       "web": [],
@@ -837,6 +837,7 @@
         "packages/core/src/import/runFastImport.ts",
         "packages/core/src/import/runImport.ts",
         "packages/core/src/import/scheduledImport.ts",
+        "packages/core/src/import/scheduledImportGate.ts",
         "packages/core/src/import/streamParse.ts",
         "packages/core/src/import/submitCopyImport.ts",
         "packages/core/src/import/templates.ts",
@@ -848,6 +849,7 @@
         "packages/db/src/repositories/importMappingTemplateRepository.ts",
         "packages/db/src/repositories/importPolicyRepository.ts",
         "packages/db/src/repositories/importStagingRepository.ts",
+        "packages/db/src/repositories/scheduledImportRepository.ts",
         "packages/db/src/repositories/sourceImportRepository.ts"
       ],
       "workers": [
@@ -858,7 +860,8 @@
         "apps/workers/src/queues/importPromotionSweep.ts",
         "apps/workers/src/queues/importReaperSweep.test.ts",
         "apps/workers/src/queues/importReaperSweep.ts",
-        "apps/workers/src/queues/imports.ts"
+        "apps/workers/src/queues/imports.ts",
+        "apps/workers/src/queues/scheduledImportSweep.ts"
       ],
       "integrations": []
     },
@@ -1274,12 +1277,14 @@
         "packages/core/src/reveal/staffWorkspaceExport.ts"
       ],
       "db": [
+        "packages/db/src/repositories/accountChildRepository.ts",
         "packages/db/src/repositories/accountRepository.ts",
         "packages/db/src/repositories/contactChannelRepository.ts",
         "packages/db/src/repositories/contactRepository.ts",
         "packages/db/src/repositories/revealRepository.ts"
       ],
       "workers": [
+        "apps/workers/src/queues/accountBackfillSweep.ts",
         "apps/workers/src/queues/channelBackfillSweep.ts",
         "apps/workers/src/queues/channelReconcileSweep.ts"
       ],
@@ -2420,7 +2425,6 @@
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
-    "apps/workers/src/queues/accountBackfillSweep.ts",
     "apps/workers/src/queues/bulkEnrichment.ts",
     "apps/workers/src/queues/bulkReveal.ts",
     "apps/workers/src/queues/dedup.ts",
@@ -2433,7 +2437,6 @@
     "apps/workers/src/queues/retentionSweep.ts",
     "apps/workers/src/queues/sequenceTick.ts",
     "apps/workers/src/queues/tokenRefresh.ts",
-    "packages/db/src/repositories/accountChildRepository.ts",
     "packages/db/src/repositories/accountHoldRepository.ts",
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/announcementRepository.ts",
@@ -2464,7 +2467,6 @@
     "packages/db/src/repositories/retentionClassPolicyRepository.ts",
     "packages/db/src/repositories/revealJobRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
-    "packages/db/src/repositories/scheduledImportRepository.ts",
     "packages/db/src/repositories/schedulerRepository.ts",
     "packages/db/src/repositories/scimTokenRepository.ts",
     "packages/db/src/repositories/searchRepository.ts",
