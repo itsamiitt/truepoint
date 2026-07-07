@@ -181,6 +181,38 @@ export function parsePolicyKeyValue(
   return { ok: true, field, value: parsed.data as AuthPolicy[keyof AuthPolicy] };
 }
 
+/** The write-authorization decision for one policy key: the validated field+value to persist, or a typed
+ *  rejection the endpoint maps to a status (unknown_key / invalid_value → 422; below_floor → 403). */
+export type PolicyWriteDecision =
+  | { ok: true; field: keyof AuthPolicy; value: AuthPolicy[keyof AuthPolicy] }
+  | {
+      ok: false;
+      reason: "unknown_key" | "invalid_value" | "below_floor";
+      violations?: Array<keyof AuthPolicy>;
+    };
+
+/**
+ * The COMPLETE write-authorization decision for one policy key — the write path's single pure security gate.
+ * Composes both guards: (1) the value must be a known key with a well-typed value (parsePolicyKeyValue), and
+ * (2) it must not loosen that key below the security `floor` (findFloorViolations, AUTH-021). Returns the
+ * validated {field, value} to persist, or a typed rejection. Pure — the endpoint resolves the `floor` (the
+ * PARENT scope's effective policy: for an org write that is the platform default; for a platform write, the
+ * env/code minimum) and calls this BEFORE effectivePolicyRepository.upsertTenantKey.
+ */
+export function validatePolicyWrite(
+  key: string,
+  value: unknown,
+  floor: AuthPolicy,
+): PolicyWriteDecision {
+  const parsed = parsePolicyKeyValue(key, value);
+  if (!parsed.ok) return { ok: false, reason: parsed.reason };
+  // Single-key partial; the computed-key object needs the cast (TS widens `{[k]: v}` to a string index).
+  const proposed = { [parsed.field]: parsed.value } as Partial<AuthPolicy>;
+  const violations = findFloorViolations(proposed, floor);
+  if (violations.length > 0) return { ok: false, reason: "below_floor", violations };
+  return { ok: true, field: parsed.field, value: parsed.value };
+}
+
 /** One stored effective-policy row — the shape the repository returns (the value is raw jsonb, hence unknown). */
 export interface AuthPolicyRow {
   scope: string; // 'platform' | 'org' | 'workspace'

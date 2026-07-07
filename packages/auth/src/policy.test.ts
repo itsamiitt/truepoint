@@ -13,6 +13,7 @@ import {
   resolveEffectivePolicy,
   resolvePolicyFromRows,
   strictestMfa,
+  validatePolicyWrite,
 } from "./policy.ts";
 
 const base: AuthPolicy = {
@@ -282,6 +283,45 @@ describe("parsePolicyKeyValue (write-path value guard)", () => {
     expect(parsePolicyKeyValue("require_sso", "yes")).toEqual({
       ok: false,
       reason: "invalid_value",
+    });
+  });
+});
+
+describe("validatePolicyWrite (the write path's single security decision)", () => {
+  // A permissive floor so a well-formed tightening write is accepted.
+  const floor: AuthPolicy = {
+    mfaEnforcement: "optional",
+    allowedMethods: ["password", "oauth", "magic_link", "sso", "passkey"],
+    disableSocial: false,
+    requireSso: false,
+    ipAllowlist: [],
+  };
+
+  it("accepts a known, well-typed, non-loosening write and returns the field+value to persist", () => {
+    expect(validatePolicyWrite("mfa_enforcement", "required", floor)).toEqual({
+      ok: true,
+      field: "mfaEnforcement",
+      value: "required",
+    });
+  });
+
+  it("rejects an unknown key (→ 422)", () => {
+    expect(validatePolicyWrite("nope", 1, floor)).toEqual({ ok: false, reason: "unknown_key" });
+  });
+
+  it("rejects a malformed value (→ 422)", () => {
+    expect(validatePolicyWrite("mfa_enforcement", "banana", floor)).toEqual({
+      ok: false,
+      reason: "invalid_value",
+    });
+  });
+
+  it("rejects a value that would loosen the floor, naming the offending key (→ 403)", () => {
+    const strictFloor: AuthPolicy = { ...floor, mfaEnforcement: "required" };
+    expect(validatePolicyWrite("mfa_enforcement", "off", strictFloor)).toEqual({
+      ok: false,
+      reason: "below_floor",
+      violations: ["mfaEnforcement"],
     });
   });
 });
