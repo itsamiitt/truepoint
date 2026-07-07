@@ -261,5 +261,26 @@ export const auditAction = z.enum([
   "channel_promoted",
   "channel_deleted",
   "channel_primary_demoted",
+  // Contact TRUE-MERGE P4 (import-and-data-model-redesign 04 §4 / 15 ruling M1 — the S-C2 train, 0066): the
+  // single closed-enum action the merge engine writes IN-TX with the merge (04 §3.4). Its metadata carries
+  // survivor id, loser id, the per-field decision set, the loser's field_provenance map, and the re-point
+  // counts per child table — enough for support to reconstruct a merge from audit alone (04 §4). Written by
+  // NOBODY until S-C4 lands the engine AND the S-C3 dual gate is ON; landed with S-C2's DDL so the first
+  // writer never fails the DB CHECK.
+  "contact.merge",
 ]);
 export type AuditAction = z.infer<typeof auditAction>;
+
+/**
+ * The scalar-edit / merge field-change audit-metadata contract (04 §4). Every write to the seven
+ * hand-editable overlay scalars (editContactFields) and every merge records, in the SAME tx as the mutation,
+ * a before/after map for the CHANGED CLEAR-TEXT scalars only — NEVER email_enc/phone_enc values (channel
+ * history is structural in 05's soft-deleted child rows). `src` labels the write origin ("user_edit" |
+ * "merge"). Shape only; the writers persist it under `audit_log.metadata`.
+ */
+export interface FieldChangeAuditMetadata {
+  /** before (`b`) / after (`a`) per changed scalar field name — clear-text overlay columns only. */
+  fields: Record<string, { b: unknown; a: unknown }>;
+  /** write origin: "user_edit" (a hand-edit PATCH) | "merge" (a loser-sourced field win). */
+  src: "user_edit" | "merge";
+}
