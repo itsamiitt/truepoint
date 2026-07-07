@@ -26,7 +26,12 @@ import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { eventsRoutes } from "./features/events/routes.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
-import { bulkImportRoutes, importArtifactRoutes, importRoutes } from "./features/import/index.ts";
+import {
+  bulkImportRoutes,
+  importArtifactRoutes,
+  importRoutes,
+  importScheduleRoutes,
+} from "./features/import/index.ts";
 import { ingestRoutes } from "./features/ingest/index.ts";
 import { listsRoutes } from "./features/lists/index.ts";
 import { notificationsRoutes } from "./features/notifications/index.ts";
@@ -112,6 +117,10 @@ app.route("/api/v1/imports/bulk", bulkImportRoutes);
 // Error-artifact downloads (S-V5/S-S4) BEFORE the import router: its `/:jobId/artifacts/:kind` is a deeper path
 // than importRoutes' `/:jobId`, so there is no capture conflict — registered first for the same discipline.
 app.route("/api/v1/imports", importArtifactRoutes);
+// Scheduled imports (P5) BEFORE the import router: `/imports/schedules` must register before importRoutes'
+// `/:jobId` so the literal `schedules` segment is never captured as a job id (the mapping-templates / bulk /
+// artifacts first-match precedent). Every verb 404s while the scheduled-imports dual gate is off.
+app.route("/api/v1/imports", importScheduleRoutes);
 app.route("/api/v1/imports", importRoutes);
 // Bulk actions BEFORE the reveal router: the literal `bulk` segment must register before reveal's `/:id/reveal`
 // so a bulk path is never captured as a contact id (same first-match pattern as imports/mapping-templates).
