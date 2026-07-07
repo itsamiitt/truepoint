@@ -117,6 +117,8 @@ export {
   resolveEffectivePolicy,
   strictestMfa,
   isMethodAllowed,
+  composeEffectivePolicy,
+  assembleScopePolicy,
 } from "./policy.ts";
 export { recordAuthEvent, recordPlatformAuthEvent } from "./auditEvent.ts";
 export {

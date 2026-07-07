@@ -1,7 +1,15 @@
 // policy.ts — resolve the effective auth policy across tenant + workspace scopes, STRICTEST-WINS
 // (ADR-0018). A workspace may only tighten the tenant policy, never relax it; MFA enforcement escalates.
+// Phase 1 (doc 11 §3, doc 12) generalizes this to the platform → org → workspace chain via composeEffectivePolicy,
+// and assembleScopePolicy maps the generic `auth_policies` (key, value jsonb) rows for one scope into a typed
+// Partial<AuthPolicy> that the fold consumes.
 
-import type { AuthMethod, AuthPolicy, MfaEnforcement } from "@leadwolf/types";
+import {
+  type AuthMethod,
+  type AuthPolicy,
+  type MfaEnforcement,
+  authPolicySchema,
+} from "@leadwolf/types";
 
 const MFA_RANK: Record<MfaEnforcement, number> = { off: 0, optional: 1, required: 2 };
 
@@ -54,4 +62,69 @@ export function isMethodAllowed(policy: AuthPolicy, method: AuthMethod): boolean
   if (policy.requireSso && method !== "sso") return false;
   if (policy.disableSocial && method === "oauth") return false;
   return policy.allowedMethods.includes(method);
+}
+
+// ── Phase 1: the platform → org → workspace effective-policy engine (doc 11 §3, doc 12) ──────────────────────
+
+/**
+ * Fold an ordered scope chain into ONE effective policy, STRICTEST-WINS per key. The FIRST argument is the
+ * COMPLETE platform default — the security floor (env-as-floor; doc 11 §3) — followed by the org override, then
+ * the workspace override (each a Partial that only supplies the keys it sets). Each later scope may only TIGHTEN
+ * a key, never loosen it: the reduction reuses the proven two-scope `resolveEffectivePolicy` pairwise, and its
+ * per-key operations (MFA escalates, timeouts shorten, booleans OR, method/IP lists intersect) are all
+ * associative + monotonic, so the strictest value across ALL scopes always survives regardless of fold order.
+ */
+export function composeEffectivePolicy(
+  platformDefault: AuthPolicy,
+  ...overrides: ReadonlyArray<Partial<AuthPolicy> | undefined>
+): AuthPolicy {
+  return overrides.reduce<AuthPolicy>(
+    (acc, next) => (next ? resolveEffectivePolicy(acc, next) : acc),
+    platformDefault,
+  );
+}
+
+// The `auth_policies.key` → AuthPolicy field map, with a per-key parser for the jsonb `value`. This is the ONLY
+// bridge between the generic (key, value) store and the typed policy; adding a knob = one entry here + the schema.
+const POLICY_KEY_FIELD = {
+  mfa_enforcement: "mfaEnforcement",
+  allowed_methods: "allowedMethods",
+  disable_social: "disableSocial",
+  require_sso: "requireSso",
+  ip_allowlist: "ipAllowlist",
+  session_timeout_seconds: "sessionTimeoutSeconds",
+  idle_timeout_seconds: "idleTimeoutSeconds",
+} as const satisfies Record<string, keyof AuthPolicy>;
+
+// Reuse the field validators straight off authPolicySchema (the single source of truth in @leadwolf/types) so a
+// value that would fail the tenant-editable PUT also fails here — no second, drifting copy of the rules.
+const POLICY_KEY_PARSER = {
+  mfa_enforcement: authPolicySchema.shape.mfaEnforcement,
+  allowed_methods: authPolicySchema.shape.allowedMethods,
+  disable_social: authPolicySchema.shape.disableSocial,
+  require_sso: authPolicySchema.shape.requireSso,
+  ip_allowlist: authPolicySchema.shape.ipAllowlist,
+  session_timeout_seconds: authPolicySchema.shape.sessionTimeoutSeconds,
+  idle_timeout_seconds: authPolicySchema.shape.idleTimeoutSeconds,
+} as const;
+
+/**
+ * Map the `auth_policies` rows for a SINGLE scope into a typed Partial<AuthPolicy>. Pure — the caller (the
+ * repository) fetches the rows per scope, this shapes them, and composeEffectivePolicy folds the chain. An
+ * unrecognised key is IGNORED (forward-compatible with knobs a newer writer added), and a value that fails its
+ * parser is SKIPPED rather than throwing — a single malformed row must never break policy resolution (which
+ * would fail login), so an unparseable override degrades to "not set" and the stricter parent scope stands.
+ */
+export function assembleScopePolicy(
+  rows: ReadonlyArray<{ key: string; value: unknown }>,
+): Partial<AuthPolicy> {
+  const out: Partial<AuthPolicy> = {};
+  for (const { key, value } of rows) {
+    const field = POLICY_KEY_FIELD[key as keyof typeof POLICY_KEY_FIELD];
+    const parser = POLICY_KEY_PARSER[key as keyof typeof POLICY_KEY_PARSER];
+    if (!field || !parser) continue; // unknown key → ignore (future-proof)
+    const parsed = parser.safeParse(value);
+    if (parsed.success) (out as Record<string, unknown>)[field] = parsed.data; // malformed → skip, never throw
+  }
+  return out;
 }
