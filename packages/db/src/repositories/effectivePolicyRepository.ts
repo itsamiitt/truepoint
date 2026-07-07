@@ -6,8 +6,10 @@
 // dependency direction — auth already depends on db), so this returns raw rows and the auth layer composes.
 // Cross-tenant isolation + the resolve are proven by test/effectivePolicyResolve.itest.ts + authPolicyIsolation.itest.ts.
 
+import { sql } from "drizzle-orm";
 import { withTenantTx } from "../client.ts";
 import { authPolicies } from "../schema/auth.ts";
+import { auditRepository } from "./auditRepository.ts";
 
 /** A raw effective-policy row. Structurally the @leadwolf/auth `AuthPolicyRow` — kept dependency-free here so
  *  packages/db stays upstream of the resolver. */
@@ -40,5 +42,62 @@ export const effectivePolicyRepository = {
         })
         .from(authPolicies),
     );
+  },
+
+  /**
+   * Upsert ONE org- or workspace-scoped policy key and audit it, atomically, as the tenant's security_admin
+   * under withTenantTx. The WITH-CHECK RLS stamps the row with the ACTIVE tenant (a cross-tenant write is
+   * blocked at the DB — proven by authPolicyIsolation.itest). This method persists an ALREADY-VALIDATED write:
+   * the value-shape guard (parsePolicyKeyValue) and the security-floor guard (findFloorViolations), both in
+   * @leadwolf/auth, run in the app-layer orchestration BEFORE this. The PLATFORM default (NULL-tenant) write is
+   * a SEPARATE staff-only path via withPlatformTx — deliberately not reachable here. Cache invalidation is
+   * delete-on-write at the caller (drop the resolver key); `version` is bumped for audit/optimistic-concurrency.
+   */
+  async upsertTenantKey(args: {
+    tenantId: string;
+    workspaceId?: string;
+    scope: "org" | "workspace";
+    key: string;
+    value: unknown;
+    actorUserId: string;
+  }): Promise<void> {
+    const { tenantId, workspaceId, scope, key, value, actorUserId } = args;
+    await withTenantTx({ tenantId, workspaceId }, async (tx) => {
+      await tx
+        .insert(authPolicies)
+        .values({
+          scope,
+          tenantId,
+          workspaceId: workspaceId ?? null,
+          key,
+          value,
+          updatedBy: actorUserId,
+        })
+        .onConflictDoUpdate({
+          target: [
+            authPolicies.scope,
+            authPolicies.tenantId,
+            authPolicies.workspaceId,
+            authPolicies.key,
+          ],
+          set: {
+            value,
+            updatedBy: actorUserId,
+            updatedAt: new Date(),
+            version: sql`${authPolicies.version} + 1`,
+          },
+        });
+      // Audited in the SAME tx (append-only audit_log) — a failed upsert rolls the audit row back too. Never
+      // the value (a policy value is not a secret, but the audit stays minimal): just the scope + key changed.
+      await auditRepository.insert(tx, {
+        tenantId,
+        workspaceId: workspaceId ?? null,
+        actorUserId,
+        action: "settings.update",
+        entityType: "auth_policy",
+        entityId: tenantId,
+        metadata: { scope, key },
+      });
+    });
   },
 };

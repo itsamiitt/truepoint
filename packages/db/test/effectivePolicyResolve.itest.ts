@@ -89,4 +89,33 @@ describe("effective-policy resolve (DB read + RLS + strictest-wins)", () => {
     expect(eff.requireSso).toBe(true); // tenant B's own row
     expect(eff.mfaEnforcement).toBe("optional"); // only the PLATFORM default — A's "required" never reached B
   });
+
+  test("upsertTenantKey inserts then UPDATES the same org key (onConflict), never duplicates", async () => {
+    const [u] = await admin`INSERT INTO users (email) VALUES ('sec-admin@acme.test') RETURNING id`;
+    const actor = (u as { id: string }).id;
+    await admin`INSERT INTO tenant_members (tenant_id, user_id) VALUES (${tenantA}, ${actor})`;
+
+    // insert
+    await dbmod.effectivePolicyRepository.upsertTenantKey({
+      tenantId: tenantA,
+      scope: "org",
+      key: "disable_social",
+      value: true,
+      actorUserId: actor,
+    });
+    let rows = await dbmod.effectivePolicyRepository.getScopeRows({ tenantId: tenantA });
+    expect(rows.find((r) => r.key === "disable_social")?.value).toBe(true);
+
+    // update the SAME (scope, tenant, workspace=NULL, key) → the onConflict path must UPDATE, not insert a dup.
+    await dbmod.effectivePolicyRepository.upsertTenantKey({
+      tenantId: tenantA,
+      scope: "org",
+      key: "disable_social",
+      value: false,
+      actorUserId: actor,
+    });
+    rows = await dbmod.effectivePolicyRepository.getScopeRows({ tenantId: tenantA });
+    expect(rows.filter((r) => r.key === "disable_social").length).toBe(1); // single row — upsert, not insert
+    expect(rows.find((r) => r.key === "disable_social")?.value).toBe(false); // value updated
+  });
 });
