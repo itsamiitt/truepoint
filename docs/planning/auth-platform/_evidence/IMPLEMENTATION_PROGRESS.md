@@ -115,6 +115,29 @@ only after you've reviewed this exit state. The next autonomous fire will pick u
 | 1.5b-rest | Remaining wiring: `auth_login_total{result,method}` + `auth_policy_block_total{reason}` in `flow.ts` (finalizeLogin + the enforcement gates), `auth_mfa_challenge_total` in the MFA path, and a **`/metrics` scrape endpoint** (network-restricted, not public) exposing `renderAuthMetrics()` | M | ◻ next | The login/policy-block sites are the highest-value SLIs but sit in the login hot path; the endpoint needs the exposure decision (internal-only). |
 | 1.6 | Drizzle **snapshot-debt stitch** (meta 0028→0053) for clean `drizzle-kit generate` | M | ◻ todo | Genuinely needs a DB to verify the regenerated snapshot matches reality; NOT attempted blind. Hand-authoring (1.1a) sidesteps the immediate need. |
 
+## ⏸ Loop paused — 2026-07-07 (Phase 1 in progress, DB-blocked)
+
+The 20-min `/loop` (cron `10381e26`) was **paused after ~14 iterations**. Reason: Phase 1's remaining work is
+uniformly **DB-bound** (tables, RLS, repositories, the API endpoint, the finalize-login switch, the backfill),
+and this sandbox has **no database** — so nothing further can be run, validated, or shipped. Every recent
+iteration produced blind DB code mirroring the same unvalidated pattern; replicating it more doesn't de-risk it
+(only a Postgres/CI pass does). Paused to stop spending tokens on unrunnable work while the requester is away.
+
+**What's DONE + FULLY VERIFIED here (pure logic, ~45 tests green):**
+- Effective-policy engine: `composeEffectivePolicy` / `assembleScopePolicy` / `resolvePolicyFromRows` (resolve),
+  `findFloorViolations` / `parsePolicyKeyValue` / `validatePolicyWrite` (write guards). — `packages/auth/src/policy.ts`
+- Managed callback origins: `resolveAllowedOrigins` / `isOriginAllowed` / `canonicalManagedOrigin`. — `packages/config/src/managedOrigins.ts`
+- Auth observability: the `authMetrics` SLI registry, wired live into `revocation.ts` + `token.ts`. — `packages/auth/src/authMetrics.ts`
+
+**What's AUTHORED but UNRUN (needs a Postgres 16 / CI pass — the ONE blocker):**
+- `auth_policies` table + RLS + `authPolicyIsolation.itest.ts` (1.1a); read `getScopeRows` + `effectivePolicyResolve.itest.ts` (1.1b-wire); tenant write `upsertTenantKey` (1.2b).
+- `auth_allowed_origins` table + RLS + `authAllowedOriginsIsolation.itest.ts` (1.4b).
+- **To validate:** point `ITEST_DATABASE_URL`/`DATABASE_URL` at a throwaway Postgres 16 and run `bun test packages/db/test/*.itest.ts`. If green, the blind layer is proven.
+
+**How to RESUME:** just reply — e.g. "here's a DATABASE_URL: …" (I validate + wire the blind layer + land the
+deferred behaviour-change items), or "keep authoring blind" (I continue 1.4c / 1.2c / 1.5b-rest), or restart the
+loop with `/loop 20m keep on implementing …`. Nothing is pushed; the branch `feat/auth-platform-phase0` is local.
+
 ## Phases 2–5
 Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadmap.md).
 
