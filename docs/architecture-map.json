@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1420,
-  "fileSetHash": "sha256:00ba97c2bbecac02e7472b9e234ca820f910168532c445be2b230ecdba42690e",
+  "fileCount": 1422,
+  "fileSetHash": "sha256:9fa1bf216dd0321a4f2139aea8be1f6ebdfad6755e0ff0c09bd5890f9368bd64",
   "features": {
     "account-search": {
       "web": [],
@@ -1775,6 +1775,8 @@
     "apps/api/middleware": [
       "apps/api/src/middleware/authn.ts",
       "apps/api/src/middleware/error.ts",
+      "apps/api/src/middleware/extensionScope.test.ts",
+      "apps/api/src/middleware/extensionScope.ts",
       "apps/api/src/middleware/idempotency.ts",
       "apps/api/src/middleware/platformAdmin.test.ts",
       "apps/api/src/middleware/platformAdmin.ts",
