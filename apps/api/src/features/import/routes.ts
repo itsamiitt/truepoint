@@ -9,6 +9,7 @@
 import { randomUUID } from "node:crypto";
 import { env } from "@leadwolf/config";
 import {
+  IMPORT_UPLOAD_REQUEST_MAX_BYTES,
   apiImportsEnabledForScope,
   applyMappingTemplate,
   assertListInWorkspace,
@@ -815,6 +816,46 @@ const IDENTITY_MAPPING: ColumnMapping = Object.fromEntries(
   canonicalField.options.map((f) => [f, f]),
 ) as ColumnMapping;
 
+/** Read the JSON request body as text under a hard byte cap — the JSON-path equivalent of the multipart
+ *  admission's whole-body gate (13 §1 / S-S1): a declared Content-Length over the cap is refused up front,
+ *  AND the stream is counted so a lying/absent (chunked) length can't slip a huge body past. Without this, an
+ *  attacker could send rows carrying enormous field values and JSON.parse would buffer them ALL into memory
+ *  before Zod's per-field max-lengths reject them — a body-size DoS the row-count ceiling alone can't bound.
+ *  Cap = IMPORT_UPLOAD_REQUEST_MAX_BYTES (the same request bound the multipart surface admits). */
+async function readJsonBodyCapped(c: Context, maxBytes: number): Promise<unknown> {
+  const declared = Number(c.req.header("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes)
+    throw new ImportTooLargeError({ limit: maxBytes, current: declared, unit: "bytes" });
+  const stream = c.req.raw.body;
+  if (!stream) return {};
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new ImportTooLargeError({ limit: maxBytes, current: total, unit: "bytes" });
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const buf = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buf.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const text = new TextDecoder().decode(buf).trim();
+  if (text === "") return {};
+  return JSON.parse(text); // caller catches → clean 400
+}
+
 importRoutes.post("/rows", requireImportCreateGrant(), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
@@ -834,13 +875,15 @@ importRoutes.post("/rows", requireImportCreateGrant(), async (c) => {
   if (!idempotencyKey)
     throw new ImportValidationError("An 'Idempotency-Key' header is required for API-push imports.");
 
-  // Read the JSON body (malformed JSON ⇒ a clean 400 rather than a 500), then STRICT safeParse it — the global
-  // onError renders only AppError, so a raw ZodError would 500; surfacing the first issue as an
+  // Read the JSON body UNDER A HARD BYTE CAP (readJsonBodyCapped — the JSON equivalent of the multipart
+  // admission's whole-body gate; over the cap ⇒ 413 before buffering it all), then STRICT safeParse it — the
+  // global onError renders only AppError, so a raw ZodError would 500; surfacing the first issue as an
   // ImportValidationError (an AppError → RFC-9457 400) tells a programmatic caller exactly what it mistyped.
   let raw: unknown;
   try {
-    raw = await c.req.json();
-  } catch {
+    raw = await readJsonBodyCapped(c, IMPORT_UPLOAD_REQUEST_MAX_BYTES);
+  } catch (err) {
+    if (err instanceof ImportTooLargeError) throw err; // the byte-cap 413 must surface as itself
     throw new ImportValidationError("The request body must be valid JSON.");
   }
   const parsed = apiPushImportSchema.safeParse(raw);
