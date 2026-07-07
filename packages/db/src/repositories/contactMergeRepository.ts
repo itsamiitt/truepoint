@@ -87,7 +87,7 @@ export const contactMergeRepository = {
     survivorContactId: string,
     loserContactId: string,
   ): Promise<{ survivor?: ContactMergeRow; loser?: ContactMergeRow }> {
-    const [a, b] = [survivorContactId, loserContactId].sort();
+    const ids: string[] = [survivorContactId, loserContactId].sort();
     const rows = await tx
       .select({
         id: contacts.id,
@@ -113,7 +113,7 @@ export const contactMergeRepository = {
         locationCity: contacts.locationCity,
       })
       .from(contacts)
-      .where(inArray(contacts.id, [a, b]))
+      .where(inArray(contacts.id, ids))
       .orderBy(contacts.id)
       .for("update");
     const map = new Map(rows.map((r) => [r.id, r as unknown as ContactMergeRow]));
@@ -127,6 +127,7 @@ export const contactMergeRepository = {
     survivorContactId: string,
     loserContactId: string,
   ): Promise<{ survivor?: ContactMergeRow; loser?: ContactMergeRow }> {
+    const ids: string[] = [survivorContactId, loserContactId];
     const rows = await tx
       .select({
         id: contacts.id,
@@ -152,7 +153,7 @@ export const contactMergeRepository = {
         locationCity: contacts.locationCity,
       })
       .from(contacts)
-      .where(inArray(contacts.id, [survivorContactId, loserContactId]));
+      .where(inArray(contacts.id, ids));
     const map = new Map(rows.map((r) => [r.id, r as unknown as ContactMergeRow]));
     return { survivor: map.get(survivorContactId), loser: map.get(loserContactId) };
   },
