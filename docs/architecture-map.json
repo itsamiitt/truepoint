@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1429,
-  "fileSetHash": "sha256:96ad20388aa623cdd204f728c385dcc49dd3f72346c8462f8c72a0a76bdac3bc",
+  "fileCount": 1431,
+  "fileSetHash": "sha256:f9e642c0d7bab21c8d80d123353e8a2a28716841cf0d6ec93407c422577dc9f9",
   "features": {
     "account-search": {
       "web": [],
@@ -2170,6 +2170,7 @@
       "packages/db/test/compliance.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
+      "packages/db/test/effectivePolicyResolve.itest.ts",
       "packages/db/test/emailAnalytics.itest.ts",
       "packages/db/test/emailGovernance.itest.ts",
       "packages/db/test/emailIsolation.itest.ts",
@@ -2358,6 +2359,7 @@
     "packages/db/src/repositories/creditPackRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/domainRepository.ts",
+    "packages/db/src/repositories/effectivePolicyRepository.ts",
     "packages/db/src/repositories/emailAnalyticsRepository.ts",
     "packages/db/src/repositories/emailEventRepository.ts",
     "packages/db/src/repositories/emailMessageRepository.ts",
