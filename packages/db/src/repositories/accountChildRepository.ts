@@ -221,6 +221,47 @@ export const accountChildRepository = {
     return domainUpsert(tx, scope, op.accountId, op.value);
   },
 
+  /**
+   * THE S-A6 ladder rung C2 probe (06 §5, "any non-deleted account_domains.domain exact"): resolve a domain to
+   * the account that holds it as a live SECONDARY (is_primary = false, deleted_at IS NULL). Returns the owning
+   * account id, or null when the domain is nowhere / is a PRIMARY (C1's job — see below) / lives under a
+   * tombstone. Callers invoke this ONLY when the S-A6 read gate is ON (accountReadFromChildEnabledForScope);
+   * gate-off it is never called, so the import company-match stays byte-identical (C1-only).
+   *
+   * WHY is_primary = false (the "C1 miss ⇒ probe" reading of 06 §5): C1 is the flat accounts.domain primary
+   * cache and its atomic upsert (accountRepository.upsertByDomain) resolves a PRIMARY-domain hit (and mints on a
+   * true miss) — with its established name-refresh + master-bridge semantics and INSERT…ON CONFLICT
+   * concurrency-safety. So a domain that is some account's PRIMARY (⇒ is_primary=true child row) must fall
+   * through to that atomic upsert, NOT be intercepted here. This rung intercepts ONLY the genuine C2 case: a
+   * domain that is a live SECONDARY of an existing account — which C1 alone would miss (its flat cache holds a
+   * DIFFERENT primary), silently minting a duplicate account (G17). ≥2 hits are IMPOSSIBLE by
+   * `uniq_account_domains_ws_domain` (the whole-set live partial unique) — a domain belongs to at most one live
+   * account per workspace — so a single row is unambiguous and LIMIT 1 is exact (06 §5 "≥2 accounts ⇒ ambiguity"
+   * cannot arise from ONE domain value; the multi-DOMAIN-row ambiguity case is the mapping layer's, doc 08).
+   * RLS scopes the probe to the caller's workspace via the tx GUC; the explicit workspace_id predicate is the
+   * belt-and-braces the write path also carries. NEVER moves or re-primaries the domain (06 §1/§Edge: an import
+   * never moves a domain; moving is an explicit verb).
+   */
+  async findAccountIdBySecondaryDomain(
+    tx: Tx,
+    workspaceId: string,
+    domain: string,
+  ): Promise<string | null> {
+    const rows = await tx
+      .select({ accountId: accountDomains.accountId })
+      .from(accountDomains)
+      .where(
+        and(
+          eq(accountDomains.workspaceId, workspaceId),
+          eq(accountDomains.domain, domain), // citext — case-insensitive equality
+          eq(accountDomains.isPrimary, false),
+          isNull(accountDomains.deletedAt),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.accountId ?? null;
+  },
+
   // ── S-A1 domain backfill (15 §2.2, the mandated re-run — seq 55) ───────────────────────────────────────
 
   /** WHERE-missing keyset walk (id ASC, cursor = last id; null = start) over LIVE accounts holding a flat

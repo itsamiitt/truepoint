@@ -1,0 +1,22 @@
+-- 0064_account_read_from_child_flag.sql — S-A6 read-cutover gate seed (import-and-data-model-redesign 06
+-- §6/§API / §Rollout; 15 §M-SEQ seq 59). SEED ONLY — nothing else ships in this migration (the 0060
+-- channels-read-flag precedent): the per-tenant half of the S-A6 account READ-CUTOVER composed gate, off/off
+-- (fail-closed). Effective read-from-child = the global `ACCOUNT_READ_FROM_CHILD` env kill-switch
+-- (explicit-"true"-only) AND this flag AND the FULL S-A2 dual-write gate (ACCOUNT_DOMAINS_DUAL_WRITE env +
+-- `account_domains_dual_write` flag) — the read gate IMPLIES the dual-write gate (06 §4 ordering: a cutover
+-- only atop a maintained cache), fail-closed if dual-write is off. While ANY layer is off, every account read
+-- keeps its shipped flat accounts.domain behavior BYTE-IDENTICALLY (the 15 §T-P4 flag-off byte-identity gate)
+-- and the import company-match ladder rung C2 (any-live-secondary-domain exact) stays dark — only C1 (the flat
+-- primary-cache upsert) runs. §R-P4: flipping any layer off at any point returns reads to the flat primary
+-- cache instantly (still dual-write-maintained); secondaries merely go invisible again, nothing is lost.
+-- FLIP PRECONDITION (07 §8 edge / 15 §M-SEQ seq 55): the S-A1 backfill re-run has converged
+-- (countAccountsMissingDomainChild = 0) so every primary domain has a live account_domains row — otherwise C2
+-- could miss a company whose primary was written before dual-write went on.
+--
+-- MINT NOTE (doc 16 drift row): 06 §Rollout names "a per-tenant dual-gate (named at PR time)" for S-A6 but pins
+-- no flag key. This pair (env + `account_read_from_child`) is minted here, mirroring 0060's `channels_read`,
+-- because 15 §M-SEQ seq 59 mandates a per-tenant dual-gate whose rollback is "off ⇒ byte-identical account API".
+INSERT INTO feature_flags (key, description, global_enabled, "default") VALUES ('account_read_from_child', 'Per-tenant rollout gate for the account READ CUTOVER (import-and-data-model-redesign 06; S-A6). OFF by default (fail-closed): while off every account read keeps its shipped flat accounts.domain behavior byte-identical — account list/search/facets resolve from the flat columns, and the import company-match ladder runs C1 only (the flat primary-cache upsert). Effective only when the global ACCOUNT_READ_FROM_CHILD env kill-switch AND the full S-A2 dual-write gate (ACCOUNT_DOMAINS_DUAL_WRITE env + account_domains_dual_write flag) are also on — read implies dual-write. With all four on: the import ladder gains rung C2 (a domain that is a live SECONDARY of an existing account resolves to that account instead of minting a duplicate — 06 §5), and the account-detail overlay projection (domains[]/locations[]) reads from the account_domains/account_locations child tables. Flip only after the S-A1 backfill re-run has converged (countAccountsMissingDomainChild = 0).', false, false) ON CONFLICT (key) DO NOTHING;
+
+-- DOWN (manual, per 15 §R-P4 — safe while the read gate is off):
+--   DELETE FROM feature_flags WHERE key = 'account_read_from_child';

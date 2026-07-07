@@ -1010,6 +1010,15 @@ export {
   accountDomainsDualWriteEnabledForScope,
 } from "./accounts/accountDualWrite.ts";
 
+// S-A6 account READ-CUTOVER composed gate (import-and-data-model-redesign 06 §6/§API/§Rollout; 15 §M-SEQ seq
+// 59): env.ACCOUNT_READ_FROM_CHILD AND the full S-A2 dual gate AND the `account_read_from_child` tenant flag —
+// read implies dual-write, fail-closed. The ONE decision the import ladder consults for rung C2 (any-live-
+// secondary-domain exact) + account-detail overlay reads. Off ⇒ byte-identical flat-column reads (doc 16 mint).
+export {
+  isAccountReadFromChildEnabled,
+  accountReadFromChildEnabledForScope,
+} from "./accounts/accountRead.ts";
+
 // S-A1/S-A3 account backfill (import-and-data-model-redesign 15 §2.2): the per-workspace runner — withTenantTx
 // keyset batches over accounts (domain pass = the mandated S-A1 re-run; HQ pass = S-A3's best-effort location
 // synthesis, freetext country → ISO alpha-2 via countryToIso, unmappable → NULL). WHERE-missing selection is

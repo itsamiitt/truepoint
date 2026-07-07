@@ -36,6 +36,7 @@ import type {
 } from "@leadwolf/types";
 import { CONTACT_PROVENANCE_FIELDS, DEFAULT_CONFLICT_POLICY } from "@leadwolf/types";
 import { accountDomainsDualWriteEnabledForScope } from "../accounts/accountDualWrite.ts";
+import { accountReadFromChildEnabledForScope } from "../accounts/accountRead.ts";
 import {
   buildPhoneChannelValue,
   channelDualWriteEnabledForScope,
@@ -348,6 +349,7 @@ async function importOneRow(
   channelDualWrite: boolean,
   channelReadFromChild: boolean,
   accountDualWrite: boolean,
+  accountReadFromChild: boolean,
 ): Promise<RowLanding> {
   const { tenantId, workspaceId } = input.scope;
   const listId = input.target?.listId;
@@ -407,16 +409,45 @@ async function importOneRow(
   // golden landing below.
   if (env.INGESTION_EVIDENCE_ENABLED) await recordImportEvidence(input, raw, hash, resolved, prepared);
 
+  // Company match ladder (06 §5), over LIVE rows only. `prepared.accountDomain` is already DM1-normalized
+  // (prepareContact), the exact form both accounts.domain and account_domains store — so no re-normalization.
+  //   • C1 — primary-domain exact (the flat accounts.domain cache): accountRepository.upsertByDomain's atomic
+  //     INSERT…ON CONFLICT resolves a primary hit (name-refresh + master-bridge) OR mints on a true miss.
+  //   • C2 — any-live-SECONDARY-domain exact (S-A6, gate-on ONLY): BEFORE the C1 upsert would mint a duplicate
+  //     for a domain that is actually a live secondary of an existing account, resolve to THAT account and
+  //     proceed as an update (06 §5 whole-set rule; the G17 payoff). ≥2 hits impossible by the ws-domain live
+  //     unique. NEVER moves/re-primaries the domain (06 §Edge). Gate-off ⇒ the probe is skipped and only the C1
+  //     upsert runs — byte-identical to today (zero account_domains queries).
+  //   • C3 — name+country — REVIEW-ONLY, not an import key: absent from this write path by design (06 §5).
   let accountId: string | undefined;
   if (prepared.accountDomain) {
-    accountId = await accountRepository.upsertByDomain(tx, {
-      tenantId,
-      workspaceId,
-      name: prepared.accountName ?? prepared.accountDomain,
-      domain: prepared.accountDomain,
-      // Overlay → Layer-0 bridge (contacts.ts:50): set the account's golden company when ER resolved one.
-      masterCompanyId: masterCompanyId ?? undefined,
-    });
+    const accountName = prepared.accountName ?? prepared.accountDomain;
+    const c2AccountId = accountReadFromChild
+      ? await accountChildRepository.findAccountIdBySecondaryDomain(
+          tx,
+          workspaceId,
+          prepared.accountDomain,
+        )
+      : null;
+    if (c2AccountId) {
+      // C2 secondary-domain match: resolve to the existing account and refresh it as C1's update would; never
+      // attach the domain here (import never moves a domain — 06 §1/§Edge; the whole live set is already the
+      // account's, and a domain that is elsewhere-owned would have failed the ws-unique upstream).
+      accountId = c2AccountId;
+      await accountRepository.refreshMatchedAccount(tx, c2AccountId, {
+        name: accountName,
+        masterCompanyId: masterCompanyId ?? undefined,
+      });
+    } else {
+      accountId = await accountRepository.upsertByDomain(tx, {
+        tenantId,
+        workspaceId,
+        name: accountName,
+        domain: prepared.accountDomain,
+        // Overlay → Layer-0 bridge (contacts.ts:50): set the account's golden company when ER resolved one.
+        masterCompanyId: masterCompanyId ?? undefined,
+      });
+    }
   }
 
   const values: ContactWriteValues = {
@@ -612,6 +643,11 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
   // per row; fail-closed on error). env.ACCOUNT_DOMAINS_DUAL_WRITE off ⇒ false with ZERO queries — the
   // gate-off run's account writes are cost-identical as well as byte-identical (the T-P4 parity gate).
   const accountDualWrite = await accountDomainsDualWriteEnabledForScope(input.scope);
+  // S-A6 account READ CUTOVER (06 §5/§6), evaluated ONCE per run (fail-closed on error ⇒ C1-only; env off ⇒
+  // zero queries). Gate-on activates ladder rung C2: a domain that is a live SECONDARY of an existing account
+  // resolves to that account instead of minting a duplicate (the G17 payoff). Read implies dual-write, so this
+  // can only be true when accountDualWrite is also effectively on. Gate-off byte-identical (C1-only).
+  const accountReadFromChild = await accountReadFromChildEnabledForScope(input.scope);
 
   const errors: ImportRowError[] = [];
   const rejectedRows: RejectedRow[] = [];
@@ -679,6 +715,7 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
           channelDualWrite,
           channelReadFromChild,
           accountDualWrite,
+          accountReadFromChild,
         ),
       );
       if (landing.outcome === "created") created++;

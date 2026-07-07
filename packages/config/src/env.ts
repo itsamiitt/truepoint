@@ -442,6 +442,21 @@ export const appEnvSchema = z
     // whale workspace drains across ticks — resumable by construction).
     ACCOUNT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
     ACCOUNT_BACKFILL_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
+    // Account READ CUTOVER (import-and-data-model-redesign 06 §6/§API, S-A6; 15 §M-SEQ seq 59) — the global
+    // kill-switch half of the S-A6 composed read gate. Effective read-from-child = this AND the FULL S-A2 dual
+    // gate (ACCOUNT_DOMAINS_DUAL_WRITE env + `account_domains_dual_write` flag) AND the per-tenant
+    // `account_read_from_child` flag (seeded off in 0064) — read IMPLIES dual-write (06 §4 ordering), fail-closed
+    // if any layer is off. While off, every account read keeps its shipped flat-column behavior BYTE-IDENTICALLY
+    // (the 15 §T-P4 flag-off byte-identity gate) and the import ladder rung C2 (any-live-secondary-domain exact)
+    // stays dark — only C1 (the flat accounts.domain upsert) runs. Flipping it off at any point is the instant
+    // §R-P4 read rollback: reads return to the flat primary cache (still dual-write-maintained), secondaries go
+    // invisible again, nothing lost. FLIP PRECONDITION (07 §8 edge / 15 seq 55): backfill re-run converged
+    // (countAccountsMissingDomainChild = 0). 06 §Rollout names "a per-tenant dual-gate (named at PR time)" — this
+    // pair is minted here (doc 16 drift row). Explicit-"true"-only posture (house 01 §7.3).
+    ACCOUNT_READ_FROM_CHILD: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the

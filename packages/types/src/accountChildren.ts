@@ -96,3 +96,16 @@ export const ACCOUNT_HIERARCHY_MAX_DEPTH = 10;
  *  gate) so this pair is MINTED here, mirroring CHANNELS_DUAL_WRITE_FLAG_KEY — the shared key lives in @types so
  *  api/workers/db-tests can never drift (doc 16 drift row records the mint). */
 export const ACCOUNT_DOMAINS_DUAL_WRITE_FLAG_KEY = "account_domains_dual_write";
+
+// ── The S-A6 account READ-CUTOVER per-tenant flag key (06 §6/§API / §Rollout; 15 §M-SEQ seq 59) ──────────
+/** Per-tenant half of the account READ-CUTOVER composed gate (S-A6). Effective read-from-child = the global
+ *  `ACCOUNT_READ_FROM_CHILD` env kill-switch AND the FULL S-A2 dual-write gate (ACCOUNT_DOMAINS_DUAL_WRITE env
+ *  + `account_domains_dual_write` flag) AND this flag (seeded off in 0064) — READ IMPLIES DUAL-WRITE (06 §4
+ *  ordering: cutting reads over to child rows no writer maintains would serve stale truth), fail-closed if any
+ *  layer is off. While off, every account read keeps its shipped flat-column behavior BYTE-IDENTICALLY (the
+ *  flag-off byte-identity gate, 15 §T-P4) and the import company-match ladder rung C2 (any-live-secondary-domain
+ *  exact) stays dark — only C1 (the flat accounts.domain primary-cache upsert) runs. 06 §Rollout names "a
+ *  per-tenant dual-gate (named at PR time)"; this pair (env + `account_read_from_child`) is MINTED here mirroring
+ *  CHANNELS_READ_FLAG_KEY (doc 16 drift row). FLIP PRECONDITION (07 §8 edge / 15 §M-SEQ seq 55): the S-A1
+ *  backfill re-run has converged (countAccountsMissingDomainChild = 0) so every primary domain has a child row. */
+export const ACCOUNT_READ_FROM_CHILD_FLAG_KEY = "account_read_from_child";

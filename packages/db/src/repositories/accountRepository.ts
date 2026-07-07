@@ -25,7 +25,18 @@ export interface AccountUpsertInput {
 }
 
 export const accountRepository = {
-  /** Insert the account, or return the existing one for this (workspace, domain). Returns the account id. */
+  /**
+   * The company-match ladder rung C1 (06 §5) + create-on-miss: insert the account, or return the existing LIVE
+   * one for this (workspace, domain). Returns the account id. The ON CONFLICT arbiter is the S-A5 live-only
+   * partial unique `uniq_accounts_ws_domain WHERE domain IS NOT NULL AND deleted_at IS NULL` — so the
+   * `targetWhere` MUST carry `AND deleted_at IS NULL` to match that predicate (Postgres infers a partial arbiter
+   * only when the ON CONFLICT predicate implies the index predicate; the pre-S-A5 `domain IS NOT NULL` alone no
+   * longer matches and would fail inference at runtime once 0061 is applied — a gate-INDEPENDENT correctness fix
+   * the S-A5 index swap made necessary, doc 16 drift row). Behaviour-neutral today (nothing writes deleted_at
+   * yet ⇒ every row satisfies `deleted_at IS NULL`); once the soft-delete verb ships this is exactly 06 §4's
+   * "import upsert on a tombstoned account creates a NEW account, never resurrects" — a tombstoned same-domain
+   * row is not in the arbiter index, so ON CONFLICT does not fire against it and a fresh account is minted.
+   */
   async upsertByDomain(tx: Tx, input: AccountUpsertInput): Promise<string> {
     const rows = await tx
       .insert(accounts)
@@ -38,7 +49,7 @@ export const accountRepository = {
       })
       .onConflictDoUpdate({
         target: [accounts.workspaceId, accounts.domain],
-        targetWhere: sql`${accounts.domain} IS NOT NULL`,
+        targetWhere: sql`${accounts.domain} IS NOT NULL AND ${accounts.deletedAt} IS NULL`,
         // Only stamp the bridge when resolution actually produced a company — never overwrite an existing
         // master_company_id with null (an unresolved re-import keeps the prior link; ADR-0021 staging).
         set: {
@@ -92,7 +103,9 @@ export const accountRepository = {
       )
       .onConflictDoUpdate({
         target: [accounts.workspaceId, accounts.domain],
-        targetWhere: sql`${accounts.domain} IS NOT NULL`,
+        // Match the S-A5 live-only partial arbiter (see upsertByDomain) — `AND deleted_at IS NULL` is required
+        // for partial-index inference once 0061 is applied; behaviour-neutral until soft-delete writes land.
+        targetWhere: sql`${accounts.domain} IS NOT NULL AND ${accounts.deletedAt} IS NULL`,
         set: {
           name: sql`excluded.name`,
           updatedAt: new Date(),
@@ -106,6 +119,31 @@ export const accountRepository = {
     const out = new Map<string, string>();
     for (const r of rows) if (r.domain) out.set(r.domain, r.id);
     return out;
+  },
+
+  /**
+   * The ladder rung C2 "proceed as update" projection (06 §5): when a row's domain resolved to an existing
+   * account as a live SECONDARY (via accountChildRepository.findAccountIdBySecondaryDomain), refresh that
+   * account exactly as C1's upsert DO UPDATE would — name last-writer-wins + stamp the master bridge only when
+   * resolution produced one (never clobber an existing bridge with null; ADR-0021 staging). Bumps updated_at
+   * (a user-facing import touch, like the C1 update). NEVER attaches or re-primaries the matched domain — an
+   * import never moves a domain (06 §1/§Edge); the domain is already a known secondary of this account. Caller
+   * passes an account id already resolved under RLS in the same tx; UPDATE-by-id is concurrency-safe (the row
+   * exists). Invoked ONLY on the S-A6-gate-on C2 path.
+   */
+  async refreshMatchedAccount(
+    tx: Tx,
+    accountId: string,
+    input: { name: string; masterCompanyId?: string | null },
+  ): Promise<void> {
+    await tx
+      .update(accounts)
+      .set({
+        name: input.name,
+        updatedAt: new Date(),
+        ...(input.masterCompanyId != null ? { masterCompanyId: input.masterCompanyId } : {}),
+      })
+      .where(eq(accounts.id, accountId));
   },
 
   /**
