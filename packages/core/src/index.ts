@@ -145,6 +145,13 @@ export {
   evaluateImportCreateGrant,
   type ImportCreateGrantVerdict,
 } from "./import/importCreateGrant.ts";
+// P5 scheduled imports (import-redesign 08 §9) — the PURE decision core (cadence math, idempotency-key
+// derivation, fire-time grant re-eval). The impure orchestration lives in the worker sweep.
+export {
+  computeNextRunAt,
+  deriveScheduleIdempotencyKey,
+  evaluateScheduleFireGrant,
+} from "./import/scheduledImport.ts";
 export { blindIndex } from "./import/blindIndex.ts";
 export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 // Pre-commit validation preview + rejected-rows artifact + conflict policy (30 §4, ADR-0036; G-IMP-1/5).

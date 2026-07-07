@@ -61,6 +61,10 @@ export interface ImportJobCreateValues {
    *  matching create_and_update / false, so an unset caller is unchanged. */
   mergeMode?: ImportMergeMode;
   preservePopulated?: boolean;
+  /** Parse/import options jsonb (08 §Contradiction/S-I5) set AT CREATE. Optional + additive — every existing
+   *  caller is unchanged (the column defaults to {}). P5 scheduled fires stash `{ scheduleId }` here so a
+   *  system-attributed job (created_by NULL, 08 §9) carries its schedule pointer. */
+  options?: Record<string, unknown>;
 }
 
 /**

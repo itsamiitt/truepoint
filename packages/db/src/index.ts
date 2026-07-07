@@ -387,6 +387,14 @@ export {
   type ImportPolicyRecord,
   type ImportPolicyUpsert,
 } from "./repositories/importPolicyRepository.ts";
+// P5 scheduled imports (import-redesign 08 §9) — workspace-scoped CRUD + the sweep's system-level due census.
+export {
+  scheduledImportRepository,
+  type ScheduledImportRow,
+  type ScheduledImportCreateValues,
+  type ScheduledImportUpdateValues,
+  type DueSchedule,
+} from "./repositories/scheduledImportRepository.ts";
 // Platform super-admin read surface (ADR-0032) — bounded cross-tenant reads, run within withPlatformTx.
 export {
   platformAdminRepository,
