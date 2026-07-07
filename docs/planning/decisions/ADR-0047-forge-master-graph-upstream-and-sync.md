@@ -13,6 +13,33 @@
 > is the locking authority; deep detail lives in the Forge suite (see *Forge 05-database-design*, *Forge
 > 11-database-synchronization-engine*, *Forge 20-future-enhancements*).
 
+## Amendment (2026-07) — Forge is NESTED in the monorepo, not a separate repo
+
+The original decision built Forge as a **separate `truepoint-forge` repo** (`@forge/*`) with its own ops DB,
+its own auth (`@forge/auth` verifying against `auth.truepoint.in`), and a **cross-repo HTTP push** to
+`POST /api/v1/master-sync`. The owner has since decided Forge should live **inside the `truepoint` monorepo**
+as peer apps (`apps/forge` console + `apps/forge-api` + `apps/forge-worker`) and packages
+(`@leadwolf/forge-core`, `@leadwolf/forge-capture-sdk`), **reusing the shipped `@leadwolf/*` auth + UI + db**.
+This supersedes the separate-repo posture. What changes:
+
+- **The compliance firewall moves from a *repo* boundary to a *schema + role* boundary.** The Forge medallion
+  layers (`raw_captures → parsed_records → verified_records` + ER/governance) live in a dedicated **`forge`
+  Postgres schema** owned by a new least-privilege role **`leadwolf_forge`** (NOLOGIN, NON-BYPASSRLS, no grant
+  on the tenant overlay — reached only via `withForgeTx`). Raw scraped payloads still never reach the customer
+  overlay. A fully separate ops DB remains possible later (swap the role's connection string).
+- **Auth is the *existing* system.** Operators sign in through `apps/auth` (PKCE) and are gated by the
+  already-shipped **`data_ops` staff role + `data:*` capabilities** (`requireCapability`, resolved from
+  `platform_staff`) — **no new capability**. `@forge/auth` is dropped.
+- **The verified → `master_*` handoff is IN-PROCESS.** Because Forge is same-repo, promotion writes the master
+  graph directly via `withErTx` + `forgeSyncRepository` — dropping the HTTP push + the machine token for the
+  primary path. The versioned `POST /api/v1/master-sync` receiver + contract (already built) remain as an
+  optional/internal/idempotent path (and for any future out-of-process split).
+- **No `@forge/*` duplication.** `@forge/{types,config,ui,sync,auth}` are folded into or replaced by their
+  `@leadwolf/*` equivalents; the cross-repo Pact/contract-test problem disappears.
+
+The rest of this ADR's reasoning (Forge owns ER; `master_*` is a downstream projection; TruePoint's `er/`
+stays inert for ingestion) is unchanged.
+
 ## Context
 
 TruePoint's ingestion path is a validated stub: `POST /api/v1/ingest` runs `authn → tenancy →
