@@ -1,0 +1,21 @@
+{
+  "name": "@leadwolf/forge-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "LEADWOLF_SURFACE=worker bun run --hot src/index.ts",
+    "start": "LEADWOLF_SURFACE=worker bun run src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@leadwolf/config": "workspace:*",
+    "@leadwolf/db": "workspace:*",
+    "@leadwolf/forge-core": "workspace:*",
+    "@leadwolf/integrations": "workspace:*",
+    "@leadwolf/types": "workspace:*",
+    "bullmq": "^5.0.0",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": { "typescript": "5.7.2" }
+}
