@@ -9,3 +9,8 @@ export {
   type AppEnv,
   type SurfaceReport,
 } from "./env.ts";
+export {
+  resolveAllowedOrigins,
+  isOriginAllowed,
+  canonicalManagedOrigin,
+} from "./managedOrigins.ts";
