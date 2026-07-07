@@ -82,6 +82,7 @@ import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueBulkImportDrive, enqueueFastImport } from "./bulkQueue.ts";
 import { bulkFileStore } from "./bulkStore.ts";
+import { readJsonBodyCapped } from "./jsonBodyCap.ts";
 import { requireImportCreateGrant } from "./createGrant.ts";
 import { isCopyModeEngaged, isImportV2Enabled } from "./importV2Gate.ts";
 import { toLegacyStatusV2 } from "./legacyStatus.ts";
@@ -816,46 +817,6 @@ const IDENTITY_MAPPING: ColumnMapping = Object.fromEntries(
   canonicalField.options.map((f) => [f, f]),
 ) as ColumnMapping;
 
-/** Read the JSON request body as text under a hard byte cap — the JSON-path equivalent of the multipart
- *  admission's whole-body gate (13 §1 / S-S1): a declared Content-Length over the cap is refused up front,
- *  AND the stream is counted so a lying/absent (chunked) length can't slip a huge body past. Without this, an
- *  attacker could send rows carrying enormous field values and JSON.parse would buffer them ALL into memory
- *  before Zod's per-field max-lengths reject them — a body-size DoS the row-count ceiling alone can't bound.
- *  Cap = IMPORT_UPLOAD_REQUEST_MAX_BYTES (the same request bound the multipart surface admits). */
-async function readJsonBodyCapped(c: Context, maxBytes: number): Promise<unknown> {
-  const declared = Number(c.req.header("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes)
-    throw new ImportTooLargeError({ limit: maxBytes, current: declared, unit: "bytes" });
-  const stream = c.req.raw.body;
-  if (!stream) return {};
-  const reader = stream.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel();
-        throw new ImportTooLargeError({ limit: maxBytes, current: total, unit: "bytes" });
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const buf = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    buf.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  const text = new TextDecoder().decode(buf).trim();
-  if (text === "") return {};
-  return JSON.parse(text); // caller catches → clean 400
-}
-
 importRoutes.post("/rows", requireImportCreateGrant(), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
@@ -881,7 +842,11 @@ importRoutes.post("/rows", requireImportCreateGrant(), async (c) => {
   // ImportValidationError (an AppError → RFC-9457 400) tells a programmatic caller exactly what it mistyped.
   let raw: unknown;
   try {
-    raw = await readJsonBodyCapped(c, IMPORT_UPLOAD_REQUEST_MAX_BYTES);
+    raw = await readJsonBodyCapped(
+      c.req.header("content-length"),
+      c.req.raw.body,
+      IMPORT_UPLOAD_REQUEST_MAX_BYTES,
+    );
   } catch (err) {
     if (err instanceof ImportTooLargeError) throw err; // the byte-cap 413 must surface as itself
     throw new ImportValidationError("The request body must be valid JSON.");
