@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1517,
-  "fileSetHash": "sha256:18cdde7f0fda1da51a96d53d7d66458b2111f982ee8fbb04612fa2bac534f823",
+  "fileCount": 1520,
+  "fileSetHash": "sha256:0d002ac8064135510875269350a1623a5fe7b766293b11d3a5d7e48283da8ff8",
   "features": {
     "account-search": {
       "web": [],
@@ -2386,6 +2386,9 @@
     "apps/forge-api/src/features/review/schema.ts",
     "apps/forge-api/src/middleware/auth.ts",
     "apps/forge-api/src/middleware/capability.ts",
+    "apps/forge-api/test/bff.test.ts",
+    "apps/forge-api/test/captures.test.ts",
+    "apps/forge-api/test/review.test.ts",
     "apps/forge-worker/test/primitives.test.ts",
     "apps/forge/next.config.mjs",
     "apps/forge/src/features/captures/api.ts",
