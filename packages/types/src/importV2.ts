@@ -6,7 +6,7 @@
 // transport contract stays in bulkImport.ts untouched (old clients keep the §2.4 compatibility mapping).
 
 import { z } from "zod";
-import { bulkImportScopeSchema } from "./bulkImport.ts";
+import { bulkImportScopeSchema, importJobCountsSchema } from "./bulkImport.ts";
 import {
   columnMappingSchema,
   conflictPolicy,
@@ -207,19 +207,8 @@ export type ImportFastInput = z.infer<typeof importFastInputSchema>;
 
 // ── v2 tenant-surface DTOs (08 §7, S-I4): the durable list/detail read model. Non-PII by construction —
 // counts + statuses + codes + histogram labels only; never a row value (the shipped rejectLabel discipline).
-/** The seven-plus-total accounting buckets of a job (09 §4 identity: created+matched+duplicate+skipped+
- *  rejected+deduped+unprocessed = total). Mirrors the `rows_*` columns straight through. */
-export const importJobCountsSchema = z.object({
-  total: z.number().int().nonnegative(),
-  created: z.number().int().nonnegative(),
-  matched: z.number().int().nonnegative(),
-  duplicate: z.number().int().nonnegative(),
-  skipped: z.number().int().nonnegative(),
-  rejected: z.number().int().nonnegative(),
-  deduped: z.number().int().nonnegative(),
-  unprocessed: z.number().int().nonnegative(),
-});
-export type ImportJobCounts = z.infer<typeof importJobCountsSchema>;
+// `importJobCountsSchema` / `ImportJobCounts` are the canonical shared shape from `./bulkImport.ts`
+// (imported above and re-exported by the barrel from there) — the v2 DTOs below reuse it, never redefine it.
 
 /** Creator attribution (10 §2.1): the userId only in Phase 1 — the display-name join lands with the S-U2
  *  history UI (the attribution surface). `null` = system/automation job (elevated-only under scoping). */
