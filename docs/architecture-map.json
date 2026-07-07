@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1428,
-  "fileSetHash": "sha256:d651099c092d14e0f8d8fcfecb1e05344f5b8ae3683a7ad9dec168a4a165784f",
+  "fileCount": 1429,
+  "fileSetHash": "sha256:96ad20388aa623cdd204f728c385dcc49dd3f72346c8462f8c72a0a76bdac3bc",
   "features": {
     "account-search": {
       "web": [],
@@ -2068,6 +2068,7 @@
       "packages/auth/src/password.ts",
       "packages/auth/src/passwordPolicy.ts",
       "packages/auth/src/passwordReset.ts",
+      "packages/auth/src/policy.test.ts",
       "packages/auth/src/policy.ts",
       "packages/auth/src/rateLimit.ts",
       "packages/auth/src/refresh.ts",
