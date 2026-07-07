@@ -57,6 +57,7 @@ export * from "./teams.ts";
 export * from "./validation.ts";
 export * from "./ingestion.ts";
 export * from "./masterSync.ts";
+export * from "./forge.ts";
 export * from "./dedupReview.ts";
 export * from "./notifications.ts";
 export * from "./aiUsage.ts";

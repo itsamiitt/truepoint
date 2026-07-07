@@ -32,3 +32,8 @@ export {
   type FetchStripe,
   defaultFetchStripe,
 } from "./stripe/stripeAdapter.ts";
+
+// TruePoint Forge AI extraction adapter (docs/planning/forge/04 §G-FORGE-402, ADR-0023) — implements
+// @leadwolf/forge-core's ExtractionPort against the Anthropic Messages API; the transport is injected so
+// contract/unit tests run on recorded responses at zero live spend. Re-homed from @forge/ai.
+export * from "./forgeAnthropicExtraction.ts";
