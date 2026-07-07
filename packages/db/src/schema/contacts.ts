@@ -198,6 +198,16 @@ export const contacts = pgTable(
         onDelete: "set null",
       },
     ),
+    // Irreversible merge-supersession pointer (import-and-data-model-redesign 04 §1/§3; S-C1, migration 0065).
+    // Set ONCE on the LOSER at merge commit → the survivor this row was merged into; never cleared (no unmerge
+    // — 04 §3.6). DISTINCT from duplicate_of_contact_id (reversible suggestion): a merged loser may carry both,
+    // but merged_into is the authoritative "this record is gone, chase here" hop. Self-FK, SET NULL on survivor
+    // hard-purge (mirrors duplicate_of). DEAD SCHEMA until the S-C4 engine + S-C3 dual gate: nothing writes it.
+    mergedIntoContactId: uuid("merged_into_contact_id").references((): AnyPgColumn => contacts.id, {
+      onDelete: "set null",
+    }),
+    // Merge commit time on the loser (04 §1); the ACTOR lives in the contact.merge audit event, not a column.
+    mergedAt: timestamp("merged_at", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }), // DSAR tombstone (08 §4.2): set + PII nulled
     // Typed-jsonb custom-field values (ADR-0028, 03 §14): shallow-merged `existing || incoming` (03 §15.3);
     // validated against custom_field_definitions at the app edge. GIN-indexed for facet/filter queries.
@@ -258,6 +268,11 @@ export const contacts = pgTable(
     duplicateIdx: index("idx_contacts_duplicate_of")
       .on(t.duplicateOfContactId)
       .where(sql`${t.duplicateOfContactId} IS NOT NULL`),
+    // Merge-supersession traversal (S-C1, 04 §1): tiny partial on the tombstoned-loser set — serves the
+    // "resolve a merged id → survivor" (410-style detail read) + merge-audit metrics.
+    mergedIntoIdx: index("idx_contacts_merged_into")
+      .on(t.mergedIntoContactId)
+      .where(sql`${t.mergedIntoContactId} IS NOT NULL`),
     // Per-account contact rollup (account-search contactCount/revealedContactCount, 24/ADR-0035): composite
     // with workspace_id so the correlated count subquery stays index-backed under the RLS workspace predicate.
     wsAccountIdx: index("idx_contacts_ws_account")
