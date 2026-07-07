@@ -21,7 +21,8 @@
 | 0.5b | Security-notification email: **new-sign-in** (new device/location) | AUTH-067 | ◻ todo | Fire from the login-finalize path with device/IP context. CARE: must not spam on every token refresh/exchange — key on a new durable session (createSession), not on mint. Needs a "known device" heuristic or it's noisy. |
 | 0.5c | Security-notification email: **MFA-changed** (enrolled / disabled / recovery-codes regenerated) | AUTH-067 | ✅ **done** | New `mfaChanged.ts` template (3 kinds via a `MfaChangeKind` copy map, brand-correct, secure-CTA, 2 tests) fired via a shared `notifyMfaChanged(email, kind)` helper (detached + best-effort, PII-free failure log) from all three fire sites in `account/security/actions.ts`: `verifyTotpEnroll` ("enrolled"), `disableMfaMethod` ("disabled", **only when `removed>0`** — a foreign methodId stays a no-op/non-oracle), `regenerateRecoveryCodes` ("recovery_regenerated"). typecheck ✓ biome ✓ tests 7/7 ✓. Rides inline `sendAuthEmail` (delivers when 0.2c wires a real ESP). |
 | 0.6 | In-product true MFA state (or remove fake `enrolled:false` badges) | AUTH-068 | ◻ todo | Needs the security-reviewed cross-origin enrolled-methods read, or drop badges. |
-| 0.7 | Passwordless enrollment path (fresh-proof step-up) + hide unusable "Begin setup" | AUTH-069 | ◻ todo | `apps/auth/src/app/account/security/stepUp.ts` + MfaSection UI. |
+| 0.7a | Stop offering an **unusable** "Begin setup" to passwordless-and-factorless users + give them a real path | AUTH-069 | ✅ **done** | Pure `canStepUp({hasPassword,hasVerifiedTotp})` predicate (mirrors verifyStepUp's contract, 3 tests) drives `MfaSection`: when a user can't step up (no password, no verified TOTP) the enroll form — whose credential field asked for an authenticator code they can't have — is replaced by guidance + a "Set a password" link to the reset flow (`AUTH_BASE_PATH/forgot`, root-relative). `hasPassword` stays a server-derived boolean (passwordHash never reaches the client). typecheck ✓ biome ✓ tests 3/3 ✓. |
+| 0.7b | **Direct** passwordless first-factor enrollment (fresh-proof step-up: session-freshness OR an email/OTP re-verification) so they needn't set a password first | AUTH-069 | ⏸ **deferred (needs supervision)** | The real "fresh-proof" mechanism. Session-freshness is unverifiable-here (refresh-rotation makes `createdAt`/auth-time semantics unclear — a wrong window is a lockout or a weak bootstrap); the email/OTP variant depends on the blocked mail path (0.2c). Both are security-sensitive; do under review. 0.7a already unblocks these users via the existing set-password path. NOTE: guiding an SSO-mandated user to set a local password may interact with org SSO-enforcement policy — revisit when that policy lands. |
 
 **Phase 0 exit:** forgot-password delivers a working reset; `/account/security` reachable + usable by every user class;
 extension token actually scoped; revocation outages visible.
@@ -68,6 +69,17 @@ Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadma
   **NEXT fire: Phase 0.5c (MFA-changed)** — cleanest next slice (same file, same detached pattern, one new
   template); then 0.7 (passwordless enrollment UI) or 0.1b. 0.5b (new-sign-in) needs the login-finalize/device
   context; 0.6 needs the cross-origin enrolled-methods read.
+- **2026-07-07:** Phase 0.7a (AUTH-069) done — the passwordless MFA bootstrap trap. Read-first found the exact
+  bug: `verifyStepUp` accepts only a password OR a verified TOTP code, but enrolling the FIRST factor is itself
+  step-up-gated, so a passwordless-and-factorless user saw a "Begin setup" form whose field asked for an
+  authenticator code they cannot have. Fixed the UI to detect that state (pure `canStepUp` predicate) and offer
+  the real, already-working path — set a password via the reset flow — instead of an unusable form. Deferred the
+  DIRECT fresh-proof enrollment (0.7b): session-freshness is unverifiable on the timer (refresh-rotation) and the
+  email/OTP variant is blocked on the mail path — both security-sensitive, do under review. **NEXT fire: Phase
+  0.6 (AUTH-068) — the "remove the fake `enrolled:false` MFA badges in apps/web SecurityPanel" half** (safe,
+  self-contained: stop rendering a hard-coded state; the real cross-origin read is the deferred half). Then 0.1b
+  (un-prefixed redirect, tiny) and 0.5b (new-sign-in). Phase 0 remaining after 0.6: 0.1b, 0.2b⏸, 0.2c(ESP),
+  0.5b, 0.6-real-read, 0.7b⏸ → then Phase 0 exit review.
 - **2026-07-07:** Phase 0.5c (AUTH-067) done — the **MFA-changed** security notification (enrolled / disabled /
   recovery-regenerated). One `mfaChanged.ts` template with a per-kind copy map + a shared `notifyMfaChanged`
   helper (same detached best-effort pattern as 0.5a) fired from all three MFA mutators in
