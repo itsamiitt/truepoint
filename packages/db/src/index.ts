@@ -86,6 +86,13 @@ export {
   type ResolveForImportInput,
   type ResolveForImportResult,
 } from "./repositories/masterGraphRepository.ts";
+// Forge master-sync apply (docs/planning/forge/11 §3) — idempotent effectively-once apply under withErTx.
+export {
+  forgeSyncRepository,
+  type SyncApplyItem,
+  type SyncApplyResult,
+  type SyncApplyOutcome,
+} from "./repositories/forgeSyncRepository.ts";
 // Probabilistic ER (I5) system reads over the master graph — candidate generation via blocking (withErTx; read-only).
 export {
   erRepository,

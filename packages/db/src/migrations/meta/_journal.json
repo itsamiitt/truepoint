@@ -377,118 +377,125 @@
       "idx": 53,
       "version": "7",
       "when": 1784700000000,
-      "tag": "0053_job_visibility_p0",
+      "tag": "0053_processed_sync_events",
       "breakpoints": true
     },
     {
       "idx": 54,
       "version": "7",
       "when": 1784800000000,
-      "tag": "0054_import_v2_p1",
+      "tag": "0053_job_visibility_p0",
       "breakpoints": true
     },
     {
       "idx": 55,
       "version": "7",
       "when": 1784900000000,
-      "tag": "0055_import_template_sharing",
+      "tag": "0054_import_v2_p1",
       "breakpoints": true
     },
     {
       "idx": 56,
       "version": "7",
       "when": 1785000000000,
-      "tag": "0056_import_storage_params",
+      "tag": "0055_import_template_sharing",
       "breakpoints": true
     },
     {
       "idx": 57,
       "version": "7",
       "when": 1785100000000,
-      "tag": "0057_import_p2_audit_actions",
+      "tag": "0056_import_storage_params",
       "breakpoints": true
     },
     {
       "idx": 58,
       "version": "7",
       "when": 1785200000000,
-      "tag": "0058_contact_channels",
+      "tag": "0057_import_p2_audit_actions",
       "breakpoints": true
     },
     {
       "idx": 59,
       "version": "7",
       "when": 1785300000000,
-      "tag": "0059_channels_dual_write_flag",
+      "tag": "0058_contact_channels",
       "breakpoints": true
     },
     {
       "idx": 60,
       "version": "7",
       "when": 1785400000000,
-      "tag": "0060_channels_read_flag",
+      "tag": "0059_channels_dual_write_flag",
       "breakpoints": true
     },
     {
       "idx": 61,
       "version": "7",
       "when": 1785500000000,
-      "tag": "0061_account_children_and_hierarchy",
+      "tag": "0060_channels_read_flag",
       "breakpoints": true
     },
     {
       "idx": 62,
       "version": "7",
       "when": 1785600000000,
-      "tag": "0062_account_domains_dual_write_flag",
+      "tag": "0061_account_children_and_hierarchy",
       "breakpoints": true
     },
     {
       "idx": 63,
       "version": "7",
       "when": 1785700000000,
-      "tag": "0063_scheduled_imports",
+      "tag": "0062_account_domains_dual_write_flag",
       "breakpoints": true
     },
     {
       "idx": 64,
       "version": "7",
       "when": 1785800000000,
-      "tag": "0064_account_read_from_child_flag",
+      "tag": "0063_scheduled_imports",
       "breakpoints": true
     },
     {
       "idx": 65,
       "version": "7",
       "when": 1785900000000,
-      "tag": "0065_contact_merge_columns",
+      "tag": "0064_account_read_from_child_flag",
       "breakpoints": true
     },
     {
       "idx": 66,
       "version": "7",
       "when": 1786000000000,
-      "tag": "0066_contact_merge_audit_action",
+      "tag": "0065_contact_merge_columns",
       "breakpoints": true
     },
     {
       "idx": 67,
       "version": "7",
       "when": 1786100000000,
-      "tag": "0067_seed_contact_merge_flag",
+      "tag": "0066_contact_merge_audit_action",
       "breakpoints": true
     },
     {
       "idx": 68,
       "version": "7",
       "when": 1786200000000,
-      "tag": "0068_contact_external_id_delta",
+      "tag": "0067_seed_contact_merge_flag",
       "breakpoints": true
     },
     {
       "idx": 69,
       "version": "7",
       "when": 1786300000000,
+      "tag": "0068_contact_external_id_delta",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1786400000000,
       "tag": "0069_seed_api_imports_flag",
       "breakpoints": true
     }

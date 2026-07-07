@@ -25,9 +25,15 @@
 > the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
-> **1474 source files · 78 code-bearing domains · 22 shared areas · 49 domain-vocabulary warnings · 58
+> **The MV3 browser extension** (`apps/extension`, `@leadwolf/extension`) is the newest surface — a thin,
+> least-privilege, compliant-capture client (Vite + CRXJS) that reuses the shipped `/api/v1` ingestion/reveal
+> seam and holds no DB/provider access; design in [`docs/planning/chrome-extension/`](./planning/chrome-extension/)
+> (00–09) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md).
+> **1571 source files · 81 code-bearing domains · 28 shared areas · 52 domain-vocabulary warnings · 61
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
-> `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
+> `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
+> feature (`apps/api/src/features/master-sync`, the Forge `/api/v1/master-sync` receiver) + `forgeSyncRepository`
+> whose entity isn't in `REPO_DOMAIN` — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
 > reflect the merged tree including the parallel `feat/data-mgmt` work; its new domains' prose is owned by that
 > track). Design refs: [04](./planning/04-ui-ux-design.md),
@@ -76,6 +82,11 @@ apps/                           # deployable processes (thin transport adapters)
   workers/ src/                 # Bun + BullMQ — imports · enrichment · scoring · dsar · outreach · firmographics ·
                                 #   dedup · retentionSweep · sequenceTick · tokenRefresh queues + leaderLock +
                                 #   mailboxThrottle (Redis token-bucket) + health/logger  [LIVE]
+  extension/ src/               # MV3 browser extension (Vite + CRXJS) — thin compliant prospect capture  [LIVE]
+    background/{index,bus,api,auth,queue,config,telemetry,eventStream,events}  # SW hub: bus·ApiClient·PKCE·IndexedDB queue·SSE
+    content/{index,observer,adapters/linkedin,extract,hovercard}              # isolated world: adapter + shadow-DOM hover-card
+    ui/{popup,panel}  shared/{messages,storage,idb,client,env,types}  i18n/   # React surfaces · Zod bus · storage · i18n
+    manifest.config.ts  vite.config.ts  scripts/gen-icons.mjs                 # least-privilege manifest + build
 ```
 
 ## FEATURE → FILES index (live)
@@ -546,6 +557,16 @@ flowchart TD
   `tuning`, `withDeadline`, `metrics`, `outboxRelay` — the leaderless ADR-0027 outbox drainer; see
   `docs/planning/worker-platform/`); queue processors bucketed to their feature (imports/enrichment/scoring/dsar/
   outreach) — see Notes for the undeclared queues. Queue itests in `apps/workers/test/`.
+- **`apps/extension`** (MV3 browser extension, Vite + CRXJS; areas `apps/extension` · `…/background` · `…/content` ·
+  `…/ui` · `…/shared` · `…/i18n`) — **`background/`** the service-worker hub (Zod message bus, `ApiClient` over `/api/v1`
+  with RFC-9457 + Idempotency-Key, PKCE `AuthModule` with in-memory token, IndexedDB capture queue + alarm-driven
+  scheduler with backoff, `RemoteConfig` + kill switch, telemetry, fetch-stream SSE consumer); **`content/`**
+  isolated-world adapter registry + LinkedIn adapter (**visible-DOM only, no network patching**), debounced navigation
+  observer, shadow-DOM hover-card; **`ui/`** React popup + four-state side panel; **`shared/`** Zod message contracts +
+  typed `chrome.storage`/IndexedDB + env; **`i18n/`** message catalog; root `manifest.config.ts`/`vite.config.ts` +
+  icon script. **Thin producer** — no `@leadwolf/db`/`@leadwolf/integrations` (enforced by the `extension-stays-thin`
+  dependency-cruiser rule); depends only on `@leadwolf/types` (+ `@leadwolf/ui` tokens). Design:
+  [`docs/planning/chrome-extension/`](./planning/chrome-extension/) + ADR-0043.
 
 ## Notes / unbucketed & warnings
 

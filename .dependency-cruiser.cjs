@@ -82,6 +82,14 @@ module.exports = {
       to: { path: "^packages/(?!config/|types/)[^/]+/" },
     },
     {
+      name: "extension-stays-thin",
+      comment:
+        "apps/extension is an untrusted thin client — never import @leadwolf/db or @leadwolf/integrations (no DB access, no provider keys on the client; ADR-0043, docs/planning/chrome-extension/02 §1).",
+      severity: "error",
+      from: { path: "^apps/extension/" },
+      to: { path: "^packages/(db|integrations)/" },
+    },
+    {
       name: "no-orphans",
       comment: "Flag unreachable modules (dead code).",
       severity: "warn",

@@ -300,6 +300,13 @@ export function classify(p) {
       : { kind: "shared", area: "packages/integrations" };
   }
 
+  // Browser extension (apps/extension, MV3) — its surfaces (background SW, content scripts, ui, i18n) are
+  // app-platform code, not domain features; extension-scoped so it never affects web/admin/api bucketing.
+  if ((m = p.match(/^apps\/extension\/src\/([^/]+)\//)))
+    return { kind: "shared", area: `apps/extension/${m[1]}` };
+  if (/^apps\/extension\/(scripts\/|[^/]+\.(c|m)?[tj]sx?$)/.test(p))
+    return { kind: "shared", area: "apps/extension" };
+
   // App routing/shared/lib/middleware.
   if ((m = p.match(/^apps\/api\/src\/middleware\//)))
     return { kind: "shared", area: "apps/api/middleware" };
