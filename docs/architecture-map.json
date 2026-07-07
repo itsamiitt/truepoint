@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1433,
-  "fileSetHash": "sha256:70e19f3a3d455d64039f5ef58d8f201071dc0ac24ab581ec1919498809bd3e1e",
+  "fileCount": 1435,
+  "fileSetHash": "sha256:37c6db29b02b3736ac43dea25477d67accc83b71c473335cf183a510700532b9",
   "features": {
     "account-search": {
       "web": [],
@@ -2044,6 +2044,8 @@
     ],
     "packages/auth": [
       "packages/auth/src/auditEvent.ts",
+      "packages/auth/src/authMetrics.test.ts",
+      "packages/auth/src/authMetrics.ts",
       "packages/auth/src/botCheck.test.ts",
       "packages/auth/src/botCheck.ts",
       "packages/auth/src/breachCheck.ts",
