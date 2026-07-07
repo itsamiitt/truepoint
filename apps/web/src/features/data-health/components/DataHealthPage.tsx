@@ -168,6 +168,7 @@ export function DataHealthPage() {
               unmarking={duplicates.unmarking}
               onRetry={duplicates.reload}
               onUnmark={duplicates.unmark}
+              onMerged={duplicates.remove}
             />
           </SectionCard>
         </div>
