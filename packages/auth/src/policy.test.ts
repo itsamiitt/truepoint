@@ -9,6 +9,7 @@ import {
   composeEffectivePolicy,
   findFloorViolations,
   isMethodAllowed,
+  parsePolicyKeyValue,
   resolveEffectivePolicy,
   resolvePolicyFromRows,
   strictestMfa,
@@ -239,6 +240,49 @@ describe("findFloorViolations (AUTH-021: cannot loosen a security minimum)", () 
       floor,
     );
     expect(v.sort()).toEqual(["mfaEnforcement", "requireSso", "sessionTimeoutSeconds"]);
+  });
+});
+
+describe("parsePolicyKeyValue (write-path value guard)", () => {
+  it("accepts a known key with a well-typed value and returns the mapped field", () => {
+    expect(parsePolicyKeyValue("mfa_enforcement", "required")).toEqual({
+      ok: true,
+      field: "mfaEnforcement",
+      value: "required",
+    });
+    expect(parsePolicyKeyValue("allowed_methods", ["sso", "passkey"])).toEqual({
+      ok: true,
+      field: "allowedMethods",
+      value: ["sso", "passkey"],
+    });
+    expect(parsePolicyKeyValue("session_timeout_seconds", 3600)).toEqual({
+      ok: true,
+      field: "sessionTimeoutSeconds",
+      value: 3600,
+    });
+  });
+
+  it("rejects an unknown key", () => {
+    expect(parsePolicyKeyValue("future_knob", 1)).toEqual({ ok: false, reason: "unknown_key" });
+  });
+
+  it("rejects a known key with a malformed value (must not silently drop, unlike resolution)", () => {
+    expect(parsePolicyKeyValue("mfa_enforcement", "banana")).toEqual({
+      ok: false,
+      reason: "invalid_value",
+    });
+    expect(parsePolicyKeyValue("session_timeout_seconds", -5)).toEqual({
+      ok: false,
+      reason: "invalid_value",
+    });
+    expect(parsePolicyKeyValue("allowed_methods", "not-an-array")).toEqual({
+      ok: false,
+      reason: "invalid_value",
+    });
+    expect(parsePolicyKeyValue("require_sso", "yes")).toEqual({
+      ok: false,
+      reason: "invalid_value",
+    });
   });
 });
 

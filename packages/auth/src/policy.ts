@@ -160,6 +160,27 @@ export function assembleScopePolicy(
   return out;
 }
 
+/**
+ * Validate a single incoming policy-key WRITE (the write-path's value-shape guard; its floor guard is
+ * findFloorViolations). Unlike assembleScopePolicy — which SKIPS a bad row during resolution so login never
+ * breaks — a write must be REJECTED loudly so the caller returns a 422 rather than persisting garbage. Returns
+ * the resolved AuthPolicy field name + the parsed value on success, or a typed reason on failure. Pure; reuses
+ * the single-source-of-truth POLICY_KEY_PARSER.
+ */
+export function parsePolicyKeyValue(
+  key: string,
+  value: unknown,
+):
+  | { ok: true; field: keyof AuthPolicy; value: AuthPolicy[keyof AuthPolicy] }
+  | { ok: false; reason: "unknown_key" | "invalid_value" } {
+  const field = POLICY_KEY_FIELD[key as keyof typeof POLICY_KEY_FIELD];
+  const parser = POLICY_KEY_PARSER[key as keyof typeof POLICY_KEY_PARSER];
+  if (!field || !parser) return { ok: false, reason: "unknown_key" };
+  const parsed = parser.safeParse(value);
+  if (!parsed.success) return { ok: false, reason: "invalid_value" };
+  return { ok: true, field, value: parsed.data as AuthPolicy[keyof AuthPolicy] };
+}
+
 /** One stored effective-policy row — the shape the repository returns (the value is raw jsonb, hence unknown). */
 export interface AuthPolicyRow {
   scope: string; // 'platform' | 'org' | 'workspace'
