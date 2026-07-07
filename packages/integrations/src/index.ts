@@ -37,3 +37,8 @@ export {
 // @leadwolf/forge-core's ExtractionPort against the Anthropic Messages API; the transport is injected so
 // contract/unit tests run on recorded responses at zero live spend. Re-homed from @forge/ai.
 export * from "./forgeAnthropicExtraction.ts";
+
+// TruePoint Forge infra adapters (Phase 4; re-homed from @forge/adapters) — the S3/MinIO object store for
+// large raw payloads and the fail-open Redis rate limiter, both implementing @leadwolf/forge-core's ports.
+export * from "./forgeObjectStore.ts";
+export * from "./forgeRateLimiter.ts";
