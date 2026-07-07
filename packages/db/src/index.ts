@@ -5,6 +5,7 @@ export {
   withTenantTx,
   withPrivilegedTx,
   withErTx,
+  withForgeTx,
   withPlatformTx,
   withPlatformReadTx,
   recordPlatformEvent,
@@ -16,6 +17,9 @@ export {
   type PlatformActor,
   type PlatformAuditTarget,
 } from "./client.ts";
+// The Forge data-plane tables live in the `forge` Postgres schema (ADR-0047). Exposed as a namespace to avoid
+// Drizzle identifier collisions with the public-schema tables (matchLinks/approvalRequests/parsers/…).
+export * as forgeTables from "./schema/forge.ts";
 export {
   provisionBootstrapAdmin,
   type BootstrapAdminInput,

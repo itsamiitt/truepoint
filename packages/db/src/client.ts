@@ -60,6 +60,20 @@ export async function withErTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   });
 }
 
+/**
+ * Run `fn` under the least-privilege `leadwolf_forge` role — the TruePoint Forge data-plane path (ADR-0047).
+ * NON-BYPASSRLS, owns ONLY the `forge` schema (raw_captures → parsed_records → verified_records + ER/governance);
+ * it has NO grant on the tenant overlay, so the ingest→verify pipeline can never read a customer's contacts.
+ * There are no GUCs — the forge tables carry no workspace_id (isolation is schema+role, the same-repo firewall).
+ * `SET LOCAL ROLE` is transaction-local (RDS-Proxy/PgBouncer-safe). Promotion into master_* still uses withErTx.
+ */
+export async function withForgeTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE leadwolf_forge`);
+    return fn(tx);
+  });
+}
+
 export interface TenantScope {
   tenantId: string;
   workspaceId?: string;

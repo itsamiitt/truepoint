@@ -3,6 +3,10 @@ export * from "./auth.ts";
 export * from "./contacts.ts";
 export * from "./masterGraph.ts";
 export * from "./processedSyncEvents.ts";
+// NOTE: ./forge.ts is intentionally NOT re-exported here — its tables live in the `forge` Postgres schema and
+// several Drizzle identifiers (matchLinks, approvalRequests, reviewTasks, parsers…) collide with the public
+// ones. The forge repos import ../schema/forge.ts directly (insert/select take the table object), and the db
+// index re-exports the forge tables under a `forge` namespace for external consumers.
 export * from "./customFields.ts";
 export * from "./tags.ts";
 export * from "./billing.ts";

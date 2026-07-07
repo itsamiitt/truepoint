@@ -56,6 +56,12 @@ const bootstrap = (appPwd: string): string => `
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_er') THEN
       CREATE ROLE leadwolf_er NOLOGIN;
     END IF;
+    -- The TruePoint Forge data-plane role (ADR-0047; nested-repo firewall): NOLOGIN, NON-BYPASSRLS — it owns
+    -- ONLY the forge schema (raw to parsed to verified + ER/governance) and has NO grant on the public/overlay
+    -- tables, so the ingest-to-verify pipeline can never read a customer's contacts. Reached only via withForgeTx.
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_forge') THEN
+      CREATE ROLE leadwolf_forge NOLOGIN;
+    END IF;
   END $$;
   GRANT USAGE ON SCHEMA public TO leadwolf_app;
   GRANT USAGE ON SCHEMA public TO leadwolf_admin;
@@ -65,6 +71,7 @@ const bootstrap = (appPwd: string): string => `
   GRANT leadwolf_app TO CURRENT_USER;
   GRANT leadwolf_admin TO CURRENT_USER;
   GRANT leadwolf_er TO CURRENT_USER;
+  GRANT leadwolf_forge TO CURRENT_USER;
 `;
 
 // Table/sequence privileges for the app role, applied AFTER tables exist (RLS still gates which rows it sees).
@@ -144,6 +151,18 @@ const GRANTS = `
                                    master_phones, source_records, match_links, projection_outbox,
                                    processed_sync_events TO leadwolf_er;
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_er;
+  -- leadwolf_forge (ADR-0047) owns the forge schema data plane end-to-end (raw to parsed to verified + ER +
+  -- governance). Full DML there (DELETE included — raw-layer DSAR erasure runs in-schema), but NO grant on the
+  -- public/overlay tables (the blanket grants above are IN SCHEMA public, so forge stays unreachable to
+  -- leadwolf_app by default — the same-repo firewall). Promotion into the master graph is a SEPARATE hop under
+  -- withErTx (leadwolf_er). Idempotent; re-run every migrate.
+  GRANT USAGE ON SCHEMA forge TO leadwolf_forge;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA forge TO leadwolf_forge;
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA forge TO leadwolf_forge;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA forge
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO leadwolf_forge;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA forge
+    GRANT USAGE, SELECT ON SEQUENCES TO leadwolf_forge;
 `;
 
 async function exists(path: string): Promise<boolean> {
