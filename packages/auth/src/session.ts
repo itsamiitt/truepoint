@@ -4,8 +4,9 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { env } from "@leadwolf/config";
-import { sessionRepository } from "@leadwolf/db";
+import { effectivePolicyRepository, sessionRepository } from "@leadwolf/db";
 import { InvalidTokenError } from "@leadwolf/types";
+import { resolveMaxConcurrentSessions } from "./policy.ts";
 import { markManyRevoked, markRevoked } from "./revocation.ts";
 
 const newId = () => randomBytes(24).toString("base64url");
@@ -69,6 +70,53 @@ export interface SessionContext {
   notLaterThan?: Date;
 }
 
+// ── AUTH-042 concurrent-session cap ──────────────────────────────────────────────────────────────────────
+/** Which session ids to evict to satisfy a `cap` on ACTIVE sessions (revoked/expired don't count), NEVER the
+ *  just-created `keepId`, oldest-first. Pure so the eviction decision is unit-testable without a DB. Empty when
+ *  the user is at/under the cap. */
+export function sessionsToEvict(
+  sessions: ReadonlyArray<{
+    id: string;
+    createdAt: Date;
+    expiresAt: Date;
+    revokedAt: Date | null;
+  }>,
+  cap: number,
+  keepId: string,
+  now: number = Date.now(),
+): string[] {
+  const active = sessions.filter((s) => s.revokedAt == null && s.expiresAt.getTime() > now);
+  if (active.length <= cap) return [];
+  return active
+    .filter((s) => s.id !== keepId) // never evict the session we just minted
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()) // oldest first
+    .slice(0, active.length - cap)
+    .map((s) => s.id);
+}
+
+/** Enforce the resolved per-tenant concurrent-session cap after a new session is created: evict the oldest over
+ *  the cap. FAIL-OPEN — the cap is a hardening, not a gate, so a resolve/list/revoke fault must NEVER break the
+ *  login that just succeeded; it is caught + logged (alertable marker, no PII) and the new session stands. */
+async function enforceConcurrentSessionCap(ctx: SessionContext, keepId: string): Promise<void> {
+  if (!ctx.tenantId) return; // no tenant scope → no per-tenant cap to resolve
+  try {
+    const rows = await effectivePolicyRepository.getScopeRows({
+      tenantId: ctx.tenantId,
+      workspaceId: ctx.workspaceId,
+    });
+    const cap = resolveMaxConcurrentSessions(rows, ctx.workspaceId);
+    if (cap == null || cap <= 0) return; // unset / unlimited
+    const evict = sessionsToEvict(await sessionRepository.listForUser(ctx.userId), cap, keepId);
+    if (evict.length === 0) return;
+    await Promise.all(evict.map((id) => sessionRepository.revoke(id)));
+    await markManyRevoked(evict); // deny-list so the evicted access tokens stop within seconds, not ≤15 min
+  } catch (err) {
+    console.error(
+      `[session-cap] enforcement skipped after login: ${err instanceof Error ? err.message : "unknown error"}`,
+    );
+  }
+}
+
 export async function createSession(ctx: SessionContext): Promise<IssuedSession> {
   const sessionId = newId();
   const refreshToken = randomBytes(32).toString("base64url");
@@ -85,6 +133,7 @@ export async function createSession(ctx: SessionContext): Promise<IssuedSession>
     ipAddress: ctx.ipAddress,
     userAgent: ctx.userAgent,
   });
+  await enforceConcurrentSessionCap(ctx, sessionId);
   return { sessionId, refreshToken, expiresAt };
 }
 

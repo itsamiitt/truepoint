@@ -220,6 +220,28 @@ export function validatePolicyWrite(
   return { ok: true, field: parsed.field, value: parsed.value };
 }
 
+/**
+ * Resolve JUST the concurrent-session cap (AUTH-042) from the raw rows — min-wins across platform→org→workspace,
+ * `undefined` = unlimited. A targeted read for the enforcement path (createSession) that needs only this one
+ * value, not the full policy or a floor. Reuses assembleScopePolicy per scope (so a malformed row degrades to
+ * "not set", never throws) and takes the strictest (smallest) cap any scope set.
+ */
+export function resolveMaxConcurrentSessions(
+  rows: ReadonlyArray<AuthPolicyRow>,
+  workspaceId?: string,
+): number | undefined {
+  const caps = [
+    assembleScopePolicy(rows.filter((r) => r.scope === "platform")).maxConcurrentSessions,
+    assembleScopePolicy(rows.filter((r) => r.scope === "org")).maxConcurrentSessions,
+    workspaceId
+      ? assembleScopePolicy(
+          rows.filter((r) => r.scope === "workspace" && r.workspaceId === workspaceId),
+        ).maxConcurrentSessions
+      : undefined,
+  ].filter((v): v is number => v != null);
+  return caps.length > 0 ? Math.min(...caps) : undefined;
+}
+
 /** One stored effective-policy row — the shape the repository returns (the value is raw jsonb, hence unknown). */
 export interface AuthPolicyRow {
   scope: string; // 'platform' | 'org' | 'workspace'

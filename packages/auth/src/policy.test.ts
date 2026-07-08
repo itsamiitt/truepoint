@@ -11,6 +11,7 @@ import {
   isMethodAllowed,
   parsePolicyKeyValue,
   resolveEffectivePolicy,
+  resolveMaxConcurrentSessions,
   resolvePolicyFromRows,
   strictestMfa,
   validatePolicyWrite,
@@ -140,6 +141,26 @@ describe("assembleScopePolicy (auth_policies rows → typed partial)", () => {
     const bad = validatePolicyWrite("max_concurrent_sessions", 0, base);
     expect(bad.ok).toBe(false);
     if (!bad.ok) expect(bad.reason).toBe("invalid_value");
+  });
+});
+
+describe("resolveMaxConcurrentSessions (targeted min-wins read, AUTH-042)", () => {
+  it("min-wins across platform + org; undefined when none set", () => {
+    const rows: AuthPolicyRow[] = [
+      { scope: "platform", workspaceId: null, key: "max_concurrent_sessions", value: 5 },
+      { scope: "org", workspaceId: null, key: "max_concurrent_sessions", value: 3 },
+    ];
+    expect(resolveMaxConcurrentSessions(rows)).toBe(3);
+    expect(resolveMaxConcurrentSessions([])).toBeUndefined();
+  });
+
+  it("ignores a non-matching workspace row and skips a malformed value", () => {
+    const rows: AuthPolicyRow[] = [
+      { scope: "org", workspaceId: null, key: "max_concurrent_sessions", value: 4 },
+      { scope: "workspace", workspaceId: "w2", key: "max_concurrent_sessions", value: 1 },
+      { scope: "platform", workspaceId: null, key: "max_concurrent_sessions", value: -9 },
+    ];
+    expect(resolveMaxConcurrentSessions(rows, "w1")).toBe(4); // w2 not in scope; -9 invalid → skipped
   });
 });
 
