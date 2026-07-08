@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1462,
-  "fileSetHash": "sha256:775022776dfde201c887e85c0a0c2fc866a63528b30d38f79d501e766138fb14",
+  "fileCount": 1464,
+  "fileSetHash": "sha256:ce6a439165606e24ff6f94ecf601e2a3736b8860cd5e8b7eafa309f3d2d3bf4f",
   "features": {
     "account-search": {
       "web": [],
@@ -1825,6 +1825,8 @@
       "apps/auth/src/app/account/security/enroll/page.tsx",
       "apps/auth/src/app/account/security/enrollCookie.ts",
       "apps/auth/src/app/account/security/page.tsx",
+      "apps/auth/src/app/account/security/passkeys/register/options/route.ts",
+      "apps/auth/src/app/account/security/passkeys/register/verify/route.ts",
       "apps/auth/src/app/account/security/status.ts",
       "apps/auth/src/app/account/security/stepUp.ts",
       "apps/auth/src/app/account/security/stepUpEligibility.test.ts",
