@@ -127,6 +127,16 @@ only after you've reviewed this exit state. The next autonomous fire will pick u
 
 ## ▶ Unblocked — 2026-07-08: branch PUSHED + blind DB layer CI-VALIDATED
 
+### ✅ Consolidated CI verification (latest run) — the ENTIRE auth-platform DB layer is green on Postgres 16
+All **6 auth-platform itests / 27 tests** pass in CI (the overall run is red ONLY on pre-existing failures —
+accountSearch, M5 DSAR — none of which this branch touches):
+`authPolicyIsolation` 5/5 · `authAllowedOriginsIsolation` 6/6 · `effectivePolicyResolve` 6/6 ·
+`authPolicyBackfill` 1/1 · `webauthnCredentialsIsolation` 4/4 · `userScopedAuthIsolation` 5/5.
+⇒ tables + RLS, the resolve/read/write path, the backfill, the passkey schema, and both isolation REVOKEs are
+all database-proven. (Unit tests — policy/route/cookie/jwks/mfaVerify/sessionCap — pass LOCALLY but do NOT run
+in CI: the Gates job's `biome check .` fails first on ~149 PRE-EXISTING errors, which blocks the unit-test step.
+That is repo-wide debt, red on `main` too — see the caveat below.)
+
 (Was paused 2026-07-07 as DB-blocked; the user then chose push + CI validation, which resolved it.) Pushed
 `feat/auth-platform-phase0` to origin; the repo's `ci.yml` runs every `*.itest.ts` against **Postgres 16 +
 Redis 7** service containers. CI run `28908660675`:
