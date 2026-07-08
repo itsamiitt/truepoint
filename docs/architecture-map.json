@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1453,
-  "fileSetHash": "sha256:6e0e8866151d1c10209afefa991c4b15ff1a7151bedfd2505f5299ebb71a2155",
+  "fileCount": 1454,
+  "fileSetHash": "sha256:b0b889a255eaeac7df098fc8a93c6bd62f918b15e66b7cc24c7a6b1f6aebee2a",
   "features": {
     "account-search": {
       "web": [],
@@ -2088,6 +2088,7 @@
       "packages/auth/src/login.ts",
       "packages/auth/src/loginTransaction.ts",
       "packages/auth/src/mfa.ts",
+      "packages/auth/src/mfaVerify.test.ts",
       "packages/auth/src/mfaVerify.ts",
       "packages/auth/src/password.test.ts",
       "packages/auth/src/password.ts",
