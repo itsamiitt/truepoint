@@ -195,6 +195,7 @@ export { authPolicyRepository } from "./repositories/authPolicyRepository.ts";
 export {
   type NewWebauthnCredential,
   type WebauthnCredentialRecord,
+  type WebauthnCredentialSummary,
   webauthnCredentialRepository,
 } from "./repositories/webauthnCredentialRepository.ts";
 export {

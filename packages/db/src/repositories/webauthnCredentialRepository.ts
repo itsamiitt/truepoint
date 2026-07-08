@@ -3,7 +3,7 @@
 // owner pool (`db`), keyed by user_id. No secret is stored (WebAuthn public keys are public). The crypto that
 // produces/validates these rows lives in @leadwolf/auth (the review-gated ceremony); this is just persistence.
 
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../client.ts";
 import { webauthnCredentials } from "../schema/auth.ts";
 
@@ -37,6 +37,15 @@ const columns = {
   transports: webauthnCredentials.transports,
 };
 
+/** UI-facing summary of a passkey (never exposes the public key) — for the account "your passkeys" list. */
+export interface WebauthnCredentialSummary {
+  id: string;
+  label: string | null;
+  backedUp: boolean;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+}
+
 export const webauthnCredentialRepository = {
   /** A user's registered credentials — used to build `excludeCredentials` (registration) / `allowCredentials`
    *  (authentication) and to look up the public key for assertion verification. */
@@ -45,6 +54,31 @@ export const webauthnCredentialRepository = {
       .select(columns)
       .from(webauthnCredentials)
       .where(eq(webauthnCredentials.userId, userId));
+  },
+
+  /** UI summary of a user's passkeys (label / backup-eligible / dates), newest first — no public key. */
+  async listSummaryForUser(userId: string): Promise<WebauthnCredentialSummary[]> {
+    return db
+      .select({
+        id: webauthnCredentials.id,
+        label: webauthnCredentials.label,
+        backedUp: webauthnCredentials.backedUp,
+        createdAt: webauthnCredentials.createdAt,
+        lastUsedAt: webauthnCredentials.lastUsedAt,
+      })
+      .from(webauthnCredentials)
+      .where(eq(webauthnCredentials.userId, userId))
+      .orderBy(desc(webauthnCredentials.createdAt));
+  },
+
+  /** Remove a passkey, but ONLY if it belongs to `userId` (ownership check — a foreign id matches nothing).
+   *  Returns the number of rows deleted (0 = not found / not theirs). */
+  async deleteForUser(userId: string, id: string): Promise<number> {
+    const rows = await db
+      .delete(webauthnCredentials)
+      .where(and(eq(webauthnCredentials.id, id), eq(webauthnCredentials.userId, userId)))
+      .returning({ id: webauthnCredentials.id });
+    return rows.length;
   },
 
   /** Resolve one credential by its (globally unique) credential id — the assertion lookup. */
