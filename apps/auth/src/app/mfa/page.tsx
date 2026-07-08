@@ -7,6 +7,7 @@ import { AuthShell } from "@/shared/AuthShell";
 import { OtpInput } from "@/shared/OtpInput";
 import { getLoginTransaction } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
+import { webauthnCredentialRepository } from "@leadwolf/db";
 import { Alert, Button, Checkbox, Label } from "@leadwolf/ui";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -18,9 +19,15 @@ type SearchParams = Promise<Record<string, string | undefined>>;
 export default async function MfaPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
   const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;
-  if (!txnId || !(await getLoginTransaction(txnId))) redirect("/login");
+  const txn = txnId ? await getLoginTransaction(txnId) : null;
+  if (!txn) redirect("/login");
 
   const isEmailOtp = sp.method === "email_otp";
+  // Only offer the passkey option when the user has one enrolled — else the prompt would have no credential to
+  // match and just fail. Owner-connection read (webauthn_credentials is REVOKEd from leadwolf_app).
+  const hasPasskeys =
+    env.WEBAUTHN_ENABLED === "true" &&
+    (await webauthnCredentialRepository.listSummaryForUser(txn.userId)).length > 0;
 
   return (
     <AuthShell
@@ -82,7 +89,7 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
         </form>
       )}
 
-      {env.WEBAUTHN_ENABLED === "true" && !isEmailOtp ? (
+      {hasPasskeys && !isEmailOtp ? (
         <div className="mt-3">
           <PasskeySignIn />
         </div>
