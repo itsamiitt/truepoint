@@ -115,13 +115,26 @@ only after you've reviewed this exit state. The next autonomous fire will pick u
 | 1.5b-rest | Remaining wiring: `auth_login_total{result,method}` + `auth_policy_block_total{reason}` in `flow.ts` (finalizeLogin + the enforcement gates), `auth_mfa_challenge_total` in the MFA path, and a **`/metrics` scrape endpoint** (network-restricted, not public) exposing `renderAuthMetrics()` | M | ◻ next | The login/policy-block sites are the highest-value SLIs but sit in the login hot path; the endpoint needs the exposure decision (internal-only). |
 | 1.6 | Drizzle **snapshot-debt stitch** (meta 0028→0053) for clean `drizzle-kit generate` | M | ◻ todo | Genuinely needs a DB to verify the regenerated snapshot matches reality; NOT attempted blind. Hand-authoring (1.1a) sidesteps the immediate need. |
 
-## ⏸ Loop paused — 2026-07-07 (Phase 1 in progress, DB-blocked)
+## ▶ Unblocked — 2026-07-08: branch PUSHED + blind DB layer CI-VALIDATED
 
-The 20-min `/loop` (cron `10381e26`) was **paused after ~14 iterations**. Reason: Phase 1's remaining work is
-uniformly **DB-bound** (tables, RLS, repositories, the API endpoint, the finalize-login switch, the backfill),
-and this sandbox has **no database** — so nothing further can be run, validated, or shipped. Every recent
-iteration produced blind DB code mirroring the same unvalidated pattern; replicating it more doesn't de-risk it
-(only a Postgres/CI pass does). Paused to stop spending tokens on unrunnable work while the requester is away.
+(Was paused 2026-07-07 as DB-blocked; the user then chose push + CI validation, which resolved it.) Pushed
+`feat/auth-platform-phase0` to origin; the repo's `ci.yml` runs every `*.itest.ts` against **Postgres 16 +
+Redis 7** service containers. CI run `28908660675`:
+- ✅ `authPolicyIsolation.itest.ts` — **5/5** (auth_policies table + nullable-tenant RLS)
+- ✅ `authAllowedOriginsIsolation.itest.ts` — **5/5** (auth_allowed_origins table + RLS)
+- ✅ `effectivePolicyResolve.itest.ts` — **4/4** (getScopeRows read, resolve via withTenantTx, AND the
+  `upsertTenantKey` onConflict NULLS-NOT-DISTINCT write — the exact thing flagged as needing DB validation)
+
+**⇒ The ~8 "authored/blind" DB units are now PROVEN correct** against a real database. Validation loop is closed:
+push → CI runs itests → read via `gh run view`. New DB units can be authored with confidence + CI-checked.
+
+**⚠️ CI is still RED, but from PRE-EXISTING failures unrelated to this work** (they also fail on `main`): the
+`biome` job on `.design-sync/previews/Alert.tsx` (a11y lint on a preview artifact), and the `accountSearch` +
+`M5 compliance DSAR` itests. This branch touches none of those files, and its migrations/RLS apply cleanly (that
+is why the three itests above ran + passed). Flag for separate triage — they gate any merge to green.
+
+**Resend (0.2c):** wired in deploy config; delivery goes live once the operator injects the `SMTP_URL` secret +
+verifies the sending domain in Resend.
 
 **What's DONE + FULLY VERIFIED here (pure logic, ~45 tests green):**
 - Effective-policy engine: `composeEffectivePolicy` / `assembleScopePolicy` / `resolvePolicyFromRows` (resolve),
