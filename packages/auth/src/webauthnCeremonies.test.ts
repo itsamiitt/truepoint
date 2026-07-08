@@ -72,7 +72,11 @@ mock.module("@simplewebauthn/server", () => ({
 }));
 
 const { verifyPasskeyRegistration } = await import("./webauthnRegistration.ts");
-const { verifyPasskeyAuthentication } = await import("./webauthnAuthentication.ts");
+const {
+  verifyPasskeyAuthentication,
+  generatePasskeyAuthenticationUsernameless,
+  verifyPasskeyAuthenticationUsernameless,
+} = await import("./webauthnAuthentication.ts");
 type RegResp = Parameters<typeof verifyPasskeyRegistration>[1];
 type AuthResp = Parameters<typeof verifyPasskeyAuthentication>[1];
 const REG_RESP = {} as unknown as RegResp;
@@ -183,6 +187,53 @@ describe("verifyPasskeyAuthentication — security orchestration", () => {
     counterUpdates.length = 0;
     expect(await verifyPasskeyAuthentication("u1", AUTH_RESP)).toBe(true);
     expect(counterUpdates).toEqual([{ credentialId: "cred-1", counter: 7 }]);
+  });
+});
+
+describe("verifyPasskeyAuthenticationUsernameless — resolves the user FROM the credential", () => {
+  it("returns a ul_-prefixed single-use handle from generate", async () => {
+    const { options, handle } = await generatePasskeyAuthenticationUsernameless();
+    expect(handle.startsWith("ul_")).toBe(true);
+    expect(options).toBeDefined();
+  });
+
+  it("fails closed with no challenge (bad/expired handle)", async () => {
+    challenge = null;
+    cred = ownCred;
+    expect(await verifyPasskeyAuthenticationUsernameless("ul_x", AUTH_RESP)).toEqual({
+      verified: false,
+    });
+  });
+
+  it("fails when the presented credential is unknown", async () => {
+    challenge = "chal";
+    cred = null;
+    expect(await verifyPasskeyAuthenticationUsernameless("ul_x", AUTH_RESP)).toEqual({
+      verified: false,
+    });
+  });
+
+  it("fails and does NOT advance the counter when the library rejects", async () => {
+    challenge = "chal";
+    cred = ownCred;
+    authResult = { verified: false };
+    counterUpdates.length = 0;
+    expect(await verifyPasskeyAuthenticationUsernameless("ul_x", AUTH_RESP)).toEqual({
+      verified: false,
+    });
+    expect(counterUpdates).toEqual([]);
+  });
+
+  it("verifies and returns the credential's userId (resolved, not supplied)", async () => {
+    challenge = "chal";
+    cred = ownCred;
+    authResult = { verified: true, authenticationInfo: { newCounter: 9 } };
+    counterUpdates.length = 0;
+    expect(await verifyPasskeyAuthenticationUsernameless("ul_x", AUTH_RESP)).toEqual({
+      verified: true,
+      userId: "u1",
+    });
+    expect(counterUpdates).toEqual([{ credentialId: "cred-1", counter: 9 }]);
   });
 });
 

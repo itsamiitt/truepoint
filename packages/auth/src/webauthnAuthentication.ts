@@ -10,6 +10,7 @@
 //     we persist the advanced counter on success.
 // Inert until the WEBAUTHN_ENABLED-gated routes call it.
 
+import { randomUUID } from "node:crypto";
 import { appOrigins, env } from "@leadwolf/config";
 import { webauthnCredentialRepository } from "@leadwolf/db";
 import {
@@ -93,6 +94,82 @@ export async function verifyPasskeyAuthentication(
   );
   record("success");
   return true;
+}
+
+// ── Usernameless (discoverable-credential) variant (AUTH-024) ────────────────────────────────────────────────
+// "Sign in with a passkey" with NO email first: the authenticator offers its resident credentials, and the USER
+// IS RESOLVED FROM the returned credential (findByCredentialId), not supplied. This is decision-independent
+// crypto/logic — it only proves possession of a registered credential and returns whose it is. Whether that
+// resolved login then SKIPS the separate MFA step (a passkey with user-verification as multi-factor) is a POLICY
+// decision made by the caller/login-flow wiring, NOT here (⚠ flagged: passkey-as-MFA vs mfa_enforcement).
+// Because there is no userId at options time, the challenge is keyed by a random single-use HANDLE the caller
+// carries in a cookie between options and verify.
+
+/** Step 1 (usernameless) — options with NO allowCredentials (the authenticator picks a resident credential) +
+ *  userVerification "required" (so the passkey is genuinely two-factor). Returns the opaque `handle` the caller
+ *  stores in a cookie; the single-use challenge is stashed under it. */
+export async function generatePasskeyAuthenticationUsernameless(): Promise<{
+  options: Awaited<ReturnType<typeof generateAuthenticationOptions>>;
+  handle: string;
+}> {
+  const options = await generateAuthenticationOptions({
+    rpID: env.WEBAUTHN_RP_ID,
+    userVerification: "required",
+    // no allowCredentials — discoverable credentials only
+  });
+  const handle = `ul_${randomUUID()}`; // distinct keyspace from real user ids
+  await storeWebauthnChallenge("authenticate", handle, options.challenge);
+  return { options, handle };
+}
+
+/** Step 2 (usernameless) — verify the assertion against the handle's stashed challenge, resolve the user FROM the
+ *  presented credential, advance the counter, and return whose credential it was. Fails closed (no userId) on any
+ *  mismatch. The caller decides what to do with `userId` (and whether it satisfies MFA). */
+export async function verifyPasskeyAuthenticationUsernameless(
+  handle: string,
+  response: AuthenticationResponseJSON,
+): Promise<{ verified: boolean; userId?: string }> {
+  const record = (result: "success" | "failure") =>
+    recordAuthMetric("webauthn_ceremony_total", { ceremony: "authenticate", result });
+  const expectedChallenge = await consumeWebauthnChallenge("authenticate", handle);
+  if (!expectedChallenge) {
+    record("failure");
+    return { verified: false };
+  }
+  const cred = await webauthnCredentialRepository.findByCredentialId(response.id);
+  if (!cred) {
+    record("failure");
+    return { verified: false };
+  }
+
+  let verification: Awaited<ReturnType<typeof verifyAuthenticationResponse>>;
+  try {
+    verification = await verifyAuthenticationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: [...appOrigins()],
+      expectedRPID: env.WEBAUTHN_RP_ID,
+      credential: {
+        id: cred.credentialId,
+        publicKey: new Uint8Array(cred.publicKey),
+        counter: cred.counter,
+        transports: (cred.transports ?? undefined) as AuthenticatorTransportFuture[] | undefined,
+      },
+    });
+  } catch {
+    record("failure");
+    return { verified: false };
+  }
+  if (!verification.verified) {
+    record("failure");
+    return { verified: false };
+  }
+  await webauthnCredentialRepository.updateCounter(
+    cred.credentialId,
+    verification.authenticationInfo.newCounter,
+  );
+  record("success");
+  return { verified: true, userId: cred.userId };
 }
 
 export type { AuthenticationResponseJSON } from "@simplewebauthn/server";

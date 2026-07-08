@@ -65,7 +65,9 @@ export {
 export {
   type AuthenticationResponseJSON,
   generatePasskeyAuthentication,
+  generatePasskeyAuthenticationUsernameless,
   verifyPasskeyAuthentication,
+  verifyPasskeyAuthenticationUsernameless,
 } from "./webauthnAuthentication.ts";
 export { encryptSecret, decryptSecret } from "./secrets.ts";
 export {
