@@ -31,6 +31,9 @@ mock.module("../../middleware/requireOrgRole.ts", () => ({
 // The platform floor the repository returns: mfa_enforcement = "optional" (so "required" is a valid tighten and
 // "off" is a below-floor loosen). upsertTenantKey is spied.
 const upserts: Array<Record<string, unknown>> = [];
+// Controls the no-lockout guard: what the org's SSO connection looks like for a require_sso write.
+let ssoConfig: { enabled: boolean; protocol: "oidc" | "saml" } | null = null;
+
 mock.module("@leadwolf/db", () => ({
   ...realDb,
   effectivePolicyRepository: {
@@ -40,6 +43,9 @@ mock.module("@leadwolf/db", () => ({
     upsertTenantKey: async (args: Record<string, unknown>) => {
       upserts.push(args);
     },
+  },
+  ssoConfigRepository: {
+    getForTenant: async () => ssoConfig,
   },
 }));
 
@@ -104,5 +110,38 @@ describe("PUT /security/effective-policy", () => {
   it("rejects a body missing the key (422)", async () => {
     const res = await put({ value: "required" });
     expect(res.status).toBe(422);
+  });
+
+  // No-lockout guard (AUTH-031): require_sso=true must not be enable-able without a working SSO connection.
+  it("rejects require_sso=true when the org has NO SSO connection (403), without writing", async () => {
+    ssoConfig = null;
+    upserts.length = 0;
+    const res = await put({ key: "require_sso", value: true });
+    expect(res.status).toBe(403);
+    expect(upserts).toHaveLength(0);
+  });
+
+  it("rejects require_sso=true when the SSO connection is DISABLED (403)", async () => {
+    ssoConfig = { enabled: false, protocol: "saml" };
+    upserts.length = 0;
+    const res = await put({ key: "require_sso", value: true });
+    expect(res.status).toBe(403);
+    expect(upserts).toHaveLength(0);
+  });
+
+  it("allows require_sso=true when the connection is enabled + wired (200)", async () => {
+    ssoConfig = { enabled: true, protocol: "saml" }; // test env → mock provider → wired
+    upserts.length = 0;
+    const res = await put({ key: "require_sso", value: true });
+    expect(res.status).toBe(200);
+    expect(upserts).toHaveLength(1);
+  });
+
+  it("allows DISABLING require_sso regardless of connection state (200)", async () => {
+    ssoConfig = null;
+    upserts.length = 0;
+    const res = await put({ key: "require_sso", value: false });
+    expect(res.status).toBe(200);
+    expect(upserts).toHaveLength(1);
   });
 });
