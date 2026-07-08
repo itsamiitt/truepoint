@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1457,
-  "fileSetHash": "sha256:68bd8f7fea97815829e0865b421e3fb9608368f10e3f398e608148aee5616afa",
+  "fileCount": 1458,
+  "fileSetHash": "sha256:deb4c1c0d73f164b8b54b1b8c2caca5efedb75de59839f837f16bb15b1e97342",
   "features": {
     "account-search": {
       "web": [],
@@ -2120,7 +2120,8 @@
       "packages/auth/src/switchOrg.ts",
       "packages/auth/src/switchWorkspace.ts",
       "packages/auth/src/token.test.ts",
-      "packages/auth/src/token.ts"
+      "packages/auth/src/token.ts",
+      "packages/auth/src/webauthnChallenge.ts"
     ],
     "packages/config": [
       "packages/config/src/env.ts",
