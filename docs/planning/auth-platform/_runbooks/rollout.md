@@ -78,12 +78,37 @@ Email OTP and security emails need a real SMTP transport. Set `SMTP_URL` (e.g. R
 See [`jwks-key-rotation.md`](./jwks-key-rotation.md) — publish the NEXT key (`JWT_NEXT_*`) → wait > JWKS cache
 TTL → cut the minter over → wait > access TTL → retire. Independent of everything above.
 
+## 9. Passkeys / WebAuthn — `WEBAUTHN_ENABLED` + `WEBAUTHN_RP_ID` ★ review before enable
+
+Built end-to-end but OFF by default. To enable: set `WEBAUTHN_ENABLED=true` **and** `WEBAUTHN_RP_ID=<registrable
+domain>` (e.g. `truepoint.in` — NOT a full origin; a boot guard fails fast if enabled without it). Then the
+account-security "Passkeys" section (add/list/remove) appears, and "Use a passkey" shows at `/mfa` for users who
+have one. **Specialist review checklist before flipping it on** (the crypto is the vetted `@simplewebauthn` libs —
+audit the integration):
+
+- `WEBAUTHN_RP_ID` = the REGISTRABLE domain (so a passkey registered on `auth.*` works across `app.*`/`api.*`);
+- `expectedOrigin` = the `APP_ORIGINS` allow-list (never a client value); `expectedRPID` = the RP-ID;
+- the challenge is single-use (Redis GETDEL) and bound to the response; `attestationType: "none"`;
+- assertion REFUSES a credential that isn't the acting user's (cross-user check — unit-tested);
+- the monotonic signature counter (clone detection) advances only on a verified assertion;
+- `webauthn_credentials` is REVOKEd from `leadwolf_app` (owner-only — itest-proven);
+- `submitMfaPasskey` mirrors `submitMfa` exactly (same lockout + advance) — it touches the login flow.
+
+Already hardened: add/remove require step-up re-auth (403 otherwise), are audited (`passkey.register`/`.remove`,
+dual-sink), email the owner a security notification, and emit `webauthn_ceremony_total`.
+
 ---
 
-## Still flagged for specialist review (NOT built / NOT enable-ready)
+## Still flagged for specialist review
 
-- **Passkeys / WebAuthn ceremony** — only the credential schema + isolation exist; the registration/assertion
-  ceremony (WebAuthn library, RP-ID, attestation, anti-replay) is unbuilt and **needs specialist review**.
-- **Real SSO/SAML/OIDC + SCIM adapters** (Phase 4) — the XL long-poles; enforce the no-lockout guard first.
+- **Passkeys / WebAuthn** — now BUILT end-to-end + hardened (audit · step-up · notify · metric · unit+itest), but
+  OFF by default: review the §9 checklist before setting `WEBAUTHN_ENABLED` + `WEBAUTHN_RP_ID`.
+- **Trusted-device MFA skip** (`TRUSTED_DEVICES_ENABLED`, off) — half-scaffolded (table + now-hidden checkbox +
+  dead `newSignInEmail` template + PENDING `device.*` audit actions). It SKIPS MFA — a **bypass** surface — so
+  build the token store/skip-check/revocation off-by-default + specialist review, not a rushed autonomous build.
+- **Resolve-time policy floor** (tracker 1.2d) — the floor is WRITE-time-enforced only; decide clamp-at-resolve
+  (silent defense-in-depth) vs. a `findFloorViolations` floor-raise remediation report.
+- **Real SSO/SAML/OIDC + SCIM adapters** (Phase 4) — the XL long-poles, under the build-vs-buy research; enforce
+  the no-lockout guard first.
 - **KMS-managed at-rest key**, **SMS OTP**, **social/OAuth login**, **adaptive step-up**, **forced-reset-on-breach**,
   the **`user_sessions` RLS** gap, and the **@leadwolf/auth-client** extract — all outstanding (see the progress tracker).
