@@ -60,6 +60,12 @@ const KEY_SPECS: Record<string, KeySpec> = {
     kind: "number",
     placeholder: "e.g. 3600",
   },
+  max_concurrent_sessions: {
+    label: "Max concurrent sessions",
+    kind: "number",
+    placeholder: "e.g. 5",
+    help: "Max simultaneous active sessions per user; the oldest is evicted over the cap. Empty = unlimited.",
+  },
 };
 const KEYS = Object.keys(KEY_SPECS);
 

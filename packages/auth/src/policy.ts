@@ -54,6 +54,11 @@ export function resolveEffectivePolicy(
     ),
     // Idle window is a timeout like the absolute cap: the strictest (shortest) of the two scopes wins.
     idleTimeoutSeconds: minDefined(tenant.idleTimeoutSeconds, workspace?.idleTimeoutSeconds),
+    // Concurrent-session cap: a limit like the timeouts — the strictest (smallest) of the two scopes wins.
+    maxConcurrentSessions: minDefined(
+      tenant.maxConcurrentSessions,
+      workspace?.maxConcurrentSessions,
+    ),
   };
 }
 
@@ -125,6 +130,7 @@ const POLICY_KEY_FIELD = {
   ip_allowlist: "ipAllowlist",
   session_timeout_seconds: "sessionTimeoutSeconds",
   idle_timeout_seconds: "idleTimeoutSeconds",
+  max_concurrent_sessions: "maxConcurrentSessions",
 } as const satisfies Record<string, keyof AuthPolicy>;
 
 // Reuse the field validators straight off authPolicySchema (the single source of truth in @leadwolf/types) so a
@@ -137,6 +143,7 @@ const POLICY_KEY_PARSER = {
   ip_allowlist: authPolicySchema.shape.ipAllowlist,
   session_timeout_seconds: authPolicySchema.shape.sessionTimeoutSeconds,
   idle_timeout_seconds: authPolicySchema.shape.idleTimeoutSeconds,
+  max_concurrent_sessions: authPolicySchema.shape.maxConcurrentSessions,
 } as const;
 
 /**

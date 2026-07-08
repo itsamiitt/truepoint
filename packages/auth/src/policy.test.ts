@@ -123,6 +123,24 @@ describe("assembleScopePolicy (auth_policies rows → typed partial)", () => {
     const orgPartial = assembleScopePolicy([{ key: "mfa_enforcement", value: "required" }]);
     expect(composeEffectivePolicy(platform, orgPartial).mfaEnforcement).toBe("required");
   });
+
+  it("maps + resolves max_concurrent_sessions min-wins (AUTH-042), and rejects a loosening org write", () => {
+    // the new key maps like the timeout caps: a smaller cap is stricter, so min-wins across scopes
+    expect(assembleScopePolicy([{ key: "max_concurrent_sessions", value: 5 }])).toEqual({
+      maxConcurrentSessions: 5,
+    });
+    const platform: AuthPolicy = { ...base, maxConcurrentSessions: 5 };
+    const org = assembleScopePolicy([{ key: "max_concurrent_sessions", value: 2 }]); // tighten
+    expect(composeEffectivePolicy(platform, org).maxConcurrentSessions).toBe(2);
+    // an org trying to RAISE the cap above the platform floor is a floor violation (below_floor at the endpoint)
+    const decision = validatePolicyWrite("max_concurrent_sessions", 10, platform);
+    expect(decision.ok).toBe(false);
+    if (!decision.ok) expect(decision.reason).toBe("below_floor");
+    // a non-positive value is an invalid shape (422 at the endpoint)
+    const bad = validatePolicyWrite("max_concurrent_sessions", 0, base);
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reason).toBe("invalid_value");
+  });
 });
 
 describe("resolvePolicyFromRows (scope partition + platform override + tighten)", () => {
