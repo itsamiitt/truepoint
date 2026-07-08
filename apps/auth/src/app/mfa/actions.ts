@@ -20,8 +20,13 @@ import { redirect } from "next/navigation";
 
 export async function submitMfa(formData: FormData): Promise<void> {
   const code = String(formData.get("code") ?? "").trim();
+  // The challenge method (AUTH-025): TOTP by default (backward-compatible — the current form sends no method),
+  // or "email_otp" once the challenge UI offers "email me a code". Anything else is rejected uniformly. Both are
+  // then verified by verifyMfaCode, which itself fails closed on an unsupported method.
+  const method = String(formData.get("method") ?? "totp");
   const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;
   if (!txnId) redirect("/login");
+  if (method !== "totp" && method !== "email_otp") redirect("/mfa?error=1");
   const txn = await getLoginTransaction(txnId);
   if (!txn) redirect("/login");
 
@@ -35,7 +40,7 @@ export async function submitMfa(formData: FormData): Promise<void> {
     redirect("/mfa?error=1");
   }
 
-  if (!(await verifyMfaCode({ userId: txn.userId, method: "totp", code }))) {
+  if (!(await verifyMfaCode({ userId: txn.userId, method, code }))) {
     await recordCredentialFailure({ ip, identifier: mfaKey });
     redirect("/mfa?error=1");
   }

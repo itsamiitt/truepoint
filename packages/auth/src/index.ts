@@ -64,6 +64,7 @@ export {
   checkRequestRate,
   checkCaptureRate,
   checkRevealRate,
+  checkEmailOtpSendRate,
   assertCredentialNotLocked,
   recordCredentialFailure,
   recordCredentialSuccess,
