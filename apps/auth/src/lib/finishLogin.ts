@@ -5,7 +5,7 @@ import { env } from "@leadwolf/config";
 // and redirect to the app callback. Called by whichever step reaches "complete" (password / MFA / workspace).
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { LOGIN_TXN_COOKIE, REFRESH_COOKIE } from "./cookies";
+import { LOGIN_TXN_COOKIE, refreshCookieName, refreshCookieWritesHost } from "./cookies";
 
 export async function finishLogin(txnId: string, txn: LoginTransaction): Promise<never> {
   const ua = (await headers()).get("user-agent") ?? undefined;
@@ -13,12 +13,14 @@ export async function finishLogin(txnId: string, txn: LoginTransaction): Promise
   await deleteLoginTransaction(txnId);
 
   const jar = await cookies();
-  jar.set(REFRESH_COOKIE, result.refreshToken, {
+  // AUTH-074: under the __Host- write flip the cookie MUST carry no Domain (browser-enforced host-only); the
+  // legacy cookie keeps its host-scoped Domain. Readers already accept both names (dual-read stage).
+  jar.set(refreshCookieName(), result.refreshToken, {
     httpOnly: true,
     secure: true,
     sameSite: "strict",
     path: "/",
-    domain: env.AUTH_COOKIE_DOMAIN,
+    ...(refreshCookieWritesHost() ? {} : { domain: env.AUTH_COOKIE_DOMAIN }),
     maxAge: result.refreshMaxAge,
   });
   jar.delete(LOGIN_TXN_COOKIE);

@@ -25,7 +25,7 @@ export async function POST(req: Request): Promise<Response> {
   // Always clear the cookie and return 204, regardless of what we find — logout is idempotent and must
   // never reveal whether a session existed. The session revoke is best-effort and swallows any failure.
   const headers = new Headers(cors);
-  headers.append("Set-Cookie", clearRefreshCookie());
+  for (const c of clearRefreshCookie()) headers.append("Set-Cookie", c);
 
   const presented = readRefreshCookie(req);
   if (presented) {

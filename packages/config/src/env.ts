@@ -42,6 +42,13 @@ export const appEnvSchema = z
       .optional(),
     AUTH_COOKIE_DOMAIN: z.string().min(1),
 
+    // AUTH-074 stage 2 — flip refresh-cookie WRITES to the browser-enforced `__Host-` prefix (Secure + Path=/ +
+    // NO Domain). Default OFF (writes the legacy `lw_refresh` with its host-scoped Domain — today's behaviour).
+    // Gated as a SEPARATE deploy step from the dual-READ (which must be live everywhere first) so no rolling-
+    // deploy window exists where an old-reader node can't read a new-writer node's `__Host-` cookie. Flip to
+    // "true" AFTER the read stage has fully rolled out; readers already accept both names. Only "true" arms it.
+    REFRESH_COOKIE_HOST_WRITE: z.string().optional(),
+
     // Client-IP binding posture for the cross-domain code (ADR-0016 addendum): `strict` = exact match on
     // the normalized IP, `prefix` = same network (/24 IPv4, /64 IPv6) so a proxy first-hop that varies
     // within a network doesn't break a legitimate login, `off` = don't bind (rely on PKCE + single-use +

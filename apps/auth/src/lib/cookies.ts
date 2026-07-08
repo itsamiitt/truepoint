@@ -34,20 +34,54 @@ export function readRefreshTokenFromHeader(cookieHeader: string | null): string 
   return legacy;
 }
 
-export function refreshCookie(token: string, maxAgeSeconds: number): string {
-  return [
-    `${REFRESH_COOKIE}=${token}`,
+/** Whether writers currently emit the `__Host-` cookie (AUTH-074 stage 2; env-gated, default off). */
+export const refreshCookieWritesHost = (): boolean => env.REFRESH_COOKIE_HOST_WRITE === "true";
+
+/** The refresh-cookie NAME writers should use now (host cookie when the write flip is armed, else legacy). */
+export const refreshCookieName = (): string =>
+  refreshCookieWritesHost() ? REFRESH_COOKIE_HOST : REFRESH_COOKIE;
+
+/** PURE Set-Cookie builder — `__Host-` forbids Domain (browser-enforced host-only); the legacy cookie keeps its
+ *  host-scoped Domain. Extracted so the name/attribute wiring is unit-testable without env. */
+export function buildRefreshSetCookie(
+  useHost: boolean,
+  token: string,
+  maxAgeSeconds: number,
+  domain: string,
+): string {
+  const parts = [
+    `${useHost ? REFRESH_COOKIE_HOST : REFRESH_COOKIE}=${token}`,
     "HttpOnly",
     "Secure",
     "SameSite=Strict",
     "Path=/",
-    `Domain=${env.AUTH_COOKIE_DOMAIN}`,
-    `Max-Age=${maxAgeSeconds}`,
-  ].join("; ");
+  ];
+  if (!useHost) parts.push(`Domain=${domain}`);
+  parts.push(`Max-Age=${maxAgeSeconds}`);
+  return parts.join("; ");
 }
 
-export function clearRefreshCookie(): string {
-  return `${REFRESH_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Domain=${env.AUTH_COOKIE_DOMAIN}; Max-Age=0`;
+/** PURE clear builder — clears BOTH names so logout ends a session set under either, whichever the write flip
+ *  was on for. Clearing an absent cookie is a harmless browser no-op. */
+export function buildClearRefreshCookies(domain: string): string[] {
+  return [
+    `${REFRESH_COOKIE_HOST}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`,
+    `${REFRESH_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Domain=${domain}; Max-Age=0`,
+  ];
+}
+
+export function refreshCookie(token: string, maxAgeSeconds: number): string {
+  return buildRefreshSetCookie(
+    refreshCookieWritesHost(),
+    token,
+    maxAgeSeconds,
+    env.AUTH_COOKIE_DOMAIN,
+  );
+}
+
+/** Clear the refresh cookie(s) — returns BOTH Set-Cookie directives; the caller appends each to its response. */
+export function clearRefreshCookie(): string[] {
+  return buildClearRefreshCookies(env.AUTH_COOKIE_DOMAIN);
 }
 
 // The short-lived login-transaction cookie (auth-origin, HttpOnly, SameSite=Strict) that threads the

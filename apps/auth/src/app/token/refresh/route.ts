@@ -38,7 +38,7 @@ export async function POST(req: Request): Promise<Response> {
     );
   } catch {
     const headers = new Headers(cors);
-    headers.append("Set-Cookie", clearRefreshCookie());
+    for (const c of clearRefreshCookie()) headers.append("Set-Cookie", c);
     return Response.json({ code: "invalid_token" }, { status: 401, headers });
   }
 }

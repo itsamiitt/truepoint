@@ -3,7 +3,12 @@
 // set under either name keeps working. Pure string/jar helpers — no next/headers request context needed.
 
 import { describe, expect, it } from "bun:test";
-import { readRefreshToken, readRefreshTokenFromHeader } from "./cookies";
+import {
+  buildClearRefreshCookies,
+  buildRefreshSetCookie,
+  readRefreshToken,
+  readRefreshTokenFromHeader,
+} from "./cookies";
 
 describe("readRefreshTokenFromHeader (Cookie-header form)", () => {
   it("prefers the __Host- cookie over the legacy name, in either order", () => {
@@ -34,5 +39,34 @@ describe("readRefreshToken (cookies() jar form)", () => {
     expect(readRefreshToken(jar({ "__Host-lw_refresh": "NEW", lw_refresh: "OLD" }))).toBe("NEW");
     expect(readRefreshToken(jar({ lw_refresh: "OLD" }))).toBe("OLD");
     expect(readRefreshToken(jar({}))).toBeUndefined();
+  });
+});
+
+describe("buildRefreshSetCookie (write flip, AUTH-074)", () => {
+  it("legacy write keeps the host-scoped Domain", () => {
+    const c = buildRefreshSetCookie(false, "TOK", 100, "auth.truepoint.in");
+    expect(c).toContain("lw_refresh=TOK");
+    expect(c).toContain("Domain=auth.truepoint.in");
+    expect(c).toContain("Secure");
+    expect(c).toContain("Path=/");
+  });
+
+  it("__Host- write uses the prefix name and OMITS Domain (browser-enforced host-only)", () => {
+    const c = buildRefreshSetCookie(true, "TOK", 100, "auth.truepoint.in");
+    expect(c).toContain("__Host-lw_refresh=TOK");
+    expect(c).not.toContain("Domain=");
+    expect(c).toContain("Secure");
+    expect(c).toContain("Path=/");
+  });
+});
+
+describe("buildClearRefreshCookies", () => {
+  it("clears BOTH names — __Host- clear has no Domain, legacy clear does", () => {
+    const [host, legacy] = buildClearRefreshCookies("auth.truepoint.in");
+    expect(host).toContain("__Host-lw_refresh=;");
+    expect(host).not.toContain("Domain=");
+    expect(legacy).toContain("Domain=auth.truepoint.in");
+    expect(host).toContain("Max-Age=0");
+    expect(legacy).toContain("Max-Age=0");
   });
 });
