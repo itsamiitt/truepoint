@@ -14,6 +14,7 @@ import {
   checkEmailOtpSendRate,
   getLoginTransaction,
   patchLoginTransaction,
+  recordAuthMetric,
   recordCredentialFailure,
   recordCredentialSuccess,
   requestEmailOtp,
@@ -47,9 +48,13 @@ export async function submitMfaPasskey(assertion: AuthenticationResponseJSON): P
   }
 
   if (!(await verifyPasskeyAuthentication(txn.userId, assertion))) {
+    // Count the passkey second factor in the SAME MFA SLI the TOTP/email-OTP path records (mfaVerify.ts), so
+    // the metric isn't blind to passkey attempts.
+    recordAuthMetric("auth_mfa_challenge_total", { result: "failed" });
     await recordCredentialFailure({ ip, identifier: mfaKey });
     redirect("/mfa?error=1");
   }
+  recordAuthMetric("auth_mfa_challenge_total", { result: "passed" });
   await recordCredentialSuccess(mfaKey);
 
   await patchLoginTransaction(txnId, { mfaVerified: true });
