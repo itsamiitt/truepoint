@@ -241,6 +241,14 @@ export const appEnvSchema = z
     // Only the literal "true" arms it.
     BREACHED_PASSWORD_CHECK_AT_LOGIN: z.string().optional(),
 
+    // WebAuthn / passkeys (AUTH-024). OFF BY DEFAULT — the ceremony routes 404 unless WEBAUTHN_ENABLED="true".
+    // WEBAUTHN_RP_ID is the Relying Party ID: the REGISTRABLE DOMAIN (e.g. "truepoint.in"), NOT a full origin —
+    // so a passkey registered on auth.* works across app.*/api.* in the subdomain estate. Ceremonies verify the
+    // response's origin against the APP_ORIGINS allow-list and its rpIdHash against this. Flagged NEEDS
+    // SPECIALIST REVIEW BEFORE ENABLE (the security-critical generate/verify lives in @leadwolf/auth).
+    WEBAUTHN_ENABLED: z.string().optional(),
+    WEBAUTHN_RP_ID: z.string().default(""),
+
     // Internal metrics scrape (Phase 1 observability, doc 03 §10). The shared-secret Bearer token that gates
     // GET /metrics (the auth SLI counters: login/token/revocation/policy-block). OFF BY DEFAULT — unset ⇒ the
     // endpoint 404s (invisible), so no operational data is exposed until an operator BOTH sets this AND puts the

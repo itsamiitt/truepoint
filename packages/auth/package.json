@@ -3,8 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@leadwolf/config": "workspace:*",
     "@leadwolf/db": "workspace:*",
@@ -12,9 +16,12 @@
     "@node-rs/argon2": "2.0.2",
     "@oslojs/encoding": "1.1.0",
     "@oslojs/otp": "1.0.0",
+    "@simplewebauthn/server": "^13.3.2",
     "ioredis": "5.4.1",
     "jose": "5.9.6",
     "rate-limiter-flexible": "5.0.4"
   },
-  "devDependencies": { "typescript": "5.7.2" }
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
 }

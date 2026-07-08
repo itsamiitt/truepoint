@@ -57,6 +57,11 @@ export {
   storeWebauthnChallenge,
   consumeWebauthnChallenge,
 } from "./webauthnChallenge.ts";
+export {
+  type RegistrationResponseJSON,
+  generatePasskeyRegistration,
+  verifyPasskeyRegistration,
+} from "./webauthnRegistration.ts";
 export { encryptSecret, decryptSecret } from "./secrets.ts";
 export {
   lookupIdentifier,

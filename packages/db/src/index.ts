@@ -193,6 +193,11 @@ export {
 // Tenant auth policy (ADR-0018) — the Auth Admin Security & Access record (tenant-scoped, audited).
 export { authPolicyRepository } from "./repositories/authPolicyRepository.ts";
 export {
+  type NewWebauthnCredential,
+  type WebauthnCredentialRecord,
+  webauthnCredentialRepository,
+} from "./repositories/webauthnCredentialRepository.ts";
+export {
   effectivePolicyRepository,
   type EffectivePolicyRow,
 } from "./repositories/effectivePolicyRepository.ts";
