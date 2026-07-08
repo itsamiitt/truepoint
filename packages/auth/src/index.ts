@@ -62,6 +62,11 @@ export {
   generatePasskeyRegistration,
   verifyPasskeyRegistration,
 } from "./webauthnRegistration.ts";
+export {
+  type AuthenticationResponseJSON,
+  generatePasskeyAuthentication,
+  verifyPasskeyAuthentication,
+} from "./webauthnAuthentication.ts";
 export { encryptSecret, decryptSecret } from "./secrets.ts";
 export {
   lookupIdentifier,
