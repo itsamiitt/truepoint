@@ -220,6 +220,7 @@ export async function finalizeLogin(
       // for that entry only (isIpAllowed skips it) — it never opens the gate. Empty allowlist = no restriction.
       const allowlist = policy.ipAllowlist ?? [];
       if (allowlist.length > 0 && !isIpAllowed(txn.clientIp, allowlist)) {
+        recordAuthMetric("auth_policy_block_total", { reason: "ip" });
         throw new ForbiddenError(
           "ip_not_allowed",
           "Your organization restricts sign-in to approved networks. You are connecting from an address that is not on the allowlist.",

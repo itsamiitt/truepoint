@@ -5,6 +5,7 @@
 import { env } from "@leadwolf/config";
 import { authPolicyRepository, userRepository } from "@leadwolf/db";
 import { InvalidTokenError } from "@leadwolf/types";
+import { recordAuthMetric } from "./authMetrics.ts";
 import {
   findActiveSessionOrDetectReuse,
   isIdleExpired,
@@ -62,6 +63,7 @@ export async function refreshAccessToken(args: {
       }
       if (isIdleExpired(session.lastSeenAt, policy.idleTimeoutSeconds)) {
         // Idle past the window: end the session (revoke + deny-list its access token) and force re-auth.
+        recordAuthMetric("auth_policy_block_total", { reason: "idle" });
         await revokeSession(session.id);
         throw new InvalidTokenError();
       }
