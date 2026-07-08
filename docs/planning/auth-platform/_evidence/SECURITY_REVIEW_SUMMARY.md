@@ -31,9 +31,11 @@ rows of [`IMPLEMENTATION_PROGRESS.md`](./IMPLEMENTATION_PROGRESS.md); enable ord
 | **Trusted-device MFA skip** | Med | Half-scaffolded; the checkbox is now hidden behind `TRUSTED_DEVICES_ENABLED` | It SKIPS MFA — build the token store/skip-check/revocation off-by-default + specialist review | tracker · rollout |
 | **Effective-policy cutover** | — | Shadow mode ready; enforcement still on `tenant_auth_policies` | Flip to the engine only after `auth_policy_shadow_total` reads ~100% `match` in prod | rollout §4 |
 
-**Guardrails already in place:** SSO no-lockout guard (`require_sso` → 403 `sso_not_ready` unless the connection
-is enabled + wired); passkey add/remove step-up + audit + owner-notify; extension-scope observe-first;
-lockout-capable gates behind an env master-arm + per-tenant switch.
+**Guardrails already in place:** SSO no-lockout guard — BOTH `require_sso` write scopes (tenant → 403 `sso_not_ready`
+unless the org's connection is enabled + wired, route-tested; platform-default `require_sso=true` → 403
+`require_sso_not_platform_default`, and dropped from the platform console as per-org only); passkey add/remove
+step-up + audit + owner-notify; extension-scope observe-first; lockout-capable gates behind an env master-arm +
+per-tenant switch.
 
 **One-line posture:** everything security-sensitive is off by default and reviewable in isolation; the flagged
 items are decisions (build-vs-buy, three security-design calls, one product call), each with the finding + fix
