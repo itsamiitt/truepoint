@@ -3,6 +3,7 @@
 // need an OTP store + the recovery-code table). Returns whether the challenge passed. (17 §7.)
 
 import { userRepository } from "@leadwolf/db";
+import { recordAuthMetric } from "./authMetrics.ts";
 import { verifyTotp } from "./mfa.ts";
 import { decryptSecret } from "./secrets.ts";
 
@@ -13,11 +14,14 @@ export async function verifyMfaCode(input: {
 }): Promise<boolean> {
   const methods = await userRepository.listMfaMethods(input.userId);
 
+  let passed = false;
   if (input.method === "totp") {
     const totp = methods.find((m) => m.type === "totp" && m.verifiedAt && m.secretEnc);
-    if (!totp?.secretEnc) return false;
-    return verifyTotp(decryptSecret(totp.secretEnc), input.code);
+    passed = totp?.secretEnc ? verifyTotp(decryptSecret(totp.secretEnc), input.code) : false;
   }
 
-  return false;
+  // SLI: MFA challenge outcome (result-only enum; never the userId/method/code). "failed" also covers a code for
+  // an unenrolled/unsupported method — a code that could not be verified did not pass.
+  recordAuthMetric("auth_mfa_challenge_total", { result: passed ? "passed" : "failed" });
+  return passed;
 }
