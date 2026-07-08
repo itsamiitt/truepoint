@@ -6,8 +6,10 @@
 import { AUTH_BASE_PATH } from "@/lib/authUrl";
 import { requireUser } from "@/lib/requireUser";
 import { AccountShell } from "@/shared/AccountShell";
+import { env } from "@leadwolf/config";
 import { HistorySection } from "./HistorySection";
 import { MfaSection } from "./MfaSection";
+import { PasskeySection } from "./PasskeySection";
 import { PasswordSection } from "./PasswordSection";
 import { SessionsSection } from "./SessionsSection";
 import { loadAccountSecurity } from "./data";
@@ -43,6 +45,7 @@ export default async function AccountSecurityPage({
         recoveryCodesRemaining={data.recoveryCodesRemaining}
         status={sp.mfa}
       />
+      {env.WEBAUTHN_ENABLED === "true" ? <PasskeySection /> : null}
       <SessionsSection sessions={data.activeSessions} status={sp.sessions} />
       <HistorySection history={data.loginHistory} />
     </AccountShell>
