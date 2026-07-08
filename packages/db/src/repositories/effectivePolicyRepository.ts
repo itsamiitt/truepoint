@@ -6,8 +6,8 @@
 // dependency direction — auth already depends on db), so this returns raw rows and the auth layer composes.
 // Cross-tenant isolation + the resolve are proven by test/effectivePolicyResolve.itest.ts + authPolicyIsolation.itest.ts.
 
-import { sql } from "drizzle-orm";
-import { type Tx, withTenantTx } from "../client.ts";
+import { eq, sql } from "drizzle-orm";
+import { type Tx, withPlatformReadTx, withTenantTx } from "../client.ts";
 import { authPolicies } from "../schema/auth.ts";
 import { auditRepository } from "./auditRepository.ts";
 
@@ -99,6 +99,26 @@ export const effectivePolicyRepository = {
         metadata: { scope, key },
       });
     });
+  },
+
+  /**
+   * Every PLATFORM-default row (scope='platform', tenant_id NULL) — the global defaults a staff admin manages.
+   * Read on the OWNER connection (withPlatformReadTx: RLS-exempt, no audit) since a staff caller has no tenant
+   * context. Returns the raw key/value rows (a super_admin console edits individual keys); the strictest-wins
+   * COMPOSITION into an effective policy stays in the auth-layer resolver. Staff-gated at the route.
+   */
+  async getPlatformRows(): Promise<EffectivePolicyRow[]> {
+    return withPlatformReadTx((tx) =>
+      tx
+        .select({
+          scope: authPolicies.scope,
+          workspaceId: authPolicies.workspaceId,
+          key: authPolicies.key,
+          value: authPolicies.value,
+        })
+        .from(authPolicies)
+        .where(eq(authPolicies.scope, "platform")),
+    );
   },
 
   /**

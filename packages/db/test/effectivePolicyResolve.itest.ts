@@ -146,4 +146,18 @@ describe("effective-policy resolve (DB read + RLS + strictest-wins)", () => {
       await admin`SELECT count(*)::int AS n FROM platform_audit_log WHERE action = 'admin.set_platform_policy' AND actor_user_id = ${staff}`;
     expect((audit as { n: number }).n).toBe(2);
   });
+
+  test("getPlatformRows returns the platform (NULL-tenant) default rows via the owner read", async () => {
+    const [s] = await admin`INSERT INTO users (email) VALUES ('staff@getplat.test') RETURNING id`;
+    const staff = (s as { id: string }).id;
+    await dbmod.withPlatformTx({ userId: staff }, "admin.set_platform_policy", (tx) =>
+      dbmod.effectivePolicyRepository.setPlatformKey(tx, "disable_social", true, staff),
+    );
+
+    const rows = await dbmod.effectivePolicyRepository.getPlatformRows();
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows.every((r) => r.scope === "platform")).toBe(true); // never a tenant/org row
+    const byKey = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    expect(byKey.disable_social).toBe(true);
+  });
 });

@@ -1027,6 +1027,11 @@ const PLATFORM_POLICY_FLOOR: AuthPolicy = {
   ipAllowlist: [],
 };
 
+adminRoutes.get("/auth/platform-policy", requireStaffRole("super_admin"), async (c) => {
+  const rows = await effectivePolicyRepository.getPlatformRows();
+  return c.json({ policies: rows.map((r) => ({ key: r.key, value: r.value })) });
+});
+
 adminRoutes.put("/auth/platform-policy", requireStaffRole("super_admin"), async (c) => {
   const body = (await c.req.json().catch(() => null)) as { key?: unknown; value?: unknown } | null;
   if (!body || typeof body.key !== "string") {
