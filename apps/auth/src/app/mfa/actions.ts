@@ -17,6 +17,7 @@ import {
   recordAuthMetric,
   recordCredentialFailure,
   recordCredentialSuccess,
+  recordPlatformAuthEvent,
   requestEmailOtp,
   resolveNextStep,
   verifyMfaCode,
@@ -49,12 +50,24 @@ export async function submitMfaPasskey(assertion: AuthenticationResponseJSON): P
 
   if (!(await verifyPasskeyAuthentication(txn.userId, assertion))) {
     // Count the passkey second factor in the SAME MFA SLI the TOTP/email-OTP path records (mfaVerify.ts), so
-    // the metric isn't blind to passkey attempts.
+    // the metric isn't blind to passkey attempts, and audit the outcome like the code-based path.
     recordAuthMetric("auth_mfa_challenge_total", { result: "failed" });
+    await recordPlatformAuthEvent({
+      action: "mfa.failure",
+      actorUserId: txn.userId,
+      ip,
+      metadata: { method: "passkey" },
+    });
     await recordCredentialFailure({ ip, identifier: mfaKey });
     redirect("/mfa?error=1");
   }
   recordAuthMetric("auth_mfa_challenge_total", { result: "passed" });
+  await recordPlatformAuthEvent({
+    action: "mfa.success",
+    actorUserId: txn.userId,
+    ip,
+    metadata: { method: "passkey" },
+  });
   await recordCredentialSuccess(mfaKey);
 
   await patchLoginTransaction(txnId, { mfaVerified: true });
@@ -116,9 +129,21 @@ export async function submitMfa(formData: FormData): Promise<void> {
   }
 
   if (!(await verifyMfaCode({ userId: txn.userId, method, code }))) {
+    await recordPlatformAuthEvent({
+      action: "mfa.failure",
+      actorUserId: txn.userId,
+      ip,
+      metadata: { method },
+    });
     await recordCredentialFailure({ ip, identifier: mfaKey });
     redirect("/mfa?error=1");
   }
+  await recordPlatformAuthEvent({
+    action: "mfa.success",
+    actorUserId: txn.userId,
+    ip,
+    metadata: { method },
+  });
   await recordCredentialSuccess(mfaKey);
 
   await patchLoginTransaction(txnId, { mfaVerified: true });

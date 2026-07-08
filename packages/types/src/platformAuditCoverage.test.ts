@@ -57,6 +57,10 @@ const WRITTEN = new Set<string>([
   // AUTH-024 — passkey credential added / removed (account security, dual-sink platform branch).
   "passkey.register",
   "passkey.remove",
+  // AUTH — MFA second-factor OUTCOME (submitMfa / submitMfaPasskey → recordPlatformAuthEvent, tenant-less at the
+  // MFA step). mfa.challenge stays PENDING — challenge issuance isn't wired as its own event.
+  "mfa.success",
+  "mfa.failure",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;
@@ -70,8 +74,6 @@ const PENDING = new Set<string>([
   "staff.login.failure",
   "login.failure",
   "mfa.challenge",
-  "mfa.success",
-  "mfa.failure",
 ]);
 
 describe("platform_audit_log.action coverage", () => {
