@@ -1050,6 +1050,16 @@ adminRoutes.put("/auth/platform-policy", requireStaffRole("super_admin"), async 
       decision.reason === "unknown_key" ? "Unknown policy key." : "Invalid value for this key.",
     );
   }
+  // No-lockout guard (AUTH-031), platform scope: `require_sso=true` as a PLATFORM DEFAULT would force EVERY tenant
+  // onto SSO — including any without a working connection — a mass lockout, and it can't be verified per-tenant
+  // here. It must be enabled PER-ORG (the org settings endpoint checks that org's SSO connection is enabled +
+  // wired). Reject the platform-wide flip.
+  if (key === "require_sso" && decision.value === true) {
+    throw new ForbiddenError(
+      "require_sso_not_platform_default",
+      "require_sso must be enabled per organization (where its SSO connection is verified), not as a platform default.",
+    );
+  }
   await withPlatformTx(
     actorOf(c),
     "admin.set_platform_policy",
