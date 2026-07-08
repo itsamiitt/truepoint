@@ -52,6 +52,11 @@ export {
 } from "./flow.ts";
 export { authorizeTenantSelection } from "./scopeGuard.ts";
 export { verifyMfaCode, requestEmailOtp } from "./mfaVerify.ts";
+export {
+  type WebauthnCeremony,
+  storeWebauthnChallenge,
+  consumeWebauthnChallenge,
+} from "./webauthnChallenge.ts";
 export { encryptSecret, decryptSecret } from "./secrets.ts";
 export {
   lookupIdentifier,
