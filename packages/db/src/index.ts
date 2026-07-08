@@ -197,6 +197,10 @@ export {
   type EffectivePolicyRow,
 } from "./repositories/effectivePolicyRepository.ts";
 export {
+  authAllowedOriginsRepository,
+  type AllowedOriginRow,
+} from "./repositories/authAllowedOriginsRepository.ts";
+export {
   idempotencyRepository,
   type StoredResponse,
 } from "./repositories/idempotencyRepository.ts";

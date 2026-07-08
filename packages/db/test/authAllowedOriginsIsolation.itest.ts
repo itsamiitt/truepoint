@@ -12,12 +12,16 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
+type DbModule = typeof import("@leadwolf/db");
+
 let dbHandle: ItestDb;
 let admin: ReturnType<typeof postgres>; // owner — RLS-exempt (seeds every scope)
 let app: ReturnType<typeof postgres>; // leadwolf_app — the role RLS constrains
+let dbmod: DbModule;
 
 let tenantA = "";
 let tenantB = "";
+let actorB = "";
 
 async function seedTenant(slug: string): Promise<string> {
   const [t] = await admin`INSERT INTO tenants (name, slug) VALUES (${slug}, ${slug}) RETURNING id`;
@@ -42,9 +46,16 @@ beforeAll(async () => {
   await admin`INSERT INTO auth_allowed_origins (scope, origin) VALUES ('platform', 'https://portal.truepoint.in')`;
   await admin`INSERT INTO auth_allowed_origins (scope, tenant_id, origin) VALUES ('org', ${tenantA}, 'https://acme.example')`;
   await admin`INSERT INTO auth_allowed_origins (scope, tenant_id, origin) VALUES ('org', ${tenantB}, 'https://globex.example')`;
+
+  // A user for the repository write path (audit FK) + env set before the db singleton loads.
+  const [u] = await admin`INSERT INTO users (email) VALUES ('sec@globex.test') RETURNING id`;
+  actorB = (u as { id: string }).id;
+  await admin`INSERT INTO tenant_members (tenant_id, user_id) VALUES (${tenantB}, ${actorB})`;
+  dbmod = await import("@leadwolf/db");
 }, 180_000);
 
 afterAll(async () => {
+  await dbmod?.closeDb();
   await app?.end();
   await admin?.end();
   await dbHandle?.stop();
@@ -103,5 +114,31 @@ describe("auth_allowed_origins RLS: isolation + platform write-guard", () => {
       return r as { id: string };
     });
     expect(inserted.id).toBeTruthy();
+  });
+
+  test("repository: addTenantOrigin (idempotent) → getScopeOrigins reflects it → removeTenantOrigin", async () => {
+    const origin = "https://globex-app.example";
+    await dbmod.authAllowedOriginsRepository.addTenantOrigin({
+      tenantId: tenantB,
+      origin,
+      actorUserId: actorB,
+    });
+    // idempotent — a duplicate add must not create a second row (onConflictDoNothing)
+    await dbmod.authAllowedOriginsRepository.addTenantOrigin({
+      tenantId: tenantB,
+      origin,
+      actorUserId: actorB,
+    });
+    let rows = await dbmod.authAllowedOriginsRepository.getScopeOrigins({ tenantId: tenantB });
+    expect(rows.filter((r) => r.origin === origin).length).toBe(1); // exactly one
+    expect(rows.some((r) => r.origin === "https://portal.truepoint.in")).toBe(true); // platform still visible
+
+    await dbmod.authAllowedOriginsRepository.removeTenantOrigin({
+      tenantId: tenantB,
+      origin,
+      actorUserId: actorB,
+    });
+    rows = await dbmod.authAllowedOriginsRepository.getScopeOrigins({ tenantId: tenantB });
+    expect(rows.some((r) => r.origin === origin)).toBe(false); // removed
   });
 });
