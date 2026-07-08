@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1475,
-  "fileSetHash": "sha256:31b01e0dd3277d9c5a4ae523bed80fc1e7fe9c55860951ce369cd97c6f2553b9",
+  "fileCount": 1476,
+  "fileSetHash": "sha256:72e1efbc819f3ff2f7fce27bceec147d4c0b39e22a1eaaf83f50077b182190df",
   "features": {
     "account-search": {
       "web": [],
@@ -2124,6 +2124,7 @@
       "packages/auth/src/signupTransaction.ts",
       "packages/auth/src/sso/jit.ts",
       "packages/auth/src/sso/mockIdp.ts",
+      "packages/auth/src/sso/providers.test.ts",
       "packages/auth/src/sso/providers.ts",
       "packages/auth/src/sso/types.ts",
       "packages/auth/src/ssoTransaction.ts",
