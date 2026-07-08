@@ -169,8 +169,19 @@ verifies the sending domain in Resend.
 deferred behaviour-change items), or "keep authoring blind" (I continue 1.4c / 1.2c / 1.5b-rest), or restart the
 loop with `/loop 20m keep on implementing …`. Nothing is pushed; the branch `feat/auth-platform-phase0` is local.
 
-## Phases 2–5
-Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadmap.md).
+## Phase 2 — Token/session hardening + concurrent controls
+Phase 1 is feature-complete on the branch (engine + resolver + org/platform config API + backfill + full
+observability + shadow validation + admin UI view/edit; the enforcement CUTOVER + the org-side settings-UI swap
+are deferred as deploy-gated). Started Phase 2 per plan order. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadmap.md).
+
+| Item | AUTH | Effort | Status | Notes |
+|---|---|---|---|---|
+| JWT verify `clockTolerance: 30s` (skew between the minter apps/auth + verifier apps/api) + **env-driven trusted-XFF-hop count** (`TRUSTED_PROXY_HOPS`, Nth-from-last, default 1 = today) | AUTH-076/077 | S | ✅ **done** | Both additive + backward-compatible (default hops=1 = last entry; clockTolerance only tolerates ≤30s skew, well under the 15-min TTL). `clientIp.test.ts` +2 cases (2-hop → 2nd-from-last; too-few-entries → x-real-ip fallback, never a forgeable entry). typecheck ✓ biome ✓ packages/auth 131/131. |
+| Dual-key JWKS publication + overlapping-`kid` rotation runbook | AUTH-013 | M | ◻ next | Publish current + next signing key so a verifier accepts either during rotation (zero-downtime). |
+| `pa` demotion → session-revoke; concurrent-session cap; `__Host-` cookie; @leadwolf/auth-client extract | AUTH-072/042/074/073 | S–M | ◻ | The remaining Phase-2 hardening items. Concurrent-session cap (`maxConcurrentSessions`) can ride the Phase-1 effective-policy engine as a new key. |
+
+## Phases 3–5
+Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadmap.md). Phase 3 = login methods + MFA depth (passkeys XL); Phase 4 = real SSO/SCIM (XL long-poles — flag for specialist review); Phase 5 = developer/OAuth platform + operate-and-comply.
 
 ## Log
 - **2026-07-06:** Phase 0.1 (AUTH-062) done — the basePath fix that resolves two of the three reported failures

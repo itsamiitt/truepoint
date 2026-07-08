@@ -71,6 +71,10 @@ export async function verifyAccessToken(
     issuer: env.AUTH_ORIGIN,
     audience,
     algorithms: [ALG],
+    // Tolerate ≤30s of clock skew between the minter (apps/auth) and this verifier (apps/api) so a slightly
+    // fast/slow node doesn't spuriously reject a just-minted or about-to-expire token (AUTH-076). Bounds exp/
+    // nbf/iat checks; 30s is well under the 15-min access TTL, so it never materially extends a token's life.
+    clockTolerance: 30,
   });
   return accessTokenClaimsSchema.parse(payload);
 }

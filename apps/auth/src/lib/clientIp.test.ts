@@ -40,4 +40,21 @@ describe("clientIpFromHeaders", () => {
   test("falls back to 0.0.0.0 when no proxy header is present", () => {
     expect(clientIpFromHeaders(headers({}))).toBe("0.0.0.0");
   });
+
+  // AUTH-077 — env-driven trusted-hop count. With N trusted hops the client IP is the Nth-from-last entry.
+  test("2 hops (CDN + Caddy): the client IP is the SECOND-from-last entry", () => {
+    // forged, real-client (added by CDN), cdn-ip (added by Caddy) → real client is 2nd-from-last
+    expect(
+      clientIpFromHeaders(headers({ "x-forwarded-for": "1.1.1.1, 203.0.113.7, 8.8.8.8" }), 2),
+    ).toBe("203.0.113.7");
+  });
+
+  test("asking for more hops than there are entries falls back to x-real-ip, never a forgeable entry", () => {
+    expect(
+      clientIpFromHeaders(
+        headers({ "x-forwarded-for": "203.0.113.7", "x-real-ip": "198.51.100.2" }),
+        2,
+      ),
+    ).toBe("198.51.100.2");
+  });
 });

@@ -48,6 +48,13 @@ export const appEnvSchema = z
     // short TTL). Default `prefix` — robust to dual-stack first-hop drift without dropping the protection.
     AUTH_BIND_IP: z.enum(["strict", "prefix", "off"]).default("prefix"),
 
+    // Number of TRUSTED reverse-proxy hops in front of the app, each of which APPENDS to X-Forwarded-For
+    // (AUTH-077). The trusted client IP is the Nth-from-last XFF entry (a client can forge earlier entries but
+    // never the last N the trusted hops added). Default 1 = the single Caddy edge (today's exact behaviour);
+    // set to 2 when a trusted CDN (e.g. Cloudflare) also sits in front. Under-counting is the safe direction
+    // (you trust FEWER hops); over-counting would read a client-forgeable entry, so keep it exact to the topology.
+    TRUSTED_PROXY_HOPS: z.coerce.number().int().positive().default(1),
+
     // The browser-facing public origins are ALSO inlined into the web/auth bundles at BUILD time
     // (NEXT_PUBLIC_*). Optional here (absent during a bare `next build` or in unit tests), but when present
     // at runtime the prod superRefine asserts they agree with the server-side origins — drift between the
