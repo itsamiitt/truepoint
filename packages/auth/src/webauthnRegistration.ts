@@ -16,6 +16,7 @@ import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
+import { recordAuthMetric } from "./authMetrics.ts";
 import { consumeWebauthnChallenge, storeWebauthnChallenge } from "./webauthnChallenge.ts";
 
 /** Step 1 — options the browser passes to `navigator.credentials.create`. Excludes the user's existing
@@ -46,8 +47,13 @@ export async function verifyPasskeyRegistration(
   response: RegistrationResponseJSON,
   label?: string,
 ): Promise<boolean> {
+  const record = (result: "success" | "failure") =>
+    recordAuthMetric("webauthn_ceremony_total", { ceremony: "register", result });
   const expectedChallenge = await consumeWebauthnChallenge("register", user.id);
-  if (!expectedChallenge) return false;
+  if (!expectedChallenge) {
+    record("failure");
+    return false;
+  }
   let verification: Awaited<ReturnType<typeof verifyRegistrationResponse>>;
   try {
     verification = await verifyRegistrationResponse({
@@ -57,9 +63,13 @@ export async function verifyPasskeyRegistration(
       expectedRPID: env.WEBAUTHN_RP_ID,
     });
   } catch {
+    record("failure");
     return false;
   }
-  if (!verification.verified || !verification.registrationInfo) return false;
+  if (!verification.verified || !verification.registrationInfo) {
+    record("failure");
+    return false;
+  }
   const { credential, aaguid, credentialBackedUp } = verification.registrationInfo;
   await webauthnCredentialRepository.create({
     userId: user.id,
@@ -71,6 +81,7 @@ export async function verifyPasskeyRegistration(
     backedUp: credentialBackedUp,
     label,
   });
+  record("success");
   return true;
 }
 

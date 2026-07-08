@@ -5,6 +5,7 @@
 // with the union of the methods both ceremonies use, driven by shared per-test state. No DB/Redis/authenticator.
 
 import { describe, expect, it, mock } from "bun:test";
+import { __resetAuthMetrics, renderAuthMetrics } from "./authMetrics.ts";
 
 // ── shared mock state (each test sets what it needs) ────────────────────────────────────────────────────────
 interface CreateInput {
@@ -182,5 +183,29 @@ describe("verifyPasskeyAuthentication — security orchestration", () => {
     counterUpdates.length = 0;
     expect(await verifyPasskeyAuthentication("u1", AUTH_RESP)).toBe(true);
     expect(counterUpdates).toEqual([{ credentialId: "cred-1", counter: 7 }]);
+  });
+});
+
+describe("webauthn_ceremony_total metric", () => {
+  it("records ceremony + result labels on each outcome (bounded cardinality)", async () => {
+    __resetAuthMetrics();
+    // one register success
+    challenge = "chal";
+    regResult = {
+      verified: true,
+      registrationInfo: {
+        credential: { id: "c", publicKey: new Uint8Array([1]), counter: 0 },
+        aaguid: "a",
+        credentialBackedUp: false,
+      },
+    };
+    await verifyPasskeyRegistration({ id: "u1" }, REG_RESP);
+    // one authenticate failure (no pending challenge)
+    challenge = null;
+    await verifyPasskeyAuthentication("u1", AUTH_RESP);
+
+    const out = renderAuthMetrics();
+    expect(out).toContain('webauthn_ceremony_total{ceremony="register",result="success"} 1');
+    expect(out).toContain('webauthn_ceremony_total{ceremony="authenticate",result="failure"} 1');
   });
 });

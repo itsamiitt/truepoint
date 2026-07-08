@@ -29,6 +29,10 @@ export interface AuthMetricLabels {
    *  how many used a password found in the HaveIBeenPwned corpus. `breached` is the number to watch before
    *  turning on forced-reset enforcement. Off unless BREACHED_PASSWORD_CHECK_AT_LOGIN is armed. */
   auth_password_breach_check_total: { result: "breached" | "clean" };
+  /** Passkey (WebAuthn) ceremony outcomes (AUTH-024): registration vs authentication, success vs failure. The
+   *  numbers to watch for passkey adoption + failure rates once WEBAUTHN_ENABLED is armed. Bounded enums (4
+   *  series) — no credential id / user id (those are the audit log, not here). */
+  webauthn_ceremony_total: { ceremony: "register" | "authenticate"; result: "success" | "failure" };
 }
 export type AuthMetricName = keyof AuthMetricLabels;
 

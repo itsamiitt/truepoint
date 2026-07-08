@@ -17,6 +17,7 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
+import { recordAuthMetric } from "./authMetrics.ts";
 import { consumeWebauthnChallenge, storeWebauthnChallenge } from "./webauthnChallenge.ts";
 
 type AuthenticatorTransportFuture =
@@ -50,10 +51,18 @@ export async function verifyPasskeyAuthentication(
   userId: string,
   response: AuthenticationResponseJSON,
 ): Promise<boolean> {
+  const record = (result: "success" | "failure") =>
+    recordAuthMetric("webauthn_ceremony_total", { ceremony: "authenticate", result });
   const expectedChallenge = await consumeWebauthnChallenge("authenticate", userId);
-  if (!expectedChallenge) return false;
+  if (!expectedChallenge) {
+    record("failure");
+    return false;
+  }
   const cred = await webauthnCredentialRepository.findByCredentialId(response.id);
-  if (!cred || cred.userId !== userId) return false; // never accept another user's credential
+  if (!cred || cred.userId !== userId) {
+    record("failure"); // unknown credential, or one that belongs to another user — never accepted
+    return false;
+  }
 
   let verification: Awaited<ReturnType<typeof verifyAuthenticationResponse>>;
   try {
@@ -71,13 +80,18 @@ export async function verifyPasskeyAuthentication(
       },
     });
   } catch {
+    record("failure");
     return false;
   }
-  if (!verification.verified) return false;
+  if (!verification.verified) {
+    record("failure");
+    return false;
+  }
   await webauthnCredentialRepository.updateCounter(
     cred.credentialId,
     verification.authenticationInfo.newCounter,
   );
+  record("success");
   return true;
 }
 
