@@ -128,4 +128,37 @@ export const effectivePolicyRepository = {
         },
       });
   },
+
+  /**
+   * One-time BACKFILL: copy every configured `tenant_auth_policies` row into the `auth_policies` org key/value
+   * rows the effective-policy engine reads, so the new resolver sees the same policy today's login gates read
+   * from the old table. IDEMPOTENT (ON CONFLICT DO NOTHING → re-runs are safe); ADDITIVE (tenant_auth_policies
+   * is untouched — the finalize-login switch is a SEPARATE, later step); NULL optional columns (ip_allowlist,
+   * the two timeouts) are skipped ("absent" = not set). Runs on an OWNER tx (a withPlatformTx wrapper), which is
+   * RLS-exempt so it can write ORG rows across ALL tenants. `enforcement_enabled` is NOT copied — it is the
+   * staff-only master switch and stays on tenant_auth_policies. jsonb columns (allowed_methods) are passed
+   * through; scalar columns are to_jsonb()'d.
+   */
+  async backfillTenantPolicies(tx: Tx): Promise<void> {
+    const copy = (key: string, expr: string, where = "") =>
+      tx.execute(sql`
+        INSERT INTO auth_policies (scope, tenant_id, key, value)
+        SELECT 'org', tenant_id, ${key}, ${sql.raw(expr)} FROM tenant_auth_policies ${sql.raw(where)}
+        ON CONFLICT DO NOTHING`);
+    await copy("mfa_enforcement", "to_jsonb(mfa_enforcement)");
+    await copy("allowed_methods", "allowed_methods"); // already jsonb
+    await copy("disable_social", "to_jsonb(disable_social)");
+    await copy("require_sso", "to_jsonb(require_sso)");
+    await copy("ip_allowlist", "to_jsonb(ip_allowlist)", "WHERE ip_allowlist IS NOT NULL");
+    await copy(
+      "session_timeout_seconds",
+      "to_jsonb(session_timeout_seconds)",
+      "WHERE session_timeout_seconds IS NOT NULL",
+    );
+    await copy(
+      "idle_timeout_seconds",
+      "to_jsonb(idle_timeout_seconds)",
+      "WHERE idle_timeout_seconds IS NOT NULL",
+    );
+  },
 };
