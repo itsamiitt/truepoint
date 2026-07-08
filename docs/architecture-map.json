@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1436,
-  "fileSetHash": "sha256:89a70df7d2627821176c9da0489fb02cb37df7c53d31908a0892de6f0d40c376",
+  "fileCount": 1437,
+  "fileSetHash": "sha256:ffec3531c55cbf11e003737b594cffe0afe055abe4b62d788b37a629146be21a",
   "features": {
     "account-search": {
       "web": [],
@@ -2360,6 +2360,7 @@
     "packages/db/src/repositories/accountHoldRepository.ts",
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/announcementRepository.ts",
+    "packages/db/src/repositories/authAllowedOriginsRepository.ts",
     "packages/db/src/repositories/authPolicyRepository.ts",
     "packages/db/src/repositories/creditPackRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
