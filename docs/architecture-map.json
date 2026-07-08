@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1472,
-  "fileSetHash": "sha256:0f8f69babde865c333fa3ab0d93634e9448fa528bddc834da9f5645f0b9f2572",
+  "fileCount": 1474,
+  "fileSetHash": "sha256:74f7bc7ca971a16df89b2d0b623ebc4fc4a704b2dfd2f64f968d9f5b4244a289",
   "features": {
     "account-search": {
       "web": [],
@@ -1904,6 +1904,7 @@
       "apps/auth/src/lib/emails/magicLink.ts",
       "apps/auth/src/lib/emails/mfaChanged.ts",
       "apps/auth/src/lib/emails/newSignIn.ts",
+      "apps/auth/src/lib/emails/passkeyChanged.ts",
       "apps/auth/src/lib/emails/passwordChanged.ts",
       "apps/auth/src/lib/emails/passwordReset.ts",
       "apps/auth/src/lib/emails/verificationCode.ts",
@@ -1913,6 +1914,7 @@
       "apps/auth/src/lib/mailTransport.test.ts",
       "apps/auth/src/lib/mailTransport.ts",
       "apps/auth/src/lib/mailer.ts",
+      "apps/auth/src/lib/notifyPasskeyChange.ts",
       "apps/auth/src/lib/requireUser.ts",
       "apps/auth/src/lib/sessionGuard.ts",
       "apps/auth/src/lib/ssoConfig.ts"
