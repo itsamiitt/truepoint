@@ -63,6 +63,19 @@ strategy · migration strategy · risks & mitigations · future enhancements —
   re-run the research sweep to resolve the `[verify]` markers with primary sources and deepen the per-platform admin/token/
   pricing detail. No other document depends on this.
 
+## Implementation & review (branch `feat/auth-platform-phase0`)
+
+The design above has been substantially BUILT on `feat/auth-platform-phase0` — Phases 1–3 (effective-policy
+engine, token/session hardening, login methods + MFA depth), the full passkey adapter, and the SSO no-lockout
+guard — with every security-sensitive part **off by default** behind a flag. Start here for the build state and
+the review:
+
+- [`_evidence/IMPLEMENTATION_PROGRESS.md`](./_evidence/IMPLEMENTATION_PROGRESS.md) — per-unit build tracker (status, tests, and the flagged decisions).
+- [`_evidence/SECURITY_REVIEW_SUMMARY.md`](./_evidence/SECURITY_REVIEW_SUMMARY.md) — **the reviewer's one-page map**: verified-sound vs flagged (severity + mitigation + where tracked).
+- [`_evidence/SSO_INTEGRATION_DECISION.md`](./_evidence/SSO_INTEGRATION_DECISION.md) — federate-vs-replace SSO integration brief (orthogonal to the build-vs-buy call).
+- [`_runbooks/rollout.md`](./_runbooks/rollout.md) — the lockout-safe enable order + per-flag review checklist (incl. §9 passkeys).
+- [`_runbooks/jwks-key-rotation.md`](./_runbooks/jwks-key-rotation.md) — signing-key rotation.
+
 ## The headline finding (for anyone skimming)
 
 The core auth engine is sound and well-built. The three reported failures are deployment/wiring defects on top of it: two
