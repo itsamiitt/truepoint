@@ -393,6 +393,18 @@ export const appEnvSchema = z
       .transform((v) => v === "true"),
   })
   .superRefine((val, ctx) => {
+    // WebAuthn/passkeys (AUTH-024): once armed, the Relying Party ID is required — enabling the ceremony without
+    // WEBAUTHN_RP_ID would fail cryptically at registration/assertion time. Fail fast at boot instead. Checked in
+    // every environment (unlike the production-only checks below), since passkeys can be enabled in dev too.
+    if (val.WEBAUTHN_ENABLED === "true" && val.WEBAUTHN_RP_ID.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["WEBAUTHN_RP_ID"],
+        message:
+          "WEBAUTHN_RP_ID (the registrable domain, e.g. truepoint.in) is required when WEBAUTHN_ENABLED is true",
+      });
+    }
+
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.
     // A bare registrable-domain value (e.g. truepoint.in) would make it a parent-domain cookie sent to
     // app.*/api.* too — the larger blast radius ADR-0016 rejects. The base schema only checks min(1).
