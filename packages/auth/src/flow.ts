@@ -19,6 +19,7 @@ import { isIpAllowed } from "./ipAllowlist.ts";
 import { log } from "./log.ts";
 import { type LoginTransaction, patchLoginTransaction } from "./loginTransaction.ts";
 import { isMethodAllowed } from "./policy.ts";
+import { shadowComparePolicy } from "./policyShadow.ts";
 import { authorizeTenantSelection } from "./scopeGuard.ts";
 import { createSession } from "./session.ts";
 
@@ -308,6 +309,12 @@ export async function finalizeLogin(
   // SLI counter (in-process, synchronous): the login success rate on-call must see BEFORE any enforcement flip.
   // method defaults to "password" when the txn predates the method field (older in-flight Redis row).
   recordAuthMetric("auth_login_total", { result: "success", method: txn.method ?? "password" });
+  // SHADOW (off unless AUTH_POLICY_SHADOW_ENABLED="true"): validate the effective-policy engine against the live
+  // policy on real login traffic before any cutover. Detached (never awaited) + fully try/caught inside, so it
+  // can neither slow nor break the login it runs alongside; it enforces nothing.
+  if (env.AUTH_POLICY_SHADOW_ENABLED === "true") {
+    void shadowComparePolicy({ tenantId, workspaceId: workspaceId ?? undefined });
+  }
   void Promise.allSettled([
     userRepository.touchLastLogin(txn.userId),
     recordAuthEvent({

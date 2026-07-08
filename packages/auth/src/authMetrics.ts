@@ -21,6 +21,10 @@ export interface AuthMetricLabels {
   /** An enforcement gate blocked a login (which control) — the number to watch when flipping a control on. */
   auth_policy_block_total: { reason: "mfa" | "method" | "ip" | "sso" | "session" | "idle" };
   auth_mfa_challenge_total: { result: "passed" | "failed" };
+  /** SHADOW pre-cutover check: does the effective-policy engine resolve to the SAME policy the live
+   *  tenant_auth_policies enforces today? `mismatch` = a cutover would change enforcement for this login
+   *  (review before flipping); `error` = the shadow read itself failed. Enforces nothing. */
+  auth_policy_shadow_total: { result: "match" | "mismatch" | "error" };
 }
 export type AuthMetricName = keyof AuthMetricLabels;
 

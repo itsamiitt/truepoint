@@ -202,6 +202,14 @@ export const appEnvSchema = z
     // scope:[] and are never affected either way.
     EXTENSION_SCOPE_ENFORCE: z.string().optional(),
 
+    // SHADOW-mode validation of the effective-policy engine (Phase 1, the safe first step of the finalize-login
+    // switch). When "true", finalizeLogin ALSO resolves the new engine's policy and emits an
+    // auth_policy_shadow_total{match|mismatch|error} SLI comparing it to the live tenant_auth_policies the login
+    // gates enforce today — but ENFORCES NOTHING (the comparison is detached + try/caught, so it can neither slow
+    // nor break a login). Lets on-call confirm the engine resolves identically on REAL traffic before any
+    // cutover. Default OFF — unset ⇒ no shadow read, today's exact behaviour. Only the literal "true" arms it.
+    AUTH_POLICY_SHADOW_ENABLED: z.string().optional(),
+
     // Internal metrics scrape (Phase 1 observability, doc 03 §10). The shared-secret Bearer token that gates
     // GET /metrics (the auth SLI counters: login/token/revocation/policy-block). OFF BY DEFAULT — unset ⇒ the
     // endpoint 404s (invisible), so no operational data is exposed until an operator BOTH sets this AND puts the
