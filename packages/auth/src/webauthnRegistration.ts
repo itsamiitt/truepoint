@@ -26,7 +26,8 @@ export async function generatePasskeyRegistration(user: { id: string; email: str
     rpName: "TruePoint",
     rpID: env.WEBAUTHN_RP_ID,
     userName: user.email,
-    userID: new TextEncoder().encode(user.id),
+    // new Uint8Array(...) so the type is Uint8Array<ArrayBuffer> (TextEncoder yields Uint8Array<ArrayBufferLike>).
+    userID: new Uint8Array(new TextEncoder().encode(user.id)),
     attestationType: "none",
     excludeCredentials: existing.map((c) => ({
       id: c.credentialId,

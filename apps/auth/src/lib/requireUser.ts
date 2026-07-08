@@ -40,18 +40,18 @@ export interface AuthenticatedAccount {
  * live session. Fails CLOSED for the account surface: any missing/revoked/expired session, or a vanished user,
  * bounces to sign-in (the opposite stance to redirectIfAuthenticated, which fails OPEN for the *entry* pages).
  */
-export async function requireUser(): Promise<AuthenticatedAccount> {
+/**
+ * Route-handler variant: resolve the authenticated account from the refresh cookie, or `null` — WITHOUT a
+ * redirect (the caller returns 401). For fetch-based JSON endpoints (e.g. the passkey ceremony routes), where a
+ * 307 to /login would hand the caller the login HTML instead of a clean auth error.
+ */
+export async function resolveApiUser(): Promise<AuthenticatedAccount | null> {
   const token = readRefreshToken(await cookies());
-  if (!token) redirect("/login");
-
+  if (!token) return null;
   const session = await sessionRepository.findByRefreshTokenHash(hashRefreshToken(token));
-  if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) {
-    redirect("/login");
-  }
-
+  if (!session || session.revokedAt || session.expiresAt.getTime() <= Date.now()) return null;
   const user = await userRepository.findById(session.userId);
-  if (!user || user.status !== "active") redirect("/login");
-
+  if (!user || user.status !== "active") return null;
   return {
     userId: session.userId,
     sessionId: session.id,
@@ -59,4 +59,10 @@ export async function requireUser(): Promise<AuthenticatedAccount> {
     workspaceId: session.workspaceId,
     user,
   };
+}
+
+export async function requireUser(): Promise<AuthenticatedAccount> {
+  const account = await resolveApiUser();
+  if (!account) redirect("/login");
+  return account;
 }
