@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1439,
-  "fileSetHash": "sha256:8df441e47a8d8aae795d4bd1b6101bb4f083b603b3e91496a3b8e11f9d06d415",
+  "fileCount": 1440,
+  "fileSetHash": "sha256:8ae0f8ccf0ea3eb2fcacdfa90e77d88fccb819b30ece51932c6f311fef12813d",
   "features": {
     "account-search": {
       "web": [],
@@ -1771,6 +1771,7 @@
       "apps/api/src/app.authz.test.ts",
       "apps/api/src/app.ts",
       "apps/api/src/instrumentation.ts",
+      "apps/api/src/metricsRoute.test.ts",
       "apps/api/src/server.ts"
     ],
     "apps/api/middleware": [
