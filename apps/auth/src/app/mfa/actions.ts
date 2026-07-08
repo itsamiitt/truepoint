@@ -9,6 +9,7 @@ import { loginCodeEmail } from "@/lib/emails";
 import { finishLogin } from "@/lib/finishLogin";
 import { sendAuthEmail } from "@/lib/mailer";
 import {
+  type AuthenticationResponseJSON,
   assertCredentialNotLocked,
   checkEmailOtpSendRate,
   getLoginTransaction,
@@ -18,9 +19,46 @@ import {
   requestEmailOtp,
   resolveNextStep,
   verifyMfaCode,
+  verifyPasskeyAuthentication,
 } from "@leadwolf/auth";
+import { env } from "@leadwolf/config";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+
+/**
+ * Passkey as a second factor (AUTH-024). Verify the assertion for the pending login's user, then advance exactly
+ * like submitMfa (same mfa: lockout namespace, same mark-verified + resolveNextStep + finishLogin). Additive and
+ * gated on WEBAUTHN_ENABLED — the TOTP/email-OTP paths are unchanged. Called from the /mfa passkey button with
+ * the assertion @simplewebauthn/browser produced; a wrong/absent assertion is the same uniform "didn't match".
+ */
+export async function submitMfaPasskey(assertion: AuthenticationResponseJSON): Promise<void> {
+  if (env.WEBAUTHN_ENABLED !== "true") redirect("/mfa?error=1");
+  const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;
+  if (!txnId) redirect("/login");
+  const txn = await getLoginTransaction(txnId);
+  if (!txn) redirect("/login");
+
+  const ip = clientIpFromHeaders(await headers());
+  const mfaKey = `mfa:${txn.userId}`;
+  try {
+    await assertCredentialNotLocked({ ip, identifier: mfaKey });
+  } catch {
+    redirect("/mfa?error=1");
+  }
+
+  if (!(await verifyPasskeyAuthentication(txn.userId, assertion))) {
+    await recordCredentialFailure({ ip, identifier: mfaKey });
+    redirect("/mfa?error=1");
+  }
+  await recordCredentialSuccess(mfaKey);
+
+  await patchLoginTransaction(txnId, { mfaVerified: true });
+  const verified = { ...txn, mfaVerified: true };
+  const step = await resolveNextStep(txnId, verified);
+  if (step === "org") redirect("/org");
+  if (step === "workspace") redirect("/workspace");
+  await finishLogin(txnId, verified);
+}
 
 /** Send an email-OTP challenge code for the pending login (AUTH-025). Rate-limited (anti-mailbomb); the code is
  *  stored regardless of delivery (best-effort send). Always returns the user to the email-OTP form so the flow

@@ -6,9 +6,11 @@ import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
 import { OtpInput } from "@/shared/OtpInput";
 import { getLoginTransaction } from "@leadwolf/auth";
+import { env } from "@leadwolf/config";
 import { Alert, Button, Checkbox, Label } from "@leadwolf/ui";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { PasskeySignIn } from "./PasskeySignIn";
 import { sendEmailOtp, submitMfa } from "./actions";
 
 type SearchParams = Promise<Record<string, string | undefined>>;
@@ -79,6 +81,12 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
           </Button>
         </form>
       )}
+
+      {env.WEBAUTHN_ENABLED === "true" && !isEmailOtp ? (
+        <div className="mt-3">
+          <PasskeySignIn />
+        </div>
+      ) : null}
     </AuthShell>
   );
 }
