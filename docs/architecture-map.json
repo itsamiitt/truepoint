@@ -95,8 +95,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1440,
-  "fileSetHash": "sha256:8ae0f8ccf0ea3eb2fcacdfa90e77d88fccb819b30ece51932c6f311fef12813d",
+  "fileCount": 1442,
+  "fileSetHash": "sha256:2e03d0595147ad42715d211adc26bc466b89073268e991e63dd5a29c82a4a55f",
   "features": {
     "account-search": {
       "web": [],
@@ -1824,6 +1824,8 @@
       "apps/auth/src/app/magic/actions.ts",
       "apps/auth/src/app/magic/confirm/route.ts",
       "apps/auth/src/app/magic/page.tsx",
+      "apps/auth/src/app/metrics/route.test.ts",
+      "apps/auth/src/app/metrics/route.ts",
       "apps/auth/src/app/mfa/actions.ts",
       "apps/auth/src/app/mfa/enroll/actions.ts",
       "apps/auth/src/app/mfa/enroll/enrollCookie.ts",
