@@ -7,6 +7,7 @@ import {
   magicLinkEmail,
   mfaChangedEmail,
   newSignInEmail,
+  passkeyChangedEmail,
   passwordChangedEmail,
   passwordResetEmail,
   verificationCodeEmail,
@@ -114,6 +115,8 @@ describe("transactional auth email templates", () => {
       passwordResetEmail({ link: "https://x.test/r" }),
       passwordChangedEmail({ secureUrl: "https://x.test/forgot" }),
       mfaChangedEmail({ change: "enrolled", secureUrl: "https://x.test/forgot" }),
+      passkeyChangedEmail({ change: "added", secureUrl: "https://x.test/forgot" }),
+      passkeyChangedEmail({ change: "removed" }),
       newSignInEmail({ device: "Firefox on Windows", ipAddress: "198.51.100.2" }),
     ]) {
       expect(m.html.startsWith("<!doctype html>")).toBe(true);

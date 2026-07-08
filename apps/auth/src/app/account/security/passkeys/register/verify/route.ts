@@ -5,6 +5,7 @@
 // STEP-UP: adding a login credential is a state-changing security action, so it requires re-proving the current
 // password/TOTP (stepUp.ts) — same as MFA enroll — so a walked-up/hijacked session can't plant a backdoor passkey.
 import { auditPasskeyChange } from "@/lib/auditPasskeyChange";
+import { notifyPasskeyChange } from "@/lib/notifyPasskeyChange";
 import { resolveApiUser } from "@/lib/requireUser";
 import { type RegistrationResponseJSON, verifyPasskeyRegistration } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
@@ -30,6 +31,9 @@ export async function POST(req: Request): Promise<Response> {
     body.response,
     typeof body.label === "string" ? body.label.slice(0, 100) : undefined,
   );
-  if (verified) await auditPasskeyChange(account.userId, "passkey.register");
+  if (verified) {
+    await auditPasskeyChange(account.userId, "passkey.register");
+    notifyPasskeyChange(account.user.email, "added"); // detached security notification
+  }
   return Response.json({ verified }, { status: verified ? 200 : 400 });
 }

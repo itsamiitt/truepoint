@@ -6,6 +6,7 @@
 // user's passkeys), so it re-proves the current password/TOTP (stepUp.ts) — same as MFA disable. The credential
 // rides in the request body (DELETE-with-body) so it never lands in a URL/log.
 import { auditPasskeyChange } from "@/lib/auditPasskeyChange";
+import { notifyPasskeyChange } from "@/lib/notifyPasskeyChange";
 import { resolveApiUser } from "@/lib/requireUser";
 import { env } from "@leadwolf/config";
 import { webauthnCredentialRepository } from "@leadwolf/db";
@@ -26,6 +27,9 @@ export async function DELETE(
   }
   const { id } = await ctx.params;
   const removed = await webauthnCredentialRepository.deleteForUser(account.userId, id);
-  if (removed > 0) await auditPasskeyChange(account.userId, "passkey.remove");
+  if (removed > 0) {
+    await auditPasskeyChange(account.userId, "passkey.remove");
+    notifyPasskeyChange(account.user.email, "removed"); // detached security notification
+  }
   return new Response(null, { status: removed > 0 ? 204 : 404 });
 }
