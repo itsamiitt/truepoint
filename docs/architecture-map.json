@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1450,
-  "fileSetHash": "sha256:e5595c3e72ac2cfa6bef89f29cc1782cafd9f23dd4b5ebddedc74ca0df6a5580",
+  "fileCount": 1451,
+  "fileSetHash": "sha256:8c00ac12680905d8a4f2d489399c1d2456a4b6e5ea47b2c1594514655403e915",
   "features": {
     "account-search": {
       "web": [],
@@ -2082,6 +2082,7 @@
       "packages/auth/src/ipAllowlist.ts",
       "packages/auth/src/ipBinding.test.ts",
       "packages/auth/src/ipBinding.ts",
+      "packages/auth/src/jwks.test.ts",
       "packages/auth/src/log.ts",
       "packages/auth/src/login.ts",
       "packages/auth/src/loginTransaction.ts",
