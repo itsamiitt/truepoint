@@ -13,6 +13,7 @@ import {
 } from "@leadwolf/db";
 import { ForbiddenError } from "@leadwolf/types";
 import { recordAuthEvent } from "./auditEvent.ts";
+import { recordAuthMetric } from "./authMetrics.ts";
 import { issueCode } from "./code.ts";
 import { isIpAllowed } from "./ipAllowlist.ts";
 import { log } from "./log.ts";
@@ -236,6 +237,9 @@ export async function finalizeLogin(
         policy.allowedMethods.length > 0 &&
         !isMethodAllowed(policy, txn.method)
       ) {
+        // SLI: an enforcement gate blocked this login (which control) — the rate to watch when flipping a
+        // control on. Low-cardinality reason only; the who/where stays in the audit log, never a metric label.
+        recordAuthMetric("auth_policy_block_total", { reason: "method" });
         throw new ForbiddenError(
           "method_not_allowed",
           "Your organization does not permit this sign-in method. Use an approved method to continue.",
@@ -301,6 +305,9 @@ export async function finalizeLogin(
   // guaranteed, so not awaiting it does not weaken any durability promise (a process recycle in the brief
   // window between response and settle could drop it — the same best-effort risk a failed insert already
   // carries). login.success — authentication fully succeeded (ADR-0031 §2; covers password/magic/SSO).
+  // SLI counter (in-process, synchronous): the login success rate on-call must see BEFORE any enforcement flip.
+  // method defaults to "password" when the txn predates the method field (older in-flight Redis row).
+  recordAuthMetric("auth_login_total", { result: "success", method: txn.method ?? "password" });
   void Promise.allSettled([
     userRepository.touchLastLogin(txn.userId),
     recordAuthEvent({
