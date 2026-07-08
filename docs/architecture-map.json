@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1449,
-  "fileSetHash": "sha256:920a98ef07db7996bd6b94d7bc4a40373c395c4d1aebb443fdc57ff9bae4523a",
+  "fileCount": 1450,
+  "fileSetHash": "sha256:e5595c3e72ac2cfa6bef89f29cc1782cafd9f23dd4b5ebddedc74ca0df6a5580",
   "features": {
     "account-search": {
       "web": [],
@@ -243,6 +243,7 @@
       "admin": [
         "apps/admin/src/features/auth-policy/api.ts",
         "apps/admin/src/features/auth-policy/components/AuthPolicyPage.tsx",
+        "apps/admin/src/features/auth-policy/components/EditDefaultDialog.tsx",
         "apps/admin/src/features/auth-policy/hooks/usePlatformDefaults.ts",
         "apps/admin/src/features/auth-policy/index.ts"
       ],
