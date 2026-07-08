@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1464,
-  "fileSetHash": "sha256:ce6a439165606e24ff6f94ecf601e2a3736b8860cd5e8b7eafa309f3d2d3bf4f",
+  "fileCount": 1465,
+  "fileSetHash": "sha256:bf972698f85ce0a3825c27eeff9c0dedf95547eeaccaf8df6a9b4976e8f6985e",
   "features": {
     "account-search": {
       "web": [],
@@ -1818,6 +1818,7 @@
       "apps/auth/src/app/.well-known/jwks.json/route.ts",
       "apps/auth/src/app/account/security/HistorySection.tsx",
       "apps/auth/src/app/account/security/MfaSection.tsx",
+      "apps/auth/src/app/account/security/PasskeySection.tsx",
       "apps/auth/src/app/account/security/PasswordSection.tsx",
       "apps/auth/src/app/account/security/SessionsSection.tsx",
       "apps/auth/src/app/account/security/actions.ts",
