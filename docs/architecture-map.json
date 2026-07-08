@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1452,
-  "fileSetHash": "sha256:aadbbf9835f232407db754d4f323821543ef5e1a79a2f01ac5d25b3a57296598",
+  "fileCount": 1453,
+  "fileSetHash": "sha256:6e0e8866151d1c10209afefa991c4b15ff1a7151bedfd2505f5299ebb71a2155",
   "features": {
     "account-search": {
       "web": [],
@@ -1885,6 +1885,7 @@
       "apps/auth/src/lib/clientIp.ts",
       "apps/auth/src/lib/completeMagic.ts",
       "apps/auth/src/lib/completeSso.ts",
+      "apps/auth/src/lib/cookies.test.ts",
       "apps/auth/src/lib/cookies.ts",
       "apps/auth/src/lib/cors.ts",
       "apps/auth/src/lib/domainResolver.ts",
