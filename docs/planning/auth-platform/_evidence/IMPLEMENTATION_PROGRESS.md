@@ -228,7 +228,14 @@ owner `db`, never withTenantTx; trusted_devices is unused) and **REVOKEd `user_m
 all four; `user_sessions` KEEPS its grant (workspace-admin session mgmt reads it via withTenantTx — its no-RLS
 raw-read gap wants an RLS policy, noted as a separate follow-up). typecheck ✓ biome ✓; pushed → CI.
 
-## Phases 4–5
+## Phase 4 — SSO / enterprise
+
+| Item | AUTH | Effort | Status | Notes |
+|---|---|---|---|---|
+| **SSO no-lockout guard** ("ship first") | AUTH-031 | S | ✅ **done** | Found the SSO seam already exists (tenant_sso_configs + ssoConfigRepository, `sso/jit.ts` JIT, SCIM, ssoRoutes, `sso/providers.ts` with a mock IdP + throwing-stub real adapters). The unbuilt "ship-first" gap was the no-lockout guard: `providers.ts` `isSsoProviderWired` (non-prod = mock/wired; prod gated on `WIRED_PROD_PROTOCOLS`, empty until arctic/node-saml land — the single flip-point) + pure `ssoReadyForEnforcement(config)`; the settings route rejects `require_sso=true` with **403 `sso_not_ready`** unless the org's connection is enabled AND its provider wired (else forcing SSO with a throwing adapter locks everyone out). Build-vs-buy-INDEPENDENT. providers.test 4/4; typecheck (auth+api) ✓ biome ✓. |
+| **Real SAML/OIDC adapters** | AUTH-001/… | XL | ◻ **flagged — build-vs-buy (research)** | The `oidcProvider`/`samlProvider` bodies in `providers.ts` throw until wired; the mock exercises the whole flow. Buy (WorkOS/Scalekit) or build (`arctic` OIDC + `@node-saml` SAML — assertion validation is the highest-risk surface: anti-XXE / anti-signature-wrapping / reject-unsigned). Same `SsoProvider` interface + the seam above either way — see the [SSO integration decision brief](SSO_INTEGRATION_DECISION.md). Account-linking + connection→tenant mapping are the security-critical review points. |
+
+## Phase 5
 Not started. Phase 4 = real SSO/SAML/OIDC + SCIM (XL long-poles — **flag for specialist review**); Phase 5 =
 developer/OAuth platform + operate-and-comply.
 

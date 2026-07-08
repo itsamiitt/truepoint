@@ -108,7 +108,11 @@ dual-sink), email the owner a security notification, and emit `webauthn_ceremony
   build the token store/skip-check/revocation off-by-default + specialist review, not a rushed autonomous build.
 - **Resolve-time policy floor** (tracker 1.2d) — the floor is WRITE-time-enforced only; decide clamp-at-resolve
   (silent defense-in-depth) vs. a `findFloorViolations` floor-raise remediation report.
-- **Real SSO/SAML/OIDC + SCIM adapters** (Phase 4) — the XL long-poles, under the build-vs-buy research; enforce
-  the no-lockout guard first.
+- **Real SSO/SAML/OIDC adapters** (Phase 4) — the XL long-poles, under the build-vs-buy research. The seam
+  (config store, JIT, SCIM, routes, mock IdP) + the **no-lockout guard** (require_sso rejects with `sso_not_ready`
+  until the org has an enabled, wired SSO connection — `AUTH-031`, build-vs-buy-independent) are DONE. The
+  remaining gap is only the real SAML/OIDC validation behind the existing `SsoProvider` seam — flip a protocol
+  into `WIRED_PROD_PROTOCOLS` (providers.ts) in the same change that lands `arctic`/`@node-saml`. See
+  [`../_evidence/SSO_INTEGRATION_DECISION.md`](../_evidence/SSO_INTEGRATION_DECISION.md).
 - **KMS-managed at-rest key**, **SMS OTP**, **social/OAuth login**, **adaptive step-up**, **forced-reset-on-breach**,
   the **`user_sessions` RLS** gap, and the **@leadwolf/auth-client** extract — all outstanding (see the progress tracker).
