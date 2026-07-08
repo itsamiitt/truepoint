@@ -4,7 +4,12 @@
 // flow. Only tenant-resolved events reach here (audit_log.tenant_id is NOT NULL + RLS, 03 §7/§9);
 // tenant-less identity events go to platform_audit_log (ADR-0031 §3). Never pass codes/tokens/PII.
 
-import { type AuditEntryInput, auditRepository, recordPlatformEvent, withTenantTx } from "@leadwolf/db";
+import {
+  type AuditEntryInput,
+  auditRepository,
+  recordPlatformEvent,
+  withTenantTx,
+} from "@leadwolf/db";
 import { log } from "./log.ts";
 
 export async function recordAuthEvent(entry: AuditEntryInput): Promise<void> {
@@ -37,7 +42,9 @@ type PlatformAuthAction =
   | "mfa.success"
   | "mfa.failure"
   | "password.reset.request"
-  | "password.reset.complete";
+  | "password.reset.complete"
+  | "passkey.register"
+  | "passkey.remove";
 
 export async function recordPlatformAuthEvent(entry: {
   action: PlatformAuthAction;

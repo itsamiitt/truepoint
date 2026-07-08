@@ -2,6 +2,7 @@
 // Gated on WEBAUTHN_ENABLED (404) + a live session (401). Ownership-checked in the repository (deleteForUser
 // matches on userId AND id), so a foreign id deletes nothing → 404. Static /passkeys/register/* wins over this
 // dynamic segment (Next first-match), so it only ever receives a credential id.
+import { auditPasskeyChange } from "@/lib/auditPasskeyChange";
 import { resolveApiUser } from "@/lib/requireUser";
 import { env } from "@leadwolf/config";
 import { webauthnCredentialRepository } from "@leadwolf/db";
@@ -17,5 +18,6 @@ export async function DELETE(
   if (!account) return new Response("Unauthorized", { status: 401 });
   const { id } = await ctx.params;
   const removed = await webauthnCredentialRepository.deleteForUser(account.userId, id);
+  if (removed > 0) await auditPasskeyChange(account.userId, "passkey.remove");
   return new Response(null, { status: removed > 0 ? 204 : 404 });
 }

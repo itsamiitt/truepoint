@@ -204,5 +204,8 @@ export const auditAction = z.enum([
   "code.exchanged",
   "signup",
   "oauth.link",
+  // AUTH-024 — passkey (WebAuthn) credential added / removed from account security.
+  "passkey.register",
+  "passkey.remove",
 ]);
 export type AuditAction = z.infer<typeof auditAction>;

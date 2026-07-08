@@ -41,6 +41,9 @@ export const platformAuditAction = z.enum([
   "mfa.failure",
   "password.reset.request",
   "password.reset.complete",
+  // AUTH-024 — passkey credential added / removed (tenant-less sink for multi-/no-tenant users).
+  "passkey.register",
+  "passkey.remove",
 ]);
 
 export type PlatformAuditAction = z.infer<typeof platformAuditAction>;

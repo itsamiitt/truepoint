@@ -2,6 +2,7 @@
 // returned from navigator.credentials.create against the stashed single-use challenge, and (on success) stores
 // the credential for the authenticated user. Gated on WEBAUTHN_ENABLED (404) + a live session (401). Fails
 // closed: verifyPasskeyRegistration returns false on a missing/expired challenge or any verification error.
+import { auditPasskeyChange } from "@/lib/auditPasskeyChange";
 import { resolveApiUser } from "@/lib/requireUser";
 import { type RegistrationResponseJSON, verifyPasskeyRegistration } from "@leadwolf/auth";
 import { env } from "@leadwolf/config";
@@ -22,5 +23,6 @@ export async function POST(req: Request): Promise<Response> {
     body.response,
     typeof body.label === "string" ? body.label.slice(0, 100) : undefined,
   );
+  if (verified) await auditPasskeyChange(account.userId, "passkey.register");
   return Response.json({ verified }, { status: verified ? 200 : 400 });
 }
