@@ -187,8 +187,19 @@ are deferred as deploy-gated). Started Phase 2 per plan order. See [`../12_Imple
 | Admin callback **client-nav** | AUTH-078 | S | ✅ **done** | The admin `/callback` did `window.location.replace("/")` — a full-document reload that DISCARDS the just-minted in-memory access token, forcing an immediate silent refresh (an extra cross-origin round-trip + a race window). Switched to `router.replace("/")` (client-side nav) so the token survives the hop and the staff gate passes immediately. Mirrors apps/web. typecheck (apps/admin) ✓ biome ✓. |
 | @leadwolf/auth-client **extract** (DRY web+admin clients); KMS-managed at-rest key + versioned re-encrypt | AUTH-073/013 | M | ◻ | Remaining Phase-2 items. The web+admin authClients are now behaviourally aligned (single-flight + client-nav); the extract is a churny new-package refactor best done with review. KMS is infra-dependent (needs a real KMS for the envelope). |
 
-## Phases 3–5
-Not started. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadmap.md). Phase 3 = login methods + MFA depth (passkeys XL); Phase 4 = real SSO/SCIM (XL long-poles — flag for specialist review); Phase 5 = developer/OAuth platform + operate-and-comply.
+## Phase 3 — Login methods + MFA depth
+Started (Phase 2 hardenings complete). Building carefully, off-by-default, flagging the XL security-critical
+adapters (passkeys) for specialist review. See [`../12_Implementation_Roadmap.md`](../12_Implementation_Roadmap.md).
+
+| Item | AUTH | Effort | Status | Notes |
+|---|---|---|---|---|
+| **Email OTP** MFA factor — core | AUTH-025 | M | ✅ **core done** | The 6-digit code primitive already existed (`emailVerification.ts`, `EmailTokenPurpose` already has `"email_otp"`). Added `verifyMfaCode` routing for method `"email_otp"` (verify against the shared auth_email_tokens store, keyed by the user's VERIFIED email, atomic single-use + TTL) + `requestEmailOtp(userId)` (mint + return the code/address for the app mailer). Additive — INERT until the MFA flow offers the method. `mfaVerify.test.ts` 5/5; full packages/auth 138/138. typecheck ✓ biome ✓. **Follow-up (app layer): the mailer/rate-limit send + the MFA challenge/enrollment UI that offers email-OTP.** |
+| **WebAuthn / passkeys** (registration + assertion ceremony) | AUTH-024 | XL | ◻ **flag for specialist review** | Security-critical; RP-ID for the subdomain estate + attestation policy. Build off-by-default + gated. |
+| SMS OTP (rate-limited, spend-capped); adaptive/risk step-up; social/OAuth login; CAPTCHA tiers + breached-password-at-login | AUTH-058/015 | M–L | ◻ | The rest of the method matrix. |
+
+## Phases 4–5
+Not started. Phase 4 = real SSO/SAML/OIDC + SCIM (XL long-poles — **flag for specialist review**); Phase 5 =
+developer/OAuth platform + operate-and-comply.
 
 ## Log
 - **2026-07-06:** Phase 0.1 (AUTH-062) done — the basePath fix that resolves two of the three reported failures

@@ -51,7 +51,7 @@ export {
   type FinalizedLogin,
 } from "./flow.ts";
 export { authorizeTenantSelection } from "./scopeGuard.ts";
-export { verifyMfaCode } from "./mfaVerify.ts";
+export { verifyMfaCode, requestEmailOtp } from "./mfaVerify.ts";
 export { encryptSecret, decryptSecret } from "./secrets.ts";
 export {
   lookupIdentifier,
