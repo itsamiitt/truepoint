@@ -10,7 +10,6 @@ import { recordAuthMetric } from "./authMetrics.ts";
 const ALG = "EdDSA";
 
 const privateKey = () => importPKCS8(env.JWT_PRIVATE_KEY_PEM, ALG);
-const publicKey = () => importSPKI(env.JWT_PUBLIC_KEY_PEM, ALG);
 
 // verifyAccessToken (the apps/api path) verifies against the auth origin's PUBLISHED JWKS, selecting the key
 // by `kid` — so the api needs no local public PEM and key rotation works (publish the next key in JWKS, the
@@ -79,10 +78,26 @@ export async function verifyAccessToken(
   return accessTokenClaimsSchema.parse(payload);
 }
 
-/** Public signing keys served at auth.<domain>/auth/.well-known/jwks.json (current key; add next on rotation). */
+/** One published JWK for a public PEM + kid. Imported `extractable` so it can be re-exported as a JWK (public
+ *  keys are safe to mark extractable — the material is already public). */
+async function jwkEntry(pem: string, kid: string): Promise<Record<string, unknown>> {
+  const jwk = await exportJWK(await importSPKI(pem, ALG, { extractable: true }));
+  return { ...jwk, use: "sig", alg: ALG, kid };
+}
+
+/**
+ * Public signing keys served at auth.<domain>/auth/.well-known/jwks.json. Publishes the ACTIVE key and, when a
+ * NEXT key is configured (JWT_NEXT_SIGNING_KID + PEM both set), that key ALONGSIDE it — the overlapping-`kid`
+ * window that makes rotation zero-downtime: a verifier selects by `kid`, so a token signed by either key
+ * validates while both are published. The minter always signs with the ACTIVE key. See the jwks-key-rotation
+ * runbook for the promote/retire sequence.
+ */
 export async function getJwks(): Promise<{ keys: Array<Record<string, unknown>> }> {
-  const jwk = await exportJWK(await publicKey());
-  return { keys: [{ ...jwk, use: "sig", alg: ALG, kid: env.JWT_SIGNING_KID }] };
+  const keys = [await jwkEntry(env.JWT_PUBLIC_KEY_PEM, env.JWT_SIGNING_KID)];
+  if (env.JWT_NEXT_SIGNING_KID && env.JWT_NEXT_PUBLIC_KEY_PEM) {
+    keys.push(await jwkEntry(env.JWT_NEXT_PUBLIC_KEY_PEM, env.JWT_NEXT_SIGNING_KID));
+  }
+  return { keys };
 }
 
 /**

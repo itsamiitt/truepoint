@@ -80,6 +80,15 @@ export const appEnvSchema = z
     // deploy.sh ships these base64 forms; loadEnv decodes them into the PEM fields. Raw PEM still wins if set.
     JWT_PRIVATE_KEY_PEM_B64: z.string().default(""),
     JWT_PUBLIC_KEY_PEM_B64: z.string().default(""),
+    // NEXT signing key for OVERLAPPING-kid rotation (AUTH-013). When BOTH are set, the JWKS publishes this key
+    // ALONGSIDE the active one so verifiers accept a token signed by EITHER — the zero-downtime rotation window.
+    // Public key only: the minter always signs with the ACTIVE key (JWT_SIGNING_KID). During a rotation this slot
+    // holds the INCOMING key (before the active-key cutover) and then the OUTGOING key (after, until its tokens
+    // expire) — see the jwks-key-rotation runbook. Unset ⇒ single-key JWKS (today's exact behaviour). Same
+    // raw-or-base64 transport as the active key (a multi-line PEM survives docker compose interpolation as B64).
+    JWT_NEXT_SIGNING_KID: z.string().default(""),
+    JWT_NEXT_PUBLIC_KEY_PEM: z.string().default(""),
+    JWT_NEXT_PUBLIC_KEY_PEM_B64: z.string().default(""),
 
     DATABASE_URL: z.string().url(),
     // Optional DIRECT (non-pooled) URL used ONLY for migrations. On Neon the default connection string is
@@ -489,6 +498,10 @@ export function resolveAppEnv(
     JWT_PUBLIC_KEY_PEM: decodeKeyMaterial(
       parsed.data.JWT_PUBLIC_KEY_PEM,
       parsed.data.JWT_PUBLIC_KEY_PEM_B64,
+    ),
+    JWT_NEXT_PUBLIC_KEY_PEM: decodeKeyMaterial(
+      parsed.data.JWT_NEXT_PUBLIC_KEY_PEM,
+      parsed.data.JWT_NEXT_PUBLIC_KEY_PEM_B64,
     ),
   };
   const frozen = Object.freeze(resolved);
