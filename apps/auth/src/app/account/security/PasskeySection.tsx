@@ -121,7 +121,12 @@ export function PasskeySection(): React.JSX.Element {
                   ? ` · last used ${new Date(p.lastUsedAt).toLocaleDateString()}`
                   : " · never used"}
               </span>
-              <Button variant="ghost" onClick={() => void removePasskey(p.id)} disabled={!canAct}>
+              <Button
+                variant="ghost"
+                onClick={() => void removePasskey(p.id)}
+                disabled={!canAct}
+                aria-label={`Remove passkey ${p.label ?? "Passkey"}`}
+              >
                 Remove
               </Button>
             </li>
