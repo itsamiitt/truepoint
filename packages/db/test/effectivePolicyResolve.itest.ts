@@ -118,4 +118,32 @@ describe("effective-policy resolve (DB read + RLS + strictest-wins)", () => {
     expect(rows.filter((r) => r.key === "disable_social").length).toBe(1); // single row — upsert, not insert
     expect(rows.find((r) => r.key === "disable_social")?.value).toBe(false); // value updated
   });
+
+  test("setPlatformKey writes a PLATFORM default (NULL tenant) via withPlatformTx, onConflict updates", async () => {
+    const [s] = await admin`INSERT INTO users (email) VALUES ('staff@platform.test') RETURNING id`;
+    const staff = (s as { id: string }).id;
+
+    // insert a new platform-default key on the owner tx (RLS-exempt) — writes platform_audit_log in the same tx
+    await dbmod.withPlatformTx({ userId: staff }, "admin.set_platform_policy", (tx) =>
+      dbmod.effectivePolicyRepository.setPlatformKey(tx, "require_sso", true, staff),
+    );
+    let rows =
+      await admin`SELECT value FROM auth_policies WHERE scope='platform' AND key='require_sso'`;
+    expect(rows.length).toBe(1);
+    expect((rows[0] as { value: unknown }).value).toBe(true);
+
+    // update the SAME platform key → the NULL-tenant onConflict path must UPDATE, not duplicate
+    await dbmod.withPlatformTx({ userId: staff }, "admin.set_platform_policy", (tx) =>
+      dbmod.effectivePolicyRepository.setPlatformKey(tx, "require_sso", false, staff),
+    );
+    rows =
+      await admin`SELECT value FROM auth_policies WHERE scope='platform' AND key='require_sso'`;
+    expect(rows.length).toBe(1); // still one row
+    expect((rows[0] as { value: unknown }).value).toBe(false); // updated
+
+    // and the platform_audit_log recorded the two staff writes
+    const [audit] =
+      await admin`SELECT count(*)::int AS n FROM platform_audit_log WHERE action = 'admin.set_platform_policy' AND actor_user_id = ${staff}`;
+    expect((audit as { n: number }).n).toBe(2);
+  });
 });

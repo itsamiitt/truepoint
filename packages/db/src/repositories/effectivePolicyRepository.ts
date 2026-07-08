@@ -7,7 +7,7 @@
 // Cross-tenant isolation + the resolve are proven by test/effectivePolicyResolve.itest.ts + authPolicyIsolation.itest.ts.
 
 import { sql } from "drizzle-orm";
-import { withTenantTx } from "../client.ts";
+import { type Tx, withTenantTx } from "../client.ts";
 import { authPolicies } from "../schema/auth.ts";
 import { auditRepository } from "./auditRepository.ts";
 
@@ -99,5 +99,33 @@ export const effectivePolicyRepository = {
         metadata: { scope, key },
       });
     });
+  },
+
+  /**
+   * Upsert a PLATFORM-default policy key (scope='platform', tenant_id NULL). STAFF-ONLY: runs on the supplied
+   * platform-OWNER transaction — the caller opens `withPlatformTx(actor, action, tx => setPlatformKey(tx, …))`,
+   * which is RLS-exempt (so it can write the NULL-tenant row that the RLS reserves for the owner) and records
+   * the change in `platform_audit_log` in the SAME tx. Deliberately not reachable from a tenant request. The
+   * value-shape + floor guards (validatePolicyWrite against the env/code minimum) run in the app-layer
+   * orchestration BEFORE this. Bumps `version` on conflict (the platform NULL-tenant onConflict case).
+   */
+  async setPlatformKey(tx: Tx, key: string, value: unknown, updatedBy: string): Promise<void> {
+    await tx
+      .insert(authPolicies)
+      .values({ scope: "platform", tenantId: null, workspaceId: null, key, value, updatedBy })
+      .onConflictDoUpdate({
+        target: [
+          authPolicies.scope,
+          authPolicies.tenantId,
+          authPolicies.workspaceId,
+          authPolicies.key,
+        ],
+        set: {
+          value,
+          updatedBy,
+          updatedAt: new Date(),
+          version: sql`${authPolicies.version} + 1`,
+        },
+      });
   },
 };
