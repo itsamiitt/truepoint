@@ -5,9 +5,11 @@
 // (PUT /admin/auth/platform-policy, already floor-guarded server-side) is the next slice.
 "use client";
 
-import { type Column, DataTable, EmptyState, StateSwitch } from "@leadwolf/ui";
+import { type Column, DataTable, EmptyState, StateSwitch, TpButton } from "@leadwolf/ui";
+import { useState } from "react";
 import type { PlatformDefault } from "../api";
 import { usePlatformDefaults } from "../hooks/usePlatformDefaults";
+import { EditDefaultDialog } from "./EditDefaultDialog";
 
 const columns: Column<PlatformDefault>[] = [
   {
@@ -31,15 +33,29 @@ const columns: Column<PlatformDefault>[] = [
 
 export function AuthPolicyPage(): React.JSX.Element {
   const { rows, error, loading, reload } = usePlatformDefaults();
+  const [editing, setEditing] = useState(false);
   return (
     <main style={{ display: "flex", flexDirection: "column", gap: 16, padding: 24 }}>
-      <header>
-        <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Auth policy</h1>
-        <p style={{ color: "var(--tp-ink-3)", margin: "4px 0 0", maxWidth: 640 }}>
-          Platform-wide authentication defaults. Every organization inherits these; an org can only
-          <em> tighten</em> a value (strictest-wins) and can never loosen one below the platform
-          minimum.
-        </p>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 16,
+        }}
+      >
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Auth policy</h1>
+          <p style={{ color: "var(--tp-ink-3)", margin: "4px 0 0", maxWidth: 640 }}>
+            Platform-wide authentication defaults. Every organization inherits these; an org can
+            only
+            <em> tighten</em> a value (strictest-wins) and can never loosen one below the platform
+            minimum.
+          </p>
+        </div>
+        <TpButton variant="primary" onClick={() => setEditing(true)}>
+          Set a default
+        </TpButton>
       </header>
       <StateSwitch
         loading={loading && rows.length === 0}
@@ -55,6 +71,15 @@ export function AuthPolicyPage(): React.JSX.Element {
       >
         <DataTable columns={columns} rows={rows} rowKey={(r) => r.key} />
       </StateSwitch>
+      {editing ? (
+        <EditDefaultDialog
+          onClose={() => setEditing(false)}
+          onSaved={async () => {
+            await reload();
+            setEditing(false);
+          }}
+        />
+      ) : null}
     </main>
   );
 }

@@ -30,3 +30,13 @@ export async function listPlatformDefaults(): Promise<PlatformDefault[]> {
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load platform auth defaults"));
   return ((await res.json()) as { policies: PlatformDefault[] }).policies;
 }
+
+/** Set ONE platform-default key. The server (validatePolicyWrite) is the real guard — it validates the value's
+ *  shape and rejects anything below the security floor — so this sends the typed value and surfaces its error. */
+export async function setPlatformDefault(key: string, value: unknown): Promise<void> {
+  const res = await adminFetch("/auth/platform-policy", {
+    method: "PUT",
+    body: JSON.stringify({ key, value }),
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not save the platform default"));
+}
