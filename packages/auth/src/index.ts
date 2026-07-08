@@ -117,7 +117,7 @@ export {
   type CreateInvitationInput,
   type AcceptInvitationResult,
 } from "./invitations.ts";
-export { getSsoProvider } from "./sso/providers.ts";
+export { getSsoProvider, isSsoProviderWired, ssoReadyForEnforcement } from "./sso/providers.ts";
 export { signMockAssertion } from "./sso/mockIdp.ts";
 export { provisionSsoIdentity } from "./sso/jit.ts";
 export type { SsoConfig, SsoAssertion, SsoInitiation, SsoProvider } from "./sso/types.ts";

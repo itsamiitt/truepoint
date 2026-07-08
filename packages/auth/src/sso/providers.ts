@@ -45,3 +45,29 @@ export function getSsoProvider(protocol: "oidc" | "saml"): SsoProvider {
   if (env.NODE_ENV !== "production") return mockProvider;
   return protocol === "oidc" ? oidcProvider : samlProvider;
 }
+
+// The one place that records which production adapters are actually wired. Empty until `arctic` (OIDC) /
+// `@node-saml/node-saml` (SAML) land — so in production BOTH resolve to a throwing stub. When you wire an
+// adapter above, add its protocol here in the SAME change.
+const WIRED_PROD_PROTOCOLS = new Set<"oidc" | "saml">();
+
+/**
+ * Is the resolved SSO provider FUNCTIONAL (not a throwing stub)? The no-lockout guard: an org must not be able to
+ * enable `require_sso` while its provider would throw — forcing SSO with a dead adapter locks everyone out. Non-
+ * production always runs the mock (fully functional); production is gated on `WIRED_PROD_PROTOCOLS`.
+ */
+export function isSsoProviderWired(protocol: "oidc" | "saml"): boolean {
+  if (env.NODE_ENV !== "production") return true;
+  return WIRED_PROD_PROTOCOLS.has(protocol);
+}
+
+/**
+ * Pure no-lockout predicate (AUTH-031): `require_sso` may be enabled for a tenant ONLY if its SSO connection is
+ * both ENABLED and backed by a WIRED provider. A null/disabled config, or an unwired (throwing-stub) provider,
+ * returns false — the write path rejects the enforcement flip so an org can't lock itself out. Testable without I/O.
+ */
+export function ssoReadyForEnforcement(
+  config: { enabled: boolean; protocol: "oidc" | "saml" } | null,
+): boolean {
+  return config != null && config.enabled && isSsoProviderWired(config.protocol);
+}

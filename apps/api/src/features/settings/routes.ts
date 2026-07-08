@@ -6,12 +6,13 @@
 // concurrent PATCHes can't lost-update). No enrichment is triggered here — this configures the policy the
 // core guard (enforceAutoEnrichPolicy) consults on a system-initiated enrich.
 
-import { resolvePolicyFromRows, validatePolicyWrite } from "@leadwolf/auth";
+import { resolvePolicyFromRows, ssoReadyForEnforcement, validatePolicyWrite } from "@leadwolf/auth";
 import {
   auditRepository,
   authPolicyRepository,
   effectivePolicyRepository,
   enrichmentPolicyRepository,
+  ssoConfigRepository,
 } from "@leadwolf/db";
 import {
   type AuthPolicy,
@@ -153,6 +154,18 @@ settingsRoutes.put(
       throw new ValidationError(
         decision.reason === "unknown_key" ? "Unknown policy key." : "Invalid value for this key.",
       );
+    }
+    // No-lockout guard (AUTH-031): forcing SSO (`require_sso=true`) permits ONLY the "sso" method, so if the org's
+    // SSO connection isn't enabled + backed by a wired provider, enabling it would lock everyone out (the adapter
+    // throws). Reject until a working connection exists. Only gates the ENABLE (value===true); disabling is free.
+    if (body.key === "require_sso" && decision.value === true) {
+      const ssoConfig = await ssoConfigRepository.getForTenant(c.get("tenantId"));
+      if (!ssoReadyForEnforcement(ssoConfig)) {
+        throw new ForbiddenError(
+          "sso_not_ready",
+          "Configure, enable, and test a working SSO connection before requiring SSO for this organization.",
+        );
+      }
     }
     await effectivePolicyRepository.upsertTenantKey({
       tenantId: c.get("tenantId"),
