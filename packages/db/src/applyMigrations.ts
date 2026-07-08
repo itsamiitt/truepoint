@@ -116,13 +116,22 @@ const GRANTS = `
   -- sub_processors (13a Area 8 / GDPR Art. 28) is staff-published compliance config — platform-owned, deny-all
   -- to the customer app role. REVOKE the blanket grant. withPlatformTx (owner) unaffected.
   REVOKE ALL ON sub_processors FROM leadwolf_app;
-  -- webauthn_credentials (AUTH-024) is auth-service-owned, user-scoped passkey data — the customer app role
-  -- never touches passkeys (the ceremony runs on apps/auth's owner connection). Nothing stores a SECRET here
-  -- (WebAuthn public keys are public), but REVOKE the blanket grant so leadwolf_app can't even enumerate which
-  -- users have credentials. The auth service (owner) is unaffected. NOTE: the older user-scoped auth tables
-  -- (user_mfa_methods/user_sessions/trusted_devices/auth_email_tokens) still ride the blanket grant — closing
-  -- that same gap is a separate follow-up.
+  -- User-scoped AUTH-SERVICE tables — accessed ONLY on the owner connection (userRepository /
+  -- authEmailTokenRepository use the owner db pool, never withTenantTx); the customer app role never queries them. The
+  -- blanket grant above handed leadwolf_app DML anyway, and these tables have NO RLS (the boundary is the
+  -- access path, not a row predicate), so a raw query would have read MFA secrets / passkey credentials /
+  -- login OTP codes. REVOKE the grant so that's impossible even by mistake. The auth service (owner) is
+  -- unaffected. webauthn_credentials (AUTH-024) — passkey public keys + which users have them.
   REVOKE ALL ON webauthn_credentials FROM leadwolf_app;
+  -- user_mfa_methods — enrolled factors + encrypted TOTP secrets (owner-only via userRepository).
+  REVOKE ALL ON user_mfa_methods FROM leadwolf_app;
+  -- auth_email_tokens — email verification / login-OTP code HASHES (owner-only via authEmailTokenRepository).
+  REVOKE ALL ON auth_email_tokens FROM leadwolf_app;
+  -- trusted_devices — the "trust this device" registry (schema present, no repository yet — unused).
+  REVOKE ALL ON trusted_devices FROM leadwolf_app;
+  -- NOTE: user_sessions deliberately KEEPS the grant — the workspace-admin session-management path reads it via
+  -- withTenantTx (bounded by a workspace_members join). Its no-RLS gap (a RAW query bypasses the join) wants an
+  -- RLS policy rather than a revoke — a separate follow-up.
   -- Layer-0 master graph (ADR-0021) is SYSTEM-OWNED, isolated by ACCESS PATH not RLS: it has NO workspace_id,
   -- so NO fail-closed RLS predicate. The blanket GRANT above handed leadwolf_app DML on it — REVOKE it so the
   -- customer app role can NEVER read the shared universe directly (PLAN_04/PLAN_07 "grant-off is the wall").

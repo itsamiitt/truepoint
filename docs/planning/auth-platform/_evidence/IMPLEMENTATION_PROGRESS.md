@@ -199,6 +199,15 @@ adapters (passkeys) for specialist review. See [`../12_Implementation_Roadmap.md
 | Breached-password **at login** (observe-first) | — | S | ✅ **done (observe-first)** | `authenticatePassword` now screens the just-verified password against HaveIBeenPwned and records `auth_password_breach_check_total{breached\|clean}` — DETACHED (never awaited) + fail-open + off unless `BREACHED_PASSWORD_CHECK_AT_LOGIN="true"`, so it can neither slow nor break a login and adds no cost by default. Sizes breached-password usage BEFORE any forced-reset enforcement (the forced-reset flow is the follow-up). Registration/reset already screen at set-time; this catches passwords breached AFTER. typecheck ✓ biome ✓ packages/auth 138/138. |
 | SMS OTP (rate-limited, spend-capped); adaptive/risk step-up; social/OAuth login; CAPTCHA tiers; forced-reset on breached login | AUTH-058/015 | M–L | ◻ | The rest of the method matrix. |
 
+### Security follow-up (found during passkeys) — user-scoped auth-table grant gap ✅ **closed**
+The user-scoped auth tables have NO RLS (the boundary is the ACCESS PATH, not a row predicate), yet rode the
+blanket `leadwolf_app` grant — so a raw customer-app query could have read encrypted MFA secrets / login-OTP code
+hashes / passkey credentials. Verified each is owner-only (userRepository / authEmailTokenRepository use the
+owner `db`, never withTenantTx; trusted_devices is unused) and **REVOKEd `user_mfa_methods` / `auth_email_tokens`
+/ `trusted_devices`** (webauthn_credentials already). `userScopedAuthIsolation.itest.ts`: leadwolf_app denied on
+all four; `user_sessions` KEEPS its grant (workspace-admin session mgmt reads it via withTenantTx — its no-RLS
+raw-read gap wants an RLS policy, noted as a separate follow-up). typecheck ✓ biome ✓; pushed → CI.
+
 ## Phases 4–5
 Not started. Phase 4 = real SSO/SAML/OIDC + SCIM (XL long-poles — **flag for specialist review**); Phase 5 =
 developer/OAuth platform + operate-and-comply.
