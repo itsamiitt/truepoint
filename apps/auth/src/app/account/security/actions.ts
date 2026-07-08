@@ -315,25 +315,33 @@ function notifyMfaChanged(email: string, change: MfaChangeKind): void {
   );
 }
 
-// Emit the declared `session.revoked` audit when the current session resolves to a tenant (the audit_log
-// tenant_id is NOT NULL). CONFIRM (audit PENDING for the tenant-less case): `session.revoked` exists ONLY in
-// the tenant `auditAction` enum — there is no tenant-less platform variant — so a self-service revoke by a user
-// whose current session carries no tenant cannot be cleanly audited yet; it stays PENDING (per the task brief),
-// rather than emit an undeclared/cross-scope row. Best-effort: recordAuthEvent swallows its own failures.
+// Emit the declared `session.revoked` audit via the SAME dual-sink as password.reset: the tenant audit_log when
+// the current session resolves to a tenant (audit_log.tenant_id is NOT NULL), else platform_audit_log for a
+// tenant-less session — `session.revoked` is now declared in BOTH scopes, so no self-service revoke goes
+// unaudited. Best-effort: both recorders swallow their own failures and never block the revoke.
 async function auditSessionRevoke(
   acct: Awaited<ReturnType<typeof requireUser>>,
   meta: { mode: "single" | "others"; count: number },
 ): Promise<void> {
-  if (!acct.tenantId) return; // tenant-less → PENDING (see note above)
   const ip = clientIpFromHeaders(await headers());
-  await recordAuthEvent({
-    tenantId: acct.tenantId,
-    workspaceId: acct.workspaceId,
-    actorUserId: acct.userId,
-    action: "session.revoked",
-    entityType: "user_session",
-    entityId: acct.userId,
-    metadata: { ...meta, self: true, via: "account_security" },
-    ipAddress: ip,
-  });
+  const metadata = { ...meta, self: true, via: "account_security" };
+  if (acct.tenantId) {
+    await recordAuthEvent({
+      tenantId: acct.tenantId,
+      workspaceId: acct.workspaceId,
+      actorUserId: acct.userId,
+      action: "session.revoked",
+      entityType: "user_session",
+      entityId: acct.userId,
+      metadata,
+      ipAddress: ip,
+    });
+  } else {
+    await recordPlatformAuthEvent({
+      action: "session.revoked",
+      actorUserId: acct.userId,
+      ip,
+      metadata,
+    });
+  }
 }

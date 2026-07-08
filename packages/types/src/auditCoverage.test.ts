@@ -59,6 +59,9 @@ const WRITTEN = new Set<string>([
   // tenant branch → audit_log; the tenant-less branch → platform_audit_log).
   "passkey.register",
   "passkey.remove",
+  // AUTH — self-service session revoke (auditSessionRevoke, tenant branch → audit_log; now fully wired via the
+  // dual-sink, so no longer PENDING).
+  "session.revoked",
 ]);
 
 // §5.2 — defined in the closed enum but not yet wired to a writeAudit() call-site.
@@ -120,7 +123,6 @@ const PENDING = new Set<string>([
   "token.revoke",
   "device.trusted",
   "device.revoked",
-  "session.revoked",
   "code.issued",
   "oauth.link",
 ]);

@@ -44,7 +44,8 @@ type PlatformAuthAction =
   | "password.reset.request"
   | "password.reset.complete"
   | "passkey.register"
-  | "passkey.remove";
+  | "passkey.remove"
+  | "session.revoked";
 
 export async function recordPlatformAuthEvent(entry: {
   action: PlatformAuthAction;

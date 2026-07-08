@@ -61,6 +61,8 @@ const WRITTEN = new Set<string>([
   // MFA step). mfa.challenge stays PENDING — challenge issuance isn't wired as its own event.
   "mfa.success",
   "mfa.failure",
+  // AUTH — self-service session revoke by a tenant-less session (auditSessionRevoke platform branch).
+  "session.revoked",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;
