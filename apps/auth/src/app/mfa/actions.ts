@@ -5,18 +5,50 @@
 
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
+import { loginCodeEmail } from "@/lib/emails";
 import { finishLogin } from "@/lib/finishLogin";
+import { sendAuthEmail } from "@/lib/mailer";
 import {
   assertCredentialNotLocked,
+  checkEmailOtpSendRate,
   getLoginTransaction,
   patchLoginTransaction,
   recordCredentialFailure,
   recordCredentialSuccess,
+  requestEmailOtp,
   resolveNextStep,
   verifyMfaCode,
 } from "@leadwolf/auth";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+
+/** Send an email-OTP challenge code for the pending login (AUTH-025). Rate-limited (anti-mailbomb); the code is
+ *  stored regardless of delivery (best-effort send). Always returns the user to the email-OTP form so the flow
+ *  never reveals whether an address exists or a send failed. */
+export async function sendEmailOtp(): Promise<void> {
+  const txnId = (await cookies()).get(LOGIN_TXN_COOKIE)?.value;
+  if (!txnId) redirect("/login");
+  const txn = await getLoginTransaction(txnId);
+  if (!txn) redirect("/login");
+
+  let limited = false;
+  try {
+    await checkEmailOtpSendRate(txn.userId);
+  } catch {
+    limited = true; // RateLimitedError — too many sends; fall through to the form with a soft notice
+  }
+  if (!limited) {
+    const otp = await requestEmailOtp(txn.userId);
+    if (otp) {
+      try {
+        await sendAuthEmail({ to: otp.email, ...loginCodeEmail({ code: otp.code }) });
+      } catch {
+        // best-effort: the code is stored; the mailer alerts on delivery failure (Phase 0). Never block login.
+      }
+    }
+  }
+  redirect(`/mfa?method=email_otp&sent=${limited ? "rate" : "1"}`);
+}
 
 export async function submitMfa(formData: FormData): Promise<void> {
   const code = String(formData.get("code") ?? "").trim();

@@ -8,3 +8,4 @@ export { type NewSignInInput, newSignInEmail } from "./newSignIn.ts";
 export { type PasswordChangedInput, passwordChangedEmail } from "./passwordChanged.ts";
 export { type PasswordResetInput, passwordResetEmail } from "./passwordReset.ts";
 export { type VerificationCodeInput, verificationCodeEmail } from "./verificationCode.ts";
+export { type LoginCodeInput, loginCodeEmail } from "./loginCode.ts";
