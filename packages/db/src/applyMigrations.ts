@@ -116,6 +116,13 @@ const GRANTS = `
   -- sub_processors (13a Area 8 / GDPR Art. 28) is staff-published compliance config — platform-owned, deny-all
   -- to the customer app role. REVOKE the blanket grant. withPlatformTx (owner) unaffected.
   REVOKE ALL ON sub_processors FROM leadwolf_app;
+  -- webauthn_credentials (AUTH-024) is auth-service-owned, user-scoped passkey data — the customer app role
+  -- never touches passkeys (the ceremony runs on apps/auth's owner connection). Nothing stores a SECRET here
+  -- (WebAuthn public keys are public), but REVOKE the blanket grant so leadwolf_app can't even enumerate which
+  -- users have credentials. The auth service (owner) is unaffected. NOTE: the older user-scoped auth tables
+  -- (user_mfa_methods/user_sessions/trusted_devices/auth_email_tokens) still ride the blanket grant — closing
+  -- that same gap is a separate follow-up.
+  REVOKE ALL ON webauthn_credentials FROM leadwolf_app;
   -- Layer-0 master graph (ADR-0021) is SYSTEM-OWNED, isolated by ACCESS PATH not RLS: it has NO workspace_id,
   -- so NO fail-closed RLS predicate. The blanket GRANT above handed leadwolf_app DML on it — REVOKE it so the
   -- customer app role can NEVER read the shared universe directly (PLAN_04/PLAN_07 "grant-off is the wall").

@@ -386,6 +386,13 @@
       "when": 1784800000000,
       "tag": "0054_auth_allowed_origins",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1784900000000,
+      "tag": "0055_webauthn_credentials",
+      "breakpoints": true
     }
   ]
 }

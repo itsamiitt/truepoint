@@ -232,6 +232,28 @@ export const userMfaMethods = pgTable("user_mfa_methods", {
   createdAt: createdAt(),
 });
 
+// WebAuthn / passkey credentials (AUTH-024) — user-owned (global identity, like user_mfa_methods) and
+// auth-service-only. Stores the PUBLIC key + credential id + signature counter per registered authenticator;
+// there is NO secret here (the private key never leaves the device). REVOKED from leadwolf_app (applyMigrations)
+// — the tenant app never touches passkeys — so a policy slip can't expose which users have credentials. This is
+// the SCHEMA FOUNDATION only: the registration/assertion CEREMONY (a WebAuthn library, RP-ID for the subdomain
+// estate, attestation policy) is a SEPARATE, off-by-default, specialist-review-gated slice. Empty until then.
+export const webauthnCredentials = pgTable("webauthn_credentials", {
+  id: id(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  credentialId: text("credential_id").notNull().unique(), // base64url credential id from the authenticator
+  publicKey: bytea("public_key").notNull(), // COSE-encoded public key (bytes) — public, not a secret
+  counter: integer("counter").notNull().default(0), // signature counter — clone / replay detection
+  transports: text("transports").array(), // usb|nfc|ble|internal|hybrid — client hints
+  aaguid: varchar("aaguid", { length: 36 }), // authenticator model id (optional)
+  backedUp: boolean("backed_up").notNull().default(false), // multi-device (synced) passkey vs single-device
+  label: varchar("label", { length: 100 }), // user-facing device name
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
 export const trustedDevices = pgTable(
   "trusted_devices",
   {
