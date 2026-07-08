@@ -3,20 +3,13 @@
 // clears the cookie. Idempotent: no cookie, or an unknown/already-revoked session, still clears + 204. Cross-
 // origin, credentialed (CORS to app origins). Never throws into the response — logout must always succeed.
 
-import { REFRESH_COOKIE, clearRefreshCookie } from "@/lib/cookies";
+import { clearRefreshCookie, readRefreshTokenFromHeader } from "@/lib/cookies";
 import { corsHeaders } from "@/lib/cors";
 import { hashRefreshToken, revokeSession } from "@leadwolf/auth";
 import { sessionRepository } from "@leadwolf/db";
 
-function readRefreshCookie(req: Request): string | null {
-  const cookie = req.headers.get("cookie");
-  if (!cookie) return null;
-  for (const part of cookie.split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === REFRESH_COOKIE) return v.join("=");
-  }
-  return null;
-}
+const readRefreshCookie = (req: Request): string | null =>
+  readRefreshTokenFromHeader(req.headers.get("cookie"));
 
 export async function OPTIONS(req: Request): Promise<Response> {
   return new Response(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });

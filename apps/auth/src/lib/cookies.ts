@@ -5,6 +5,35 @@ import { cookies } from "next/headers";
 
 export const REFRESH_COOKIE = "lw_refresh";
 
+// AUTH-074 — the `__Host-` refresh cookie. The prefix is browser-ENFORCED host-only scope: Secure + Path=/ +
+// NO Domain. Our cookie is already host-only (Domain === the auth host), so this hardens the guarantee at the
+// browser rather than trusting the AUTH_COOKIE_DOMAIN config. Migration is staged READERS-FIRST: this window
+// ships the dual-READ (accept both names, host-preferred) so every instance can read the new cookie BEFORE any
+// instance writes it; a later window flips the WRITE to this name (and clears both). Deploying reader+writer
+// together would leave a window where a new-writer node sets a cookie an old-reader node can't read.
+export const REFRESH_COOKIE_HOST = "__Host-lw_refresh";
+
+/** Dual-read the refresh token from a Next `cookies()` jar — prefer the __Host- cookie, fall back to the legacy
+ *  name during the migration window. */
+export function readRefreshToken(jar: {
+  get(name: string): { value: string } | undefined;
+}): string | undefined {
+  return jar.get(REFRESH_COOKIE_HOST)?.value ?? jar.get(REFRESH_COOKIE)?.value;
+}
+
+/** Dual-read the refresh token from a raw `Cookie` request header (route handlers) — same host-preferred
+ *  fallback. Returns the value, or null if neither cookie is present. */
+export function readRefreshTokenFromHeader(cookieHeader: string | null): string | null {
+  if (!cookieHeader) return null;
+  let legacy: string | null = null;
+  for (const part of cookieHeader.split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === REFRESH_COOKIE_HOST) return v.join("="); // host cookie wins if both are somehow present
+    if (k === REFRESH_COOKIE) legacy = v.join("=");
+  }
+  return legacy;
+}
+
 export function refreshCookie(token: string, maxAgeSeconds: number): string {
   return [
     `${REFRESH_COOKIE}=${token}`,

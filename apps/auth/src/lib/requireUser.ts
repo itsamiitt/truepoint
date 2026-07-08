@@ -16,7 +16,7 @@
 // Origin/action-id check on top, and every mutation additionally requires step-up (current password). Three
 // independent layers, no relaxation of the existing cookie hardening.
 
-import { REFRESH_COOKIE } from "@/lib/cookies";
+import { readRefreshToken } from "@/lib/cookies";
 import { hashRefreshToken } from "@leadwolf/auth";
 import { type UserRecord, sessionRepository, userRepository } from "@leadwolf/db";
 import { cookies } from "next/headers";
@@ -41,7 +41,7 @@ export interface AuthenticatedAccount {
  * bounces to sign-in (the opposite stance to redirectIfAuthenticated, which fails OPEN for the *entry* pages).
  */
 export async function requireUser(): Promise<AuthenticatedAccount> {
-  const token = (await cookies()).get(REFRESH_COOKIE)?.value;
+  const token = readRefreshToken(await cookies());
   if (!token) redirect("/login");
 
   const session = await sessionRepository.findByRefreshTokenHash(hashRefreshToken(token));
