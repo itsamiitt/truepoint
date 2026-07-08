@@ -249,6 +249,12 @@ export const appEnvSchema = z
     WEBAUTHN_ENABLED: z.string().optional(),
     WEBAUTHN_RP_ID: z.string().default(""),
 
+    // Trusted-device "remember this device for 30 days" MFA skip (device.trusted). OFF BY DEFAULT — the /mfa
+    // checkbox is HIDDEN and no MFA is skipped until the trusted-device backend (token store + skip check +
+    // revocation) is built and reviewed. It is an MFA-BYPASS surface, so it stays dark until then rather than
+    // present a checkbox that silently does nothing. Only an explicit "true" shows the option.
+    TRUSTED_DEVICES_ENABLED: z.string().optional(),
+
     // Internal metrics scrape (Phase 1 observability, doc 03 §10). The shared-secret Bearer token that gates
     // GET /metrics (the auth SLI counters: login/token/revocation/policy-block). OFF BY DEFAULT — unset ⇒ the
     // endpoint 404s (invisible), so no operational data is exposed until an operator BOTH sets this AND puts the

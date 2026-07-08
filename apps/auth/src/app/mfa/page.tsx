@@ -1,7 +1,8 @@
 // page.tsx — Step 3: the MFA challenge. 6-digit code (auto-submits on the 6th digit), a "trust this device"
-// option, and a recovery-code escape hatch. TOTP (authenticator) is the default; a user who can't reach their
-// authenticator can request an emailed code (?method=email_otp, AUTH-025) — the TOTP path is unchanged, the
-// email option is additive. Requires a pending login transaction (else back to /login). SSR + WCAG AA.
+// option (flag-gated on TRUSTED_DEVICES_ENABLED — hidden until its backend exists), and a recovery-code escape
+// hatch. TOTP (authenticator) is the default; a user who can't reach their authenticator can request an emailed
+// code (?method=email_otp, AUTH-025) — the TOTP path is unchanged, the email option is additive. Requires a
+// pending login transaction (else back to /login). SSR + WCAG AA.
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { AuthShell } from "@/shared/AuthShell";
 import { OtpInput } from "@/shared/OtpInput";
@@ -52,9 +53,14 @@ export default async function MfaPage({ searchParams }: { searchParams: SearchPa
           <Label htmlFor="code">Verification code</Label>
           <OtpInput />
         </div>
-        <label className="mb-4 flex items-center gap-2 text-sm" htmlFor="trust_device">
-          <Checkbox id="trust_device" name="trust_device" value="1" /> Trust this device for 30 days
-        </label>
+        {/* Trusted-device MFA skip is OFF until its backend is built + reviewed (MFA-bypass surface). Hidden
+            rather than shown as a no-op — a checkbox that silently does nothing is a trust bug. */}
+        {env.TRUSTED_DEVICES_ENABLED === "true" ? (
+          <label className="mb-4 flex items-center gap-2 text-sm" htmlFor="trust_device">
+            <Checkbox id="trust_device" name="trust_device" value="1" /> Trust this device for 30
+            days
+          </label>
+        ) : null}
         {sp.error ? (
           <Alert variant="destructive" role="alert" className="mb-4">
             That code didn&apos;t match. Try again.
