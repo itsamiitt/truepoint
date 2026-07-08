@@ -36,7 +36,10 @@ const KEY_SPECS: Record<string, KeySpec> = {
     options: ["off", "optional", "required"],
     help: "The minimum MFA posture every org inherits; an org may only make it stricter.",
   },
-  require_sso: { label: "Require SSO", kind: "boolean" },
+  // require_sso is intentionally NOT offered as a platform default: forcing SSO org-wide can only be verified +
+  // enabled PER-ORG (the org settings endpoint checks that org's SSO connection is wired), and the platform
+  // write rejects it (403 require_sso_not_platform_default) to avoid a mass lockout. Set it in the org's own
+  // security settings, where the no-lockout guard runs.
   disable_social: { label: "Disable social login", kind: "boolean" },
   allowed_methods: {
     label: "Allowed methods",
