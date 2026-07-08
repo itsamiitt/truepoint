@@ -202,6 +202,12 @@ export const appEnvSchema = z
     // scope:[] and are never affected either way.
     EXTENSION_SCOPE_ENFORCE: z.string().optional(),
 
+    // Internal metrics scrape (Phase 1 observability, doc 03 §10). The shared-secret Bearer token that gates
+    // GET /metrics (the auth SLI counters: login/token/revocation/policy-block). OFF BY DEFAULT — unset ⇒ the
+    // endpoint 404s (invisible), so no operational data is exposed until an operator BOTH sets this AND puts the
+    // endpoint behind an internal-only network. A SECRET: read only here, never NEXT_PUBLIC_/client-exposed/logged.
+    METRICS_TOKEN: z.string().min(16).optional(),
+
     TYPESENSE_URL: z.string().url().optional(),
     TYPESENSE_API_KEY: z.string().optional(),
     SMTP_URL: z.string().optional(),
