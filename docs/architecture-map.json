@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1456,
-  "fileSetHash": "sha256:836a0dc910839e213232179fee2ce81b27805b2e4fe5a9498676fcbe224f9f6b",
+  "fileCount": 1457,
+  "fileSetHash": "sha256:68bd8f7fea97815829e0865b421e3fb9608368f10e3f398e608148aee5616afa",
   "features": {
     "account-search": {
       "web": [],
@@ -2245,6 +2245,7 @@
       "packages/db/test/tags.itest.ts",
       "packages/db/test/templateIsolation.itest.ts",
       "packages/db/test/trackingIngest.itest.ts",
+      "packages/db/test/userScopedAuthIsolation.itest.ts",
       "packages/db/test/verificationJobs.itest.ts",
       "packages/db/test/webauthnCredentialsIsolation.itest.ts",
       "packages/db/test/webhooks.itest.ts",
