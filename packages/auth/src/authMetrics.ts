@@ -25,6 +25,10 @@ export interface AuthMetricLabels {
    *  tenant_auth_policies enforces today? `mismatch` = a cutover would change enforcement for this login
    *  (review before flipping); `error` = the shadow read itself failed. Enforces nothing. */
   auth_policy_shadow_total: { result: "match" | "mismatch" | "error" };
+  /** OBSERVE-FIRST breached-password screening at login (AUTH — credential-stuffing): among password logins,
+   *  how many used a password found in the HaveIBeenPwned corpus. `breached` is the number to watch before
+   *  turning on forced-reset enforcement. Off unless BREACHED_PASSWORD_CHECK_AT_LOGIN is armed. */
+  auth_password_breach_check_total: { result: "breached" | "clean" };
 }
 export type AuthMetricName = keyof AuthMetricLabels;
 

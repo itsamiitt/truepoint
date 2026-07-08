@@ -233,6 +233,14 @@ export const appEnvSchema = z
     // cutover. Default OFF — unset ⇒ no shadow read, today's exact behaviour. Only the literal "true" arms it.
     AUTH_POLICY_SHADOW_ENABLED: z.string().optional(),
 
+    // OBSERVE-FIRST breached-password screening at LOGIN (credential-stuffing defence). When "true",
+    // authenticatePassword screens the just-verified password against HaveIBeenPwned (detached + fail-open, so it
+    // never slows or breaks a login) and records an auth_password_breach_check_total{breached|clean} SLI — so
+    // on-call can size the breached-password problem BEFORE any forced-reset enforcement. Adds one HIBP range
+    // call per successful password login when on; default OFF (registration/reset already screen at set-time).
+    // Only the literal "true" arms it.
+    BREACHED_PASSWORD_CHECK_AT_LOGIN: z.string().optional(),
+
     // Internal metrics scrape (Phase 1 observability, doc 03 §10). The shared-secret Bearer token that gates
     // GET /metrics (the auth SLI counters: login/token/revocation/policy-block). OFF BY DEFAULT — unset ⇒ the
     // endpoint 404s (invisible), so no operational data is exposed until an operator BOTH sets this AND puts the
