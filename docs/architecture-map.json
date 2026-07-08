@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1458,
-  "fileSetHash": "sha256:deb4c1c0d73f164b8b54b1b8c2caca5efedb75de59839f837f16bb15b1e97342",
+  "fileCount": 1461,
+  "fileSetHash": "sha256:183a25f6965a76529fbd199871add3df985eb264356d9489c025e592c9f5ee6b",
   "features": {
     "account-search": {
       "web": [],
@@ -2121,7 +2121,8 @@
       "packages/auth/src/switchWorkspace.ts",
       "packages/auth/src/token.test.ts",
       "packages/auth/src/token.ts",
-      "packages/auth/src/webauthnChallenge.ts"
+      "packages/auth/src/webauthnChallenge.ts",
+      "packages/auth/src/webauthnRegistration.ts"
     ],
     "packages/config": [
       "packages/config/src/env.ts",
@@ -2248,6 +2249,7 @@
       "packages/db/test/trackingIngest.itest.ts",
       "packages/db/test/userScopedAuthIsolation.itest.ts",
       "packages/db/test/verificationJobs.itest.ts",
+      "packages/db/test/webauthnCredentialRepo.itest.ts",
       "packages/db/test/webauthnCredentialsIsolation.itest.ts",
       "packages/db/test/webhooks.itest.ts",
       "packages/db/test/workspaceSwitch.itest.ts"
@@ -2434,6 +2436,7 @@
     "packages/db/src/repositories/supportNoteRepository.ts",
     "packages/db/src/repositories/tagRepository.ts",
     "packages/db/src/repositories/validationRuleRepository.ts",
+    "packages/db/src/repositories/webauthnCredentialRepository.ts",
     "packages/db/src/repositories/webhookRepository.ts"
   ],
   "warnings": [
