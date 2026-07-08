@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1467,
-  "fileSetHash": "sha256:2d06db05313504667651a4dee8e532343d767bdf4af76bdb3e9cec5104438e06",
+  "fileCount": 1469,
+  "fileSetHash": "sha256:f00813a38433152a87b42b5159f043eb887faec8f12ddd61f2a67200510541a7",
   "features": {
     "account-search": {
       "web": [],
@@ -1848,11 +1848,13 @@
       "apps/auth/src/app/magic/page.tsx",
       "apps/auth/src/app/metrics/route.test.ts",
       "apps/auth/src/app/metrics/route.ts",
+      "apps/auth/src/app/mfa/PasskeySignIn.tsx",
       "apps/auth/src/app/mfa/actions.ts",
       "apps/auth/src/app/mfa/enroll/actions.ts",
       "apps/auth/src/app/mfa/enroll/enrollCookie.ts",
       "apps/auth/src/app/mfa/enroll/page.tsx",
       "apps/auth/src/app/mfa/page.tsx",
+      "apps/auth/src/app/mfa/passkey/options/route.ts",
       "apps/auth/src/app/org/actions.ts",
       "apps/auth/src/app/org/page.tsx",
       "apps/auth/src/app/org/switch/route.ts",
