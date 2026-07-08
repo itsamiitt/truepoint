@@ -97,7 +97,7 @@
     "workspaces"
   ],
   "fileCount": 1471,
-  "fileSetHash": "sha256:f8b1eb43211900323c49c1c63c64f824819f4bbb3d9a97a996a0ecd8022d2fff",
+  "fileSetHash": "sha256:2cfe2c152600e43d347fe8e495cf205e6b5b0fb50d0b4542afe47b18e060c4b8",
   "features": {
     "account-search": {
       "web": [],
@@ -2128,8 +2128,8 @@
       "packages/auth/src/switchWorkspace.ts",
       "packages/auth/src/token.test.ts",
       "packages/auth/src/token.ts",
-      "packages/auth/src/webauthnAuthentication.test.ts",
       "packages/auth/src/webauthnAuthentication.ts",
+      "packages/auth/src/webauthnCeremonies.test.ts",
       "packages/auth/src/webauthnChallenge.ts",
       "packages/auth/src/webauthnRegistration.ts"
     ],
