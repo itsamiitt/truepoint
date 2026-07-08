@@ -96,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1451,
-  "fileSetHash": "sha256:8c00ac12680905d8a4f2d489399c1d2456a4b6e5ea47b2c1594514655403e915",
+  "fileCount": 1452,
+  "fileSetHash": "sha256:aadbbf9835f232407db754d4f323821543ef5e1a79a2f01ac5d25b3a57296598",
   "features": {
     "account-search": {
       "web": [],
@@ -2106,6 +2106,7 @@
       "packages/auth/src/scopeGuard.ts",
       "packages/auth/src/secrets.ts",
       "packages/auth/src/session.ts",
+      "packages/auth/src/sessionCap.test.ts",
       "packages/auth/src/sessionTimeout.test.ts",
       "packages/auth/src/signupTransaction.ts",
       "packages/auth/src/sso/jit.ts",
