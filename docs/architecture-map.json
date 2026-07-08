@@ -23,6 +23,7 @@
     "api-public",
     "audit-log",
     "auth",
+    "auth-policy",
     "billing",
     "compliance",
     "contacts-bulk",
@@ -95,8 +96,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1444,
-  "fileSetHash": "sha256:a04b9beacd7f3f7d9beff3fc4cf58602ff5e253dbd3617a86709850d9d2e9c15",
+  "fileCount": 1449,
+  "fileSetHash": "sha256:920a98ef07db7996bd6b94d7bc4a40373c395c4d1aebb443fdc57ff9bae4523a",
   "features": {
     "account-search": {
       "web": [],
@@ -234,6 +235,20 @@
       "db": [
         "packages/db/src/repositories/userRepository.ts"
       ],
+      "workers": [],
+      "integrations": []
+    },
+    "auth-policy": {
+      "web": [],
+      "admin": [
+        "apps/admin/src/features/auth-policy/api.ts",
+        "apps/admin/src/features/auth-policy/components/AuthPolicyPage.tsx",
+        "apps/admin/src/features/auth-policy/hooks/usePlatformDefaults.ts",
+        "apps/admin/src/features/auth-policy/index.ts"
+      ],
+      "api": [],
+      "core": [],
+      "db": [],
       "workers": [],
       "integrations": []
     },
@@ -1720,6 +1735,7 @@
     "apps/admin/app": [
       "apps/admin/src/app/(shell)/ai-usage/page.tsx",
       "apps/admin/src/app/(shell)/audit-log/page.tsx",
+      "apps/admin/src/app/(shell)/auth-policy/page.tsx",
       "apps/admin/src/app/(shell)/billing/page.tsx",
       "apps/admin/src/app/(shell)/compliance/page.tsx",
       "apps/admin/src/app/(shell)/content/page.tsx",
@@ -2416,6 +2432,7 @@
     "undeclared domain 'admin' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'announcements' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'audit-log' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'auth-policy' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-bulk' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-dedup' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'content' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
