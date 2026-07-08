@@ -5,6 +5,7 @@
 // visibility + a platform_audit_log row). The role lookup is resolved per-request (requireCapability), so a
 // revoke takes effect on the next request — no stale-JWT window.
 
+import { revokeAllSessionsForUser } from "@leadwolf/auth";
 import { staffRepository, withPlatformTx } from "@leadwolf/db";
 import { type StaffMemberView, ValidationError, grantStaffSchema } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
@@ -64,5 +65,11 @@ staffRoutes.delete("/:userId", async (c) => {
     (tx) => staffRepository.revoke(tx, userId),
     { targetType: "user", targetId: userId },
   );
+  // AUTH-072 — close the in-token `pa` residual. The staff-role lookup is per-request (so specific
+  // capabilities deny immediately), but the coarse `pa: true` CLAIM baked into the demoted user's LIVE access
+  // token still passes the platformAdmin gate until it expires (≤15 min). Force a global logout so that residual
+  // closes now: revoke every session (DB) + deny-list each access token. Runs AFTER the role revoke commits, and
+  // is resilient (the deny-list writes swallow a Redis outage), so it never rolls back the revoke.
+  await revokeAllSessionsForUser(userId);
   return c.json({ ok: true, userId });
 });
