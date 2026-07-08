@@ -75,4 +75,29 @@ describe("webauthnCredentialRepository", () => {
     }
     expect(threw).toBe(true);
   });
+
+  test("listSummaryForUser returns a UI summary WITHOUT the public key", async () => {
+    const summaries = await dbmod.webauthnCredentialRepository.listSummaryForUser(userId);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]?.label).toBe("iPhone");
+    expect(summaries[0]?.backedUp).toBe(true);
+    expect("publicKey" in (summaries[0] ?? {})).toBe(false); // the summary must never expose the key material
+  });
+
+  test("deleteForUser is ownership-checked — a foreign userId removes nothing", async () => {
+    const [s] = await dbmod.webauthnCredentialRepository.listSummaryForUser(userId);
+    const removed = await dbmod.webauthnCredentialRepository.deleteForUser(
+      "00000000-0000-0000-0000-000000000000",
+      s?.id ?? "",
+    );
+    expect(removed).toBe(0);
+    expect(await dbmod.webauthnCredentialRepository.findByCredentialId("cred-1")).not.toBeNull();
+  });
+
+  test("deleteForUser removes the owner's own credential", async () => {
+    const [s] = await dbmod.webauthnCredentialRepository.listSummaryForUser(userId);
+    const removed = await dbmod.webauthnCredentialRepository.deleteForUser(userId, s?.id ?? "");
+    expect(removed).toBe(1);
+    expect(await dbmod.webauthnCredentialRepository.findByCredentialId("cred-1")).toBeNull();
+  });
 });
