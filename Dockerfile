@@ -24,8 +24,12 @@ RUN bun install --frozen-lockfile
 # (db/src never imports core). api/workers need no build step (Bun runs their TS directly).
 # Source the env so NEXT_PUBLIC_* inline correctly and @leadwolf/config's fail-fast boot
 # validation passes during `next build`.
+# NODE_ENV is forced back to production AFTER sourcing: a stray NODE_ENV=development in the
+# dotenv (e.g. a dev .env copied as .env.production) makes `next build` mix dev+prod React
+# runtimes → prerender crashes with "null is not an object (evaluating 'useState')".
 RUN --mount=type=secret,id=dotenv \
     sh -c 'set -a; [ -f /run/secrets/dotenv ] && . /run/secrets/dotenv; set +a; \
+           export NODE_ENV=production; \
            bun run --filter "@leadwolf/web" build && \
            bun run --filter "@leadwolf/auth-app" build && \
            bun run --filter "@leadwolf/admin" build'

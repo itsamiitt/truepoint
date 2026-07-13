@@ -23,6 +23,19 @@ if grep -q "change-me-to-a-long-random-string" "$ENV_FILE"; then
   echo "  Set it to a strong value:  openssl rand -hex 32"
   exit 1
 fi
+# Catch a dev .env copied over the production template: NODE_ENV=development poisons `next build`
+# (mixed dev/prod React runtimes → prerender crash), and localhost origins would be BAKED into the
+# web bundle (NEXT_PUBLIC_* inline at build time) — the stack would build yet be unusable.
+if grep -qE '^NODE_ENV=development' "$ENV_FILE"; then
+  echo "ERROR: NODE_ENV=development in $ENV_FILE — this looks like a dev .env, not the production template."
+  echo "  cp deploy/env.production.template $ENV_FILE   # then re-apply your DATABASE_URL etc."
+  exit 1
+fi
+if grep -qE '^(AUTH_ORIGIN|APP_ORIGINS|NEXT_PUBLIC_[A-Z_]+)=.*(localhost|127\.0\.0\.1)' "$ENV_FILE"; then
+  echo "ERROR: $ENV_FILE contains localhost origins — these get baked into the web bundle at build time."
+  echo "  Use the https://*.truepoint.in values from deploy/env.production.template."
+  exit 1
+fi
 
 # Ensure a VALID EdDSA keypair, then ship it BASE64-ENCODED. A multi-line PEM loses its newlines when docker
 # compose interpolates ${VAR} → importPKCS8 throws → login 503s (token_mint_failed). Base64 is a single line,
