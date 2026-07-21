@@ -155,6 +155,53 @@ export class ConflictError extends AppError {
   }
 }
 
+/**
+ * Contact TRUE-MERGE legality — a merge input is already merged/tombstoned (import-and-data-model-redesign
+ * 04 §API/§pre-build edge): loser already merged, or survivor tombstoned. 409 `contact_merged` carrying a
+ * `mergedInto` extension member so a stale reference resolves to the survivor (the same code a 410-style
+ * detail read of a merged id returns). Merge is irreversible — this is a hard stop, never a retry.
+ */
+export class ContactMergedError extends AppError {
+  constructor(mergedInto: string | null, detail?: string) {
+    super({
+      status: 409,
+      code: "contact_merged",
+      title: "Contact already merged",
+      detail,
+      ...(mergedInto ? { extensions: { mergedInto } } : {}),
+    });
+  }
+}
+
+/**
+ * Contact TRUE-MERGE per-workspace daily cap reached (04 §3.1 — the FinOps-style brake against a runaway or
+ * abusive merge loop of an irreversible, destructive verb). 409 `merge_daily_cap`; the cap resets at UTC
+ * midnight. A guardrail, not an error the client should auto-retry.
+ */
+export class ContactMergeCapError extends AppError {
+  constructor(detail?: string) {
+    super({ status: 409, code: "merge_daily_cap", title: "Daily merge limit reached", detail });
+  }
+}
+
+/**
+ * A verb was requested against a resource in a state that does not permit it — the 08 §2.1 state-machine
+ * legality violation (e.g. cancelling a terminal or non-cancellable import). 409 with the stable
+ * `illegal_state` slug (the import-redesign series harmonizes on 409, not 422 — 08 §2.1); `currentState` is
+ * a non-PII enum, safe to surface so the client can render the reason.
+ */
+export class IllegalStateError extends AppError {
+  constructor(detail?: string, currentState?: string) {
+    super({
+      status: 409,
+      code: "illegal_state",
+      title: "Action not allowed in the current state",
+      detail,
+      ...(currentState ? { extensions: { currentState } } : {}),
+    });
+  }
+}
+
 /** An import row (or its column mapping) failed validation — carries the offending row index(es). */
 export class ImportValidationError extends AppError {
   constructor(detail?: string, extensions?: Record<string, unknown>) {
@@ -164,6 +211,41 @@ export class ImportValidationError extends AppError {
       title: "Import is invalid",
       detail,
       extensions,
+    });
+  }
+}
+
+/**
+ * The malware scanner is CONFIGURED but unreachable/failing (import-redesign 13 §2.2, S-S2/G08) — the
+ * FAIL-CLOSED refusal at upload admission: a real scanner that cannot answer never admits a file (delayed
+ * imports over unscanned imports, always). 503 with the stable `scan_unavailable` slug and honest copy;
+ * carries NOTHING about the engine or the file. Distinct from an `infected` refusal (a 422 at the seam).
+ */
+export class ScanUnavailableError extends AppError {
+  constructor(detail?: string) {
+    super({
+      status: 503,
+      code: "scan_unavailable",
+      title: "Upload scanning is temporarily unavailable",
+      detail,
+    });
+  }
+}
+
+/**
+ * The per-workspace import commit quota is exhausted (import-and-data-model-redesign 08 §2.3 / 12 §5, S-I10):
+ * commits (incl. retry-failed children — a retry "counts against the commit quota") per workspace per hour
+ * exceed `IMPORT_MAX_COMMITS_PER_HOUR`. 429 with the stable `import_quota_exceeded` slug; `retryAfterSeconds`
+ * (when known) lets the client back off. Non-PII.
+ */
+export class ImportQuotaExceededError extends AppError {
+  constructor(detail?: string, retryAfterSeconds?: number) {
+    super({
+      status: 429,
+      code: "import_quota_exceeded",
+      title: "Import quota reached",
+      detail,
+      ...(retryAfterSeconds ? { extensions: { retryAfterSeconds } } : {}),
     });
   }
 }

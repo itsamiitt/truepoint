@@ -31,6 +31,20 @@ export const retentionDataClass = z.enum([
   "consent_records",
   "contacts",
   "audit_log",
+  // Multi-value channel child tables (import-redesign 05 §7, S-CH1 / migration 0058): registered + seeded
+  // to MIRROR `contacts` (ttlDays null, shadow) — PII-bearing contact children whose DSAR/tombstone
+  // PII-nulling fans out with the parent (value_enc/e164_enc/raw_original_enc AND the blind indexes: a
+  // keyed HMAC of PII is still personal data under the deletion obligation). Dead schema until S-CH2.
+  "contact_emails",
+  "contact_phones",
+  // OBJECT-STORE class (import-redesign 13 §4.4, S-S7): the import error-artifact pair (repair CSV + error
+  // report) — 90 d, enforced by the FILESTORE LIFECYCLE SWEEP (importArtifactSweep) + key-nulling, NOT by the
+  // DB retention engine (there is no artifact table; the class is registered so the retention surface stays
+  // ONE inventory — 16's posture). Deliberately NOT in DEFAULT_RETENTION_POLICIES below: the seed rows in
+  // 0025_retention_engine.sql must match that constant exactly, so the policy row rides the NEXT migration
+  // train together with a DEFAULT entry (doc-16 drift row records it). The sweep runs off env
+  // (IMPORT_ARTIFACT_TTL_DAYS, default 90) either way — enforcement never waited on the seed.
+  "import_artifacts",
 ]);
 export type RetentionDataClass = z.infer<typeof retentionDataClass>;
 
@@ -82,6 +96,8 @@ export const DEFAULT_RETENTION_POLICIES: readonly RetentionPolicy[] = [
   { dataClass: "consent_records", ttlDays: 180, mode: "shadow" },
   { dataClass: "contacts", ttlDays: null, mode: "shadow" }, // tombstone-only today; null pending legal/budget
   { dataClass: "audit_log", ttlDays: null, mode: "shadow" }, // compliance trail; null (≈7y) pending counsel
+  { dataClass: "contact_emails", ttlDays: null, mode: "shadow" }, // mirror contacts (05 §7); seeded in 0058 (S-CH1)
+  { dataClass: "contact_phones", ttlDays: null, mode: "shadow" }, // mirror contacts (05 §7); seeded in 0058 (S-CH1)
 ] as const;
 
 // ── Run audit (the shadow-mode evidence: "what WOULD delete") ─────────────────────────────────────────────

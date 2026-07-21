@@ -217,11 +217,12 @@ describe("retention control plane: RLS / access posture", () => {
   const scopeA = (): Scope => ({ tenantId: tenantA, workspaceId: wsA });
 
   test("A1: app role can SELECT the seeded policy defaults but can never write one", async () => {
-    // SELECT: the migration seeds the 12 DEFAULT_RETENTION_POLICIES; the app role reads them all (USING true).
+    // SELECT: the migrations seed the 14 DEFAULT_RETENTION_POLICIES (12 in 0033 + the two S-CH1 channel
+    // classes contact_emails/contact_phones in 0058); the app role reads them all (USING true).
     const policies = await db.withTenantTx(scopeA(), (tx) =>
       db.retentionClassPolicyRepository.listPolicies(tx),
     );
-    expect(policies).toHaveLength(12);
+    expect(policies).toHaveLength(14);
     const verif = policies.find((p) => p.dataClass === "verification_jobs");
     expect(verif?.ttlDays).toBe(730);
     expect(verif?.mode).toBe("shadow");

@@ -6,7 +6,8 @@
 // The HTTP transport is PATCH /contacts/:id (apps/api reveal routes; contactFieldEditSchema-validated, scope
 // from the verified token), which delegates here.
 
-import { contactRepository, withTenantTx } from "@leadwolf/db";
+import { auditRepository, contactRepository, withTenantTx } from "@leadwolf/db";
+import type { FieldChangeAuditMetadata } from "@leadwolf/types";
 import { planUserEdit } from "./fieldProvenance.ts";
 
 /** The scalar overlay fields a user may hand-edit (PLAN_03 §3.1 CONTACT_PROVENANCE_FIELDS). `null` clears. */
@@ -38,7 +39,29 @@ export async function editContactFields(
     const edited = Object.keys(edits).filter(
       (k) => edits[k as keyof ContactFieldEdits] !== undefined,
     );
+    if (edited.length === 0) return; // nothing to write — no audit noise either
+    // Before-values for the field-change audit metadata contract (04 §4): the CLEAR-TEXT scalars only (this
+    // path never touches email_enc/phone_enc), read in the SAME tx as the write so the before/after is
+    // consistent and the audit row commits or rolls back WITH the mutation (in-tx, never fire-and-forget).
+    const before = await contactRepository.getScalarValues(tx, contactId);
     const provenance = planUserEdit(existing, edited, userId, new Date().toISOString());
     await contactRepository.update(tx, contactId, { ...edits, fieldProvenance: provenance });
+    // If no visible row was read (foreign/absent id → before = {}), the UPDATE touched nothing; still record
+    // the attempt honestly with the requested after-values (RLS made it a no-op — the audit reflects intent).
+    const metadata: FieldChangeAuditMetadata = {
+      src: "user_edit",
+      fields: Object.fromEntries(
+        edited.map((f) => [f, { b: before[f] ?? null, a: edits[f as keyof ContactFieldEdits] ?? null }]),
+      ),
+    };
+    await auditRepository.insert(tx, {
+      tenantId: scope.tenantId,
+      workspaceId: scope.workspaceId,
+      actorUserId: userId,
+      action: "contact.update",
+      entityType: "contact",
+      entityId: contactId,
+      metadata: metadata as unknown as Record<string, unknown>,
+    });
   });
 }

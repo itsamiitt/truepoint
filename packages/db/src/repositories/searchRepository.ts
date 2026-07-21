@@ -12,8 +12,20 @@
 // expansion happens in the apps/api provider (core taxonomy) before values reach here — the repo ILIKEs them.
 // NOT yet covered (documented, follow-ups): do_not_contact/suppression (email/domain/contact matching),
 // revenue range (categorical column), signal_recency. Title facet counts/suggest group by raw job_title.
+//
+// S-CH4 READ CUTOVER (import-redesign 05 §5, G16): every entry point takes an optional
+// `{ channelsFromChild }` opt — the caller-evaluated composed read gate (core's isChannelReadFromChildEnabled;
+// this repo never reads flags). Gate-on: has_email/has_phone (filter + projection) become "∃ live child row"
+// (secondaries count — HubSpot's top documented gap closed), the `complete` presence legs follow, the
+// `company` filter's email-domain leg matches ANY live email's domain (contact_emails.email_domain, index
+// §2.3), and each returned hit carries the masked `channels` summaries (counts + type/status/lineType/
+// isPrimary — never values) via ONE batched query per page. Gate-off (the default): byte-identical SQL +
+// payload to the pre-S-CH4 shape, zero child-table reads. Facet COUNT grouping + suggest for `company` stay
+// on the flat primary domain either way (grouping by any-value domains changes row cardinality; the
+// production-engine facet model is doc 12/G24's — recorded as a doc-16 drift row).
 
 import type {
+  ContactChannelSummaries,
   ContactQuery,
   FacetKey,
   MaskedContact,
@@ -22,7 +34,43 @@ import type {
 } from "@leadwolf/types";
 import { type SQL, and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
+import { contactEmails, contactPhones } from "../schema/contactChannels.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
+import { contactChannelRepository } from "./contactChannelRepository.ts";
+
+// 06 §4: a contact whose account is soft-deleted renders COMPANY-LESS — the account leftJoin filters tombstones
+// so company text/facets never resolve through a tombstoned account row (the contact itself still returns; the
+// join simply yields NULL company fields). Applied GATE-INDEPENDENTLY + BEHAVIOUR-NEUTRALLY: nothing writes
+// `accounts.deleted_at` yet, so `deleted_at IS NULL` is identically true for every account and the result set
+// is unchanged; it becomes load-bearing when the soft-delete verb lands (doc 04/11 slice).
+const ACCOUNT_JOIN_LIVE: SQL = and(
+  eq(accounts.id, contacts.accountId),
+  sql`${accounts.deletedAt} IS NULL`,
+) as SQL;
+
+/** S-CH4 read options threaded from the caller-evaluated composed gate (default: flat, byte-identical). */
+export interface SearchReadOpts {
+  channelsFromChild?: boolean;
+}
+
+// "∃ live child value" — the 05 §5 gate-on presence predicates. RLS on contact_emails/contact_phones
+// applies inside the subquery under the caller's withTenantTx GUC (the revealedTypes subquery precedent),
+// and the correlation is by contact_id (index-backed via the contact-leading partial uniques).
+const emailChildExists = sql`EXISTS (SELECT 1 FROM ${contactEmails} ce WHERE ce.contact_id = ${contacts.id} AND ce.deleted_at IS NULL)`;
+const phoneChildExists = sql`EXISTS (SELECT 1 FROM ${contactPhones} cp WHERE cp.contact_id = ${contacts.id} AND cp.deleted_at IS NULL)`;
+// Boolean-typed projection variants (the MASKED select's hasEmail/hasPhone columns swap to these gate-on).
+const hasEmailFlat = sql<boolean>`${contacts.emailEnc} IS NOT NULL`;
+const hasPhoneFlat = sql<boolean>`${contacts.phoneEnc} IS NOT NULL`;
+const hasEmailChild = sql<boolean>`${emailChildExists}`;
+const hasPhoneChild = sql<boolean>`${phoneChildExists}`;
+
+/** Gate-on `company` email-domain leg (05 §5, G16): match ANY live email's `email_domain` (idx §2.3), not
+ *  just the flat primary's. RLS on contact_emails applies inside the correlated EXISTS. */
+function emailDomainChildMatch(values: string[]): SQL | undefined {
+  const parts = values.map((v) => sql`ce.email_domain ILIKE ${`%${v}%`}`);
+  if (parts.length === 0) return undefined;
+  return sql`EXISTS (SELECT 1 FROM ${contactEmails} ce WHERE ce.contact_id = ${contacts.id} AND ce.deleted_at IS NULL AND (${or(...parts)}))`;
+}
 
 /** One keyset page of masked hits + the opaque cursor for the next page. */
 export interface SearchResultPage {
@@ -54,7 +102,10 @@ function ilikeAny(col: SQL, values: string[]): SQL | undefined {
 /** Build the WHERE condition for one filter clause. `null` = a clause this adapter doesn't support (skipped,
  *  documented above). `exceptFacet` lets facetCounts drop a facet's OWN term filter so its options still show
  *  their independent counts (Apollo behaviour). */
-function clauseCondition(clause: ContactQuery["filters"][number]): SQL | undefined {
+function clauseCondition(
+  clause: ContactQuery["filters"][number],
+  opts: SearchReadOpts,
+): SQL | undefined {
   if (clause.kind === "term") {
     const inv = (cond: SQL | undefined): SQL | undefined =>
       cond ? (clause.op === "exclude" ? (sql`NOT (${cond})` as SQL) : cond) : undefined;
@@ -73,9 +124,13 @@ function clauseCondition(clause: ContactQuery["filters"][number]): SQL | undefin
           ),
         );
       case "company":
+        // Gate-on the email-domain leg matches ANY live email's domain (secondaries count, G16); gate-off it
+        // is the flat primary domain, byte-identical. The account name/domain legs are unchanged either way.
         return inv(
           or(
-            ilikeAny(sql`${contacts.emailDomain}`, clause.values),
+            opts.channelsFromChild
+              ? emailDomainChildMatch(clause.values)
+              : ilikeAny(sql`${contacts.emailDomain}`, clause.values),
             ilikeAny(sql`${accounts.name}`, clause.values),
             ilikeAny(sql`${accounts.domain}`, clause.values),
           ),
@@ -110,9 +165,10 @@ function clauseCondition(clause: ContactQuery["filters"][number]): SQL | undefin
     const is = (cond: SQL): SQL => (want ? cond : (sql`NOT (${cond})` as SQL));
     switch (clause.field) {
       case "has_email":
-        return is(sql`${contacts.emailEnc} IS NOT NULL`);
+        // "∃ live child email" gate-on (secondaries count, correct for no-primary edge states); flat gate-off.
+        return is(opts.channelsFromChild ? emailChildExists : sql`${contacts.emailEnc} IS NOT NULL`);
       case "has_phone":
-        return is(sql`${contacts.phoneEnc} IS NOT NULL`);
+        return is(opts.channelsFromChild ? phoneChildExists : sql`${contacts.phoneEnc} IS NOT NULL`);
       case "has_linkedin":
         return is(sql`${contacts.linkedinUrl} IS NOT NULL`);
       case "is_revealed":
@@ -125,8 +181,11 @@ function clauseCondition(clause: ContactQuery["filters"][number]): SQL | undefin
           ? (sql`NOT EXISTS (SELECT 1 FROM outreach_log ol WHERE ol.contact_id = ${contacts.id})` as SQL)
           : (sql`EXISTS (SELECT 1 FROM outreach_log ol WHERE ol.contact_id = ${contacts.id})` as SQL);
       case "complete":
+        // The email/phone presence legs follow has_email/has_phone (child gate-on, flat gate-off).
         return is(
-          sql`(${contacts.emailEnc} IS NOT NULL AND ${contacts.phoneEnc} IS NOT NULL AND ${contacts.linkedinUrl} IS NOT NULL AND ${contacts.jobTitle} IS NOT NULL)`,
+          opts.channelsFromChild
+            ? (sql`(${emailChildExists} AND ${phoneChildExists} AND ${contacts.linkedinUrl} IS NOT NULL AND ${contacts.jobTitle} IS NOT NULL)` as SQL)
+            : sql`(${contacts.emailEnc} IS NOT NULL AND ${contacts.phoneEnc} IS NOT NULL AND ${contacts.linkedinUrl} IS NOT NULL AND ${contacts.jobTitle} IS NOT NULL)`,
         );
       default:
         return undefined; // do_not_contact — suppression matching is a documented follow-up
@@ -177,11 +236,11 @@ function textCondition(text: string | undefined): SQL | undefined {
 
 /** Combine all clauses + text + the not-deleted guard into one WHERE. `exceptFacet` drops a facet's own term
  *  filter (for live facet counts). Always includes deleted_at IS NULL (DSAR tombstones never surface). */
-function buildWhere(query: ContactQuery, exceptFacet?: FacetKey): SQL {
+function buildWhere(query: ContactQuery, opts: SearchReadOpts, exceptFacet?: FacetKey): SQL {
   const conds: (SQL | undefined)[] = [sql`${contacts.deletedAt} IS NULL`];
   for (const clause of query.filters) {
     if (exceptFacet && clause.kind === "term" && clause.field === exceptFacet) continue;
-    conds.push(clauseCondition(clause));
+    conds.push(clauseCondition(clause, opts));
   }
   conds.push(textCondition(query.text));
   return and(...conds.filter((c): c is SQL => c !== undefined)) as SQL;
@@ -195,8 +254,10 @@ const MASKED = {
   emailDomain: contacts.emailDomain,
   emailStatus: contacts.emailStatus,
   phoneStatus: contacts.phoneStatus,
-  hasEmail: sql<boolean>`${contacts.emailEnc} IS NOT NULL`,
-  hasPhone: sql<boolean>`${contacts.phoneEnc} IS NOT NULL`,
+  // Flat presence by default; runSearch swaps these two columns to the child-EXISTS variants gate-on
+  // (05 §5 — "∃ live child row", identical in steady state by CH-INV-1, correct for no-primary edges).
+  hasEmail: hasEmailFlat,
+  hasPhone: hasPhoneFlat,
   seniorityLevel: contacts.seniorityLevel,
   department: contacts.department,
   locationCountry: contacts.locationCountry,
@@ -228,7 +289,7 @@ type MaskedRow = {
       : unknown;
 };
 
-function toMasked(r: MaskedRow): MaskedContact {
+function toMasked(r: MaskedRow, channels?: ContactChannelSummaries): MaskedContact {
   return {
     id: r.id as string,
     firstName: r.firstName as string | null,
@@ -249,6 +310,9 @@ function toMasked(r: MaskedRow): MaskedContact {
     ownerUserId: r.ownerUserId as string | null,
     createdAt: (r.createdAt as Date).toISOString(),
     lastVerifiedAt: (r.lastVerifiedAt as Date | null)?.toISOString() ?? null,
+    // Additive, gate-on only: the masked per-value channel summaries (counts + type/status/lineType/
+    // isPrimary — never values/domains). ABSENT gate-off ⇒ the payload is byte-identical to pre-S-CH4.
+    ...(channels ? { channels } : {}),
   };
 }
 
@@ -265,9 +329,14 @@ function decodeCursor(cursor: string): { k: string | number | null; id: string }
 }
 
 export const searchRepository = {
-  /** Faceted, owner-scoped, keyset-paged contact search. Workspace-isolated via RLS (withTenantTx). */
-  async searchContacts(scope: TenantScope, query: ContactQuery): Promise<SearchResultPage> {
-    return withTenantTx(scope, (tx) => searchRepository.searchContactsTx(tx, query));
+  /** Faceted, owner-scoped, keyset-paged contact search. Workspace-isolated via RLS (withTenantTx).
+   *  `opts.channelsFromChild` is the caller-evaluated S-CH4 composed read gate (default off ⇒ byte-identical). */
+  async searchContacts(
+    scope: TenantScope,
+    query: ContactQuery,
+    opts: SearchReadOpts = {},
+  ): Promise<SearchResultPage> {
+    return withTenantTx(scope, (tx) => searchRepository.searchContactsTx(tx, query, opts));
   },
 
   /**
@@ -277,11 +346,15 @@ export const searchRepository = {
    * list's saved ContactQuery here, inside the same tx as the list existence check (RLS is the boundary for
    * both). `searchContacts` is just this wrapped in its own withTenantTx.
    */
-  async searchContactsTx(tx: Tx, query: ContactQuery): Promise<SearchResultPage> {
-    const where = buildWhere(query);
+  async searchContactsTx(
+    tx: Tx,
+    query: ContactQuery,
+    opts: SearchReadOpts = {},
+  ): Promise<SearchResultPage> {
+    const where = buildWhere(query, opts);
     // Sort + keyset: score_desc seeks on (priority_score, id); everything else on (created_at, id).
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
-    const rows = await runSearch(tx, where, query.sort, query.limit + 1, cursor);
+    const rows = await runSearch(tx, where, query.sort, query.limit + 1, cursor, opts);
     const more = rows.length > query.limit;
     const page = more ? rows.slice(0, query.limit) : rows;
     const last = page[page.length - 1];
@@ -291,7 +364,19 @@ export const searchRepository = {
         query.sort === "score_desc" ? (last.priorityScore ?? -1) : last.createdAt.toISOString();
       nextCursor = encodeCursor({ k: key, id: last.id });
     }
-    return { hits: page.map(toMasked), nextCursor };
+    // Gate-on: attach the masked per-value channel summaries via ONE batched query per table for the whole
+    // page (no N+1; contactChannelRepository bounds it by page-size × the 25-value cap). Gate-off: nothing.
+    let channelsById: Map<string, ContactChannelSummaries> | undefined;
+    if (opts.channelsFromChild && page.length > 0) {
+      channelsById = await contactChannelRepository.channelSummariesForContacts(
+        tx,
+        page.map((r) => r.id),
+      );
+    }
+    return {
+      hits: page.map((r) => toMasked(r, channelsById?.get(r.id))),
+      nextCursor,
+    };
   },
 
   /**
@@ -299,18 +384,22 @@ export const searchRepository = {
    * powers select-all-across-search ("Select all N results"). Workspace-isolated via RLS (withTenantTx). Exact,
    * uncapped count: only the per-request bulk MUTATION footprint is capped (the caller slices resolveVisibleIds).
    */
-  async countContacts(scope: TenantScope, query: ContactQuery): Promise<number> {
-    return withTenantTx(scope, (tx) => searchRepository.countContactsTx(tx, query));
+  async countContacts(
+    scope: TenantScope,
+    query: ContactQuery,
+    opts: SearchReadOpts = {},
+  ): Promise<number> {
+    return withTenantTx(scope, (tx) => searchRepository.countContactsTx(tx, query, opts));
   },
 
   /** The tx-aware core of countContacts — the exact match total computed inside an already-open withTenantTx
    *  (so the Phase-4 dynamic-list read derives its member count in the SAME tx as the page it returns). */
-  async countContactsTx(tx: Tx, query: ContactQuery): Promise<number> {
-    const where = buildWhere(query);
+  async countContactsTx(tx: Tx, query: ContactQuery, opts: SearchReadOpts = {}): Promise<number> {
+    const where = buildWhere(query, opts);
     const rows = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(contacts)
-      .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+      .leftJoin(accounts, ACCOUNT_JOIN_LIVE)
       .where(where);
     return rows[0]?.n ?? 0;
   },
@@ -322,12 +411,17 @@ export const searchRepository = {
    * can never resolve an unbounded id set into a single bulk mutation. Workspace-isolated via RLS. tx-aware so
    * the caller resolves ids INSIDE the same withTenantTx as the mutation (no cross-tx visibility gap).
    */
-  async resolveVisibleIds(tx: Tx, query: ContactQuery, limit: number): Promise<string[]> {
-    const where = buildWhere(query);
+  async resolveVisibleIds(
+    tx: Tx,
+    query: ContactQuery,
+    limit: number,
+    opts: SearchReadOpts = {},
+  ): Promise<string[]> {
+    const where = buildWhere(query, opts);
     const rows = await tx
       .select({ id: contacts.id })
       .from(contacts)
-      .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+      .leftJoin(accounts, ACCOUNT_JOIN_LIVE)
       .where(where)
       .orderBy(sql`${contacts.createdAt} DESC, ${contacts.id} DESC`)
       .limit(limit);
@@ -346,11 +440,13 @@ export const searchRepository = {
       for (const field of fields) {
         const expr = FACET_EXPR[field];
         if (!expr) continue; // join-only facet not grouped by this adapter (documented)
-        const where = and(buildWhere(query, field), sql`${expr} IS NOT NULL`) as SQL;
+        // Facet COUNT grouping stays on the flat primary domain either way (05 §5 / doc-16 drift — grouping
+        // by any-value domains changes row cardinality; the production-engine facet model is doc 12/G24's).
+        const where = and(buildWhere(query, {}, field), sql`${expr} IS NOT NULL`) as SQL;
         const rows = await tx
           .select({ value: sql<string>`${expr}::text`, count: sql<number>`count(*)::int` })
           .from(contacts)
-          .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+          .leftJoin(accounts, ACCOUNT_JOIN_LIVE)
           .where(where)
           .groupBy(expr)
           .orderBy(desc(sql`count(*)`))
@@ -370,7 +466,7 @@ export const searchRepository = {
       const rows = await tx
         .select({ value: sql<string>`${expr}::text`, count: sql<number>`count(*)::int` })
         .from(contacts)
-        .leftJoin(accounts, eq(accounts.id, contacts.accountId))
+        .leftJoin(accounts, ACCOUNT_JOIN_LIVE)
         .where(
           and(sql`${contacts.deletedAt} IS NULL`, sql`${expr} ILIKE ${`${req.prefix}%`}`) as SQL,
         )
@@ -389,11 +485,17 @@ function runSearch(
   sort: ContactQuery["sort"],
   limit: number,
   cursor: { k: string | number | null; id: string } | null,
+  opts: SearchReadOpts = {},
 ) {
+  // Gate-on the hasEmail/hasPhone projection columns resolve from live child rows ("∃ live row"); gate-off
+  // they stay the flat-column presence, so the SELECT is byte-identical (the MaskedRow keys are unchanged).
+  const select: typeof MASKED = opts.channelsFromChild
+    ? { ...MASKED, hasEmail: hasEmailChild, hasPhone: hasPhoneChild }
+    : { ...MASKED };
   const base = tx
-    .select({ ...MASKED })
+    .select(select)
     .from(contacts)
-    .leftJoin(accounts, eq(accounts.id, contacts.accountId));
+    .leftJoin(accounts, ACCOUNT_JOIN_LIVE);
 
   let seek: SQL | undefined;
   let order: SQL;

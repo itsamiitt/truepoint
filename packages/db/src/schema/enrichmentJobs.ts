@@ -57,6 +57,9 @@ export const enrichmentJobs = pgTable(
     creditSpentMicros: bigint("credit_spent_micros", { mode: "number" }).notNull().default(0),
     columnMapping: jsonb("column_mapping").notNull().default({}), // CSV header → canonical field map
     options: jsonb("options").notNull().default({}), // run options (providers, dedup policy, etc.)
+    // Per-job share flag (import-redesign 10 §2.3, S-V1): column now, UX deferred — written by no route,
+    // read only by the jobVisibility predicate (constant false ⇒ zero behavior change while unset).
+    sharedWithWorkspace: boolean("shared_with_workspace").notNull().default(false),
     idempotencyKey: varchar("idempotency_key", { length: 255 }), // dedups re-submits of the same upload
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -66,6 +69,14 @@ export const enrichmentJobs = pgTable(
   (t) => ({
     // The dashboard/worker read path: jobs of a given status within a workspace.
     byWsStatus: index("idx_enrichment_jobs_ws_status").on(t.workspaceId, t.status),
+    // Member-path keyset list (import-redesign 10 S-V1): the jobVisibility predicate narrowed to a creator
+    // within a workspace, newest-first — keeps the scoped list index-ordered (no sort node).
+    byWsCreatorCreated: index("idx_enrichment_jobs_ws_creator_created").on(
+      t.workspaceId,
+      t.createdByUserId,
+      t.createdAt.desc(),
+      t.id.desc(),
+    ),
     // Submit idempotency: a re-submit carrying the same key into the same workspace collapses onto the job.
     uniqWsIdempotency: uniqueIndex("uniq_enrichment_jobs_ws_idempotency")
       .on(t.workspaceId, t.idempotencyKey)

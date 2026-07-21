@@ -2,7 +2,7 @@
 // so zod never enters the browser bundle); this file holds presentation concerns: the source picklist and
 // the mappable-field labels/grouping the column-mapper renders.
 
-import type { CanonicalField, SourceName } from "@leadwolf/types";
+import type { CanonicalField, ImportMergeMode, SourceName } from "@leadwolf/types";
 
 export const SOURCE_OPTIONS: { value: SourceName; label: string }[] = [
   { value: "manual", label: "Manual / other CSV" },
@@ -45,3 +45,20 @@ export const IDENTITY_FIELDS: CanonicalField[] = [
   "linkedinPublicId",
   "salesNavLeadId",
 ];
+
+/** The 08 §5 merge-mode triad, in plain language (import-redesign 11 §3; S-U4). Shared by the one-shot
+ *  wizard card and the S-U7 draft flow's strategy controls/summary so the copy can never fork. */
+export const MERGE_OPTIONS: { value: ImportMergeMode; label: string }[] = [
+  { value: "create_and_update", label: "Add new and update existing matches" },
+  { value: "create_only", label: "Only add new — skip existing matches" },
+  { value: "update_only", label: "Only update existing matches — skip new rows" },
+];
+
+/** The confirm-step strategy sentence (11 §3-W5). Null-tolerant for resume (strategy comes off the row). */
+export function strategySentence(
+  mode: ImportMergeMode | null,
+  preservePopulated: boolean | null,
+): string {
+  const label = MERGE_OPTIONS.find((o) => o.value === mode)?.label ?? "Workspace default strategy";
+  return preservePopulated ? `${label} · existing values protected` : label;
+}

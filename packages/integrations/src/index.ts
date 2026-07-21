@@ -32,3 +32,29 @@ export {
   type FetchStripe,
   defaultFetchStripe,
 } from "./stripe/stripeAdapter.ts";
+
+// GATE C (G08 / S-S2): the ClamAV clamd INSTREAM adapter for core's MalwareScannerPort — dependency-free
+// node:net socket protocol, env-selected at the roots (MALWARE_SCANNER=clamav). Fail-closed on any outage.
+export {
+  clamdScanner,
+  parseClamdResponse,
+  instreamLengthPrefix,
+  INSTREAM_COMMAND,
+  INSTREAM_TERMINATOR,
+  type ClamdScannerOptions,
+  type ClamdSocketLike,
+} from "./security/clamdScanner.ts";
+
+// GATE B (G07): the S3-compatible FileStore adapter (dependency-free SigV4 over fetch — no AWS SDK) + the
+// env selection seam BOTH app composition roots call: env unset ⇒ null (roots keep diskFileStore — dark,
+// byte-identical to today). Provisioning the bucket + setting BULK_IMPORT_S3_* is the user-owed enable step.
+export {
+  s3FileStore,
+  s3FileStoreFromEnv,
+  bulkObjectStoreFromEnv,
+  sigV4SigningKey,
+  sha256Hex,
+  S3StoreError,
+  type S3FileStoreOptions,
+  type S3Fetch,
+} from "./storage/s3FileStore.ts";

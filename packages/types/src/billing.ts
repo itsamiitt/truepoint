@@ -35,9 +35,36 @@ export const revealHistoryEntrySchema = z.object({
 });
 export type RevealHistoryEntry = z.infer<typeof revealHistoryEntrySchema>;
 
+/** One decrypted email VALUE on the post-reveal read (import-redesign 05 §5, S-CH4): an owned `email` claim
+ *  unmasks ALL live email values of the contact — reveal stays contact × reveal_type grained, per-value
+ *  metering is explicitly deferred. Primary-first ordering is the contract. */
+export const revealedEmailValueSchema = z.object({
+  value: z.string(),
+  type: z.string(), // usage context (work|personal|other)
+  status: z.string(), // per-value verification grade (emailStatus vocabulary)
+  isPrimary: z.boolean(),
+});
+export type RevealedEmailValue = z.infer<typeof revealedEmailValueSchema>;
+
+/** One decrypted phone VALUE on the post-reveal read — the phone twin (line type = the TCPA dial-risk badge
+ *  for the per-call picker; extension rides outside the E.164 core). Primary-first. */
+export const revealedPhoneValueSchema = z.object({
+  value: z.string(),
+  type: z.string(),
+  status: z.string().nullable(),
+  lineType: z.string().nullable(),
+  extension: z.string().nullable(),
+  isPrimary: z.boolean(),
+});
+export type RevealedPhoneValue = z.infer<typeof revealedPhoneValueSchema>;
+
 /** GET /contacts/:id/revealed — the NO-CHARGE view of a contact's ALREADY-OWNED reveal data (Phase 1 read
  *  primitive). `email`/`phone` are decrypted ONLY for the reveal_types this workspace owns (null otherwise);
- *  statuses/line-type mirror that ownership; `linkedinUrl` is a clear-text public URL. Never charges credits. */
+ *  statuses/line-type mirror that ownership; `linkedinUrl` is a clear-text public URL. Never charges credits.
+ *  S-CH4 (import-redesign 05 §5): behind the composed channel read gate the payload ADDITIVELY gains the
+ *  full per-value lists (`emails`/`phones`, primary-first) for owned types — the scalar `email`/`phone` keep
+ *  meaning THE PRIMARY value (byte-identical to the flat cache by CH-INV-1), so no consumer changes;
+ *  gate-off the arrays are ABSENT and the payload is byte-identical to the pre-S-CH4 shape. */
 export const revealedContactSchema = z.object({
   contactId: z.string().uuid(),
   email: z.string().nullable(),
@@ -46,6 +73,10 @@ export const revealedContactSchema = z.object({
   emailStatus: z.string().nullable(),
   phoneStatus: z.string().nullable(),
   phoneLineType: z.string().nullable(),
+  /** ALL live email values (owned `email`/`full_profile` claim only), primary-first — S-CH4 gate-on only. */
+  emails: z.array(revealedEmailValueSchema).optional(),
+  /** ALL live phone values (owned `phone`/`full_profile` claim only), primary-first — S-CH4 gate-on only. */
+  phones: z.array(revealedPhoneValueSchema).optional(),
   /** Which reveal_types this workspace owns (drives the "reveal more" affordance + status). */
   ownedTypes: z.array(revealType),
   /** Which PII fields resolved to a value (email/phone) — the record actually holds + owns them. */
@@ -207,5 +238,52 @@ export const auditAction = z.enum([
   // AUTH-024 — passkey (WebAuthn) credential added / removed from account security.
   "passkey.register",
   "passkey.remove",
+  // Import visibility & permissions P0 (import-and-data-model-redesign 10 §3 / 15 ruling M1): the audited
+  // per-workspace import-policy change (who_can_import + strategy defaults). Writer lands with S-V4.
+  "import.policy_updated",
+  // Import v2 P1 lifecycle verbs (import-and-data-model-redesign 08 §7 / 15 ruling M1, S-I1 train): the
+  // actor-initiated verbs Phase 1's writers emit in-tx with the transition — committed/cancelled at
+  // S-I4/S-I8, retry_created at S-I10, template_saved at the S-V4-gated template upsert, and the audited
+  // artifact download at S-I7. P2's 'import.draft_reaped'/'import.av_infected' ride that phase's train.
+  "import.committed",
+  "import.cancelled",
+  "import.retry_created",
+  "import.template_saved",
+  "import.artifact_downloaded",
+  // Import v2 P2 system terminals (import-and-data-model-redesign 08 §7 / 13 §2.2 / 15 ruling M1 —
+  // the S-I9 train, 0057): the two SYSTEM-actor events wired in-tx with their transitions — the copy
+  // drive's infected terminal (runBulkImport failInfected; facets: jobId + signature label) and the
+  // draft reaper's TTL delete (importReaperSweep job 4; facets: jobId + age). actor_user_id = null.
+  "import.av_infected",
+  "import.draft_reaped",
+  // Multi-value channel ops P3 (import-and-data-model-redesign 05 §7 / 15 ruling M1 — the S-CH1 train,
+  // 0058): every applyChannelWrite op audits in-tx (actor, action, contact id, channel-row id — NEVER the
+  // value). Written by NOBODY until S-CH2 lands the write path; landed with the phase's DDL train so the
+  // first writer never fails the DB CHECK. P4's 'contact.merge' rides S-C2's train.
+  "channel_added",
+  "channel_promoted",
+  "channel_deleted",
+  "channel_primary_demoted",
+  // Contact TRUE-MERGE P4 (import-and-data-model-redesign 04 §4 / 15 ruling M1 — the S-C2 train, 0066): the
+  // single closed-enum action the merge engine writes IN-TX with the merge (04 §3.4). Its metadata carries
+  // survivor id, loser id, the per-field decision set, the loser's field_provenance map, and the re-point
+  // counts per child table — enough for support to reconstruct a merge from audit alone (04 §4). Written by
+  // NOBODY until S-C4 lands the engine AND the S-C3 dual gate is ON; landed with S-C2's DDL so the first
+  // writer never fails the DB CHECK.
+  "contact.merge",
 ]);
 export type AuditAction = z.infer<typeof auditAction>;
+
+/**
+ * The scalar-edit / merge field-change audit-metadata contract (04 §4). Every write to the seven
+ * hand-editable overlay scalars (editContactFields) and every merge records, in the SAME tx as the mutation,
+ * a before/after map for the CHANGED CLEAR-TEXT scalars only — NEVER email_enc/phone_enc values (channel
+ * history is structural in 05's soft-deleted child rows). `src` labels the write origin ("user_edit" |
+ * "merge"). Shape only; the writers persist it under `audit_log.metadata`.
+ */
+export interface FieldChangeAuditMetadata {
+  /** before (`b`) / after (`a`) per changed scalar field name — clear-text overlay columns only. */
+  fields: Record<string, { b: unknown; a: unknown }>;
+  /** write origin: "user_edit" (a hand-edit PATCH) | "merge" (a loser-sourced field win). */
+  src: "user_edit" | "merge";
+}

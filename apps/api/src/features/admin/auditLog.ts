@@ -8,6 +8,7 @@
 import { type PlatformAuditRow, platformAuditReadRepository, withPlatformTx } from "@leadwolf/db";
 import { ValidationError, platformAuditQuerySchema } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
+import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
 
@@ -60,8 +61,7 @@ auditLogRoutes.get("/export", async (c) => {
     (tx) => platformAuditReadRepository.exportRows(tx, filters),
     { metadata: filters },
   );
-  c.header("content-type", "text/csv; charset=utf-8");
-  c.header("content-disposition", 'attachment; filename="platform-audit-log.csv"');
+  setCsvDownloadHeaders(c, "platform-audit-log.csv");
   return c.body(toCsv(rows));
 });
 

@@ -5,7 +5,6 @@
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
-  BulkImportJobRef,
   BulkImportJobStatusResponse,
   ColumnMapping,
   ConflictPolicy,
@@ -13,6 +12,7 @@ import type {
   ImportJobStatusResponse,
   ImportMappingTemplate,
   ImportMappingTemplateList,
+  ImportMergeMode,
   ImportPreview,
   MaskedContact,
   SourceName,
@@ -32,6 +32,12 @@ export async function postImport(args: {
   sourceName: SourceName;
   mapping: ColumnMapping;
   conflictPolicy: ConflictPolicy;
+  /** The 08 §5 merge strategy (S-I6): sent as `mergeMode` + `preservePopulated` form fields. When the IMPORT_V2
+   *  gate is ON the server uses these (they win over `conflictPolicy`); gate-OFF they are ignored and the legacy
+   *  `conflictPolicy` drives dedup — so the wizard sends BOTH (the triad + a compat conflictPolicy) and the
+   *  right one takes effect per gate. Absent ⇒ the workspace `import_policy` default (10 §3). */
+  mergeMode?: ImportMergeMode;
+  preservePopulated?: boolean;
   /** Optional "import into list" target (list-plan/03 §2.2): landed rows are added to this list. Server-
    *  validated against the caller's workspace — the id is never trusted client-side. */
   listId?: string;
@@ -41,6 +47,8 @@ export async function postImport(args: {
   form.set("sourceName", args.sourceName);
   form.set("mapping", JSON.stringify(args.mapping));
   form.set("conflictPolicy", args.conflictPolicy);
+  if (args.mergeMode) form.set("mergeMode", args.mergeMode);
+  if (args.preservePopulated != null) form.set("preservePopulated", String(args.preservePopulated));
   if (args.listId) form.set("listId", args.listId);
   const res = await fetchWithAuth(`${API_BASE}/api/v1/imports`, { method: "POST", body: form });
   if (!res.ok) throw new Error(await problemMessage(res, "Import failed"));
@@ -81,8 +89,11 @@ export async function getImportJob(jobId: string): Promise<ImportJobStatusRespon
 }
 
 // ── Bulk import (the big-file COPY-staging path; backlog #2). Gated DARK behind env.BULK_IMPORT_ENABLED on the
-// server: while off, BOTH routes answer 403 `bulk_import_disabled` and this slice surfaces a clear "not enabled"
-// state — NOT a generic failure. Mirrors the sync pair above: a 202 job ref to POST, a status envelope to poll. ──
+// server: while off, the route answers 403 `bulk_import_disabled` and this slice surfaces a clear "not enabled"
+// state — NOT a generic failure. Only the status poll remains client-side: the wizard's client-side bulk POST
+// fork was deleted with the "Large file" toggle (import-redesign 11 §1.4, S-U1) — how a file is processed is
+// the SERVER's commit-time decision, the UI never asks. This read backs the legacy /imports/[jobId] progress
+// page until Phase C retires that surface (08 §1.2). ──
 
 /** Thrown when a bulk route answers 403 `bulk_import_disabled` (the feature flag is off). The hook + components
  *  branch on this to show a clear "Bulk import isn't enabled" message instead of a generic error. */
@@ -114,37 +125,6 @@ async function bulkError(res: Response, fallback: string): Promise<Error> {
     return new BulkImportDisabledError(p.detail ?? p.title ?? "Bulk import is not enabled.");
   }
   return new Error(p.detail ?? p.title ?? `${fallback} (${res.status})`);
-}
-
-/**
- * Enqueue a BULK import (POST /imports/bulk). The big-file sibling of postImport: the upload is streamed to the
- * object store and merged by apps/workers off the request thread, so this returns 202 + a job ref to poll via
- * getBulkImportJob (NOT a summary). A fresh Idempotency-Key per attempt collapses a retried POST onto the same
- * job (09 §5; server partial-unique index on (workspace_id, idempotency_key)), so a network retry never starts a
- * duplicate import. The `listId` is server-validated against the caller's workspace — it is never trusted here.
- */
-export async function postBulkImport(args: {
-  file: File;
-  sourceName: SourceName;
-  mapping: ColumnMapping;
-  conflictPolicy: ConflictPolicy;
-  listId?: string;
-}): Promise<BulkImportJobRef> {
-  const form = new FormData();
-  form.set("file", args.file);
-  form.set("sourceName", args.sourceName);
-  form.set("mapping", JSON.stringify(args.mapping));
-  form.set("conflictPolicy", args.conflictPolicy);
-  if (args.listId) form.set("listId", args.listId);
-  const res = await fetchWithAuth(`${API_BASE}/api/v1/imports/bulk`, {
-    method: "POST",
-    // No content-type header: the browser sets the multipart/form-data boundary for FormData. Idempotency-Key
-    // is generated client-side per the server contract (cf. prospect reveal) — one fresh key per attempt.
-    headers: { "Idempotency-Key": crypto.randomUUID() },
-    body: form,
-  });
-  if (!res.ok) throw await bulkError(res, "Bulk import failed");
-  return (await res.json()) as BulkImportJobRef;
 }
 
 /** Poll one bulk-import job's status / counts (GET /imports/bulk/:jobId). A 403 `bulk_import_disabled` throws the

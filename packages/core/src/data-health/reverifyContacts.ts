@@ -15,6 +15,7 @@
 
 import {
   type ContactWriteValues,
+  contactChannelRepository,
   contactRepository,
   verificationJobRepository,
   withTenantTx,
@@ -27,6 +28,7 @@ import {
   type ReverificationRun,
   reverifyCutoff,
 } from "@leadwolf/types";
+import { channelDualWriteEnabledForScope } from "../channels/channelDualWrite.ts";
 import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
 import { decryptPii } from "../import/encryptPii.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "./emailVerifier.ts";
@@ -90,6 +92,10 @@ export async function runReverification(
   );
   if (!enabled) return { scanned: 0, reverified: 0, errored: 0 };
 
+  // S-CH2 dual gate, evaluated ONCE per run (fail-closed; env off ⇒ zero queries — T-CH parity). Gate-on,
+  // each stamped grade is ALSO mirrored onto the live primary child row(s) in the same stamp tx.
+  const channelDualWrite = await channelDualWriteEnabledForScope(scope);
+
   const limit = opts?.batchSize ?? 500;
   const now = opts?.now ?? new Date();
   const cutoff = reverifyCutoff(now, FRESHNESS_SLA_DAYS.email);
@@ -142,6 +148,26 @@ export async function runReverification(
             lastVerifiedAt: now,
           };
           await contactRepository.update(tx, g.contactId, values);
+          // S-CH2 (05 §5 — verification writers migrate onto applyChannelWrite): mirror the SAME grades
+          // onto the live primary child row(s), same tx as the flat stamp. No-op pre-backfill.
+          if (channelDualWrite) {
+            await contactChannelRepository.applyChannelWrite(tx, scope, {
+              kind: "email_verify",
+              contactId: g.contactId,
+              status: g.emailStatus,
+              lastVerifiedAt: now,
+            });
+            if (g.phoneStatus || g.phoneLineType) {
+              await contactChannelRepository.applyChannelWrite(tx, scope, {
+                kind: "phone_verify",
+                contactId: g.contactId,
+                status: g.phoneStatus,
+                lineType: g.phoneLineType,
+                lineTypeSource: g.phoneLineType ? "carrier_lookup" : null,
+                lastVerifiedAt: now,
+              });
+            }
+          }
           reverified += 1;
         } catch (err) {
           errored += 1;

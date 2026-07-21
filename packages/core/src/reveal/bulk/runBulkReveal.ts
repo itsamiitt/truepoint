@@ -42,7 +42,7 @@ export interface RunBulkRevealDriveInput {
 export async function runBulkRevealDrive(
   input: RunBulkRevealDriveInput,
 ): Promise<{ skipped?: boolean; bands: number }> {
-  const job = await revealJobRepository.getJob(input.scope, input.jobId);
+  const job = await revealJobRepository.getJobSystem(input.scope, input.jobId);
   if (!job || job.status !== "running") return { skipped: true, bands: 0 };
   const total = job.totalContacts;
   if (total === 0) {
@@ -79,7 +79,7 @@ export interface BulkProcessRevealChunkInput {
 export async function bulkProcessRevealChunk(
   input: BulkProcessRevealChunkInput,
 ): Promise<{ processed: number; finalized: boolean }> {
-  const job = await revealJobRepository.getJob(input.scope, input.jobId);
+  const job = await revealJobRepository.getJobSystem(input.scope, input.jobId);
   // Stop the moment the job is no longer running (paused / cancelled / already completed).
   if (!job || job.status !== "running") return { processed: 0, finalized: false };
   const revealType = job.revealType as RevealType;
@@ -97,7 +97,7 @@ export async function bulkProcessRevealChunk(
     // Re-check status periodically so a cancel/pause stops the band promptly (not just at the next chunk).
     // Remaining rows stay `queued` → a resume re-processes them; a cancel releases the lease.
     if (tally.processed > 0 && tally.processed % 25 === 0) {
-      const live = await revealJobRepository.getJob(input.scope, input.jobId);
+      const live = await revealJobRepository.getJobSystem(input.scope, input.jobId);
       if (!live || live.status !== "running") break;
     }
     let outcome = "error";
@@ -150,7 +150,7 @@ export async function bulkProcessRevealChunk(
   // Realtime (best-effort, coalesced): stream the cumulative progress for the live bar. Dark until
   // REALTIME_SSE_ENABLED (the getJob is skipped entirely while off).
   if (realtimeEnabled()) {
-    const after = await revealJobRepository.getJob(input.scope, input.jobId);
+    const after = await revealJobRepository.getJobSystem(input.scope, input.jobId);
     if (after) {
       await emitRevealEvent(input.scope, EVENT_REVEAL_JOB_PROGRESS, {
         jobId: input.jobId,
@@ -177,7 +177,7 @@ export async function bulkProcessRevealChunk(
 
   // Realtime (best-effort): on the finalizing chunk, emit the completion + the released-balance change.
   if (finalized && realtimeEnabled()) {
-    const done = await revealJobRepository.getJob(input.scope, input.jobId);
+    const done = await revealJobRepository.getJobSystem(input.scope, input.jobId);
     if (done) {
       await emitRevealEvent(input.scope, EVENT_REVEAL_JOB_COMPLETED, {
         jobId: input.jobId,

@@ -38,9 +38,15 @@ export function useDuplicatePairs() {
     }
   }, []);
 
+  // Drop a pair the merge verb resolved (the loser is tombstoned server-side) — the row leaves the visible queue;
+  // the server stays authoritative on the next reload. No network here: the merge mutation already committed.
+  const remove = useCallback((duplicateId: string) => {
+    setPairs((cur) => (cur ? cur.filter((p) => p.duplicateId !== duplicateId) : cur));
+  }, []);
+
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  return { pairs, error, loading, unmarking, reload, unmark };
+  return { pairs, error, loading, unmarking, reload, unmark, remove };
 }

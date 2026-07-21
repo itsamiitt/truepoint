@@ -157,7 +157,8 @@ const GRANTS = `
   -- BYPASSRLS (it has no business reading any RLS-scoped table). It needs sequence USAGE to default the v7 PKs.
   -- Idempotent; re-run every migrate. A future Layer-0 table that the resolver writes MUST be added here.
   GRANT SELECT, INSERT, UPDATE ON master_persons, master_companies, master_employment, master_emails,
-                                   master_phones, source_records, match_links, projection_outbox TO leadwolf_er;
+                                   master_phones, source_records, match_links, projection_outbox,
+                                   processed_sync_events TO leadwolf_er;
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_er;
 `;
 

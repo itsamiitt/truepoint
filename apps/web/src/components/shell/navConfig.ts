@@ -11,6 +11,7 @@ import {
   Search,
   Send,
   Settings,
+  Upload,
 } from "lucide-react";
 
 export interface NavDestination {
@@ -22,10 +23,25 @@ export interface NavDestination {
 }
 
 /** The primary rail destinations (11 §2). Inbox is a real destination now (was a placeholder page). */
+/** The Imports destination (import-redesign 11 §1.1) — the section landing at /imports, single-sourced here so
+ *  the rail entry, the section-title resolver, and the palette all read one object. Railed at S-U2 now that
+ *  /imports is the real durable history dashboard (11 §2).
+ *  NOTE (drift, doc 16): 11 §Rollout wanted the rail entry gated behind the IMPORT_V2 dual gate, but apps/web
+ *  has no per-tenant flag reader yet — so the entry shows for everyone and the history page degrades to an
+ *  honest "not enabled yet" state while the gate is off (GET /imports 404 → ImportsNotEnabledError). Revisit
+ *  at the cohort flip if strict-dark nav is wanted. */
+export const IMPORTS_DESTINATION: NavDestination = {
+  label: "Imports",
+  href: "/imports",
+  match: "/imports",
+  icon: Upload,
+};
+
 export const DESTINATIONS: NavDestination[] = [
   { label: "Home", href: "/home", match: "/home", icon: Home },
   { label: "Prospect", href: "/prospect", match: "/prospect", icon: Search },
   { label: "Lists", href: "/lists", match: "/lists", icon: ListChecks },
+  IMPORTS_DESTINATION,
   { label: "Sequences", href: "/sequences", match: "/sequences", icon: Send },
   { label: "Inbox", href: "/inbox", match: "/inbox", icon: Inbox },
   { label: "Reports", href: "/reports", match: "/reports", icon: BarChart2 },
@@ -103,8 +119,10 @@ export function sectionTitleFor(pathname: string): string {
   for (const d of DESTINATIONS) {
     if (pathname === d.match || pathname.startsWith(`${d.match}/`)) return d.label;
   }
-  if (pathname.startsWith("/imports/")) return "Bulk import";
-  if (pathname.startsWith("/import")) return "Import";
+  // The Imports section (landing + wizard + job pages) titles from the single-sourced destination entry —
+  // the old "/imports/ → Bulk import" and "/import → Import" special cases collapsed here (11 §1.1; the
+  // /import route itself is now a redirect into the section).
+  if (isActive(pathname, IMPORTS_DESTINATION.match)) return IMPORTS_DESTINATION.label;
   if (pathname.startsWith("/enrichment/jobs")) return "Enrichment jobs";
   if (pathname.startsWith("/sales-navigator")) return "Sales Navigator";
   return "TruePoint";
@@ -144,12 +162,11 @@ export const PALETTE_QUICK: PaletteEntry[] = [
     href: "/lists",
     keywords: ["list", "lists", "collection", "segment"],
   },
-  { id: "act-import", label: "Import contacts", href: "/import", keywords: ["csv", "upload"] },
   {
-    id: "act-bulk-import",
-    label: "Bulk import (large file)",
-    href: "/import",
-    keywords: ["bulk", "large", "background", "csv", "xlsx", "upload", "import"],
+    id: "act-import",
+    label: "Import contacts",
+    href: "/imports/new",
+    keywords: ["csv", "upload"],
   },
   {
     id: "act-enrichment-jobs",

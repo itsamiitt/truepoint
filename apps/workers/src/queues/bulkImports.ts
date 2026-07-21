@@ -9,16 +9,22 @@
 
 import {
   type EnqueueChunk,
+  type FastImportResult,
   type FileStore,
+  type MalwareScannerPort,
   bulkProcessChunk,
+  continueChunkWindow,
   finalizeIfLastChunk,
   runBulkImport,
+  runFastImport,
 } from "@leadwolf/core";
 import {
   type BulkImportDeadLetter,
   type BulkImportJobData,
   type BulkImportScope,
+  type ImportFastJobData,
   bulkImportJobDataSchema,
+  importFastJobDataSchema,
 } from "@leadwolf/types";
 import type { Job, Queue } from "bullmq";
 
@@ -26,6 +32,10 @@ import type { Job, Queue } from "bullmq";
 // apps/api producer never drift (and apps never import apps). Re-exported for register.ts (the composition root).
 export { BULK_IMPORTS_QUEUE, BULK_IMPORTS_DLQ } from "@leadwolf/types";
 export type { BulkImportJobData } from "@leadwolf/types";
+
+/** The unified `bulk-imports` payload union (09 §1.1, S-I3): legacy drive/chunk + the v2 `fast` lane. The
+ *  legacy discriminated union in bulkImport.ts stays byte-untouched; the fast kind lives in importV2.ts. */
+export type UnifiedImportJobData = BulkImportJobData | ImportFastJobData;
 
 /** The dependencies the composition root injects so core never imports BullMQ/Redis/an object store directly. */
 export interface BulkImportProcessDeps {
@@ -39,6 +49,47 @@ export interface BulkImportProcessDeps {
    * inside the injected fn: a rollup-enqueue failure must never fail the chunk job.
    */
   fireRollups: (scope: BulkImportScope) => void | Promise<void>;
+  /**
+   * Whether the COPY kinds (drive/chunk) may run — env.BULK_IMPORT_ENABLED at the composition root (S-Q1,
+   * 09 §1.1). Since the worker is now ALSO constructed under IMPORT_V2_ENABLED (the fast lane), a stale copy
+   * job arriving while the copy gate is off must FAIL LOUDLY (retry→DLQ; operator redrive after enabling —
+   * replay is idempotent) rather than run a gated pipeline or silently consume the job. The fast kind is
+   * never affected by this switch.
+   */
+  copyEnabled: boolean;
+  /** Bounded rolling fan-out window K (S-Q2; env.IMPORT_CHUNK_WINDOW at the root). 0 = ∞ = enqueue-all. */
+  chunkWindow: number;
+  /**
+   * S-Q2 deferred-lane transport for the fast kind: re-enqueue the SAME fast payload after the recheck
+   * delay (rows travel in the payload — parking without transport would strand them). The composition root
+   * adds it with the fast priority band + a `:r<n>`-suffixed jobId (a spent stable id would dedupe the
+   * re-enqueue away).
+   */
+  requeueFastDeferred: (data: ImportFastJobData, nextDeferrals: number) => Promise<void>;
+  /**
+   * S-Q3 (09 §6.2, G06): when true, the fast wrapper's terminal tx enqueues the `import.rollups` worker_outbox
+   * intent ATOMICALLY with the terminal flip (crash-safe, at-least-once), and the completed handler's best-effort
+   * rollup enqueue is retired. The root passes `env.IMPORT_V2_ENABLED` (the per-tenant half already gated the
+   * producer). False ⇒ the handler fires the rollups — byte-identical (T-Q3 flag-off).
+   */
+  emitOutbox: boolean;
+  /**
+   * S-S2 (G08, 13 §2.2 wire point 2): the env-selected MalwareScannerPort the copy DRIVE re-checks before
+   * parse/staging. The root composes it (MALWARE_SCANNER=clamav ⇒ clamd; default stub ⇒ dark, byte-identical);
+   * infected ⇒ failed terminal (the completed handler meters + operator-notifies on `result.infected`);
+   * real-scanner outage ⇒ the drive throws (fail-closed retry → DLQ).
+   */
+  malwareScanner?: MalwareScannerPort;
+}
+
+/** A copy-kind job claimed while BULK_IMPORT_ENABLED is off (see BulkImportProcessDeps.copyEnabled). */
+export class CopyKindsDisabledError extends Error {
+  constructor(kind: string) {
+    super(
+      `bulk-imports: refusing '${kind}' job — BULK_IMPORT_ENABLED is off (copy kinds gated; fast lane only)`,
+    );
+    this.name = "CopyKindsDisabledError";
+  }
 }
 
 /** A non-PII summary of what a single bulk-import job step did (for per-queue observability; never the rows). */
@@ -50,6 +101,8 @@ export type BulkImportProcessResult =
       totalChunks: number;
       enqueuedChunks: number;
       resumed: boolean;
+      /** S-S2: the drive-time AV re-check found the stored object infected (failed terminal written). */
+      infected?: boolean;
     }
   | {
       kind: "chunk";
@@ -59,7 +112,8 @@ export type BulkImportProcessResult =
       duplicate: number;
       finalized: boolean;
       firedRollups: boolean;
-    };
+    }
+  | FastImportResult;
 
 /**
  * Build the bulk-imports processor with its injected deps. A `drive` job stages the file + fans out chunk jobs; a
@@ -69,11 +123,35 @@ export type BulkImportProcessResult =
  */
 export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
   return async function processBulkImport(
-    job: Job<BulkImportJobData>,
+    job: Job<UnifiedImportJobData>,
   ): Promise<BulkImportProcessResult> {
+    // v2 FAST lane (S-I3, 09 §1.1): the durable dual-write wrapper around the UNCHANGED runImport. The fast
+    // kind rides the IMPORT_V2 dual gate at the PRODUCER (a fast job only exists if the tenant's gate was on
+    // at submit); the consumer never re-checks env so an in-flight job still terminalizes after a mid-flight
+    // flip-off (15 §R-P1 rehearsal (a)). Rows travel in this payload — the Phase-A transport bound
+    // (importV2.ts) — so the DLQ path below must never copy `input` into a record.
+    if ((job.data as { kind?: string }).kind === "fast") {
+      const fast = importFastJobDataSchema.parse(job.data);
+      return runFastImport({
+        scope: fast.scope,
+        jobId: fast.jobId,
+        input: fast.input,
+        deferrals: fast.deferrals ?? 0,
+        requeueDeferred: (nextDeferrals) => deps.requeueFastDeferred(fast, nextDeferrals),
+        // S-I7: the SAME injected object store the copy drive stages through — the fast wrapper writes the
+        // repair-CSV + error-report pair through it at the terminal transition when ≥1 row was rejected.
+        fileStore: deps.fileStore,
+        // S-Q3: emit the terminal rollup intent onto worker_outbox in-tx (crash-safe) instead of the handler.
+        emitOutbox: deps.emitOutbox,
+      });
+    }
+
     // Defense in depth: re-validate + narrow the queue payload (the producer is trusted, but the discriminated
     // union guards a malformed/stale job). bulkImportJobDataSchema narrows `kind` → drive | chunk.
     const data = bulkImportJobDataSchema.parse(job.data);
+
+    // COPY kinds stay gated by BULK_IMPORT_ENABLED even though the worker itself now boots for the fast lane.
+    if (!deps.copyEnabled) throw new CopyKindsDisabledError(data.kind);
 
     if (data.kind === "drive") {
       const r = await runBulkImport({
@@ -81,6 +159,10 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
         jobId: data.jobId,
         fileStore: deps.fileStore,
         enqueueChunk: deps.enqueueChunk,
+        // S-Q2: the drive enqueues only the first K bands; chunk completions refill (continuation below).
+        chunkWindow: deps.chunkWindow,
+        // S-S2: scan-before-staging re-check (dark under the stub; fail-closed on a real engine's outage).
+        malwareScanner: deps.malwareScanner,
       });
       return {
         kind: "drive",
@@ -89,6 +171,7 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
         totalChunks: r.totalChunks,
         enqueuedChunks: r.enqueuedChunks,
         resumed: r.resumed,
+        infected: r.infected,
       };
     }
 
@@ -104,10 +187,24 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
     if (r.processed) {
       const f = await finalizeIfLastChunk({ scope: data.scope, jobId: data.jobId });
       finalized = f.finalized;
+      // RESERVED (dormant) copy-mode artifact hook (S-I7): when copy mode engages (Phase C, G07+G09), the LAST
+      // chunk's finalize is where the same `writeImportArtifacts` pair (repair CSV + error report) is generated —
+      // the copy path's rejected rows are the drive's (runBulkImport still writes the legacy single predecessor
+      // today). Wiring it here needs finalize to surface the rejected rows; deferred with copy-mode engagement.
       // Rollups fire ONLY on the last chunk's finalize, ONCE per job — the same trigger the sync import uses.
       if (f.fireRollups) {
         await deps.fireRollups(data.scope);
         firedRollups = true;
+      }
+      // Rolling-window continuation (S-Q2, 09 §2.2): a completed band refills the window with the next
+      // pending band(s). Idempotent by stable chunk jobIds + terminal-skip; the reaper heals a lost enqueue.
+      if (!finalized) {
+        await continueChunkWindow({
+          scope: data.scope,
+          jobId: data.jobId,
+          enqueueChunk: deps.enqueueChunk,
+          window: deps.chunkWindow,
+        });
       }
     }
     return {
@@ -130,13 +227,18 @@ export function makeProcessBulkImport(deps: BulkImportProcessDeps) {
  */
 export async function deadLetterFailedBulkImport(
   deadLetterQueue: Queue<BulkImportDeadLetter>,
-  job: Job<BulkImportJobData> | undefined,
+  job: Job<UnifiedImportJobData> | undefined,
   err: Error,
 ): Promise<void> {
   if (!job) return;
   const maxAttempts = job.opts.attempts ?? 1;
   if (job.attemptsMade < maxAttempts) return; // retries remain — not dead yet
-  const parsed = bulkImportJobDataSchema.safeParse(job.data);
+  // The fast payload CARRIES ROWS (Phase-A transport bound) — extract scope/ids ONLY; the record stays
+  // PII-free like every dead letter (the rows die with the queue job, never copied anywhere).
+  const isFast = (job.data as { kind?: string }).kind === "fast";
+  const parsed = isFast
+    ? importFastJobDataSchema.safeParse(job.data)
+    : bulkImportJobDataSchema.safeParse(job.data);
   if (!parsed.success) return; // unparseable payload — nothing safe (or useful) to record
   const { kind, jobId, scope } = parsed.data;
   const record: BulkImportDeadLetter = {

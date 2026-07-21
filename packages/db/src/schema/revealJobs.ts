@@ -7,6 +7,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -54,6 +55,9 @@ export const revealJobs = pgTable(
     creditLeasedFromSub: integer("credit_leased_from_sub").notNull().default(0),
     creditSpent: integer("credit_spent").notNull().default(0),
     resultKey: varchar("result_key", { length: 1024 }), // S3 key of the revealed CSV once written (nullable)
+    // Per-job share flag (import-redesign 10 §2.3, S-V1): column now, UX deferred — written by no route,
+    // read only by the jobVisibility predicate (constant false ⇒ zero behavior change while unset).
+    sharedWithWorkspace: boolean("shared_with_workspace").notNull().default(false),
     idempotencyKey: varchar("idempotency_key", { length: 255 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -62,6 +66,14 @@ export const revealJobs = pgTable(
   },
   (t) => ({
     byWsStatus: index("idx_reveal_jobs_ws_status").on(t.workspaceId, t.status),
+    // Member-path keyset list (import-redesign 10 S-V1): the jobVisibility predicate narrowed to a creator
+    // within a workspace, newest-first — keeps the scoped list index-ordered (no sort node).
+    byWsCreatorCreated: index("idx_reveal_jobs_ws_creator_created").on(
+      t.workspaceId,
+      t.createdByUserId,
+      t.createdAt.desc(),
+      t.id.desc(),
+    ),
     uniqWsIdempotency: uniqueIndex("uniq_reveal_jobs_ws_idempotency")
       .on(t.workspaceId, t.idempotencyKey)
       .where(sql`${t.idempotencyKey} IS NOT NULL`),

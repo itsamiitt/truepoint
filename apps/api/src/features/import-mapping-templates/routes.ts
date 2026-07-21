@@ -13,16 +13,20 @@ import {
   listMappingTemplates,
   saveMappingTemplate,
 } from "@leadwolf/core";
+import { importMappingTemplateRepository } from "@leadwolf/db";
 import {
   ForbiddenError,
   type ImportMappingTemplate,
   type ImportMappingTemplateList,
+  type JobViewer,
   NotFoundError,
   ValidationError,
+  isElevatedJobRole,
   saveImportMappingTemplateSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
@@ -51,12 +55,29 @@ importMappingTemplatesRoutes.get("/", async (c) => {
   return c.json(body, 200);
 });
 
-// Save (UPSERT by case-insensitive name) a template.
+// Save (UPSERT by case-insensitive name) a template. S-V4 manage-gates (import-redesign 10 §2.1 template
+// row), riding the visibility dual gate (pass-through gate-off ⇒ today's ungated posture, byte-identical):
+// viewers are read-only; a member may create, and overwrite only their OWN template; elevated any.
 importMappingTemplatesRoutes.post("/", async (c) => {
   const scope = requireScope(c);
   const parsed = saveImportMappingTemplateSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success)
     throw new ValidationError("Body must be { name, mapping } with at least one mapped field.");
+
+  const viewer: JobViewer = await buildJobViewer({ ...scope, userId: c.get("claims").sub });
+  if (viewer.scoped && !isElevatedJobRole(viewer.role)) {
+    if (viewer.role === "viewer")
+      throw new ForbiddenError("insufficient_role", "Your role does not allow saving templates.");
+    // Member: the case-insensitive name UPSERTs in place — block overwriting another user's template
+    // (10 §2.1: edit/delete OWN; null-creator/system templates count as nobody's own).
+    const existing = await importMappingTemplateRepository.findByName(scope, parsed.data.name);
+    if (existing && existing.createdByUserId !== viewer.userId) {
+      throw new ForbiddenError(
+        "insufficient_role",
+        "A template with this name belongs to another member.",
+      );
+    }
+  }
 
   const template = await saveMappingTemplate({
     scope,
@@ -77,9 +98,22 @@ importMappingTemplatesRoutes.get("/:id", async (c) => {
   return c.json(body, 200);
 });
 
-// Delete one template.
+// Delete one template. S-V4 manage-gates (dual-gated): creator ∪ elevated; viewers read-only.
 importMappingTemplatesRoutes.delete("/:id", async (c) => {
   const scope = requireScope(c);
+  const viewer: JobViewer = await buildJobViewer({ ...scope, userId: c.get("claims").sub });
+  if (viewer.scoped && !isElevatedJobRole(viewer.role)) {
+    if (viewer.role === "viewer")
+      throw new ForbiddenError("insufficient_role", "Your role does not allow deleting templates.");
+    const existing = await getMappingTemplate(scope, c.req.param("id"));
+    if (!existing) throw new NotFoundError("Mapping template not found.");
+    if (existing.createdByUserId !== viewer.userId) {
+      throw new ForbiddenError(
+        "insufficient_role",
+        "Only the template's creator or an admin may delete it.",
+      );
+    }
+  }
   const deleted = await deleteMappingTemplate(scope, c.req.param("id"));
   if (!deleted) throw new NotFoundError("Mapping template not found.");
   return c.body(null, 204);

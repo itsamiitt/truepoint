@@ -6,6 +6,21 @@
 export { runImport, type RunImportInput } from "./import/runImport.ts";
 export { parseImportFile, parseCsv, isXlsxFile, type ParsedCsv } from "./import/parseFile.ts";
 export { parseXlsx } from "./import/parseXlsx.ts";
+// Upload-admission envelope (import-redesign 13 §1, S-S1): content sniffing (magic bytes, encoding, NUL),
+// the admission cap constants (the ONE local spot — S-P2 centralizes), consumed by the api upload routes.
+export {
+  IMPORT_CSV_MAX_BYTES,
+  IMPORT_CSV_SNIFF_PREFIX_BYTES,
+  IMPORT_MULTIPART_MAX_FIELD_BYTES,
+  IMPORT_MULTIPART_MAX_PARTS,
+  IMPORT_UPLOAD_REQUEST_MAX_BYTES,
+  IMPORT_XLSX_MAX_BYTES,
+  assertCsvPrefixAdmissible,
+  assertXlsxAdmissible,
+  assertXlsxArchiveWithinLimits,
+  decodeAdmittedCsv,
+  hasZipMagic,
+} from "./import/admission.ts";
 // Constant-memory streaming CSV reader for the bulk-import drive path (15-bulk-import-design §3) — parses
 // byte-identically to the sync parseCsv (the quoting state machine mirrors parseFile.ts parseMatrix). CSV only.
 export { streamParseCsv } from "./import/streamParse.ts";
@@ -21,16 +36,81 @@ export {
 export {
   runBulkImport,
   finalizeIfLastChunk,
+  chunkWindowLimit,
+  continueChunkWindow,
   type EnqueueChunk,
   type RunBulkImportInput,
   type RunBulkImportResult,
   type FinalizeIfLastChunkInput,
   type FinalizeResult,
 } from "./import/runBulkImport.ts";
+// THE fast-vs-copy routing decision (import-redesign 08 §1; S-I5 pre-gate → S-I9 engagement): pure +
+// env-free — the api passes the measured facts + the threshold knob + the copy-engagement verdict;
+// over-threshold refuses honestly unless copy is engaged (15 §R-P2's standing fallback).
+export {
+  decideImportRouting,
+  type ImportRoutingFacts,
+  type ImportRoutingVerdict,
+} from "./import/routing.ts";
+// The ONE store-then-enqueue copy submission (import-redesign 08 §1.2 Phase C, S-I9): control row
+// (processing_mode='copy') → stream the upload to the FileStore → enqueue the drive. Extracted from
+// POST /imports/bulk so the bulk route is a thin delegate and the unified one-shot POST reuses it.
+// Dependency-injected (FileStore + enqueue) like runBulkImport — core stays BullMQ/SDK-free.
+export {
+  copySourceExt,
+  submitCopyImport,
+  type SubmitCopyImportInput,
+  type SubmitCopyImportResult,
+} from "./import/submitCopyImport.ts";
+// Tenant fairness for the unified import queue (import-redesign 09 §2, S-Q2): per-workspace job cap →
+// `deferred` admission + the leader-locked sweep's per-workspace promotion pass. Knobs revert by env.
+export {
+  ACTIVE_IMPORT_STATUSES,
+  decideFastAdmission,
+  promoteDeferredForWorkspace,
+  type FastAdmission,
+  type PromotedImportJob,
+} from "./import/importFairness.ts";
+// Progress contract (import-redesign 09 §4, S-Q6): the counter-delta cadence constants + THE one
+// derivation function feeding the poll response and, when wired, the SSE payloads + staff console.
+export {
+  IMPORT_PROGRESS_BATCH_ROWS,
+  IMPORT_PROGRESS_MAX_DELTAS_PER_CHUNK,
+  IMPORT_PROGRESS_MIN_INTERVAL_MS,
+  deriveImportProgress,
+  type DerivedImportProgress,
+  type ImportProgressSource,
+} from "./import/importProgress.ts";
 export type { RawRow } from "./import/columnMap.ts";
+// Fast-path dual-write wrapper (import-redesign 08 §1.2 Phase A / 09 §1.1, S-I3): durable state transitions +
+// atomic counter deltas + the rejected-rows ledger AROUND the unchanged runImport. DARK while the
+// IMPORT_V2_ENABLED dual gate is off (the api producer enqueues no `fast` jobs while gated).
+export {
+  runFastImport,
+  markFastImportFailed,
+  FastImportFailedError,
+  type RunFastImportInput,
+  type FastImportResult,
+} from "./import/runFastImport.ts";
 // Object-store seam (15-bulk-import-design §3/§4): the FileStore port the bulk pipeline writes through + a
 // dev/test local-disk adapter. The prod S3 adapter is injected at the app composition root (kept out of core).
 export { diskFileStore, type FileStore } from "./storage/fileStore.ts";
+// Artifact/object lifecycle seam (import-redesign 13 §4.4, S-S7): the one job-object prefix + the
+// hard-purge deleter every import purge path (retention deleter, S-S8 DSAR fan-out) composes.
+export {
+  importJobObjectPrefix,
+  legacyRejectedRowsKey,
+  purgeImportJobObjects,
+} from "./import/artifactLifecycle.ts";
+// Malware-scanner seam (import-redesign 13 §2, S-S2 — the G08/Gate C port): core declares the contract +
+// the explicit stub default; the ClamAV clamd adapter lives in @leadwolf/integrations, env-selected at the
+// api/workers composition roots (MALWARE_SCANNER=clamav|stub). Fail-closed on a real engine's error.
+export {
+  stubMalwareScanner,
+  type MalwareScanResult,
+  type MalwareScanSource,
+  type MalwareScannerPort,
+} from "./security/malwareScanner.ts";
 // Data-quality validation engine (database-management-research 06) — the built-in + custom rules a prepared
 // import row must pass (reject-on-fail). The DB-row custom rules are read by apps/api/apps/workers and passed in.
 export {
@@ -59,6 +139,37 @@ export {
   deleteMappingTemplate,
   type SaveMappingTemplateInput,
 } from "./import/templates.ts";
+// The G02 "import at all" grant decision (import-redesign 10 §3, S-V4) — pure verdict; the api middleware
+// maps it to 403 problems (insufficient_role / import_disabled_by_policy) behind the visibility dual gate.
+export {
+  evaluateImportCreateGrant,
+  type ImportCreateGrantVerdict,
+} from "./import/importCreateGrant.ts";
+// P5 scheduled imports (import-redesign 08 §9) — the PURE decision core (cadence math, idempotency-key
+// derivation, fire-time grant re-eval). The impure orchestration lives in the worker sweep.
+export {
+  computeNextRunAt,
+  deriveScheduleIdempotencyKey,
+  evaluateScheduleFireGrant,
+} from "./import/scheduledImport.ts";
+// P5 scheduled-imports DUAL GATE (SCHEDULED_IMPORTS_ENABLED env + `scheduled_imports_enabled` tenant flag) —
+// the in-tx re-check (worker sweep) + the fail-closed forScope check (api verbs, gate-on-404). Fail-closed.
+export {
+  isScheduledImportsEnabled,
+  scheduledImportsEnabledForScope,
+} from "./import/scheduledImportGate.ts";
+// P5 DELTA-imports DUAL GATE (DELTA_IMPORTS_ENABLED env + `delta_imports_enabled` tenant flag; 08 §9 layer 3)
+// — the in-tx eval + the fail-closed forScope check (api route pre-enqueue). Fail-closed; off ⇒ zero queries.
+export {
+  isDeltaImportsEnabled,
+  deltaImportsEnabledForScope,
+} from "./import/deltaImportsGate.ts";
+// P5 API-PUSH imports DUAL GATE (API_IMPORTS_ENABLED env + `api_imports_enabled` tenant flag; 08 §9) — the
+// in-tx eval + the fail-closed forScope check (the POST /imports/rows gate-on-404). Fail-closed; off ⇒ zero queries.
+export {
+  isApiImportsEnabled,
+  apiImportsEnabledForScope,
+} from "./import/apiImportsGate.ts";
 export { blindIndex } from "./import/blindIndex.ts";
 export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 // Pre-commit validation preview + rejected-rows artifact + conflict policy (30 §4, ADR-0036; G-IMP-1/5).
@@ -67,10 +178,29 @@ export {
   rejectedRowsFor,
   identitySignature,
   type RowVerdict,
+  type RowRejectReason,
   type RowIdentity,
 } from "./import/validateRow.ts";
 export { buildImportPreview, type PreviewOptions } from "./import/preview.ts";
+// S-I8 draft flow (08 §3.2/§4): the server-side auto-map alias table + the full-pass preview projection.
+export { normalizeHeaderKey, suggestColumnMapping } from "./import/headerAliases.ts";
+export {
+  buildDraftPreviewSummary,
+  type DraftPreviewOptions,
+  type DraftPreviewResult,
+} from "./import/draftPreview.ts";
 export { rejectedRowsToCsv } from "./import/rejectedRowsCsv.ts";
+// The S-I7 server-side artifact pair (repair CSV + taxonomy-grouped error report) + their deterministic keys.
+export {
+  buildRepairCsv,
+  buildErrorReportCsv,
+  writeImportArtifacts,
+  repairArtifactKey,
+  errorReportArtifactKey,
+  neutralizeCell,
+  redactValues,
+  type ImportArtifactKeys,
+} from "./import/artifactWriter.ts";
 
 export { revealContact, revealCostFor, type RevealInput } from "./reveal/revealContact.ts";
 // No-charge "view already-revealed data" reads (Phase 1 single + Phase 2 batch): decrypt ONLY the fields this
@@ -698,6 +828,31 @@ export {
   type ContactFieldEdits,
 } from "./prospect/editContact.ts";
 
+// Contact TRUE-MERGE dual gate (import-and-data-model-redesign 04 §3.1, S-C3): env CONTACT_MERGE_ENABLED +
+// per-tenant `contact_merge_enabled` flag. Off ⇒ the merge verb 404s + the engine is never constructed.
+export {
+  isContactMergeEnabled,
+  contactMergeEnabledForScope,
+} from "./prospect/contactMergeGate.ts";
+// Contact TRUE-MERGE engine (import-and-data-model-redesign 04 §3, S-C4): the ONE value-moving merge
+// implementation (DM1) — the pure field-union planner + the tx executor with the §3.4 child re-point
+// inventory. Both surfaces (customer verb S-C5, Surface-1 staff wrapper S-C9) call runContactMerge.
+export {
+  runContactMerge,
+  runStaffContactMerge,
+  type RunContactMergeInput,
+} from "./prospect/mergeContact.ts";
+export {
+  planContactMerge,
+  type MergeScalars,
+  type PlanContactMergeInput,
+  type PlanContactMergeResult,
+} from "./prospect/contactMergePlan.ts";
+export {
+  previewContactMerge,
+  type PreviewContactMergeInput,
+} from "./prospect/mergePreview.ts";
+
 // Search query-semantics layer (24 §4, ADR-0035): title canonicalization + synonym/abbreviation expansion.
 export { normalizeTitle } from "./search/normalizeTitle.ts";
 export {
@@ -834,3 +989,83 @@ export {
   runRetentionSweepForTenant,
   type RetentionSweepResult,
 } from "./retention/runRetentionSweep.ts";
+
+// Multi-value channel dual-write (import-and-data-model-redesign 05, S-CH2): the dual-gate evaluator
+// (CHANNEL_DUAL_WRITE env + `channels_dual_write` per-tenant flag, fail-closed) + the phone channel-value
+// builder (DM1: shipped toE164/blindIndex/encryptPii, zero new normalizers). The write path itself is
+// @leadwolf/db's contactChannelRepository.applyChannelWrite (CH-INV-1's single sanctioned writer).
+export {
+  isChannelDualWriteEnabled,
+  channelDualWriteEnabledForScope,
+  buildPhoneChannelValue,
+  countryHintOf,
+  phoneRawIndexForm,
+  type BuildPhoneChannelInput,
+} from "./channels/channelDualWrite.ts";
+
+// S-CH4 read cutover (import-and-data-model-redesign 05 §5/§Implementation Steps): the COMPOSED read gate —
+// env CHANNEL_READ_FROM_CHILD AND the full S-CH2 dual-write gate AND the `channels_read` tenant flag (read
+// implies dual-write, fail-closed at every layer). Every cut-over read surface consults exactly this
+// decision; gate-off every read is byte- and cost-identical to the shipped flat-column path.
+export {
+  isChannelReadFromChildEnabled,
+  channelReadFromChildEnabledForScope,
+} from "./channels/channelRead.ts";
+
+// S-CH3 channel backfill (import-and-data-model-redesign 15 §2.1): the per-workspace runner — withTenantTx
+// keyset batches (email bytes verbatim, phones decrypt→E.164 in-worker), WHERE-missing selection as the
+// watermark, the dual gate re-checked per batch as the abort. Driven by apps/workers' leader-locked
+// channelBackfillSweep; the completeness count (the S-CH4 gate) is contactChannelRepository's.
+export {
+  planContactChannelBackfill,
+  runChannelBackfillForWorkspace,
+  type ChannelBackfillOptions,
+  type ChannelBackfillWorkspaceResult,
+  type ContactChannelBackfillPlan,
+} from "./channels/channelBackfill.ts";
+
+// S-CH5 permanent reconcile / drift sweep (import-and-data-model-redesign 05 §3.4/§5): the per-workspace
+// runner — WHERE-drift keyset batches, the dual gate re-checked per batch as tenant-select + abort, the READ
+// gate picking the PHASE-DEPENDENT repair direction (read off ⇒ flat wins; read on ⇒ child wins). Driven by
+// apps/workers' leader-locked channelReconcileSweep; the drift count/gauge is contactChannelRepository's.
+export {
+  decideChannelReconcile,
+  runChannelReconcileForWorkspace,
+  type ChannelReconcileAction,
+  type ChannelReconcileOptions,
+  type ChannelReconcileState,
+  type ChannelReconcileWorkspaceResult,
+  type ReconcileDirection,
+} from "./channels/channelReconcile.ts";
+
+// S-A2 account-domain dual-write GATE (import-and-data-model-redesign 06 §1/§Rollout): the dual gate
+// (ACCOUNT_DOMAINS_DUAL_WRITE env + `account_domains_dual_write` per-tenant flag, fail-closed) the account
+// writers evaluate before composing accountChildRepository.applyAccountDomainWrite (@leadwolf/db owns the
+// single write path). The pair is minted for S-A2 (06 names only the S-A6 read gate) — doc 16 drift row.
+export {
+  isAccountDomainsDualWriteEnabled,
+  accountDomainsDualWriteEnabledForScope,
+} from "./accounts/accountDualWrite.ts";
+
+// S-A6 account READ-CUTOVER composed gate (import-and-data-model-redesign 06 §6/§API/§Rollout; 15 §M-SEQ seq
+// 59): env.ACCOUNT_READ_FROM_CHILD AND the full S-A2 dual gate AND the `account_read_from_child` tenant flag —
+// read implies dual-write, fail-closed. The ONE decision the import ladder consults for rung C2 (any-live-
+// secondary-domain exact) + account-detail overlay reads. Off ⇒ byte-identical flat-column reads (doc 16 mint).
+export {
+  isAccountReadFromChildEnabled,
+  accountReadFromChildEnabledForScope,
+} from "./accounts/accountRead.ts";
+
+// S-A1/S-A3 account backfill (import-and-data-model-redesign 15 §2.2): the per-workspace runner — withTenantTx
+// keyset batches over accounts (domain pass = the mandated S-A1 re-run; HQ pass = S-A3's best-effort location
+// synthesis, freetext country → ISO alpha-2 via countryToIso, unmappable → NULL). WHERE-missing selection is
+// the watermark; the dual gate re-checked per batch as tenant-select + abort. Driven by apps/workers'
+// leader-locked accountBackfillSweep; the completeness counts (the S-A6/C2 gate) are accountChildRepository's.
+export {
+  planAccountHqBackfill,
+  runAccountBackfillForWorkspace,
+  type AccountBackfillOptions,
+  type AccountBackfillWorkspaceResult,
+  type AccountHqBackfillPlan,
+} from "./accounts/accountBackfill.ts";
+export { countryToIso } from "./accounts/countryToIso.ts";

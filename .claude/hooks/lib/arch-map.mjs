@@ -67,6 +67,14 @@ export const QUEUE_DOMAIN = {
   scoring: "scoring",
   imports: "import",
   bulkImports: "import",
+  importNotify: "import",
+  importReaperSweep: "import",
+  importPromotionSweep: "import",
+  importArtifactSweep: "import",
+  channelBackfillSweep: "reveal",
+  channelReconcileSweep: "reveal",
+  accountBackfillSweep: "reveal",
+  scheduledImportSweep: "import",
   dataRetentionSweep: "compliance",
   "crm-sync": "crm-sync",
   outreach: "outreach",
@@ -95,10 +103,20 @@ export const REPO_DOMAIN = {
   outreach_log: "outreach",
   salesNavLink: "sales-navigator",
   sales_nav_link: "sales-navigator",
+  // Contact-channel overlay (contact_emails/contact_phones, import-and-data-model-redesign S-CH1+):
+  // rides the contact/reveal domain like the contact repo itself.
+  contactChannel: "reveal",
   source_import: "import",
   sourceImport: "import",
   importJob: "import",
   importStaging: "import",
+  importMappingTemplate: "import",
+  // Per-workspace import policy (who_can_import + strategy defaults; P0 of import-and-data-model-redesign).
+  importPolicy: "import",
+  // P5 scheduled imports (import-and-data-model-redesign 08 §9): the recurring-import definition + fires.
+  scheduledImport: "import",
+  // 06-family company children (account_domains/account_locations/hierarchy; Phase 4) — reveal, like accounts.
+  accountChild: "reveal",
   suppression: "compliance",
   retentionPolicy: "compliance",
   retentionRun: "compliance",
@@ -116,9 +134,11 @@ export const REPO_DOMAIN = {
   intent_signal: "scoring",
   providerCall: "enrichment",
   provider_call: "enrichment",
-  // The transactional outbox (worker_outbox, ADR-0027): generic mechanism, but its only topic today is the
-  // bulk-enrichment confirm→drive publish — re-home if a second domain adopts it.
+  // The transactional outbox (worker_outbox + event_outbox, ADR-0027): generic mechanism. Originally only the
+  // bulk-enrichment confirm→drive publish; import now co-adopts it (import.rollups/import.notify, S-Q3/S-Q4).
+  // Shared infra in practice; kept under enrichment (first + primary producer) since the map has no "shared repo".
   outbox: "enrichment",
+  eventOutbox: "enrichment",
   reveal: "reveal",
   credit: "billing",
   stripeCustomer: "billing",
@@ -261,8 +281,9 @@ export function classify(p) {
   }
   if (/^packages\/db\//.test(p)) return { kind: "shared", area: "packages/db" };
 
-  // worker queues -> domain via QUEUE_DOMAIN; rest of workers is shared.
-  if ((m = p.match(/^apps\/workers\/src\/queues\/([^/]+)\.(c|m)?[tj]sx?$/))) {
+  // worker queues -> domain via QUEUE_DOMAIN; rest of workers is shared. Colocated `.test`/`.itest`
+  // files place with their queue (strip the suffix before lookup).
+  if ((m = p.match(/^apps\/workers\/src\/queues\/([^/]+?)(?:\.i?test)?\.(c|m)?[tj]sx?$/))) {
     const domain = QUEUE_DOMAIN[m[1]];
     return domain ? { kind: "feature", domain, bucket: "workers" } : { kind: "unassigned" };
   }

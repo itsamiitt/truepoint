@@ -23,6 +23,28 @@
 // is RLS-scoped (withTenantTx) like the other data-management itests. NO pipeline code is modified — this
 // composes the real entry points (runBulkImport / bulkProcessChunk / finalizeIfLastChunk / runImport) only.
 //
+// ── S-P1 / GATE A (G09) — cases 5–7 (import-and-data-model-redesign 12 §3.2 criteria 2–4; 15 §M-SEQ seq 39;
+// TP-1). Criterion 1 (functional round-trip: backpressure-aware Writable, byte-for-byte CSV encoding, bytea →
+// Buffer) IS case 1 above — not duplicated. The shipped driver is postgres.js 3.4.5 and the spike runs through
+// the REAL seam (`importStagingRepository.copyRows` → `ownerClient.unsafe(<COPY … FROM STDIN>).writable()`);
+// if that API is absent or broken, case 5/6/7 fail loudly — a failing case IS the red verdict, and the red
+// path is 12 §3.3's batched-INSERT fallback behind the same seam (never a redesign — 14 R01). The verdict is
+// recorded in the ADR-0036 addendum ("verdict: pending CI" until this file runs green/red in CI).
+//   5 (criterion 2): throughput floor — ≥ SPIKE_MIN_ROWS_PER_SEC (default 20 000) prepared rows/s sustained
+//     over ≥ SPIKE_THROUGHPUT_ROWS (default 100 000) synthetic rows, after a small warmup band (the
+//     CI-variance guard: a cold pool/JIT never decides the gate). ~500 B/row per 12 §3.2.
+//   6 (criterion 3): memory plateau — producer RSS delta ≤ SPIKE_MAX_RSS_DELTA_MB (default 128) while
+//     staging SPIKE_MEMORY_ROWS (default 1 000 000) rows, AND the delta must not correlate with row count
+//     (plateau assertion: second-half growth bounded, not just a peak check).
+//   7 (criterion 4): mid-stream cancel — destroying the Writable mid-COPY (producer throws → stream.pipeline
+//     destroys the sink) rejects copyRows, leaves NO partial rows (COPY is atomic ⇒ a re-drive re-stages the
+//     aborted band exactly once — the 15 §2 no-double-staging property AT THIS SEAM; the byte-watermark
+//     resume above it is runBulkImport's and is exercised in case 3's machinery), leaves the owner
+//     connection serviceable (no wedge), leaves no server-side COPY backend behind (pg_stat_activity), and
+//     the staging table stays droppable.
+// The G09 verdict is only valid at the DEFAULT parameters — the SPIKE_* env knobs exist for local smoke
+// runs on weak machines, and CI must not lower them.
+//
 // PII identity WITHOUT plaintext: contacts are compared by their email_blind_index (HMAC bytea, hex-keyed) +
 // email_domain + the cleartext scalar facets (names/title) — never a decrypted email. The conflict policy
 // exercised is `skip` (the safe default: a match is a held-back DUPLICATE, the existing row untouched).
@@ -435,7 +457,7 @@ describe("bulk import pipeline: COPY spike + drive/chunk/finalize + sync parity"
     expect(finalize?.fireRollups).toBe(true); // ≥1 contact landed
 
     // Control-row counters (atomic deltas onto the zeroed columns) + terminal status.
-    const job = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJob(tx, jobIdA));
+    const job = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJobSystem(tx, jobIdA));
     expect(job?.status).toBe("completed");
     expect(job?.rowsTotal).toBe(4);
     expect(job?.rowsCreated).toBe(2);
@@ -513,7 +535,7 @@ describe("bulk import pipeline: COPY spike + drive/chunk/finalize + sync parity"
     // The bulk control-row counters (case 3) vs the sync summary: created + duplicate agree exactly. The
     // in-file duplicate lands in DIFFERENT buckets by design — bulk `deduped` (dropped at the staging dedup
     // step) vs sync `skipped` (content-hash idempotency) — but BOTH are 1 and BOTH collapse to one B contact.
-    const jobA = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJob(tx, jobIdA));
+    const jobA = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJobSystem(tx, jobIdA));
     expect(summary.created).toBe(jobA?.rowsCreated); // 2 === 2
     expect(summary.duplicates).toBe(jobA?.rowsDuplicate); // 1 === 1
     // skipped ↔ deduped: the documented divergence (1 === 1) — the in-file dup, different bucket, same effect.
@@ -530,4 +552,225 @@ describe("bulk import pipeline: COPY spike + drive/chunk/finalize + sync parity"
     // And every identity is present on both sides (the explicit identity-set check).
     expect(new Set(b.map((r) => r.blindHex))).toEqual(new Set(a.map((r) => r.blindHex)));
   });
+});
+
+// ═══ S-P1 / GATE A (G09) — the COPY spike as CI assertions (12 §3.2 criteria 2–4; TP-1) ═══════════════════
+
+function intEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+// The G09 verdict is valid ONLY at these defaults (12 §3.2's bars). Knobs exist for local smoke runs.
+const SPIKE_THROUGHPUT_ROWS = intEnv("SPIKE_THROUGHPUT_ROWS", 100_000);
+const SPIKE_MIN_ROWS_PER_SEC = intEnv("SPIKE_MIN_ROWS_PER_SEC", 20_000);
+const SPIKE_MEMORY_ROWS = intEnv("SPIKE_MEMORY_ROWS", 1_000_000);
+const SPIKE_MAX_RSS_DELTA_BYTES = intEnv("SPIKE_MAX_RSS_DELTA_MB", 128) * 1024 * 1024;
+// Plateau bound: the RSS delta over the SECOND half of the stream may exceed the first-half max by at most
+// this much — "the delta must not correlate with row count" (12 §3.2 criterion 3), with GC-noise headroom.
+const SPIKE_MAX_PLATEAU_GROWTH_BYTES = 32 * 1024 * 1024;
+
+// Prepared-row-shaped templates (~500 B/row per 12 §3.2: bytea ciphertext/blind-index/hash sizes mirror what
+// prepareContact emits — AES-GCM ciphertext ~64 B, HMAC blind index 32 B, sha256 content hash 32 B). The
+// buffers are SHARED across rows (the per-row cost is the CSV hex/quote encode — the real producer cost);
+// identity_key varies per row so nothing in the table collapses. Generated IN-PROCESS — no fixtures on disk.
+const SPIKE_EMAIL_ENC = Buffer.alloc(64, 0xa7);
+const SPIKE_BLIND_INDEX = Buffer.alloc(32, 0x5c);
+const SPIKE_CONTENT_HASH = Buffer.alloc(32, 0x33);
+
+/** Synthetic prepared rows [startAt, startAt+count): cheap per-row (no crypto — rows arrive PREPARED at this
+ *  seam), unique identity_key/source_row_num. `onRow` = RSS sampling hook; `abortAt` = mid-stream producer
+ *  throw (stream.pipeline then destroys the COPY Writable — criterion 4's cancel). */
+async function* syntheticRows(
+  count: number,
+  workspaceId: string,
+  opts: { startAt?: number; onRow?: (i: number) => void; abortAt?: number } = {},
+): AsyncIterable<StagingRow> {
+  const startAt = opts.startAt ?? 0;
+  for (let i = 0; i < count; i += 1) {
+    if (opts.abortAt !== undefined && i === opts.abortAt) {
+      throw new Error("SPIKE mid-stream cancel (deliberate)");
+    }
+    opts.onRow?.(i);
+    const n = startAt + i;
+    yield {
+      sourceRowNum: n,
+      workspaceId,
+      identityKey: `spike:${n.toString(16).padStart(16, "0")}`,
+      emailEnc: SPIKE_EMAIL_ENC,
+      phoneEnc: null,
+      emailBlindIndex: SPIKE_BLIND_INDEX,
+      contentHash: SPIKE_CONTENT_HASH,
+      emailDomain: "spike.test",
+      linkedinPublicId: null,
+      salesNavLeadId: null,
+      firstName: "Synthetic",
+      lastName: `Row ${n}`,
+      jobTitle: "Load Generator, Sr.",
+      seniorityLevel: null,
+      department: "R&D",
+      linkedinUrl: null,
+      salesNavProfileUrl: null,
+      locationCountry: "US",
+      locationCity: "San José",
+      accountName: "Spike, Inc.",
+      accountDomain: "spike.test",
+      rawData: { n },
+    };
+  }
+}
+
+/** Server-side COPY backends still alive for THIS database (excluding us). Criterion 4's no-leak probe. */
+async function lingeringCopyBackends(): Promise<number> {
+  const [r] = (await admin`
+    SELECT count(*)::int AS n
+      FROM pg_stat_activity
+     WHERE datname = current_database()
+       AND pid <> pg_backend_pid()
+       AND state <> 'idle'
+       AND query ILIKE 'COPY %'`) as { n: number }[];
+  return r!.n;
+}
+
+/** Best-effort GC so RSS baselines/samples measure the producer, not pre-test garbage (Bun exposes gc()). */
+function tryGc(): void {
+  (globalThis as unknown as { Bun?: { gc?: (force: boolean) => void } }).Bun?.gc?.(true);
+}
+
+describe("S-P1 — the COPY spike (Gate A / G09): criteria 2–4 as CI assertions", () => {
+  // ── 5. CRITERION 2 — throughput floor: ≥ 20k prepared rows/s sustained over ≥ 100k rows ─────────────────
+  test(
+    `5: copyRows sustains ≥ ${SPIKE_MIN_ROWS_PER_SEC} rows/s over ${SPIKE_THROUGHPUT_ROWS} synthetic rows`,
+    async () => {
+      const jobId = randomUUID();
+      await db.importStagingRepository.createStagingTable(jobId, wsA);
+      try {
+        // Warmup band (NOT timed): pool checkout, prepared paths, JIT — the generous CI-variance guard.
+        // The floor itself is NOT discounted: the timed run must clear the 12 §3.2 bar as-is.
+        await db.importStagingRepository.copyRows(jobId, syntheticRows(5_000, wsA, { startAt: 0 }));
+
+        const t0 = performance.now();
+        await db.importStagingRepository.copyRows(
+          jobId,
+          syntheticRows(SPIKE_THROUGHPUT_ROWS, wsA, { startAt: 5_000 }),
+        );
+        const elapsedSec = (performance.now() - t0) / 1_000;
+        const rowsPerSec = SPIKE_THROUGHPUT_ROWS / elapsedSec;
+
+        // Integrity at volume first (a fast wrong answer is not a pass), then the floor.
+        expect(await db.importStagingRepository.countStaged(jobId)).toBe(
+          5_000 + SPIKE_THROUGHPUT_ROWS,
+        );
+        // The measured number MUST surface in the CI log — it is the figure the ADR-0036 addendum records.
+        console.info(
+          `[S-P1 criterion 2] ${SPIKE_THROUGHPUT_ROWS} rows in ${elapsedSec.toFixed(2)}s = ${Math.round(rowsPerSec)} rows/s (floor ${SPIKE_MIN_ROWS_PER_SEC})`,
+        );
+        expect(rowsPerSec).toBeGreaterThanOrEqual(SPIKE_MIN_ROWS_PER_SEC);
+      } finally {
+        await db.importStagingRepository.dropStagingTable(jobId);
+      }
+    },
+    300_000,
+  );
+
+  // ── 6. CRITERION 3 — memory plateau: RSS delta ≤ 128 MB at ≥ 1M rows, and NOT row-count-correlated ──────
+  test(
+    `6: producer RSS delta stays ≤ ${Math.round(SPIKE_MAX_RSS_DELTA_BYTES / 1024 / 1024)} MB and plateaus while staging ${SPIKE_MEMORY_ROWS} rows`,
+    async () => {
+      const jobId = randomUUID();
+      await db.importStagingRepository.createStagingTable(jobId, wsA);
+      try {
+        tryGc();
+        const baseline = process.memoryUsage().rss;
+        const samples: Array<{ atRow: number; rss: number }> = [];
+        const SAMPLE_EVERY = 50_000;
+
+        await db.importStagingRepository.copyRows(
+          jobId,
+          syntheticRows(SPIKE_MEMORY_ROWS, wsA, {
+            onRow: (i) => {
+              if (i > 0 && i % SAMPLE_EVERY === 0) {
+                samples.push({ atRow: i, rss: process.memoryUsage().rss });
+              }
+            },
+          }),
+        );
+        samples.push({ atRow: SPIKE_MEMORY_ROWS, rss: process.memoryUsage().rss });
+
+        expect(await db.importStagingRepository.countStaged(jobId)).toBe(SPIKE_MEMORY_ROWS);
+
+        const deltas = samples.map((s) => s.rss - baseline);
+        const overallMax = Math.max(...deltas);
+        const mid = Math.floor(samples.length / 2);
+        const firstHalfMax = Math.max(...deltas.slice(0, Math.max(mid, 1)));
+        // The measured number MUST surface in the CI log — it is the figure the ADR-0036 addendum records.
+        console.info(
+          `[S-P1 criterion 3] RSS delta max ${(overallMax / 1024 / 1024).toFixed(1)} MB over ${SPIKE_MEMORY_ROWS} rows; first-half max ${(firstHalfMax / 1024 / 1024).toFixed(1)} MB (${samples.length} samples)`,
+        );
+        // The ceiling: constant-memory property, absolute.
+        expect(overallMax).toBeLessThanOrEqual(SPIKE_MAX_RSS_DELTA_BYTES);
+        // The PLATEAU: doubling the rows streamed must not keep growing RSS — second-half growth over the
+        // first-half max is bounded by GC-noise headroom, never proportional to row count.
+        expect(overallMax - firstHalfMax).toBeLessThanOrEqual(SPIKE_MAX_PLATEAU_GROWTH_BYTES);
+      } finally {
+        await db.importStagingRepository.dropStagingTable(jobId);
+      }
+    },
+    600_000,
+  );
+
+  // ── 7. CRITERION 4 — mid-stream cancel: abort, no wedge, no partial rows, no backend leak, droppable ────
+  test(
+    "7: destroying the COPY stream mid-flight aborts cleanly; re-drive stages exactly once; table droppable",
+    async () => {
+      const jobId = randomUUID();
+      await db.importStagingRepository.createStagingTable(jobId, wsA);
+      // NO try/finally around the drop here — the DROP is itself an assertion (a wedged/locked staging
+      // table after an aborted COPY is exactly the failure mode criterion 4 exists to catch).
+      const BASELINE = 1_000;
+      const BAND = 50_000;
+
+      // A committed baseline band, so atomicity is observable against a non-empty table.
+      await db.importStagingRepository.copyRows(jobId, syntheticRows(BASELINE, wsA, { startAt: 0 }));
+      expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE);
+
+      // Mid-stream cancel: the producer throws at row 25 000 of the 50 000-row band → stream.pipeline
+      // destroys the COPY Writable → the server-side COPY must abort. copyRows rejects (wrapped with the
+      // jobId; the underlying reason may be the producer error or the driver's premature-close, either is
+      // a correct abort — the load-bearing assertions are the post-conditions below).
+      await expect(
+        db.importStagingRepository.copyRows(
+          jobId,
+          syntheticRows(BAND, wsA, { startAt: BASELINE, abortAt: 25_000 }),
+        ),
+      ).rejects.toThrow(/copyRows failed/);
+
+      // No wedge: the owner connection keeps serving queries…
+      expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE);
+      // …and COPY atomicity means the aborted band contributed ZERO rows — which is exactly why the
+      // re-drive below can re-stage the whole band without double-staging (15 §2 at this seam).
+
+      // No server-side leak: the aborted COPY backend must wind down (poll — the server needs a moment).
+      let lingering = -1;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        lingering = await lingeringCopyBackends();
+        if (lingering === 0) break;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      expect(lingering).toBe(0);
+
+      // Re-drive the SAME band to completion: lands exactly once (baseline + band, no dupes possible).
+      await db.importStagingRepository.copyRows(jobId, syntheticRows(BAND, wsA, { startAt: BASELINE }));
+      expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE + BAND);
+
+      // And the staging table is droppable — no orphan lock from the aborted COPY.
+      await db.importStagingRepository.dropStagingTable(jobId);
+      const stagingName = db.importStagingRepository.stagingTableName(jobId);
+      const [reg] = (await admin`SELECT to_regclass(${stagingName}) AS t`) as { t: string | null }[];
+      expect(reg!.t).toBeNull();
+    },
+    120_000,
+  );
 });

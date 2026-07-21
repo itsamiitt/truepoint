@@ -6,6 +6,7 @@
 import {
   ageDaysSince,
   computeContactDataQuality,
+  type ContactChannelSummaries,
   type FieldProvenanceMap,
   type MaskedContact,
   type PhoneLineType,
@@ -16,6 +17,13 @@ import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 
 import { alias } from "drizzle-orm/pg-core";
 import { type TenantScope, type Tx, db, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
+import { contactChannelRepository } from "./contactChannelRepository.ts";
+
+/** S-CH4 read opt threaded from the caller-evaluated composed read gate (05 §6). Default off ⇒ the email
+ *  dedup rung + masked projections resolve from the flat columns, byte-identical to the pre-S-CH4 path. */
+export interface ContactReadOpts {
+  channelsFromChild?: boolean;
+}
 
 /** A within-workspace duplicate contact + the canonical it was auto-pointed at (dedup review, G09). NAMES ONLY —
  *  no encrypted email/phone; both sides are same-workspace (RLS-scoped). */
@@ -156,11 +164,15 @@ type ContactRow = typeof contacts.$inferSelect;
  * from the canonical single source in @leadwolf/types (the SAME composition as listRepository.toMaskedMember —
  * never re-derived). All inputs are non-PII present-flags + statuses + the last-verified age, so it is safe here.
  */
-function toMaskedContact(r: ContactRow): MaskedContact {
+function toMaskedContact(r: ContactRow, channels?: ContactChannelSummaries): MaskedContact {
   const emailStatus = r.emailStatus as MaskedContact["emailStatus"];
   const phoneStatus = r.phoneStatus as MaskedContact["phoneStatus"];
-  const hasEmail = r.emailEnc != null;
-  const hasPhone = r.phoneEnc != null;
+  // S-CH4 gate-on (channels present): has_email/has_phone derive from live child-row counts ("∃ live value"
+  // — identical to the flat derivation in steady state by CH-INV-1, correct for no-primary edges, and
+  // secondaries count). dataHealth follows. Gate-off (channels absent) both are the flat-column presence,
+  // byte-identical to the pre-S-CH4 projection.
+  const hasEmail = channels ? channels.emailCount > 0 : r.emailEnc != null;
+  const hasPhone = channels ? channels.phoneCount > 0 : r.phoneEnc != null;
   const lastVerifiedAt = r.lastVerifiedAt?.toISOString() ?? null;
   const dataHealth = computeContactDataQuality({
     hasName: r.firstName !== null || r.lastName !== null,
@@ -197,7 +209,24 @@ function toMaskedContact(r: ContactRow): MaskedContact {
     createdAt: r.createdAt.toISOString(),
     lastVerifiedAt,
     dataHealth,
+    // Additive, gate-on only (05 §5): masked per-value channel summaries. ABSENT gate-off ⇒ byte-identical.
+    ...(channels ? { channels } : {}),
   };
+}
+
+/** Overlay the masked rows with their batched channel summaries when the S-CH4 read gate is on (05 §5): ONE
+ *  query per table for the whole page (no N+1). Gate-off ⇒ the rows pass through untouched, byte-identical. */
+async function withChannelSummaries(
+  tx: Tx,
+  rows: ContactRow[],
+  opts: ContactReadOpts,
+): Promise<MaskedContact[]> {
+  if (!opts.channelsFromChild || rows.length === 0) return rows.map((r) => toMaskedContact(r));
+  const byId = await contactChannelRepository.channelSummariesForContacts(
+    tx,
+    rows.map((r) => r.id),
+  );
+  return rows.map((r) => toMaskedContact(r, byId.get(r.id)));
 }
 
 export const contactRepository = {
@@ -340,24 +369,36 @@ export const contactRepository = {
     return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
   },
 
-  /** Find an existing contact in the workspace by the first dedup key that hits (email → linkedin → sales-nav). */
+  /** Find an existing contact in the workspace by the first dedup key that hits (email → linkedin → sales-nav).
+   *  S-CH4 (05 §6): gate-on the email rung retargets to `contact_emails.blind_index` (secondaries resolve too —
+   *  the G15/G16 payoff), workspace-scoped; the §2.2 partial ws-unique guarantees ≤1 live row per key so
+   *  precedence is preserved exactly. Gate-off (default) the rung reads `contacts.email_blind_index`,
+   *  byte-identical. linkedin/sales-nav rungs are unchanged either way. */
   async findByDedupKeys(
     tx: Tx,
     workspaceId: string,
     keys: DedupKeys,
+    opts: ContactReadOpts = {},
   ): Promise<{ id: string } | null> {
     if (keys.emailBlindIndex) {
-      const r = await tx
-        .select({ id: contacts.id })
-        .from(contacts)
-        .where(
-          and(
-            eq(contacts.workspaceId, workspaceId),
-            eq(contacts.emailBlindIndex, keys.emailBlindIndex),
-          ),
-        )
-        .limit(1);
-      if (r[0]) return r[0];
+      if (opts.channelsFromChild) {
+        const hits = await contactChannelRepository.findContactIdsByEmailBlindIndexes(tx, workspaceId, [
+          keys.emailBlindIndex,
+        ]);
+        if (hits[0]) return { id: hits[0].contactId };
+      } else {
+        const r = await tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.workspaceId, workspaceId),
+              eq(contacts.emailBlindIndex, keys.emailBlindIndex),
+            ),
+          )
+          .limit(1);
+        if (r[0]) return r[0];
+      }
     }
     if (keys.linkedinPublicId) {
       const r = await tx
@@ -401,6 +442,7 @@ export const contactRepository = {
     tx: Tx,
     workspaceId: string,
     keysList: DedupKeys[],
+    opts: ContactReadOpts = {},
   ): Promise<Array<{ id: string } | null>> {
     if (keysList.length === 0) return [];
 
@@ -413,15 +455,27 @@ export const contactRepository = {
       if (k.salesNavLeadId) salesNavIds.push(k.salesNavLeadId);
     }
 
+    // S-CH4 (05 §6): gate-on the email rung's ONE IN-list SELECT retargets to contact_emails.blind_index
+    // (secondaries resolve too), workspace-scoped; gate-off it reads contacts.email_blind_index, byte-identical.
+    // Either way it stays one query per chunk and the §2.2 ws-unique keeps ≤1 hit per key ⇒ precedence exact.
     const emailMap = new Map<string, string>();
     if (emailKeys.length > 0) {
-      const rows = await tx
-        .select({ id: contacts.id, emailBlindIndex: contacts.emailBlindIndex })
-        .from(contacts)
-        .where(
-          and(eq(contacts.workspaceId, workspaceId), inArray(contacts.emailBlindIndex, emailKeys)),
+      if (opts.channelsFromChild) {
+        const hits = await contactChannelRepository.findContactIdsByEmailBlindIndexes(
+          tx,
+          workspaceId,
+          emailKeys,
         );
-      for (const r of rows) if (r.emailBlindIndex) emailMap.set(byteaKey(r.emailBlindIndex), r.id);
+        for (const h of hits) emailMap.set(byteaKey(h.blindIndex), h.contactId);
+      } else {
+        const rows = await tx
+          .select({ id: contacts.id, emailBlindIndex: contacts.emailBlindIndex })
+          .from(contacts)
+          .where(
+            and(eq(contacts.workspaceId, workspaceId), inArray(contacts.emailBlindIndex, emailKeys)),
+          );
+        for (const r of rows) if (r.emailBlindIndex) emailMap.set(byteaKey(r.emailBlindIndex), r.id);
+      }
     }
 
     const linkedinMap = new Map<string, string>();
@@ -634,8 +688,14 @@ export const contactRepository = {
     return out;
   },
 
-  /** Masked, workspace-scoped list for the search/results + post-import surfaces. Never returns PII. */
-  async listByWorkspace(scope: TenantScope, limit = 100): Promise<MaskedContact[]> {
+  /** Masked, workspace-scoped list for the search/results + post-import surfaces. Never returns PII.
+   *  `opts.channelsFromChild` (caller-evaluated S-CH4 gate) adds the masked `channels` summaries + derives
+   *  has_email/has_phone from live child rows; default off ⇒ byte-identical to the pre-S-CH4 projection. */
+  async listByWorkspace(
+    scope: TenantScope,
+    limit = 100,
+    opts: ContactReadOpts = {},
+  ): Promise<MaskedContact[]> {
     return withTenantTx(scope, async (tx) => {
       // DSAR tombstones never surface (08 §4.2).
       const rows = await tx
@@ -644,7 +704,7 @@ export const contactRepository = {
         .where(isNull(contacts.deletedAt))
         .orderBy(desc(contacts.createdAt))
         .limit(limit);
-      return rows.map(toMaskedContact);
+      return withChannelSummaries(tx, rows, opts);
     });
   },
 
@@ -920,6 +980,29 @@ export const contactRepository = {
   },
 
   /**
+   * S-C6 (import-and-data-model-redesign 04 §2 act layer): write ONE match-time duplicate SUGGESTION —
+   * point `contactId` at `canonicalId` via duplicate_of_contact_id — feeding the review queue (G21, doc 11).
+   * The MATCH-vs-ACT split (03 §2.1 [34]): a match-time signal (a secondary-value / phone-line collision the
+   * primary-key ladder can't express as a conflict) NEVER updates, merges, or blocks the row — it lands per
+   * policy and this pointer is the only side effect. GUARDED to stay a pure SUGGESTION: it writes ONLY when
+   * the contact has NO existing pointer (never clobbers the dedup sweep's marker or a stronger signal) and
+   * never self-references (the `contactId === canonicalId` short-circuit + the predicate). Like flagDuplicates
+   * this is a derived annotation → updatedAt is intentionally NOT bumped. The marker is reversible/transient
+   * (the dedup sweep re-derives markers wholesale on its next run — 04 §3.5); the DURABLE signal home is I5
+   * `match_links`, out of scope here. RLS scopes the write to the caller's workspace. Returns whether a
+   * pointer was written.
+   */
+  async markDuplicateSuggestion(tx: Tx, contactId: string, canonicalId: string): Promise<boolean> {
+    if (contactId === canonicalId) return false;
+    const rows = await tx
+      .update(contacts)
+      .set({ duplicateOfContactId: canonicalId })
+      .where(and(eq(contacts.id, contactId), isNull(contacts.duplicateOfContactId)))
+      .returning({ id: contacts.id });
+    return rows.length > 0;
+  },
+
+  /**
    * List the workspace's DUPLICATE contacts (duplicate_of_contact_id set) paired with the canonical each was
    * auto-pointed at — the within-workspace dedup REVIEW read (database-management-research G09). RLS scopes BOTH
    * sides to the caller's workspace (the alias is the same RLS-scoped `contacts` table, so no cross-workspace
@@ -965,14 +1048,18 @@ export const contactRepository = {
    * the role-gated CSV export. Never selects the encrypted email/phone (export ships facets only, never PII).
    * Tombstoned rows are excluded. Order is stable (created_at desc, id desc) so the CSV is deterministic.
    */
-  async listMaskedByIds(tx: Tx, ids: string[]): Promise<MaskedContact[]> {
+  async listMaskedByIds(
+    tx: Tx,
+    ids: string[],
+    opts: ContactReadOpts = {},
+  ): Promise<MaskedContact[]> {
     if (ids.length === 0) return [];
     const rows = await tx
       .select()
       .from(contacts)
       .where(and(inArray(contacts.id, ids), isNull(contacts.deletedAt)))
       .orderBy(desc(contacts.createdAt), desc(contacts.id));
-    return rows.map(toMaskedContact);
+    return withChannelSummaries(tx, rows, opts);
   },
 
   /**

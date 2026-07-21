@@ -5,7 +5,7 @@
 // that stays in runImport; this is the shared verdict both the preview and the import use so they never
 // disagree. Returns a structured verdict with per-field reasons (the rejected-rows artifact rows).
 
-import type { ColumnMapping, RejectedRow } from "@leadwolf/types";
+import type { ColumnMapping, ImportRejectCode, RejectedRow } from "@leadwolf/types";
 import { type MappedRow, type RawRow, mapRow } from "./columnMap.ts";
 import {
   linkedinPublicIdOf,
@@ -21,9 +21,19 @@ export interface RowIdentity {
   salesNavLeadId?: string;
 }
 
+/** One per-field (or whole-row) rejection reason. `code` is the typed vocabulary member (importReject.ts, 08
+ *  §4) — the machine-readable half that the ledger token + artifacts consume; `reason` stays the human string
+ *  (the repair CSV's `tp__error_detail`, legal inside that gated file — 13 §3.3). `field` is the CANONICAL
+ *  column ref (non-PII), or null for a whole-row reason. */
+export interface RowRejectReason {
+  field: string | null;
+  reason: string;
+  code: ImportRejectCode;
+}
+
 export type RowVerdict =
   | { ok: true; mapped: MappedRow; identity: RowIdentity }
-  | { ok: false; reasons: { field: string | null; reason: string }[] };
+  | { ok: false; reasons: RowRejectReason[] };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -34,14 +44,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 export function validateRow(raw: RawRow, mapping: ColumnMapping): RowVerdict {
   const mapped = mapRow(raw, mapping);
-  const reasons: { field: string | null; reason: string }[] = [];
+  const reasons: RowRejectReason[] = [];
 
   // Field-level format checks (only for fields actually mapped + present).
   const storageEmail = normalizeEmailForStorage(mapped.email);
   if (mapped.email != null && !storageEmail && !EMAIL_RE.test(mapped.email.trim())) {
-    reasons.push({ field: "email", reason: "Malformed email address." });
+    reasons.push({ field: "email", reason: "Malformed email address.", code: "malformed_email" });
   } else if (storageEmail && !EMAIL_RE.test(storageEmail)) {
-    reasons.push({ field: "email", reason: "Malformed email address." });
+    reasons.push({ field: "email", reason: "Malformed email address.", code: "malformed_email" });
   }
 
   const linkedinPublicId = linkedinPublicIdOf(mapped.linkedinPublicId ?? mapped.linkedinUrl);
@@ -53,6 +63,7 @@ export function validateRow(raw: RawRow, mapping: ColumnMapping): RowVerdict {
     reasons.push({
       field: null,
       reason: "Row has no email, LinkedIn, or Sales Navigator identifier.",
+      code: "missing_identifier",
     });
   }
 
@@ -65,13 +76,14 @@ export function validateRow(raw: RawRow, mapping: ColumnMapping): RowVerdict {
   return { ok: true, mapped, identity };
 }
 
-/** Build the rejected-rows artifact entries for a verdict's reasons (one entry per offending field). */
+/** Build the rejected-rows artifact entries for a verdict's reasons (one entry per offending field). Carries the
+ *  typed `code` through so the ledger token + artifacts share ONE vocabulary (08 §4). */
 export function rejectedRowsFor(
   row: number,
   raw: RawRow,
-  reasons: { field: string | null; reason: string }[],
+  reasons: RowRejectReason[],
 ): RejectedRow[] {
-  return reasons.map((r) => ({ row, field: r.field, reason: r.reason, raw }));
+  return reasons.map((r) => ({ row, field: r.field, reason: r.reason, code: r.code, raw }));
 }
 
 /**

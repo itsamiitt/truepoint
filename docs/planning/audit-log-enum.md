@@ -39,7 +39,7 @@ honest and the gap does not silently reopen.
 enum**. There is no `AUDIT_ACTIONS` array, and no type literally named `audit_action`. The Zod list and the
 CHECK list are two **hand-maintained** lists that must match (see §7).
 
-### 2.2 The value set — 79 values, four groups
+### 2.2 The value set — 80 values, four groups (+ `import.policy_updated`, import-redesign S-V1)
 
 Exactly as declared in `auditAction` (`packages/types/src/billing.ts`). In the prose docs (08 §5, 03 §7)
 shared prefixes are slash-compressed (`contact.create/update/delete`); the code carries the fully-expanded
@@ -180,7 +180,7 @@ the blocked-attempt proof survives.)* Because `packages/auth` cannot import `cor
 (`packages/auth/src/auditEvent.ts`, [ADR-0031](./decisions/ADR-0031-auth-event-audit-tenancy.md)): its own
 `withTenantTx`, swallow-on-failure, wired for the **tenant-resolved** events (§5.1).
 
-### 5.1 Written today — verified call-sites (22 of 79)
+### 5.1 Written today — verified call-sites (23 of 80)
 
 | Action | Call-site |
 |---|---|
@@ -206,8 +206,9 @@ the blocked-attempt proof survives.)* Because `packages/auth` cannot import `cor
 | `member.update` | `packages/core/src/auth/members.ts` `changeMemberRole` (P1-03) |
 | `member.remove` | `packages/core/src/auth/members.ts` `removeMember` (P1-03) |
 | `mfa.enroll` | `apps/auth/src/app/mfa/enroll/actions.ts` `verifyMfaEnroll` (forced) + `apps/auth/src/app/account/security/actions.ts` `verifyTotpEnroll` (self-service) — both via `recordAuthEvent` (P1-01) |
+| `import.policy_updated` | `apps/api/src/features/settings/routes.ts` PUT /settings/import-policy — in-tx `writeAudit` beside `importPolicyRepository.upsertInTx` (import-redesign 10 §3, S-V4) |
 
-### 5.2 Defined but not yet wired — the residual coverage backlog (57 of 79)
+### 5.2 Defined but not yet wired — the residual coverage backlog (57 of 80)
 
 These values exist in the closed enum but have **no writer call-site yet** (`writeAudit` for core,
 `recordAuthEvent` for auth); they land as their owning services / milestones do:

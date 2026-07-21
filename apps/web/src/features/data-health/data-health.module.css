@@ -175,6 +175,134 @@
   line-height: 1.5;
 }
 
+/* ── S-U8 merge review drawer (11 §5.2) ─────────────────────────────────────────────────────────────── */
+.mergeFoot {
+  display: flex;
+  gap: var(--tp-space-2, 8px);
+  justify-content: flex-end;
+}
+
+.mergeBody {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Survivor / loser identity cards. */
+.mergeRecords {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.recordCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--tp-surface-2);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.recordRole {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tp-ink-4);
+}
+
+.recordName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+
+.mergeSwapRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Per-field comparison grid: a label column + a two-option pick block. */
+.mergeFields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mergeFieldsHead,
+.mergeField {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.mergeFieldLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-ink-2);
+}
+
+.mergePicks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pickValue {
+  font-size: 13px;
+  color: var(--tp-ink);
+  overflow-wrap: anywhere;
+}
+
+.pinBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tp-ink-4);
+}
+
+.mergeNote {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--tp-ink-4);
+}
+
+.mergeImpact {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.impactChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Stack the field grid on narrow drawers (mobile ≥768 side-by-side per 11 §7.3). */
+@media (max-width: 640px) {
+  .mergeFieldsHead,
+  .mergeField {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
 /* ── Responsive ───────────────────────────────────────────────────────────────────────────────────── */
 @media (max-width: 860px) {
   .page {

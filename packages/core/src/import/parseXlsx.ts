@@ -9,10 +9,11 @@
 //   • ZIP MAGIC — a real .xlsx is an OOXML ZIP; non-ZIP bytes are rejected before parse (SheetJS otherwise
 //     mis-reads arbitrary bytes as a 1-cell sheet).
 //   • BOUNDED INPUT — the COMPRESSED upload is capped at MAX_BYTES and the parse is capped at MAX_ROWS via
-//     `sheetRows`; columns are capped after the header is read. NOTE: `XLSX.read` still decompresses the OOXML
-//     container (sheet XML + shared-strings) into memory before `sheetRows` truncates, so the compressed-byte
-//     cap — not a decompressed-size cap — is the real ceiling; a hostile high-ratio zip is a known residual to
-//     harden at the scale/streaming step (list-plan/03 §6). Over-cap → a clean ImportValidationError, no crash.
+//     `sheetRows`; columns are capped after the header is read. The decompressed-size hazard `XLSX.read` would
+//     otherwise pose (it inflates the OOXML container — sheet XML + shared-strings — into memory before
+//     `sheetRows` truncates) is now closed by S-S5: `assertXlsxArchiveWithinLimits` reads the central directory
+//     and enforces the declared-uncompressed / expansion-ratio / entry-count caps STRICTLY BEFORE `XLSX.read`,
+//     so a hostile high-ratio zip is refused (422) before it inflates. Over-cap → a clean error, no crash.
 //   • CSV-INJECTION — a leading formula trigger (= + - @, incl. after a tab/CR) is neutralized so a value that
 //     is later re-exported to a spreadsheet can't execute. This matches the OWASP CSV-injection guidance and is
 //     applied at the parse seam so both the preview and the stored raw row are clean.
@@ -20,12 +21,16 @@
 
 import { ImportValidationError } from "@leadwolf/types";
 import * as XLSX from "xlsx";
+import {
+  IMPORT_XLSX_MAX_BYTES as MAX_BYTES,
+  IMPORT_XLSX_MAX_COLS as MAX_COLS,
+  IMPORT_XLSX_MAX_ROWS as MAX_ROWS,
+  assertXlsxArchiveWithinLimits,
+} from "./admission.ts";
 import type { ParsedCsv, RawRow } from "./columnMap.ts";
 
-/** Footprint caps (truepoint-security / list-plan/03 §6 "Footprint caps"). Reject before materializing. */
-const MAX_ROWS = 100_000; // data rows (excludes the header)
-const MAX_COLS = 256; // header columns
-const MAX_BYTES = 25 * 1024 * 1024; // 25 MiB compressed workbook — a worker-safe ceiling
+// Footprint caps (truepoint-security / list-plan/03 §6 "Footprint caps") now live in admission.ts — the ONE
+// constants spot for the S-S1 upload envelope (S-P2 will centralize) — and are aliased to the original names.
 
 /** Strip a leading spreadsheet-formula trigger so a re-exported value can't execute (CSV-injection class). */
 function neutralizeFormula(value: string): string {
@@ -60,6 +65,10 @@ export function parseXlsx(bytes: Uint8Array): ParsedCsv {
       "The .xlsx file could not be read — it may be corrupt or not a real .xlsx.",
     );
   }
+  // S-S5 (13 §1.4): zip-bomb/archive caps at central-directory read, STRICTLY BEFORE XLSX.read inflates
+  // the container — expansion ratio, entry count, per-entry/total uncompressed, nested archives,
+  // traversal names, ZIP64. Throws ArchiveLimitsExceededError (422 `archive_limits_exceeded`).
+  assertXlsxArchiveWithinLimits(bytes);
 
   let workbook: XLSX.WorkBook;
   try {

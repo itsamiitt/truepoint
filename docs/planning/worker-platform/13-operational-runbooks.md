@@ -62,8 +62,10 @@ your orchestrator. Anything load-bearing carries a citation.
 | H | [Deploy / rollback](#runbook-h--deploy--rollback) | Shipping or reverting the workers image | Change |
 | I | [Boot crash from a missing env var](#runbook-i--boot-crash-from-a-missing-env-var) | Workers crash-loop at startup | SEV-1 |
 | J | [Dev Redis wiped repeatables](#runbook-j--dev-redis-wiped-repeatables) | Sweeps stop ticking after a Redis restart (dev) | SEV-3 (dev-only) |
+| K | [Import stall / stuck import + reaper alerts](#runbook-k--import-stall--stuck-import-reaper--alerts-import-redesign-s-q5s-q7) | `import.jobs.stalled` > 0, accounting/artifact-pending gauge > 0, or a stuck-looking import | SEV-1/2 (SEV-1 for accounting violations) |
 
-> There is no Runbook "F"; IDs align to the deliverable spec (A–J, F reserved).
+> There is no Runbook "F"; IDs align to the deliverable spec (A–J, F reserved). Runbook K is added by the
+> import redesign (09 §8 / S-Q5 / S-Q7) — the import reaper's observe/recover surface.
 
 ### 0.4 Shared reference — the topology every runbook uses
 
@@ -707,6 +709,81 @@ redis-cli KEYS 'bull:*:repeat'
 None needed — re-registration is idempotent (stable `jobId` prevents duplicates). To make dev
 survive restarts, mirror prod by setting Redis to `--appendonly yes` locally
 ([RECOMMENDATION]) — but ephemeral dev Redis is the intended default.
+
+---
+
+## Runbook K — Import stall / stuck import, reaper & alerts (import redesign, S-Q5/S-Q7)
+
+Home for the import-redesign observability landed by **S-Q7** (metrics + alert catalog + these entries) on
+top of the **S-Q5** reaper. Everything here is **gate-independent hardening** — the reaper observes/recovers
+the durable `import_jobs` rows the unified queue creates; it never changes the happy path. All metrics are on
+the shipped zero-dep `GET /metrics` (`apps/workers/src/metrics.ts`, rendered by `collectWorkerMetricsText`).
+
+### K.0 The by-design-vs-defect framing still rules (see §0.1)
+
+The unified import queue (`bulk-imports`) and its reaper/promotion sweeps are **only constructed when
+`BULK_IMPORT_ENABLED ∨ IMPORT_V2_ENABLED`** (`apps/workers/src/register.ts`). With both gates off there are no
+non-terminal v2 rows to reap and the `leadwolf_import_*` metrics never move — **that is by design, not a
+defect.** Confirm the gate state before treating a flat/empty import metric as a fault.
+
+### K.1 Import alert catalog (09 §8 — thresholds + severity)
+
+Severity uses the worker-platform 10 §9 scale. "First check" is the one-line triage; the reaper heals most
+recovery cases with **no manual action** — these alerts are mostly *confirm-it-healed*, not *go-fix-it*.
+
+| Alert | Signal (metric) | Threshold | Sev | First check → action |
+|---|---|---|---|---|
+| **Accounting violation** | `leadwolf_import_jobs_accounting_violations` | > 0 | **S1** (data integrity) | A terminal job's 7-bucket sum ≠ `rows_total`. Do **not** self-heal — capture the jobId (worker logs `import reaper: accounting-identity violations`), diff the counters vs ledger, open a data-integrity incident. Never a routine redrive. |
+| **Import DLQ growth** | `leadwolf_worker_queue_jobs{queue="bulk-imports-dlq",state="waiting"}` | > 0 sustained | S2 | PII-free dead-letter records — classify transient vs poison, then [Runbook D](#runbook-d--dlq-growth--redrive). Redrive is idempotent (stable ids). |
+| **Import stall** | `leadwolf_import_jobs_stalled` | > 0 for > 1 scrape | S2 | A `running` job's counters haven't moved past the stall window. Worker up? Redis reachable ([Runbook B](#runbook-b--redis-wedged-buffered-commands-silent-stall))? If the drive/chunk is genuinely gone the reaper re-drives copy / terminalizes fast next tick — confirm the gauge returns to 0. |
+| **Artifact pending** | `leadwolf_import_jobs_artifact_pending` | > 0 sustained | S3 | A terminal job with rejects but no repair-CSV key (store crash mid-finalize). The reaper flags (does not yet re-run — 16 drift); re-generate the artifact via the retry-failed path or accept the honest "expired/unavailable" UI state. |
+| **Relay lag (notify/rollup)** | `leadwolf_worker_outbox_oldest_pending_seconds` | > 60 s (S2); > 10 min (S1) | S2/S1 | Outbox not draining → check worker replicas + `worker_outbox.status='failed'` rows (a wiring bug, not a retry case). Leaderless: any replica's relay drains on recovery. |
+| **Reaper re-drive anomaly** | `leadwolf_import_reaper_copy_redrive_total` / `_fast_orphan_failed_total` | rate spike | S2 | A climbing re-drive/orphan-fail rate = a systemic loss (Redis flush, producer crash-loop). Rule out [Runbook A](#runbook-a--worker-process-down)/[B](#runbook-b--redis-wedged-buffered-commands-silent-stall); the counters are cumulative (rate() over them). |
+| **Backpressure 503s** | (product-cap layer; ~0 in normal op — 09 §1.3) | firing | S2 | The raw shed fired before the product cap — the caps are mis-sized (doc 12). Not a reaper case. |
+| **No-new-'skipped' (G08 monitor)** | `leadwolf_import_av_skipped_recent` | > 0 while `MALWARE_SCANNER≠stub` | **S2 security** | A fresh upload recorded `av_scan_status='skipped'` with a real scanner configured — the AV gate is FAILING OPEN (import-redesign 13 §2.3). Investigate the wiring (both wire points: api admission + drive re-check); never normal, never self-healing. `retry:%` children are excluded (they inherit the parent's verdict). Gauge published only while a scanner is configured (absent under the stub = honest, not green). |
+| **AV scan pending stale** | `leadwolf_import_av_pending_stale` | > 0 sustained | S2 ops | `pending` verdicts older than the scan SLA — usually the scanner outage holding jobs (fail-closed WORKING: nothing was admitted unscanned). Restore clamd (`CLAMAV_HOST:CLAMAV_PORT` reachable; `nc -z` it), then retried drives complete; admission-side outages surface as 503 `scan_unavailable` to uploaders. |
+| **Infected upload** | `leadwolf_import_av_infected_total` | any increment (rate-watch) | S3 routine | The control WORKING: a drive-time re-check found a stored object infected ⇒ job `failed` (`av_infected`), object unreachable (no tenant download path serves source objects; the artifact sweep bounds it). Repeated hits per user/workspace ⇒ abuse review (13 §7). Admission-time infections are refused pre-job (422, no row) and do not meter here. |
+| **Artifact TTL sweep stalled** | `leadwolf_import_artifact_ttl_candidates` | growing over successive scrapes | S3 | S-S7: lapsed PII artifacts (> `IMPORT_ARTIFACT_TTL_DAYS`, default 90 d) are not being expired — sweep errors in worker logs (`import artifact sweep: expiry failed`), usually store credentials/reachability. `_expired_total`/`_objects_deleted_total` climbing then settling = healthy; a candidate count that only grows = go look. Key-nulling means an expired artifact download is an honest 404, never a broken stream. |
+| **Scheduled-import fires stalled** | `leadwolf_import_scheduled_due` (census) / `leadwolf_import_scheduled_fired_total` / `_scheduled_failed_total` / `_scheduled_grant_disabled_total` | `due` growing while `_fired_total` flat (S3); `_failed_total` rate spike (S2) | S3/S2 | P5 (08 §9): the leader-locked sweep fires due schedules onto the fast lane. **Gate check first (K.0-style):** the sweep is built only when `SCHEDULED_IMPORTS_ENABLED` (env) AND rides the unified-queue block, and each fire re-checks the per-tenant `scheduled_imports_enabled` flag — all off ⇒ the gauge never moves, by design (a tenant-off schedule is cheaply re-skipped each tick, so a nonzero `due` with `_skipped_total` climbing is NORMAL when the flag is off). A `due` census that only grows while `_fired_total` is flat = the fast lane wedged (check the `bulk-imports` queue depth + [Runbook A](#runbook-a--worker-process-down)/[B](#runbook-b--redis-wedged-buffered-commands-silent-stall)) OR every due schedule failing (`_failed_total` climbing — worker logs `scheduled-import sweep: fire failed`: missing/undecodable source object, parse error, or an over-fast-pair source; a broken schedule auto-disables at `SCHEDULED_IMPORT_MAX_CONSECUTIVE_FAILURES` and notifies its creator). `_grant_disabled_total` increments = a schedule creator lost their import grant (demoted/policy-tightened/deleted) ⇒ the schedule disabled itself + notified — expected on a role change, never self-healing (the creator re-creates or an admin re-enables). Never a value in logs (ids + counts only). |
+| **Channel drift (CH-INV-1)** | `leadwolf_channel_drift_remaining` | > 0 after burn-in (S2); a SPIKE (S1 triage) | S2 | S-CH5: live contacts whose flat email/phone columns disagree with the live `is_primary` child row. **Gate check first (K.0-style):** the reconcile sweep is built only when `CHANNEL_DUAL_WRITE ∧ CHANNEL_RECONCILE_ENABLED` — off ⇒ the gauge never moves, by design. The sweep self-repairs per the PHASE rule (read gate off ⇒ flat wins; on ⇒ child wins) — most nonzero readings settle to 0 within a sweep cycle (default 15 min): confirm `_drift_repaired_flat_total`/`_repaired_child_total` climbing then the gauge draining. A **sustained** nonzero after a full cycle = residual not auto-repairable (undecryptable flat phone / non-representable legacy `phone_status`|`line_type` grade — `_drift_skipped_total` > 0, or steady flat-wins phantom) ⇒ manual data triage. A **spike** = a writer bug bypassing `applyChannelWrite` (05 §worst-case): flip `CHANNEL_READ_FROM_CHILD` off (reads return to the flat primary cache), find the offending writer, let the sweep repair. Never a value in logs (ids + counts only). |
+| **Account backfill remaining (S-A1/S-A3)** | `leadwolf_account_backfill_domain_remaining` (the S-A6/C2 gate); `leadwolf_account_backfill_hq_remaining` (count-only) | domain gauge not draining while enabled (S3); the domain gauge is the **S-A6/C2 activation gate** — C2 must not flip until it reads 0 | S3 | import-and-data-model-redesign S-A1 (the mandated re-run, 15 §2.2/seq 55) + S-A3 (HQ synthesis, seq 56). **Gate check first:** the sweep is built only when `ACCOUNT_DOMAINS_DUAL_WRITE ∧ ACCOUNT_BACKFILL_ENABLED` — off ⇒ the gauges never move, by design. The sweep is self-terminating + idempotent (WHERE-missing selection is the watermark): enable it, watch `_backfill_domains_created_total` climb and `backfill_domain_remaining` drain to 0, RE-RUN after dual-write is on fleet-wide to close the write-gap tail (a flat account written between the first pass and dual-write-on lacks a child row — 14 conflict ⑤), THEN it is safe to activate S-A6's C2 rung. `backfill_hq_remaining` is COUNT-ONLY (never a gate): S-A3 is best-effort — an unmappable freetext hq_country yields a location with `country NULL` (counted as `_backfill_hq_unmapped_total`), so the HQ gauge still drains to 0 but blocks nothing. A **domain gauge stuck > 0 while enabled** = per-workspace pass failures in worker logs (`account-backfill: workspace pass failed`) or the tenant flag off for the residual cohort (`gateOff` in the tick log). Never a value in logs (ids + counts only). |
+
+> **Reserved, not owned here:** the notify delivery-lag gauge `leadwolf_import_notify_delivery_lag_seconds` is
+> defined by S-Q4 (the notify consumer), not S-Q7 — its threshold (p95 terminal→in-app < 60 s) lands with it.
+
+### K.2 Symptom → Diagnosis → Action → Verification → Rollback
+
+**Symptom.** An import looks stuck (customer poll shows `running`/`queued` not advancing), or an import alert
+above fired.
+
+**Diagnosis.**
+1. **Gate check first (K.0).** If both import gates are off, there is nothing to reap — the report is a
+   by-design empty, not a fault.
+2. Scrape `GET /metrics` (port 3002, exec in — §0.4) and read the `leadwolf_import_*` family + the
+   `bulk-imports`/`bulk-imports-dlq` depth rows.
+3. Non-PII DB census (break-glass DBA read; control rows only, never `import_job_rows`):
+   ```bash
+   psql "$DATABASE_URL" -c "SELECT status, count(*) FROM import_jobs GROUP BY status;"
+   ```
+   States waiting on a human/gate (`draft`,`deferred`,`paused`) are **not** "stuck on a worker" (09 §9).
+
+**Action.**
+- **Stall / orphan:** no manual action in the common case — the reaper re-drives copy jobs (stable-id,
+  watermark-resumed) and writes the honest `failed` terminal for orphaned fast jobs (rows-in-payload are
+  unrecoverable in Phase A — 16 drift). If the gauge does not clear, the worker or Redis is down → Runbook
+  A/B. Do **not** hand-edit `import_jobs.status`.
+- **Redis flush:** the reaper is the recovery — verify via `leadwolf_import_reaper_*` climbing then settling;
+  every job reaches a terminal state with **no manual re-submits** (T-Q5 intent).
+- **DLQ growth:** [Runbook D](#runbook-d--dlq-growth--redrive).
+- **Accounting violation (S1):** incident, not a redrive — see K.1.
+
+**Verification.** `leadwolf_import_jobs_stalled` and the integrity gauges return to 0; the `import_jobs` census
+shows no non-terminal rows older than the orphan grace; DLQ drains.
+
+**Rollback.** The reaper only observes + recovers (idempotent re-drive / idempotent terminal write) — nothing
+to roll back. To silence it, flip the import gate off (`IMPORT_V2_ENABLED`/`BULK_IMPORT_ENABLED` = not
+`"true"`) + restart workers; the metrics then read empty (honest absence). Tuning reverts by env
+(`IMPORT_REAPER_SWEEP_EVERY_MS`, `IMPORT_REAPER_ORPHAN_GRACE_MS`, `IMPORT_REAPER_STALL_WINDOW_MS`).
 
 ---
 

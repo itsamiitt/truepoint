@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { revealType } from "./billing.ts";
+import { importRejectCode } from "./importReject.ts";
 import { freshnessStatus } from "./intel.ts";
 
 // ── Enums (mirror 03 §5 CHECK constraints) ─────────────────────────────────────────────────────────────
@@ -34,10 +35,79 @@ export type EmailStatus = z.infer<typeof emailStatus>;
 export const phoneStatus = z.enum(["direct", "mobile", "hq", "unknown", "valid", "invalid"]);
 export type PhoneStatus = z.infer<typeof phoneStatus>;
 
-/** Carrier line type (Twilio Lookup line_type_intelligence) — the TCPA mobile-vs-landline gating signal
- *  (01 §5.3), distinct from phone_status (the reachability/kind grade). `unknown` = couldn't classify. */
-export const phoneLineType = z.enum(["mobile", "landline", "voip", "unknown"]);
+/** Carrier line type — the TCPA mobile-vs-landline gating signal (01 §5.3), distinct from phone_status (the
+ *  reachability/kind grade). `unknown` = couldn't classify. WIDENED IN PLACE (additively) to the
+ *  import-redesign 05 §1.5 union taxonomy at S-CH1 — DM1: ONE vocabulary; this symbol stays the single
+ *  symbol of record, shared by the flat `contacts.phone_line_type` cache and `contact_phones.line_type`:
+ *  the original four (backwards-compatible; the only values today's verifiers emit) ∪ Twilio Lookup's
+ *  carrier-live set (the fraud/TCPA-relevant fixed/non-fixed VOIP split, toll_free, premium_rate,
+ *  shared_cost, personal, pager, uan, voicemail) ∪ libphonenumber's honest offline-US ambiguity value
+ *  `fixed_line_or_mobile` (store it, don't guess — `contact_phones.line_type_source` records HOW it was
+ *  determined). `voip` remains for legacy rows and providers that don't distinguish fixed/non-fixed. */
+export const phoneLineType = z.enum([
+  "mobile",
+  "landline",
+  "fixed_voip",
+  "non_fixed_voip",
+  "voip",
+  "toll_free",
+  "premium_rate",
+  "shared_cost",
+  "personal",
+  "pager",
+  "uan",
+  "voicemail",
+  "fixed_line_or_mobile",
+  "unknown",
+]);
 export type PhoneLineType = z.infer<typeof phoneLineType>;
+
+// ── Multi-value channel usage types + masked summaries (import-redesign 05 §1.4/§5; S-CH1/S-CH4) ────────
+// Moved here from contactChannels.ts at S-CH4 (maskedContactSchema below now embeds the summaries, and
+// contactChannels.ts imports THIS file — defining them there would cycle). contactChannels.ts remains the
+// channel layer's home for everything else (flag keys, caps, line_type_source).
+
+/** Email usage context. RFC 9553 `contexts` + the Merge/Apideck interop core — lossless egress guaranteed. */
+export const contactEmailType = z.enum(["work", "personal", "other"]);
+export type ContactEmailType = z.infer<typeof contactEmailType>;
+
+/** Phone usage context: the interop core (work|personal|mobile|other) + the sales-intelligence kinds
+ *  `direct`/`hq` every SI dataset ships. `type` answers "what is this value FOR"; `line_type` (the
+ *  phoneLineType union above) answers "what kind of line is it"; `status` answers "is it any good"
+ *  — the three RFC 9553 axes, with `is_primary` as the degenerate two-level `pref`. */
+export const contactPhoneType = z.enum(["work", "personal", "mobile", "direct", "hq", "other"]);
+export type ContactPhoneType = z.infer<typeof contactPhoneType>;
+
+/** One live email value, masked (05 §5 — non-PII): usage type + verification status + primary flag.
+ *  No value, no domain — a SECONDARY email's domain is PII-adjacent and stays masked until reveal. */
+export const contactEmailSummarySchema = z.object({
+  type: contactEmailType,
+  status: emailStatus,
+  isPrimary: z.boolean(),
+});
+export type ContactEmailSummary = z.infer<typeof contactEmailSummarySchema>;
+
+/** One live phone value, masked: usage type + status grade + carrier line type (the TCPA dial-risk badge
+ *  for the per-call picker) + primary flag. No value, ever. */
+export const contactPhoneSummarySchema = z.object({
+  type: contactPhoneType,
+  status: phoneStatus.nullable(),
+  lineType: phoneLineType.nullable(),
+  isPrimary: z.boolean(),
+});
+export type ContactPhoneSummary = z.infer<typeof contactPhoneSummarySchema>;
+
+/** The masked channel projection a contact read carries once the S-CH4 read gate is on (additive,
+ *  optional-populated like `dataHealth`/`revealedTypes` — only surfaces that compute it send it): live-row
+ *  counts + per-value summaries, primary-first. `emailDomain`/`emailStatus`/`phoneStatus`/`phoneLineType`
+ *  on the masked contact keep meaning THE PRIMARY's facets (CH-INV-1), so no existing consumer changes. */
+export const contactChannelSummariesSchema = z.object({
+  emailCount: z.number().int().min(0), // live contact_emails rows
+  phoneCount: z.number().int().min(0), // live contact_phones rows
+  emailSummaries: z.array(contactEmailSummarySchema).optional(),
+  phoneSummaries: z.array(contactPhoneSummarySchema).optional(),
+});
+export type ContactChannelSummaries = z.infer<typeof contactChannelSummariesSchema>;
 
 export const seniorityLevel = z.enum(["c_suite", "vp", "director", "manager", "ic", "other"]);
 export type SeniorityLevel = z.infer<typeof seniorityLevel>;
@@ -74,6 +144,11 @@ export const canonicalField = z.enum([
   "locationCity",
   "accountName",
   "accountDomain",
+  // P5 delta imports (08 §9 layer 3): the caller's STABLE external key (their CRM/source row id). Mapping it
+  // is the per-import opt-in that, under the DELTA_IMPORTS gate, makes it the TOP dedup rung. Additive: an
+  // import that never maps it is byte-identical to the shipped email→linkedin→sales-nav ladder. Wizard/auto-map
+  // exposure is DEFERRED to a doc-11 UI slice (doc 16 drift) — the field is mappable by contract, dark in the UI.
+  "externalId",
 ]);
 export type CanonicalField = z.infer<typeof canonicalField>;
 
@@ -101,6 +176,9 @@ export const canonicalContactRowSchema = z.object({
   locationCity: z.string().max(100).optional(),
   accountName: z.string().max(255).optional(),
   accountDomain: z.string().max(255).optional(),
+  // P5 delta imports (08 §9 layer 3): the caller's stable external key; max mirrors the contacts.external_id
+  // varchar(255). Optional like every canonical field — only present when the caller maps an externalId column.
+  externalId: z.string().max(255).optional(),
 });
 export type CanonicalContactRow = z.infer<typeof canonicalContactRowSchema>;
 
@@ -187,6 +265,10 @@ export const rejectedRowSchema = z.object({
   row: z.number().int().nonnegative(), // 0-based index in the parsed file
   field: z.string().nullable(), // canonical field at fault, or null for a whole-row reason
   reason: z.string(),
+  /** The typed reject code (importReject.ts) — the machine-readable half of the reason, shared by the ledger's
+   *  `reject_reason` token and the artifacts' `tp__error_code` column (S-I7, 08 §4). Optional so legacy
+   *  producers and the flag-off path stay byte-identical; populated by every core producer from S-I7 on. */
+  code: importRejectCode.optional(),
   raw: z.record(z.string(), z.string()), // the verbatim source row (header → value)
 });
 export type RejectedRow = z.infer<typeof rejectedRowSchema>;
@@ -407,5 +489,13 @@ export const maskedContactSchema = z.object({
   // phoneLineType). Drives the grid's per-row reveal affordance + "revealed" badge without decrypting the
   // dataset; the actual PII is fetched separately (GET/POST revealed) only for owned rows.
   revealedTypes: z.array(revealType).optional(),
+  // Masked multi-value channel summaries (import-redesign 05 §5, S-CH4 — G16: secondaries become visible as
+  // counts + types + statuses, NEVER values or secondary domains). Optional-populated: present ONLY when the
+  // composed read gate (CHANNEL_READ_FROM_CHILD env + channels_read flag, implying the dual-write gate)
+  // evaluated ON for the surface that built the row — gate-off the field is ABSENT and the payload is
+  // byte-identical to the pre-S-CH4 shape. When present, `hasEmail`/`hasPhone` above derive from these live
+  // child-row counts ("∃ live value" — identical to the flat derivation in steady state by CH-INV-1, but
+  // correct for no-primary edge states, and secondaries count).
+  channels: contactChannelSummariesSchema.optional(),
 });
 export type MaskedContact = z.infer<typeof maskedContactSchema>;

@@ -1,7 +1,10 @@
 // Aggregates all Drizzle table definitions for the client + drizzle-kit. Add new schema files here.
 export * from "./auth.ts";
 export * from "./contacts.ts";
+export * from "./contactChannels.ts";
+export * from "./accountChildren.ts";
 export * from "./masterGraph.ts";
+export * from "./processedSyncEvents.ts";
 export * from "./customFields.ts";
 export * from "./tags.ts";
 export * from "./billing.ts";
@@ -19,6 +22,8 @@ export * from "./pipelineStages.ts";
 export * from "./savedSearches.ts";
 export * from "./lists.ts";
 export * from "./enrichmentPolicy.ts";
+export * from "./importPolicy.ts";
+export * from "./scheduledImports.ts";
 export * from "./webhooks.ts";
 export * from "./importMappingTemplates.ts";
 export * from "./featureFlags.ts";

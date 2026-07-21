@@ -16,6 +16,7 @@ import { billingRoutes, creditsRoutes } from "./features/billing/index.ts";
 import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.ts";
 import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
 import { contactsDedupRoutes } from "./features/contacts-dedup/index.ts";
+import { contactsMergeRoutes } from "./features/contacts-merge/index.ts";
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
 import {
   emailConnectRoutes,
@@ -27,8 +28,14 @@ import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { eventsRoutes } from "./features/events/routes.ts";
 import { homeRoutes } from "./features/home/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
-import { bulkImportRoutes, importRoutes } from "./features/import/index.ts";
+import {
+  bulkImportRoutes,
+  importArtifactRoutes,
+  importRoutes,
+  importScheduleRoutes,
+} from "./features/import/index.ts";
 import { ingestRoutes } from "./features/ingest/index.ts";
+import { masterSyncRoutes } from "./features/master-sync/index.ts";
 import { listsRoutes } from "./features/lists/index.ts";
 import { notificationsRoutes } from "./features/notifications/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
@@ -120,6 +127,13 @@ app.route("/api/v1/imports/mapping-templates", importMappingTemplatesRoutes);
 // mapping-templates: importRoutes' `GET /:jobId` would otherwise capture `/imports/bulk` as a job id. The router
 // is GATED DARK behind BULK_IMPORT_ENABLED (default false) — every route 403s and nothing is created while off.
 app.route("/api/v1/imports/bulk", bulkImportRoutes);
+// Error-artifact downloads (S-V5/S-S4) BEFORE the import router: its `/:jobId/artifacts/:kind` is a deeper path
+// than importRoutes' `/:jobId`, so there is no capture conflict — registered first for the same discipline.
+app.route("/api/v1/imports", importArtifactRoutes);
+// Scheduled imports (P5) BEFORE the import router: `/imports/schedules` must register before importRoutes'
+// `/:jobId` so the literal `schedules` segment is never captured as a job id (the mapping-templates / bulk /
+// artifacts first-match precedent). Every verb 404s while the scheduled-imports dual gate is off.
+app.route("/api/v1/imports", importScheduleRoutes);
 app.route("/api/v1/imports", importRoutes);
 // Bulk actions BEFORE the reveal router: the literal `bulk` segment must register before reveal's `/:id/reveal`
 // so a bulk path is never captured as a contact id (same first-match pattern as imports/mapping-templates).
@@ -127,6 +141,9 @@ app.route("/api/v1/contacts/bulk", contactsBulkRoutes); // 24 Phase-3: owner/tag
 // Within-workspace dedup review (database-management-research G09) — the literal `duplicates` segment registers
 // BEFORE the reveal router so it is never captured as a contact `:id` (same first-match pattern as /contacts/bulk).
 app.route("/api/v1/contacts/duplicates", contactsDedupRoutes);
+// True-merge verb + preview (S-C5): /:id/merge + /:id/merge-preview — no path overlap with reveal/scores/
+// activities. Dual-gated 404-off (dark until the merge flag flips).
+app.route("/api/v1/contacts", contactsMergeRoutes);
 app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal
 app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path overlap either
@@ -137,6 +154,9 @@ app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + r
 app.route("/api/v1/lists", listsRoutes); // 24: static prospect lists (bulk add-to-list)
 // Unified ingestion entry (prospect-database-platform Phase 03 / I2) — one idempotent envelope for every source.
 app.route("/api/v1/ingest", ingestRoutes);
+// Machine-only Forge master-sync ingress (docs/planning/forge/11, ADR-0047) — its own scope-gated principal,
+// NOT the human authn→tenancy→requireRole chain.
+app.route("/api/v1/master-sync", masterSyncRoutes);
 app.route("/api/v1/ai-search", aiSearchRoutes); // 23/ADR-0023: NL → validated filter (for confirmation)
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/custom-fields", customFieldsRoutes); // ADR-0028: field definitions + typed-jsonb values

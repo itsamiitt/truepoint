@@ -147,17 +147,26 @@ function textCondition(text: string | undefined): SQL | undefined {
   return or(sql`${accounts.name} ILIKE ${like}`, sql`${accounts.domain}::text ILIKE ${like}`);
 }
 
+/** Tombstone exclusion (06 §4): account lists/search/facets never surface a soft-deleted account. Applied
+ *  GATE-INDEPENDENTLY and BEHAVIOUR-NEUTRALLY — nothing writes `accounts.deleted_at` yet (no delete verb has
+ *  shipped), so `deleted_at IS NULL` is identically true for every existing row and results are unchanged; it
+ *  becomes load-bearing the moment the soft-delete verb lands (doc 04/11 slice). Threaded through search, count,
+ *  facetCounts AND suggest so page/count/facet totals can never disagree (the S-CH4b page/count/resolve lesson). */
+const NOT_DELETED: SQL = sql`${accounts.deletedAt} IS NULL`;
+
 /** Combine all clauses + text into one WHERE. `exceptFacet` drops a facet's own term filter (for live facet
- *  counts). Workspace isolation is RLS (withTenantTx) — never spelled out in the WHERE. */
-function buildWhere(query: AccountQuery, exceptFacet?: AccountFacetKey): SQL | undefined {
+ *  counts). Workspace isolation is RLS (withTenantTx) — never spelled out in the WHERE. Always carries the
+ *  tombstone exclusion, so this never returns `undefined`. */
+function buildWhere(query: AccountQuery, exceptFacet?: AccountFacetKey): SQL {
   const conds: (SQL | undefined)[] = [];
   for (const clause of query.filters) {
     if (exceptFacet && clause.kind === "term" && clause.field === exceptFacet) continue;
     conds.push(clauseCondition(clause));
   }
   conds.push(textCondition(query.text));
+  conds.push(NOT_DELETED);
   const present = conds.filter((c): c is SQL => c !== undefined);
-  return present.length ? (and(...present) as SQL) : undefined;
+  return and(...present) as SQL;
 }
 
 const SELECTION = {
@@ -320,7 +329,7 @@ export const accountSearchRepository = {
         const rows = (await tx.execute(sql`
           SELECT tech.value AS value, count(*)::int AS count
           FROM accounts, LATERAL jsonb_array_elements_text(${accounts.technologies}) AS tech(value)
-          WHERE tech.value ILIKE ${like}
+          WHERE tech.value ILIKE ${like} AND ${NOT_DELETED}
           GROUP BY tech.value
           ORDER BY count(*) DESC
           LIMIT ${req.limit}
@@ -331,7 +340,7 @@ export const accountSearchRepository = {
       const rows = await tx
         .select({ value: sql<string>`${col}::text`, count: sql<number>`count(*)::int` })
         .from(accounts)
-        .where(and(sql`${col} IS NOT NULL`, sql`${col}::text ILIKE ${like}`) as SQL)
+        .where(and(sql`${col} IS NOT NULL`, sql`${col}::text ILIKE ${like}`, NOT_DELETED) as SQL)
         .groupBy(col)
         .orderBy(desc(sql`count(*)`))
         .limit(req.limit);

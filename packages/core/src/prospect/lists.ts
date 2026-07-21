@@ -31,6 +31,7 @@ import {
   ValidationError,
   contactQuery,
 } from "@leadwolf/types";
+import { isChannelReadFromChildEnabled } from "../channels/channelRead.ts";
 import { writeAudit } from "../compliance/writeAudit.ts";
 import { expandTitleFilters } from "../search/expandTitleFilters.ts";
 
@@ -68,6 +69,7 @@ const DYNAMIC_PAGE_MAX = 200;
  * coherence note in createDynamicList). */
 async function resolveDynamicMembers(
   tx: Tx,
+  tenantId: string,
   filters: unknown,
   limit: number,
   cursor: string | null,
@@ -79,7 +81,11 @@ async function resolveDynamicMembers(
     limit: Math.min(limit, DYNAMIC_PAGE_MAX),
     cursor: cursor ?? undefined,
   });
-  const page = await searchRepository.searchContactsTx(tx, query);
+  // S-CH4b: dynamic-list membership MUST resolve with the SAME child-presence predicates the search page did,
+  // or a channels_read-on member page could disagree with the grid the same saved query renders. Evaluated in
+  // this tx (env-off ⇒ zero queries, byte-identical gate-off).
+  const channelsFromChild = await isChannelReadFromChildEnabled(tx, tenantId);
+  const page = await searchRepository.searchContactsTx(tx, query, { channelsFromChild });
   return { members: page.hits, nextCursor: page.nextCursor };
 }
 
@@ -151,10 +157,13 @@ export async function createDynamicList(input: CreateDynamicListInput): Promise<
       entityId: row.id,
       metadata: { name: row.name, listKind: "dynamic", source: "search" },
     });
-    // The freshly-created dynamic list's count = its query's live match total (resolved in the same tx).
+    // The freshly-created dynamic list's count = its query's live match total (resolved in the same tx). S-CH4b:
+    // same child-presence predicates as the page/members read so the count can't disagree once channels_read flips.
+    const channelsFromChild = await isChannelReadFromChildEnabled(tx, input.scope.tenantId);
     const count = await searchRepository.countContactsTx(
       tx,
       expandTitleFilters(contactQuery.parse(saved.filters)),
+      { channelsFromChild },
     );
     return toDto({ ...row, memberCount: count }, input.callerUserId);
   });
@@ -171,6 +180,10 @@ export async function listLists(actor: ListActor): Promise<List[]> {
   return withTenantTx(actor.scope, async (tx) => {
     const rows = await listRepository.listByWorkspaceTx(tx);
     const out: List[] = [];
+    // S-CH4b: dynamic-list counts must use the SAME child-presence predicates the members page / search does.
+    // Evaluated lazily at most ONCE (only if a dynamic list is present; env-off ⇒ zero queries, byte-identical
+    // gate-off) — the per-tenant flag is stable within the tx.
+    let channelsFromChild: boolean | undefined;
     for (const r of rows) {
       if (r.kind !== "dynamic" || !r.savedSearchId) {
         out.push(toDto(r, actor.callerUserId));
@@ -178,10 +191,14 @@ export async function listLists(actor: ListActor): Promise<List[]> {
       }
       const saved = await savedSearchRepository.findById(tx, r.savedSearchId, actor.callerUserId);
       const parsed = saved ? contactQuery.safeParse(saved.filters) : null;
-      const count =
-        parsed?.success === true
-          ? await searchRepository.countContactsTx(tx, expandTitleFilters(parsed.data))
-          : 0;
+      let count = 0;
+      if (parsed?.success === true) {
+        if (channelsFromChild === undefined)
+          channelsFromChild = await isChannelReadFromChildEnabled(tx, actor.scope.tenantId);
+        count = await searchRepository.countContactsTx(tx, expandTitleFilters(parsed.data), {
+          channelsFromChild,
+        });
+      }
       out.push(toDto({ ...r, memberCount: count }, actor.callerUserId));
     }
     return out;
@@ -223,7 +240,13 @@ export async function listListMembers(
         input.callerUserId,
       );
       if (!saved) return { members: [], nextCursor: null };
-      return resolveDynamicMembers(tx, saved.filters, input.limit, input.cursor ?? null);
+      return resolveDynamicMembers(
+        tx,
+        input.scope.tenantId,
+        saved.filters,
+        input.limit,
+        input.cursor ?? null,
+      );
     }
     return listRepository.listMembers(tx, input.listId, input.limit, input.cursor ?? null);
   });

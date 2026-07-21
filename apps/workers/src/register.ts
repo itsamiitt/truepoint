@@ -4,21 +4,32 @@
 
 import { env } from "@leadwolf/config";
 import {
+  FastImportFailedError,
   defaultEmailVerifier,
   defaultPhoneVerifier,
   diskFileStore,
+  markFastImportFailed,
   registerEmailProviders,
+  runAccountBackfillForWorkspace,
+  runChannelBackfillForWorkspace,
+  runChannelReconcileForWorkspace,
+  stubMalwareScanner,
 } from "@leadwolf/core";
 import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
-import { defaultProviders } from "@leadwolf/integrations";
+import { clamdScanner, defaultProviders, s3FileStoreFromEnv } from "@leadwolf/integrations";
 import {
   BULK_ENRICHMENT_DRIVE_TOPIC,
   type BulkEnrichmentDeadLetter,
   type BulkImportDeadLetter,
   type BulkImportScope,
   type BulkRevealDeadLetter,
+  IMPORT_NOTIFY_TOPIC,
+  IMPORT_QUEUE_PRIORITY,
+  IMPORT_ROLLUPS_TOPIC,
   type ImportDeadLetter,
   bulkEnrichmentJobDataSchema,
+  importNotifyPayloadSchema,
+  importRollupsPayloadSchema,
 } from "@leadwolf/types";
 import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
@@ -27,11 +38,17 @@ import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
 import {
   type QueueDepth,
+  incrementImportCounter,
   recordCompleted,
   recordFailed,
   renderPromMetrics,
 } from "./metrics.ts";
-import { type OutboxRelayHandle, startOutboxRelay } from "./outboxRelay.ts";
+import { type OutboxPublisher, type OutboxRelayHandle, startOutboxRelay } from "./outboxRelay.ts";
+import {
+  ACCOUNT_BACKFILL_SWEEP_QUEUE,
+  type AccountBackfillSweepJobData,
+  makeProcessAccountBackfillSweep,
+} from "./queues/accountBackfillSweep.ts";
 import {
   BILLING_RECON_SWEEP_QUEUE,
   type BillingReconSweepJobData,
@@ -48,9 +65,21 @@ import {
   BULK_IMPORTS_DLQ,
   BULK_IMPORTS_QUEUE,
   type BulkImportJobData,
+  type UnifiedImportJobData,
   deadLetterFailedBulkImport,
   makeProcessBulkImport,
 } from "./queues/bulkImports.ts";
+import {
+  CHANNEL_BACKFILL_SWEEP_QUEUE,
+  type ChannelBackfillSweepJobData,
+  makeProcessChannelBackfillSweep,
+} from "./queues/channelBackfillSweep.ts";
+import {
+  CHANNEL_RECONCILE_SWEEP_QUEUE,
+  type ChannelReconcileSweepJobData,
+  makeProcessChannelReconcileSweep,
+} from "./queues/channelReconcileSweep.ts";
+import { deliverImportNotification } from "./queues/importNotify.ts";
 import {
   BULK_REVEAL_DLQ,
   BULK_REVEAL_QUEUE,
@@ -88,6 +117,27 @@ import {
   type GmailInboxPollJobData,
   makeProcessGmailInboxPoll,
 } from "./queues/gmailInboxPollSweep.ts";
+import {
+  IMPORT_PROMOTION_SWEEP_EVERY_MS,
+  IMPORT_PROMOTION_SWEEP_QUEUE,
+  type ImportPromotionSweepJobData,
+  makeProcessImportPromotionSweep,
+} from "./queues/importPromotionSweep.ts";
+import {
+  IMPORT_ARTIFACT_SWEEP_QUEUE,
+  type ImportArtifactSweepJobData,
+  makeProcessImportArtifactSweep,
+} from "./queues/importArtifactSweep.ts";
+import {
+  IMPORT_REAPER_SWEEP_QUEUE,
+  type ImportReaperSweepJobData,
+  makeProcessImportReaperSweep,
+} from "./queues/importReaperSweep.ts";
+import {
+  SCHEDULED_IMPORT_SWEEP_QUEUE,
+  type ScheduledImportSweepJobData,
+  makeProcessScheduledImportSweep,
+} from "./queues/scheduledImportSweep.ts";
 import {
   IMPORTS_DLQ,
   IMPORTS_QUEUE,
@@ -178,7 +228,12 @@ import {
   REVERIFICATION_RETRY,
   SCORING_RETRY,
 } from "./retryPolicies.ts";
-import { SWEEP_WORKER_TUNING, deadlineMs, eventTuning } from "./tuning.ts";
+import {
+  SWEEP_WORKER_TUNING,
+  bulkImportKindDeadlineMs,
+  deadlineMs,
+  eventTuning,
+} from "./tuning.ts";
 import { withDeadline } from "./withDeadline.ts";
 
 // BullMQ requires maxRetriesPerRequest: null on the blocking connection.
@@ -294,7 +349,7 @@ function bounded<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
  * systemHealthProbes contract). The per-queue completed/failed counters are fed by instrument().
  */
 export async function collectWorkerMetricsText(): Promise<string> {
-  const specs: ReadonlyArray<{ name: string; queue: Pick<Queue, "getJobCounts"> }> = [
+  const specs: Array<{ name: string; queue: Pick<Queue, "getJobCounts"> }> = [
     { name: IMPORTS_QUEUE, queue: importQueue },
     { name: IMPORTS_DLQ, queue: importDeadLetterQueue },
     { name: ENRICHMENT_QUEUE, queue: enrichmentQueue },
@@ -324,6 +379,15 @@ export async function collectWorkerMetricsText(): Promise<string> {
     { name: DATA_RETENTION_SWEEP_QUEUE, queue: dataRetentionSweepQueue },
     { name: EMAIL_TOKEN_REFRESH_QUEUE, queue: tokenRefreshQueue },
   ];
+  // The UNIFIED import queue + its DLQ are constructed conditionally (gated) inside startWorkers; scrape their
+  // depth via the lifted handles when present (S-Q7) — the DLQ-depth (S2) and queue-depth/age alerts (09 §8)
+  // need them. Absent while the gate is off ⇒ the rows simply don't render (honest absence, no fake zero).
+  if (bulkImportsQueueHandle) {
+    specs.push({ name: BULK_IMPORTS_QUEUE, queue: bulkImportsQueueHandle });
+  }
+  if (bulkImportsDlqHandle) {
+    specs.push({ name: BULK_IMPORTS_DLQ, queue: bulkImportsDlqHandle });
+  }
 
   const settled = await Promise.allSettled(
     specs.map(async (s) => {
@@ -535,6 +599,12 @@ export async function enqueueMasterBackfill(
 // Phase 3 (ADR-0027): the outbox relay handle, set by startWorkers when the bulk-enrichment block runs.
 let outboxRelay: OutboxRelayHandle | undefined;
 
+// S-Q7: the unified import queue + its DLQ are built conditionally inside startWorkers (gated). Their handles
+// are lifted here so collectWorkerMetricsText can scrape their depth for the 09 §8 alerts (queue depth/age +
+// DLQ depth). Undefined while the gate is off — the metrics rows then simply don't render (no fake zero).
+let bulkImportsQueueHandle: Queue<UnifiedImportJobData> | undefined;
+let bulkImportsDlqHandle: Queue<BulkImportDeadLetter> | undefined;
+
 /** Stop background relays (Phase 3): halts the outbox relay's schedule and awaits its in-flight tick. The
  *  entrypoint calls this FIRST in the drain so no new drive publish races the worker close. No-op when the
  *  bulk-enrichment block never started a relay (flag off). Safe to call more than once. */
@@ -580,6 +650,14 @@ export function startWorkers(): Worker[] {
   // Per-mailbox send-rate throttle (WARM-001). Conservative fixed defaults (10 burst, 1/sec ≈ 60/min); the P5
   // warmup ramp makes this per-mailbox/day. A throttled send is deferred (re-enqueued), never dropped.
   const mailboxThrottle = createRedisMailboxThrottle(connection, { capacity: 10, refillPerSec: 1 });
+
+  // S-Q3 (09 §6, ADR-0027): imports become the outbox's first consumer beyond bulk-enrich. Publishers accumulate
+  // here from the import + enrichment blocks below and a SINGLE leaderless relay drains worker_outbox for ALL of
+  // them (one table, FOR UPDATE SKIP LOCKED) — a second relay with a disjoint publisher map would terminally-fail
+  // the other block's topics. The import terminal tx (runFastImport) writes its outbox intents only when the
+  // IMPORT_V2 dual gate's env half is on; gate-off ⇒ no intents + the best-effort handlers fire (byte-identical).
+  const outboxPublishers: Record<string, OutboxPublisher> = {};
+  const importOutboxEnabled = env.IMPORT_V2_ENABLED;
 
   const importsWorker = instrument(
     new Worker<ImportJobData>(
@@ -839,53 +917,108 @@ export function startWorkers(): Worker[] {
       EMAIL_TOKEN_REFRESH_QUEUE,
     ),
   ];
-  // Bulk COPY-staging import (backlog #2, phase 6) — GATED DARK behind BULK_IMPORT_ENABLED (default false). Purely
-  // ADDITIVE: when off, the bulk queues/worker are never even constructed (the array above is untouched) and the
-  // apps/api producer enqueues nothing, so the feature is inert in prod until the COPY spike + a prod object store
-  // land. When on: a `drive` job stages the upload + fans out `chunk` jobs onto the SAME bulk queue; each `chunk`
-  // merges one staged band, and the LAST chunk's finalize fires the dedup/firmographics/masterBackfill rollups
-  // ONCE — the SAME idempotent per-workspace rollups the sync import kicks on completion (best-effort).
-  if (env.BULK_IMPORT_ENABLED) {
-    const bulkImportsQueue = new Queue<BulkImportJobData>(BULK_IMPORTS_QUEUE, { connection });
+  // The UNIFIED import execution queue (import-redesign 09 §1.1, S-Q1): ONE `bulk-imports` consumer carries
+  // the COPY kinds (drive/chunk — backlog #2, gated by BULK_IMPORT_ENABLED) AND the v2 fast lane (S-I3 —
+  // gated at the PRODUCER by the IMPORT_V2 dual gate). Constructed when EITHER gate's env layer is on, so
+  // the fast path runs under IMPORT_V2 even with BULK_IMPORT off; with both off nothing here is built and
+  // the array above is untouched (byte-identical boot). Copy kinds arriving while BULK_IMPORT_ENABLED is
+  // off fail loudly (CopyKindsDisabledError → retry → DLQ; redrive is idempotent) — never silently consumed.
+  // Priority bands order the WAITING set (fast=1 · copy drive=5 · copy chunk=10); within a band, FIFO.
+  if (env.BULK_IMPORT_ENABLED || env.IMPORT_V2_ENABLED) {
+    const bulkImportsQueue = new Queue<UnifiedImportJobData>(BULK_IMPORTS_QUEUE, { connection });
     const bulkImportDeadLetterQueue = new Queue<BulkImportDeadLetter>(BULK_IMPORTS_DLQ, {
       connection,
     });
-    // DEV/TEST local-disk store; the prod FileStore (S3, presigned multipart, AV-before-promote) is injected here
-    // later (no AWS SDK pulled in). Same env dir the apps/api producer composes against (apps never import apps).
-    const bulkFileStore = diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
+    // S-Q7: publish these handles for /metrics depth scraping (queue depth/age + DLQ depth alerts, 09 §8).
+    bulkImportsQueueHandle = bulkImportsQueue;
+    bulkImportsDlqHandle = bulkImportDeadLetterQueue;
+    // GATE B (G07) selection seam: BULK_IMPORT_S3_* complete ⇒ the S3-compatible SigV4 adapter (presigned
+    // multipart + SSE, @leadwolf/integrations — no AWS SDK); else the DEV/TEST local-disk store. The SAME env
+    // selection the apps/api producer runs (apps never import apps), so both roots read/write ONE backend —
+    // the 01 §3.1 multi-instance failure mode closes the moment the bucket env lands.
+    const bulkFileStore = s3FileStoreFromEnv() ?? diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
+    // S-S2 (G08 / Gate C, wire point 2): the SAME env selection the api's admission seam runs — clamav ⇒
+    // the dependency-free clamd INSTREAM adapter; default stub ⇒ dark, byte-identical (the drive re-check
+    // is a no-op and records stay 'skipped'). Deploying the sidecar + flipping MALWARE_SCANNER is the
+    // user-owed half of Gate C.
+    const malwareScanner =
+      env.MALWARE_SCANNER === "clamav"
+        ? clamdScanner({
+            host: env.CLAMAV_HOST,
+            port: env.CLAMAV_PORT,
+            timeoutMs: env.CLAMAV_TIMEOUT_MS,
+          })
+        : stubMalwareScanner();
+    const processBulkImport = makeProcessBulkImport({
+      fileStore: bulkFileStore,
+      malwareScanner,
+      // The drive phase fans out one chunk job per staged band onto the SAME bulk queue — copy-chunk band,
+      // STABLE jobId `import-chunk:<chunkId>` (09 §1.2) so a re-drive/reaper re-publish dedupes at the queue
+      // (and S-Q2's rolling-window continuation enqueue is idempotent by construction).
+      enqueueChunk: async (jobId, scope, chunkId) => {
+        await bulkImportsQueue.add(
+          "chunk",
+          { kind: "chunk", jobId, scope, chunkId },
+          { priority: IMPORT_QUEUE_PRIORITY.copyChunk, jobId: `import-chunk:${chunkId}` },
+        );
+      },
+      // The LAST chunk's finalize fires these ONCE — the SAME idempotent per-workspace rollups the sync import
+      // kicks on completion. Best-effort: a rollup-enqueue failure never fails the chunk job.
+      fireRollups: (scope: BulkImportScope) => {
+        const data = { tenantId: scope.tenantId, workspaceId: scope.workspaceId };
+        void enqueueDedup(data).catch((e) =>
+          log.error("bulk-import: dedup enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        void enqueueFirmographics(data).catch((e) =>
+          log.error("bulk-import: firmographics enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        void enqueueMasterBackfill(data).catch((e) =>
+          log.error("bulk-import: master-backfill enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      },
+      // S-Q3 (09 §6.2, G06): emit the terminal ROLLUP intent onto worker_outbox in the terminal tx (crash-safe,
+      // at-least-once) instead of the completed handler's best-effort enqueue. Gate-off ⇒ the handler fires.
+      emitOutbox: importOutboxEnabled,
+      // Copy kinds stay gated by their own env switch even when this worker boots for the fast lane only.
+      copyEnabled: env.BULK_IMPORT_ENABLED,
+      // Bounded rolling fan-out window K (S-Q2; 0 = ∞ = legacy enqueue-all). Dormant until copy mode runs.
+      chunkWindow: env.IMPORT_CHUNK_WINDOW,
+      // Deferred-lane transport for the fast kind (S-Q2): re-enqueue the SAME payload (rows ride it —
+      // Phase-A bound) with the fast band after the recheck delay; the `:r<n>` suffix sidesteps the spent
+      // stable id. The leader-locked sweep below is the DB-truth promoter; this loop is only transport.
+      requeueFastDeferred: async (data, nextDeferrals) => {
+        await bulkImportsQueue.add(
+          "fast",
+          { ...data, deferrals: nextDeferrals },
+          {
+            priority: IMPORT_QUEUE_PRIORITY.fast,
+            jobId: `import-fast:${data.jobId}:r${nextDeferrals}`,
+            delay: env.IMPORT_DEFER_RECHECK_DELAY_MS,
+          },
+        );
+      },
+    });
     const bulkImportsWorker = instrument(
-      new Worker<BulkImportJobData>(
+      new Worker<UnifiedImportJobData>(
         BULK_IMPORTS_QUEUE,
-        makeProcessBulkImport({
-          fileStore: bulkFileStore,
-          // The drive phase fans out one chunk job per staged band onto the SAME bulk queue.
-          enqueueChunk: async (jobId, scope, chunkId) => {
-            await bulkImportsQueue.add("chunk", { kind: "chunk", jobId, scope, chunkId });
-          },
-          // The LAST chunk's finalize fires these ONCE — the SAME idempotent per-workspace rollups the sync import
-          // kicks on completion. Best-effort: a rollup-enqueue failure never fails the chunk job.
-          fireRollups: (scope: BulkImportScope) => {
-            const data = { tenantId: scope.tenantId, workspaceId: scope.workspaceId };
-            void enqueueDedup(data).catch((e) =>
-              log.error("bulk-import: dedup enqueue failed", {
-                error: e instanceof Error ? e.message : String(e),
-              }),
-            );
-            void enqueueFirmographics(data).catch((e) =>
-              log.error("bulk-import: firmographics enqueue failed", {
-                error: e instanceof Error ? e.message : String(e),
-              }),
-            );
-            void enqueueMasterBackfill(data).catch((e) =>
-              log.error("bulk-import: master-backfill enqueue failed", {
-                error: e instanceof Error ? e.message : String(e),
-              }),
-            );
-          },
-        }),
-        // Explicitly serial while dark (Phase 1): the chunked pipeline's throughput lever is chunk fan-out,
-        // and any concurrency raise is a deliberate later decision, not a default.
-        { connection, concurrency: 1 },
+        // Per-KIND deadline (09 §3; S-Q1): fast 2 min · drive 15 min · chunk 10 min — chosen per job at
+        // claim, each ≤ the queue-level ceiling registered in PROCESSOR_DEADLINE_MS. An unknown kind fails
+        // the attempt loudly (tuning.ts lookup), never runs unbounded.
+        (job) =>
+          withDeadline(
+            BULK_IMPORTS_QUEUE,
+            bulkImportKindDeadlineMs((job.data as { kind?: string }).kind),
+            processBulkImport,
+          )(job),
+        // Serial + explicit lock/stall containment via the tuning table (60s lock / 30s stall / 2 stalls →
+        // DLQ), replacing the bare `concurrency: 1` — the same registration pattern as every event worker.
+        { connection, ...eventTuning(BULK_IMPORTS_QUEUE) },
       ),
       BULK_IMPORTS_QUEUE,
     );
@@ -896,8 +1029,300 @@ export function startWorkers(): Worker[] {
           error: e instanceof Error ? e.message : String(e),
         }),
       );
+      // v2 FAST lane (S-I3): exhausted attempts flip the DURABLE row to the honest `failed` terminal so the
+      // poll/history never show a job stuck `running` after the queue gave up (the accounting identity holds
+      // with `unprocessed` absorbing the un-landed remainder). Idempotent — a terminal row is left untouched.
+      // The stored reason is a BUCKETED, PII-free constant (a raw err.message may quote row values).
+      const data = job?.data as UnifiedImportJobData | undefined;
+      if (job && data?.kind === "fast" && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+        const summary = err instanceof FastImportFailedError ? err.summary : undefined;
+        void markFastImportFailed({
+          scope: data.scope,
+          jobId: data.jobId,
+          failedReason: summary
+            ? "Import failed: no rows could be imported."
+            : `Import failed after retries (${err.name}).`,
+          summary,
+          totalRows: data.input.rows.length,
+          // S-Q4: the failed terminal writes the `import.notify` intent in-tx (crash-safe) instead of the handler.
+          emitOutbox: importOutboxEnabled,
+        }).catch((e) =>
+          log.error("bulk-import: fast failed-terminal write failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      }
+    });
+    // v2 FAST lane completion side-effects — BYTE-PARALLEL with the legacy imports handler above (S-Q3
+    // retires both onto the transactional outbox later; until then the fast path must not silently lose the
+    // rollups or the importer's notification the legacy path delivers). Fires ONLY on a fresh terminal
+    // (result.finalized) — a terminal-skip replay re-fires nothing.
+    bulkImportsWorker.on("completed", (job, result) => {
+      const data = job?.data as UnifiedImportJobData | undefined;
+      // S-S2 operator notification (13 §9.2: an infected verdict is S3-routine — the control WORKING — but
+      // operators must SEE it): the drive-time AV re-check wrote the failed terminal; meter + log loudly.
+      // Cheap-and-present today (metric + structured log feed the §K alert catalog); the tenant-facing
+      // failure notification for COPY jobs rides the copy-notify follow-up (S-Q3/S-Q4 drift — doc 16).
+      if (data?.kind === "drive" && (result as { infected?: boolean } | undefined)?.infected) {
+        incrementImportCounter("av_infected_total");
+        log.error("bulk-import: drive-time malware scan found the stored object INFECTED", {
+          jobId: data.jobId,
+          workspaceId: data.scope.workspaceId,
+        });
+      }
+      if (data?.kind !== "fast") return;
+      const r = result as { finalized?: boolean; landed?: boolean; status?: string } | undefined;
+      if (!r?.finalized) return;
+      const scope = { tenantId: data.scope.tenantId, workspaceId: data.scope.workspaceId };
+      // S-Q3: gate-on, the terminal tx's `import.rollups` outbox intent drives these (crash-safe) — the handler
+      // enqueue is RETIRED to avoid a double fan-out. Gate-off (no fast jobs exist) this branch is the fallback.
+      if (r.landed && !importOutboxEnabled) {
+        void enqueueDedup(scope).catch((e) =>
+          log.error("fast-import: dedup enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        void enqueueFirmographics(scope).catch((e) =>
+          log.error("fast-import: firmographics enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+        void enqueueMasterBackfill(scope).catch((e) =>
+          log.error("fast-import: master-backfill enqueue failed", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      }
+      // S-Q4: gate-on, the terminal tx's `import.notify` outbox intent drives the notification IDEMPOTENTLY
+      // (crash-safe, exactly-once effect) — the handler insert is RETIRED to avoid a double notify. Gate-off
+      // (no fast jobs exist) this best-effort insert is the fallback, byte-identical.
+      const importedBy = data.input.importedByUserId;
+      if (importedBy && !importOutboxEnabled) {
+        void db
+          .transaction((tx) =>
+            notificationRepository.create(tx, {
+              tenantId: scope.tenantId,
+              workspaceId: scope.workspaceId,
+              userId: importedBy,
+              type: "import_complete",
+              title: "Import finished",
+              body: `Your ${data.input.sourceName} import is ready — contacts are in your workspace.`,
+            }),
+          )
+          .catch((e) =>
+            log.error("fast-import: import-complete notification failed", {
+              error: e instanceof Error ? e.message : String(e),
+            }),
+          );
+      }
     });
     workers.push(bulkImportsWorker);
+
+    // S-Q3 (09 §6.2, G06): the `import.rollups` outbox publisher — fans out the SAME idempotent per-workspace
+    // dedup / firmographics / master-backfill rollups the completed handler used to enqueue best-effort, now
+    // driven by the terminal tx's crash-safe intent (at-least-once; the rollup jobs are each idempotent so a
+    // re-publish is harmless). Registered only when the import gate is on (only then are the intents written).
+    // A throw leaves the row `pending` for a later re-claim (all three re-enqueue idempotently); the drained
+    // single relay is started once, after the enrichment block, over `outboxPublishers`.
+    if (importOutboxEnabled) {
+      outboxPublishers[IMPORT_ROLLUPS_TOPIC] = async (payload) => {
+        const { scope } = importRollupsPayloadSchema.parse(payload);
+        const data = { tenantId: scope.tenantId, workspaceId: scope.workspaceId };
+        await enqueueDedup(data);
+        await enqueueFirmographics(data);
+        await enqueueMasterBackfill(data);
+      };
+      // S-Q4 (09 §6.3, G06): the `import.notify` publisher — idempotently inserts the importer's in-app
+      // notification (dedup by (import_job, jobId) ⇒ exactly-once effect), hands to the email seam (no-op until
+      // doc 11/14), and records terminal→insert delivery lag. A throw re-claims the intent; the insert dedupes.
+      outboxPublishers[IMPORT_NOTIFY_TOPIC] = async (payload) => {
+        await deliverImportNotification(importNotifyPayloadSchema.parse(payload));
+      };
+    }
+
+    // S-Q2: the leader-locked `deferred → queued` promotion sweep (09 §2.2) — the scheduler half of the
+    // per-workspace cap. Rides the same construction gate as the unified queue (nothing to promote while
+    // both gates are off — `deferred` rows only exist once a producer gate opened). Copy drives re-publish
+    // with their stable id + band; fast promotions are DB flips (transport = the deferred re-check loop).
+    const importPromotionSweepQueue = new Queue<ImportPromotionSweepJobData>(
+      IMPORT_PROMOTION_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<ImportPromotionSweepJobData>(
+          IMPORT_PROMOTION_SWEEP_QUEUE,
+          makeProcessImportPromotionSweep(connection, async (jobId, scope) => {
+            await bulkImportsQueue.add(
+              "drive",
+              { kind: "drive", jobId, scope },
+              { priority: IMPORT_QUEUE_PRIORITY.copyDrive, jobId: `import-drive:${jobId}` },
+            );
+          }),
+          { connection, ...SWEEP_WORKER_TUNING },
+        ),
+        IMPORT_PROMOTION_SWEEP_QUEUE,
+      ),
+    );
+    void importPromotionSweepQueue
+      .add(
+        "sweep",
+        {},
+        {
+          repeat: { every: IMPORT_PROMOTION_SWEEP_EVERY_MS },
+          jobId: "import-promotion-sweep",
+        },
+      )
+      .catch((e) =>
+        log.error("failed to schedule the import-promotion sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+
+    // S-Q5: the leader-locked IMPORT REAPER (09 §7 row 2 / §8) — the DB-backed recovery + observe spine.
+    // Gate-independent hardening (observe/recover only; never touches the happy path). Constructed under the
+    // SAME gate as the unified queue because it needs the queue handle for liveness + re-drive, and only the
+    // gate's producers create the non-terminal rows it heals. Redis-loss re-enqueue (copy drive re-publish /
+    // fast honest-terminal), stall flag, and the artifact/accounting integrity gauges.
+    const importReaperSweepQueue = new Queue<ImportReaperSweepJobData>(IMPORT_REAPER_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        new Worker<ImportReaperSweepJobData>(
+          IMPORT_REAPER_SWEEP_QUEUE,
+          makeProcessImportReaperSweep(connection, {
+            // Live-job snapshot: all ids on the unified queue this tick (bounded) — the orphan-liveness oracle.
+            snapshotLiveJobIds: async () => {
+              const jobs = await bulkImportsQueue.getJobs(
+                ["waiting", "delayed", "active", "prioritized", "paused"],
+                0,
+                2000,
+              );
+              const ids = new Set<string>();
+              for (const j of jobs) if (j.id) ids.add(j.id);
+              return ids;
+            },
+            // Re-publish an orphaned copy job's drive (stable id → idempotent re-drive; watermark-resumed).
+            reenqueueCopyDrive: async (jobId, scope) => {
+              await bulkImportsQueue.add(
+                "drive",
+                { kind: "drive", jobId, scope },
+                { priority: IMPORT_QUEUE_PRIORITY.copyDrive, jobId: `import-drive:${jobId}` },
+              );
+            },
+            orphanGraceMs: env.IMPORT_REAPER_ORPHAN_GRACE_MS,
+            stallWindowMs: env.IMPORT_REAPER_STALL_WINDOW_MS,
+            // S-S2 no-new-'skipped' monitor (13 §2.3): armed ONLY when a real scanner is configured —
+            // any fresh 'skipped' row then means the G08 gate failed open (S2 alert; §K catalog).
+            scannerConfigured: env.MALWARE_SCANNER !== "stub",
+            // S-I8 draft reap (08 §2.1/§Edge cases): the SAME env-selected store the api's draft upload
+            // writes through (bulkStore.ts selects identically), + the 48 h-default TTL in ms.
+            fileStore: bulkFileStore,
+            draftTtlMs: env.IMPORT_DRAFT_TTL_HOURS * 3_600_000,
+          }),
+          { connection, ...SWEEP_WORKER_TUNING },
+        ),
+        IMPORT_REAPER_SWEEP_QUEUE,
+      ),
+    );
+    void importReaperSweepQueue
+      .add(
+        "sweep",
+        {},
+        { repeat: { every: env.IMPORT_REAPER_SWEEP_EVERY_MS }, jobId: "import-reaper-sweep" },
+      )
+      .catch((e) =>
+        log.error("failed to schedule the import-reaper sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+
+    // S-S7 (13 §4.4): the leader-locked ARTIFACT LIFECYCLE sweep — TTL-expires the PII-bearing error
+    // artifacts (objects deleted, keys nulled ⇒ honest "expired" UI state). Rides the same construction
+    // gate (artifacts only exist once a producer gate opened) and the SAME env-selected FileStore the
+    // pipeline writes through. Job hard-purge prefix deletion is core's purgeImportJobObjects seam, owned
+    // by the future row-purger (retention deleter / S-S8 DSAR) — not this sweep.
+    const importArtifactSweepQueue = new Queue<ImportArtifactSweepJobData>(
+      IMPORT_ARTIFACT_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<ImportArtifactSweepJobData>(
+          IMPORT_ARTIFACT_SWEEP_QUEUE,
+          makeProcessImportArtifactSweep(connection, {
+            fileStore: bulkFileStore,
+            ttlDays: env.IMPORT_ARTIFACT_TTL_DAYS,
+          }),
+          { connection, ...SWEEP_WORKER_TUNING },
+        ),
+        IMPORT_ARTIFACT_SWEEP_QUEUE,
+      ),
+    );
+    void importArtifactSweepQueue
+      .add(
+        "sweep",
+        {},
+        { repeat: { every: env.IMPORT_ARTIFACT_SWEEP_EVERY_MS }, jobId: "import-artifact-sweep" },
+      )
+      .catch((e) =>
+        log.error("failed to schedule the import-artifact sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+
+    // P5 (08 §9): the leader-locked SCHEDULED-IMPORT sweep — fires due schedules by enqueuing an ordinary
+    // fast-lane job onto THIS unified queue (so it rides the unified-queue construction gate — a scheduled
+    // fire has no consumer without the fast lane). Sub-gated on SCHEDULED_IMPORTS_ENABLED so it stays dark
+    // even with the unified queue up (the per-tenant `scheduled_imports_enabled` flag is the second half).
+    // Reuses the SAME env-selected FileStore the api's schedule-create wrote the source object through.
+    if (env.SCHEDULED_IMPORTS_ENABLED) {
+      const scheduledImportSweepQueue = new Queue<ScheduledImportSweepJobData>(
+        SCHEDULED_IMPORT_SWEEP_QUEUE,
+        { connection },
+      );
+      workers.push(
+        instrument(
+          new Worker<ScheduledImportSweepJobData>(
+            SCHEDULED_IMPORT_SWEEP_QUEUE,
+            makeProcessScheduledImportSweep(connection, {
+              fileStore: bulkFileStore,
+              // Enqueue the fired fast job EXACTLY like the commit verb: stable id (re-publish dedupes), fast
+              // band, and the deferred re-check delay when admission parked it deferred.
+              enqueueFastImport: async (jobId, scope, input, admission) => {
+                await bulkImportsQueue.add(
+                  "fast",
+                  { kind: "fast", jobId, scope, input },
+                  {
+                    priority: IMPORT_QUEUE_PRIORITY.fast,
+                    jobId: `import-fast:${jobId}`,
+                    delay: admission === "deferred" ? env.IMPORT_DEFER_RECHECK_DELAY_MS : 0,
+                  },
+                );
+              },
+              maxFailures: env.SCHEDULED_IMPORT_MAX_CONSECUTIVE_FAILURES,
+            }),
+            { connection, ...SWEEP_WORKER_TUNING },
+          ),
+          SCHEDULED_IMPORT_SWEEP_QUEUE,
+        ),
+      );
+      void scheduledImportSweepQueue
+        .add(
+          "sweep",
+          {},
+          {
+            repeat: { every: env.SCHEDULED_IMPORT_SWEEP_EVERY_MS },
+            jobId: "scheduled-import-sweep",
+          },
+        )
+        .catch((e) =>
+          log.error("failed to schedule the scheduled-import sweep", {
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+    }
   }
   // Bulk (existing-contact) re-enrich money path (prospect-database-platform I3 / audit A3/P08) — GATED DARK behind
   // BULK_ENRICHMENT_ENABLED (default false). Purely ADDITIVE: when off, the queue/worker are never constructed and
@@ -955,18 +1380,20 @@ export function startWorkers(): Worker[] {
     // Payload is validated against the shared schema before publish; a malformed row burns its attempts cap
     // (bounded) and fails out via the repository, loudly logged each claim. Gated with the consumer: when
     // the kill-switch is off no relay runs and committed intents simply wait, exactly like the dark queue.
-    outboxRelay = startOutboxRelay({
-      publishers: {
-        [BULK_ENRICHMENT_DRIVE_TOPIC]: async (payload) => {
-          const data = bulkEnrichmentJobDataSchema.parse(payload);
-          await bulkEnrichmentQueue.add("drive", data, {
-            jobId: `bulkenrich:drive:${data.jobId}`,
-            attempts: 3,
-            backoff: { type: "exponential", delay: 2000, jitter: 0.5 },
-          });
-        },
-      },
-    });
+    outboxPublishers[BULK_ENRICHMENT_DRIVE_TOPIC] = async (payload) => {
+      const data = bulkEnrichmentJobDataSchema.parse(payload);
+      await bulkEnrichmentQueue.add("drive", data, {
+        jobId: `bulkenrich:drive:${data.jobId}`,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2000, jitter: 0.5 },
+      });
+    };
+  }
+  // Start the SINGLE leaderless outbox relay (ADR-0027) if ANY block registered a publisher — bulk-enrich drive
+  // and/or the import rollups/notify topics (S-Q3/S-Q4). One relay drains worker_outbox for every topic (a
+  // per-block relay would terminally-fail the others' topics). stopBackgroundRelays halts it first in the drain.
+  if (Object.keys(outboxPublishers).length > 0) {
+    outboxRelay = startOutboxRelay({ publishers: outboxPublishers });
   }
   // Async BULK REVEAL consumer — DARK by default (BULK_REVEAL_ENABLED=false; the apps/api producer enqueues
   // nothing while off, so this never runs in prod until the flag is flipped in a CI-gated step). A `drive` job
@@ -974,7 +1401,9 @@ export function startWorkers(): Worker[] {
   // through the gated revealContact in `lease` settle-mode (the job's ONE lease already reserved the credits —
   // no per-row hot-lock) and, on the last band, writes the revealed CSV + finalizes with a release.
   if (env.BULK_REVEAL_ENABLED) {
-    const revealFileStore = diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
+    // Same Gate-B selection as the import store: the api's reveal download reads the SAME backend this
+    // worker writes, so the two roots must flip together (env-selected identically; disk fallback = today).
+    const revealFileStore = s3FileStoreFromEnv() ?? diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
     const bulkRevealQueue = new Queue<BulkRevealJobData>(BULK_REVEAL_QUEUE, { connection });
     const bulkRevealDeadLetterQueue = new Queue<BulkRevealDeadLetter>(BULK_REVEAL_DLQ, {
       connection,
@@ -1178,6 +1607,95 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "ledger-backfill-sweep" })
       .catch((e) =>
         log.error("failed to schedule the ledger-backfill sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // S-CH3 channel-backfill sweep (import-redesign 15 §M-SEQ seq 46, mechanics 15 §2.1) — DARK by default,
+  // double env-gated: CHANNEL_DUAL_WRITE (S-CH3 runs strictly after S-CH2 in the rollout train) AND
+  // CHANNEL_BACKFILL_ENABLED (05's job-level flag). When off, nothing is built. Per-tenant selection +
+  // the batch-boundary abort ride the `channels_dual_write` flag inside core's runner (fail-closed).
+  // Self-terminating (no-ops once the completeness census is empty) and idempotent, so it is safe to leave
+  // scheduled — the operator enables it, watches `leadwolf_channel_backfill_remaining` drain to 0 (the
+  // S-CH4 gate), re-runs after dual-write is on fleet-wide to close the write-gap tail, then turns it off.
+  if (env.CHANNEL_DUAL_WRITE && env.CHANNEL_BACKFILL_ENABLED) {
+    const channelBackfillQueue = new Queue<ChannelBackfillSweepJobData>(
+      CHANNEL_BACKFILL_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<ChannelBackfillSweepJobData>(
+          CHANNEL_BACKFILL_SWEEP_QUEUE,
+          makeProcessChannelBackfillSweep(connection, runChannelBackfillForWorkspace),
+          { connection },
+        ),
+        CHANNEL_BACKFILL_SWEEP_QUEUE,
+      ),
+    );
+    void channelBackfillQueue
+      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "channel-backfill-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the channel-backfill sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // S-CH5 channel reconcile / drift sweep (import-redesign 05 §3.4/§5, 15 §M-SEQ seq 48) — DARK by default,
+  // double env-gated: CHANNEL_DUAL_WRITE (the train needs dual-write to be meaningful) AND
+  // CHANNEL_RECONCILE_ENABLED (05's S-CH5 job-level enable). When off, nothing is built. Per-tenant selection
+  // + the batch-boundary abort ride the `channels_dual_write` flag inside core's runner; the READ gate picks
+  // the phase-dependent repair direction. Unlike the self-terminating S-CH3 backfill this is PERMANENT — the
+  // operator enables it and leaves it; `leadwolf_channel_drift_remaining` at 0 is the steady state (a nonzero
+  // reading after burn-in is the S2 alert, runbook §K).
+  if (env.CHANNEL_DUAL_WRITE && env.CHANNEL_RECONCILE_ENABLED) {
+    const channelReconcileQueue = new Queue<ChannelReconcileSweepJobData>(
+      CHANNEL_RECONCILE_SWEEP_QUEUE,
+      { connection },
+    );
+    workers.push(
+      instrument(
+        new Worker<ChannelReconcileSweepJobData>(
+          CHANNEL_RECONCILE_SWEEP_QUEUE,
+          makeProcessChannelReconcileSweep(connection, runChannelReconcileForWorkspace),
+          { connection },
+        ),
+        CHANNEL_RECONCILE_SWEEP_QUEUE,
+      ),
+    );
+    void channelReconcileQueue
+      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "channel-reconcile-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the channel-reconcile sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // S-A1/S-A3 account-backfill sweep (import-redesign 15 §M-SEQ seq 55/56, mechanics 15 §2.2) — DARK by
+  // default, double env-gated: ACCOUNT_DOMAINS_DUAL_WRITE (the backfill runs strictly after S-A2, the S-CH3
+  // train posture) AND ACCOUNT_BACKFILL_ENABLED (the job-level flag). When off, nothing is built. Per-tenant
+  // selection + the batch-boundary abort ride the `account_domains_dual_write` flag inside core's runner
+  // (fail-closed). Self-terminating (no-ops once the census is empty) and idempotent, so it is safe to leave
+  // scheduled — the operator enables it, watches `leadwolf_account_backfill_domain_remaining` drain to 0
+  // (the S-A6/C2 gate), re-runs after dual-write is on fleet-wide to close the write-gap tail, then off.
+  if (env.ACCOUNT_DOMAINS_DUAL_WRITE && env.ACCOUNT_BACKFILL_ENABLED) {
+    const accountBackfillQueue = new Queue<AccountBackfillSweepJobData>(ACCOUNT_BACKFILL_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        new Worker<AccountBackfillSweepJobData>(
+          ACCOUNT_BACKFILL_SWEEP_QUEUE,
+          makeProcessAccountBackfillSweep(connection, runAccountBackfillForWorkspace),
+          { connection },
+        ),
+        ACCOUNT_BACKFILL_SWEEP_QUEUE,
+      ),
+    );
+    void accountBackfillQueue
+      .add("sweep", {}, { repeat: { every: 5 * 60_000 }, jobId: "account-backfill-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the account-backfill sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );

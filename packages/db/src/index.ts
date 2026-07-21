@@ -58,6 +58,27 @@ export {
   type AccountFirmographicsPatch,
   type AccountUpsertInput,
 } from "./repositories/accountRepository.ts";
+// Company-overlay child write path (import-and-data-model-redesign 06 §1/§3, S-A2 dual-write + S-A1/S-A3
+// backfills) — the accounts sibling of contactChannelRepository: `applyAccountDomainWrite` (child + flat
+// accounts.domain cache in one withTenantTx) plus the WHERE-missing backfill selection/insert/census/count.
+export {
+  accountChildRepository,
+  AccountHierarchyError,
+  type AccountChildProjection,
+  type AccountChildScope,
+  type AccountDomainValue,
+  type AccountDomainWriteOp,
+  type AccountDomainWriteOutcome,
+  type AccountHierarchyErrorCode,
+  type BackfillAccountChildResult,
+  type MissingAccountDomainRow,
+  type MissingAccountHqRow,
+} from "./repositories/accountChildRepository.ts";
+export {
+  planAccountDomainWrite,
+  type AccountDomainUpsertState,
+  type AccountDomainVerdict,
+} from "./repositories/accountChildPlan.ts";
 // Layer-0 master graph (ADR-0021; prospect-company-data PLAN_01 §4) — deterministic MATCH-AGAINST resolve-for-
 // import. Reads/co-op-safe-mints the system-owned golden graph; always run within withErTx (the leadwolf_er role).
 export {
@@ -65,6 +86,13 @@ export {
   type ResolveForImportInput,
   type ResolveForImportResult,
 } from "./repositories/masterGraphRepository.ts";
+// Forge master-sync apply (docs/planning/forge/11 §3) — idempotent effectively-once apply under withErTx.
+export {
+  forgeSyncRepository,
+  type SyncApplyItem,
+  type SyncApplyResult,
+  type SyncApplyOutcome,
+} from "./repositories/forgeSyncRepository.ts";
 // Probabilistic ER (I5) system reads over the master graph — candidate generation via blocking (withErTx; read-only).
 export {
   erRepository,
@@ -88,6 +116,35 @@ export {
   type HotLeadRow,
   type UnresolvedContactRow,
 } from "./repositories/contactRepository.ts";
+export { contactExternalIdRepository } from "./repositories/contactExternalIdRepository.ts";
+export {
+  contactChannelRepository,
+  type BackfillContactChannelsResult,
+  type BackfillEmailChild,
+  type BackfillPhoneChild,
+  type ChannelWriteOp,
+  type ChannelWriteOutcome,
+  type ChannelDriftRow,
+  type ChannelWriteScope,
+  type EmailBlindIndexHit,
+  type EmailChannelValue,
+  type LiveEmailChannelRow,
+  type LivePhoneChannelRow,
+  type MissingChannelProjectionRow,
+  type PhoneChannelValue,
+  type ReconcileEmailRow,
+  type ReconcilePhoneRow,
+} from "./repositories/contactChannelRepository.ts";
+export {
+  contactMergeRepository,
+  type ContactMergeRow,
+  type SurvivorWriteSet,
+} from "./repositories/contactMergeRepository.ts";
+export {
+  planChannelUpsert,
+  type ChannelUpsertState,
+  type ChannelUpsertVerdict,
+} from "./repositories/contactChannelPlan.ts";
 export {
   verificationJobRepository,
   type VerificationJobRecord,
@@ -263,10 +320,18 @@ export {
   type LogWithSequence,
   type OutreachLogRow,
 } from "./repositories/outreachLogRepository.ts";
+// The ONE job-visibility predicate (import-redesign 10 §4) — applied inside every user-facing job list/get
+// repository method; exported for the repo layer and its tests (routes NEVER assemble the predicate).
+export {
+  jobVisibility,
+  creatorVisibility,
+  type JobVisibilityColumns,
+} from "./repositories/jobVisibility.ts";
 export {
   enrichmentJobRepository,
   type JobCreateValues,
   type JobRecord,
+  type JobViewRow,
   type JobStatusUpdate,
   type JobProgressDelta,
   type ChunkCreateValues,
@@ -283,6 +348,7 @@ export {
   revealJobRepository,
   type RevealJobCreateValues,
   type RevealJobRecord,
+  type RevealJobViewRow,
   type RevealJobStatusUpdate,
   type RevealJobProgressDelta,
   type RevealBandRow,
@@ -344,6 +410,21 @@ export {
   type EnrichmentPolicyUpsert,
   type EnrichmentPolicyPatch,
 } from "./repositories/enrichmentPolicyRepository.ts";
+// Per-workspace import policy (import-redesign 10 §3, S-V4; G02) — the who_can_import grant knob +
+// the 08 §5 strategy defaults. Tx-aware upsert so the settings PUT audits in the same transaction.
+export {
+  importPolicyRepository,
+  type ImportPolicyRecord,
+  type ImportPolicyUpsert,
+} from "./repositories/importPolicyRepository.ts";
+// P5 scheduled imports (import-redesign 08 §9) — workspace-scoped CRUD + the sweep's system-level due census.
+export {
+  scheduledImportRepository,
+  type ScheduledImportRow,
+  type ScheduledImportCreateValues,
+  type ScheduledImportUpdateValues,
+  type DueSchedule,
+} from "./repositories/scheduledImportRepository.ts";
 // Platform super-admin read surface (ADR-0032) — bounded cross-tenant reads, run within withPlatformTx.
 export {
   platformAdminRepository,

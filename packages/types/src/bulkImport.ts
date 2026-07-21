@@ -106,13 +106,15 @@ export const bulkImportJobStatusResponseSchema = z.object({
 });
 export type BulkImportJobStatusResponse = z.infer<typeof bulkImportJobStatusResponseSchema>;
 
-/** PII-free dead-letter for a bulk-import job that exhausts retries (scope + source + reason only). */
+/** PII-free dead-letter for a bulk-import job that exhausts retries (scope + source + reason only).
+ *  `fast` joins the kind vocabulary with the unified-queue fast lane (importV2.ts, S-I3) — additive; the
+ *  drive/chunk record shape is unchanged. */
 export const bulkImportDeadLetterSchema = z.object({
   jobId: z.string(),
   tenantId: z.string(),
   workspaceId: z.string(),
   sourceName: z.string(),
-  kind: z.enum(["drive", "chunk"]),
+  kind: z.enum(["drive", "chunk", "fast"]),
   reason: z.string(),
 });
 export type BulkImportDeadLetter = z.infer<typeof bulkImportDeadLetterSchema>;

@@ -144,7 +144,7 @@ export async function bulkProcessChunk(
 
   // Load the control + chunk rows (RLS-scoped). The staging band is read SEPARATELY on the owner connection.
   const meta = await withTenantTx(scope, async (tx) => {
-    const job = await importJobRepository.getJob(tx, jobId);
+    const job = await importJobRepository.getJobSystem(tx, jobId);
     if (!job) return null;
     const chunks = await importJobRepository.listChunks(tx, jobId);
     const chunk = chunks.find((c) => c.id === chunkId) ?? null;

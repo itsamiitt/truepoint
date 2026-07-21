@@ -5,10 +5,13 @@
 // reveal_job_rows — a row starts `queued` and a chunk drives it to a terminal outcome, so resume/retry-failed
 // is just "rows that aren't terminal / are failed".
 
+import type { JobViewer } from "@leadwolf/types";
 import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { type TenantScope, withTenantTx } from "../client.ts";
+import { users } from "../schema/auth.ts";
 import { revealJobRows, revealJobs } from "../schema/revealJobs.ts";
 import { creditRepository } from "./creditRepository.ts";
+import { jobVisibility } from "./jobVisibility.ts";
 
 type WsScope = TenantScope & { workspaceId: string };
 
@@ -82,6 +85,12 @@ export interface RevealBandRow {
   id: string;
   contactId: string | null;
   rowIndex: number;
+}
+
+/** A viewer-read job row: the control record + creator attribution (import-redesign 10 §2.1 — the display
+ *  name joins from `users` at read time; null = the user row is gone → the UI renders "Former member"). */
+export interface RevealJobViewRow extends RevealJobRecord {
+  createdByDisplayName: string | null;
 }
 
 const JOB_COLS = {
@@ -165,18 +174,73 @@ export const revealJobRepository = {
     });
   },
 
-  async listJobsByWorkspace(scope: TenantScope, limit = 50): Promise<RevealJobRecord[]> {
+  /**
+   * List the jobs VISIBLE TO THE VIEWER, most-recent first (import-redesign 10 §2.1): members see their own
+   * + shared rows; elevated roles see all with creator attribution; while the dual gate is off the predicate
+   * short-circuits to workspace-wide (byte-identical shipped behavior, T-V4). Renamed from the unpredicated
+   * `listJobsByWorkspace` (10 §4.2 rule 1 — the old name is deleted so omission is a compile error).
+   * RLS keeps guaranteeing the workspace wall underneath either way.
+   */
+  async listJobs(scope: TenantScope, viewer: JobViewer, limit = 50): Promise<RevealJobViewRow[]> {
     const capped = Math.max(1, Math.min(200, Math.trunc(limit)));
     return withTenantTx(scope, (tx) =>
       tx
-        .select(JOB_COLS)
+        .select({
+          ...JOB_COLS,
+          createdByDisplayName: sql<
+            string | null
+          >`coalesce(${users.fullName}, ${users.email}::text)`,
+        })
         .from(revealJobs)
+        .leftJoin(users, eq(users.id, revealJobs.createdByUserId))
+        .where(
+          jobVisibility(viewer, {
+            createdByUserId: revealJobs.createdByUserId,
+            sharedWithWorkspace: revealJobs.sharedWithWorkspace,
+          }),
+        )
         .orderBy(desc(revealJobs.createdAt), desc(revealJobs.id))
         .limit(capped),
     );
   },
 
-  async getJob(scope: TenantScope, jobId: string): Promise<RevealJobRecord | null> {
+  /**
+   * USER-FACING read of one job by id — the SAME predicate as the list (10 §4.2 rule 2), so a leaked or
+   * guessed id is no IDOR side-door: invisible (foreign-user or absent) ⇒ null ⇒ the route 404s without
+   * revealing existence. Worker/system paths use getJobSystem (10 §4.3).
+   */
+  async getJob(
+    scope: TenantScope,
+    viewer: JobViewer,
+    jobId: string,
+  ): Promise<RevealJobViewRow | null> {
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select({
+          ...JOB_COLS,
+          createdByDisplayName: sql<
+            string | null
+          >`coalesce(${users.fullName}, ${users.email}::text)`,
+        })
+        .from(revealJobs)
+        .leftJoin(users, eq(users.id, revealJobs.createdByUserId))
+        .where(
+          and(
+            eq(revealJobs.id, jobId),
+            jobVisibility(viewer, {
+              createdByUserId: revealJobs.createdByUserId,
+              sharedWithWorkspace: revealJobs.sharedWithWorkspace,
+            }),
+          ),
+        )
+        .limit(1);
+      return rows[0] ?? null;
+    });
+  },
+
+  /** SYSTEM read of a job by id — worker paths only (the drive/finalize loop): no viewer, RLS workspace
+   *  isolation unchanged. Never call from a user-facing route (10 §4.3). */
+  async getJobSystem(scope: TenantScope, jobId: string): Promise<RevealJobRecord | null> {
     return withTenantTx(scope, async (tx) => {
       const rows = await tx
         .select(JOB_COLS)

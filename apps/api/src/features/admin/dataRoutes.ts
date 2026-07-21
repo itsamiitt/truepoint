@@ -10,7 +10,7 @@
 // in the SAME tx) and is PLATFORM_READ_LIMIT-bounded. METADATA + tallies ONLY — the repo reads the import_jobs /
 // retention_runs CONTROL tables, never import_job_rows, so no imported contact PII crosses the boundary
 // (truepoint-security: a cross-tenant admin read exposes counts, not records).
-import { BUILTIN_VALIDATION_RULES, staffWorkspaceExport } from "@leadwolf/core";
+import { BUILTIN_VALIDATION_RULES, runStaffContactMerge, staffWorkspaceExport } from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
   platformAdminRepository,
@@ -26,6 +26,7 @@ import {
   approvalRequestViewSchema,
   bulkDeleteParamsSchema,
   bulkExportParamsSchema,
+  contactTrueMergeParamsSchema,
   createApprovalSchema,
   decideApprovalSchema,
   dedupMergeParamsSchema,
@@ -35,6 +36,7 @@ import {
   validationRuleSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
+import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
 import { bulkFileStore } from "../import/bulkStore.ts";
@@ -373,6 +375,25 @@ dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), asyn
           throw new ValidationError(
             "The survivor is itself marked a duplicate of the loser — unmark it first or swap the pair.",
           );
+      } else if (row.operation === "contact_true_merge") {
+        const p = contactTrueMergeParamsSchema.safeParse(row.params);
+        if (!p.success)
+          throw new ValidationError(
+            p.error.issues[0]?.message ?? "Invalid contact_true_merge params",
+          );
+        // SURFACE-1 VALUE-MOVING TRUE MERGE (04 §3.5; S-C9) — the maker-checker wrapper over the SAME core
+        // engine the customer verb uses (DM1). Runs on the TARGET tenant's withTenantTx (RLS-correct — the
+        // engine never touches the owner path), rides the tenant's merge dual gate, and is IRREVERSIBLE
+        // (unlike the grain-A dedup_merge above, which stays marker-only + reversible). The approving staff
+        // user is the merge actor (pins + audit). SEAM: the engine commits in its own tenant tx, so a re-approve
+        // after a partial is made safe by the wrapper's idempotent already-merged handling (doc 16 caveat).
+        await runStaffContactMerge({
+          scope: { tenantId: p.data.tenantId, workspaceId: p.data.workspaceId },
+          survivorContactId: p.data.survivorContactId,
+          loserContactId: p.data.loserContactId,
+          decisions: p.data.decisions,
+          userId: actor.userId,
+        });
       } else if (row.operation === "bulk_delete") {
         const p = bulkDeleteParamsSchema.safeParse(row.params);
         if (!p.success)
@@ -557,8 +578,7 @@ dataRoutes.get("/approvals/:id/export", requireCapability("data:export"), async 
   } catch {
     throw new NotFoundError("Export artifact not found.");
   }
-  c.header("content-type", "text/csv; charset=utf-8");
-  c.header("content-disposition", `attachment; filename="staff-export-${id}.csv"`);
+  setCsvDownloadHeaders(c, `staff-export-${id}.csv`);
   // Merged-types fallout: c.body's Data type rejects a Buffer/Uint8Array here — hand it a fresh ArrayBuffer
   // slice (exact bytes; runtime behavior unchanged). See contacts-bulk export for the same shape.
   return c.body(

@@ -62,6 +62,9 @@ const WRITTEN = new Set<string>([
   // AUTH — self-service session revoke (auditSessionRevoke, tenant branch → audit_log; now fully wired via the
   // dual-sink, so no longer PENDING).
   "session.revoked",
+  // Import visibility P0 (import-redesign 10 §3, S-V4): the audited per-workspace import-policy change —
+  // written in-tx by PUT /settings/import-policy (apps/api settings routes → writeAudit).
+  "import.policy_updated",
 ]);
 
 // §5.2 — defined in the closed enum but not yet wired to a writeAudit() call-site.

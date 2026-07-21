@@ -12,6 +12,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "lint:boundaries": "depcruise apps packages",
+    "lint:import-pii": "node scripts/lint-import-pii-logs.mjs",
     "arch:map": "node .claude/hooks/gen-architecture-map.mjs",
     "db:migrate": "bun run --filter @leadwolf/db migrate",
     "db:seed": "bun run --filter @leadwolf/db seed",

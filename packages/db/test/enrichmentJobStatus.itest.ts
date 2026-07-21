@@ -127,9 +127,13 @@ afterAll(async () => {
 
 describe("G-ENR-4 enrichment job-status surface — workspace scoping + mapping", () => {
   const scopeA = () => ({ tenantId: tenantA, workspaceId: wsA });
+  // These tests assert the RLS workspace wall + DTO mapping, not the owner scope: a scoped:false viewer
+  // short-circuits the jobVisibility predicate to workspace-wide (the shipped behavior; T-V4 parity).
+  const wsWideViewer = () =>
+    ({ userId: "00000000-0000-0000-0000-000000000000", role: "owner", scoped: false }) as const;
 
   test("listEnrichmentJobs(A) returns ONLY A's jobs, most-recent first; B's never leak", async () => {
-    const jobs = await core.listEnrichmentJobs({ scope: scopeA() });
+    const jobs = await core.listEnrichmentJobs({ scope: scopeA(), viewer: wsWideViewer() });
     expect(jobs.length).toBe(2);
     // Most-recent first → the failed job (inserted last) leads.
     expect(jobs[0]!.sourceName).toBe("a-failed.csv");
@@ -139,7 +143,7 @@ describe("G-ENR-4 enrichment job-status surface — workspace scoping + mapping"
   });
 
   test("derives progress, failed count, and failure reason from the control-row counters", async () => {
-    const jobs = await core.listEnrichmentJobs({ scope: scopeA() });
+    const jobs = await core.listEnrichmentJobs({ scope: scopeA(), viewer: wsWideViewer() });
     const running = jobs.find((j) => j.sourceName === "a-running.csv")!;
     expect(running.progress).toBeCloseTo(0.4, 5); // 40 / 100
     // In-flight: the rows not yet matched are still pending, NOT failed → failed reads 0 until settled.
@@ -156,15 +160,15 @@ describe("G-ENR-4 enrichment job-status surface — workspace scoping + mapping"
   });
 
   test("getEnrichmentJobStatus is RLS-scoped: A sees its own job, B's id resolves to null", async () => {
-    const jobs = await core.listEnrichmentJobs({ scope: scopeA() });
+    const jobs = await core.listEnrichmentJobs({ scope: scopeA(), viewer: wsWideViewer() });
     const aJobId = jobs[0]!.jobId;
-    const own = await core.getEnrichmentJobStatus({ scope: scopeA(), jobId: aJobId });
+    const own = await core.getEnrichmentJobStatus({ scope: scopeA(), viewer: wsWideViewer(), jobId: aJobId });
     expect(own?.jobId).toBe(aJobId);
 
     // B's job id — fetched with admin (bypassing RLS) — must be invisible to A (null → 404 at the edge).
     const [bRow] = await admin`SELECT id FROM enrichment_jobs WHERE workspace_id = ${wsB} LIMIT 1`;
     const bJobId = (bRow as { id: string }).id;
-    const leaked = await core.getEnrichmentJobStatus({ scope: scopeA(), jobId: bJobId });
+    const leaked = await core.getEnrichmentJobStatus({ scope: scopeA(), viewer: wsWideViewer(), jobId: bJobId });
     expect(leaked).toBeNull();
   });
 });

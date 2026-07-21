@@ -8,8 +8,9 @@
 //   • retention_runs     — per-tenant, APPEND-ONLY audit of each sweep's outcome for ONE class (the shadow-mode
 //                          evidence: candidate volume measured BEFORE any class is flipped to `enforce`).
 // The class vocabulary, the disabled|shadow|enforce mode, and the conservative seed defaults are the shipped
-// contract in @leadwolf/types (packages/types/src/retention.ts); the seed rows in 0025_retention_engine.sql MUST
-// match DEFAULT_RETENTION_POLICIES exactly. Closed enums via the varchar + CHECK idiom this folder uses (no pgEnum).
+// contract in @leadwolf/types (packages/types/src/retention.ts); the seed rows (12 in 0033_retention_engine.sql
+// + the two S-CH1 channel classes in 0058_contact_channels.sql) MUST match DEFAULT_RETENTION_POLICIES exactly.
+// Closed enums via the varchar + CHECK idiom this folder uses (no pgEnum).
 
 import { sql } from "drizzle-orm";
 import { check, index, integer, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";

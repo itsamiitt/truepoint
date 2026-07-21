@@ -7,12 +7,10 @@
 // trust boundary as the sync route: the workspace comes from the VERIFIED token (tenancy middleware), never the
 // body; the client listId is validated against that workspace before enqueue (list-plan D4 — never trusted).
 
-import { randomUUID } from "node:crypto";
 import { env } from "@leadwolf/config";
-import { assertListInWorkspace, isFlagEnabledForTenant } from "@leadwolf/core";
+import { assertListInWorkspace, isFlagEnabledForTenant, submitCopyImport } from "@leadwolf/core";
 import { type ImportJobRow, importJobRepository, withTenantTx } from "@leadwolf/db";
 import {
-  type AvScanStatus,
   BULK_IMPORT_FLAG_KEY,
   type BulkImportJobRef,
   type BulkImportJobStatus,
@@ -31,10 +29,14 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueBulkImportDrive } from "./bulkQueue.ts";
 import { bulkFileStore } from "./bulkStore.ts";
+import { requireImportCreateGrant } from "./createGrant.ts";
+import { scanImportUpload } from "./malwareScan.ts";
+import { admittedImportFormData, assertBulkUploadAdmissible } from "./uploadAdmission.ts";
 
 export const bulkImportRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -55,6 +57,18 @@ bulkImportRoutes.use("*", async (_c, next) => {
     throw new ForbiddenError("bulk_import_disabled", "Bulk import is not enabled.");
   }
   await next();
+});
+
+// ── S-I9: the 08 §1.2 Phase-C DELEGATION WINDOW — with unified routing shipped, this surface is a THIN
+// DELEGATE over core's submitCopyImport (the exact trio the unified POST /imports drives when copy is
+// engaged: same control row, same object key idiom, same drive) kept "for one release window, then
+// retired" (retirement = 15 §M-SEQ seq 43's drain, never a quiet 404). Successful responses carry the
+// standard deprecation signal (RFC 9745 `Deprecation` + a successor Link) so window-era clients can see
+// the clock; behavior is otherwise untouched, and while the env gate above is closed nothing here runs.
+bulkImportRoutes.use("*", async (c, next) => {
+  await next();
+  c.res.headers.set("Deprecation", "true");
+  c.res.headers.set("Link", '</api/v1/imports>; rel="successor-version"');
 });
 
 /** Map a stored control row's row-accounting columns to the public, non-PII counts DTO (rows_in = the sum). */
@@ -111,25 +125,16 @@ function parseBulkListTarget(form: FormData): string | undefined {
   return parsed.data.listId;
 }
 
-/** A sanitized lowercase extension for the deterministic source key — the filename is NEVER trusted in a path
- *  (alnum only; the disk adapter is traversal-guarded too). Defaults to `csv`. */
-function sourceExt(name: string): string {
-  const ext = (name.split(".").pop() ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return ext || "csv";
-}
-
-/**
- * AV-scan SEAM (G-IMP-6): no scanner is wired at this composition root yet, so an untrusted upload is recorded as
- * `skipped`. When a real scanner is injected here it returns `clean`/`infected`; the caller REFUSES an `infected`
- * file before any job is created (and core's promote-to-staging re-checks the gate).
- */
-function scanUpload(): AvScanStatus {
-  return "skipped";
-}
+// AV-scan SEAM (G-IMP-6 → S-S2/G08, wire point 1): scanImportUpload runs the env-selected MalwareScannerPort
+// (MALWARE_SCANNER=clamav ⇒ clamd INSTREAM; default stub ⇒ 'skipped', byte-identical). The caller REFUSES an
+// `infected` file before any job is created; a configured-but-unreachable scanner throws 503 (fail-closed,
+// never a silent 'skipped'); core's promote-to-staging re-checks the gate (wire point 2, runBulkImport).
 
 // POST /imports/bulk — accept a (potentially huge) upload: stream it to the FileStore, record a control row, and
 // enqueue ONE drive job; return 202 + a job ref to poll. No per-row work on the request thread.
-bulkImportRoutes.post("/", async (c) => {
+// S-V4 (G02): a job-CREATING import verb — the create grant rides the visibility dual gate on top of the
+// existing BULK_IMPORT_ENABLED + bulk_import_enabled pair (pass-through while the visibility gate is off).
+bulkImportRoutes.post("/", requireImportCreateGrant(), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before importing.");
@@ -148,8 +153,13 @@ bulkImportRoutes.post("/", async (c) => {
   if (!tenantEnabled)
     throw new ForbiddenError("bulk_import_disabled", "Bulk import is not enabled.");
 
-  const form = await c.req.formData();
+  // S-S1 admission envelope (13 §1): byte-count-capped multipart parse (a lying Content-Length aborts
+  // mid-stream, never buffers past the ceiling) + multipart hardening, then per-file content admission —
+  // the bulk drive parses CSV only, so .xlsx/ZIP-magic/binary uploads are refused HERE with an honest
+  // 415/413/422 instead of being streamed to the store and failed in the worker.
+  const form = await admittedImportFormData(c.req.raw);
   const { file, sourceName: src, mapping } = await parseBulkImportForm(form);
+  await assertBulkUploadAdmissible(file);
 
   // Explicit conflict policy (G-IMP-5) — default `skip` (no silent overwrite) when the field is absent.
   const policyRaw = form.get("conflictPolicy");
@@ -165,61 +175,39 @@ bulkImportRoutes.post("/", async (c) => {
   const listId = parseBulkListTarget(form);
   if (listId) await assertListInWorkspace({ scope, listId });
 
-  // AV-scan SEAM: refuse an infected upload before any job exists. With no scanner configured this is `skipped`.
-  const avScan = scanUpload();
+  // AV-scan (S-S2, wire point 1): refuse an infected upload BEFORE any job exists (no row, no stored object
+  // retained) and BEFORE the bytes are streamed to the store. Stub ⇒ 'skipped' (shipped behavior); real
+  // scanner outage ⇒ 503 fail-closed inside the helper. Scan strictly precedes parse AND storage.
+  const avScan = await scanImportUpload(file);
   if (avScan === "infected")
     throw new ImportValidationError("The uploaded file did not pass the malware scan.");
-
-  // Deterministic object-store key for the SOURCE upload, keyed by a fresh upload id (NOT the jobId): createJob
-  // assigns the jobId from the DB default and the db repo exposes no setter to rewrite source_file post-insert, so
-  // the key is computed BEFORE create (put → create → enqueue). The ext is sanitized — the filename is untrusted.
-  // (The rejected-rows artifact is jobId-based, written by core's runBulkImport — see the GET handler.)
-  const sourceKey = `imports/${randomUUID()}/source.${sourceExt(file.name)}`;
 
   // Idempotency-Key (09 §5): a re-submit carrying the same key collapses onto the existing job via the partial-
   // unique (workspace_id, idempotency_key) index in createJob — never a duplicate import.
   const idempotencyKey = c.req.header("idempotency-key") ?? null;
 
-  // Create the control row FIRST (short tx) so an idempotent re-submit is detected BEFORE we stream the upload or
-  // enqueue a duplicate drive. source_file points at sourceKey; we write those bytes immediately after (and only
-  // for a freshly-created job), BEFORE the drive is enqueued — so the worker never reads a not-yet-written object.
-  const { id: jobId, created } = await withTenantTx(scope, (tx) =>
-    importJobRepository.createJob(tx, {
-      tenantId,
-      workspaceId,
-      createdByUserId: claims.sub,
-      // source_file = the object-store KEY (core's bulkStage reads the upload from it); source_name = the
-      // SourceName PROVIDER enum (core casts `job.sourceName as SourceName` for the content hash + the
-      // `import:<source>` provenance stamp, byte-identical to the sync path — NOT the display filename, despite
-      // the schema's inline comment). The original filename is carried only inside the object key here.
-      sourceFile: sourceKey,
-      sourceName: src,
-      fileSize: file.size,
-      avScanStatus: avScan,
-      idempotencyKey,
-      columnMapping: mapping,
-      conflictPolicy: parsedPolicy.data,
-      targetListId: listId ?? null,
-    }),
-  );
-
-  if (created) {
-    // Stream the raw upload to the FileStore (constant memory — File.stream() is a ReadableStream<Uint8Array>),
-    // THEN enqueue the single drive job. On a storage failure mark the job failed (best-effort) and surface it.
-    try {
-      await bulkFileStore().putObject(sourceKey, file.stream());
-    } catch (err) {
-      await withTenantTx(scope, (tx) =>
-        importJobRepository.updateJobStatus(tx, jobId, {
-          status: "failed",
-          failedReason: "Failed to store the uploaded file.",
-          completedAt: new Date(),
-        }),
-      ).catch(() => undefined);
-      throw err;
-    }
-    await enqueueBulkImportDrive({ kind: "drive", jobId, scope });
-  }
+  // S-I9 delegation (08 §1.2 Phase C): core's submitCopyImport IS this route's former inline body,
+  // extracted — create the control row FIRST (short tx, idempotent re-submit detected before any bytes
+  // move), stream the upload to the FileStore, THEN enqueue the single drive. The row is now marked
+  // IDENTICALLY to the unified surface's copy jobs (`processing_mode='copy'` + the display
+  // `source_filename` — it IS the same trio; source_name keeps the SourceName PROVIDER enum for the
+  // content hash + the `import:<source>` provenance stamp, exactly as before). No strategy pair here:
+  // the legacy bulk engine keeps reading `conflictPolicy`; the columns take their policy-matching defaults.
+  const { jobId } = await submitCopyImport({
+    scope,
+    createdByUserId: claims.sub,
+    sourceName: src,
+    fileName: file.name,
+    fileSize: file.size,
+    body: () => file.stream(),
+    avScanStatus: avScan,
+    idempotencyKey,
+    columnMapping: mapping,
+    conflictPolicy: parsedPolicy.data,
+    targetListId: listId ?? null,
+    fileStore: bulkFileStore(),
+    enqueueDrive: (id, s) => enqueueBulkImportDrive({ kind: "drive", jobId: id, scope: s }),
+  });
 
   // The accept-status is always `queued` (the sync route's posture); the client polls GET for the real status —
   // which, for an idempotent re-submit, reflects wherever the original job already is.
@@ -236,7 +224,12 @@ bulkImportRoutes.get("/:jobId", async (c) => {
   const scope = { tenantId, workspaceId };
   const jobId = c.req.param("jobId");
 
-  const job = await withTenantTx(scope, (tx) => importJobRepository.getJob(tx, jobId));
+  // Viewer-predicated detail read (import-redesign 10 §5 row 2 — the legacy bulk poll rides the same
+  // predicate as every detail-by-id), behind the S-V3 dual gate. This route runs no requireRole guard, so
+  // buildJobViewer resolves the caller's ACTIVE workspace role itself — but only when the gate is on
+  // (gate off ⇒ zero extra queries, workspace-wide, byte-identical — T-V4).
+  const viewer = await buildJobViewer({ tenantId, workspaceId, userId: c.get("claims").sub });
+  const job = await withTenantTx(scope, (tx) => importJobRepository.getJob(tx, viewer, jobId));
   // Tenant isolation: RLS already restricts getJob to the caller's workspace; the explicit workspace check is
   // belt-and-suspenders. A foreign/absent job 404s — never leak another workspace's job (nor its existence).
   if (!job || job.workspaceId !== workspaceId)

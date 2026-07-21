@@ -296,6 +296,16 @@ export const appEnvSchema = z
     // call that would exceed this is rejected with a budget error BEFORE any model spend.
     AI_NL_SEARCH_DAILY_BUDGET: z.coerce.number().int().positive().default(200),
 
+    // Owner-scoped job visibility (import-and-data-model-redesign 10; the G01 fix). GLOBAL kill-switch of the
+    // dual gate: effective scoping = (this === "true") AND the per-tenant `job_visibility_scoped` flag. While
+    // off, every job surface (import/reveal/enrichment lists + detail + the home Recent Imports card) keeps
+    // its shipped workspace-wide visibility BYTE-IDENTICALLY (the jobVisibility predicate short-circuits;
+    // T-V4 parity). Flipping it off at any point is the instant fleet-wide rollback lever (15 §R-P0). Same
+    // explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy.
+    JOB_VISIBILITY_SCOPED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Bulk COPY-staging import (backlog #2, phase 6; 15-bulk-import-design). HARD GATE, default FALSE: the whole
     // pipeline is DARK in prod until the COPY spike + a prod object store are ready. While off, the apps/api
     // producer creates/enqueues NOTHING and the apps/workers consumer is not even registered. Modelled on
@@ -309,9 +319,263 @@ export const appEnvSchema = z
     // FileStore (S3: presigned multipart + AV-scan-before-promote) is injected at the app composition root later —
     // no AWS SDK is added here; this dir is only the dev adapter's root. Has a sane default so dev/test boot clean.
     BULK_IMPORT_STORAGE_DIR: z.string().min(1).default(".data/bulk-imports"),
+    // ── GATE B (G07): the PRODUCTION S3-compatible object store (import-redesign 14 §gates; db-mgmt 05 §5.3).
+    // The dependency-free SigV4 adapter (@leadwolf/integrations s3FileStore) is selected at BOTH composition
+    // roots (apps/api bulkStore.ts + apps/workers register.ts) when BUCKET + ACCESS_KEY_ID + SECRET are all
+    // set; any of them absent ⇒ diskFileStore, byte-identical to today (the adapter ships DARK — provisioning
+    // the bucket and setting these vars is the entire user-owed enable step). The credentials are SECRETS:
+    // server-only, never logged, never NEXT_PUBLIC_.
+    BULK_IMPORT_S3_BUCKET: z.string().min(1).optional(),
+    BULK_IMPORT_S3_REGION: z.string().min(1).default("us-east-1"), // R2 uses "auto" — signs fine
+    // S3-compatible endpoint origin for R2/MinIO (path-style addressing). Unset = AWS virtual-host style.
+    BULK_IMPORT_S3_ENDPOINT: z.string().url().optional(),
+    BULK_IMPORT_S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+    BULK_IMPORT_S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    // Server-side-encryption header on writes ("AES256" | "aws:kms") — 13 §4.1's encrypted-at-rest posture.
+    // Explicit "none" omits the header for stores that encrypt unconditionally and reject it (R2).
+    BULK_IMPORT_S3_SSE: z.string().min(1).default("AES256"),
+    // Presigned-GET TTL — bounded per 13 §4.3 (a presigned URL is a bearer capability; ≤ 5 min).
+    BULK_IMPORT_S3_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().max(300).default(300),
+    // ── GATE C (G08 / S-S2): the malware scanner selection (import-redesign 13 §2). Default `stub` = the
+    // shipped behavior byte-identical (uploads record av_scan_status='skipped', nothing is refused).
+    // `clamav` composes the dependency-free clamd INSTREAM adapter at BOTH roots — from that moment every
+    // upload is scanned at admission, the copy drive re-checks before staging, infected ⇒ refused/failed
+    // terminal, and a scanner OUTAGE FAILS CLOSED (503 at admission — never a silent 'skipped'). Reverting
+    // to `stub` after enabling is deliberately loud: the no-new-'skipped' monitor fires (13 §2.3/§11).
+    // Deploying the clamd sidecar + flipping this var is the user-owed half of Gate C.
+    MALWARE_SCANNER: z.enum(["stub", "clamav"]).default("stub"),
+    CLAMAV_HOST: z.string().min(1).default("127.0.0.1"),
+    CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
+    // Whole-scan deadline; exceeded ⇒ verdict 'error' ⇒ fail-closed. Must comfortably cover the byte
+    // ceiling at the sidecar's throughput; clamd's own StreamMaxLength must be ≥ the upload ceiling
+    // (13 §2.1: a file too big to scan is a file too big to accept).
+    CLAMAV_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+    // ── S-S7 (13 §4.4): the import ARTIFACT lifecycle. TTL for the PII-bearing error-artifact pair
+    // (repair CSV + error report) — after this many days past the job's terminal, the leader-locked
+    // importArtifactSweep deletes the objects and NULLS the job row's artifact keys (the UI then shows the
+    // honest "expired" state; the artifact route already 404s a null key). The SOURCE object is NOT
+    // TTL'd here — it follows the job's own purge horizon. Sweep cadence below; both revert by env.
+    IMPORT_ARTIFACT_TTL_DAYS: z.coerce.number().int().positive().default(90),
+    IMPORT_ARTIFACT_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(6 * 3_600_000),
+    // S-I8 (08 §2.1/§Edge cases): the DRAFT TTL. A draft older than this is REAPED by the import reaper
+    // sweep — the row hard-deleted (drafts never entered execution and appear in no history; a tombstone
+    // would pollute retention for zero forensic value) and its stored source object deleted. 08 fixes the
+    // default at 48 h. Reverts by env; raising it only delays future reaps (never resurrects a reaped draft).
+    IMPORT_DRAFT_TTL_HOURS: z.coerce.number().int().positive().default(48),
     // The sync→bulk promotion threshold (rows): an import larger than this is steered onto the bulk pipeline
     // rather than the inline `imports` queue. Consumed by the promotion logic; a sensible default until tuned.
     BULK_IMPORT_THRESHOLD_ROWS: z.coerce.number().int().positive().default(5000),
+    // Unified durable import pipeline v2 (import-and-data-model-redesign 08/09; S-I3 onward). GLOBAL
+    // kill-switch of the dual gate: effective v2 = (this === "true") AND the per-tenant `import_v2_enabled`
+    // flag (seeded off in 0054). While off, every import surface keeps its shipped behavior BYTE-IDENTICALLY
+    // (T1 parity is the proof): POST /imports enqueues the legacy `imports` queue job and GET /imports/:jobId
+    // reads BullMQ — no durable row is created or read. Flipping it off at any point is the instant
+    // fleet-wide rollback lever (15 §R-P1); executed imports KEEP their durable rows (data is never rolled
+    // back by a flag). Same explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can
+    // never read truthy.
+    IMPORT_V2_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Tenant-fairness knobs for the unified import queue (import-redesign 09 §2, S-Q2). All revert by env
+    // (15 §R-P1: "tuning knobs revert by env"); each 0 = the DISABLED/∞ sentinel restoring legacy behavior.
+    // Per-workspace cap on concurrently EXECUTING imports (states validating|staged|running — 08 §2.1's
+    // `deferred` parks the overflow, HubSpot's visible-backpressure pattern). Doc 12 publishes the number
+    // (N=3, worst-case per-workspace chunk fan-out = K×N). 0 = no cap (nothing ever defers).
+    IMPORT_WORKSPACE_JOB_CAP: z.coerce.number().int().nonnegative().default(3),
+    // Bounded rolling chunk fan-out window K (09 §2.2): a copy drive enqueues only the first K chunk jobs;
+    // each completion enqueues the next pending band (self-perpetuating; reaper-healed). 0 = ∞ sentinel =
+    // legacy enqueue-all (also dodges addBulk degradation above ~1k jobs).
+    IMPORT_CHUNK_WINDOW: z.coerce.number().int().nonnegative().default(2),
+    // How long a DEFERRED fast job waits before its cooperative cap re-check re-claims it (Phase A: fast
+    // payloads carry rows, so the deferred lane re-enqueues with this delay rather than parking without
+    // transport — importV2.ts documents the bound).
+    IMPORT_DEFER_RECHECK_DELAY_MS: z.coerce.number().int().positive().default(15_000),
+    // Import reaper knobs (import-redesign 09 §7 row 2 / §8, S-Q5): the DB-backed recovery + observe spine
+    // that composes the promotion-sweep idiom. All gate-independent hardening (observe/recover only; the
+    // reaper never changes happy-path behavior) and revert-by-env.
+    //   • sweep cadence — how often the leader-locked reaper tick runs.
+    IMPORT_REAPER_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(60_000),
+    //   • orphan grace — a non-terminal import older than this WITH NO live BullMQ job is a Redis-loss /
+    //     503-shed orphan (drift 16: the "503 shed leaves a visible queued row" edge): copy re-drives from
+    //     the durable row (idempotent, watermark-resumed), fast terminalizes `failed` (rows-in-payload
+    //     unrecoverable in Phase A — honest terminal, no eternal `queued`/`running` row).
+    IMPORT_REAPER_ORPHAN_GRACE_MS: z.coerce.number().int().positive().default(5 * 60_000),
+    //   • stall window — a `running` job whose 7-bucket counters have not advanced for longer than this is
+    //     flagged (metric + log; NEVER auto-killed) — the durable-truth "is it stuck?" signal (09 §8).
+    IMPORT_REAPER_STALL_WINDOW_MS: z.coerce.number().int().positive().default(10 * 60_000),
+    // Scheduled imports (import-and-data-model-redesign 08 §9; P5). GLOBAL kill-switch of the dual gate:
+    // effective = (this === "true") AND the per-tenant `scheduled_imports_enabled` flag (seeded off in 0063)
+    // AND the import_v2 dual gate on for the tenant (a fired run rides the unified durable pipeline). While
+    // off, the CRUD verbs 404 and the leader-locked sweep is NOT constructed — the table stays inert. Same
+    // explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy. The
+    // remote-URL / connected-source branch (08 §9) is NOT built here (13 §8 SSRF forward-guard, deferred);
+    // only the STORED-object branch ships, so nothing here opens an outbound-fetch surface.
+    SCHEDULED_IMPORTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Incremental / DELTA imports (import-and-data-model-redesign 08 §9 layer 3; P5). GLOBAL kill-switch of the
+    // delta dual gate: effective external-id upsert = (this === "true") AND the per-tenant `delta_imports_enabled`
+    // flag (seeded off in 0068) AND the per-import `externalIdUpsert` opt-in (a mapped `externalId` column).
+    // While off, every import keeps its shipped content-hash idempotent-skip + email→linkedin→sales-nav dedup
+    // ladder BYTE-IDENTICALLY and never reads or writes contacts.external_id (the gate is evaluated in the api
+    // route; a gate-off job never carries the option onto the payload). The `modified_since` timestamp-cursor
+    // for CONNECTED sources is NOT built here (connected sources are deferred — 08 §9; doc 16 P5 rows); the
+    // stored-object/scheduled delta case is served by the shipped content_hash skip. Same explicit-"true"-only
+    // posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy.
+    DELTA_IMPORTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // API-PUSH imports (import-and-data-model-redesign 08 §9 "API-push imports"; P5). GLOBAL kill-switch of the
+    // push dual gate: effective push = (this === "true") AND the per-tenant `api_imports_enabled` flag (seeded
+    // off in 0069). While off, `POST /imports/rows` 404s (strict-from-birth, no existence oracle) and the JSON
+    // pipeline is never constructed — every OTHER import surface is byte-identical (a NEW additive route). With
+    // both on, a caller may submit already-structured canonical rows as JSON onto the SAME fast-lane durable
+    // pipeline (createJob + enqueueFastImport) the multipart one-shot uses, Idempotency-Key required. Body-
+    // carried data ONLY — no remote-URL / connected-source fetch (13 §7/§8 SSRF forward-guard; that branch is
+    // deferred). Same explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset never truthy.
+    API_IMPORTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // How often the leader-locked scheduled-import sweep ticks (fires due schedules). Revert-by-env.
+    SCHEDULED_IMPORT_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(60_000),
+    // N consecutive FIRE-TIME failures (grant loss / submission error) that auto-disable a schedule (it turns
+    // itself off + notifies the creator rather than firing forever). Default mirrors the shared type constant.
+    SCHEDULED_IMPORT_MAX_CONSECUTIVE_FAILURES: z.coerce.number().int().positive().default(5),
+    // Multi-value channel DUAL-WRITE (import-and-data-model-redesign 05, S-CH2) — the GLOBAL kill-switch half
+    // of the dual gate (the name doc 05 pins): effective dual-write = (this === "true") AND the per-tenant
+    // `channels_dual_write` flag (seeded off in 0059). While off, every email/phone writer (import, enrichment,
+    // reveal verify, re-verification) keeps its shipped flat-column behavior BYTE-IDENTICALLY — zero flag reads,
+    // zero child-table writes (T-CH parity is the proof). With both halves on, those writers ALSO maintain
+    // `contact_emails`/`contact_phones` rows via `applyChannelWrite` in the SAME withTenantTx (CH-INV-1); the
+    // flat columns remain the source of truth until S-CH4. Flipping this off at any point is the instant
+    // fleet-wide §R-P3 rollback lever — already-written child rows stay inert (nothing reads them until S-CH4)
+    // and are never rolled back by a flag. Same explicit-"true"-only posture as BULK_IMPORT_ENABLED.
+    CHANNEL_DUAL_WRITE: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Multi-value channel BACKFILL (import-and-data-model-redesign 05/15 §2.1, S-CH3) — the job-level flag
+    // 05's S-CH3 row mandates. The leader-locked sweep is registered ONLY when BOTH this AND
+    // CHANNEL_DUAL_WRITE read "true" (S-CH3 runs strictly after S-CH2 in the rollout train, 15 §M-SEQ);
+    // per-tenant selection then rides the SAME `channels_dual_write` flag, re-evaluated fail-closed at every
+    // batch boundary — which is also the dynamic abort lever (flip the tenant flag off ⇒ that tenant's
+    // backfill halts at the next batch; flip this env off ⇒ the sweep stops scheduling at the next restart,
+    // the leader-lock TTL bounding any in-flight tick). Re-runs are idempotent no-ops on done contacts
+    // (WHERE-missing selection), so stop/resume is always safe (§R-P3). Explicit-"true"-only posture.
+    CHANNEL_BACKFILL_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // S-CH3 batch knobs (05's "per-workspace batch control"): contacts per keyset batch (one tx per batch —
+    // 15 §2.1's 1k default) and batches processed per workspace per sweep tick (bounds one tick's work under
+    // the leader-lock TTL; a whale workspace simply drains across ticks — resumable by construction).
+    CHANNEL_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
+    CHANNEL_BACKFILL_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
+    // Multi-value channel READ CUTOVER (import-and-data-model-redesign 05 §Implementation Steps, S-CH4) —
+    // THE NAME DOC 05's S-CH4 row pins. Env half of the composed read gate: effective read-from-child =
+    // this AND the full S-CH2 dual gate (CHANNEL_DUAL_WRITE env + `channels_dual_write` tenant flag) AND
+    // the `channels_read` tenant flag (0060) — read IMPLIES dual-write (05 §5 ordering), fail-closed if any
+    // layer is off. While off, every read surface keeps its shipped flat-column behavior BYTE-IDENTICALLY
+    // with zero extra queries: masked list/search projections + has_email/has_phone/email_domain facets,
+    // the dedup email rung (contacts.email_blind_index), reveal reads, and the revealed export. With all
+    // layers on, the child tables become the read truth (05 §3.4 phase flip): masked reads gain per-value
+    // channel summaries (counts + type/status/lineType/isPrimary — NEVER values or secondary domains, G16),
+    // secondaries count toward has_email/has_phone and dedup (the email rung retargets to
+    // contact_emails.blind_index), and reveal/export read primary-first from child rows. Flipping this off
+    // is the instant §R-P3 read rollback — reads return to the flat primary cache (permanently dual-write-
+    // maintained); secondaries merely go invisible, nothing is lost. FLIP PRECONDITIONS (05 §Rollout / 15
+    // §T-P3): parity itests green in CI + backfill completeness = 0 + drift = 0. Explicit-"true"-only.
+    CHANNEL_READ_FROM_CHILD: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Contact TRUE-MERGE (import-and-data-model-redesign 04 §3.1, S-C3) — the GLOBAL kill-switch half of the
+    // merge dual gate (the name doc 04 pins): effective merge = (this === "true") AND the per-tenant
+    // `contact_merge_enabled` flag (seeded off in 0067). While EITHER half is off the merge verb 404s (dark)
+    // and the engine is never constructed — flag-off is byte-identical current behavior (nothing merges). With
+    // both on, the maker-confirmed customer verb (Surface 2) + the Surface-1 staff wrapper (S-C9) call the
+    // SAME core merge engine on withTenantTx. Merge is IRREVERSIBLE: flipping this off halts NEW merges but
+    // NEVER rolls back executed ones (§R-P4 — the guardrail, not an unmerge). PRECONDITIONS (04 §Rollout):
+    // 05's channel tables live + backfill complete (demotion needs somewhere to demote to) + S-A5. Same
+    // explicit-"true"-only posture as BULK_IMPORT_ENABLED — "false"/"0"/""/unset can never read truthy.
+    CONTACT_MERGE_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Contact TRUE-MERGE per-workspace DAILY CAP (04 §3.1 — the FinOps-style brake on an irreversible,
+    // destructive verb; the cap value is a doc-14 rollout knob). Counted against committed `contact.merge`
+    // audit events in the workspace since UTC midnight. 0 = unlimited (kept low during canary — 04 §Rollout).
+    CONTACT_MERGE_DAILY_CAP: z.coerce.number().int().min(0).default(100),
+    // Multi-value channel PERMANENT RECONCILE / DRIFT SWEEP (import-and-data-model-redesign 05 §3.4/§5,
+    // 15 §M-SEQ seq 48, S-CH5) — the job-level enable for the CH-INV-1 drift sweep. It is part of the
+    // channel train, so the leader-locked sweep is registered ONLY when this AND `CHANNEL_DUAL_WRITE` both
+    // read "true" (a reconcile is meaningful only where child rows are maintained — the same env-pair posture
+    // the S-CH3 backfill uses). Off ⇒ nothing is built. Per-tenant SELECTION + the batch-boundary abort ride
+    // the SAME `channels_dual_write` flag (re-evaluated fail-closed in-tx per batch, the S-CH3 mechanism);
+    // the per-tenant READ gate (`CHANNEL_READ_FROM_CHILD` + `channels_read`, evaluated in-tx per batch) then
+    // picks the PHASE-DEPENDENT repair direction — read-gate OFF ⇒ FLAT wins (re-project the child primary
+    // from flat), read-gate ON ⇒ CHILD wins (re-project the flat cache from the child primary). Unlike the
+    // self-terminating S-CH3 backfill this NEVER retires (05 §5): drift = 0 is the steady state it holds
+    // forever. Explicit-"true"-only posture (house 01 §7.3). Alert: `leadwolf_channel_drift_remaining` > 0
+    // after burn-in = S2 (runbook §K) — a spike is the writer-bug signature (05 §worst-case).
+    CHANNEL_RECONCILE_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // S-CH5 batch knobs (mirror the S-CH3 per-workspace batch control): contacts per keyset batch (one tx per
+    // batch) and batches per workspace per sweep tick (bounds one tick's work under the leader-lock TTL; a
+    // whale workspace's residual drift simply drains across ticks — resumable by construction, the WHERE-drift
+    // selection is the watermark).
+    CHANNEL_RECONCILE_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
+    CHANNEL_RECONCILE_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
+    // Account-domain DUAL-WRITE (import-and-data-model-redesign 06 §1 / §Rollout, S-A2; 15 §M-SEQ seq 54) —
+    // the global kill-switch half of the S-A2 dual gate. Effective dual-write = this AND the per-tenant
+    // `account_domains_dual_write` feature flag (seeded off in 0062). While the ENV layer is off every account
+    // writer (import upsert; later enrichment/manual) keeps its shipped flat-column behavior BYTE-IDENTICALLY
+    // and performs ZERO flag reads (cost-identical) — the account_domains child table stays unwritten. Flipping
+    // it off at any point is the instant §R-P4 rollback lever: writers revert to flat-only, the flat accounts.
+    // domain cache stays authoritative (reads never move until S-A6), and already-written child rows stay inert
+    // and are never rolled back by a flag. 06 names no dual-write flag (only the S-A6 read cutover) — this pair
+    // is minted here (doc 16 drift row). Explicit-"true"-only posture (house 01 §7.3).
+    ACCOUNT_DOMAINS_DUAL_WRITE: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Account child BACKFILL (import-and-data-model-redesign 06 S-A1/S-A3, 15 §2.2 / §M-SEQ seq 55–56) — the
+    // job-level enable for the leader-locked account backfill sweep (domain pass = the mandated S-A1 re-run
+    // closing the write-gap tail; HQ pass = S-A3's best-effort location synthesis). Registered ONLY when this
+    // AND ACCOUNT_DOMAINS_DUAL_WRITE both read "true" (the backfill runs strictly after S-A2, the S-CH3 train
+    // posture). Per-tenant selection + the batch-boundary abort ride the SAME `account_domains_dual_write` flag
+    // (re-evaluated fail-closed in-tx per batch). Self-terminating + idempotent (WHERE-missing selection is the
+    // watermark) ⇒ safe to leave scheduled. Off ⇒ nothing is built. Explicit-"true"-only posture.
+    ACCOUNT_BACKFILL_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // S-A1/S-A3 batch knobs (mirror the S-CH3 per-workspace batch control): accounts per keyset batch (one tx
+    // per batch) and batches per workspace per sweep tick (bounds one tick's work under the leader-lock TTL; a
+    // whale workspace drains across ticks — resumable by construction).
+    ACCOUNT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
+    ACCOUNT_BACKFILL_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
+    // Account READ CUTOVER (import-and-data-model-redesign 06 §6/§API, S-A6; 15 §M-SEQ seq 59) — the global
+    // kill-switch half of the S-A6 composed read gate. Effective read-from-child = this AND the FULL S-A2 dual
+    // gate (ACCOUNT_DOMAINS_DUAL_WRITE env + `account_domains_dual_write` flag) AND the per-tenant
+    // `account_read_from_child` flag (seeded off in 0064) — read IMPLIES dual-write (06 §4 ordering), fail-closed
+    // if any layer is off. While off, every account read keeps its shipped flat-column behavior BYTE-IDENTICALLY
+    // (the 15 §T-P4 flag-off byte-identity gate) and the import ladder rung C2 (any-live-secondary-domain exact)
+    // stays dark — only C1 (the flat accounts.domain upsert) runs. Flipping it off at any point is the instant
+    // §R-P4 read rollback: reads return to the flat primary cache (still dual-write-maintained), secondaries go
+    // invisible again, nothing lost. FLIP PRECONDITION (07 §8 edge / 15 seq 55): backfill re-run converged
+    // (countAccountsMissingDomainChild = 0). 06 §Rollout names "a per-tenant dual-gate (named at PR time)" — this
+    // pair is minted here (doc 16 drift row). Explicit-"true"-only posture (house 01 §7.3).
+    ACCOUNT_READ_FROM_CHILD: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Evidence-substrate dual-write (prospect-database-platform I0 / audit P01): when ON, the ER resolve path
     // ALSO appends an immutable source_records evidence row + a match_links cluster-membership row alongside the
     // shipped deterministic landing. DEFAULT-OFF: while off the writers are never called and NOTHING changes — the

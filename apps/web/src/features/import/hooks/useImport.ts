@@ -5,7 +5,13 @@
 // timers are torn down on unmount and at the start of every new run so nothing leaks or double-fires.
 "use client";
 
-import type { ColumnMapping, ConflictPolicy, ImportSummary, SourceName } from "@leadwolf/types";
+import type {
+  ColumnMapping,
+  ConflictPolicy,
+  ImportMergeMode,
+  ImportSummary,
+  SourceName,
+} from "@leadwolf/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getImportJob, postImport } from "../api";
 import {
@@ -22,15 +28,20 @@ export interface RunArgs {
   sourceName: SourceName;
   mapping: ColumnMapping;
   conflictPolicy: ConflictPolicy;
+  /** The 08 §5 merge strategy (S-U4). Sent alongside `conflictPolicy`; the server uses it gate-on, ignores it
+   *  gate-off. Optional — absent ⇒ the workspace policy default. */
+  mergeMode?: ImportMergeMode;
+  preservePopulated?: boolean;
   /** Optional "import into list" target — landed rows are added to this list (list-plan/03 §2.2). */
   listId?: string;
 }
 
-/** Poll cadence and ceiling: ~1.5s between polls, giving up after ~2 min so the UI never hangs forever. */
+/** Poll cadence: ~1.5s between polls. There is NO attempt ceiling — a running job is durable server-side, so
+ *  the poll follows it to a terminal state rather than giving up (import-redesign 11 §4 / G11: the old ~2-min
+ *  "taking longer than expected" abort is deleted; the page flow uses the durable job page instead). */
 const POLL_INTERVAL_MS = 1_500;
-const MAX_POLL_ATTEMPTS = 80;
-/** Tolerate a few CONSECUTIVE transient poll failures (a dropped connection / 5xx) before giving up — one
- *  flaky GET must not abort a job that is still running fine server-side. Reset on every successful poll. */
+/** Tolerate a few CONSECUTIVE transient poll failures (a dropped connection / 5xx) before surfacing an error —
+ *  one flaky GET must not abort a job that is still running fine server-side. Reset on every successful poll. */
 const MAX_CONSECUTIVE_POLL_ERRORS = 3;
 
 export interface UseImport {
@@ -73,15 +84,10 @@ export function useImport(): UseImport {
       const isCurrent = () => runId === runIdRef.current;
       setVm({ phase: "submitting", jobId: null, summary: null, error: null });
 
-      // `errorStreak` counts CONSECUTIVE failed polls so a single blip doesn't kill a still-running job.
-      const poll = async (jobId: string, attempt: number, errorStreak: number): Promise<void> => {
+      // `errorStreak` counts CONSECUTIVE failed polls so a single blip doesn't kill a still-running job. No
+      // attempt ceiling — the loop follows a durable job to its terminal state (G11).
+      const poll = async (jobId: string, errorStreak: number): Promise<void> => {
         if (!isCurrent()) return;
-        if (attempt > MAX_POLL_ATTEMPTS) {
-          setVm(
-            viewModelFromError("Import is taking longer than expected. Check back shortly.", jobId),
-          );
-          return;
-        }
         try {
           const job = await getImportJob(jobId);
           if (!isCurrent()) return;
@@ -90,7 +96,7 @@ export function useImport(): UseImport {
           // Terminal is decided by the MAPPED phase, never the raw status: a "completed" job whose summary
           // hasn't materialized yet maps to `processing`, so we keep polling instead of freezing on a null.
           if (isTerminalPhase(next.phase)) return;
-          timerRef.current = setTimeout(() => void poll(jobId, attempt + 1, 0), POLL_INTERVAL_MS);
+          timerRef.current = setTimeout(() => void poll(jobId, 0), POLL_INTERVAL_MS);
         } catch (e) {
           if (!isCurrent()) return;
           if (errorStreak + 1 >= MAX_CONSECUTIVE_POLL_ERRORS) {
@@ -103,10 +109,7 @@ export function useImport(): UseImport {
             return;
           }
           // Transient blip — keep the user in `processing` and retry on the next tick.
-          timerRef.current = setTimeout(
-            () => void poll(jobId, attempt + 1, errorStreak + 1),
-            POLL_INTERVAL_MS,
-          );
+          timerRef.current = setTimeout(() => void poll(jobId, errorStreak + 1), POLL_INTERVAL_MS);
         }
       };
 
@@ -115,7 +118,7 @@ export function useImport(): UseImport {
           const ref = await postImport(args);
           if (!isCurrent()) return;
           setVm({ phase: "processing", jobId: ref.jobId, summary: null, error: null });
-          await poll(ref.jobId, 1, 0);
+          await poll(ref.jobId, 0);
         } catch (e) {
           if (!isCurrent()) return;
           setVm(viewModelFromError(e instanceof Error ? e.message : "Import failed."));

@@ -1,0 +1,438 @@
+// runFastImport.ts — the S-I3 fast-path dual-write wrapper (import-and-data-model-redesign 08 §1.2 Phase A,
+// 09 §1.1): drives ONE fast-mode import through the durable `import_jobs` state machine AROUND the UNCHANGED
+// `runImport` engine. The wrapper owns exactly three things — state transitions (queued→validating→running→
+// completed|partial|failed), the single real `import_job_chunks` row (uniform accounting, 08 §1.1), and the
+// terminal tx that translates runImport's summary into ATOMIC counter deltas + the rejected-rows ledger —
+// and NOTHING about how a row lands (mapping/dedup/encrypt/merge stay byte-identical to the legacy path;
+// one implementation, two transports). G03 closes here: the poll endpoint reads the durable row this
+// wrapper maintains, never `Job.getState()`.
+//
+// Idempotency & retry posture (09 §3 chunk row, applied to the fast kind):
+//   • counter deltas + ledger + completed-chunk increment commit ONCE, in the SAME terminal tx as the
+//     status flip — a failed attempt contributes NOTHING (a re-run's per-row effects are already no-ops via
+//     source_imports.content_hash, so the re-run's summary is the truthful tally);
+//   • a replay of an already-terminal job is a TERMINAL-SKIP no-op (stable BullMQ jobId dedupes most
+//     replays at the queue; this guard catches the rest);
+//   • zero-progress (total > 0, nothing landed) THROWS FastImportFailedError — mirroring the legacy
+//     consumer's ImportFailedError semantics byte-for-byte — so BullMQ retries and, on exhaustion, the
+//     worker's failed-hook calls markFastImportFailed to write the honest `failed` terminal.
+
+import { env } from "@leadwolf/config";
+import {
+  importJobRepository,
+  outboxRepository,
+  withTenantTx,
+  type ImportJobProgressDelta,
+  type ImportJobRowInsert,
+} from "@leadwolf/db";
+import {
+  IMPORT_NOTIFY_TOPIC,
+  IMPORT_ROLLUPS_TOPIC,
+  type ImportFastInput,
+  type ImportSummary,
+  rejectReasonToken,
+} from "@leadwolf/types";
+import type { FileStore } from "../storage/fileStore.ts";
+import { writeImportArtifacts } from "./artifactWriter.ts";
+import { ACTIVE_IMPORT_STATUSES } from "./importFairness.ts";
+import { runImport, type RunImportInput } from "./runImport.ts";
+
+export interface RunFastImportInput {
+  scope: { tenantId: string; workspaceId: string };
+  /** The durable import_jobs.id (the public jobId — one job identity for both modes, 08 §1.1). */
+  jobId: string;
+  input: ImportFastInput;
+  /** How many times the deferred lane has already re-enqueued this job (S-Q2; payload `deferrals`). */
+  deferrals?: number;
+  /**
+   * S-Q2 deferred-lane transport (Phase A): when a claim finds the job `deferred` AND the workspace still
+   * at its cap, the wrapper calls this to re-enqueue the SAME payload after env.IMPORT_DEFER_RECHECK_DELAY_MS
+   * (rows travel in the payload, so parking without transport would strand them — importV2.ts). Injected by
+   * the worker so core never touches BullMQ. Absent ⇒ the cap re-check is skipped and a deferred claim
+   * promotes unconditionally (test/tooling convenience; the worker always injects it).
+   */
+  requeueDeferred?: (nextDeferrals: number) => Promise<void>;
+  /**
+   * The object store the S-I7 artifact pair (repair CSV + error report) is written through at the terminal
+   * transition when ≥1 row was rejected (08 §6.2). Injected by the worker (core stays SDK-free). Absent ⇒ the
+   * artifacts are skipped (test/tooling convenience; the ledger + counters still commit) — the honest posture
+   * while no FileStore is composed. In prod the pair is written only while the IMPORT_V2 dual gate is on, which
+   * post-G07 means the encrypting S3 adapter (encryption-at-rest gap: the dev diskFileStore is plaintext — 13).
+   */
+  fileStore?: FileStore;
+  /**
+   * S-Q3 (09 §6.2, G06): when true, the terminal tx enqueues the `import.rollups` worker_outbox intent ATOMICALLY
+   * with the status flip (a crash after commit re-delivers via the leaderless relay — at-least-once, idempotent
+   * rollups) instead of relying on the worker's best-effort completed handler. The worker passes
+   * `env.IMPORT_V2_ENABLED`; the per-tenant half already gated at the producer (a fast job only exists gate-on).
+   * Absent/false ⇒ NO outbox write and the completed handler fires the rollups — byte-identical (T-Q3 flag-off).
+   */
+  emitOutbox?: boolean;
+}
+
+/** Non-PII result for per-queue observability (mirrors BulkImportProcessResult's discipline). */
+export interface FastImportResult {
+  kind: "fast";
+  jobId: string;
+  /** The terminal status written (or the pre-existing one on a terminal-skip replay). */
+  status: string;
+  /** false on a terminal-skip replay — the completed-handler must NOT re-fire rollups/notifications. */
+  finalized: boolean;
+  /** true when the claim found the workspace at its cap and re-enqueued instead of running (S-Q2). */
+  deferred?: boolean;
+  created: number;
+  matched: number;
+  duplicate: number;
+  skipped: number;
+  rejected: number;
+  total: number;
+  /** ≥1 row landed (created/matched/skipped/duplicate resolved to a workspace contact) — the rollup trigger. */
+  landed: boolean;
+  /** Mirrors runImport's addedToList tally for the completed-notification copy (not persisted — see S-I4). */
+  addedToList: number;
+}
+
+/** A wholly-failed fast import (zero rows landed out of >0): thrown so BullMQ retries and, once attempts are
+ *  exhausted, the worker's failed-hook writes the `failed` terminal via markFastImportFailed. Mirrors the
+ *  legacy consumer's ImportFailedError (imports.ts) — the retry semantics are byte-identical by design. */
+export class FastImportFailedError extends Error {
+  readonly summary: ImportSummary;
+  constructor(summary: ImportSummary) {
+    super(
+      `Fast import made no progress: 0/${summary.total} rows imported (${summary.errors.length} errored).`,
+    );
+    this.name = "FastImportFailedError";
+    this.summary = summary;
+  }
+}
+
+const TERMINAL = new Set(["completed", "partial", "failed", "cancelled"]);
+
+/**
+ * Execute one fast-mode import against its durable job row. The engine call in the middle is the UNCHANGED
+ * `runImport` (its own per-row withTenantTx transactions); everything around it is short, single-purpose
+ * transactions on the control plane. Safe to replay: terminal-skip + once-only terminal accounting.
+ */
+export async function runFastImport(args: RunFastImportInput): Promise<FastImportResult> {
+  const { scope, jobId, input } = args;
+  const total = input.rows.length;
+
+  // ── Claim: terminal-skip guard + the S-Q2 cap re-check + queued→validating (+ the single chunk row) ────
+  const claim = await withTenantTx(scope, async (tx) => {
+    // FOR UPDATE: lock the row so a concurrent tenant cancel (getJobForUpdate) cannot commit `cancelled`
+    // between this read and the validating UPDATE below — otherwise the unconditional UPDATE would revive it.
+    const job = await importJobRepository.getJobSystemForUpdate(tx, jobId);
+    if (!job) throw new Error(`runFastImport: durable job row not found (${jobId})`);
+    if (TERMINAL.has(job.status)) {
+      // Replay of a settled job (at-least-once transport): a no-op, never a second effect.
+      return { skip: true as const, status: job.status };
+    }
+    // Deferred lane (09 §2.2, S-Q2): the commit verb parked this job at the workspace cap. Re-check the
+    // census at claim: still at cap ⇒ re-enqueue after the recheck delay (outside this tx) and exit without
+    // touching the row (the leader-locked sweep is the DB-truth promoter; this loop is the Phase-A
+    // transport). Below cap ⇒ promote and run — deferred→queued→validating collapses into this claim tx
+    // (the sweep's flip and this claim converge; the pinned-status UPDATE in the sweep makes racing safe).
+    if (job.status === "deferred" && args.requeueDeferred) {
+      const cap = env.IMPORT_WORKSPACE_JOB_CAP;
+      if (cap > 0) {
+        const active = await importJobRepository.countJobsByStatuses(tx, scope.workspaceId, [
+          ...ACTIVE_IMPORT_STATUSES,
+        ]);
+        if (active >= cap) return { skip: true as const, status: "deferred", defer: true as const };
+      }
+    }
+    await importJobRepository.updateJobStatus(tx, jobId, {
+      status: "validating",
+      startedAt: job.startedAt ?? new Date(),
+      totalChunks: 1,
+    });
+    // Exactly ONE real chunk row (uniform accounting, 08 §1.1). A retry attempt reuses the existing row —
+    // the (job_id, chunk_index) unique is the idempotency backstop; `attempts` counts the re-claims.
+    const chunks = await importJobRepository.listChunks(tx, jobId);
+    const chunk = chunks.find((c) => c.chunkIndex === 0) ?? null;
+    let chunkId: string;
+    if (chunk) {
+      chunkId = chunk.id;
+      await importJobRepository.updateChunk(tx, chunkId, {
+        status: "running",
+        incrementAttempts: true,
+      });
+    } else {
+      chunkId = await importJobRepository.createChunk(tx, {
+        jobId,
+        chunkIndex: 0,
+        rowStart: 0,
+        rowEnd: total, // half-open band, planBands convention
+        status: "running",
+      });
+    }
+    // A chunk already `completed` with a non-terminal job = a crash between the chunk tx and nothing (they
+    // commit together below), so this cannot normally occur; guard anyway so accounting never double-applies.
+    return { skip: false as const, chunkId, chunkDone: chunk?.status === "completed" };
+  });
+  if (claim.skip) {
+    const stillDeferred = "defer" in claim && claim.defer === true;
+    if (stillDeferred && args.requeueDeferred) {
+      // Outside the tx: the payload re-enqueues itself with the recheck delay (rows must not be lost).
+      await args.requeueDeferred((args.deferrals ?? 0) + 1);
+    }
+    return {
+      kind: "fast",
+      jobId,
+      status: claim.status,
+      finalized: false,
+      deferred: stillDeferred,
+      created: 0,
+      matched: 0,
+      duplicate: 0,
+      skipped: 0,
+      rejected: 0,
+      total,
+      landed: false,
+      addedToList: 0,
+    };
+  }
+
+  // Cooperative cancel boundary (09 §5.2, completing S-I4's fast-path cancel): BETWEEN validating and running,
+  // re-read the row and honor a cancel/terminal that arrived while we claimed — NEVER flip a `cancelled` job
+  // back to `running` (an illegal cancelled→running revive that the bare UPDATE would otherwise perform). The
+  // engine simply never runs; nothing was committed yet, so stop-remainder is trivially satisfied.
+  const boundary = await withTenantTx(scope, async (tx) => {
+    // FOR UPDATE: the cancel verb must not slip a `cancelled` commit between this read and the running UPDATE —
+    // the row lock serializes the two, so a cancelled job is seen as terminal here and never revived to running.
+    const job = await importJobRepository.getJobSystemForUpdate(tx, jobId);
+    if (!job || TERMINAL.has(job.status))
+      return { proceed: false as const, status: job?.status ?? "failed" };
+    await importJobRepository.updateJobStatus(tx, jobId, { status: "running" });
+    return { proceed: true as const };
+  });
+  if (!boundary.proceed) {
+    return {
+      kind: "fast",
+      jobId,
+      status: boundary.status,
+      finalized: false,
+      created: 0,
+      matched: 0,
+      duplicate: 0,
+      skipped: 0,
+      rejected: 0,
+      total,
+      landed: false,
+      addedToList: 0,
+    };
+  }
+
+  // ── The UNCHANGED engine (05 §3): per-row txs, ladder dedup, provenance — byte-identical to legacy. ────
+  const runInput: RunImportInput = {
+    scope,
+    importedByUserId: input.importedByUserId,
+    sourceName: input.sourceName,
+    sourceFile: input.sourceFile,
+    mapping: input.mapping,
+    conflictPolicy: input.conflictPolicy,
+    // 08 §5 strategy triad (S-I6): the server-resolved strategy rides the payload and supersedes conflictPolicy
+    // in the engine; absent (a job submitted before S-I6) ⇒ runImport maps conflictPolicy onto the triad.
+    strategy: input.strategy,
+    // P5 delta (08 §9 layer 3): the route sets this ONLY when the DELTA_IMPORTS gate is on, so a legacy/gate-off
+    // job carries it absent ⇒ runImport runs the shipped ladder byte-identically. Rides the payload like strategy.
+    externalIdUpsert: input.externalIdUpsert,
+    rows: input.rows,
+    target: input.target,
+  };
+  const summary = await runImport(runInput);
+
+  // Zero-progress = a job-level failure that must RETRY, not silently complete (legacy semantics preserved).
+  // The durable row stays `running`; the failed-hook writes the terminal on exhaustion.
+  const landedCount = summary.created + summary.matched + summary.skipped + summary.duplicates;
+  if (summary.total > 0 && landedCount === 0) throw new FastImportFailedError(summary);
+
+  // ── Terminal tx: deltas + ledger + chunk completion + status flip commit TOGETHER, exactly once. ───────
+  const status = summary.rejected > 0 ? "partial" : "completed";
+
+  // S-I7 artifact pair (08 §6.2) — generated + written to the FileStore OUTSIDE the terminal tx (object-store
+  // I/O must never hold a DB transaction open); the resulting keys ride the tx below. Only on a real completion
+  // (not a chunkDone crash-recovery replay), only when ≥1 row was rejected, and only when a store is injected
+  // (test/tooling without one still commits the ledger + counters). A store failure leaves the keys null → the
+  // job is honestly artifact-less. The repair CSV is REGENERATED content (serialized ledger rows), never the
+  // original file's bytes — so an infected upload can never ride it back out (13 §11 worst-case #1).
+  const writeArtifacts = !claim.chunkDone && summary.rejected > 0 && args.fileStore != null;
+  const artifactKeys = writeArtifacts
+    ? await writeImportArtifacts(args.fileStore as FileStore, jobId, summary.rejectedRows)
+    : { repairKey: null as string | null, errorsKey: null as string | null };
+
+  await withTenantTx(scope, async (tx) => {
+    // FOR UPDATE: lock the row so a cancel that races the engine's tail cannot commit `cancelled` between this
+    // read and the terminal UPDATE below — the unconditional UPDATE would otherwise clobber the cancel back to
+    // completed/partial (a cancel-revive). Cancel/terminal wins (08 §2.1 legality): if the job settled while the
+    // engine ran, never overwrite the terminal — committed rows stay (stop-remainder).
+    const job = await importJobRepository.getJobSystemForUpdate(tx, jobId);
+    if (!job || TERMINAL.has(job.status)) return;
+    if (!claim.chunkDone) {
+      const delta: ImportJobProgressDelta = {
+        rowsTotal: summary.total,
+        rowsCreated: summary.created,
+        rowsMatched: summary.matched,
+        rowsDuplicate: summary.duplicates,
+        rowsSkipped: summary.skipped,
+        rowsRejected: summary.rejected,
+      };
+      await importJobRepository.updateJobProgress(tx, jobId, delta);
+      // Rejected-rows ledger (08 §6.1): one import_job_rows entry per rejected INPUT LINE — summary
+      // .rejectedRows may carry >1 reason per row (one per offending field), so dedupe by row index with
+      // the PRIMARY (first) reason (the exact rule buildRepairCsv uses, so ledger + artifact agree). The
+      // reject_reason is the TYPED code:column token (13 §3.3) — NEVER the free-text reason (which may embed a
+      // value); the values live only in `input` (the sanctioned durable-plaintext ledger column, 13 #4) and the
+      // gated repair CSV. Landed rows' per-row outcomes stay aggregate-only (runImport is UNCHANGED; counters
+      // carry the truth — the S-I3 drift note).
+      const byRow = new Map<number, (typeof summary.rejectedRows)[number]>();
+      for (const r of summary.rejectedRows) {
+        if (!byRow.has(r.row)) byRow.set(r.row, r);
+      }
+      const ledger: ImportJobRowInsert[] = [...byRow.values()].map((r) => ({
+        jobId,
+        chunkId: claim.chunkId,
+        rowIndex: r.row,
+        workspaceId: scope.workspaceId,
+        input: r.raw,
+        outcome: "rejected",
+        rejectReason: rejectReasonToken(r.code ?? "processing_error", r.field),
+      }));
+      await importJobRepository.insertJobRows(tx, ledger);
+      await importJobRepository.updateChunk(tx, claim.chunkId, {
+        status: "completed",
+        processedRows: summary.total,
+        completedAt: new Date(),
+      });
+      await importJobRepository.incrementCompletedChunks(tx, jobId);
+    }
+    // The repair-CSV key rides the shipped `rejected_artifact_key` column; the SECOND artifact (error report)
+    // has no dedicated column, so its key lands in the `options` jsonb (`errorReportKey`) — DRIFT: 08 S-I1 sized
+    // one artifact-key column for the shipped single-artifact predecessor; the pair needs a second, kept in
+    // options rather than a schema change (recorded in doc 16). Written only when a key exists (store succeeded).
+    const options =
+      artifactKeys.errorsKey != null
+        ? {
+            ...(job.options as Record<string, unknown> | null | undefined),
+            errorReportKey: artifactKeys.errorsKey,
+          }
+        : undefined;
+    await importJobRepository.updateJobStatus(tx, jobId, {
+      status,
+      completedAt: new Date(),
+      rejectHistogram: summary.rejectHistogram,
+      rejectedArtifactKey: artifactKeys.repairKey ?? undefined,
+      options,
+    });
+    // S-Q3 (09 §6.2, G06): the per-workspace ROLLUP intent commits ATOMICALLY with the terminal flip — a crash
+    // anywhere after commit re-delivers via the leaderless relay (at-least-once; the dedup/firmographics/
+    // master-backfill rollups are each idempotent). This RETIRES the worker's best-effort completed-handler
+    // rollup enqueues (register.ts) behind the IMPORT_V2 gate. Only when ≥1 row landed (the rollup trigger).
+    // Gate-off (emitOutbox false) ⇒ no intent, the handler fires — byte-identical (09 §Rollout / T-Q3 flag-off).
+    if (args.emitOutbox && landedCount > 0) {
+      await outboxRepository.enqueueInTx(tx, {
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        topic: IMPORT_ROLLUPS_TOPIC,
+        payload: { scope: { tenantId: scope.tenantId, workspaceId: scope.workspaceId } },
+      });
+    }
+    // S-Q4 (09 §6.1/§6.3, G06): the terminal NOTIFY intent commits in the SAME tx — the user-facing "your import
+    // finished" the market never forgives LOSING (§6.1: the trust bug is loss, not slowness). PII-free payload;
+    // the publisher resolves the recipient (createdByUserId) + dedupes (exactly-once effect). RETIRES the
+    // completed handler's best-effort notification behind the gate. Only when a real importer created the job.
+    if (args.emitOutbox && input.importedByUserId != null) {
+      await outboxRepository.enqueueInTx(tx, {
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        topic: IMPORT_NOTIFY_TOPIC,
+        payload: {
+          jobId,
+          scope: { tenantId: scope.tenantId, workspaceId: scope.workspaceId },
+          terminalStatus: status,
+        },
+      });
+    }
+  });
+
+  return {
+    kind: "fast",
+    jobId,
+    status,
+    finalized: true,
+    created: summary.created,
+    matched: summary.matched,
+    duplicate: summary.duplicates,
+    skipped: summary.skipped,
+    rejected: summary.rejected,
+    total: summary.total,
+    landed: landedCount > 0,
+    addedToList: summary.addedToList,
+  };
+}
+
+/**
+ * Terminal `failed` writer for a fast job whose attempts are EXHAUSTED (the worker's failed-hook calls this
+ * exactly once, alongside the PII-free dead-letter). Idempotent: a terminal job is left untouched. The
+ * accounting identity still holds on the failed terminal: rejected rows are counted and the un-landed
+ * remainder is `unprocessed` (created+matched+duplicate+skipped+rejected+deduped+unprocessed = rows_total).
+ * `failedReason` must be PII-FREE — pass a bucketed message, never a raw error that may quote row values.
+ */
+export async function markFastImportFailed(args: {
+  scope: { tenantId: string; workspaceId: string };
+  jobId: string;
+  failedReason: string;
+  /** The zero-progress summary when the exhausting error carried one (FastImportFailedError). */
+  summary?: ImportSummary;
+  /** Fallback row count when no summary is available (payload rows length). */
+  totalRows?: number;
+  /** S-Q4: emit the terminal NOTIFY intent onto worker_outbox in the SAME failed-terminal tx (crash-safe) —
+   *  the worker passes env.IMPORT_V2_ENABLED. False ⇒ no intent (the best-effort handler path, byte-identical). */
+  emitOutbox?: boolean;
+}): Promise<void> {
+  const { scope, jobId, failedReason } = args;
+  await withTenantTx(scope, async (tx) => {
+    // FOR UPDATE: serialize against the cancel verb so an exhausted-retry `failed` write can never clobber a
+    // `cancelled` (or any) terminal committed in the read→write window — a terminal row is left untouched.
+    const job = await importJobRepository.getJobSystemForUpdate(tx, jobId);
+    if (!job || TERMINAL.has(job.status)) return;
+    const total = args.summary?.total ?? args.totalRows ?? 0;
+    const rejected = args.summary?.rejected ?? 0;
+    if (job.rowsTotal === 0 && total > 0) {
+      await importJobRepository.updateJobProgress(tx, jobId, {
+        rowsTotal: total,
+        rowsRejected: rejected,
+        rowsUnprocessed: total - rejected,
+      });
+    }
+    const chunks = await importJobRepository.listChunks(tx, jobId);
+    const chunk = chunks.find((c) => c.chunkIndex === 0);
+    if (chunk && chunk.status !== "completed") {
+      await importJobRepository.updateChunk(tx, chunk.id, {
+        status: "failed",
+        completedAt: new Date(),
+      });
+    }
+    await importJobRepository.updateJobStatus(tx, jobId, {
+      status: "failed",
+      failedReason,
+      completedAt: new Date(),
+      rejectHistogram: args.summary?.rejectHistogram,
+    });
+    // S-Q4 (09 §6.3, G06): the "your import failed" NOTIFY intent commits with the failed terminal — a failed
+    // import is exactly when the importer most needs to hear (§6.1). PII-free; publisher dedupes. Only when a
+    // real importer created the job (a system job has no recipient).
+    if (args.emitOutbox && job.createdByUserId != null) {
+      await outboxRepository.enqueueInTx(tx, {
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        topic: IMPORT_NOTIFY_TOPIC,
+        payload: {
+          jobId,
+          scope: { tenantId: scope.tenantId, workspaceId: scope.workspaceId },
+          terminalStatus: "failed",
+        },
+      });
+    }
+  });
+}

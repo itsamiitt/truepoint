@@ -10,11 +10,13 @@ import {
   char,
   check,
   customType,
+  foreignKey,
   index,
   integer,
   jsonb,
   pgTable,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
   varchar,
@@ -71,6 +73,18 @@ export const accounts = pgTable(
     // Per-field provenance/confidence seam (C6, PLAN_03 §3.3 / PLAN_00 §5.3): which source/run set each
     // overlay field, for merge precedence + reconciliation against Layer-0. Empty {} until first enrichment.
     fieldProvenance: jsonb("field_provenance").notNull().default({}),
+    // ── Company hierarchy + soft-delete (import-and-data-model-redesign 06 §2/§4; S-A4/S-A5, migration 0061).
+    // DEAD SCHEMA until the account write path (S-A2) and read cutover (S-A6): nothing writes or reads these.
+    // Workspace-local single-parent pointer; guarded by the COMPOSITE same-workspace FK below (a plain FK to
+    // accounts.id would bypass RLS — 06 §2). Self-parent CHECK is the DB backstop; the cycle guard + depth-10
+    // cap + root recompute are APP-LAYER at write time (the write-path step, NOT this schema).
+    parentAccountId: uuid("parent_account_id"),
+    // Denormalized ultimate-parent (family key = COALESCE(root_account_id, id)). NO FK (07 §2.2 draws it
+    // FK-less): it is a recomputed cache, and an FK would add overhead on every subtree root recompute.
+    rootAccountId: uuid("root_account_id"),
+    // Soft-delete / merge-loser tombstone (G18), symmetric with contacts.deleted_at. Read paths exclude
+    // deleted_at IS NOT NULL; children tombstone in the same tx; hierarchy children splice to the grandparent.
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -79,10 +93,32 @@ export const accounts = pgTable(
     masterIdx: index("idx_accounts_master")
       .on(t.masterCompanyId)
       .where(sql`${t.masterCompanyId} IS NOT NULL`),
-    // Per-workspace dedup on domain (partial — only rows that carry a domain).
+    // Per-workspace dedup on domain — S-A5 adds `AND deleted_at IS NULL` so a tombstoned account RELEASES its
+    // domain (06 §4). Behaviour-neutral until the S-A5 write path writes deleted_at (until then always NULL).
     uniqWsDomain: uniqueIndex("uniq_accounts_ws_domain")
       .on(t.workspaceId, t.domain)
-      .where(sql`${t.domain} IS NOT NULL`),
+      .where(sql`${t.domain} IS NOT NULL AND ${t.deletedAt} IS NULL`),
+    // FK-target unique CONSTRAINT (not a bare index — a composite FK requires a unique/PK on its referenced
+    // columns) for the same-workspace parent FK below (S-A4, 06 §2 / 07 §4.1).
+    uniqWsId: unique("uniq_accounts_ws_id").on(t.workspaceId, t.id),
+    // Composite same-workspace self-FK: (workspace_id, parent_account_id) → accounts(workspace_id, id). Makes a
+    // cross-workspace parent structurally impossible. onDelete("set null") is the Drizzle-expressible form; the
+    // hand-written 0061 uses the PG15+ COLUMN-TARGETED `SET NULL (parent_account_id)` (a plain SET NULL would
+    // try to null the NOT NULL workspace_id and error) — see 0061 + doc 16 drift row.
+    parentFk: foreignKey({
+      columns: [t.workspaceId, t.parentAccountId],
+      foreignColumns: [t.workspaceId, t.id],
+      name: "accounts_ws_parent_account_fk",
+    }).onDelete("set null"),
+    // Self-parent block (Salesforce write-time self-reference block, 06 §2); the app validation rejects first.
+    parentNotSelf: check(
+      "accounts_parent_not_self",
+      sql`${t.parentAccountId} IS NULL OR ${t.parentAccountId} <> ${t.id}`,
+    ),
+    // Family reads without recursive CTEs (07 §4.2); live-hierarchy nodes only.
+    wsRootIdx: index("idx_accounts_ws_root")
+      .on(t.workspaceId, t.rootAccountId)
+      .where(sql`${t.rootAccountId} IS NOT NULL`),
     icpRange: check(
       "accounts_icp_fit_range",
       sql`${t.icpFitScore} IS NULL OR ${t.icpFitScore} BETWEEN 0 AND 100`,
@@ -125,6 +161,11 @@ export const contacts = pgTable(
     linkedinPublicId: varchar("linkedin_public_id", { length: 255 }),
     salesNavProfileUrl: varchar("sales_nav_profile_url", { length: 500 }),
     salesNavLeadId: varchar("sales_nav_lead_id", { length: 255 }),
+    // P5 delta imports (08 §9 layer 3): the caller's STABLE external key (their CRM/source row id), mapped as
+    // an `externalId` column and used as the TOP dedup rung under the DELTA_IMPORTS gate. Additive dead schema
+    // (0068) — NULL until a gate-on external-id upsert writes it; the flat email/linkedin/sales-nav ladder is
+    // unchanged when unset. Per-workspace uniqueness is the partial `uniq_contacts_ws_external_id` index below.
+    externalId: varchar("external_id", { length: 255 }),
     jobTitle: varchar("job_title", { length: 255 }),
     seniorityLevel: varchar("seniority_level", { length: 50 }),
     department: varchar("department", { length: 100 }),
@@ -162,6 +203,16 @@ export const contacts = pgTable(
         onDelete: "set null",
       },
     ),
+    // Irreversible merge-supersession pointer (import-and-data-model-redesign 04 §1/§3; S-C1, migration 0065).
+    // Set ONCE on the LOSER at merge commit → the survivor this row was merged into; never cleared (no unmerge
+    // — 04 §3.6). DISTINCT from duplicate_of_contact_id (reversible suggestion): a merged loser may carry both,
+    // but merged_into is the authoritative "this record is gone, chase here" hop. Self-FK, SET NULL on survivor
+    // hard-purge (mirrors duplicate_of). DEAD SCHEMA until the S-C4 engine + S-C3 dual gate: nothing writes it.
+    mergedIntoContactId: uuid("merged_into_contact_id").references((): AnyPgColumn => contacts.id, {
+      onDelete: "set null",
+    }),
+    // Merge commit time on the loser (04 §1); the ACTOR lives in the contact.merge audit event, not a column.
+    mergedAt: timestamp("merged_at", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }), // DSAR tombstone (08 §4.2): set + PII nulled
     // Typed-jsonb custom-field values (ADR-0028, 03 §14): shallow-merged `existing || incoming` (03 §15.3);
     // validated against custom_field_definitions at the app edge. GIN-indexed for facet/filter queries.
@@ -193,6 +244,12 @@ export const contacts = pgTable(
     uniqWsSalesNav: uniqueIndex("uniq_contacts_ws_salesnav")
       .on(t.workspaceId, t.salesNavLeadId)
       .where(sql`${t.salesNavLeadId} IS NOT NULL`),
+    // P5 delta imports (08 §9 layer 3, migration 0068): the caller's stable external key — per-workspace
+    // unique among LIVE rows (a tombstoned contact never blocks re-use of its external id). Same partial-unique
+    // shape as the three identity keys above; inert until a gate-on external-id upsert populates the column.
+    uniqWsExternalId: uniqueIndex("uniq_contacts_ws_external_id")
+      .on(t.workspaceId, t.externalId)
+      .where(sql`${t.externalId} IS NOT NULL AND ${t.deletedAt} IS NULL`),
     emailStatusEnum: check(
       "contacts_email_status_enum",
       sql`${t.emailStatus} IN ('unverified','valid','risky','invalid','catch_all','unknown')`,
@@ -222,6 +279,11 @@ export const contacts = pgTable(
     duplicateIdx: index("idx_contacts_duplicate_of")
       .on(t.duplicateOfContactId)
       .where(sql`${t.duplicateOfContactId} IS NOT NULL`),
+    // Merge-supersession traversal (S-C1, 04 §1): tiny partial on the tombstoned-loser set — serves the
+    // "resolve a merged id → survivor" (410-style detail read) + merge-audit metrics.
+    mergedIntoIdx: index("idx_contacts_merged_into")
+      .on(t.mergedIntoContactId)
+      .where(sql`${t.mergedIntoContactId} IS NOT NULL`),
     // Per-account contact rollup (account-search contactCount/revealedContactCount, 24/ADR-0035): composite
     // with workspace_id so the correlated count subquery stays index-backed under the RLS workspace predicate.
     wsAccountIdx: index("idx_contacts_ws_account")
@@ -240,6 +302,11 @@ export const contacts = pgTable(
 // ── Source imports (per-import provenance — the ONLY lineage under ADR-0006) ───────────────────────────
 // NOTE: 03 §12 targets monthly range-partitioning for this high-volume table; shipped as a plain table in
 // M1 and converted when volume warrants (do not silently drop the partitioning intent).
+// STORAGE PARAMS (S-P5, migration 0056; comment-only — Drizzle can't express them): append-only autovacuum
+// posture per import-redesign 12 §6.2 (scale factors 0.01 + insert threshold 100k — visibility map/freeze
+// sized for 100M rows and import bursts). Reversible via ALTER … RESET. The other two §6.2 tables,
+// contact_emails/contact_phones, shipped with S-CH1 (schema/contactChannels.ts) — migration 0058 (re)states
+// the same parameters unguarded, closing 0056's to_regclass tripwire (16 drift row resolved).
 export const sourceImports = pgTable(
   "source_imports",
   {
@@ -266,6 +333,13 @@ export const sourceImports = pgTable(
     // predicate instead of a seq-scan + sort on this high-volume table (perf RC#9).
     wsImportedAtIdx: index("idx_source_imports_ws_imported_at").on(
       t.workspaceId,
+      t.importedAt.desc(),
+    ),
+    // Member-path Recent Imports read (import-redesign 10 S-V1): the jobVisibility predicate narrowed to
+    // one importer within a workspace, newest-first — the scoped recentBatches path stays index-backed.
+    wsImporterAtIdx: index("idx_source_imports_ws_importer_at").on(
+      t.workspaceId,
+      t.importedByUserId,
       t.importedAt.desc(),
     ),
     sourceNameEnum: check(

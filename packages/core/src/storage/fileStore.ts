@@ -7,7 +7,7 @@
 // DEV ONLY: it has no signing, no expiry, and no isolation beyond the filesystem — never wire it in production.
 
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -32,6 +32,12 @@ export interface FileStore {
   putArtifact(key: string, bytes: Uint8Array): Promise<void>;
   /** A download URL for an object (signed + expiring in prod; a bare `file://` URL in the dev adapter). */
   getSignedDownloadUrl(key: string): Promise<string>;
+  /** Delete ONE object (idempotent — deleting an absent key is a no-op, never an error). The S-S7 artifact
+   *  lifecycle sweep (13 §4.4) deletes lapsed artifact objects through this. */
+  deleteObject(key: string): Promise<void>;
+  /** Delete EVERY object under a "/"-terminated key prefix (e.g. `imports/<jobId>/` on job hard-purge —
+   *  13 §4.4: object-store leftovers after a DB purge are orphaned PII). Idempotent; absent prefix = no-op. */
+  deletePrefix(prefix: string): Promise<void>;
 }
 
 /** Map an opaque key to an absolute path UNDER `root`, rejecting any key that would escape it (path traversal /
@@ -99,6 +105,16 @@ export function diskFileStore(rootDir: string): FileStore {
     async getSignedDownloadUrl(key) {
       // Dev only: a bare file:// URL, NOT a signed/expiring link. The prod S3 adapter returns a presigned URL.
       return pathToFileURL(resolveKey(root, key)).href;
+    },
+
+    async deleteObject(key) {
+      // force: an absent object is a successful delete (idempotent — mirrors S3 DELETE semantics).
+      await rm(resolveKey(root, key), { force: true });
+    },
+
+    async deletePrefix(prefix) {
+      // A "/"-terminated key prefix maps to a directory under the root; recursive+force = idempotent purge.
+      await rm(resolveKey(root, prefix), { recursive: true, force: true });
     },
   };
 }

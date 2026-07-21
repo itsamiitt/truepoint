@@ -64,7 +64,7 @@ export async function runBulkEnrich(input: RunBulkEnrichInput): Promise<RunBulkE
   const { scope, jobId, enqueueChunk } = input;
   const repoScope: TenantScope = scope;
 
-  const job = await enrichmentJobRepository.getJob(repoScope, jobId);
+  const job = await enrichmentJobRepository.getJobSystem(repoScope, jobId);
   if (!job) throw new Error(`runBulkEnrich: job not found (${jobId})`);
 
   // CONFIRM GATE (defense in depth): only a confirmed run is chunked. Never advances a non-`running` job.

@@ -29,9 +29,11 @@
 > least-privilege, compliant-capture client (Vite + CRXJS) that reuses the shipped `/api/v1` ingestion/reveal
 > seam and holds no DB/provider access; design in [`docs/planning/chrome-extension/`](./planning/chrome-extension/)
 > (00–09) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md).
-> **1476 source files · 76 code-bearing domains · 27 shared areas · 47 domain-vocabulary warnings · 60
+> **1571 source files · 81 code-bearing domains · 28 shared areas · 52 domain-vocabulary warnings · 61
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
-> `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — see the generated
+> `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
+> feature (`apps/api/src/features/master-sync`, the Forge `/api/v1/master-sync` receiver) + `forgeSyncRepository`
+> whose entity isn't in `REPO_DOMAIN` — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
 > reflect the merged tree including the parallel `feat/data-mgmt` work; its new domains' prose is owned by that
 > track). Design refs: [04](./planning/04-ui-ux-design.md),
@@ -51,8 +53,8 @@ packages/                       # side-effect-free libraries, each exported via 
   ui/      src/                 # TruePoint design system: tokens/primitives/theme.css + cn + headless kit + shadcn-pattern ui/*
   db/      src/                 # Drizzle schema + RLS + repositories (the ONLY data access)  [LIVE]
     schema/{auth,contacts,billing,intel,compliance,activity,salesnav,outreach,lists,savedSearches,customFields,
-            tags,pipelineStages,email,enrichmentJobs,enrichmentPolicy,importMappingTemplates,featureFlags,
-            platformOps,scim,webhooks}.ts  rls/*.sql (one per schema, applied sorted)
+            tags,pipelineStages,email,enrichmentJobs,enrichmentPolicy,importMappingTemplates,importPolicy,
+            featureFlags,platformOps,scim,webhooks}.ts  rls/*.sql (one per schema, applied sorted)
     client.ts (withTenantTx · withPrivilegedTx · withPlatformTx · closeDb)  applyMigrations.ts  bootstrapAdmin.ts
     repositories/*.ts (one per entity)   test/*.itest.ts (per-DoD, run in separate processes)
   core/    src/                 # domain logic [LIVE]: import · reveal · billing · compliance · enrichment(+bulk) ·
@@ -102,10 +104,27 @@ apps/                           # deployable processes (thin transport adapters)
   `columnMap.ts`, `validateRow.ts` (pure per-row verdict, reused by preview + run), `preview.ts` (valid/rejected/duplicate
   counts + bounded sample), `rejectedRowsCsv.ts`, `templates.ts` (save/load reusable column mappings), `normalize.ts`,
   `blindIndex.ts` (HMAC dedup key), `encryptPii.ts` (AES-GCM, KMS-swappable), `contentHash.ts`
-- **db:** `sourceImportRepository.ts` (per-import provenance + content-hash skip); `importMappingTemplateRepository.ts`
-- **api:** `features/import/` (POST `/imports` → `202` + `jobId`; preview; `queue.ts` BullMQ producer) ·
-  `features/import-mapping-templates/` (mapping-template CRUD) · **workers:** `queues/imports.ts`
-- **web:** `features/import/` — `ImportWizard` (file→map→preview→confirm), `ContactsTable`, `importJob.ts` (poll→UI state), `rejectedRowsCsv.ts`
+- **db:** `sourceImportRepository.ts` (per-import provenance + content-hash skip); `importMappingTemplateRepository.ts`;
+  `importPolicyRepository.ts` (per-workspace `who_can_import` + strategy defaults, P0 of
+  [import-and-data-model-redesign](./planning/import-and-data-model-redesign/README.md)); `jobVisibility.ts`
+  (`JobViewer` owner/elevated predicate shared by import/reveal/enrichment job reads — dual-gated
+  `JOB_VISIBILITY_SCOPED` + `job_visibility_scoped`, flag-off = workspace-wide as before)
+- **api:** `features/import/` (POST `/imports` → `202` + `jobId`; preview; `queue.ts` BullMQ producer; creates gated by
+  `requireImportCreateGrant`) · `features/import-mapping-templates/` (mapping-template CRUD, role-gated manage) ·
+  `features/settings/` (GET/PUT `/settings/import-policy`, owner/admin + in-tx audit) · `features/import/artifactRoutes.ts`
+  (gated proxied download of the repair-CSV/error-report pair) · `middleware/jobViewer.ts` (builds the viewer, fail-closed
+  dual gate) · **workers:** `queues/imports.ts` · `queues/bulkImports.ts` (fast kind) · `queues/importReaperSweep.ts`
+  (orphan recovery + stall) · `queues/importPromotionSweep.ts` (deferred→queued) · `queues/importNotify.ts` (outbox
+  `import.notify` consumer → in-app notification, S-Q4) · `queues/importArtifactSweep.ts` (artifact TTL key-nulling,
+  S-S7). Import lifecycle now rides the ADR-0027 transactional outbox
+  (`import.rollups`/`import.notify`, G06) — all Phase-1 additions dark behind `IMPORT_V2_ENABLED`. **Phase-2 gate
+  code (dark, env-selected):** `packages/integrations/src/storage/s3FileStore.ts` (dependency-free SigV4
+  S3-compatible FileStore — Gate B) · `packages/core/src/security/malwareScanner.ts` +
+  `packages/integrations/src/security/clamdScanner.ts` (MalwareScannerPort, fail-closed — Gate C) · the Gate-A COPY
+  spike in `packages/db/test/bulkImport.pipeline.itest.ts` + nightly soaks (S-P1/S-P4)
+- **web:** `features/import/` — `ImportWizard` (file→map→preview→confirm; the dead-end "Large file" toggle is gone —
+  server will decide the path), `ImportsLanding` (`/imports` scaffold; `/import` → redirect `/imports/new`),
+  `ContactsTable`, `importJob.ts` (poll→UI state), `rejectedRowsCsv.ts`; root `providers.tsx` (TanStack Query seam)
 
 #### enrichment — *M4 provider waterfall + bulk match-first* ([06](./planning/06-enrichment-engine.md), ADR-0037/0038)
 - **core:** `enrichment/` — `providerPort.ts` (the 06 §3 contract; core OWNS the port), `waterfall.ts` (trust÷cost
@@ -149,6 +168,20 @@ apps/                           # deployable processes (thin transport adapters)
   ONLY the fields the workspace owns a claim for
 - **db:** `{account,contact}Repository.ts` (overlay reads/writes, masked list — `searchRepository` projects
   `revealedTypes`); `revealRepository.ts` (claim + usage + owned-field / claim reads + batched hydration)
+- **multi-value channels (import-and-data-model-redesign Phase 3 — dark behind the `CHANNEL_DUAL_WRITE` /
+  `CHANNEL_READ_FROM_CHILD` dual-gate pairs):** `contact_emails`/`contact_phones` child tables
+  (`schema/contactChannels.ts`, encrypted + blind-indexed, one-live-primary, E.164 on phones) ·
+  `contactChannelRepository.ts` + `packages/core/src/channels/` (`applyChannelWrite` = the CH-INV-1 single
+  write path: child upsert + flat primary-cache projection in one tx; backfill + reconcile runners) · worker
+  sweeps `queues/channelBackfillSweep.ts` (flat→child projection, WHERE-missing watermark) and
+  `queues/channelReconcileSweep.ts` (permanent drift repair, phase-rule direction). Gate-on, masked contact
+  DTOs carry channel summaries, `has_email`/`has_phone` count secondaries, the dedup email rung reads
+  `contact_emails.blind_index`, and reveal/export go primary-first — uniformly across search/count/resolve/
+  dynamic-list membership. Flat columns remain the permanent primary-value cache (never dropped)
+- **company children (Phase 4, DDL landed dark — migration 0061):** `account_domains` (clear citext,
+  live-unique per workspace) + `account_locations` (hq/branch/office) child tables (`schema/accountChildren.ts`)
+  + `accounts.parent_account_id`/`root_account_id` (composite same-workspace FK) + `accounts.deleted_at` (G18);
+  write paths/backfills ride the in-flight S-A2 train
 - **api:** `features/reveal/*` (masked `/contacts` list; POST `/contacts/:id/reveal` behind Idempotency-Key
   replay, role-gated + burst-limited; GET `/contacts/:id/revealed` + POST `/contacts/revealed/batch` no-charge
   reads; `/credits/reveal-costs`)

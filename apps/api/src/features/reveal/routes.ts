@@ -12,10 +12,11 @@ import {
   editContactFields,
   getRevealedContact,
   getRevealedContactsBatch,
+  isChannelReadFromChildEnabled,
   revealContact,
 } from "@leadwolf/core";
 import {
-  type RevealJobRecord,
+  type RevealJobViewRow,
   contactRepository,
   creditRepository,
   revealJobRepository,
@@ -26,6 +27,7 @@ import {
   BULK_SELECTION_CAP,
   ForbiddenError,
   InsufficientCreditsError,
+  type JobViewer,
   NotFoundError,
   type RevealJobSummary,
   ValidationError,
@@ -37,15 +39,18 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { idempotency } from "../../middleware/idempotency.ts";
-import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
+import { buildJobViewer } from "../../middleware/jobViewer.ts";
+import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { revealRateLimit } from "../../middleware/revealRateLimit.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
 import { bulkFileStore } from "../import/bulkStore.ts";
 import { enqueueBulkRevealDrive } from "./bulkRevealQueue.ts";
 
-/** Map a control-row record to the PII-free customer status DTO (the reveal-jobs UI polls this). */
-function toRevealJobSummary(job: RevealJobRecord): RevealJobSummary {
-  return {
+/** Map a viewer-read control row to the PII-free customer status DTO (the reveal-jobs UI polls this).
+ *  Creator attribution rides ONLY while the job-visibility dual gate is on for the tenant (import-redesign
+ *  10 §2.1) — flag-off responses stay byte-identical (T-V4). */
+function toRevealJobSummary(job: RevealJobViewRow, viewer: JobViewer): RevealJobSummary {
+  const summary: RevealJobSummary = {
     id: job.id,
     revealType: job.revealType as RevealJobSummary["revealType"],
     status: job.status as RevealJobSummary["status"],
@@ -61,6 +66,11 @@ function toRevealJobSummary(job: RevealJobRecord): RevealJobSummary {
     createdAt: job.createdAt.toISOString(),
     startedAt: job.startedAt?.toISOString() ?? null,
     completedAt: job.completedAt?.toISOString() ?? null,
+  };
+  if (!viewer.scoped) return summary;
+  return {
+    ...summary,
+    createdBy: { userId: job.createdByUserId, displayName: job.createdByDisplayName },
   };
 }
 
@@ -166,9 +176,15 @@ revealRoutes.post("/reveal-jobs", requireRole("owner", "admin", "member"), async
   // Select-all-matching → materialize the visible ids server-side (capped). This is what makes bulk reveal work
   // across an entire search result, which the synchronous client loop could not.
   const contactIds = parsed.data.criteria
-    ? await withTenantTx(scope, (tx) =>
-        searchRepository.resolveVisibleIds(tx, parsed.data.criteria!, BULK_SELECTION_CAP),
-      )
+    ? await withTenantTx(scope, async (tx) => {
+        // S-CH4b: resolve the select-all-matching ids with the SAME child-presence predicates the search page
+        // used, so a channels_read-on bulk reveal targets exactly the rows the filtered page showed. Evaluated
+        // in this tx (env-off ⇒ zero queries, byte-identical gate-off).
+        const channelsFromChild = await isChannelReadFromChildEnabled(tx, scope.tenantId);
+        return searchRepository.resolveVisibleIds(tx, parsed.data.criteria!, BULK_SELECTION_CAP, {
+          channelsFromChild,
+        });
+      })
     : (parsed.data.contactIds ?? []);
   if (contactIds.length === 0) throw new ValidationError("No contacts match the selection.");
 
@@ -197,30 +213,45 @@ revealRoutes.post("/reveal-jobs", requireRole("owner", "admin", "member"), async
   );
 });
 
-/** List this workspace's reveal jobs (status polling). Any member may read. */
+/** List the reveal jobs visible to the viewer (status polling). Any active role may read; the repo's
+ *  jobVisibility predicate decides WHICH rows (import-redesign 10 §2.1), behind the S-V3 dual gate
+ *  (env JOB_VISIBILITY_SCOPED + per-tenant flag; off ⇒ workspace-wide, byte-identical — T-V4). */
 revealRoutes.get("/reveal-jobs", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
-  const jobs = await revealJobRepository.listJobsByWorkspace({
+  const viewer = await buildJobViewer({
     tenantId: c.get("tenantId"),
     workspaceId,
+    userId: c.get("claims").sub,
+    role: getWorkspaceRole(c),
   });
-  return c.json({ jobs: jobs.map(toRevealJobSummary) });
+  const jobs = await revealJobRepository.listJobs(
+    { tenantId: c.get("tenantId"), workspaceId },
+    viewer,
+  );
+  return c.json({ jobs: jobs.map((job) => toRevealJobSummary(job, viewer)) });
 });
 
-/** One job's status. */
+/** One job's status — the SAME predicate as the list (10 §4.2 rule 2); invisible ⇒ 404. */
 revealRoutes.get(
   "/reveal-jobs/:jobId",
   requireRole("owner", "admin", "member", "viewer"),
   async (c) => {
     const workspaceId = c.get("workspaceId");
     if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const viewer = await buildJobViewer({
+      tenantId: c.get("tenantId"),
+      workspaceId,
+      userId: c.get("claims").sub,
+      role: getWorkspaceRole(c),
+    });
     const job = await revealJobRepository.getJob(
       { tenantId: c.get("tenantId"), workspaceId },
+      viewer,
       c.req.param("jobId"),
     );
     if (!job) throw new NotFoundError("Reveal job not found in this workspace.");
-    return c.json(toRevealJobSummary(job));
+    return c.json(toRevealJobSummary(job, viewer));
   },
 );
 
@@ -239,15 +270,23 @@ revealRoutes.get(
   },
 );
 
-/** Signed download URL for the revealed CSV (terminal jobs only). */
+/** Signed download URL for the revealed CSV (terminal jobs only). Rides the viewer-predicated detail read
+ *  (10 §4.2 rule 2): when the gate is on, a member can fetch only their own job's export. */
 revealRoutes.get(
   "/reveal-jobs/:jobId/download",
   requireRole("owner", "admin", "member"),
   async (c) => {
     const workspaceId = c.get("workspaceId");
     if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace.");
+    const viewer = await buildJobViewer({
+      tenantId: c.get("tenantId"),
+      workspaceId,
+      userId: c.get("claims").sub,
+      role: getWorkspaceRole(c),
+    });
     const job = await revealJobRepository.getJob(
       { tenantId: c.get("tenantId"), workspaceId },
+      viewer,
       c.req.param("jobId"),
     );
     if (!job || !job.resultKey)
