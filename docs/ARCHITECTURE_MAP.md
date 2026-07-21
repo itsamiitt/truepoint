@@ -26,10 +26,14 @@
 > (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
 > initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
 > **The MV3 browser extension** (`apps/extension`, `@leadwolf/extension`) is the newest surface — a thin,
-> least-privilege, compliant-capture client (Vite + CRXJS) that reuses the shipped `/api/v1` ingestion/reveal
-> seam and holds no DB/provider access; design in [`docs/planning/chrome-extension/`](./planning/chrome-extension/)
-> (00–09) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md).
-> **1571 source files · 81 code-bearing domains · 28 shared areas · 52 domain-vocabulary warnings · 61
+> least-privilege, compliant-capture client (Vite + CRXJS), built dark, that reuses the shipped `/api/v1`
+> ingestion/reveal seam and holds no DB/provider access. Its LinkedIn→contact seam is
+> `features/contacts-resolve` (`GET /contacts/by-linkedin/:publicId` — masked, RLS-scoped) + `features/identity`
+> (`GET /me`, `/orgs` — display identity + org switcher); companion-tab auth is ADR-0045. Design in
+> [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
+> the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
+> /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
+> **1577 source files · 83 code-bearing domains · 28 shared areas · 54 domain-vocabulary warnings · 61
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
 > feature (`apps/api/src/features/master-sync`, the Forge `/api/v1/master-sync` receiver) + `forgeSyncRepository`
@@ -358,7 +362,8 @@ apps/                           # deployable processes (thin transport adapters)
 ### E. Identity, access, billing & developer
 
 #### auth — *M2 global identity + ADR-0040 hardening* ([17](./planning/17-authentication.md), ADR-0019/0020/0040)
-- **api:** `features/auth/*` (GET `/auth/session` incl. live workspace role); RBAC middleware
+- **api:** `features/auth/*` (GET `/auth/session` incl. live workspace role) · `features/identity/*` (GET
+  `/me`, `/orgs` — the extension's display identity + org switcher, each token-`sub`-scoped); RBAC middleware
   `{requireRole,requireOrgRole,requireStaffRole,platformAdmin}.ts` (workspace / org / platform tiers)
 - **core:** `auth/members.ts` (workspace member lifecycle: invite/change-role/remove, owner non-removable, audited),
   `auth/adminSessions.ts` (list/revoke member sessions, force-reauth) · **db:** `userRepository.ts`
