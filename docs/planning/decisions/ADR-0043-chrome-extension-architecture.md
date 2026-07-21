@@ -8,8 +8,13 @@
 - **Detail:** `docs/planning/chrome-extension/` (00–11 — engineering `00–05`, product `06–09`, auth & brand
   `10–11`). Builds on the product/compliance spec in
   `docs/planning/prospect-database-platform/06-Chrome-Extension-Capture.md`.
-- **Companion ADR:** [ADR-0044](./ADR-0044-extension-authentication.md) locks the extension's authentication
-  architecture (silent re-auth, no client refresh token).
+- **Companion ADR:** [ADR-0044](./ADR-0044-extension-authentication.md) → **superseded by
+  [ADR-0045](./ADR-0045-extension-auth-companion-window.md)** (companion-window auth).
+- **As-built (2026-07-21, dark):** `apps/extension` is built (M1 + partial M2). **§5 (PKCE
+  `launchWebAuthFlow`) is superseded by ADR-0045** (companion handoff). **§8's "Preact + Zustand" was not
+  taken** — the in-page hover card is vanilla-DOM in a Shadow DOM and there is no Zustand (plain classes +
+  `useState`); extension pages are React 19. The Context line "no client build target exists" is stale.
+  Status truth: [`../chrome-extension/14-implementation-audit.md`](../chrome-extension/14-implementation-audit.md).
 
 ## Context
 

@@ -1,7 +1,12 @@
 # 12 — Extension Auth: Gap Analysis & Remediation (companion-window pivot)
 
-> **Series:** [TruePoint Browser Extension](./README.md) · **Doc:** 12 · **Status:** ✅ Drafted
+> **Series:** [TruePoint Browser Extension](./README.md) · **Doc:** 12 · **Status:** ✅ Drafted — **Phase A backend SHIPPED (dark)**
 > · **Prev:** [`11-extension-branding`](./11-extension-branding.md)
+> · **Update (2026-07-21):** §8 "Phase A (NET-NEW)" is now built — extension mint/refresh/logout + the
+> `/auth/extension` handoff page + `EXTENSION_ORIGINS` all exist; see
+> [`14-implementation-audit.md`](./14-implementation-audit.md). The §4 gap register's `pkceFlow.ts`/`module.ts`
+> evidence is refactored past (auth is now `companionTab.ts`+`refreshToken.ts`); gaps #1/#2/#5/#7 are
+> resolved by the pivot, #3/#4 collapse to pinning `EXTENSION_ORIGINS`, and #6 (`GET /me`) remains (X03).
 
 Doc [`10`](./10-extension-authentication.md) designed the extension's auth around
 `chrome.identity.launchWebAuthFlow` ("silent re-auth", ADR-0044). **In testing it does not work** — the
