@@ -33,11 +33,13 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **1577 source files · 83 code-bearing domains · 28 shared areas · 54 domain-vocabulary warnings · 61
+> **1682 source files · 83 code-bearing domains · 33 shared areas · 54 domain-vocabulary warnings · 130
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
-> feature (`apps/api/src/features/master-sync`, the Forge `/api/v1/master-sync` receiver) + `forgeSyncRepository`
-> whose entity isn't in `REPO_DOMAIN` — see the generated
+> feature (`apps/api/src/features/master-sync`) + the **nested TruePoint Forge** (fully migrated from the
+> standalone repo): the `apps/forge` console + `apps/forge-api` (capture-ingest/BFF) + `apps/forge-worker`
+> (the parse→extract→verify→sync DAG), `@leadwolf/forge-core` + `@leadwolf/forge-capture-sdk`, the Forge repos
+> + Anthropic/S3/Redis adapters, and the isolated `forge` Postgres schema (owned by `leadwolf_forge`) — see the generated
 > [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
 > reflect the merged tree including the parallel `feat/data-mgmt` work; its new domains' prose is owned by that
 > track). Design refs: [04](./planning/04-ui-ux-design.md),

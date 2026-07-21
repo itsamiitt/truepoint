@@ -90,6 +90,22 @@ module.exports = {
       to: { path: "^packages/(db|integrations)/" },
     },
     {
+      name: "forge-capture-sdk-stays-thin",
+      comment:
+        "@leadwolf/forge-capture-sdk ships into the untrusted MV3 extension process — it imports ONLY @leadwolf/types, never db/integrations/core (docs/planning/forge/04, ADR-0046).",
+      severity: "error",
+      from: { path: "^packages/forge-capture-sdk/" },
+      to: { path: "^packages/(?!forge-capture-sdk/|types/)[^/]+/" },
+    },
+    {
+      name: "forge-core-must-not-import-integrations",
+      comment:
+        "@leadwolf/forge-core declares ports; @leadwolf/integrations implements them. forge-core never imports integrations (mirrors core-must-not-import-integrations; docs/planning/forge/04).",
+      severity: "error",
+      from: { path: "^packages/forge-core/" },
+      to: { path: "^packages/integrations/" },
+    },
+    {
       name: "no-orphans",
       comment: "Flag unreachable modules (dead code).",
       severity: "warn",
