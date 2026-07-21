@@ -68,6 +68,20 @@ printf 'JWT_PRIVATE_KEY_PEM_B64=%s\n' "$JWT_PRIVATE_KEY_PEM_B64" >> "$ENV_FILE"
 printf 'JWT_PUBLIC_KEY_PEM_B64=%s\n'  "$JWT_PUBLIC_KEY_PEM_B64"  >> "$ENV_FILE"
 echo "==> JWT keys validated, base64-encoded from $KEY_DIR/, and persisted to $ENV_FILE (durable across restarts)"
 
+# Prove bun.lock matches the workspace manifests BEFORE the build. The Dockerfile's
+# `bun install --frozen-lockfile` reports only "lockfile had changes, but lockfile is frozen" —
+# it never names the package, and it fails minutes into the build. This names it in milliseconds.
+# Prefer the host's node; fall back to the same bun image the build uses (this host may have neither
+# bun nor node, but it always has docker).
+echo "==> [0/5] Checking bun.lock is in sync with package.json…"
+if command -v node >/dev/null 2>&1; then
+  node scripts/check-lockfile.mjs
+elif command -v bun >/dev/null 2>&1; then
+  bun scripts/check-lockfile.mjs
+else
+  docker run --rm -v "$PWD":/w -w /w oven/bun:1.3.14 bun scripts/check-lockfile.mjs
+fi
+
 # ── 1. Build the single image ───────────────────────────────────────────────────
 echo "==> [1/5] Building leadwolf:latest (bun install + next build — first run is slow)…"
 DOCKER_BUILDKIT=1 docker build --secret id=dotenv,src="$ENV_FILE" -t leadwolf:latest .
