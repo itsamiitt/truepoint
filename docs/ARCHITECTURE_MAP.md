@@ -540,7 +540,8 @@ flowchart TD
   (bootstrap → drizzle → RLS sorted → grants), `bootstrapAdmin.ts`, `migrate.ts`, `seed.ts`; `schema/*.ts` (23 schema files incl.
   the system-owned **Layer-0 master graph** `masterGraph.ts` — ADR-0021, walled off from `leadwolf_app` by the
   `applyMigrations` grant-off, no RLS), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
-  (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility).
+  (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility) +
+  `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate).
 - **`packages/core`** — `index.ts` is the public surface; domain code bucketed per feature above. Owns all ports
   (enrichment/sender/SearchPort/AiPort/MatchPort/DnsResolverPort) — never imports `integrations`.
 - **`packages/auth`** — the self-built auth primitives (login/registration/invitations/password+policy+breach/MFA/SSO/switch/
