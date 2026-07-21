@@ -1,0 +1,411 @@
+/* globals.css — the Forge operator-console shell styling, built from the shared TruePoint tokens + the
+ * @leadwolf/ui primitives stylesheet. Mirrors the apps/admin shell chrome (.tp-* classes) so the console reads
+ * as the same product, plus a few console-only additions (staff tag, scope note, page scaffold). No Tailwind —
+ * inline tokens + these classes, exactly like apps/admin. Light-theme only; color appears only on status glyphs. */
+@import "@leadwolf/ui/tokens.css";
+@import "@leadwolf/ui/primitives.css";
+
+* {
+  box-sizing: border-box;
+}
+
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  margin: 0;
+  background: var(--tp-surface);
+  color: var(--tp-ink);
+  font-family: var(--font-sans);
+}
+
+.app-button {
+  height: 40px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--tp-on-fill);
+  background: var(--tp-btn);
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition-property: background-color, transform;
+  transition-duration: var(--tp-duration-fast);
+  transition-timing-function: var(--tp-ease);
+}
+.app-button:hover {
+  background: var(--tp-btn-700);
+}
+.app-button:active {
+  transform: translateY(0.5px);
+}
+.app-muted {
+  color: var(--tp-ink-3);
+}
+
+.app-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+/* Centered states: loading / redirecting / access-denied panels. */
+.tp-center-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+.tp-signin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 380px;
+  padding: 32px;
+  text-align: center;
+  background: var(--tp-surface);
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgb(17 24 39 / 6%);
+}
+.tp-signin-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* Shell grid: fixed rail + a fluid main column. */
+.tp-shell {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+.tp-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.tp-content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* Sidebar — #f9fafb surface, single hairline right border. */
+.tp-sidebar {
+  display: flex;
+  flex-direction: column;
+  background: var(--tp-surface-2);
+  border-right: 1px solid var(--tp-hairline-2);
+  padding: 14px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: transform var(--tp-duration-slow) var(--tp-ease-out);
+}
+.tp-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px 4px;
+}
+.tp-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.tp-staff-tag {
+  padding: 0 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tp-ink-4);
+}
+.tp-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tp-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--tp-ink-2);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition-property: background-color, color;
+  transition-duration: var(--tp-duration-fast);
+  transition-timing-function: var(--tp-ease);
+}
+.tp-nav-item:hover {
+  background: var(--nav-hover-fill);
+}
+.tp-nav-item.is-active {
+  background: var(--tp-surface-3);
+  color: var(--tp-ink);
+}
+.tp-nav-glyph {
+  width: 18px;
+  text-align: center;
+  color: var(--tp-ink-3);
+  font-size: 13px;
+}
+.tp-nav-item.is-active .tp-nav-glyph {
+  color: var(--tp-cobalt);
+}
+.tp-nav-label {
+  flex: 1;
+}
+.tp-sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tp-divider {
+  height: 1px;
+  margin: 8px 2px;
+  background: var(--tp-hairline-2);
+}
+.tp-user-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tp-user-email {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-user-role {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.tp-user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: 0;
+  border-radius: 7px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--tp-duration-fast) var(--tp-ease);
+}
+.tp-user-trigger:hover {
+  background: var(--nav-hover-fill);
+}
+.tp-sidebar-footer .tp-ui-anchor {
+  display: block;
+}
+
+/* Top bar — sticky; one hairline under it. */
+.tp-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--tp-hairline-2);
+  background: var(--tp-surface);
+  position: sticky;
+  top: 0;
+  z-index: var(--tp-z-sticky);
+  flex-shrink: 0;
+}
+.tp-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.tp-topbar-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.tp-scope-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--tp-ink-3);
+}
+
+/* Hamburger button — visible only on mobile. */
+.tp-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--tp-hairline-2);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--tp-ink-2);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tp-menu-btn:hover {
+  background: var(--tp-surface-2);
+  color: var(--tp-ink);
+}
+.tp-sidebar-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--tp-z-drawer) - 1);
+  padding: 0;
+  border: 0;
+  background: var(--tp-scrim);
+  cursor: default;
+  animation: tp-fade-in var(--tp-duration) var(--tp-ease-out);
+}
+.tp-sidebar-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--tp-ink-3);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tp-sidebar-close:hover {
+  background: var(--tp-surface-3);
+  color: var(--tp-ink);
+}
+
+/* ============================================================================
+ * Console page scaffold — the standard content padding + heading + KPI/table layout
+ * used by every operator surface (Overview, Captures, Parsers, Review, Sync status).
+ * ========================================================================== */
+.tp-page {
+  padding: 28px 32px;
+  max-width: 1100px;
+}
+.tp-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.tp-page-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.tp-page-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--tp-ink-3);
+}
+.tp-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.tp-section-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tp-ink-4);
+}
+.tp-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+.tp-meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tp-meta-label {
+  font-size: 11px;
+  color: var(--tp-ink-4);
+}
+.tp-meta-value {
+  font-size: 14px;
+  color: var(--tp-ink);
+  font-weight: 500;
+}
+.tp-cell-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--tp-ink-2);
+}
+
+/* ============================================================================
+ * Mobile responsive shell — sidebar becomes a fixed overlay at ≤ 768px.
+ * ========================================================================== */
+@media (max-width: 768px) {
+  .tp-shell {
+    grid-template-columns: 1fr;
+  }
+  .tp-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: var(--tp-z-drawer);
+    width: 260px;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 32px rgba(17, 24, 39, 0.14);
+  }
+  .tp-sidebar.is-open {
+    transform: translateX(0);
+  }
+  .tp-menu-btn {
+    display: inline-flex;
+  }
+  .tp-sidebar-close {
+    display: inline-flex;
+  }
+  .tp-brand {
+    width: 100%;
+  }
+  .tp-topbar {
+    padding: 0 16px;
+  }
+  .tp-page {
+    padding: 20px 16px;
+  }
+}

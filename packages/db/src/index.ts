@@ -5,6 +5,7 @@ export {
   withTenantTx,
   withPrivilegedTx,
   withErTx,
+  withForgeTx,
   withPlatformTx,
   withPlatformReadTx,
   recordPlatformEvent,
@@ -16,6 +17,9 @@ export {
   type PlatformActor,
   type PlatformAuditTarget,
 } from "./client.ts";
+// The Forge data-plane tables live in the `forge` Postgres schema (ADR-0047). Exposed as a namespace to avoid
+// Drizzle identifier collisions with the public-schema tables (matchLinks/approvalRequests/parsers/…).
+export * as forgeTables from "./schema/forge.ts";
 export {
   provisionBootstrapAdmin,
   type BootstrapAdminInput,
@@ -93,6 +97,9 @@ export {
   type SyncApplyResult,
   type SyncApplyOutcome,
 } from "./repositories/forgeSyncRepository.ts";
+// Forge data-plane repositories (ADR-0047; docs/planning/forge/04) — tx-scoped ingest → parse → extract →
+// verify → sync write/read primitives; callers wrap in withForgeTx. Adapt them to @leadwolf/forge-core's ports.
+export * from "./repositories/forge/index.ts";
 // Probabilistic ER (I5) system reads over the master graph — candidate generation via blocking (withErTx; read-only).
 export {
   erRepository,

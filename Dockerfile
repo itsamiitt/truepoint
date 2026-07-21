@@ -28,11 +28,13 @@ RUN --mount=type=secret,id=dotenv \
     sh -c 'set -a; [ -f /run/secrets/dotenv ] && . /run/secrets/dotenv; set +a; \
            bun run --filter "@leadwolf/web" build && \
            bun run --filter "@leadwolf/auth-app" build && \
-           bun run --filter "@leadwolf/admin" build'
+           bun run --filter "@leadwolf/admin" build && \
+           bun run --filter "@leadwolf/forge" build'
 
 ENV NODE_ENV=production
-# web 3002 · auth 3000 · api 3001 · admin 3003
-EXPOSE 3000 3001 3002 3003
+# web 3002 · auth 3000 · api 3001 · admin 3003 · forge console 3004 · forge-api 3005
+# (forge-worker runs TS directly under Bun, no port).
+EXPOSE 3000 3001 3002 3003 3004 3005
 
 # Default command; overridden per-service in docker-compose.prod.yml.
 CMD ["bun", "run", "--filter", "@leadwolf/api", "start"]

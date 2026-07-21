@@ -519,6 +519,13 @@
       "when": 1786700000000,
       "tag": "0072_webauthn_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1786800000000,
+      "tag": "0073_forge_schema",
+      "breakpoints": true
     }
   ]
 }

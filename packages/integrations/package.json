@@ -8,7 +8,10 @@
   "dependencies": {
     "@leadwolf/config": "workspace:*",
     "@leadwolf/core": "workspace:*",
-    "@leadwolf/types": "workspace:*"
+    "@leadwolf/forge-core": "workspace:*",
+    "@leadwolf/types": "workspace:*",
+    "ioredis": "^5.4.1",
+    "zod": "3.23.8"
   },
   "devDependencies": { "typescript": "5.7.2" }
 }

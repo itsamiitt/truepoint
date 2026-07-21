@@ -91,7 +91,7 @@ fi
 # instead of 502-ing immediately. Caddy is recreated LAST (it depends_on the apps being healthy), so the
 # proxy is the last thing to blip and its retry cushion covers the apps' recreate gaps.
 echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, admin, caddy)…"
-"${COMPOSE[@]}" up -d api auth workers web admin caddy
+"${COMPOSE[@]}" up -d api auth workers web admin forge-api forge-worker forge caddy
 
 # ── 5. Post-deploy smoke gate: prove sign-in can actually MINT, or fail the deploy loudly ───────────────
 # The slim oven/bun image has no curl/wget — use bun -e. `up -d` already waited on healthchecks (Caddy
