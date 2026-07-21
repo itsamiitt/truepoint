@@ -31,6 +31,8 @@ export const en = {
   "panel.errorLoad": "Couldn't load captured contacts",
   "panel.retry": "Retry",
   "panel.revealAll": "Reveal all on page ({count})",
+  "panel.revealEmpty": "No prospect in view",
+  "panel.revealEmptyHint": "Open a LinkedIn profile to see their TruePoint intel.",
   "state.loading": "Loading…",
   "error.auth": "Please sign in again.",
   "error.rate_limit": "Slow down — too many requests.",
