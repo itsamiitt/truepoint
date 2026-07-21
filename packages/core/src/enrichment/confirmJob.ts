@@ -8,7 +8,7 @@
 
 import { type TenantScope, enrichmentJobRepository } from "@leadwolf/db";
 import type { EnrichmentJobSummary } from "@leadwolf/types";
-import { type GetEnrichmentJobInput, toEnrichmentJobSummary } from "./jobStatus.ts";
+import { toEnrichmentJobSummary } from "./jobStatus.ts";
 
 /** The result of a confirm attempt — the endpoint maps each arm to an HTTP status. */
 export type ConfirmBulkEnrichmentResult =
@@ -26,9 +26,10 @@ export type ConfirmBulkEnrichmentResult =
  * Workspace-scoped via RLS. Enables NO spend by itself: the worker (a later slice) is what would spend, and it is
  * gated behind the same BULK_ENRICHMENT_ENABLED kill-switch as the endpoint that calls this.
  */
-export async function confirmBulkEnrichmentJob(
-  input: GetEnrichmentJobInput,
-): Promise<ConfirmBulkEnrichmentResult> {
+export async function confirmBulkEnrichmentJob(input: {
+  scope: TenantScope;
+  jobId: string;
+}): Promise<ConfirmBulkEnrichmentResult> {
   const scope: TenantScope = input.scope;
   // GUARDED transition — true iff THIS call moved the job awaiting_confirmation → running.
   const promoted = await enrichmentJobRepository.confirmAwaitingJob(scope, input.jobId);

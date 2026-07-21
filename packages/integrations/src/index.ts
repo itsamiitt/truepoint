@@ -58,3 +58,14 @@ export {
   type S3FileStoreOptions,
   type S3Fetch,
 } from "./storage/s3FileStore.ts";
+
+// TruePoint Forge data-plane adapters (ADR-0046/0047): the Anthropic extraction port + its default fetch
+// transport, and the forge S3 object store. Injected by forge-worker at its composition root.
+export {
+  anthropicExtractionPort,
+  defaultAnthropicTransport,
+  type AnthropicExtractionConfig,
+  type AnthropicResponse,
+} from "./forgeAnthropicExtraction.ts";
+export { forgeObjectStore, type ForgeS3Config } from "./forgeObjectStore.ts";
+export { forgeRateLimiter } from "./forgeRateLimiter.ts";

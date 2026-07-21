@@ -17,8 +17,7 @@ import {
 
 // The EICAR test string (the industry-standard harmless detection fixture, 13 §2.3 / T-S3) and the
 // signature name ClamAV reports for it.
-const EICAR =
-  "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
+const EICAR = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
 const EICAR_SIGNATURE = "Win.Test.EICAR_HDB-1";
 
 describe("INSTREAM framing (pure)", () => {
@@ -57,7 +56,6 @@ describe("clamd response parse (pure)", () => {
 class FakeClamdSocket extends EventEmitter implements ClamdSocketLike {
   readonly written: Buffer[] = [];
   destroyed = false;
-  private timeoutMs = 0;
   private timeoutCb: (() => void) | null = null;
   constructor(private readonly reply: string | null) {
     super();
@@ -66,8 +64,13 @@ class FakeClamdSocket extends EventEmitter implements ClamdSocketLike {
   write(data: Uint8Array): boolean {
     this.written.push(Buffer.from(data));
     // Detect the zero-length terminator frame → answer like clamd would.
-    if (data.byteLength === 4 && Buffer.from(data).readUInt32BE(0) === 0 && this.written.length > 1) {
-      if (this.reply !== null) queueMicrotask(() => this.emit("data", Buffer.from(`${this.reply}\0`, "ascii")));
+    if (
+      data.byteLength === 4 &&
+      Buffer.from(data).readUInt32BE(0) === 0 &&
+      this.written.length > 1
+    ) {
+      if (this.reply !== null)
+        queueMicrotask(() => this.emit("data", Buffer.from(`${this.reply}\0`, "ascii")));
       else queueMicrotask(() => this.emit("close"));
     }
     return true;
@@ -76,8 +79,7 @@ class FakeClamdSocket extends EventEmitter implements ClamdSocketLike {
   destroy(): void {
     this.destroyed = true;
   }
-  setTimeout(ms: number, cb: () => void): void {
-    this.timeoutMs = ms;
+  setTimeout(_ms: number, cb: () => void): void {
     this.timeoutCb = cb;
   }
   fireTimeout(): void {
@@ -150,7 +152,11 @@ describe("clamdScanner (fake socket)", () => {
     class SilentSocket extends FakeClamdSocket {
       override write(data: Uint8Array): boolean {
         this.written.push(Buffer.from(data));
-        if (data.byteLength === 4 && Buffer.from(data).readUInt32BE(0) === 0 && this.written.length > 1) {
+        if (
+          data.byteLength === 4 &&
+          Buffer.from(data).readUInt32BE(0) === 0 &&
+          this.written.length > 1
+        ) {
           queueMicrotask(() => this.fireTimeout());
         }
         return true;

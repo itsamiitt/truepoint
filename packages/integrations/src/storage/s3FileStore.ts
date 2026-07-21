@@ -102,7 +102,10 @@ function uriEncode(value: string, keepSlash: boolean): string {
 }
 
 function amzTimestamps(now: Date): { amzDate: string; dateStamp: string } {
-  const iso = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const iso = now
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
   return { amzDate: iso, dateStamp: iso.slice(0, 8) };
 }
 
@@ -204,12 +207,9 @@ export function s3FileStore(opts: S3FileStoreOptions): FileStore {
       args.payloadHash,
     ].join("\n");
     const scopeStr = `${dateStamp}/${region}/s3/aws4_request`;
-    const stringToSign = [
-      "AWS4-HMAC-SHA256",
-      amzDate,
-      scopeStr,
-      sha256Hex(canonicalRequest),
-    ].join("\n");
+    const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scopeStr, sha256Hex(canonicalRequest)].join(
+      "\n",
+    );
     const signature = createHmac("sha256", sigV4SigningKey(secretAccessKey, dateStamp, region))
       .update(stringToSign, "utf8")
       .digest("hex");
@@ -242,7 +242,7 @@ export function s3FileStore(opts: S3FileStoreOptions): FileStore {
     const res = await fetchFn(urlFor(path, query), {
       method: args.method,
       headers,
-      body: bodyBytes as BodyInit | undefined,
+      body: bodyBytes as RequestInit["body"],
     });
     const ok = args.okStatuses ? args.okStatuses.includes(res.status) : res.ok;
     if (!ok) {
@@ -253,9 +253,7 @@ export function s3FileStore(opts: S3FileStoreOptions): FileStore {
     return res;
   }
 
-  const writeHeaders: Record<string, string> = sse
-    ? { "x-amz-server-side-encryption": sse }
-    : {};
+  const writeHeaders: Record<string, string> = sse ? { "x-amz-server-side-encryption": sse } : {};
 
   async function simplePut(key: string, bytes: Uint8Array): Promise<void> {
     await (
@@ -376,7 +374,7 @@ export function s3FileStore(opts: S3FileStoreOptions): FileStore {
       const res = await s3Request({ op: "GET", method: "GET", key });
       const body = res.body;
       if (!body) return (async function* empty(): AsyncGenerator<Uint8Array> {})();
-      return webStreamToBytes(body);
+      return webStreamToBytes(body as ReadableStream<Uint8Array>);
     },
 
     async putArtifact(key, bytes) {
@@ -430,7 +428,9 @@ export function s3FileStore(opts: S3FileStoreOptions): FileStore {
         }
         const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
         continuation = truncated
-          ? decodeXml(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml)?.[1] ?? "")
+          ? decodeXml(
+              /<NextContinuationToken>([^<]+)<\/NextContinuationToken>/.exec(xml)?.[1] ?? "",
+            )
           : null;
         if (!continuation) break;
       }

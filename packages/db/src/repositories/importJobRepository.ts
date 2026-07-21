@@ -51,6 +51,9 @@ export interface ImportJobCreateValues {
   conflictPolicy?: ConflictPolicy;
   targetListId?: string | null;
   stagingTable?: string | null;
+  /** Retry-child self-FK (0054 `parent_job_id`, SET NULL): a retry job points at the parent whose ledger
+   *  rows it re-runs. Absent for a normal (non-retry) job. */
+  parentJobId?: string | null;
   // ── Import v2 unified-job columns (S-I1; written from S-I3 on, unread while the dual gate is off) ──
   /** The SERVER's routing verdict at commit/one-shot (08 §1): 'fast' | 'copy'. Absent = legacy row. */
   processingMode?: "fast" | "copy";
@@ -223,9 +226,7 @@ export const importJobRepository = {
     const rows = await tx
       .select()
       .from(importJobs)
-      .where(
-        and(eq(importJobs.id, jobId), artifactVisibility(viewer, importJobs.createdByUserId)),
-      )
+      .where(and(eq(importJobs.id, jobId), artifactVisibility(viewer, importJobs.createdByUserId)))
       .limit(1);
     return rows[0] ?? null;
   },
@@ -616,7 +617,13 @@ export const importJobRepository = {
     cutoff: Date,
     limit = 200,
   ): Promise<
-    Array<{ id: string; tenantId: string; workspaceId: string; sourceFile: string; createdAt: Date }>
+    Array<{
+      id: string;
+      tenantId: string;
+      workspaceId: string;
+      sourceFile: string;
+      createdAt: Date;
+    }>
   > {
     const capped = Math.max(1, Math.min(1000, Math.trunc(limit)));
     const rows = (await db.execute(sql`

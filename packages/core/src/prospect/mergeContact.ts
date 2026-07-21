@@ -13,12 +13,13 @@
 // (the IDOR guard) in deterministic id order (the concurrent-merge race guard).
 
 import { env } from "@leadwolf/config";
-import { contactMergeRepository, type SurvivorWriteSet, withTenantTx } from "@leadwolf/db";
+import { type SurvivorWriteSet, contactMergeRepository, withTenantTx } from "@leadwolf/db";
 import {
   CONTACT_MERGE_DECIDABLE_FIELDS,
   ContactMergeCapError,
   ContactMergedError,
   type FieldChangeAuditMetadata,
+  type FieldProvenanceMap,
   type MergeFieldDecision,
   type MergeResult,
   NotFoundError,
@@ -128,7 +129,7 @@ export async function runContactMerge(input: RunContactMergeInput): Promise<Merg
     const plan = planContactMerge({
       survivor: {
         scalars: scalarsOf(survivor),
-        provenance: survivor.fieldProvenance,
+        provenance: survivor.fieldProvenance as FieldProvenanceMap,
         customFields: survivor.customFields,
       },
       loser: { scalars: scalarsOf(loser), customFields: loser.customFields },
@@ -143,7 +144,8 @@ export async function runContactMerge(input: RunContactMergeInput): Promise<Merg
       provenance: plan.provenance,
       customFields: plan.customFields,
     };
-    if (isBlank(survivor.accountId) && !isBlank(loser.accountId)) writeSet.accountId = loser.accountId;
+    if (isBlank(survivor.accountId) && !isBlank(loser.accountId))
+      writeSet.accountId = loser.accountId;
     if (isBlank(survivor.ownerUserId) && !isBlank(loser.ownerUserId)) {
       writeSet.ownerUserId = loser.ownerUserId;
     }
@@ -167,9 +169,14 @@ export async function runContactMerge(input: RunContactMergeInput): Promise<Merg
     }
 
     await contactMergeRepository.applySurvivorWrites(tx, survivorContactId, writeSet);
-    const repointed = await contactMergeRepository.repointChildren(tx, loserContactId, survivorContactId, {
-      workspaceId: scope.workspaceId,
-    });
+    const repointed = await contactMergeRepository.repointChildren(
+      tx,
+      loserContactId,
+      survivorContactId,
+      {
+        workspaceId: scope.workspaceId,
+      },
+    );
     await contactMergeRepository.tombstoneLoser(tx, loserContactId, survivorContactId);
 
     // The contact.merge audit event (04 §4): reconstructable from audit alone — survivor, loser, decisions,

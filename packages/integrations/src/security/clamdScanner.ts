@@ -16,12 +16,8 @@
 // tests run with a FAKE socket — no clamd in CI (T-S3's end-to-end EICAR run is the itest against a real
 // sidecar, CI-owed with the deployment).
 
-import { type Socket, connect as netConnect } from "node:net";
-import type {
-  MalwareScanResult,
-  MalwareScanSource,
-  MalwareScannerPort,
-} from "@leadwolf/core";
+import { connect as netConnect } from "node:net";
+import type { MalwareScanResult, MalwareScanSource, MalwareScannerPort } from "@leadwolf/core";
 
 /** The 4-byte big-endian length prefix for one INSTREAM chunk. Exported for the framing unit test. */
 export function instreamLengthPrefix(byteLength: number): Uint8Array {
@@ -37,7 +33,10 @@ export const INSTREAM_TERMINATOR: Uint8Array = instreamLengthPrefix(0);
 export const INSTREAM_COMMAND: Uint8Array = Buffer.from("zINSTREAM\0", "ascii");
 
 /** Parse clamd's one-line reply. Exported for the EICAR unit test. Unknown shapes = `error` (fail-closed). */
-export function parseClamdResponse(raw: string): { verdict: "clean" | "infected" | "error"; signature?: string } {
+export function parseClamdResponse(raw: string): {
+  verdict: "clean" | "infected" | "error";
+  signature?: string;
+} {
   const line = raw.replace(/\0/g, "").trim();
   if (/^stream: OK$/i.test(line)) return { verdict: "clean" };
   const found = /^stream: (.+) FOUND$/i.exec(line);
