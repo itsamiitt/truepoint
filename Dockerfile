@@ -33,8 +33,16 @@ RUN bun install --frozen-lockfile
 # NODE_ENV is forced back to production AFTER loading: a stray NODE_ENV=development in the
 # dotenv (e.g. a dev .env copied as .env.production) makes `next build` mix dev+prod React
 # runtimes → prerender crashes with "null is not an object (evaluating 'useState')".
+# The path goes in via DOTENV_FILE, never as a `.` argument: this /bin/sh is dash, which ignores
+# arguments to the dot command (the sourced script would see an empty $1 and export nothing).
+# The canary check right after makes any such silent failure loud immediately: if the secret was
+# mounted, DATABASE_URL must have come out of it — otherwise abort before minutes of Next builds
+# fail on a misleading "Required" error.
 RUN --mount=type=secret,id=dotenv \
-    sh -c '. ./scripts/export-dotenv.sh /run/secrets/dotenv; \
+    sh -c 'DOTENV_FILE=/run/secrets/dotenv; . ./scripts/export-dotenv.sh; \
+           if [ -f /run/secrets/dotenv ] && [ -z "$DATABASE_URL" ]; then \
+             echo "ERROR: dotenv secret is mounted but DATABASE_URL did not load — env parsing is broken" >&2; exit 1; \
+           fi; \
            export NODE_ENV=production; \
            bun run --filter "@leadwolf/web" build && \
            bun run --filter "@leadwolf/auth-app" build && \

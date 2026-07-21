@@ -1,6 +1,12 @@
 # export-dotenv.sh — SOURCE this to export a .env file without shell-interpreting the values.
 #
-#   . scripts/export-dotenv.sh /run/secrets/dotenv
+#   DOTENV_FILE=/run/secrets/dotenv; . scripts/export-dotenv.sh
+#
+# The file path MUST arrive via $DOTENV_FILE, not as an argument. POSIX leaves `.` arguments
+# undefined and dash (Debian/Ubuntu /bin/sh — what the build image runs) silently ignores them:
+# the sourced script sees the CALLER's positional parameters, so a `${1:-}` reads empty, the
+# guard below returns early, and nothing gets exported — with exit 0 and no message. bash DOES
+# pass source arguments, which makes the argument form work everywhere except production.
 #
 # Why this exists. The image build used `set -a; . "$envfile"; set +a`, which asks the shell to
 # PARSE the env file as a script. Any unquoted value holding a shell metacharacter then changes
@@ -19,7 +25,8 @@
 # POSIX sh only (the build stage runs under /bin/sh). Variables are prefixed and unset at the end
 # so sourcing this cannot collide with the caller's names.
 
-__dotenv_file="${1:-}"
+# $DOTENV_FILE is required (see header); ${1:-} remains as a bash convenience for local use.
+__dotenv_file="${DOTENV_FILE:-${1:-}}"
 [ -n "$__dotenv_file" ] && [ -f "$__dotenv_file" ] || return 0
 
 __dotenv_cr="$(printf '\r')"
@@ -59,4 +66,4 @@ while IFS= read -r __dotenv_line || [ -n "$__dotenv_line" ]; do
   export "$__dotenv_key=$__dotenv_val"
 done < "$__dotenv_file"
 
-unset __dotenv_file __dotenv_cr __dotenv_line __dotenv_key __dotenv_val
+unset __dotenv_file __dotenv_cr __dotenv_line __dotenv_key __dotenv_val DOTENV_FILE
