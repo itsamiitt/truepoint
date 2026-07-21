@@ -499,3 +499,17 @@ export const maskedContactSchema = z.object({
   channels: contactChannelSummariesSchema.optional(),
 });
 export type MaskedContact = z.infer<typeof maskedContactSchema>;
+
+// ── LinkedIn resolve (browser extension: /in/<publicId> → contactId — chrome-extension/14 X01) ───────────
+/** The response for the extension's LinkedIn-identity lookup. Given the public-identifier slug the user is
+ *  viewing, resolve whether THIS workspace already holds that contact and, if so, its masked (non-PII)
+ *  projection — so the side panel can show status + a reveal/open affordance without re-scraping the page.
+ *  `owned` = the workspace already owns reveal data (`isRevealed`). The client already knows the slug it sent,
+ *  so it is not echoed back. Workspace-scoped by RLS; never crosses tenants; never returns email/phone plaintext. */
+export const linkedinResolveResponseSchema = z.object({
+  known: z.boolean(),
+  owned: z.boolean(),
+  contactId: z.string().uuid().nullable(),
+  contact: maskedContactSchema.nullable(),
+});
+export type LinkedinResolveResponse = z.infer<typeof linkedinResolveResponseSchema>;

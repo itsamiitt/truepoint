@@ -709,6 +709,33 @@ export const contactRepository = {
   },
 
   /**
+   * Resolve a single masked contact by its LinkedIn public identifier (the `/in/<publicId>` slug the browser
+   * extension extracts) — the resolver behind the extension's LOOKUP (chrome-extension/14 X01). RLS scopes this
+   * to ONE workspace via the caller's withTenantTx GUC (isolation rides the tx, like listByWorkspace — it never
+   * crosses workspaces or tenants); the partial `uniq_contacts_ws_linkedin` (workspace_id, linkedin_public_id)
+   * guarantees at most one LIVE row per slug. Returns the SAME masked, non-PII projection as the list/search
+   * surfaces (`toMaskedContact` via `withChannelSummaries`) — never the email/phone plaintext. Null when this
+   * workspace holds no live contact for the slug. Soft-deleted rows never surface (unlike findByDedupKeys, this
+   * is a user-facing "do we already have this prospect" read, not import dedup).
+   */
+  async resolveByLinkedinPublicId(
+    scope: TenantScope,
+    linkedinPublicId: string,
+    opts: ContactReadOpts = {},
+  ): Promise<MaskedContact | null> {
+    return withTenantTx(scope, async (tx) => {
+      const rows = await tx
+        .select()
+        .from(contacts)
+        .where(and(eq(contacts.linkedinPublicId, linkedinPublicId), isNull(contacts.deletedAt)))
+        .limit(1);
+      if (rows.length === 0) return null;
+      const [masked] = await withChannelSummaries(tx, rows, opts);
+      return masked ?? null;
+    });
+  },
+
+  /**
    * Per-workspace data-quality rollup (10 §5 / 22 — the Data Health dashboard): a LIVE aggregate over the
    * workspace's non-tombstoned contacts → raw counts (fill / email+phone verification / freshness) the UI turns
    * into rates. One aggregate scan per call (Postgres-native, fine at lakh-row scale — a precomputed snapshot is
