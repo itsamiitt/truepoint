@@ -116,7 +116,7 @@ questions.
 
 Questions to answer:
 - Can a user access another user's data by guessing or incrementing an ID?
-  (Always filter by `userId` or `orgId` on every query — never trust a client-supplied ID alone)
+  (Always filter by `tenant_id`/`workspace_id` on every query — never trust a client-supplied ID alone)
 - Is every API route protected by the auth middleware?
 - Are we exposing fields the caller should not see? (strip server-only fields before sending)
 - Is there rate limiting on this endpoint? (especially login, search, enrichment, exports)

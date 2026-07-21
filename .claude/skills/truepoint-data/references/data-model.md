@@ -130,7 +130,8 @@ results the tenant can pull into their working set.
 
 - **Every tenant-owned table: `tenant_id NOT NULL` (+ `workspace_id NOT NULL`
   where workspace-scoped) + RLS policy + a `tenant_id`/`workspace_id`-leading
-  index.** RLS is `ENABLE` + `FORCE`, fail-closed via `NULLIF` on the GUC. Added in
+  index.** RLS is `ENABLE` + `FORCE` (`ENABLE`-only for tables written by the
+  RLS-bypassing owner connection, e.g. audit/auth), fail-closed via `NULLIF` on the GUC. Added in
   the same migration that creates the table (platform tenancy + data-platform;
   architecture `database.md`).
 - **Ownership fields are explicit**: `ownerUserId` (the user who owns the record) is

@@ -65,8 +65,8 @@ forked or hand-edited away from the shared definition.
 ```
 packages/types/src/
 ├── index.ts             # Re-exports
-├── schemas/             # Zod schemas — the request/response source of truth
-└── ...                  # Inferred types (z.infer) exported for callers
+└── *.ts                 # one Zod-schema module per domain (auth.ts, contacts.ts, …),
+                         #   each exporting its schemas + inferred z.infer types (flat — no schemas/ dir)
 ```
 
 A handwritten client instance (base URL, auth headers from `@leadwolf/auth`,
@@ -90,15 +90,16 @@ sets — but their **brand tokens must not fork**.
 
 ```
 packages/ui/src/
-├── index.ts
-├── tokens/              # ← consumes the single shared token source (not forked)
-├── primitives/          # Atoms: Button, Input, Badge, Avatar (one per component)
-├── composed/            # Molecules: Form, Modal, Dropdown
-└── providers/ThemeProvider.tsx
+├── index.ts             # Public API (re-exports)
+├── cn.ts                # className helper
+├── tokens.css           # the single shared --tp-* token source (not forked)
+├── theme.css            # Tailwind @theme mapping onto the tokens
+├── primitives.css       # .tp-ui-* classes
+└── components/          # Card, DataTable, controls.tsx, ui/* (shadcn), …
 ```
 
-A `primitives/` component never imports from `composed/` — dependencies flow downward.
-The shared tokens (the `--tp-*` namespace) are defined once; each app's `@leadwolf/ui`
+Simpler components never import more complex ones — dependencies flow downward.
+The shared tokens (the `--tp-*` namespace) are defined once (in `tokens.css`); the
 components build on them. Keep the shared package minimal and generic; app-specific
 components stay in the app (see `internal-repo.md`).
 
@@ -107,8 +108,8 @@ components stay in the app (see `internal-repo.md`).
 ## `@leadwolf/core`
 
 Pure helpers only (there is no `utils` package). No side effects, no imports from
-other `@leadwolf/` packages, no async. One concern per file (`phone.ts`, `date.ts`,
-`email.ts`), files do not import each other.
+other `@leadwolf/` packages, no async. Organised by domain module (e.g. `email/`,
+`enrichment/`, `validation/`), one concern per file; files do not import each other.
 
 > Note: the *normalisation* logic used for dedup/identity resolution (email, domain,
 > phone) must be deterministic and shared so dedup keys match — its canonical home and

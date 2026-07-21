@@ -13,34 +13,32 @@ The monorepo root holds all apps and shared packages; this app is `apps/web`.
 ```
 apps/
 └── web/                             # @leadwolf/web — the customer app
-    ├── app/                         # Next.js App Router pages
-    │   ├── (auth)/                  # Route group: auth-gated pages
-    │   │   ├── dashboard/
-    │   │   │   └── page.tsx
-    │   │   └── layout.tsx
-    │   ├── (public)/                # Route group: unauthenticated pages
-    │   │   ├── login/
-    │   │   │   └── page.tsx
-    │   │   └── layout.tsx
-    │   ├── api/                     # Route handlers (server-side only)
-    │   │   └── webhooks/
-    │   └── layout.tsx               # Root layout
-    ├── features/                    # Feature modules (see below)
-    ├── components/                  # Shared UI components (this app only)
-    │   ├── layout/                  # Nav, sidebar, shell
-    │   └── feedback/                # Toasts, modals, empty states
-    ├── hooks/                       # Shared hooks (this app only)
-    ├── lib/                         # App-level setup (query client, providers)
-    └── middleware.ts                # Auth middleware
+    └── src/                         # ALL app source lives under src/  (@/* → ./src/*)
+        ├── app/                     # Next.js App Router pages
+        │   ├── (shell)/             # Route group: authed pages (inherit the app shell)
+        │   │   ├── [feature]/
+        │   │   │   └── page.tsx
+        │   │   └── layout.tsx
+        │   ├── (public)/            # Route group: unauthenticated pages
+        │   ├── auth/                # auth entry / callback routes
+        │   ├── api/                 # Route handlers — BFF only (see truepoint-platform)
+        │   ├── layout.tsx           # Root layout
+        │   ├── providers.tsx        # Client providers (query client, toast)
+        │   └── globals.css
+        ├── features/                # Feature modules (see below)
+        ├── components/              # Shared UI components (this app only; incl. shell/)
+        ├── hooks/                   # Shared hooks (this app only)
+        └── lib/                     # App-level setup (query client, helpers)
+    # (Next.js middleware, if added, is apps/web/src/middleware.ts — none exists today.)
 
 packages/                           # shared @leadwolf/* workspace packages
 ├── ui/                             # @leadwolf/ui — design system (--tp-* tokens)
 ├── types/                          # @leadwolf/types — shared Zod schemas (API contract)
-├── auth/                           # @leadwolf/auth — auth wrapper
+├── auth/                           # @leadwolf/auth — auth primitives (backend-consumed)
 └── core/                           # @leadwolf/core — shared pure helpers
 
 # repo root: turbo.json, biome.json, package.json (workspaces), .env.example,
-# .github/workflows/ (path-filtered per app)
+# .github/workflows/ci.yml
 ```
 
 ---
@@ -88,14 +86,14 @@ import { ContactList } from '@/features/contacts/components/ContactList'
 
 | Code | Location |
 |---|---|
-| A page for a route | `app/(auth)/[feature-name]/page.tsx` |
-| Feature components, hooks, API | `features/[feature-name]/` |
-| A component used by 3+ features | `components/` |
-| A hook used by 3+ features | `hooks/` |
+| A page for a route | `src/app/(shell)/[feature-name]/page.tsx` |
+| Feature components, hooks, API | `src/features/[feature-name]/` |
+| A component used by 3+ features | `src/components/` |
+| A hook used by 3+ features | `src/hooks/` |
 | A pure helper (formatting, parsing) | `packages/core/src/` |
 | A reusable UI primitive (button, input) | `packages/ui/src/` |
-| A server action or route handler | `app/api/` |
-| An auth check / redirect | `middleware.ts` |
+| A server action or route handler (BFF) | `src/app/api/` |
+| An auth check / redirect | `src/middleware.ts` (Next.js middleware) |
 | A request/response type (the API contract) | `packages/types/src/` (shared Zod schemas) |
 
 If you are unsure, ask: does this code know about the customer product? If yes,

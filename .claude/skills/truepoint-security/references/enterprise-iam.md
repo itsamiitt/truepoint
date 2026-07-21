@@ -50,11 +50,12 @@ can do, synced from the customer's IdP:
 - **Owned records are reassigned, not orphaned**, on deprovisioning (see
   **truepoint-data** ownership-and-sharing) — losing access must not lose the data.
 
-> **Implementation status:** SCIM is the **target**, currently stubbed (gap **G-AUTH-4**,
-> `docs/planning/28-enterprise-readiness-audit.md` §3.1). Only a `users.scimExternalId`
-> column exists — there is **no SCIM API, no `scim_tokens`, and no group mapping**. The
-> security-critical deprovisioning path is therefore not yet automated; keep the mandate
-> and build the SCIM endpoint + token + group-to-role mapping.
+> **Implementation status:** SCIM user provisioning now exists — the `scim_tokens` table
+> (+ RLS in `packages/db/src/rls/scim.sql`), token mint/list/revoke
+> (`apps/api/src/features/settings/identityRoutes.ts`), and the `/scim/v2/Users` endpoints
+> (`apps/api/src/features/scim/`). Still missing: **group-to-role mapping** (`/scim/v2/Groups`
+> is TODO — gap **G-AUTH-4**, `docs/planning/28-enterprise-readiness-audit.md` §3.1). Keep the
+> mandate for the remaining group mapping, and verify the deprovisioning path is fully wired.
 
 ---
 

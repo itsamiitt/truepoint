@@ -5,6 +5,10 @@ only triggers the customer pipeline. A change to `apps/admin` (the internal app)
 only triggers the admin pipeline. Shared package changes propagate via Turborepo's
 dependency graph.
 
+> **Implementation status:** today there is a **single** `.github/workflows/ci.yml`, not
+> per-app pipelines — the per-app, path-filtered design below is the target. There is no
+> `customer-web.yml` / `admin.yml` yet; do not reference them.
+
 ---
 
 ## Pipeline Trigger Rules

@@ -31,7 +31,10 @@ Three layers, decided once:
    data. Isolation stops being a thing every developer and every agent must
    remember on every query, and becomes a property the database guarantees. RLS is
    `ENABLE` + `FORCE` and fail-closed: the policy uses `NULLIF` on the GUC so a
-   missing tenant context matches nothing rather than everything.
+   missing tenant context matches nothing rather than everything. (Exception: tables
+   written by the RLS-bypassing **owner** connection — the auth/tenant tables and
+   `platform_audit_log`, via `withPlatformTx`/`recordPlatformEvent` in `client.ts` —
+   are `ENABLE`-only, since `FORCE` would block the owner writer and fail closed.)
 
 3. **Enterprise siloing for the few who need it.** Customers with data-residency
    requirements (EU-only), customer-managed encryption keys (BYOK), or
@@ -146,11 +149,15 @@ without a single-org context, and they are:
 
 - Restricted to the internal/platform-admin surface (`apps/admin`) and
   platform-admin roles (see `truepoint-security` enterprise-iam).
-- Implemented with an explicit, audited "elevated" connection — the privileged
-  `leadwolf_admin` role (`withPrivilegedTx` in `packages/db/src/client.ts`) — used
-  by a tiny, reviewed set of functions, never the general query path. The everyday
-  request path runs as the non-BYPASSRLS `leadwolf_app` role.
-- Logged as privileged access. Every cross-tenant read by staff is auditable.
+- Implemented with an explicit, audited elevated path in `packages/db/src/client.ts`:
+  the general staff cross-tenant path is **`withPlatformTx`** (runs on the DB-owner
+  connection, reads across workspaces, and writes a `platform_audit_log` row in the
+  same transaction — reached only behind a verified platform-admin claim). The
+  narrower `withPrivilegedTx`/`leadwolf_admin` role is reserved for the audited DSAR
+  fan-out. Neither is the general query path — the everyday request path runs as the
+  non-BYPASSRLS `leadwolf_app` role via `withTenantTx`.
+- Logged as privileged access — `withPlatformTx` writes the audit row itself. Every
+  cross-tenant read by staff is auditable.
 
 If a feature seems to need cross-tenant access and isn't one of these, it is a
 design error — surface it rather than bypassing RLS.
@@ -196,8 +203,9 @@ explicitly and the test is required (see the architecture `testing.md`):
 ## Checklist
 
 - Does every tenant-owned table have `tenant_id NOT NULL` (plus `workspace_id`
-  where workspace-scoped) and an RLS policy (`ENABLE` + `FORCE`) with both `USING`
-  and `WITH CHECK`, fail-closed via `NULLIF` on the GUC?
+  where workspace-scoped) and an RLS policy (`ENABLE` + `FORCE`; `ENABLE`-only for
+  owner-connection-written tables) with both `USING` and `WITH CHECK`, fail-closed via
+  `NULLIF` on the GUC?
 - Is tenant context set centrally in middleware from the session, never the body?
 - Are `app.current_tenant_id` / `app.current_workspace_id` transaction-local
   (`SET LOCAL`) so they are pooler-safe?

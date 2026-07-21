@@ -12,7 +12,7 @@ inconsistency that multiplies as the product grows.
 Desktop / Tablet (≥ 640px)
 ┌──────────────────────────────────────────────────┐
 │ <div style={{ display:'flex', height:'100vh' }}  │
-│   <Sidebar />  (width: RAIL_W = 68px, flex-shrink:0) │
+│   <Sidebar />  (width: 60px = --tp-rail-w, flex-shrink:0) │
 │   <div style={{ flex:1, display:'flex',          │
 │                 flexDirection:'column',           │
 │                 overflow:'hidden' }}>             │
@@ -53,28 +53,28 @@ Mobile (< 640px)
 
 ## Sidebar
 
-Fixed — do not modify. Reuse the shared `@leadwolf/ui` component; do not redefine.
+Fixed — do not modify. Reuse the shared app-shell `Sidebar` (`apps/web/src/components/shell/`); do not redefine.
 
-- Rail width: `68px` (constant `RAIL_W`)
-- Expanded width: `244px` (constant `DRAWER_W`)
+- Rail width: `60px` (token `--tp-rail-w`)
+- Expanded width: `232px` (token `--tp-rail-expanded`)
 - Trigger: `onMouseEnter` → open, `onMouseLeave` → close
 - `<aside>` is `position: absolute` — overlays content when expanded
 - `<div>` spacer (`width: RAIL_W`) holds the flex layout gap
 - Active item: `background: var(--tp-cobalt-50)`, `color: var(--tp-cobalt-700)`, `fontWeight: 600`
 - Labels/badges: `opacity` transition `160ms`, `60ms` delay on open, `0ms` on close
 - Shadow: `var(--tp-shadow-drawer)` when open, `none` when closed
-- `z-index: 20` (below sticky/drawer scale)
+- `z-index: var(--tp-z-drawer)` (40) when expanded and overlaying content
 - Mobile: hide entirely, show `<BottomNav>` instead
 
 ---
 
 ## Topbar
 
-Fixed — do not modify. Reuse the shared `@leadwolf/ui` component; do not redefine.
+Fixed — do not modify. Reuse the shared app-shell `TopBar` (`apps/web/src/components/shell/`); do not redefine.
 
 - Height: `56px`, sticky, `background: var(--tp-surface)`
 - Bottom: `1px solid var(--tp-hairline)`
-- Left: page title (`15px, 600`) + optional subtitle (`12px, ink-4`)
+- Left: page title (`16px, 600`) + optional subtitle (`12px, ink-4`)
 - Right: search input (hidden at tablet) | period `SegmentedControl` | `TpIconButton` (bell) | primary CTA
 - `z-index: var(--tp-z-sticky)` = `30`
 
@@ -167,8 +167,8 @@ Avatar (28–32px) | Name (600) + subtitle (ink-3, 11–12px)
 - Row height: `44px` via `--tp-row-h`
 - Hover actions: positioned right side, `opacity: 0 → 1` on row hover
   ```jsx
-  // Inside DataTable column render
-  render: (row) => (
+  // Inside a DataTable column's cell
+  cell: (row) => (
     <div style={{ display:'flex', gap:4, opacity: isHovered ? 1 : 0, transition:'opacity 120ms' }}>
       <TpIconButton onClick={...}><IPhone size={15}/></TpIconButton>
       <TpIconButton onClick={...}><IMail size={15}/></TpIconButton>
@@ -181,7 +181,7 @@ Avatar (28–32px) | Name (600) + subtitle (ink-3, 11–12px)
 
 ## ScorePill (Custom Atom)
 
-Source of truth in `@leadwolf/ui`. Import it, never redefine.
+Source of truth is the app component in `apps/web` (not a `@leadwolf/ui` export). Reuse it, never redefine; reference implementation:
 
 ```jsx
 function ScorePill({ score }) {
@@ -204,29 +204,16 @@ Always: dot + number, tabular-nums, `fontWeight: 600`, `fontSize: 13`.
 
 ## Responsive Breakpoints
 
-```js
-function useBreakpoint() {
-  const [bp, setBp] = React.useState({
-    mobile: window.innerWidth < 640,
-    tablet: window.innerWidth < 1024
-  });
-  React.useEffect(() => {
-    const h = () => setBp({
-      mobile: window.innerWidth < 640,
-      tablet: window.innerWidth < 1024
-    });
-    window.addEventListener('resize', h);
-    return () => window.removeEventListener('resize', h);
-  }, []);
-  return bp;
-}
-```
+Responsive behaviour is driven by **CSS media queries** in the app's `globals.css`, not a
+shared JS hook — there is no `useBreakpoint` in the codebase. If a client component genuinely
+needs the current breakpoint in JS, read it with `window.matchMedia(...)` inside an effect.
+The app's real breakpoints (from `apps/web/src/app/globals.css`):
 
 | Breakpoint | Layout changes |
 |---|---|
-| Desktop ≥ 1024px | Full sidebar rail + topbar search visible |
-| Tablet 640–1023px | Rail sidebar + topbar search hidden + 2-col stat grid |
-| Mobile < 640px | No sidebar + BottomNav + 2-col stat grid + fewer table columns |
+| Desktop ≥ 769px | Full sidebar rail + topbar search visible |
+| Mobile ≤ 768px | Sidebar hidden + BottomNav + topbar search hidden + 2-col stat grid |
+| Small ≤ 480px | Fewer table columns + tightest spacing |
 
 Mobile DataTable columns: hide `loc` and `email`. Show only: Prospect, Company, Fit, Value.
 
@@ -246,7 +233,7 @@ Mobile DataTable columns: hide `loc` and `email`. Show only: Prospect, Company, 
       label={s.label}
       value={s.value}
       sublabel={s.detail}
-      trend={{ value: s.delta, up: s.up }}
+      trend={<StatusBadge tone={s.up ? 'success' : 'danger'}>{s.delta}</StatusBadge>}
     />
   ))}
 </div>
@@ -291,7 +278,7 @@ const { toast } = useToast();
 toast({ title: 'Contact saved', description: 'Changes applied.' });
 
 // Error
-toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
+toast({ title: 'Save failed', description: error.message, tone: 'error' });
 ```
 
 Never use `alert()` or custom inline error states for transient feedback.

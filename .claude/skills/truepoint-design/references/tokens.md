@@ -70,9 +70,9 @@ manual review rule, not an automated check.
 | `--success` | `#16a34a` | Positive state, qualified, won |
 | `--warning` | `#d97706` | Caution state, proposal, negotiation |
 | `--danger` | `#dc2626` | Negative state, lost, destructive |
-| `--accent` | `#4f46e5` | Indigo accent (rare — prefer cobalt) |
+| `--danger-700` | `#b91c1c` | Destructive-button hover, error text on light |
 
-ScorePill thresholds (from `@leadwolf/ui`):
+ScorePill thresholds (from the app `ScorePill` component in `apps/web`):
 ```js
 score >= 80 → var(--success)
 score >= 50 → var(--warning)
@@ -154,7 +154,7 @@ For topbar and sidebar padding, use `var(--tp-space-6)` (24px) horizontally.
 | `--tp-z-toast` | `80` | Toast notifications |
 | `--tp-z-command` | `90` | Command palette (reserved) |
 
-Never invent z-index values. Use this scale. Sidebar uses `z-index: 20` (below sticky).
+Never invent z-index values. Use this scale. The expanded sidebar overlay uses `--tp-z-drawer` (40).
 
 ---
 
@@ -164,13 +164,14 @@ Never invent z-index values. Use this scale. Sidebar uses `z-index: 20` (below s
 |---|---|---|
 | `--font-sans` | Geist → system fallback | All UI text |
 | `--font-mono` | Geist Mono → system fallback | Code, IDs, tabular data |
-| `--font-weight-normal` | `400` | Body text |
-| `--font-weight-medium` | `500` | Labels, secondary headings |
-| `--font-weight-semibold` | `600` | Names, values, active nav |
-| `--font-weight-extrabold` | `800` | Large stat values |
+
+Font **weights** are raw values, not tokens (there are no `--font-weight-*` custom
+properties): `400` body, `500` labels/secondary headings, `600` names, values and active
+nav, `700` for the large score number (`.tp-score-big`). Hierarchy comes from weight + size,
+never colour.
 
 Font sizes (design-system scale):
-- Page title: `15px, 600`
+- Page title: `16px, 600`
 - Topbar subtitle: `12px, ink-4`
 - Nav label: `14px, 500 (inactive) / 600 (active)`
 - Table cell: `var(--tp-table-font)` = `13px`

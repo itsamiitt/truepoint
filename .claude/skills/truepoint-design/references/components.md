@@ -11,6 +11,8 @@ Anywhere this file or others show `window.TruePointUI` destructuring, use a norm
 import instead.) Props are listed exactly as declared — `Tp*` controls also accept
 standard HTML form attributes even when omitted from this list.
 
+> **Finding a component:** the **Decision Tree** below maps a use-case to a component; the
+> **Component Props** sections are then listed alphabetically (`Alert` → `TpTextarea`).
 
 ---
 
@@ -23,7 +25,7 @@ Before reaching for a `<div>`, ask:
 | Show a data table / list | `DataTable` |
 | Show a stat / metric | `StatTile` |
 | Show status of a record | `StatusBadge` |
-| Show a score (0–100 with colour) | `ScorePill` (custom atom in `@leadwolf/ui`) |
+| Show a score (0–100 with colour) | `ScorePill` (app component in `apps/web`, not a `@leadwolf/ui` export) |
 | Show a user's initials/avatar | `Avatar` |
 | Show a pill/tag on a row | `TpChip` |
 | Show a progress bar | `Progress` |
@@ -74,7 +76,7 @@ className?, id?, style?, children
 ### Avatar
 ```ts
 name: string          // generates initials
-size?: number         // px, default 32
+size?: number         // px, default 28
 style?
 ```
 
@@ -94,18 +96,18 @@ className?, id?, style?, children
 
 ### Card
 ```ts
-as?: 'div' | 'article' | 'section'    // default 'div'
+as?: 'section' | 'div' | 'article'    // default 'section'
 style?, children
 ```
-No padding — add your own via inner `style`.
+Has built-in `padding: 20`; override or extend via `style`.
 
 ### Checkbox (shadcn)
 Standard HTML checkbox attributes + `className`, `id`, `style`, `children`.
 
 ### Combobox
 ```ts
-options: Array<{ value: string; label: string }>
-value?: string
+options: Array<{ value: string; label: string; hint?: string }>
+value: string | null
 onChange?: (value: string) => void
 placeholder?: string
 searchPlaceholder?: string
@@ -118,11 +120,13 @@ className?
 columns: Array<{
   key: string
   header: string | ReactNode
-  render?: (row: Row) => ReactNode
+  cell: (row: Row) => ReactNode
+  sortValue?: (row: Row) => string | number   // provide to enable client-side sort
   width?: number | string
+  align?: 'left' | 'right' | 'center'
 }>
 rows: Array<Record<string, any>>
-rowKey: string | ((row) => string)
+rowKey: (row, index) => string
 onRowClick?: (row) => void
 isSelected?: (row) => boolean
 empty?: ReactNode              // shown when rows.length === 0
@@ -135,10 +139,10 @@ right, opacity 0 normally, 1 on row hover.
 ```ts
 open: boolean
 onClose: () => void
-title: string
-description?: string
+title?: ReactNode
+description?: ReactNode
 footer?: ReactNode
-maxWidth?: string | number
+maxWidth?: number
 children
 ```
 
@@ -146,25 +150,26 @@ children
 ```ts
 open: boolean
 onClose: () => void
-title?: string
+title?: ReactNode
 side?: 'right' | 'left'    // default 'right'
-width?: number | string     // default 480
+width?: number             // applied as max-width; no default
 footer?: ReactNode
 children
 ```
-ContactDrawer uses `width=480, side="right"`. Always reset to `tab='overview'`
-via `useEffect([contact?.id])` when `contact` changes.
+A contact detail drawer built on `Drawer` should use `width={480} side="right"` and reset to
+`tab='overview'` via `useEffect([contact?.id])` when `contact` changes. (There is no
+`ContactDrawer` export in `@leadwolf/ui` today — compose one from `Drawer` in the app.)
 
 ### DropdownMenu
 ```ts
-trigger: ReactNode
+trigger: (args: { toggle: () => void; open: boolean }) => ReactNode
 items: Array<{
-  label: string
-  onClick: () => void
+  label: ReactNode
+  onSelect?: () => void
   icon?: ReactNode
-  variant?: 'default' | 'danger'
-  disabled?: boolean
-} | { type: 'separator' }>
+  danger?: boolean
+  separatorBefore?: boolean   // renders a divider above this item
+}>
 align?: 'start' | 'end'
 side?: 'top' | 'bottom'
 ```
@@ -190,9 +195,9 @@ style?
 
 ### FieldGroup
 ```ts
-label: string
-hint?: string
-error?: string
+label?: ReactNode
+hint?: ReactNode
+error?: ReactNode
 htmlFor?: string
 className?, children
 ```
@@ -200,16 +205,16 @@ Wraps a single form control with label above, error/hint below.
 
 ### FormRow
 ```ts
-label: string
-description?: string
+label?: ReactNode
+description?: ReactNode
 className?, children
 ```
 Two-column layout: label+description left, control right.
 
 ### FormSection
 ```ts
-title: string
-description?: string
+title?: ReactNode
+description?: ReactNode
 className?, children
 ```
 Named section within a settings/config form.
@@ -241,17 +246,17 @@ Default loading body for cards and lists. Use inside `StateSwitch.skeleton`.
 
 ### Pagination
 ```ts
-onPrev: () => void
-onNext: () => void
-hasPrev: boolean
-hasNext: boolean
+onPrev?: () => void
+onNext?: () => void
+hasPrev?: boolean
+hasNext?: boolean
 label?: string     // e.g. "Page 2 of 14"
 className?
 ```
 
 ### Popover
 ```ts
-trigger: ReactNode
+trigger: (args: { toggle: () => void; open: boolean }) => ReactNode
 align?: 'start' | 'end'
 side?: 'top' | 'bottom'
 className?, children
@@ -303,9 +308,9 @@ style?
 
 ### StateSwitch
 ```ts
-loading: boolean
-error: any           // truthy = show error state
-empty: boolean
+loading?: boolean
+error?: unknown       // truthy = show error state
+empty?: boolean
 onRetry?: () => void
 skeleton?: ReactNode       // defaults to LoadingState
 emptyState?: ReactNode     // defaults to EmptyState
@@ -319,7 +324,7 @@ The single correct way to handle async state. Use on every data surface.
 label: string
 value: string | number
 sublabel?: string
-trend?: { value: number; up: boolean }
+trend?: ReactNode        // a trailing accessory (e.g. a StatusBadge or trend chip)
 style?
 ```
 
@@ -352,8 +357,8 @@ Renders tab bar only — tab panel content is your responsibility.
 
 // Call anywhere inside
 const { toast } = useToast();
-toast({ title: 'Saved', description: 'Contact updated.' });
-toast({ title: 'Error', variant: 'destructive' });
+toast({ title: 'Saved', description: 'Contact updated.' });        // tone?: 'default' | 'success' | 'error'
+toast({ title: 'Error', tone: 'error' });
 ```
 
 ### Tooltip
@@ -392,7 +397,7 @@ For filter chips: `active` = chip is applied, `onRemove` = clear this filter.
 
 ### TpIconButton
 ```ts
-label?: string    // aria-label
+label: string     // aria-label — required
 className?, id?, style?, children
 ```
 32px square ghost icon button. Wrap icon as children.
