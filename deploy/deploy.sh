@@ -95,7 +95,13 @@ echo "==> [2/4] Starting local infrastructure (redis, typesense, mailhog)…"
 # silently freeze on a Neon pooler, but `timeout` guarantees a hung run can never block the deploy
 # (set -e turns the 124 exit into a clean abort BEFORE any app service starts).
 echo "==> [3/4] Running database migrations…"
-timeout 300 "${COMPOSE[@]}" run --rm migrate
+# `--foreground` + `-T` are load-bearing, not style. Plain `timeout` runs its child in a SEPARATE
+# process group; when `docker compose run` then attaches interactively and reads the TTY, the kernel
+# stops it with SIGTTIN — silently, right after "Container … Created". The migrate step then never
+# actually runs while looking exactly like a hang (the failure mode that ate several deploys).
+# --foreground keeps the child in the shell's foreground process group; -T skips the TTY attach
+# entirely (migrate is non-interactive and logs via direct fd-2 writes, so nothing is lost).
+timeout --foreground 300 "${COMPOSE[@]}" run --rm -T migrate
 
 # ── 3b. Provision/refresh the platform Bootstrap Admin from .env (ADR-0034) ──────────
 # Re-run EVERY deploy so .env.production is the source of truth for the break-glass super-admin: a changed
