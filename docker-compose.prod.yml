@@ -163,6 +163,51 @@ services:
       retries: 6
       start_period: 40s
 
+  # ── TruePoint Forge (ADR-0047; nested) — same image, three services ──────────────
+  # Forge capture-ingest edge + operator BFF (forge-api.truepoint.in). Its origin must be in APP_ORIGINS.
+  forge-api:
+    <<: *app
+    command: ["bun", "run", "--filter", "@leadwolf/forge-api", "start"]
+    environment:
+      FORGE_API_PORT: "3005"
+    depends_on:
+      redis: { condition: service_healthy }
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3005/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
+  # Forge pipeline DAG (parse→extract→resolve→verify→promote→maintenance). No public port; health on 3006.
+  forge-worker:
+    <<: *app
+    command: ["bun", "run", "--filter", "@leadwolf/forge-worker", "start"]
+    environment:
+      LEADWOLF_SURFACE: worker
+      FORGE_WORKER_HEALTH_PORT: "3006"
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3006/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
+  # Forge operator console (forge.truepoint.in). Signs staff in through the shared auth origin (data_ops role).
+  forge:
+    <<: *app
+    command: ["bun", "run", "--filter", "@leadwolf/forge", "start"]
+    depends_on:
+      redis: { condition: service_healthy }
+      forge-api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3004/',{redirect:'manual'}).then(()=>process.exit(0),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
   # ── Edge: TLS termination + subdomain routing (auto Let's Encrypt) ──────────────
   caddy:
     image: caddy:2

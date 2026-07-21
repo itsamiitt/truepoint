@@ -101,6 +101,61 @@
         "vite": "6.0.5",
       },
     },
+    "apps/forge": {
+      "name": "@leadwolf/forge",
+      "version": "0.0.0",
+      "dependencies": {
+        "@leadwolf/types": "workspace:*",
+        "@leadwolf/ui": "workspace:*",
+        "geist": "1.3.1",
+        "lucide-react": "1.18.0",
+        "next": "15.1.2",
+        "react": "19.0.0",
+        "react-dom": "19.0.0",
+      },
+      "devDependencies": {
+        "@types/node": "22.10.2",
+        "@types/react": "19.0.1",
+        "@types/react-dom": "19.0.2",
+        "typescript": "5.7.2",
+      },
+    },
+    "apps/forge-api": {
+      "name": "@leadwolf/forge-api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@leadwolf/auth": "workspace:*",
+        "@leadwolf/config": "workspace:*",
+        "@leadwolf/db": "workspace:*",
+        "@leadwolf/forge-capture-sdk": "workspace:*",
+        "@leadwolf/forge-core": "workspace:*",
+        "@leadwolf/integrations": "workspace:*",
+        "@leadwolf/types": "workspace:*",
+        "bullmq": "^5.0.0",
+        "hono": "4.6.13",
+        "ioredis": "^5.4.1",
+        "zod": "3.23.8",
+      },
+      "devDependencies": {
+        "typescript": "5.7.2",
+      },
+    },
+    "apps/forge-worker": {
+      "name": "@leadwolf/forge-worker",
+      "version": "0.0.0",
+      "dependencies": {
+        "@leadwolf/config": "workspace:*",
+        "@leadwolf/db": "workspace:*",
+        "@leadwolf/forge-core": "workspace:*",
+        "@leadwolf/integrations": "workspace:*",
+        "@leadwolf/types": "workspace:*",
+        "bullmq": "^5.0.0",
+        "ioredis": "^5.4.1",
+      },
+      "devDependencies": {
+        "typescript": "5.7.2",
+      },
+    },
     "apps/web": {
       "name": "@leadwolf/web",
       "version": "0.0.0",
@@ -200,13 +255,38 @@
         "typescript": "5.7.2",
       },
     },
+    "packages/forge-capture-sdk": {
+      "name": "@leadwolf/forge-capture-sdk",
+      "version": "0.0.0",
+      "dependencies": {
+        "@leadwolf/types": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "5.7.2",
+      },
+    },
+    "packages/forge-core": {
+      "name": "@leadwolf/forge-core",
+      "version": "0.0.0",
+      "dependencies": {
+        "@leadwolf/config": "workspace:*",
+        "@leadwolf/db": "workspace:*",
+        "@leadwolf/types": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "5.7.2",
+      },
+    },
     "packages/integrations": {
       "name": "@leadwolf/integrations",
       "version": "0.0.0",
       "dependencies": {
         "@leadwolf/config": "workspace:*",
         "@leadwolf/core": "workspace:*",
+        "@leadwolf/forge-core": "workspace:*",
         "@leadwolf/types": "workspace:*",
+        "ioredis": "^5.4.1",
+        "zod": "3.23.8",
       },
       "devDependencies": {
         "typescript": "5.7.2",
@@ -452,6 +532,16 @@
     "@leadwolf/db": ["@leadwolf/db@workspace:packages/db"],
 
     "@leadwolf/extension": ["@leadwolf/extension@workspace:apps/extension"],
+
+    "@leadwolf/forge": ["@leadwolf/forge@workspace:apps/forge"],
+
+    "@leadwolf/forge-api": ["@leadwolf/forge-api@workspace:apps/forge-api"],
+
+    "@leadwolf/forge-capture-sdk": ["@leadwolf/forge-capture-sdk@workspace:packages/forge-capture-sdk"],
+
+    "@leadwolf/forge-core": ["@leadwolf/forge-core@workspace:packages/forge-core"],
+
+    "@leadwolf/forge-worker": ["@leadwolf/forge-worker@workspace:apps/forge-worker"],
 
     "@leadwolf/integrations": ["@leadwolf/integrations@workspace:packages/integrations"],
 

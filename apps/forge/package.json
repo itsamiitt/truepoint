@@ -1,0 +1,27 @@
+{
+  "name": "@leadwolf/forge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3004 --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --port 3004",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@leadwolf/types": "workspace:*",
+    "@leadwolf/ui": "workspace:*",
+    "geist": "1.3.1",
+    "lucide-react": "1.18.0",
+    "next": "15.1.2",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.2",
+    "typescript": "5.7.2",
+    "@types/node": "22.10.2"
+  }
+}

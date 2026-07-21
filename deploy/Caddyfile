@@ -59,3 +59,12 @@ api.truepoint.in {
 admin.truepoint.in {
 	import site_proxy admin:3003
 }
+
+# TruePoint Forge — the data-ops operator console + its capture-ingest/BFF API (ADR-0047; nested).
+forge.truepoint.in {
+	import site_proxy forge:3004
+}
+
+forge-api.truepoint.in {
+	import site_proxy forge-api:3005
+}
