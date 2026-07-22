@@ -8,4 +8,9 @@ export const APP_ORIGIN: string =
   typeof window !== "undefined"
     ? window.location.origin
     : (process.env.NEXT_PUBLIC_APP_ORIGIN ?? "");
-export const API_BASE: string = process.env.NEXT_PUBLIC_API_BASE ?? "";
+// The console's API surface is its own BFF (forge-api /bff/*), NOT the main TruePoint api — inheriting
+// NEXT_PUBLIC_API_BASE pointed every call at api.truepoint.in, which serves no /bff routes and no CORS
+// for it (the launch 502-adjacent "couldn't reach the Forge API" bug). Default "" = relative same-origin
+// calls; the forge.truepoint.in Caddy site routes /bff/* to forge-api:3005, so no CORS surface exists.
+// Set NEXT_PUBLIC_FORGE_API_BASE only for a split-origin deployment (which must then add CORS to forge-api).
+export const API_BASE: string = process.env.NEXT_PUBLIC_FORGE_API_BASE ?? "";
