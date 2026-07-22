@@ -20,12 +20,11 @@ apps/
         │   │   ├── [section]/   # e.g. calls, contacts, users, billing, platform
         │   │   └── layout.tsx
         │   ├── callback/        # auth callback route
-        │   ├── api/
+        │   ├── api/             # (none today — create only if a BFF route is genuinely needed)
         │   └── layout.tsx
         ├── features/            # Feature modules (operator + platform-admin)
         ├── components/          # App-specific shared components
-        ├── hooks/               # App-specific shared hooks
-        └── lib/
+        └── lib/                 # authClient.ts, adminGate.ts, pkce.ts, helpers
     # (Next.js middleware, if added, is apps/admin/src/middleware.ts — none exists today.)
 
 packages/                       # shared @leadwolf/* workspace packages
@@ -141,5 +140,5 @@ package minimal and generic. App-specific components stay in the app.
 | Role / permission logic | `packages/permissions/src/` (mandate; not yet a package — see the permissions note) |
 | A request/response type (the API contract) | `packages/types/src/` (shared Zod schemas) |
 | Pure helper | `packages/core/src/` |
-| Server action / route handler | `apps/admin/src/app/api/` |
-| Auth check / redirect | `apps/admin/src/middleware.ts` (Next.js middleware) |
+| Server action / route handler | `apps/admin/src/app/api/` (none exist today) |
+| Auth check / redirect (rendering gate) | `apps/admin/src/lib/authClient.ts` + `adminGate.ts` — no Next.js middleware (see `auth.md`) |

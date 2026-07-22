@@ -36,9 +36,12 @@ worker.
   survive process restarts — an in-memory queue is not durable and loses work on
   deploy.
 - **Queues are named by purpose** with their own concurrency and priority. The
-  registered queues today are `imports`, `enrichment`, `firmographics`, `scoring`,
-  `dedup`, `dsar`, and `outreach`, plus an `imports` **dead-letter queue**
-  (`apps/workers/src/register.ts`). A slow queue (enrichment, bound by provider
+  registry is `apps/workers/src/register.ts` (queue-name constants in
+  `@leadwolf/types`): ~30 purpose-named queues today — event queues (imports,
+  enrichment, scoring, dedup, dsar, outreach, firmographics, email, master-sync, …),
+  leader-locked sweep queues, and a **per-queue dead-letter queue** for each event
+  queue. Don't enumerate queues from memory — read the registry. A slow queue
+  (enrichment, bound by provider
   latency) must not starve a fast one (outreach) — separate queues, separate
   workers.
 - **Priority and fairness**: a single tenant's huge bulk job must not monopolise a

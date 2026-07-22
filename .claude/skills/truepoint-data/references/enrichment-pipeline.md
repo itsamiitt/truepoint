@@ -126,8 +126,9 @@ and `truepoint-operations` FinOps):
 - **Rate-limited** per user and per tenant server-side.
 - **Bulk enrichment** is a job with per-tenant fairness so one tenant's
   million-record enrichment doesn't starve others or blow the budget in one burst.
-- Every enrichment call emits a **UsageEvent** for metering/billing (see
-  `data-model.md`).
+- Every enrichment call is **ledgered** for metering/billing — today a
+  `provider_calls` row with `cost_micros` (there is no `UsageEvent` table; see
+  `data-model.md` and operations finops).
 
 ---
 

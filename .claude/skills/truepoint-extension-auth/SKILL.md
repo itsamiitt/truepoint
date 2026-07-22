@@ -1,19 +1,20 @@
 ---
 name: truepoint-extension-auth
 description: >
-  Governs authentication, tokens, and API communication for TruePoint's browser extension —
-  the companion-window login and `externally_connectable` handoff, the extension-scoped access
-  and rotating refresh tokens and their storage/rotation/refresh lifecycle, the service-worker
-  API client (Bearer, idempotency, RFC-9457, 401-retry, tenancy-from-claims), the handoff threat
-  model, and the `EXTENSION_ORIGINS`/`CHROME_EXTENSION_ENABLED` enablement gates. Use this skill
-  whenever editing anything under `apps/extension/src/background/{auth,api}`, the auth handoff on
-  `apps/web`/`apps/auth`, the extension token endpoints, or when adding an authenticated call
-  from the extension. It is one of three sibling extension skills: the MV3 shell is
-  `truepoint-extension-architecture`; content-script/LinkedIn work is `truepoint-extension-linkedin`.
-  The governing decision is ADR-0045 (read with doc 14's as-built notes). Whether a token flow is
-  *safe* is `truepoint-security`'s final say; the API contract and tenancy are
-  `truepoint-platform`'s. If the task touches extension auth, tokens, the SW API client, or the
-  enablement gates, this skill is active.
+  Governs authentication, tokens, and API communication for TruePoint's browser
+  extension — the companion-window login and `externally_connectable` handoff, the
+  extension-scoped access and rotating refresh tokens and their lifecycle, the
+  service-worker API client (Bearer, idempotency, RFC-9457, 401-retry,
+  tenancy-from-claims), the handoff threat model, and the
+  `EXTENSION_ORIGINS`/`CHROME_EXTENSION_ENABLED` enablement gates. Use this skill
+  whenever editing anything under `apps/extension/src/background/{auth,api}`, the
+  auth handoff on `apps/web`/`apps/auth`, the extension token endpoints, or when
+  adding an authenticated call from the extension. Siblings: the MV3 shell is
+  `truepoint-extension-architecture`; content-script work is
+  `truepoint-extension-linkedin`. Governing decision: ADR-0045 + doc 14's as-built
+  notes. Token-flow safety is `truepoint-security`'s final say; the API contract
+  and tenancy are `truepoint-platform`'s. Active for any extension auth, token, SW
+  API client, or enablement-gate work.
 ---
 
 # TruePoint Extension — Auth & API Skill

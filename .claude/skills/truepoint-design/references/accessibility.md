@@ -119,7 +119,8 @@ keep it minimal. Decorative motion is the first thing to cut.
 - Interactive targets are at least 44×44px effective size — this is why the
   standard row height is `--tp-row-h` (44px) and why `TpIconButton` is 32px with
   padding to reach the target. Do not shrink interactive controls below this.
-- On mobile, the `BottomNav` items are full-height touch targets — keep them so.
+- On mobile, the off-canvas sidebar's nav items and the TopBar hamburger stay
+  ≥44px touch targets — keep them so.
 
 ---
 

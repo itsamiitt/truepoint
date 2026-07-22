@@ -1,7 +1,8 @@
 # Testing Strategy
 
-CI enforces coverage thresholds (80% lines for `packages/`, 60% for `apps/`), but
-coverage is a floor, not a goal. A suite that hits 80% by asserting implementation
+Coverage targets are 80% lines for `packages/`, 60% for `apps/` — a floor, not a
+goal. (No CI coverage gate exists yet — CI runs `bun test` without coverage; the
+thresholds are the intended gate to build toward.) A suite that hits 80% by asserting implementation
 details is worse than useless — it breaks on every refactor and catches no real
 bugs. This file is about writing tests that earn their place, across the full range
 of test types a system at this scale needs — not just unit tests.

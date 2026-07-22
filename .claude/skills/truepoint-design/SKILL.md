@@ -38,7 +38,9 @@ styles. Every token resolves to its light value.
 
 ## Which Skill, When
 
-TruePoint has six skills across orthogonal axes. Most real features touch several.
+TruePoint has nine skills — six platform skills plus three `truepoint-extension-*`
+skills for the browser extension (see the root `CLAUDE.md` routing table). Most real
+features touch several.
 
 - **truepoint-design** (this skill) — HOW it looks and behaves: components, tokens,
   layout, responsive, large-data rendering, accessibility, motion, copy, i18n, brand.
@@ -47,6 +49,8 @@ TruePoint has six skills across orthogonal axes. Most real features touch severa
 - **truepoint-data** — the data model, ownership/sharing, enrichment, search.
 - **truepoint-security** — WHETHER it is safe.
 - **truepoint-operations** — running it.
+- **truepoint-extension-{architecture,linkedin,auth}** — the browser extension
+  (`apps/extension`); its surfaces defer here for anything that renders.
 
 Take "add a prospect to a list":
 - Design (this skill): how the button, modal, and toast look; the four states;
@@ -68,9 +72,11 @@ pre-build pass:
 
 1. **Information hierarchy** — What must the user see first? Default to progressive
    disclosure.
-2. **Shared atoms** — Does `Sidebar`, `Topbar`, `ContactDrawer`, `SmartSearch`,
-   `ScorePill`, or `FilterBar` already exist in `@leadwolf/ui` (or the app's shared
-   components)? Reuse the exact component — never duplicate it.
+2. **Shared atoms** — Does the app shell (`Sidebar`, `TopBar`, `PageHeader` in
+   `apps/web/src/components/shell/`), a `@leadwolf/ui` component, or an existing app
+   recipe (e.g. the ScorePill recipe) already cover this? Reuse the exact
+   component — never duplicate it. `references/components.md` is the inventory;
+   detail drawers are composed from the DS `Drawer`.
 3. **Brand asset?** — Does this show the logo, wordmark, a brand colour, or an icon?
    If yes, read `Guidelines/` (the brand kit, the primary source of truth) and then
    `references/brand.md` for the code patterns. Never approximate.
@@ -133,6 +139,9 @@ This resolves the prior Tailwind-vs-inline contradiction. The split is by layer:
   component before styling a `<div>`; the look lives in the DS.
 - **App-level layout (in `apps/*`) uses inline `style={{ }}` reading `var(--tp-*)`
   tokens** — not Tailwind utility classes in app JSX, and not raw values.
+- **Token-driven CSS modules are an accepted app-styling layer** alongside inline
+  styles — the shell and larger features use `*.module.css` whose values are
+  `var(--tp-*)`; extend a feature's existing stylesheet rather than converting it.
 
 The HARD RULE is scoped to app code: **no Tailwind utility classes in `apps/*` JSX**.
 The design SYSTEM itself (`@leadwolf/ui`) is deliberately a hybrid and is exempt:
@@ -170,9 +179,9 @@ App Router layouts**, shared across routes through a route-group layout. This
 replaces the prototype's single-file `CRMApp` view switcher.
 
 ```
-app/(authed)/layout.tsx        ← renders Sidebar + Topbar, wraps all authed routes
-app/(authed)/contacts/page.tsx ← a route; inherits the shell from the layout
-app/(authed)/deals/page.tsx    ← another route; same shell, no duplication
+app/(shell)/layout.tsx         ← renders Sidebar + TopBar, wraps all authed routes
+app/(shell)/contacts/page.tsx  ← a route; inherits the shell from the layout
+app/(shell)/deals/page.tsx     ← another route; same shell, no duplication
 ```
 
 (The `contacts`/`deals` route paths above are illustrative of the App Router pattern,
@@ -181,12 +190,14 @@ not literal file locations — read them as "any route under the authed group".)
 - **Adding a surface is adding a route** under the authed group — it inherits the
   shell from the layout for free. You do not hand-roll a new shell, and you do not
   add a case to a client-side switcher.
-- **Shared chrome lives in the layout once** (Sidebar, Topbar, BottomNav on mobile)
+- **Shared chrome lives in the layout once** (Sidebar, TopBar; on mobile the sidebar
+  becomes the off-canvas drawer opened by the TopBar hamburger)
   — never duplicated per page. This is the design expression of the architecture
   skill's UI-consolidation rule.
 
 **Detail-in-drawer still holds as a UX pattern.** Opening a contact/prospect from a
-list shows it in `ContactDrawer` rather than navigating to a separate full page —
+list shows it in a drawer composed from the DS `Drawer` (see
+`references/components.md`) rather than navigating to a separate full page —
 the user keeps their place in the list. In the App Router this is implemented with
 client drawer state (or intercepting/parallel routes if a shareable URL is needed),
 not by leaving the list route. The principle ("don't lose the list to see a detail")
@@ -266,19 +277,22 @@ user-facing copy is **localizable** (see `references/i18n.md`). Full guidance:
 These are mandates every UI surface must meet. How each is currently enforced:
 Biome (`biome.json`) runs format + lint; dependency-cruiser (`.dependency-cruiser.cjs`,
 via `bun run lint:boundaries`) enforces module boundaries; token / accessibility /
-no-raw-hex adherence is **manual review** against `docs/planning/brand-identity.md` and
-`docs/planning/04-ui-ux-design.md` (and `Guidelines/`).
+no-raw-hex adherence is **manual review** against `Guidelines/TruePoint Brand Kit.html`
+and the live tokens in `packages/ui/src/tokens.css`. (`docs/planning/brand-identity.md`
+is superseded — trust only its header banner, never its legacy body.)
 
 > **Implementation status:** there is no custom design-lint yet — the token / a11y /
 > no-raw-hex / no-raw-element rules below are not automatically checked. They are
-> enforced by code review against the brand docs; Biome and dependency-cruiser cover
-> only formatting/lint and import boundaries (`biome.json`, `.dependency-cruiser.cjs`).
+> enforced by code review against the Brand Kit + tokens.css; Biome and
+> dependency-cruiser cover only formatting/lint and import boundaries.
 
 - **No hardcoded hex.** `#2563c9` → `var(--tp-cobalt)`.
 - **No raw `<button>`/`<input>`/`<table>`/`<dialog>`** — use the DS equivalents.
-- **No duplicating `Sidebar` or `ContactDrawer`** — one shared source in
-  `@leadwolf/ui` / the app layout.
-- **No navigating away from a list to show detail** — use `ContactDrawer`.
+- **No duplicating the shell or a detail drawer** — one shared source (the
+  app-shell components in `apps/web/src/components/shell/`; drawers composed from
+  the DS `Drawer`).
+- **No navigating away from a list to show detail** — open it in a drawer (DS
+  `Drawer` composition).
 - **No hand-rolled shell** — the shell is the Next.js authed layout; add a route.
 - **No Tailwind utility classes in app JSX (`apps/*`)** — app code uses token-driven
   inline styles. (The `@leadwolf/ui` package itself is a hybrid and is exempt — see
@@ -292,7 +306,8 @@ no-raw-hex adherence is **manual review** against `docs/planning/brand-identity.
 - **No meaning by colour alone.**
 - **No un-virtualized large lists** — large data uses virtualization + server
   pagination (`references/large-data.md`).
-- **No untranslatable hardcoded user-facing strings** (`references/i18n.md`).
+- **Copy is written translation-ready** — interpolation-shaped, never concatenated
+  sentences (`references/i18n.md`; no i18n catalog exists yet — see its status note).
 
 ---
 

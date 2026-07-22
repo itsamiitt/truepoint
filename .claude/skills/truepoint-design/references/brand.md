@@ -6,8 +6,9 @@ TruePoint's brand assets live in two places. Read both before touching anything
 brand-related. They are complementary, not redundant.
 
 **`Guidelines/`** — the canonical brand kit folder in the codebase root. The
-authoritative source is **`Guidelines/TruePoint Brand Kit.html`** (with
-`docs/planning/brand-identity.md` as its planning-doc companion). It covers the logo
+authoritative source is **`Guidelines/TruePoint Brand Kit.html`**. (Its old
+planning-doc companion `docs/planning/brand-identity.md` is **superseded** — trust
+only the corrected facts in its header banner, never its legacy body.) It covers the logo
 files, icon exports, colour definitions, typography specimens, spacing rules, usage
 guidelines, and any other brand documentation the design team maintains. Before
 making any brand-level decision — logo placement, colour use, typography,
@@ -63,50 +64,27 @@ something different, update the code to match.
 
 ### Logo Mark
 
-The TruePoint logo mark is a three-layer stacked diamond. Canonical inline SVG:
+The TruePoint logo mark is **three rising chevrons** — only the apex chevron in
+Cobalt, the lower two in ink. The canonical implementation is `Brandmark` in
+`apps/web/src/components/shell/Logo.tsx` (Brand Kit v1.0) — reuse/copy it, never
+redraw or approximate:
 
 ```jsx
-<Svg size={17} sw={2.4}>
-  <path d="M12 2 3 7l9 5 9-5-9-5Z"/>
-  <path d="m3 17 9 5 9-5"/>
-  <path d="M3 12l9 5 9-5"/>
-</Svg>
+// Logo.tsx — canonical geometry (viewBox 0 0 100 100, fill="none", rounded caps/joins)
+<path d="M22 43 L50 28 L78 43" stroke={accent} />  // apex — var(--tp-cobalt)
+// …two lower chevrons in currentColor (ink); `reversed` variant for dark backgrounds
 ```
 
-`strokeLinecap="round"` `strokeLinejoin="round"` `fill="none"`
-`stroke="currentColor"` `strokeWidth={2.4}`
-
-### Logo Container (App Icon Treatment)
-
-```jsx
-<div style={{
-  width: 30,
-  height: 30,
-  borderRadius: 8,
-  background: 'var(--tp-cobalt)',
-  display: 'grid',
-  placeItems: 'center',
-  color: 'var(--tp-surface)',
-  flexShrink: 0,
-}}>
-  {/* logo mark SVG */}
-</div>
-```
-
-Container sizes: sidebar `30×30px`, larger contexts scale proportionally.
-`borderRadius` stays between `8` and `12` — never exceed `12`.
+Exact paths, stroke width, and spacing live in `Logo.tsx` and
+`Guidelines/TruePoint Brand Kit.html` — read them before placing the mark. App-icon
+treatments come from the exported assets in `Guidelines/assets` — don't hand-build
+containers.
 
 ### Wordmark
 
-```jsx
-<span style={{
-  fontFamily: 'var(--font-sans)',
-  fontWeight: 600,
-  fontSize: 15,
-  letterSpacing: '-0.01em',
-  color: 'var(--tp-ink)',
-}}>TruePoint</span>
-```
+The wordmark is **two-weight**: "True" at weight 400 + "Point" at 700–800, one
+colour — never a single uniform weight. Canonical implementation: `Wordmark` in
+`apps/web/src/components/shell/Logo.tsx`; the spec is in the Brand Kit.
 
 ### Brand Colour
 
@@ -122,12 +100,15 @@ on a white background — fills and active states only.
 
 ### Typography
 
-Geist (sans) and Geist Mono only. Both loaded automatically via the DS
-stylesheet — no separate `@font-face` needed.
+Geist (sans) and Geist Mono only — **self-hosted per app via next/font** (the
+`geist` package): each app's root layout imports `GeistSans`/`GeistMono` and sets
+`--font-geist-*` on `<html>` (see `apps/web/src/app/layout.tsx`); the DS stylesheet
+supplies only the fallback stacks. A new app must wire this itself — nothing loads
+the fonts "automatically".
 
 | Role | Size | Weight |
 |---|---|---|
-| Page title | 15px | 600 |
+| Page title | 16px | 600 |
 | Nav label active | 14px | 600 |
 | Nav label inactive | 14px | 500 |
 | Body / card | 14px | 400 |
@@ -137,17 +118,16 @@ stylesheet — no separate `@font-face` needed.
 
 ### Iconography
 
-All icons in `@leadwolf/ui` follow: `viewBox="0 0 24 24"`, `fill="none"`,
-`stroke="currentColor"`, `strokeWidth={1.75}`, `strokeLinecap="round"`,
-`strokeLinejoin="round"`. The canonical set:
+Icons are **lucide-react glyphs rendered through the DS `Icon` wrapper**
+(`@leadwolf/ui`): consistent `strokeWidth 1.75` default, sized by context (see
+tokens.md). Pick an existing lucide glyph for the semantic you need — do not
+hand-draw SVGs or introduce a parallel icon set; the logo mark (`Logo.tsx`) is the
+only custom-drawn SVG. Check `Guidelines/` for exported icon assets before
+introducing a new glyph.
 
-```
-IGrid, IUsers, IDeals, IContacts, IReports, ISettings, ISearch, IBell,
-IPlus, IArrowUp, IArrowDn, IMail, IPhone, IPin, IBuilding, IStack,
-IZap, IDots, ICalendar, ISave, IDownload, IUser, IReturn, IClose
-```
+```jsx
+import { Icon } from '@leadwolf/ui'
+import { Phone } from 'lucide-react'
 
-Reuse existing icons for their designated semantics. New icons are defined
-at the top of `@leadwolf/ui` with the `I` prefix, matching the same stroke
-style. Check `Guidelines/` for any exported icon assets before drawing a
-new one from scratch.
+<Icon icon={Phone} size={16} label="Call" />
+```

@@ -42,7 +42,9 @@ input, external systems, or regulated obligations.
 
 ## Which Skill, When
 
-TruePoint has six skills across orthogonal axes. Most real features touch several.
+TruePoint has nine skills — six platform skills plus three `truepoint-extension-*`
+skills for the browser extension (see the root `CLAUDE.md` routing table). Most real
+features touch several.
 
 - **truepoint-security** (this skill) — WHETHER it is safe. Access control, IAM,
   input validation, data protection, secrets, API hardening, integrations, abuse,
@@ -52,6 +54,8 @@ TruePoint has six skills across orthogonal axes. Most real features touch severa
 - **truepoint-data** — the data model, ownership/sharing semantics, enrichment.
 - **truepoint-architecture / design** — the frontend.
 - **truepoint-operations** — incident/breach *response* and FinOps.
+- **truepoint-extension-{architecture,linkedin,auth}** — the browser extension
+  (`apps/extension`); this skill keeps final say on its token/capture safety.
 
 Take "add a prospect to a list":
 - Security (this skill): the write verifies the user owns the list, is tenant-scoped

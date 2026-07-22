@@ -17,8 +17,9 @@ Two credentials, two tiers, one holder (the service worker). Get the tiers wrong
 - **Rotation + reuse detection is the server's, reused as-is.** Refresh calls `/auth/extension/refresh`, which
   rotates via the shipped `packages/auth/src/session.ts` machinery and denylists the old `sid`; a replayed old
   token trips whole-family revocation. The extension just stores whatever refresh token comes back.
-- **Proactive refresh on `chrome.alarms`** (~13 min, ahead of the 15-min access TTL) via the
-  `BrowserEventManager` `auth-refresh` alarm — never a timer (the SW may be asleep; the alarm wakes it).
+- **Proactive refresh on `chrome.alarms`** (~14 min — the one-shot `auth-refresh` alarm fires at token
+  expiry − 60s, floored at +30s; scheduled in `src/background/index.ts`) — never a timer (the SW may be
+  asleep; the alarm wakes it).
 - **Reactive refresh** is the API client's one-shot 401-retry-after-refresh (`api-client.md`); if refresh
   itself 401s (revoked/expired), transition to signed-out.
 - **Tenancy is in the claims** (`tid`/`wid`), pinned server-side from the verified token — the client never

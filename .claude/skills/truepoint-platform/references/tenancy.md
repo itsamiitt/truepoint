@@ -1,5 +1,9 @@
 # Multi-Tenancy and Tenant Isolation
 
+> **Contents:** The Model · Why Not the Alternatives · How Tenant Context Is
+> Established · Rules for Every Data Path · Cross-Tenant Operations · Routing a
+> Tenant to Its Cluster · The Mandatory Isolation Test · Checklist
+
 This is the most important file in the platform skill. TruePoint holds many
 organisations' data in one system. The tenancy model decides how that data is
 kept apart — and getting it wrong means one tenant sees another's pipeline. The
@@ -31,10 +35,14 @@ Three layers, decided once:
    data. Isolation stops being a thing every developer and every agent must
    remember on every query, and becomes a property the database guarantees. RLS is
    `ENABLE` + `FORCE` and fail-closed: the policy uses `NULLIF` on the GUC so a
-   missing tenant context matches nothing rather than everything. (Exception: tables
-   written by the RLS-bypassing **owner** connection — the auth/tenant tables and
-   `platform_audit_log`, via `withPlatformTx`/`recordPlatformEvent` in `client.ts` —
-   are `ENABLE`-only, since `FORCE` would block the owner writer and fail closed.)
+   missing tenant context matches nothing rather than everything. (Exception — a
+   *category*, not a fixed pair: any table whose system writers run on the
+   RLS-bypassing **owner** connection is `ENABLE`-only, since `FORCE` would block
+   the owner writer and fail closed. That covers the auth/tenant tables,
+   `platform_audit_log`, the outbox tables, notifications, the credit ledger,
+   subscriptions, provider configs, and more — ~10 of the
+   `packages/db/src/rls/*.sql` files are deliberately FORCE-less, each with a
+   header explaining why. **Read the file header before adding `FORCE` anywhere.**)
 
 3. **Enterprise siloing for the few who need it.** Customers with data-residency
    requirements (EU-only), customer-managed encryption keys (BYOK), or

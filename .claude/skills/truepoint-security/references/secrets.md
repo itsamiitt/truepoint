@@ -55,6 +55,12 @@ Real secret values live in a secrets manager (AWS Secrets Manager, Doppler, or
 the platform's equivalent), injected at deploy time. Per the CI/CD skill, the
 pipeline pulls them; they are never stored in the repo.
 
+> **Implementation status:** the manager is the **target**. Today production
+> secrets live in a gitignored `.env.production` on the deploy host, consumed by
+> `deploy/deploy.sh` as a Docker build secret (`--secret id=dotenv`); CI pulls no
+> secrets. Rotate/add secrets there (template: `deploy/env.production.template`)
+> until a manager exists.
+
 - Each environment has its own secret set. Production secrets never appear in
   staging or development.
 - The CI role has read-only access to secrets — it cannot create or modify them.

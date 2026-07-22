@@ -8,7 +8,7 @@
   dev.
 - It is a normal workspace package (`@leadwolf/extension`), auto-linked by `bun install`; Turbo's generic
   `build`/`typecheck` tasks pick it up (no per-package Turbo config). `tsconfig.json` extends
-  `../../tsconfig.base.json` with `types: ["chrome", "node"]`, `jsx: react-jsx`.
+  `../../tsconfig.base.json` with `types: ["chrome", "node", "bun"]`, `jsx: react-jsx`.
 - Depend only on `@leadwolf/types` + `@leadwolf/ui`; `.dependency-cruiser.cjs` `extension-stays-thin` forbids
   `@leadwolf/db`/`@leadwolf/integrations`. This host has no `bun`/`docker`, so typecheck/biome run in CI —
   self-review the diff and mirror a sibling before committing.

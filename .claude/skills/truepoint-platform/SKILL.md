@@ -29,7 +29,9 @@ reason against. This skill is those answers.
 
 ## Which Skill, When
 
-TruePoint has six skills across orthogonal axes. Most real features touch several.
+TruePoint has nine skills — six platform skills plus three `truepoint-extension-*`
+skills for the browser extension (see the root `CLAUDE.md` routing table). Most real
+features touch several.
 
 - **truepoint-platform** (this skill) — the backend, the data platform, tenancy,
   the API contract, queues, caching, service topology, observability, scale.
@@ -41,6 +43,8 @@ TruePoint has six skills across orthogonal axes. Most real features touch severa
 - **truepoint-security** — WHETHER it is safe. Tenancy *enforcement* (RLS),
   access control, IAM, compliance.
 - **truepoint-operations** — running it: incident response, FinOps, runbooks.
+- **truepoint-extension-{architecture,linkedin,auth}** — the browser extension
+  (`apps/extension`), which consumes this skill's `/api/v1` contract.
 
 Take "build prospect search":
 - Platform (this skill): the search service, the index, the read path, caching,

@@ -41,11 +41,13 @@ how they're typically used:
 
 - **List-based sharing** — the primary, explicit sharing path, modelled as `lists`
   + `list_members` (`listMembers`, with `addedByUserId`; `unique(list, contact)`).
-  A List has its own visibility (private to owner, shared with named users, shared
-  with a team, or workspace-wide). Sharing a list shares *visibility of its member
-  prospects in the context of that list*. This is the main way collaboration
-  happens, and it is the exception-to-the-default that the original skills'
-  owner-scoped model needs.
+  The **target** list model adds per-list visibility (private to owner, shared with
+  named users, shared with a team, or workspace-wide), where sharing a list shares
+  *visibility of its member prospects in the context of that list*.
+  > **Implementation status:** list visibility is **not built** — `lists` has no
+  > visibility column; every list is **workspace-visible today** (the schema header
+  > says owner-vs-workspace visibility, if ever needed, is an app-layer concern).
+  > Do not present a list as private, and do not build against a visibility field.
 - **Saved-search visibility** — a saved search has a `visibility` of `private` or
   `workspace`, gated in the **app layer** (not RLS): a `workspace`-visible saved
   search is offered to other members of the workspace, a `private` one only to its
@@ -55,14 +57,19 @@ how they're typically used:
   > private/workspace distinction is enforced in the API, so that check must not be
   > bypassed (it is the only thing separating private from workspace-shared
   > searches).
-- **Team visibility** — records owned by team members can be visible to the team
-  (or to team leads) per the team's configuration. Expresses "the pod sees the
-  pod's work."
+- **Team visibility** — the **target**: records owned by team members visible to
+  the team (or team leads) per the team's configuration ("the pod sees the pod's
+  work").
+  > **Implementation status:** not built — `teams` is explicitly **grouping-only**
+  > ("team membership NEVER restricts contact/list/search visibility",
+  > `packages/db/src/schema/teams.ts`). Do not gate visibility on team membership
+  > today.
 - **Role-based workspace-wide visibility** — managers/admins with a role permission
   see across owners. A reporting or oversight role legitimately needs the whole
   workspace's data; that's a role grant, checked server-side.
-- **Explicit per-record share** — a record shared directly with a named user
-  (less common; for one-off collaboration).
+- **Explicit per-record share** — the **target**: a record shared directly with a
+  named user (less common; for one-off collaboration).
+  > **Implementation status:** not built — no per-record share table exists.
 
 Each of these is a *grant* that widens the default. None of them crosses the
 tenant/workspace boundary — sharing is always within one workspace.

@@ -43,10 +43,19 @@ independent failure isolation, a different runtime).
   > **Implementation status:** not yet met in the codebase — there is no separate
   > `realtime` service today; this is a future-extraction option, not a present
   > service.
-- **`search`** — the search query + indexing surface fronting the search engine
-  (see `truepoint-data` search-infrastructure). Today this lives in the
-  `@leadwolf/search` package consumed in-process; extracting it to its own service
-  is a future option when the engine and its scaling justify it.
+- **`search`** — the search query + indexing surface (see `truepoint-data`
+  search-infrastructure). Today it runs in-process in `apps/api`:
+  `features/search/searchPortProvider.ts` wires the `SearchPort` (types in
+  `@leadwolf/types`) to the Postgres index-backed `searchRepository` in
+  `@leadwolf/db`. (`packages/search` holds only the unused in-memory adapter kept
+  as the ADR-0021 seam — don't edit it expecting product effect.) Extracting a
+  real search service is a future option.
+- **`apps/forge-api` / `apps/forge-worker` / `apps/forge`** (`@leadwolf/forge*`) —
+  the TruePoint Forge data plane (ADR-0047): the capture→parse→verify pipeline in
+  its own `forge` schema under the least-privilege `leadwolf_forge` DB role
+  (`withForgeTx`), so ingest can never read tenant contacts. Three separate compose
+  services; the Forge console calls its own BFF, not the main API. Forge-domain
+  logic goes here — never into `apps/api`.
 
 The two frontend apps (`apps/web` = `@leadwolf/web`, the customer surface; and
 `apps/admin` = `@leadwolf/admin`, the internal/platform-admin surface) are *not*
@@ -104,6 +113,13 @@ logic; the principle is one responsibility, not a hard line count.)
 ---
 
 ## Deployment
+
+> **Implementation status:** independent per-service pipelines and rolling
+> zero-downtime deploys are the **target**. Today one image (`leadwolf:latest`) is
+> built and every service is recreated together by `deploy/deploy.sh`
+> (`up -d api auth workers web admin forge-* caddy`) on a single host — the script
+> itself documents the resulting downtime window. The decoupled migrate step below
+> is real. Do not assume a workers-only change leaves the API untouched.
 
 - Each service deploys independently (its own pipeline — mirrors the architecture
   CI/CD per-app pipelines). A change to workers doesn't redeploy the API.

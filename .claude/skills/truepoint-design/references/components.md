@@ -25,7 +25,7 @@ Before reaching for a `<div>`, ask:
 | Show a data table / list | `DataTable` |
 | Show a stat / metric | `StatTile` |
 | Show status of a record | `StatusBadge` |
-| Show a score (0–100 with colour) | `ScorePill` (app component in `apps/web`, not a `@leadwolf/ui` export) |
+| Show a score (0–100 with colour) | the ScorePill *recipe* (inlined in the lists Data-Health cell — see patterns.md; not a component export) |
 | Show a user's initials/avatar | `Avatar` |
 | Show a pill/tag on a row | `TpChip` |
 | Show a progress bar | `Progress` |
@@ -333,7 +333,8 @@ style?
 tone: 'success' | 'warning' | 'danger' | 'muted'
 style?, children
 ```
-Stage mapping from `@leadwolf/ui`:
+Suggested stage→tone mapping (not a `@leadwolf/ui` export — define it in the
+owning feature if needed):
 ```js
 const STAGE_TONE = {
   New: 'muted', Qualified: 'success', Proposal: 'warning',

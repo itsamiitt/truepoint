@@ -49,17 +49,21 @@ uses cursor pagination.**
 GET /api/v1/prospects?limit=50&cursor=eyJpZCI6...
 
 200 {
-  "data": [ ... ],
-  "page": { "nextCursor": "eyJpZCI6...", "hasMore": true }
+  "members": [ ... ],            // the collection field is named per domain (members, jobs, …)
+  "nextCursor": "eyJpZCI6..."    // string | null — null means last page
 }
 ```
+
+The response is **flat** — no `page` wrapper and no `hasMore` field; clients derive
+"has more" from `nextCursor !== null` (see `packages/types/src/lists.ts` for the
+canonical shape).
 
 - The cursor is opaque (an encoded stable sort key, e.g. `(created_at, id)`).
   Clients pass it back verbatim; they never construct it.
 - `limit` has a **hard maximum** (e.g. 100) enforced server-side — a client asking
   for 100k rows gets the max, not 100k.
-- The frontend's infinite-scroll and `Pagination` component consume `nextCursor` /
-  `hasMore` (see design large-data).
+- The frontend's infinite-scroll and `Pagination` component consume `nextCursor`
+  (deriving has-more from non-null — see design large-data).
 - No endpoint returns an unbounded collection. "Get all" is paginated like
   everything else; bulk extraction goes through export jobs (see `async-jobs.md`).
 
@@ -92,8 +96,7 @@ maps onto it — see architecture state-and-data).
   "type": "https://api.truepoint.in/problems/prospect-not-found",
   "title": "Prospect not found.",
   "status": 404,
-  "code": "prospect_not_found",
-  "requestId": "req_8f3a..."
+  "code": "prospect_not_found"
 }
 ```
 
@@ -102,7 +105,11 @@ maps onto it — see architecture state-and-data).
 - A human-readable `title` safe to surface — **never** a stack trace, a raw
   database error, an internal path, or anything that leaks schema or PII (see
   `truepoint-security` api-security and data-protection).
-- A `requestId` that ties the response to server logs/traces for support.
+- > **Implementation status:** a `requestId` correlation field is the **target** —
+  > the shipped `ProblemDetails` (`packages/types/src/errors.ts`) is
+  > `{ type, title, status, code, detail?, …ext }` and no request-id middleware
+  > exists yet. Add the field and the middleware together when built; until then
+  > don't promise users a request id.
 - HTTP status used correctly: `400` validation, `401` unauthenticated, `403`
   forbidden, `404` not found / not yours (indistinguishable — see security
   access-control), `409` conflict, `422` semantic validation, `429` rate-limited,
@@ -164,6 +171,6 @@ integrations).
 - Is every list endpoint cursor-paginated with a hard `limit` max?
 - Do create/billable writes accept an `Idempotency-Key`, backed by a DB constraint?
 - Does every error use the one RFC 9457 `problem+json` envelope, leaking no
-  internals, with a `requestId`?
+  internals?
 - Is input schema-validated and the response shaped to authorized fields only?
 - Are rate limits declared and enforced server-side via shared counters?

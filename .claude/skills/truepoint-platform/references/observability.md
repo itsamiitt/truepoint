@@ -9,10 +9,12 @@ The architecture pre-build pass asks "how will we know when this is broken in
 production?" — this is the answer, system-wide.
 
 > **Implementation status:** the full stack below is the target, not yet wired.
-> Today there is structured logging (e.g. `apps/workers/src/logger.ts`) but no
-> distributed tracing/OpenTelemetry, no RED/USE metrics pipeline, and no codified
-> SLOs/error budgets. Keep these as the standard to build toward; do not assume
-> they already exist.
+> Today there is structured logging (e.g. `apps/workers/src/logger.ts`) **and
+> worker queue/DLQ metrics in Prometheus text form** (`apps/workers/src/metrics.ts`,
+> served on the workers' `/metrics` — extend it, don't rebuild it), but no
+> distributed tracing/OpenTelemetry, no API-side RED metrics, no
+> collector/dashboards, and no codified SLOs/error budgets. Keep these as the
+> standard to build toward; do not assume they already exist.
 
 ---
 

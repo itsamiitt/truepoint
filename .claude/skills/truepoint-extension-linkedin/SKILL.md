@@ -1,19 +1,20 @@
 ---
 name: truepoint-extension-linkedin
 description: >
-  Governs how TruePoint's browser extension integrates with LinkedIn (and future supported
-  sites) from the content script — page detection, the per-site adapter framework,
-  single-page-app navigation detection, minimal user-visible DOM extraction, the injected
-  Shadow-DOM hover card, and the anti-fingerprint / Terms-of-Service posture that keeps the
-  extension a compliant citizen rather than a scraper. Use this skill whenever creating or
-  editing anything under `apps/extension/src/content` — the content script, `observer.ts`, the
-  `adapters/` registry or a site adapter, `extract/`, or `hovercard/` — or when deciding what
-  the extension is allowed to read off a page. It is one of three sibling extension skills:
-  the MV3 shell/build is `truepoint-extension-architecture`; auth/tokens/API is
-  `truepoint-extension-auth`. Anything about how the hover card looks defers to
-  `truepoint-design`; whether an extraction is *safe or compliant* is `truepoint-security`'s
-  final say. If the task touches the content script, a site adapter, SPA detection, DOM
-  extraction, or the in-page surface, this skill is active.
+  Governs how TruePoint's browser extension integrates with LinkedIn (and future
+  supported sites) from the content script — page detection, the per-site adapter
+  framework, SPA-navigation detection, minimal user-visible DOM extraction, the
+  injected Shadow-DOM hover card, and the anti-fingerprint / Terms-of-Service
+  posture that keeps the extension a compliant citizen rather than a scraper. Use
+  this skill whenever creating or editing anything under `apps/extension/src/content`
+  — the content script, `observer.ts`, the `adapters/` registry or a site adapter,
+  `extract/`, or `hovercard/` — or when deciding what the extension may read off a
+  page. Siblings: the MV3 shell/build is `truepoint-extension-architecture`;
+  auth/tokens/API is `truepoint-extension-auth`. Hover-card looks defer to
+  `truepoint-design`; whether an extraction is safe or compliant is
+  `truepoint-security`'s final say. If the task touches the content script, a site
+  adapter, SPA detection, DOM extraction, or the in-page surface, this skill is
+  active.
 ---
 
 # TruePoint Extension — LinkedIn Integration Skill
@@ -56,8 +57,9 @@ no secrets, and asks the service worker for everything (see `truepoint-extension
    identifier (`/in/<publicId>`). Send it to the SW to resolve against our own data; do not scrape a full
    profile to reconstruct data we already license server-side. See `references/dom-extraction.md`.
 
-4. **Handle the SPA.** LinkedIn never full-reloads; detect navigation via History-API + `popstate` +
-   a debounced `MutationObserver`, and re-run the adapter on a real path change. See `references/spa-navigation.md`.
+4. **Handle the SPA.** LinkedIn never full-reloads; the as-built detector (`observer.ts`) is `popstate` +
+   a debounced, scoped `MutationObserver` with a path compare (the History-API `pushState` patch is the
+   known completion to add). Re-run the adapter only on a real path change. See `references/spa-navigation.md`.
 
 5. **Minimize the fingerprint surface.** Keep `web_accessible_resources` absent (or scoped + `use_dynamic_url`),
    keep host permissions tight, and keep the injected footprint to the Shadow-DOM hover card. See

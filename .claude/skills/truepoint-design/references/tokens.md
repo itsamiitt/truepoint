@@ -1,5 +1,9 @@
 # Token Reference
 
+> **Contents:** Text · Surfaces · Borders · Brand (Cobalt) · Status · Buttons ·
+> Spacing · Table/Row · Radii · Shadows · Z-Index · Typography · Animation ·
+> Permitted Raw Values · Icon Sizing
+
 Every colour, spacing, radius, shadow, z-index, font, and timing value must be
 expressed as a `var(--tp-*)` token. Never hardcode hex values or raw px numbers
 outside the specific exceptions noted below.
@@ -72,7 +76,8 @@ manual review rule, not an automated check.
 | `--danger` | `#dc2626` | Negative state, lost, destructive |
 | `--danger-700` | `#b91c1c` | Destructive-button hover, error text on light |
 
-ScorePill thresholds (from the app `ScorePill` component in `apps/web`):
+ScorePill thresholds (the ScorePill *recipe* — inlined in the lists Data-Health
+cell; see patterns.md):
 ```js
 score >= 80 → var(--success)
 score >= 50 → var(--warning)
@@ -194,8 +199,8 @@ when values update.
 | `--tp-ease` | `cubic-bezier(0.4,0,0.2,1)` | Standard easing |
 | `--tp-ease-out` | `cubic-bezier(0,0,0.2,1)` | Decelerate (drawers entering) |
 
-Sidebar uses `200ms cubic-bezier(0.4,0,0.2,1)` for width transition.
-Label/badge opacity uses `160ms` with `60ms` delay on open.
+The sidebar column width rides `var(--tp-duration)` (180ms); label/badge opacity
+uses `var(--tp-duration-fast)` (120ms), no delay.
 
 ---
 
@@ -221,13 +226,14 @@ element the icon sits in, so iconography stays consistent across the app.
 |---|---|
 | Inside a small/compact control, row action | 14–15px |
 | Standard nav item, button icon, inline with body text | 16–18px |
-| Logo mark in sidebar, bottom-nav item | 17–20px |
+| Logo mark in sidebar, mobile-drawer nav item | 17–20px |
 | Section header or emphasis icon | 20px |
 
-Match the icon size to siblings. The Sidebar nav uses 18px; the BottomNav uses
-20px; row hover actions use 14–15px; the logo mark uses 17px. When adding an
+Match the icon size to siblings. The Sidebar nav uses 18px; the mobile drawer nav
+uses 20px; row hover actions use 14–15px; the logo mark uses 17px. When adding an
 icon next to existing ones, match their size rather than introducing a new value.
 
-Icon stroke width is `1.75` by default (the `Svg` helper default), `2.4` only
-for the logo mark. Do not vary stroke width per icon — it makes the set look
+Icon stroke width is `1.75` by default (the DS `Icon` wrapper's default — icons are
+lucide-react glyphs passed to `Icon`); the logo mark has its own stroke spec
+(`Logo.tsx`). Do not vary stroke width per icon — it makes the set look
 inconsistent.

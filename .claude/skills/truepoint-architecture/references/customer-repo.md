@@ -21,7 +21,7 @@ apps/
         │   │   └── layout.tsx
         │   ├── (public)/            # Route group: unauthenticated pages
         │   ├── auth/                # auth entry / callback routes
-        │   ├── api/                 # Route handlers — BFF only (see truepoint-platform)
+        │   ├── api/                 # (none today — create only if a BFF route is genuinely needed)
         │   ├── layout.tsx           # Root layout
         │   ├── providers.tsx        # Client providers (query client, toast)
         │   └── globals.css
@@ -92,8 +92,8 @@ import { ContactList } from '@/features/contacts/components/ContactList'
 | A hook used by 3+ features | `src/hooks/` |
 | A pure helper (formatting, parsing) | `packages/core/src/` |
 | A reusable UI primitive (button, input) | `packages/ui/src/` |
-| A server action or route handler (BFF) | `src/app/api/` |
-| An auth check / redirect | `src/middleware.ts` (Next.js middleware) |
+| A server action or route handler (BFF) | `src/app/api/` (none exist today — create only if genuinely needed) |
+| An auth check / redirect (rendering gate) | `src/lib/authClient.ts` + the `AppShell` gate — there is no Next.js middleware (see `auth.md`) |
 | A request/response type (the API contract) | `packages/types/src/` (shared Zod schemas) |
 
 If you are unsure, ask: does this code know about the customer product? If yes,
@@ -172,8 +172,11 @@ is resolved in favour of the design skill's token-driven approach):
 - **App-level layout uses inline `style={{ }}` reading `var(--tp-*)` tokens** — not
   Tailwind utility classes in app JSX, and not raw hex/px values. Every colour,
   space, radius, and shadow is a token.
-- **No CSS modules** unless a third-party library requires it; `<style>` blocks only
-  for the narrow exceptions the design skill lists (`@keyframes`, `@font-face`).
+- **Token-driven CSS modules are accepted** — the shell and larger features use
+  `*.module.css` whose values are `var(--tp-*)` tokens; extend a feature's existing
+  stylesheet rather than converting it to inline styles (and keep raw hex/px out of
+  modules too). `<style>` blocks only for the narrow exceptions the design skill
+  lists (`@keyframes`, `@font-face`).
 - **Responsive** behaviour follows the design skill's breakpoints and patterns.
 
 Full styling rules, tokens, components, and the permitted exceptions live in the

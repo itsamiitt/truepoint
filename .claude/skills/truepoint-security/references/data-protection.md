@@ -1,5 +1,9 @@
 # Data Protection
 
+> **Contents:** Know What Is PII · Never Log PII/Tokens/Secrets · Encryption ·
+> Data Residency · Consent and Lawful Basis · Data Minimization · Field-Level
+> Exposure · Retention and Deletion · Data Export (DSAR) · Checklist
+
 TruePoint stores personal data: the names, emails, phone numbers, job titles, and
 locations of customers and their prospects, plus company and deal data. Some
 prospects are in jurisdictions with strict data laws (the EU, the UK). Handling

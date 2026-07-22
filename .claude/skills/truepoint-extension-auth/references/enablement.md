@@ -7,8 +7,8 @@ working extension; this reference is the checklist for turning it on (and why no
 
 | Gate | Where | Effect |
 |---|---|---|
-| `EXTENSION_ORIGINS` | `packages/config/src/env.ts:38` (regex `^chrome-extension://[a-p]{32}$`) | Folds into `appOrigins()` (`env.ts:760-763`) → gates **both** the API CORS allow-list **and** token-audience verification (`verifyAccessToken`). **Unset ⇒ every credentialed call from the extension is 403'd** (preflight and/or audience). The single most important flag. |
-| `CHROME_EXTENSION_ENABLED` | `packages/config/src/env.ts:567` (explicit-`"true"`-only) | Registers the `chrome_extension` ingest connector. Off ⇒ `POST /ingest` returns 400 "no connector". |
+| `EXTENSION_ORIGINS` | `packages/config/src/env.ts` (regex `^chrome-extension://[a-p]{32}$`) | Folds into `appOrigins()` (same file) → gates **both** the API CORS allow-list **and** token-audience verification (`verifyAccessToken`). **Unset ⇒ every credentialed call from the extension is 403'd** (preflight and/or audience). The single most important flag. |
+| `CHROME_EXTENSION_ENABLED` | `packages/config/src/env.ts` (explicit-`"true"`-only) | Registers the `chrome_extension` ingest connector. Off ⇒ `POST /ingest` returns 400 "no connector". |
 | Published extension id | Chrome Web Store | The value pinned in `EXTENSION_ORIGINS` and the manifest `externally_connectable`; and the target of the enterprise `ExtensionInstallForcelist` policy. |
 
 ## Sequence to enable
