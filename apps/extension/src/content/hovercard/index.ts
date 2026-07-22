@@ -4,6 +4,7 @@
 import tokens from "@leadwolf/ui/tokens.css?inline";
 import { t } from "../../i18n/index.ts";
 import { send } from "../../shared/client.ts";
+import { ENV } from "../../shared/env.ts";
 import type { CapturedRecord, SubjectStatus } from "../../shared/types.ts";
 
 const baseCss = `
@@ -123,6 +124,15 @@ export class HoverCard {
       return;
     }
     const contactId = this.status?.contactId ?? null;
+
+    // Owned → open the prospect in the full app. Previously this fell through to the capture path (the
+    // chrome-extension/14 X06 miswire): the "Open in TruePoint" button re-captured instead of navigating.
+    // The app has no per-contact detail route yet, so open the prospect workspace (a deep link is a future
+    // apps/web route). A content-script click is a user gesture, so window.open is allowed.
+    if (contactId && this.status?.owned) {
+      window.open(`${ENV.appOrigin}/prospect`, "_blank", "noopener,noreferrer");
+      return;
+    }
 
     if (contactId && !this.status?.owned) {
       this.button.disabled = true;

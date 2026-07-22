@@ -22,7 +22,11 @@ actually shipped in `apps/extension`).
 ## 0. Read first — do not duplicate
 
 TruePoint is **not greenfield** here. The **server side of the extension already exists and is tested**;
-this program designs the **client build target** (`apps/extension`) that does not yet exist.
+this program designs the **client build target** (`apps/extension`). **Update (2026-07-21):** that client
+now exists and is built through **M1 + partial M2**, shipped **dark** behind flags — see
+[`14-implementation-audit.md`](./14-implementation-audit.md) for the authoritative built/dark/stub state,
+the gate-state tracker, and the remaining backlog (the X-register). The design docs below stay the target;
+doc 14 is the only place shipped-status lives.
 
 - **Product/compliance spec (drafted):** [`prospect-database-platform/06-Chrome-Extension-Capture.md`](../prospect-database-platform/06-Chrome-Extension-Capture.md)
   — the extension is *one connector on the unified ingestion contract*; it **never writes the DB and never
@@ -56,7 +60,8 @@ Every design doc below **cites** those rather than restating them.
 | **11** | [`11-extension-branding.md`](./11-extension-branding.md) | **Branding & visual language:** the three-chevron mark + real icon assets, Cobalt/Ink tokens, Geist type, brand voice, and per-surface branding (toolbar, popup, auth pages, states, notifications, onboarding, profile, workspace switcher). |
 | **12** | [`12-extension-auth-gap-analysis-and-remediation.md`](./12-extension-auth-gap-analysis-and-remediation.md) | **Auth gap analysis & fix:** why auth fails today (launchWebAuthFlow never captures the code; the "tab" symptom), how enterprise extensions really authenticate, the ranked gap register, and the **companion-window** remediation (popup web login + `externally_connectable` handoff + rotating SW refresh token). |
 | **13** | [`13-brand-and-credits.md`](./13-brand-and-credits.md) | **Brand + live-credits build record:** the brand→token/font mapping that shipped in `apps/extension` (tokens via `@leadwolf/ui`, self-hosted Geist, the mark/lockup, mark icons) and the credits data-flow (`GET /credits/balance`, the SW `CreditsStore`, refresh triggers + the reveal `balanceAfter` delta). |
-| ADR | [`../decisions/ADR-0043-chrome-extension-architecture.md`](../decisions/ADR-0043-chrome-extension-architecture.md) | The MV3 architecture decisions (least-privilege, thin-producer, compliant capture). |
+| **14** | [`14-implementation-audit.md`](./14-implementation-audit.md) | **Implementation audit (living):** what has actually shipped into `apps/extension` (+ its server seams), the gate-state tracker, the drift log reconciling stale docs (auth backend built, ADR-0043/0045 divergences), and the remaining backlog (X-register). The source of truth for shipped-status. |
+| ADR | [`../decisions/ADR-0043-chrome-extension-architecture.md`](../decisions/ADR-0043-chrome-extension-architecture.md) | The MV3 architecture decisions (least-privilege, thin-producer, compliant capture). ⚠ §5 (auth) superseded by ADR-0045; §8 "Preact + Zustand" not-taken — see doc `14`. |
 | ADR | [`../decisions/ADR-0044-extension-authentication.md`](../decisions/ADR-0044-extension-authentication.md) | ⚠ **Superseded by ADR-0045.** The original launchWebAuthFlow silent-re-auth decision. |
 | ADR | [`../decisions/ADR-0045-extension-auth-companion-window.md`](../decisions/ADR-0045-extension-auth-companion-window.md) | The corrected auth decision: companion-window login + `externally_connectable` handoff + extension-scoped rotating refresh token. |
 

@@ -23,6 +23,19 @@ if grep -q "change-me-to-a-long-random-string" "$ENV_FILE"; then
   echo "  Set it to a strong value:  openssl rand -hex 32"
   exit 1
 fi
+# Catch a dev .env copied over the production template: NODE_ENV=development poisons `next build`
+# (mixed dev/prod React runtimes → prerender crash), and localhost origins would be BAKED into the
+# web bundle (NEXT_PUBLIC_* inline at build time) — the stack would build yet be unusable.
+if grep -qE '^NODE_ENV=development' "$ENV_FILE"; then
+  echo "ERROR: NODE_ENV=development in $ENV_FILE — this looks like a dev .env, not the production template."
+  echo "  cp deploy/env.production.template $ENV_FILE   # then re-apply your DATABASE_URL etc."
+  exit 1
+fi
+if grep -qE '^(AUTH_ORIGIN|APP_ORIGINS|NEXT_PUBLIC_[A-Z_]+)=.*(localhost|127\.0\.0\.1)' "$ENV_FILE"; then
+  echo "ERROR: $ENV_FILE contains localhost origins — these get baked into the web bundle at build time."
+  echo "  Use the https://*.truepoint.in values from deploy/env.production.template."
+  exit 1
+fi
 
 # Ensure a VALID EdDSA keypair, then ship it BASE64-ENCODED. A multi-line PEM loses its newlines when docker
 # compose interpolates ${VAR} → importPKCS8 throws → login 503s (token_mint_failed). Base64 is a single line,
@@ -55,6 +68,20 @@ printf 'JWT_PRIVATE_KEY_PEM_B64=%s\n' "$JWT_PRIVATE_KEY_PEM_B64" >> "$ENV_FILE"
 printf 'JWT_PUBLIC_KEY_PEM_B64=%s\n'  "$JWT_PUBLIC_KEY_PEM_B64"  >> "$ENV_FILE"
 echo "==> JWT keys validated, base64-encoded from $KEY_DIR/, and persisted to $ENV_FILE (durable across restarts)"
 
+# Prove bun.lock matches the workspace manifests BEFORE the build. The Dockerfile's
+# `bun install --frozen-lockfile` reports only "lockfile had changes, but lockfile is frozen" —
+# it never names the package, and it fails minutes into the build. This names it in milliseconds.
+# Prefer the host's node; fall back to the same bun image the build uses (this host may have neither
+# bun nor node, but it always has docker).
+echo "==> [0/5] Checking bun.lock is in sync with package.json…"
+if command -v node >/dev/null 2>&1; then
+  node scripts/check-lockfile.mjs
+elif command -v bun >/dev/null 2>&1; then
+  bun scripts/check-lockfile.mjs
+else
+  docker run --rm -v "$PWD":/w -w /w oven/bun:1.3.14 bun scripts/check-lockfile.mjs
+fi
+
 # ── 1. Build the single image ───────────────────────────────────────────────────
 echo "==> [1/5] Building leadwolf:latest (bun install + next build — first run is slow)…"
 DOCKER_BUILDKIT=1 docker build --secret id=dotenv,src="$ENV_FILE" -t leadwolf:latest .
@@ -68,7 +95,13 @@ echo "==> [2/4] Starting local infrastructure (redis, typesense, mailhog)…"
 # silently freeze on a Neon pooler, but `timeout` guarantees a hung run can never block the deploy
 # (set -e turns the 124 exit into a clean abort BEFORE any app service starts).
 echo "==> [3/4] Running database migrations…"
-timeout 300 "${COMPOSE[@]}" run --rm migrate
+# `--foreground` + `-T` are load-bearing, not style. Plain `timeout` runs its child in a SEPARATE
+# process group; when `docker compose run` then attaches interactively and reads the TTY, the kernel
+# stops it with SIGTTIN — silently, right after "Container … Created". The migrate step then never
+# actually runs while looking exactly like a hang (the failure mode that ate several deploys).
+# --foreground keeps the child in the shell's foreground process group; -T skips the TTY attach
+# entirely (migrate is non-interactive and logs via direct fd-2 writes, so nothing is lost).
+timeout --foreground 300 "${COMPOSE[@]}" run --rm -T migrate
 
 # ── 3b. Provision/refresh the platform Bootstrap Admin from .env (ADR-0034) ──────────
 # Re-run EVERY deploy so .env.production is the source of truth for the break-glass super-admin: a changed

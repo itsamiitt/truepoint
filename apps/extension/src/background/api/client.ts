@@ -1,7 +1,12 @@
 // ApiClient — the ONLY component that talks to api.truepoint.in. Attaches the Bearer token, sets the
 // Idempotency-Key on writes, and maps RFC 9457 problem+json onto the error taxonomy (02 §6/§11, 03 §1).
 // Tenancy is taken from token claims (never sent by the caller as trusted input).
-import type { ConsentContext, IngestionEnvelope, RawObservation } from "@leadwolf/types";
+import type {
+  ConsentContext,
+  IngestionEnvelope,
+  LinkedinResolveResponse,
+  RawObservation,
+} from "@leadwolf/types";
 import { API_BASE } from "../../shared/env.ts";
 import type { QueueItem } from "../../shared/idb.ts";
 import type { ErrorClass, RevealCosts, RevealType, SubjectStatus } from "../../shared/types.ts";
@@ -158,6 +163,41 @@ export class ApiClient {
       return await this.request<RevealCosts>("/credits/reveal-costs", { method: "GET" });
     } catch {
       return null;
+    }
+  }
+
+  /** Resolve a LinkedIn public id (the `/in/<publicId>` slug) to this workspace's masked contact, if any —
+   *  GET /contacts/by-linkedin/:publicId (chrome-extension/14 X01). Maps the masked resolution onto the non-PII
+   *  SubjectStatus the content script + panel render; never returns email/phone plaintext. Throws ApiError on
+   *  401/offline so the bus can degrade the LOOKUP to "unknown". */
+  async resolveByLinkedin(publicId: string): Promise<SubjectStatus> {
+    const resp = await this.request<LinkedinResolveResponse>(
+      `/contacts/by-linkedin/${encodeURIComponent(publicId)}`,
+      { method: "GET" },
+    );
+    return {
+      contactId: resp.contactId,
+      known: resp.known,
+      owned: resp.owned,
+      // A lookup is not a capture outcome; the known/owned booleans carry the real signal.
+      outcome: "unknown",
+      emailAvailable: resp.contact?.hasEmail ?? false,
+      phoneAvailable: resp.contact?.hasPhone ?? false,
+      // score (a buying-signal) is intentionally deferred until the signals feature is built.
+      score: null,
+    };
+  }
+
+  /** The caller's orgs (across tenants) for the org switcher — GET /orgs (chrome-extension/14 X04). Degrades to
+   *  just the active org on any failure so the switcher never crashes. */
+  async listOrgs(): Promise<{
+    orgs: Array<{ tenantId: string; tenantName: string; isTenantOwner: boolean }>;
+    activeTenantId: string | null;
+  }> {
+    try {
+      return await this.request("/orgs", { method: "GET" });
+    } catch {
+      return { orgs: [], activeTenantId: this.auth.tenantId };
     }
   }
 }

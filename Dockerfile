@@ -22,10 +22,28 @@ RUN bun install --frozen-lockfile
 # Turbo refuse the package graph. The Next apps don't need Turbo orchestration: they
 # transpile the workspace TS packages themselves, and there is no runtime module cycle
 # (db/src never imports core). api/workers need no build step (Bun runs their TS directly).
-# Source the env so NEXT_PUBLIC_* inline correctly and @leadwolf/config's fail-fast boot
-# validation passes during `next build`.
+# Load the env so NEXT_PUBLIC_* inline correctly and @leadwolf/config's fail-fast boot
+# validation passes during `next build`. This goes through scripts/export-dotenv.sh rather than
+# `set -a; . "$file"`: the latter makes the SHELL parse the file, so an unquoted value containing
+# a metacharacter silently changes the line's meaning. A Neon DATABASE_URL ends in
+# `?sslmode=require&channel_binding=require`, and that `&` backgrounds the assignment — the
+# variable never reaches the parent shell and the build fails with "DATABASE_URL: Required"
+# while the value is plainly present in the file. compose's env_file reader does not
+# shell-interpret values, so that same file works at runtime; export-dotenv.sh matches it.
+# NODE_ENV is forced back to production AFTER loading: a stray NODE_ENV=development in the
+# dotenv (e.g. a dev .env copied as .env.production) makes `next build` mix dev+prod React
+# runtimes → prerender crashes with "null is not an object (evaluating 'useState')".
+# The path goes in via DOTENV_FILE, never as a `.` argument: this /bin/sh is dash, which ignores
+# arguments to the dot command (the sourced script would see an empty $1 and export nothing).
+# The canary check right after makes any such silent failure loud immediately: if the secret was
+# mounted, DATABASE_URL must have come out of it — otherwise abort before minutes of Next builds
+# fail on a misleading "Required" error.
 RUN --mount=type=secret,id=dotenv \
-    sh -c 'set -a; [ -f /run/secrets/dotenv ] && . /run/secrets/dotenv; set +a; \
+    sh -c 'DOTENV_FILE=/run/secrets/dotenv; . ./scripts/export-dotenv.sh; \
+           if [ -f /run/secrets/dotenv ] && [ -z "$DATABASE_URL" ]; then \
+             echo "ERROR: dotenv secret is mounted but DATABASE_URL did not load — env parsing is broken" >&2; exit 1; \
+           fi; \
+           export NODE_ENV=production; \
            bun run --filter "@leadwolf/web" build && \
            bun run --filter "@leadwolf/auth-app" build && \
            bun run --filter "@leadwolf/admin" build && \

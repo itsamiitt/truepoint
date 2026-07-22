@@ -7,6 +7,12 @@
   + rotation/reuse-detection), ADR-0043 (Chrome extension architecture — reserves `externally_connectable`
   for `app.truepoint.in`).
 - **Detail:** `docs/planning/chrome-extension/12-extension-auth-gap-analysis-and-remediation.md`.
+- **As-built (2026-07-21, dark):** shipped. Decision 3's refresh token lives in memory-backed
+  `chrome.storage.session` (no disk, no key material) — **not** the encrypted `chrome.storage.local` this
+  ADR specifies; the as-built choice is arguably safer, so amend Decision 3 to match. Decision 1's visible
+  popup **window** vs the shipped silent background **tab** (`companionTab.ts`) is tracked as X16 (interactive
+  login for signed-out users). Status truth:
+  [`../chrome-extension/14-implementation-audit.md`](../chrome-extension/14-implementation-audit.md).
 
 ## Context
 

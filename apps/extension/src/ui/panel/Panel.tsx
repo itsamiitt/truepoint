@@ -5,8 +5,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n/index.ts";
 import { onBroadcast, send } from "../../shared/client.ts";
+import { ENV } from "../../shared/env.ts";
 import { type RecentItem, db } from "../../shared/idb.ts";
 import type { AppState } from "../../shared/messages.ts";
+import type { SubjectStatus } from "../../shared/types.ts";
 import { CreditsPill } from "../brand/CreditsPill.tsx";
 import { Lockup } from "../brand/Mark.tsx";
 
@@ -181,6 +183,123 @@ function CapturedTab(): React.ReactElement {
   );
 }
 
+const primaryBtn: React.CSSProperties = {
+  width: "100%",
+  border: 0,
+  borderRadius: "var(--radius, 8px)",
+  padding: "8px 12px",
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "var(--tp-on-fill, #fff)",
+  background: "var(--tp-btn, #111827)",
+  fontFamily: "inherit",
+};
+
+/** Titlecase a LinkedIn slug ("jane-doe-8a1b") into a readable label — the masked name isn't carried on the
+ *  status broadcast, so the slug is the fallback identifier (richer hydration is a follow-up). */
+function slugLabel(key: string): string {
+  return key
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function revealError(errorClass?: string): string {
+  switch (errorClass) {
+    case "auth":
+      return t("error.auth");
+    case "rate_limit":
+      return t("error.rate_limit");
+    case "transient":
+      return t("error.transient");
+    default:
+      return t("error.unexpected");
+  }
+}
+
+/** The Reveal tab — the current LinkedIn prospect's TruePoint status, driven by the SUBJECT_STATUS broadcast
+ *  the service worker emits on LOOKUP (chrome-extension/14 X01/X06). Four states: no subject (open a profile) ·
+ *  unknown (no match) · known-not-revealed (Reveal) · owned (Open in app). It populates when the user views a
+ *  profile; on-open hydration of the active tab's subject is a follow-up. */
+function RevealTab(): React.ReactElement {
+  const [subject, setSubject] = useState<{ key: string; status: SubjectStatus } | null>(null);
+  const [reveal, setReveal] = useState<{ phase: "idle" | "busy" | "done" | "error"; text?: string }>({
+    phase: "idle",
+  });
+
+  useEffect(() => {
+    return onBroadcast((msg) => {
+      if (msg.type === "SUBJECT_STATUS") {
+        setSubject({ key: msg.subjectKey, status: msg.status });
+        setReveal({ phase: "idle" });
+      }
+    });
+  }, []);
+
+  if (!subject) {
+    return <EmptyState title={t("panel.revealEmpty")} hint={t("panel.revealEmptyHint")} />;
+  }
+
+  const { status } = subject;
+  const contactId = status.contactId;
+
+  const onReveal = async (): Promise<void> => {
+    if (!contactId) {
+      return;
+    }
+    setReveal({ phase: "busy" });
+    const res = await send({ type: "REVEAL", contactId, revealType: "email" });
+    setReveal(
+      res.ok
+        ? { phase: "done", text: res.email ?? res.phone ?? t("card.revealed") }
+        : { phase: "error", text: revealError(res.errorClass) },
+    );
+  };
+
+  return (
+    <div>
+      <div style={{ fontWeight: 600, fontSize: 14 }}>{slugLabel(subject.key)}</div>
+      <div style={{ ...monoOutcome, marginTop: 4 }}>
+        {status.owned ? t("card.revealed") : status.known ? t("card.notRevealed") : t("card.noMatch")}
+      </div>
+      <div style={{ height: 1, background: "var(--tp-hairline, #f0f0f0)", margin: "12px 0" }} />
+
+      {status.known && contactId ? (
+        status.owned ? (
+          <button
+            type="button"
+            style={primaryBtn}
+            onClick={() =>
+              window.open(`${ENV.appOrigin}/prospect`, "_blank", "noopener,noreferrer")
+            }
+          >
+            {t("card.openInApp")}
+          </button>
+        ) : (
+          <button
+            type="button"
+            style={primaryBtn}
+            disabled={reveal.phase === "busy"}
+            onClick={() => void onReveal()}
+          >
+            {reveal.phase === "busy" ? t("card.revealing") : t("card.reveal")}
+          </button>
+        )
+      ) : (
+        <div style={muted}>{t("card.noMatchHint")}</div>
+      )}
+
+      {reveal.text ? (
+        <div style={{ marginTop: 10, fontSize: 13, color: "var(--tp-ink, #111827)" }}>
+          {reveal.text}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function Panel(): React.ReactElement {
   const [tab, setTab] = useState<Tab>("captured");
   const [state, setState] = useState<AppState | null>(null);
@@ -217,6 +336,8 @@ export function Panel(): React.ReactElement {
       <div style={body}>
         {tab === "captured" ? (
           <CapturedTab />
+        ) : tab === "reveal" ? (
+          <RevealTab />
         ) : (
           <EmptyState title={t("panel.emptyCaptured")} hint={t("panel.emptyCapturedHint")} />
         )}

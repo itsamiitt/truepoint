@@ -59,13 +59,15 @@ export {
   type S3Fetch,
 } from "./storage/s3FileStore.ts";
 
-// TruePoint Forge data-plane adapters (ADR-0046/0047): the Anthropic extraction port + its default fetch
-// transport, and the forge S3 object store. Injected by forge-worker at its composition root.
+// TruePoint Forge adapters (ADR-0046/0047; re-homed from @forge/integrations): the Redis rate limiter,
+// the S3/MinIO object store, and the Anthropic extraction port the forge-api/forge-worker composition
+// roots inject. Forge-core declares the ports and never imports this package.
+export { forgeRateLimiter } from "./forgeRateLimiter.ts";
+export { forgeObjectStore, type ForgeS3Config } from "./forgeObjectStore.ts";
 export {
   anthropicExtractionPort,
   defaultAnthropicTransport,
   type AnthropicExtractionConfig,
   type AnthropicResponse,
+  type FetchJson as ForgeExtractionFetchJson,
 } from "./forgeAnthropicExtraction.ts";
-export { forgeObjectStore, type ForgeS3Config } from "./forgeObjectStore.ts";
-export { forgeRateLimiter } from "./forgeRateLimiter.ts";

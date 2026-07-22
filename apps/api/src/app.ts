@@ -17,6 +17,7 @@ import { complianceRoutes, dsarPublicRoutes } from "./features/compliance/index.
 import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
 import { contactsDedupRoutes } from "./features/contacts-dedup/index.ts";
 import { contactsMergeRoutes } from "./features/contacts-merge/index.ts";
+import { contactsResolveRoutes } from "./features/contacts-resolve/index.ts";
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
 import {
   emailConnectRoutes,
@@ -27,6 +28,7 @@ import {
 import { enrichmentRoutes } from "./features/enrichment/index.ts";
 import { eventsRoutes } from "./features/events/routes.ts";
 import { homeRoutes } from "./features/home/index.ts";
+import { meRoutes, orgsRoutes } from "./features/identity/index.ts";
 import { importMappingTemplatesRoutes } from "./features/import-mapping-templates/index.ts";
 import {
   bulkImportRoutes,
@@ -107,6 +109,11 @@ app.get("/metrics", (c) => {
 // Coarse per-caller throttle on the resource surface (IP-keyed here; per-subject once authn has set claims).
 app.use("/api/*", rateLimit);
 app.route("/api/v1/auth", authRoutes);
+// Extension identity reads (chrome-extension/14 X03/X04): GET /me (display identity for the popup/panel) +
+// GET /orgs (the caller's orgs for the switcher). Each keyed by the token's sub → a user only ever sees their
+// own identity/memberships. Own bases; no overlap with /credits/me or /admin/me.
+app.route("/api/v1/me", meRoutes);
+app.route("/api/v1/orgs", orgsRoutes);
 // Platform super-admin (ADR-0032): pa-gated, cross-tenant, audited — NOT workspace-scoped. Highest privilege.
 app.route("/api/v1/admin", adminRoutes);
 app.route("/api/v1/announcements", announcementsRoutes); // 13a Area 10 — customer banner read
@@ -144,6 +151,10 @@ app.route("/api/v1/contacts/duplicates", contactsDedupRoutes);
 // True-merge verb + preview (S-C5): /:id/merge + /:id/merge-preview — no path overlap with reveal/scores/
 // activities. Dual-gated 404-off (dark until the merge flag flips).
 app.route("/api/v1/contacts", contactsMergeRoutes);
+// Extension LinkedIn resolver (chrome-extension/14 X01): GET /contacts/by-linkedin/:publicId → the masked
+// contact for the slug in the active workspace. Registered BEFORE the reveal router so the literal
+// `by-linkedin` segment is never captured as a contact `:id` (same first-match discipline as /contacts/bulk).
+app.route("/api/v1/contacts", contactsResolveRoutes);
 app.route("/api/v1/contacts", revealRoutes);
 app.route("/api/v1/contacts", scoringRoutes); // /:id/scores + /:id/rescore — no path overlap with reveal
 app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path overlap either

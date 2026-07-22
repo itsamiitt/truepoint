@@ -12,9 +12,10 @@ map in `docs/ARCHITECTURE_MAP.md` (kept in sync by `.claude/hooks/gen-architectu
 
 ## Skills — when to use which
 
-This project ships six skills under `.claude/skills/`. Most real features need several at
-once. **Before writing any code, file, or migration, read the `SKILL.md` of every skill your
-task touches** — and run the pre-build pass in `truepoint-architecture` first.
+This project ships nine skills under `.claude/skills/` — six platform skills plus three for the
+browser extension (`truepoint-extension-{architecture,linkedin,auth}`). Most real features need
+several at once. **Before writing any code, file, or migration, read the `SKILL.md` of every skill
+your task touches** — and run the pre-build pass in `truepoint-architecture` first.
 
 ### Routing — pick by what the task involves
 
@@ -26,6 +27,9 @@ task touches** — and run the pre-build pass in `truepoint-architecture` first.
 | Anything that renders — `@leadwolf/ui` components, tokens (`var(--tp-*)`), layout, large tables/lists, accessibility (WCAG 2.2 AA), motion, copy, i18n, brand | **truepoint-design** |
 | Whether it's safe — access control & tenant isolation (RLS), IAM/SSO/SCIM, input validation, secrets/KMS, PII/residency, API hardening, abuse/scraping, telephony, compliance | **truepoint-security** |
 | Running it in production — incidents, breach response, cost/FinOps (metered enrichment), runbooks | **truepoint-operations** |
+| The **browser extension** (`apps/extension`, Manifest V3) — the service worker, manifest, message bus, storage & MV3 lifecycle, build/release/store compliance | **truepoint-extension-architecture** |
+| The extension's **LinkedIn integration** — content scripts, site adapters, SPA-navigation detection, minimal user-visible DOM extraction, the hover card, the anti-fingerprint/ToS posture | **truepoint-extension-linkedin** |
+| The extension's **auth & API** — companion-window handoff, extension-scoped tokens, the SW API client, the `EXTENSION_ORIGINS`/`CHROME_EXTENSION_ENABLED` gates | **truepoint-extension-auth** |
 
 ### Composition — most features touch several
 

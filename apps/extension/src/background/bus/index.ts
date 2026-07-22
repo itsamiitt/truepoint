@@ -40,10 +40,18 @@ async function handle(
       return ctx.getState();
     }
 
-    case "LOOKUP":
-      // TODO: wire POST /search/contacts for a real owned/known check
-      // (import the ContactQuery schema from @leadwolf/types).
-      return { status: { contactId: null, known: false, owned: false, outcome: "unknown" } };
+    case "LOOKUP": {
+      // Resolve the LinkedIn slug against this workspace's contacts (chrome-extension/14 X01). Broadcast the
+      // result so the side panel's Reveal tab can render it; degrade to "unknown" on any failure (offline /
+      // signed-out) so the in-page card never blocks the profile.
+      try {
+        const status = await ctx.api.resolveByLinkedin(msg.subjectKey);
+        ctx.broadcast({ type: "SUBJECT_STATUS", subjectKey: msg.subjectKey, status });
+        return { status };
+      } catch {
+        return { status: { contactId: null, known: false, owned: false, outcome: "unknown" } };
+      }
+    }
 
     case "CAPTURE": {
       await ctx.queue.enqueue(msg.record);
@@ -109,7 +117,9 @@ async function handle(
     }
 
     case "LIST_ORGS":
-      return ctx.auth.listOrgs();
+      // The orgs list is a tenant-membership read on /api/v1 — route it through the SW API client (the one
+      // HTTP client), not the auth module. The endpoint returns { orgs, activeTenantId } (chrome-extension/14 X04).
+      return ctx.api.listOrgs();
 
     case "OPEN_PANEL": {
       try {
