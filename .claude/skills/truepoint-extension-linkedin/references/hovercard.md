@@ -21,7 +21,8 @@ Keep it small, isolated, and resilient.
   no token and makes no API call.
 - **Implement the four states** — resolving, unknown (offer capture), known/owned (offer open/reveal), error.
   Wire the primary action to the correct branch: an **owned** subject's primary action must open the app /
-  reveal, not fall through to capture (this is a known miswire to fix — doc 14 X06).
+  reveal, not fall through to capture (the X06 miswire here is **fixed** — owned opens the app; the X06
+  remainder is the panel tabs, see doc 14).
 - **Tear down cleanly** on SPA navigation (see `spa-navigation.md`) — one card at a time, no leaked nodes.
 - **Defer the visuals to `truepoint-design`** — placement, spacing, motion, copy, accessibility, and the exact
   state treatments are its call; this reference is about isolation and wiring, not look.

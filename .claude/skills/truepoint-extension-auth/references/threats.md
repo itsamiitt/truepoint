@@ -19,8 +19,10 @@ LinkedIn's page and, potentially, other extensions).
   `sid` family is independently revocable without touching the web session.
 - **Over-privileged token.** Mitigation: mint drops the `pa` super-admin bit and scopes `aud` to the extension
   id; a stolen extension token can't act as an admin or as the web app.
-- **Remote-code / config tampering.** Mitigation: no remotely-hosted code (strict CSP); remote config is
-  signature-checked and fail-closed (X09) and can only flip flags, never change behavior.
+- **Remote-code / config tampering.** Mitigation: no remotely-hosted code (strict CSP). The remote-config
+  **signature check is a marked TODO (X09)** — `remoteConfig.ts` is currently a local-cache scaffold with no
+  remote fetch; until the signed fetch ships, treat unsigned/unverified config as all-flags-off. Config can
+  only ever flip flags, never change behavior.
 - **CSRF/XSS.** The extension pages are `'self'`-CSP with no remote origins; the API is bearer-token (no ambient
   cookie to forge); inputs from the page are untrusted and validated server-side.
 

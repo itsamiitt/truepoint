@@ -232,6 +232,28 @@ export const userMfaMethods = pgTable("user_mfa_methods", {
   createdAt: createdAt(),
 });
 
+// WebAuthn / passkey credentials (AUTH-024) — user-owned (global identity, like user_mfa_methods) and
+// auth-service-only. Stores the PUBLIC key + credential id + signature counter per registered authenticator;
+// there is NO secret here (the private key never leaves the device). REVOKED from leadwolf_app (applyMigrations)
+// — the tenant app never touches passkeys — so a policy slip can't expose which users have credentials. This is
+// the SCHEMA FOUNDATION only: the registration/assertion CEREMONY (a WebAuthn library, RP-ID for the subdomain
+// estate, attestation policy) is a SEPARATE, off-by-default, specialist-review-gated slice. Empty until then.
+export const webauthnCredentials = pgTable("webauthn_credentials", {
+  id: id(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  credentialId: text("credential_id").notNull().unique(), // base64url credential id from the authenticator
+  publicKey: bytea("public_key").notNull(), // COSE-encoded public key (bytes) — public, not a secret
+  counter: integer("counter").notNull().default(0), // signature counter — clone / replay detection
+  transports: text("transports").array(), // usb|nfc|ble|internal|hybrid — client hints
+  aaguid: varchar("aaguid", { length: 36 }), // authenticator model id (optional)
+  backedUp: boolean("backed_up").notNull().default(false), // multi-device (synced) passkey vs single-device
+  label: varchar("label", { length: 100 }), // user-facing device name
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: createdAt(),
+});
+
 export const trustedDevices = pgTable(
   "trusted_devices",
   {
@@ -293,6 +315,68 @@ export const tenantAuthPolicies = pgTable("tenant_auth_policies", {
   enforcementEnabled: boolean("enforcement_enabled").notNull().default(false),
   updatedAt: updatedAt(),
 });
+
+// auth_policies (doc 11 §2-4) — the generalized effective-policy store that SUBSUMES tenant_auth_policies: one
+// row per (scope, tenant, workspace, key). A `platform` row carries a NULL tenant_id (the platform default); an
+// `org` row a tenant_id; a `workspace` row both. The resolver composes platform → org → workspace (strictest-wins
+// for security keys). RLS (rls/auth.sql): a tenant READS its own rows + the platform (NULL) defaults, and WRITES
+// only its own — the platform defaults are owner-only (withPlatformTx). The NULLS-NOT-DISTINCT unique index lives
+// in the migration (0053): drizzle-kit generate is blocked by the snapshot debt, so the SQL migration is the
+// source of truth and this def is kept in hand-sync with it. Phase 1, AUTH effective-policy engine (doc 12).
+export const authPolicies = pgTable(
+  "auth_policies",
+  {
+    id: id(),
+    scope: varchar("scope", { length: 12 }).notNull(), // platform | org | workspace
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // NULL = platform default
+    workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
+    key: varchar("key", { length: 64 }).notNull(),
+    value: jsonb("value").notNull(),
+    version: integer("version").notNull().default(1),
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => ({
+    scopeChk: check("auth_policies_scope_enum", sql`${t.scope} IN ('platform','org','workspace')`),
+    // scope ↔ tenant/workspace presence must agree (platform: neither; org: tenant only; workspace: both).
+    consistencyChk: check(
+      "auth_policies_scope_consistency",
+      sql`(${t.scope} = 'platform' AND ${t.tenantId} IS NULL AND ${t.workspaceId} IS NULL)
+       OR (${t.scope} = 'org' AND ${t.tenantId} IS NOT NULL AND ${t.workspaceId} IS NULL)
+       OR (${t.scope} = 'workspace' AND ${t.tenantId} IS NOT NULL AND ${t.workspaceId} IS NOT NULL)`,
+    ),
+  }),
+);
+
+// auth_allowed_origins (doc 11 §2, AUTH-036) — the MANAGED callback/redirect-origin allow-list, with env as the
+// FLOOR: the resolver (@leadwolf/config resolveAllowedOrigins) unions the env origins with these managed rows.
+// A `platform` row (NULL tenant_id) is a platform-wide managed origin; an `org` row is tenant-specific. `origin`
+// is a canonical https origin (validated + normalised by canonicalManagedOrigin at write time). RLS mirrors
+// auth_policies exactly: a tenant reads its own + the platform (NULL) rows and writes only its own; platform rows
+// are owner-only (withPlatformTx). NULLS-NOT-DISTINCT unique (scope, tenant_id, origin) lives in the migration
+// (0054) — the SQL is source-of-truth while drizzle-kit generate is snapshot-blocked; this def is hand-synced.
+export const authAllowedOrigins = pgTable(
+  "auth_allowed_origins",
+  {
+    id: id(),
+    scope: varchar("scope", { length: 12 }).notNull(), // platform | org
+    tenantId: uuid("tenant_id").references(() => tenants.id, { onDelete: "cascade" }), // NULL = platform
+    origin: varchar("origin", { length: 255 }).notNull(), // canonical https origin
+    kind: varchar("kind", { length: 20 }).notNull().default("callback"), // callback | cors
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => ({
+    scopeChk: check("auth_allowed_origins_scope_enum", sql`${t.scope} IN ('platform','org')`),
+    // scope ↔ tenant presence must agree (platform: no tenant; org: a tenant).
+    consistencyChk: check(
+      "auth_allowed_origins_scope_consistency",
+      sql`(${t.scope} = 'platform' AND ${t.tenantId} IS NULL)
+       OR (${t.scope} = 'org' AND ${t.tenantId} IS NOT NULL)`,
+    ),
+  }),
+);
 
 // Pending invitations to join an org/workspace (accepted at registration → tenant_member + workspace_member).
 export const invitations = pgTable("invitations", {

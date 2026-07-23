@@ -1,7 +1,8 @@
 // app.ts — compose the api: error handler + CORS (allow-listed app origins, credentials) + feature
 // routers. The api is the only public HTTP surface (09); it trusts the access JWT and never issues one.
 
-import { appOrigins } from "@leadwolf/config";
+import { renderAuthMetrics } from "@leadwolf/auth";
+import { appOrigins, env } from "@leadwolf/config";
 import { Hono } from "hono";
 import { compress } from "hono/compress";
 import { cors } from "hono/cors";
@@ -95,6 +96,16 @@ app.use(
 );
 
 app.get("/health", (c) => c.json({ status: "ok" }));
+// Internal auth-SLI scrape (Phase 1 observability, doc 03 §10). OFF BY DEFAULT: 404 unless METRICS_TOKEN is set
+// AND the request carries `Authorization: Bearer <token>` — a scraper has no user JWT, so the shared secret IS
+// the gate. A wrong/absent token also 404s: the endpoint is invisible to anyone without the secret (don't
+// advertise it). Renders THIS process's in-process auth counters (apps/api: revocation-check SLIs) as Prometheus
+// text. Registered OUTSIDE /api/* so no user authn / rate-limit applies; intended to sit behind an internal network.
+app.get("/metrics", (c) => {
+  const token = env.METRICS_TOKEN;
+  if (!token || c.req.header("authorization") !== `Bearer ${token}`) return c.notFound();
+  return c.text(renderAuthMetrics(), 200, { "content-type": "text/plain; version=0.0.4" });
+});
 // Coarse per-caller throttle on the resource surface (IP-keyed here; per-subject once authn has set claims).
 app.use("/api/*", rateLimit);
 app.route("/api/v1/auth", authRoutes);

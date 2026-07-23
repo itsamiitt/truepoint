@@ -41,6 +41,12 @@ export const platformAuditAction = z.enum([
   "mfa.failure",
   "password.reset.request",
   "password.reset.complete",
+  // AUTH-024 — passkey credential added / removed (tenant-less sink for multi-/no-tenant users).
+  "passkey.register",
+  "passkey.remove",
+  // AUTH — self-service session revoke whose current session carries no tenant (tenant-less branch of the
+  // session.revoked dual-sink; the tenant branch lands on audit_log).
+  "session.revoked",
 ]);
 
 export type PlatformAuditAction = z.infer<typeof platformAuditAction>;

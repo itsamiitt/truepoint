@@ -1,4 +1,4 @@
--- 0074_forge_quarantine.sql — persist the parse quarantine lane (P-01.8). Selection/shape/parse drift was routed
+-- 0077_forge_quarantine.sql — persist the parse quarantine lane (P-01.8). Selection/shape/parse drift was routed
 -- to a console.warn and LOST — a drifted or unparseable capture left no auditable record, no signal to alert on,
 -- and no way to replay. One row per (raw_capture_id, route), idempotent (a re-quarantine refreshes the reason).
 -- HAND-AUTHORED (drizzle-kit generate is forbidden); leadwolf_forge is granted via the post-migration ALL-TABLES

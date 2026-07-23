@@ -1,4 +1,4 @@
--- 0072_forge_extraction_candidates.sql — the AI-extract stage (S2) output store (P-01.2). runExtraction produced
+-- 0075_forge_extraction_candidates.sql — the AI-extract stage (S2) output store (P-01.2). runExtraction produced
 -- per-field candidates {path, value, confidence, band, grounded} but the worker DISCARDED the return value, so the
 -- pipeline paid for extraction and persisted NOTHING for promotion to promote. One row per (raw_capture_id, path),
 -- idempotent so a re-extraction converges. Same PII posture as parsed_records.fields (non-channel profile fields

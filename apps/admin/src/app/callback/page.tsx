@@ -6,6 +6,7 @@
 "use client";
 
 import { RECOVERY_KEY, completeLogin, recoveryActionFor, startLogin } from "@/lib/authClient";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 function messageFor(reason: string): string {
@@ -21,6 +22,7 @@ function messageFor(reason: string): string {
 export default function CallbackPage() {
   const [error, setError] = useState<string | null>(null);
   const ran = useRef(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (ran.current) return;
@@ -37,7 +39,10 @@ export default function CallbackPage() {
     completeLogin(code, state)
       .then(() => {
         sessionStorage.removeItem(RECOVERY_KEY);
-        window.location.replace("/");
+        // Client-side nav (NOT window.location): keeps the just-minted in-memory access token alive across the
+        // hop to the console, so the staff gate passes immediately instead of forcing a fresh silent refresh
+        // (AUTH-078, mirrors apps/web). "/" redirects to /tenants where the gate runs.
+        router.replace("/");
       })
       .catch(async (err: unknown) => {
         const reason = err instanceof Error ? err.message : "unknown";
@@ -58,7 +63,7 @@ export default function CallbackPage() {
         console.warn(`[admin] sign-in could not complete: ${reason}`);
         setError(messageFor(reason));
       });
-  }, []);
+  }, [router]);
 
   return (
     <div className="tp-center-screen">

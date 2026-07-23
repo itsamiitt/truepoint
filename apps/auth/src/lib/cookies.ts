@@ -5,20 +5,83 @@ import { cookies } from "next/headers";
 
 export const REFRESH_COOKIE = "lw_refresh";
 
-export function refreshCookie(token: string, maxAgeSeconds: number): string {
-  return [
-    `${REFRESH_COOKIE}=${token}`,
+// AUTH-074 — the `__Host-` refresh cookie. The prefix is browser-ENFORCED host-only scope: Secure + Path=/ +
+// NO Domain. Our cookie is already host-only (Domain === the auth host), so this hardens the guarantee at the
+// browser rather than trusting the AUTH_COOKIE_DOMAIN config. Migration is staged READERS-FIRST: this window
+// ships the dual-READ (accept both names, host-preferred) so every instance can read the new cookie BEFORE any
+// instance writes it; a later window flips the WRITE to this name (and clears both). Deploying reader+writer
+// together would leave a window where a new-writer node sets a cookie an old-reader node can't read.
+export const REFRESH_COOKIE_HOST = "__Host-lw_refresh";
+
+/** Dual-read the refresh token from a Next `cookies()` jar — prefer the __Host- cookie, fall back to the legacy
+ *  name during the migration window. */
+export function readRefreshToken(jar: {
+  get(name: string): { value: string } | undefined;
+}): string | undefined {
+  return jar.get(REFRESH_COOKIE_HOST)?.value ?? jar.get(REFRESH_COOKIE)?.value;
+}
+
+/** Dual-read the refresh token from a raw `Cookie` request header (route handlers) — same host-preferred
+ *  fallback. Returns the value, or null if neither cookie is present. */
+export function readRefreshTokenFromHeader(cookieHeader: string | null): string | null {
+  if (!cookieHeader) return null;
+  let legacy: string | null = null;
+  for (const part of cookieHeader.split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === REFRESH_COOKIE_HOST) return v.join("="); // host cookie wins if both are somehow present
+    if (k === REFRESH_COOKIE) legacy = v.join("=");
+  }
+  return legacy;
+}
+
+/** Whether writers currently emit the `__Host-` cookie (AUTH-074 stage 2; env-gated, default off). */
+export const refreshCookieWritesHost = (): boolean => env.REFRESH_COOKIE_HOST_WRITE === "true";
+
+/** The refresh-cookie NAME writers should use now (host cookie when the write flip is armed, else legacy). */
+export const refreshCookieName = (): string =>
+  refreshCookieWritesHost() ? REFRESH_COOKIE_HOST : REFRESH_COOKIE;
+
+/** PURE Set-Cookie builder — `__Host-` forbids Domain (browser-enforced host-only); the legacy cookie keeps its
+ *  host-scoped Domain. Extracted so the name/attribute wiring is unit-testable without env. */
+export function buildRefreshSetCookie(
+  useHost: boolean,
+  token: string,
+  maxAgeSeconds: number,
+  domain: string,
+): string {
+  const parts = [
+    `${useHost ? REFRESH_COOKIE_HOST : REFRESH_COOKIE}=${token}`,
     "HttpOnly",
     "Secure",
     "SameSite=Strict",
     "Path=/",
-    `Domain=${env.AUTH_COOKIE_DOMAIN}`,
-    `Max-Age=${maxAgeSeconds}`,
-  ].join("; ");
+  ];
+  if (!useHost) parts.push(`Domain=${domain}`);
+  parts.push(`Max-Age=${maxAgeSeconds}`);
+  return parts.join("; ");
 }
 
-export function clearRefreshCookie(): string {
-  return `${REFRESH_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Domain=${env.AUTH_COOKIE_DOMAIN}; Max-Age=0`;
+/** PURE clear builder — clears BOTH names so logout ends a session set under either, whichever the write flip
+ *  was on for. Clearing an absent cookie is a harmless browser no-op. */
+export function buildClearRefreshCookies(domain: string): string[] {
+  return [
+    `${REFRESH_COOKIE_HOST}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`,
+    `${REFRESH_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Domain=${domain}; Max-Age=0`,
+  ];
+}
+
+export function refreshCookie(token: string, maxAgeSeconds: number): string {
+  return buildRefreshSetCookie(
+    refreshCookieWritesHost(),
+    token,
+    maxAgeSeconds,
+    env.AUTH_COOKIE_DOMAIN,
+  );
+}
+
+/** Clear the refresh cookie(s) — returns BOTH Set-Cookie directives; the caller appends each to its response. */
+export function clearRefreshCookie(): string[] {
+  return buildClearRefreshCookies(env.AUTH_COOKIE_DOMAIN);
 }
 
 // The short-lived login-transaction cookie (auth-origin, HttpOnly, SameSite=Strict) that threads the

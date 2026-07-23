@@ -112,6 +112,29 @@ export async function checkRevealRate(key: string): Promise<void> {
   await consume(revealLimiter(), key);
 }
 
+// ── Email-OTP send throttle (AUTH-025) ─────────────────────────────────────────────────────────────────
+// Cap how often a user can request an emailed MFA code so the factor can't be abused to spam a mailbox or burn
+// send quota. A dedicated keyspace (does not touch the failed-attempt lockout, which counts WRONG codes — this
+// counts SENDS). 3 codes per 15-minute window per user. Throws RateLimitedError on exhaustion; fails OPEN on a
+// Redis outage (a cache blip must not block a legitimate code).
+const OTP_SEND_POINTS = 3;
+const OTP_SEND_WINDOW = 900;
+let _otpSendLimiter: RateLimiterRedis | undefined;
+const otpSendLimiter = (): RateLimiterRedis =>
+  // biome-ignore lint/suspicious/noAssignInExpressions: lazy-singleton memoization (defer the socket).
+  (_otpSendLimiter ??= new RateLimiterRedis({
+    storeClient: redis(),
+    keyPrefix: "rl:otp:send",
+    points: OTP_SEND_POINTS,
+    duration: OTP_SEND_WINDOW,
+  }));
+
+/** Throttle email-OTP code SENDS per user (anti-mailbomb / send-quota guard). Throws RateLimitedError when the
+ *  user has requested too many codes recently; fails OPEN on a Redis outage. Consume BEFORE minting/sending. */
+export async function checkEmailOtpSendRate(userId: string): Promise<void> {
+  await consume(otpSendLimiter(), userId);
+}
+
 // ── Credential-step brute-force lockout (W7) ───────────────────────────────────────────────────────────
 // The identifier step (checkIdentifierRate) throttles the EXISTENCE probe; this guards the actual SECRET check
 // (password / MFA / reset code). We consume one point PER FAILED attempt — keyed by identifier AND by IP — and

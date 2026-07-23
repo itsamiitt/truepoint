@@ -42,11 +42,25 @@ export const appEnvSchema = z
       .optional(),
     AUTH_COOKIE_DOMAIN: z.string().min(1),
 
+    // AUTH-074 stage 2 — flip refresh-cookie WRITES to the browser-enforced `__Host-` prefix (Secure + Path=/ +
+    // NO Domain). Default OFF (writes the legacy `lw_refresh` with its host-scoped Domain — today's behaviour).
+    // Gated as a SEPARATE deploy step from the dual-READ (which must be live everywhere first) so no rolling-
+    // deploy window exists where an old-reader node can't read a new-writer node's `__Host-` cookie. Flip to
+    // "true" AFTER the read stage has fully rolled out; readers already accept both names. Only "true" arms it.
+    REFRESH_COOKIE_HOST_WRITE: z.string().optional(),
+
     // Client-IP binding posture for the cross-domain code (ADR-0016 addendum): `strict` = exact match on
     // the normalized IP, `prefix` = same network (/24 IPv4, /64 IPv6) so a proxy first-hop that varies
     // within a network doesn't break a legitimate login, `off` = don't bind (rely on PKCE + single-use +
     // short TTL). Default `prefix` — robust to dual-stack first-hop drift without dropping the protection.
     AUTH_BIND_IP: z.enum(["strict", "prefix", "off"]).default("prefix"),
+
+    // Number of TRUSTED reverse-proxy hops in front of the app, each of which APPENDS to X-Forwarded-For
+    // (AUTH-077). The trusted client IP is the Nth-from-last XFF entry (a client can forge earlier entries but
+    // never the last N the trusted hops added). Default 1 = the single Caddy edge (today's exact behaviour);
+    // set to 2 when a trusted CDN (e.g. Cloudflare) also sits in front. Under-counting is the safe direction
+    // (you trust FEWER hops); over-counting would read a client-forgeable entry, so keep it exact to the topology.
+    TRUSTED_PROXY_HOPS: z.coerce.number().int().positive().default(1),
 
     // The browser-facing public origins are ALSO inlined into the web/auth bundles at BUILD time
     // (NEXT_PUBLIC_*). Optional here (absent during a bare `next build` or in unit tests), but when present
@@ -73,6 +87,15 @@ export const appEnvSchema = z
     // deploy.sh ships these base64 forms; loadEnv decodes them into the PEM fields. Raw PEM still wins if set.
     JWT_PRIVATE_KEY_PEM_B64: z.string().default(""),
     JWT_PUBLIC_KEY_PEM_B64: z.string().default(""),
+    // NEXT signing key for OVERLAPPING-kid rotation (AUTH-013). When BOTH are set, the JWKS publishes this key
+    // ALONGSIDE the active one so verifiers accept a token signed by EITHER — the zero-downtime rotation window.
+    // Public key only: the minter always signs with the ACTIVE key (JWT_SIGNING_KID). During a rotation this slot
+    // holds the INCOMING key (before the active-key cutover) and then the OUTGOING key (after, until its tokens
+    // expire) — see the jwks-key-rotation runbook. Unset ⇒ single-key JWKS (today's exact behaviour). Same
+    // raw-or-base64 transport as the active key (a multi-line PEM survives docker compose interpolation as B64).
+    JWT_NEXT_SIGNING_KID: z.string().default(""),
+    JWT_NEXT_PUBLIC_KEY_PEM: z.string().default(""),
+    JWT_NEXT_PUBLIC_KEY_PEM_B64: z.string().default(""),
 
     DATABASE_URL: z.string().url(),
     // Optional DIRECT (non-pooled) URL used ONLY for migrations. On Neon the default connection string is
@@ -193,6 +216,50 @@ export const appEnvSchema = z
     // guarantee). String, not z.coerce.boolean(), so ONLY "true" enables it — "false"/"0"/"" can never be
     // coerced truthy.
     AUTH_POLICY_ENFORCEMENT_ENABLED: z.string().optional(),
+
+    // AUTH-065: restrict an extension-scoped access token (scope:["extension"]) to the prospecting/ingestion
+    // route allow-list in apps/api (extensionScope.ts), deny-by-default. LOCKOUT-CAPABLE (a wrong allow-list
+    // would 403 the live Chrome extension), so it ships OBSERVE-first: with this UNSET the guard only LOGS an
+    // out-of-scope call (validate the allow-list against real traffic), and only "true" flips it to enforce
+    // (403 insufficient_scope). String, not z.coerce.boolean(), so ONLY "true" arms it. Web/admin tokens carry
+    // scope:[] and are never affected either way.
+    EXTENSION_SCOPE_ENFORCE: z.string().optional(),
+
+    // SHADOW-mode validation of the effective-policy engine (Phase 1, the safe first step of the finalize-login
+    // switch). When "true", finalizeLogin ALSO resolves the new engine's policy and emits an
+    // auth_policy_shadow_total{match|mismatch|error} SLI comparing it to the live tenant_auth_policies the login
+    // gates enforce today — but ENFORCES NOTHING (the comparison is detached + try/caught, so it can neither slow
+    // nor break a login). Lets on-call confirm the engine resolves identically on REAL traffic before any
+    // cutover. Default OFF — unset ⇒ no shadow read, today's exact behaviour. Only the literal "true" arms it.
+    AUTH_POLICY_SHADOW_ENABLED: z.string().optional(),
+
+    // OBSERVE-FIRST breached-password screening at LOGIN (credential-stuffing defence). When "true",
+    // authenticatePassword screens the just-verified password against HaveIBeenPwned (detached + fail-open, so it
+    // never slows or breaks a login) and records an auth_password_breach_check_total{breached|clean} SLI — so
+    // on-call can size the breached-password problem BEFORE any forced-reset enforcement. Adds one HIBP range
+    // call per successful password login when on; default OFF (registration/reset already screen at set-time).
+    // Only the literal "true" arms it.
+    BREACHED_PASSWORD_CHECK_AT_LOGIN: z.string().optional(),
+
+    // WebAuthn / passkeys (AUTH-024). OFF BY DEFAULT — the ceremony routes 404 unless WEBAUTHN_ENABLED="true".
+    // WEBAUTHN_RP_ID is the Relying Party ID: the REGISTRABLE DOMAIN (e.g. "truepoint.in"), NOT a full origin —
+    // so a passkey registered on auth.* works across app.*/api.* in the subdomain estate. Ceremonies verify the
+    // response's origin against the APP_ORIGINS allow-list and its rpIdHash against this. Flagged NEEDS
+    // SPECIALIST REVIEW BEFORE ENABLE (the security-critical generate/verify lives in @leadwolf/auth).
+    WEBAUTHN_ENABLED: z.string().optional(),
+    WEBAUTHN_RP_ID: z.string().default(""),
+
+    // Trusted-device "remember this device for 30 days" MFA skip (device.trusted). OFF BY DEFAULT — the /mfa
+    // checkbox is HIDDEN and no MFA is skipped until the trusted-device backend (token store + skip check +
+    // revocation) is built and reviewed. It is an MFA-BYPASS surface, so it stays dark until then rather than
+    // present a checkbox that silently does nothing. Only an explicit "true" shows the option.
+    TRUSTED_DEVICES_ENABLED: z.string().optional(),
+
+    // Internal metrics scrape (Phase 1 observability, doc 03 §10). The shared-secret Bearer token that gates
+    // GET /metrics (the auth SLI counters: login/token/revocation/policy-block). OFF BY DEFAULT — unset ⇒ the
+    // endpoint 404s (invisible), so no operational data is exposed until an operator BOTH sets this AND puts the
+    // endpoint behind an internal-only network. A SECRET: read only here, never NEXT_PUBLIC_/client-exposed/logged.
+    METRICS_TOKEN: z.string().min(16).optional(),
 
     TYPESENSE_URL: z.string().url().optional(),
     TYPESENSE_API_KEY: z.string().optional(),
@@ -596,6 +663,18 @@ export const appEnvSchema = z
       .transform((v) => v === "true"),
   })
   .superRefine((val, ctx) => {
+    // WebAuthn/passkeys (AUTH-024): once armed, the Relying Party ID is required — enabling the ceremony without
+    // WEBAUTHN_RP_ID would fail cryptically at registration/assertion time. Fail fast at boot instead. Checked in
+    // every environment (unlike the production-only checks below), since passkeys can be enabled in dev too.
+    if (val.WEBAUTHN_ENABLED === "true" && val.WEBAUTHN_RP_ID.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["WEBAUTHN_RP_ID"],
+        message:
+          "WEBAUTHN_RP_ID (the registrable domain, e.g. truepoint.in) is required when WEBAUTHN_ENABLED is true",
+      });
+    }
+
     // In production the refresh cookie is scoped to AUTH_COOKIE_DOMAIN; it MUST equal the auth origin's host.
     // A bare registrable-domain value (e.g. truepoint.in) would make it a parent-domain cookie sent to
     // app.*/api.* too — the larger blast radius ADR-0016 rejects. The base schema only checks min(1).
@@ -724,6 +803,10 @@ export function resolveAppEnv(
     JWT_PUBLIC_KEY_PEM: decodeKeyMaterial(
       parsed.data.JWT_PUBLIC_KEY_PEM,
       parsed.data.JWT_PUBLIC_KEY_PEM_B64,
+    ),
+    JWT_NEXT_PUBLIC_KEY_PEM: decodeKeyMaterial(
+      parsed.data.JWT_NEXT_PUBLIC_KEY_PEM,
+      parsed.data.JWT_NEXT_PUBLIC_KEY_PEM_B64,
     ),
   };
   const frozen = Object.freeze(resolved);

@@ -4,43 +4,47 @@ Exact specifications for every repeating surface in TruePoint CRM.
 These are fixed contracts — not suggestions. Deviating from them creates
 inconsistency that multiplies as the product grows.
 
+> **Contents:** Page Shell · Sidebar · Topbar · Contact/Prospect Drawer ·
+> Filter Bar/Smart Search · List Row · ScorePill · Responsive Breakpoints ·
+> Stat Grid · Forms · Toasts · Page Content Padding
+
 ---
 
 ## Page Shell
 
+The shell is the shared `AppShell` (`apps/web/src/components/shell/`) — reuse it,
+never re-implement it.
+
 ```
-Desktop / Tablet (≥ 640px)
+Desktop / Tablet (≥ 769px)
 ┌──────────────────────────────────────────────────┐
-│ <div style={{ display:'flex', height:'100vh' }}  │
-│   <Sidebar />  (width: RAIL_W = 68px, flex-shrink:0) │
-│   <div style={{ flex:1, display:'flex',          │
-│                 flexDirection:'column',           │
-│                 overflow:'hidden' }}>             │
-│     <Topbar />                                   │
-│     <main style={{ flex:1, overflowY:'auto',     │
+│ .tp-shell — display:grid,                        │
+│   grid-template-columns: var(--tp-rail-w) 1fr    │
+│   <Sidebar />   (in-flow rail column — expands   │
+│                  via :has(hover/focus) or pin)   │
+│   <div>                                          │
+│     <TopBar />                                   │
+│     <main style={{ overflowY:'auto',             │
 │                    background:'var(--tp-surface-2)' }}>
 │       <CurrentView />                            │
 │     </main>                                      │
 │   </div>                                         │
 │ </div>                                           │
 
-Mobile (< 640px)
+Mobile (≤ 768px)
 ┌──────────────────────────────────────────────────┐
-│ <div style={{ display:'flex', flexDirection:     │
-│               'column', height:'100vh' }}>        │
-│   <Topbar />                                     │
-│   <main style={{ flex:1, overflowY:'auto' }}>    │
-│     <CurrentView />                              │
-│   </main>                                        │
-│   <BottomNav />                                  │
-│ </div>                                           │
+│ Same shell; the sidebar becomes a fixed          │
+│ off-canvas overlay (translateX) behind a scrim,  │
+│ opened by the TopBar hamburger. There is no      │
+│ separate mobile nav component.                   │
 ```
 
 **Adding a new view (Next.js App Router):**
-1. Add a route under the authed route group: `app/(authed)/myview/page.tsx`
+1. Add a route under the authed route group: `app/(shell)/myview/page.tsx`
+   (both apps use `(shell)` as the authed group)
 2. Add its nav entry to the sidebar nav config so it appears in the shell
 3. Build the page/feature as a feature module (see **truepoint-architecture**)
-4. Do not create a new shell — the authed layout provides Sidebar/Topbar/BottomNav;
+4. Do not create a new shell — the `(shell)` layout provides Sidebar/TopBar;
    the route inherits them for free
 
 > Earlier prototype steps said "add to `NAV_ITEMS`" and "add a `case` to the view
@@ -53,29 +57,32 @@ Mobile (< 640px)
 
 ## Sidebar
 
-Fixed — do not modify. Reuse the shared `@leadwolf/ui` component; do not redefine.
+Fixed — do not modify. Reuse the shared app-shell `Sidebar` (`apps/web/src/components/shell/`); do not redefine.
 
-- Rail width: `68px` (constant `RAIL_W`)
-- Expanded width: `244px` (constant `DRAWER_W`)
-- Trigger: `onMouseEnter` → open, `onMouseLeave` → close
-- `<aside>` is `position: absolute` — overlays content when expanded
-- `<div>` spacer (`width: RAIL_W`) holds the flex layout gap
-- Active item: `background: var(--tp-cobalt-50)`, `color: var(--tp-cobalt-700)`, `fontWeight: 600`
-- Labels/badges: `opacity` transition `160ms`, `60ms` delay on open, `0ms` on close
-- Shadow: `var(--tp-shadow-drawer)` when open, `none` when closed
-- `z-index: 20` (below sticky/drawer scale)
-- Mobile: hide entirely, show `<BottomNav>` instead
+- The rail is an **in-flow grid column** of `.tp-shell` (`grid-template-columns:
+  var(--tp-rail-w) 1fr`) — not an absolutely-positioned overlay
+- Rail width: `60px` (token `--tp-rail-w`); expanded: `232px` (token `--tp-rail-expanded`)
+- Expansion: CSS `:has(.tp-sidebar:hover)` / `:focus-within` — a **push**, not an
+  overlay — plus a pin (`useSidebarPin` + the TopBar toggle); no JS mouse handlers
+- Active item: `background: var(--tp-surface-3)`, `color: var(--tp-ink)`, with the
+  glyph in `var(--tp-cobalt)` — a subtle surface fill only, no cobalt tint/bar
+- Labels/badges: `opacity` transition `var(--tp-duration-fast)` (120ms), no delay;
+  the column width rides `var(--tp-duration)` (180ms)
+- Mobile (≤768px): the sidebar becomes a fixed off-canvas overlay behind a scrim
+  (`box-shadow: var(--tp-shadow-rail)`), toggled by the TopBar hamburger
 
 ---
 
 ## Topbar
 
-Fixed — do not modify. Reuse the shared `@leadwolf/ui` component; do not redefine.
+Fixed — do not modify. Reuse the shared app-shell `TopBar` (`apps/web/src/components/shell/`); do not redefine.
 
 - Height: `56px`, sticky, `background: var(--tp-surface)`
-- Bottom: `1px solid var(--tp-hairline)`
-- Left: page title (`15px, 600`) + optional subtitle (`12px, ink-4`)
-- Right: search input (hidden at tablet) | period `SegmentedControl` | `TpIconButton` (bell) | primary CTA
+- Bottom: `1px solid var(--tp-hairline-2)`
+- Left: sidebar pin toggle / mobile hamburger, then page title (`16px, 600`) +
+  optional subtitle (`12px, ink-4`)
+- Right: `GlobalSearch` | `DensityToggle` | keyboard-shortcuts `TpIconButton` |
+  `NotificationsBell` | `CreditPill`
 - `z-index: var(--tp-z-sticky)` = `30`
 
 ---
@@ -167,11 +174,11 @@ Avatar (28–32px) | Name (600) + subtitle (ink-3, 11–12px)
 - Row height: `44px` via `--tp-row-h`
 - Hover actions: positioned right side, `opacity: 0 → 1` on row hover
   ```jsx
-  // Inside DataTable column render
-  render: (row) => (
+  // Inside a DataTable column's cell (icons: lucide-react via the DS Icon wrapper)
+  cell: (row) => (
     <div style={{ display:'flex', gap:4, opacity: isHovered ? 1 : 0, transition:'opacity 120ms' }}>
-      <TpIconButton onClick={...}><IPhone size={15}/></TpIconButton>
-      <TpIconButton onClick={...}><IMail size={15}/></TpIconButton>
+      <TpIconButton label="Call" onClick={...}><Icon icon={Phone} size={15}/></TpIconButton>
+      <TpIconButton label="Email" onClick={...}><Icon icon={Mail} size={15}/></TpIconButton>
     </div>
   )
   ```
@@ -179,9 +186,12 @@ Avatar (28–32px) | Name (600) + subtitle (ink-3, 11–12px)
 
 ---
 
-## ScorePill (Custom Atom)
+## ScorePill (Recipe)
 
-Source of truth in `@leadwolf/ui`. Import it, never redefine.
+ScorePill is a *recipe*, not a component: today it is inlined in the lists
+Data-Health cell (`apps/web/src/features/lists/components/ListDetailPage.tsx`).
+Follow the recipe below verbatim; extract it to a shared component on second use
+rather than redefining variants:
 
 ```jsx
 function ScorePill({ score }) {
@@ -204,29 +214,16 @@ Always: dot + number, tabular-nums, `fontWeight: 600`, `fontSize: 13`.
 
 ## Responsive Breakpoints
 
-```js
-function useBreakpoint() {
-  const [bp, setBp] = React.useState({
-    mobile: window.innerWidth < 640,
-    tablet: window.innerWidth < 1024
-  });
-  React.useEffect(() => {
-    const h = () => setBp({
-      mobile: window.innerWidth < 640,
-      tablet: window.innerWidth < 1024
-    });
-    window.addEventListener('resize', h);
-    return () => window.removeEventListener('resize', h);
-  }, []);
-  return bp;
-}
-```
+Responsive behaviour is driven by **CSS media queries** in the app's `globals.css`, not a
+shared JS hook — there is no `useBreakpoint` in the codebase. If a client component genuinely
+needs the current breakpoint in JS, read it with `window.matchMedia(...)` inside an effect.
+The app's real breakpoints (from `apps/web/src/app/globals.css`):
 
 | Breakpoint | Layout changes |
 |---|---|
-| Desktop ≥ 1024px | Full sidebar rail + topbar search visible |
-| Tablet 640–1023px | Rail sidebar + topbar search hidden + 2-col stat grid |
-| Mobile < 640px | No sidebar + BottomNav + 2-col stat grid + fewer table columns |
+| Desktop ≥ 769px | Full sidebar rail + topbar search visible |
+| Mobile ≤ 768px | Sidebar off-canvas (hamburger) + topbar search hidden + 2-col stat grid |
+| Small ≤ 480px | Fewer table columns + tightest spacing |
 
 Mobile DataTable columns: hide `loc` and `email`. Show only: Prospect, Company, Fit, Value.
 
@@ -246,7 +243,7 @@ Mobile DataTable columns: hide `loc` and `email`. Show only: Prospect, Company, 
       label={s.label}
       value={s.value}
       sublabel={s.detail}
-      trend={{ value: s.delta, up: s.up }}
+      trend={<StatusBadge tone={s.up ? 'success' : 'danger'}>{s.delta}</StatusBadge>}
     />
   ))}
 </div>
@@ -291,7 +288,7 @@ const { toast } = useToast();
 toast({ title: 'Contact saved', description: 'Changes applied.' });
 
 // Error
-toast({ title: 'Save failed', description: error.message, variant: 'destructive' });
+toast({ title: 'Save failed', description: error.message, tone: 'error' });
 ```
 
 Never use `alert()` or custom inline error states for transient feedback.

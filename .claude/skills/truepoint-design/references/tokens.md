@@ -1,5 +1,9 @@
 # Token Reference
 
+> **Contents:** Text · Surfaces · Borders · Brand (Cobalt) · Status · Buttons ·
+> Spacing · Table/Row · Radii · Shadows · Z-Index · Typography · Animation ·
+> Permitted Raw Values · Icon Sizing
+
 Every colour, spacing, radius, shadow, z-index, font, and timing value must be
 expressed as a `var(--tp-*)` token. Never hardcode hex values or raw px numbers
 outside the specific exceptions noted below.
@@ -70,9 +74,10 @@ manual review rule, not an automated check.
 | `--success` | `#16a34a` | Positive state, qualified, won |
 | `--warning` | `#d97706` | Caution state, proposal, negotiation |
 | `--danger` | `#dc2626` | Negative state, lost, destructive |
-| `--accent` | `#4f46e5` | Indigo accent (rare — prefer cobalt) |
+| `--danger-700` | `#b91c1c` | Destructive-button hover, error text on light |
 
-ScorePill thresholds (from `@leadwolf/ui`):
+ScorePill thresholds (the ScorePill *recipe* — inlined in the lists Data-Health
+cell; see patterns.md):
 ```js
 score >= 80 → var(--success)
 score >= 50 → var(--warning)
@@ -154,7 +159,7 @@ For topbar and sidebar padding, use `var(--tp-space-6)` (24px) horizontally.
 | `--tp-z-toast` | `80` | Toast notifications |
 | `--tp-z-command` | `90` | Command palette (reserved) |
 
-Never invent z-index values. Use this scale. Sidebar uses `z-index: 20` (below sticky).
+Never invent z-index values. Use this scale. The expanded sidebar overlay uses `--tp-z-drawer` (40).
 
 ---
 
@@ -164,13 +169,14 @@ Never invent z-index values. Use this scale. Sidebar uses `z-index: 20` (below s
 |---|---|---|
 | `--font-sans` | Geist → system fallback | All UI text |
 | `--font-mono` | Geist Mono → system fallback | Code, IDs, tabular data |
-| `--font-weight-normal` | `400` | Body text |
-| `--font-weight-medium` | `500` | Labels, secondary headings |
-| `--font-weight-semibold` | `600` | Names, values, active nav |
-| `--font-weight-extrabold` | `800` | Large stat values |
+
+Font **weights** are raw values, not tokens (there are no `--font-weight-*` custom
+properties): `400` body, `500` labels/secondary headings, `600` names, values and active
+nav, `700` for the large score number (`.tp-score-big`). Hierarchy comes from weight + size,
+never colour.
 
 Font sizes (design-system scale):
-- Page title: `15px, 600`
+- Page title: `16px, 600`
 - Topbar subtitle: `12px, ink-4`
 - Nav label: `14px, 500 (inactive) / 600 (active)`
 - Table cell: `var(--tp-table-font)` = `13px`
@@ -193,8 +199,8 @@ when values update.
 | `--tp-ease` | `cubic-bezier(0.4,0,0.2,1)` | Standard easing |
 | `--tp-ease-out` | `cubic-bezier(0,0,0.2,1)` | Decelerate (drawers entering) |
 
-Sidebar uses `200ms cubic-bezier(0.4,0,0.2,1)` for width transition.
-Label/badge opacity uses `160ms` with `60ms` delay on open.
+The sidebar column width rides `var(--tp-duration)` (180ms); label/badge opacity
+uses `var(--tp-duration-fast)` (120ms), no delay.
 
 ---
 
@@ -220,13 +226,14 @@ element the icon sits in, so iconography stays consistent across the app.
 |---|---|
 | Inside a small/compact control, row action | 14–15px |
 | Standard nav item, button icon, inline with body text | 16–18px |
-| Logo mark in sidebar, bottom-nav item | 17–20px |
+| Logo mark in sidebar, mobile-drawer nav item | 17–20px |
 | Section header or emphasis icon | 20px |
 
-Match the icon size to siblings. The Sidebar nav uses 18px; the BottomNav uses
-20px; row hover actions use 14–15px; the logo mark uses 17px. When adding an
+Match the icon size to siblings. The Sidebar nav uses 18px; the mobile drawer nav
+uses 20px; row hover actions use 14–15px; the logo mark uses 17px. When adding an
 icon next to existing ones, match their size rather than introducing a new value.
 
-Icon stroke width is `1.75` by default (the `Svg` helper default), `2.4` only
-for the logo mark. Do not vary stroke width per icon — it makes the set look
+Icon stroke width is `1.75` by default (the DS `Icon` wrapper's default — icons are
+lucide-react glyphs passed to `Icon`); the logo mark has its own stroke spec
+(`Logo.tsx`). Do not vary stroke width per icon — it makes the set look
 inconsistent.

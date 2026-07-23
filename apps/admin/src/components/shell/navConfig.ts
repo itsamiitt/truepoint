@@ -10,6 +10,7 @@ import {
   FileUp,
   Flag,
   Gauge,
+  KeyRound,
   Layers,
   Megaphone,
   Plug,
@@ -44,6 +45,7 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Content", href: "/content", match: "/content", icon: Megaphone },
   { label: "Retention", href: "/retention", match: "/retention", icon: Timer },
   { label: "Staff", href: "/staff", match: "/staff", icon: ShieldCheck },
+  { label: "Auth policy", href: "/auth-policy", match: "/auth-policy", icon: KeyRound },
   { label: "Compliance", href: "/compliance", match: "/compliance", icon: ShieldAlert },
   { label: "Audit log", href: "/audit-log", match: "/audit-log", icon: ScrollText },
   // Data-management control panel (database-management-research Phase 1) — the cross-tenant data-ops overview.

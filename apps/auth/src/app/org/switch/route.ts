@@ -58,7 +58,8 @@ export async function POST(req: Request): Promise<Response> {
     const headers = new Headers(cors);
     // Only an invalid/expired session clears the cookie (reuse-rejection); a 403 (no access to the target org)
     // leaves the still-valid session intact so the user keeps their current org.
-    if (err instanceof InvalidTokenError) headers.append("Set-Cookie", clearRefreshCookie());
+    if (err instanceof InvalidTokenError)
+      for (const c of clearRefreshCookie()) headers.append("Set-Cookie", c);
     const status = err instanceof AppError ? err.status : 401;
     const code = err instanceof AppError ? err.code : "invalid_token";
     return Response.json({ code }, { status, headers });

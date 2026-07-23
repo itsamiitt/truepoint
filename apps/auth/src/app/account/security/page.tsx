@@ -3,10 +3,13 @@
 // here (#password / #mfa / #sessions / #history). GATED by requireUser — a guest is redirected to /login and
 // no account data is rendered. Every read is scoped to the authenticated userId (data.ts), never a request
 // value (09 access / mass-assignment AC). SSR + WCAG 2.2 AA; no inline scripts (strict nonce-CSP preserved).
+import { AUTH_BASE_PATH } from "@/lib/authUrl";
 import { requireUser } from "@/lib/requireUser";
 import { AccountShell } from "@/shared/AccountShell";
+import { env } from "@leadwolf/config";
 import { HistorySection } from "./HistorySection";
 import { MfaSection } from "./MfaSection";
+import { PasskeySection } from "./PasskeySection";
 import { PasswordSection } from "./PasswordSection";
 import { SessionsSection } from "./SessionsSection";
 import { loadAccountSecurity } from "./data";
@@ -33,18 +36,16 @@ export default async function AccountSecurityPage({
   const data = await loadAccountSecurity(acct.userId, acct.sessionId);
 
   return (
-    <AccountShell
-      title="Account security"
-      subtitle={acct.user.email}
-      sections={SECTIONS}
-    >
+    <AccountShell title="Account security" subtitle={acct.user.email} sections={SECTIONS}>
       <PasswordSection hasPassword={data.hasPassword} status={sp.password} />
       <MfaSection
         methods={data.mfaMethods}
         hasPassword={data.hasPassword}
+        setPasswordHref={`${AUTH_BASE_PATH}/forgot`}
         recoveryCodesRemaining={data.recoveryCodesRemaining}
         status={sp.mfa}
       />
+      {env.WEBAUTHN_ENABLED === "true" ? <PasskeySection /> : null}
       <SessionsSection sessions={data.activeSessions} status={sp.sessions} />
       <HistorySection history={data.loginHistory} />
     </AccountShell>

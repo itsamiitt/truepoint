@@ -171,11 +171,15 @@ write that would stamp a row with another tenant's `tenant_id` (or `workspace_id
 
 A few legitimate operations span tenants (platform-admin analytics, support tooling,
 billing rollups). These are the only paths that run without a single-tenant context,
-and they are restricted to platform-admin roles, implemented via a tiny reviewed set
-of functions using an explicit elevated connection (the privileged `leadwolf_admin`
-role) that bypasses tenant RLS, and **logged as privileged access** (see
-**truepoint-platform** tenancy). Anything else needing cross-tenant access is a design
-error to surface, not bypass.
+and they are restricted to platform-admin roles and implemented via a tiny reviewed
+set of functions in `packages/db/src/client.ts`: the general staff path is
+**`withPlatformTx`** — the DB-owner connection, reached only behind a verified
+platform-admin (`pa`) claim, writing a `platform_audit_log` row in the same
+transaction — while the narrower **`withPrivilegedTx`** (`leadwolf_admin` role) is
+reserved for the DSAR/SCIM-token fan-out (as a general path `leadwolf_admin` would
+fail closed — on Neon it lacks BYPASSRLS). Both are **logged as privileged access**
+(see **truepoint-platform** tenancy). Anything else needing cross-tenant access is a
+design error to surface, not bypass.
 
 ---
 
@@ -192,4 +196,6 @@ error to surface, not bypass.
   indistinguishable 404?
 - Do updates allowlist fields, with `role`/`tenantId`/`workspaceId`/`ownerUserId`
   impossible to self-set (and RLS `WITH CHECK` blocking cross-tenant writes)?
-- Are cross-tenant operations restricted to `leadwolf_admin`, reviewed, and audited?
+- Are cross-tenant operations restricted to the audited `withPlatformTx` path
+  (`withPrivilegedTx`/`leadwolf_admin` only for the DSAR/SCIM fan-out), reviewed,
+  and audited?

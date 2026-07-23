@@ -28,13 +28,13 @@ A "search" feature that queries Postgres directly with `ILIKE`/`OR` filters over
 the big dataset is the failure this architecture exists to prevent (see platform
 scaling-playbook tier 4). **Use an index; never SQL `LIKE`/`OR` scans at scale.**
 
-> **Implementation status:** search runs today on Postgres behind an **in-memory
-> `SearchPort` adapter** (`apps/api/src/features/search/searchPortProvider.ts`; a
-> Typesense container is in the dev compose). The full
-> OpenSearch (global) + Typesense (overlay) + ClickHouse (facets) index is
+> **Implementation status:** search runs today on Postgres behind the `SearchPort`
+> interface — `apps/api/src/features/search/searchPortProvider.ts` wires it to the
+> **index-backed `searchRepository` in `@leadwolf/db`** (this replaced the earlier
+> bounded in-memory candidate set; a Typesense container sits in the dev compose).
+> The full OpenSearch (global) + Typesense (overlay) + ClickHouse (facets) stack is
 > **ADR-0021 future work** behind the *same* `SearchPort` interface — the
-> never-`LIKE`-at-scale mandate stands and the interface is already in place so the
-> swap is non-breaking.
+> never-`LIKE`-at-scale mandate stands and the swap stays non-breaking.
 
 ---
 

@@ -55,6 +55,13 @@ const WRITTEN = new Set<string>([
   "mailbox.connect",
   "sending_domain.add",
   "sending_domain.verify",
+  // AUTH-024 — passkey (WebAuthn) credential added / removed from account security (auditPasskeyChange, the
+  // tenant branch → audit_log; the tenant-less branch → platform_audit_log).
+  "passkey.register",
+  "passkey.remove",
+  // AUTH — self-service session revoke (auditSessionRevoke, tenant branch → audit_log; now fully wired via the
+  // dual-sink, so no longer PENDING).
+  "session.revoked",
   // Import visibility P0 (import-redesign 10 §3, S-V4): the audited per-workspace import-policy change —
   // written in-tx by PUT /settings/import-policy (apps/api settings routes → writeAudit).
   "import.policy_updated",
@@ -119,7 +126,6 @@ const PENDING = new Set<string>([
   "token.revoke",
   "device.trusted",
   "device.revoked",
-  "session.revoked",
   "code.issued",
   "oauth.link",
 ]);

@@ -10,8 +10,9 @@ token in one place and centralizes idempotency, error handling, and refresh.
 - **`Authorization: Bearer <access JWT>`** on every request, from the in-memory token store.
 - **`Idempotency-Key` on writes** — the platform replays a stored success for a repeated key (the reveal money
   path depends on this; a killed-and-retried SW must not double-charge).
-- **RFC-9457 problem-details parsing** → a typed `ErrorClass` (from `@leadwolf/types`), so callers switch on
-  error kind, not string matching.
+- **RFC-9457 problem-details parsing** → a typed `ErrorClass` (defined in `src/shared/types.ts`; the wire
+  request/response schemas are what come from `@leadwolf/types`), so callers switch on error kind, not string
+  matching.
 - **One silent refresh-and-retry on 401** — refresh the access token once and replay the request; a second 401
   is a real failure.
 - **Wire contracts come from `@leadwolf/types`** — request/response schemas are shared with the server; import

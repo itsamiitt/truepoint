@@ -13,34 +13,32 @@ The monorepo root holds all apps and shared packages; this app is `apps/web`.
 ```
 apps/
 └── web/                             # @leadwolf/web — the customer app
-    ├── app/                         # Next.js App Router pages
-    │   ├── (auth)/                  # Route group: auth-gated pages
-    │   │   ├── dashboard/
-    │   │   │   └── page.tsx
-    │   │   └── layout.tsx
-    │   ├── (public)/                # Route group: unauthenticated pages
-    │   │   ├── login/
-    │   │   │   └── page.tsx
-    │   │   └── layout.tsx
-    │   ├── api/                     # Route handlers (server-side only)
-    │   │   └── webhooks/
-    │   └── layout.tsx               # Root layout
-    ├── features/                    # Feature modules (see below)
-    ├── components/                  # Shared UI components (this app only)
-    │   ├── layout/                  # Nav, sidebar, shell
-    │   └── feedback/                # Toasts, modals, empty states
-    ├── hooks/                       # Shared hooks (this app only)
-    ├── lib/                         # App-level setup (query client, providers)
-    └── middleware.ts                # Auth middleware
+    └── src/                         # ALL app source lives under src/  (@/* → ./src/*)
+        ├── app/                     # Next.js App Router pages
+        │   ├── (shell)/             # Route group: authed pages (inherit the app shell)
+        │   │   ├── [feature]/
+        │   │   │   └── page.tsx
+        │   │   └── layout.tsx
+        │   ├── (public)/            # Route group: unauthenticated pages
+        │   ├── auth/                # auth entry / callback routes
+        │   ├── api/                 # (none today — create only if a BFF route is genuinely needed)
+        │   ├── layout.tsx           # Root layout
+        │   ├── providers.tsx        # Client providers (query client, toast)
+        │   └── globals.css
+        ├── features/                # Feature modules (see below)
+        ├── components/              # Shared UI components (this app only; incl. shell/)
+        ├── hooks/                   # Shared hooks (this app only)
+        └── lib/                     # App-level setup (query client, helpers)
+    # (Next.js middleware, if added, is apps/web/src/middleware.ts — none exists today.)
 
 packages/                           # shared @leadwolf/* workspace packages
 ├── ui/                             # @leadwolf/ui — design system (--tp-* tokens)
 ├── types/                          # @leadwolf/types — shared Zod schemas (API contract)
-├── auth/                           # @leadwolf/auth — auth wrapper
+├── auth/                           # @leadwolf/auth — auth primitives (backend-consumed)
 └── core/                           # @leadwolf/core — shared pure helpers
 
 # repo root: turbo.json, biome.json, package.json (workspaces), .env.example,
-# .github/workflows/ (path-filtered per app)
+# .github/workflows/ci.yml
 ```
 
 ---
@@ -88,14 +86,14 @@ import { ContactList } from '@/features/contacts/components/ContactList'
 
 | Code | Location |
 |---|---|
-| A page for a route | `app/(auth)/[feature-name]/page.tsx` |
-| Feature components, hooks, API | `features/[feature-name]/` |
-| A component used by 3+ features | `components/` |
-| A hook used by 3+ features | `hooks/` |
+| A page for a route | `src/app/(shell)/[feature-name]/page.tsx` |
+| Feature components, hooks, API | `src/features/[feature-name]/` |
+| A component used by 3+ features | `src/components/` |
+| A hook used by 3+ features | `src/hooks/` |
 | A pure helper (formatting, parsing) | `packages/core/src/` |
 | A reusable UI primitive (button, input) | `packages/ui/src/` |
-| A server action or route handler | `app/api/` |
-| An auth check / redirect | `middleware.ts` |
+| A server action or route handler (BFF) | `src/app/api/` (none exist today — create only if genuinely needed) |
+| An auth check / redirect (rendering gate) | `src/lib/authClient.ts` + the `AppShell` gate — there is no Next.js middleware (see `auth.md`) |
 | A request/response type (the API contract) | `packages/types/src/` (shared Zod schemas) |
 
 If you are unsure, ask: does this code know about the customer product? If yes,
@@ -174,8 +172,11 @@ is resolved in favour of the design skill's token-driven approach):
 - **App-level layout uses inline `style={{ }}` reading `var(--tp-*)` tokens** — not
   Tailwind utility classes in app JSX, and not raw hex/px values. Every colour,
   space, radius, and shadow is a token.
-- **No CSS modules** unless a third-party library requires it; `<style>` blocks only
-  for the narrow exceptions the design skill lists (`@keyframes`, `@font-face`).
+- **Token-driven CSS modules are accepted** — the shell and larger features use
+  `*.module.css` whose values are `var(--tp-*)` tokens; extend a feature's existing
+  stylesheet rather than converting it to inline styles (and keep raw hex/px out of
+  modules too). `<style>` blocks only for the narrow exceptions the design skill
+  lists (`@keyframes`, `@font-face`).
 - **Responsive** behaviour follows the design skill's breakpoints and patterns.
 
 Full styling rules, tokens, components, and the permitted exceptions live in the

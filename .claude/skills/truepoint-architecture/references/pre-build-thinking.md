@@ -1,5 +1,10 @@
 # Pre-Build Thinking Protocol
 
+> **Contents:** The Reasoning Pass — Source of Truth · Failure Modes · Duplicate
+> Prevention · Audit and Change History · Security · Scalability · Monitoring and
+> Observability · Rollback · Edge Cases · Assumptions · Misuse · Load Behaviour ·
+> Worst Case — then What the Plan Looks Like · Shortcuts Are Bugs
+
 Before writing a single line of code or creating any file, the agent must run
 a full reasoning pass. This is not optional and it is not a formality. The
 purpose is to surface problems, contradictions, missing context, and risky
@@ -116,7 +121,7 @@ questions.
 
 Questions to answer:
 - Can a user access another user's data by guessing or incrementing an ID?
-  (Always filter by `userId` or `orgId` on every query — never trust a client-supplied ID alone)
+  (Always filter by `tenant_id`/`workspace_id` on every query — never trust a client-supplied ID alone)
 - Is every API route protected by the auth middleware?
 - Are we exposing fields the caller should not see? (strip server-only fields before sending)
 - Is there rate limiting on this endpoint? (especially login, search, enrichment, exports)

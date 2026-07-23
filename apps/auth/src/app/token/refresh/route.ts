@@ -2,19 +2,12 @@
 // same-site, credentialed fetches from the app), rotates the session, mints a fresh access JWT, and sets
 // the rotated cookie. On any failure the cookie is cleared and 401 returned (reuse-detection upstream).
 
-import { REFRESH_COOKIE, clearRefreshCookie, refreshCookie } from "@/lib/cookies";
+import { clearRefreshCookie, readRefreshTokenFromHeader, refreshCookie } from "@/lib/cookies";
 import { corsHeaders } from "@/lib/cors";
 import { refreshAccessToken } from "@leadwolf/auth";
 
-function readRefreshCookie(req: Request): string | null {
-  const cookie = req.headers.get("cookie");
-  if (!cookie) return null;
-  for (const part of cookie.split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === REFRESH_COOKIE) return v.join("=");
-  }
-  return null;
-}
+const readRefreshCookie = (req: Request): string | null =>
+  readRefreshTokenFromHeader(req.headers.get("cookie"));
 
 export async function OPTIONS(req: Request): Promise<Response> {
   return new Response(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });
@@ -45,7 +38,7 @@ export async function POST(req: Request): Promise<Response> {
     );
   } catch {
     const headers = new Headers(cors);
-    headers.append("Set-Cookie", clearRefreshCookie());
+    for (const c of clearRefreshCookie()) headers.append("Set-Cookie", c);
     return Response.json({ code: "invalid_token" }, { status: 401, headers });
   }
 }

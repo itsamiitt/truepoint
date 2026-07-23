@@ -30,7 +30,9 @@ not reach past it.
 
 ## Which Skill, When
 
-TruePoint has six skills across orthogonal axes. Most real features touch several.
+TruePoint has nine skills — six platform skills plus three `truepoint-extension-*`
+skills for the browser extension (see the root `CLAUDE.md` routing table). Most real
+features touch several.
 
 - **truepoint-architecture** (this skill) — WHERE frontend code lives and HOW it is
   structured. Feature modules, file size, client state/data flow, query keys, tests,
@@ -44,6 +46,9 @@ TruePoint has six skills across orthogonal axes. Most real features touch severa
 - **truepoint-security** — WHETHER it is safe. Access control, IAM, input validation,
   data protection, secrets, API hardening, compliance.
 - **truepoint-operations** — running it: incidents, runbooks, FinOps.
+- **truepoint-extension-{architecture,linkedin,auth}** — the browser extension
+  (`apps/extension`): the MV3 shell/build, the LinkedIn content script, and
+  extension auth/tokens. Anything under `apps/extension` routes there.
 
 Take "add a prospect to a list":
 - Architecture (this skill): where the feature folder, mutation hook, and query key
@@ -87,8 +92,9 @@ This is fixed, so there is one answer:
   middleware. They are **pure presentation layers**: no business logic, no direct
   database access, no provider secrets. All of that is the backend
   (truepoint-platform; the real service is `apps/api`, `@leadwolf/api`). Next.js route
-  handlers (`app/api/`) do only BFF aggregation,
-  auth-cookie handling, and the few frontend-owned webhooks.
+  handlers (`app/api/`), if ever added, do only BFF aggregation, auth-cookie
+  handling, and the few frontend-owned webhooks — today neither frontend app has
+  any (`apps/web`/`apps/admin` call `apps/api` directly via `fetchWithAuth`).
 - **Note on the legacy prototype.** An earlier single-file `crm-app.jsx` prototype
   (with a `window.TruePointUI` global and a client-side view switcher) was the
   origin of the design system and patterns. It is **superseded** by the
@@ -135,8 +141,10 @@ Both live in the one Bun monorepo (root package `leadwolf`) under `apps/`, along
 | `apps/admin` (`@leadwolf/admin`) | internal/platform-admin surface (subdomain TBD) | Internal staff, platform admins |
 
 Authentication is centralised (`auth.truepoint.in`, served by the dedicated
-`apps/auth` IdP) and consumed via the shared internal `@leadwolf/auth` package.
-Neither app owns auth logic. Enterprise IAM
+`apps/auth` IdP) and consumed via **each app's local auth client**
+(`src/lib/authClient.ts` — PKCE, in-memory access token, silent refresh, ADR-0016);
+`@leadwolf/auth` is the backend IdP/verification package (consumed by `apps/auth`
+and `apps/api`, never by the frontends). Enterprise IAM
 (SSO/SAML/SCIM) and the security model behind auth live in **truepoint-security**
 (enterprise-iam); this skill covers only the client-side session/middleware pattern
 (`auth.md`).
@@ -220,7 +228,9 @@ The full discipline is in `references/shared-packages.md`. Key points:
 - `@leadwolf/ui` — the design system. **Design tokens (brand) are a single shared
   source**; only the *components* may diverge between customer and internal. Tokens
   must not fork (see the design skill).
-- `@leadwolf/core` — pure helpers only, no side effects (there is no `utils` package).
+- `@leadwolf/core` — the shared **server-side** domain layer (it depends on
+  `@leadwolf/db`/`@leadwolf/config`; never import it into `apps/web`/`apps/admin`).
+  There is no `utils` package.
 
 ---
 
@@ -274,7 +284,9 @@ the server-side cache (CDN/Redis) is **truepoint-platform** caching. Full patter
 
 ## Testing
 
-CI enforces coverage (80% `packages/`, 60% `apps/`) but coverage is a floor.
+Coverage targets are 80% `packages/`, 60% `apps/` — a floor, not a goal. (No CI
+coverage gate exists yet: CI runs `bun test` without coverage; the thresholds are
+the intended gate to build toward.)
 Beyond unit/component tests, the test classes that matter at scale — contract tests
 against the API (the shared `@leadwolf/types` Zod schemas), integration tests, the
 mandatory **cross-tenant isolation test**, and load tests — are covered in

@@ -6,15 +6,19 @@
 // concurrent PATCHes can't lost-update). No enrichment is triggered here — this configures the policy the
 // core guard (enforceAutoEnrichPolicy) consults on a system-initiated enrich.
 
+import { resolvePolicyFromRows, ssoReadyForEnforcement, validatePolicyWrite } from "@leadwolf/auth";
 import { writeAudit } from "@leadwolf/core";
 import {
   auditRepository,
   authPolicyRepository,
+  effectivePolicyRepository,
   enrichmentPolicyRepository,
   importPolicyRepository,
+  ssoConfigRepository,
   withTenantTx,
 } from "@leadwolf/db";
 import {
+  type AuthPolicy,
   DEFAULT_IMPORT_POLICY,
   type EnrichmentPolicyResponse,
   ForbiddenError,
@@ -173,6 +177,86 @@ settingsRoutes.put(
       throw new ValidationError("Invalid auth policy.", { issues: parsed.error.issues });
     await authPolicyRepository.upsert(c.get("tenantId"), parsed.data, c.get("claims").sub);
     return c.json(parsed.data, 200);
+  },
+);
+
+// ── Effective auth-policy engine (Phase 1, doc 11 §3 / doc 12) — the generalized store that SUBSUMES the
+// per-tenant policy above. GET returns the RESOLVED effective policy (platform default → this org,
+// strictest-wins); PUT writes ONE org-scoped key after the value-shape + security-floor guards. The
+// DB primitives (getScopeRows / upsertTenantKey) + the pure validatePolicyWrite decision are CI-proven; this
+// route is the thin orchestration. security_admin|owner. ──
+
+// The hardcoded platform FLOOR (mirrors authPolicyRepository DEFAULT_POLICY): the base the resolver composes
+// platform rows onto, and the minimum an org write may never loosen below.
+const POLICY_FLOOR: AuthPolicy = {
+  mfaEnforcement: "optional",
+  allowedMethods: ["password", "oauth", "magic_link", "sso", "passkey"],
+  disableSocial: false,
+  requireSso: false,
+  ipAllowlist: [],
+};
+
+settingsRoutes.get(
+  "/security/effective-policy",
+  requireOrgRole("security_admin", "owner"),
+  async (c) => {
+    const rows = await effectivePolicyRepository.getScopeRows({ tenantId: c.get("tenantId") });
+    // Full chain (platform → this org); no workspace scope at the org-settings surface.
+    return c.json(resolvePolicyFromRows(rows, undefined, POLICY_FLOOR), 200);
+  },
+);
+
+settingsRoutes.put(
+  "/security/effective-policy",
+  requireOrgRole("security_admin", "owner"),
+  async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      key?: unknown;
+      value?: unknown;
+    } | null;
+    if (!body || typeof body.key !== "string") {
+      throw new ValidationError("Expected a { key, value } body.");
+    }
+    // The floor an org write may not loosen below = the resolved PLATFORM default (platform rows over the code
+    // floor), deliberately WITHOUT this org's own overrides.
+    const rows = await effectivePolicyRepository.getScopeRows({ tenantId: c.get("tenantId") });
+    const platformFloor = resolvePolicyFromRows(
+      rows.filter((r) => r.scope === "platform"),
+      undefined,
+      POLICY_FLOOR,
+    );
+    const decision = validatePolicyWrite(body.key, body.value, platformFloor);
+    if (!decision.ok) {
+      if (decision.reason === "below_floor") {
+        throw new ForbiddenError(
+          "policy_below_floor",
+          `This value would loosen a security key below the platform minimum: ${decision.violations?.join(", ")}.`,
+        );
+      }
+      throw new ValidationError(
+        decision.reason === "unknown_key" ? "Unknown policy key." : "Invalid value for this key.",
+      );
+    }
+    // No-lockout guard (AUTH-031): forcing SSO (`require_sso=true`) permits ONLY the "sso" method, so if the org's
+    // SSO connection isn't enabled + backed by a wired provider, enabling it would lock everyone out (the adapter
+    // throws). Reject until a working connection exists. Only gates the ENABLE (value===true); disabling is free.
+    if (body.key === "require_sso" && decision.value === true) {
+      const ssoConfig = await ssoConfigRepository.getForTenant(c.get("tenantId"));
+      if (!ssoReadyForEnforcement(ssoConfig)) {
+        throw new ForbiddenError(
+          "sso_not_ready",
+          "Configure, enable, and test a working SSO connection before requiring SSO for this organization.",
+        );
+      }
+    }
+    await effectivePolicyRepository.upsertTenantKey({
+      tenantId: c.get("tenantId"),
+      scope: "org",
+      key: body.key,
+      value: decision.value,
+      actorUserId: c.get("claims").sub,
+    });
+    return c.json({ key: body.key, value: decision.value }, 200);
   },
 );
 

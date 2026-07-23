@@ -5,6 +5,10 @@ only triggers the customer pipeline. A change to `apps/admin` (the internal app)
 only triggers the admin pipeline. Shared package changes propagate via Turborepo's
 dependency graph.
 
+> **Implementation status:** today there is a **single** `.github/workflows/ci.yml`, not
+> per-app pipelines — the per-app, path-filtered design below is the target. There is no
+> `customer-web.yml` / `admin.yml` yet; do not reference them.
+
 ---
 
 ## Pipeline Trigger Rules
@@ -47,8 +51,8 @@ error; warnings are allowed but reviewed in PR.
 **type-check** — `bun run typecheck` (turbo, `tsc --noEmit` per package). No type
 errors permitted on `main`.
 
-**test** — `bun test` (unit + integration). Coverage threshold is enforced: 80%
-line coverage minimum for `packages/`, 60% for `apps/`.
+**test** — `bun test` (unit + integration). Coverage targets: 80% line coverage for
+`packages/`, 60% for `apps/` (no coverage gate is wired yet — the target).
 
 **build** — `turbo build` with remote caching enabled. Build artifacts are
 cached by content hash — unchanged packages do not rebuild.
@@ -129,6 +133,10 @@ failure blocks the deploy.
 ## Secrets Management
 
 Secrets are never in the repo. The pipeline pulls them at deploy time:
+
+> **Implementation status:** no secrets manager / CI pull exists yet — today
+> `deploy/deploy.sh` consumes a gitignored host-local `.env.production` as a Docker
+> build secret (see **truepoint-security** secrets). The example below is the target.
 
 ```yaml
 - name: Pull secrets

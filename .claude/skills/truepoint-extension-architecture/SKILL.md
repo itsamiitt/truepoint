@@ -3,17 +3,17 @@ name: truepoint-extension-architecture
 description: >
   Governs the structure, build, and runtime shell of TruePoint's Manifest V3 browser
   extension (`apps/extension`) — the service-worker-as-hub topology, folder layout, the
-  Vite + @crxjs build, the manifest, the message bus, storage tiers and the MV3 service-worker
-  lifecycle, signed remote config / feature flags, packaging, release, and Chrome Web Store
-  compliance. Use this skill whenever creating, moving, or reviewing any file under
-  `apps/extension`, editing `manifest.config.ts` or `vite.config.ts`, adding a background
-  module, a message type, a storage key, an alarm, or an extension surface (side panel, popup,
-  options). It is one of three sibling extension skills: LinkedIn/content-script work is
-  `truepoint-extension-linkedin`; auth/token/API-client work is `truepoint-extension-auth`.
-  Anything that *renders* defers to `truepoint-design`; backend, tenancy, queues, and scale
-  defer to `truepoint-platform`/`truepoint-data`; whether something is *safe* is
-  `truepoint-security`'s final say. If the task touches the extension's build, manifest,
-  service worker, messaging, storage, or release, this skill is active.
+  Vite + @crxjs build, the manifest, the message bus, storage tiers, the MV3
+  service-worker lifecycle, signed remote config / feature flags, packaging, release,
+  and Chrome Web Store compliance. Use this skill whenever creating, moving, or
+  reviewing any file under `apps/extension`, editing `manifest.config.ts` or
+  `vite.config.ts`, or adding a background module, a message type, a storage key, an
+  alarm, or a surface (side panel, popup, options). Siblings: LinkedIn/content-script
+  work is `truepoint-extension-linkedin`; auth/token/API-client work is
+  `truepoint-extension-auth`. Rendering defers to `truepoint-design`; backend and
+  scale to `truepoint-platform`/`truepoint-data`; safety is `truepoint-security`'s
+  final say. If the task touches the extension's build, manifest, service worker,
+  messaging, storage, or release, this skill is active.
 ---
 
 # TruePoint Extension — Architecture Skill

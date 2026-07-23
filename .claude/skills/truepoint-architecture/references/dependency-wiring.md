@@ -1,5 +1,9 @@
 # Dependency Wiring
 
+> **Contents:** Dependency Checklist (Audit Trail · Export · Permissions ·
+> Notifications · Activity Feed · Search/Indexing · Optimistic UI · Webhooks) ·
+> The Prospect-to-List Example · Stub Pattern · Dependency Map by Feature Type
+
 Every feature exists inside a product — and every product has cross-cutting
 concerns that apply to new features automatically: audit trails, exports,
 notifications, permissions, search indexing, activity feeds, and more.

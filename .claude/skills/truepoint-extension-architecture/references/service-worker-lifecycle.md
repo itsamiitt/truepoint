@@ -7,8 +7,9 @@ cold restart.
 ## Rules
 
 - **Never `setInterval`/`setTimeout` for periodic work.** Use `chrome.alarms` (minimum 1-minute period). The
-  as-built `BrowserEventManager` (`src/background/events/manager.ts`) registers alarms for `drain`, `flush`,
-  and `auth-refresh`; add periodic work there, not with a timer.
+  as-built `BrowserEventManager` (`src/background/events/manager.ts`) registers the periodic `drain` and
+  `flush` alarms and routes all alarm events; the one-shot `auth-refresh` alarm is scheduled from token
+  expiry in `src/background/index.ts`. Add periodic work in the manager, not with a timer.
 - **Persist anything that must outlive the worker.** Durable queues and caches are IndexedDB-backed
   (`src/shared/idb.ts`; the capture queue is `src/background/queue/captureQueue.ts`). Small settings/flags go
   in `chrome.storage.local`; the access token is memory-only and the refresh token is `chrome.storage.session`

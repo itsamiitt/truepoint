@@ -39,10 +39,15 @@ noted as global.
   for sharing and reporting.
 - **Membership** — links a User to a Team with a role. The join that expresses "who
   is on which team as what."
-- **Role / Permission** — roles are **data, not hardcoded enums** (see
+- **Role / Permission** — the target is roles as **data, not hardcoded enums** (see
   `truepoint-security` enterprise-iam). An Org admin can define roles; permissions
   attach to roles; this model must represent custom tenant-defined roles, not a
-  fixed `customer|staff|admin` list. (The platform-level `customer|staff|admin`
+  fixed `customer|staff|admin` list.
+  > **Implementation status:** roles today ARE closed enums — `tenant_members.org_role`
+  > (`owner|billing_admin|security_admin|compliance_admin|member`, ADR-0030, enforced
+  > by `requireOrgRole`) plus hardcoded workspace roles via `requireRole(...)`; there
+  > are no roles/permissions tables yet (gap G-AUTH-10). Keep the mandate; don't
+  > look for role tables today. (The platform-level `customer|staff|admin`
   distinction is the *surface* a user belongs to — the customer surface is
   `apps/web` (@leadwolf/web); the internal/platform-admin surface is `apps/admin`
   (@leadwolf/admin); within the customer surface, a tenant has its own richer
@@ -86,7 +91,8 @@ results the tenant can pull into their working set.
 ## CRM Working Entities (tenant-owned)
 
 - **List** (`lists`) — a named collection of prospects within a workspace (a
-  campaign, a segment). Has an owner and sharing (see `ownership-and-sharing.md`).
+  campaign, a segment). Has an owner (`ownerUserId`); visibility today is
+  workspace-wide — see `ownership-and-sharing.md` for the model and its status.
 - **ListMember** (`list_members`) — links a Prospect to a List. Carries
   `addedByUserId` (who added it) and when, and is `unique(list, contact)` so a
   prospect can't be double-added to the same list (for audit/activity).
@@ -120,9 +126,10 @@ results the tenant can pull into their working set.
   caching). Today this is the DB-level `provider_calls` table
   (`unique(workspace, request_hash)`, sha256-keyed) — there is no Redis hot-cache
   layer yet.
-- **UsageEvent** — metered actions (enrichment calls, exports) for quota and
-  billing (see `truepoint-operations` FinOps). Reliable, since billing depends on
-  it.
+- **UsageEvent** (concept, not a table) — metered actions for quota and billing
+  (see `truepoint-operations` FinOps). There is **no `usage_events` table**: today
+  the metered ledger is `provider_calls` rows (`cost_micros`) plus the append-only
+  `audit_log` (see finops). Write those; don't invent a UsageEvent row.
 
 ---
 
@@ -130,7 +137,8 @@ results the tenant can pull into their working set.
 
 - **Every tenant-owned table: `tenant_id NOT NULL` (+ `workspace_id NOT NULL`
   where workspace-scoped) + RLS policy + a `tenant_id`/`workspace_id`-leading
-  index.** RLS is `ENABLE` + `FORCE`, fail-closed via `NULLIF` on the GUC. Added in
+  index.** RLS is `ENABLE` + `FORCE` (`ENABLE`-only for tables written by the
+  RLS-bypassing owner connection, e.g. audit/auth), fail-closed via `NULLIF` on the GUC. Added in
   the same migration that creates the table (platform tenancy + data-platform;
   architecture `database.md`).
 - **Ownership fields are explicit**: `ownerUserId` (the user who owns the record) is

@@ -54,6 +54,15 @@ const WRITTEN = new Set<string>([
   // 13a Area 8 / GDPR Art. 28 — set / toggle a sub-processor registry entry (POST/PUT + /:id/active under
   // /admin/compliance/sub-processors). Audited "sub_processor.set".
   "sub_processor.set",
+  // AUTH-024 — passkey credential added / removed (account security, dual-sink platform branch).
+  "passkey.register",
+  "passkey.remove",
+  // AUTH — MFA second-factor OUTCOME (submitMfa / submitMfaPasskey → recordPlatformAuthEvent, tenant-less at the
+  // MFA step). mfa.challenge stays PENDING — challenge issuance isn't wired as its own event.
+  "mfa.success",
+  "mfa.failure",
+  // AUTH — self-service session revoke by a tenant-less session (auditSessionRevoke platform branch).
+  "session.revoked",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;
@@ -67,8 +76,6 @@ const PENDING = new Set<string>([
   "staff.login.failure",
   "login.failure",
   "mfa.challenge",
-  "mfa.success",
-  "mfa.failure",
 ]);
 
 describe("platform_audit_log.action coverage", () => {

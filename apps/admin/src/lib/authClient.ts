@@ -11,6 +11,7 @@ import { APP_ORIGIN, AUTH_ORIGIN } from "./publicConfig";
 let accessToken: string | null = null;
 let expiresAtMs = 0;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
 
 const PKCE_VERIFIER_KEY = "lw_admin_pkce_verifier";
 const STATE_KEY = "lw_admin_oauth_state";
@@ -86,20 +87,30 @@ export async function completeLogin(code: string, returnedState: string): Promis
   setToken(data.accessToken, data.expiresIn);
 }
 
-/** Silent refresh against the auth origin (the refresh cookie rides the same-site credentialed fetch). */
+/** Silent refresh against the auth origin (the refresh cookie rides the same-site credentialed fetch).
+ * SINGLE-FLIGHT (AUTH-078): concurrent callers share ONE in-flight request. On cold load the adminGate and the
+ * first data fetch both ask for a refresh; without collapsing them each POST /token/refresh ROTATES the refresh
+ * token, so the 2nd..Nth present an already-rotated token → the auth service's reuse-detection revokes the whole
+ * session family and the staff user is spuriously logged out. Mirrors apps/web. */
 export async function silentRefresh(): Promise<boolean> {
-  try {
-    const res = await fetch(`${AUTH_ORIGIN}/auth/token/refresh`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { accessToken: string; expiresIn: number };
-    setToken(data.accessToken, data.expiresIn);
-    return true;
-  } catch {
-    return false;
-  }
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${AUTH_ORIGIN}/auth/token/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return false;
+      const data = (await res.json()) as { accessToken: string; expiresIn: number };
+      setToken(data.accessToken, data.expiresIn);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
 }
 
 /** Fetch with the in-memory access token, attempting one silent refresh if it's missing/expired. */

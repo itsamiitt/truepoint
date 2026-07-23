@@ -1,4 +1,4 @@
--- 0071_seed_forge_voyager_parser.sql — SEED ONLY (the 0067/0069 flag-seed precedent). Registers the ONE built-in
+-- 0074_seed_forge_voyager_parser.sql — SEED ONLY (the 0067/0069 flag-seed precedent). Registers the ONE built-in
 -- voyager profile parser into forge.parsers + forge.parser_versions so forge.parsed_records.parser_version_id (a
 -- uuid FK to forge.parser_versions) RESOLVES. P-01.1: the in-memory ParserRegistry previously wrote a string id
 -- ("voyager-profile-1-0-0") into that uuid FK against an empty table, so every production parse upsert failed on

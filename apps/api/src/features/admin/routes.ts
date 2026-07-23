@@ -1,3 +1,4 @@
+import { validatePolicyWrite } from "@leadwolf/auth";
 // routes.ts — platform super-admin API (ADR-0032). authn + platformAdmin, NO tenancy: the caller reads
 // ACROSS all tenants/workspaces via the audited withPlatformTx (the owner-role RLS bypass). Every read is
 // recorded in platform_audit_log; results are bounded (PLATFORM_READ_LIMIT) — no unbounded cross-tenant
@@ -11,6 +12,7 @@ import {
   aiRequestRepository,
   authPolicyRepository,
   creditRepository,
+  effectivePolicyRepository,
   featureFlagRepository,
   idempotencyRepository,
   jitElevationRepository,
@@ -28,6 +30,7 @@ import {
 } from "@leadwolf/db";
 import {
   type AccountHoldView,
+  type AuthPolicy,
   type EconomicsTrendPoint,
   ElevationRequiredError,
   type EnvFeatureGate,
@@ -1009,6 +1012,62 @@ adminRoutes.post(
     return c.json({ ok: true, tenantId, enforcementEnabled: enabled });
   },
 );
+
+// ── Platform-DEFAULT policy (Phase 1 effective-policy engine, doc 11 §3) — STAFF-ONLY. A super_admin sets a
+// platform-wide default for ONE policy key; it becomes the base every org tightens (strictest-wins). The value
+// is guarded against the env/code minimum (PLATFORM_POLICY_FLOOR / validatePolicyWrite) so a platform default
+// can never be set BELOW the security floor. Written on the withPlatformTx owner tx (RLS-exempt so it can write
+// the NULL-tenant row; audited admin.set_platform_policy). Org security_admins can never reach it. ──
+// Mirrors the org endpoint's floor in apps/api/src/features/settings/routes.ts (the code minimum).
+const PLATFORM_POLICY_FLOOR: AuthPolicy = {
+  mfaEnforcement: "optional",
+  allowedMethods: ["password", "oauth", "magic_link", "sso", "passkey"],
+  disableSocial: false,
+  requireSso: false,
+  ipAllowlist: [],
+};
+
+adminRoutes.get("/auth/platform-policy", requireStaffRole("super_admin"), async (c) => {
+  const rows = await effectivePolicyRepository.getPlatformRows();
+  return c.json({ policies: rows.map((r) => ({ key: r.key, value: r.value })) });
+});
+
+adminRoutes.put("/auth/platform-policy", requireStaffRole("super_admin"), async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { key?: unknown; value?: unknown } | null;
+  if (!body || typeof body.key !== "string") {
+    throw new ValidationError("Expected a { key, value } body.");
+  }
+  const key = body.key;
+  const decision = validatePolicyWrite(key, body.value, PLATFORM_POLICY_FLOOR);
+  if (!decision.ok) {
+    if (decision.reason === "below_floor") {
+      throw new ForbiddenError(
+        "policy_below_floor",
+        `This value would set a platform default below the security minimum: ${decision.violations?.join(", ")}.`,
+      );
+    }
+    throw new ValidationError(
+      decision.reason === "unknown_key" ? "Unknown policy key." : "Invalid value for this key.",
+    );
+  }
+  // No-lockout guard (AUTH-031), platform scope: `require_sso=true` as a PLATFORM DEFAULT would force EVERY tenant
+  // onto SSO — including any without a working connection — a mass lockout, and it can't be verified per-tenant
+  // here. It must be enabled PER-ORG (the org settings endpoint checks that org's SSO connection is enabled +
+  // wired). Reject the platform-wide flip.
+  if (key === "require_sso" && decision.value === true) {
+    throw new ForbiddenError(
+      "require_sso_not_platform_default",
+      "require_sso must be enabled per organization (where its SSO connection is verified), not as a platform default.",
+    );
+  }
+  await withPlatformTx(
+    actorOf(c),
+    "admin.set_platform_policy",
+    (tx) => effectivePolicyRepository.setPlatformKey(tx, key, decision.value, actorOf(c).userId),
+    { metadata: { key } },
+  );
+  return c.json({ key, value: decision.value });
+});
 
 // ── System health (13 §9) — service status + two complementary job views. `jobs` is the import_jobs
 // CONTROL-TABLE tally (a bounded DB read, the historical queue-depth/DLQ proxy); `queues` is the LIVE BullMQ

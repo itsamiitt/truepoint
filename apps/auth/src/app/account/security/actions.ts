@@ -10,7 +10,10 @@
 // middleware.ts is preserved unchanged (09 "Strict CSP preserved on new auth-origin client code").
 "use server";
 
+import { authUrl } from "@/lib/authUrl";
 import { clientIpFromHeaders } from "@/lib/clientIp";
+import { type MfaChangeKind, mfaChangedEmail, passwordChangedEmail } from "@/lib/emails";
+import { sendAuthEmail } from "@/lib/mailer";
 import { requireUser } from "@/lib/requireUser";
 import {
   checkPasswordAcceptable,
@@ -25,6 +28,7 @@ import {
   recordPlatformAuthEvent,
   verifyTotp,
 } from "@leadwolf/auth";
+import { env } from "@leadwolf/config";
 import { sessionRepository, tenantMemberRepository, userRepository } from "@leadwolf/db";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -93,6 +97,17 @@ export async function changePassword(formData: FormData): Promise<void> {
       metadata: { via: "account_security" },
     });
   }
+
+  // Security notification (AUTH-067): tell the owner their password was changed, so an unauthorized change is
+  // noticed. To the SESSION's own email (acct.user.email — never a request value). Best-effort + DETACHED so it
+  // never fails or delays the change; the failure log carries no PII (the mailer logs its own transport state).
+  const secureUrl = authUrl(env.AUTH_ORIGIN, "/forgot");
+  void sendAuthEmail({ to: acct.user.email, ...passwordChangedEmail({ secureUrl }) }).catch((e) =>
+    console.error(
+      "[auth-mail] password-changed notification failed:",
+      e instanceof Error ? e.message : e,
+    ),
+  );
 
   back("changed");
 }
@@ -182,6 +197,9 @@ export async function verifyTotpEnroll(formData: FormData): Promise<void> {
     });
   }
 
+  // AUTH-067: notify the owner a new second factor was added (an attacker with the password + step-up could too).
+  notifyMfaChanged(acct.user.email, "enrolled");
+
   redirect("/account/security/enroll?done=1");
 }
 
@@ -208,6 +226,8 @@ export async function disableMfaMethod(formData: FormData): Promise<void> {
     if (!remaining.some((m) => m.verifiedAt)) {
       await userRepository.replaceRecoveryCodes(acct.userId, []);
     }
+    // AUTH-067: notify only on an ACTUAL removal (a foreign/no-op methodId → removed===0 → no mail, no oracle).
+    notifyMfaChanged(acct.user.email, "disabled");
   }
   // CONFIRM (audit PENDING): same as enroll — no declared `mfa.disable`/`mfa.method.removed` action exists in
   // the closed audit enums, so the removal audit stays PENDING (do not emit an undeclared action).
@@ -230,6 +250,9 @@ export async function regenerateRecoveryCodes(formData: FormData): Promise<void>
     acct.userId,
     codes.map((c) => hashRecoveryCode(c)),
   );
+
+  // AUTH-067: notify the owner their recovery codes were regenerated (the old set no longer works).
+  notifyMfaChanged(acct.user.email, "recovery_regenerated");
 
   (await cookies()).set(ENROLL_RESULT_COOKIE, JSON.stringify({ kind: "recovery", codes }), {
     httpOnly: true,
@@ -279,25 +302,46 @@ export async function finishEnroll(): Promise<void> {
   redirect("/account/security?mfa=enrolled#mfa");
 }
 
-// Emit the declared `session.revoked` audit when the current session resolves to a tenant (the audit_log
-// tenant_id is NOT NULL). CONFIRM (audit PENDING for the tenant-less case): `session.revoked` exists ONLY in
-// the tenant `auditAction` enum — there is no tenant-less platform variant — so a self-service revoke by a user
-// whose current session carries no tenant cannot be cleanly audited yet; it stays PENDING (per the task brief),
-// rather than emit an undeclared/cross-scope row. Best-effort: recordAuthEvent swallows its own failures.
+// Fire an MFA-change security notification (AUTH-067) to the account's OWN email — detached + best-effort, so
+// it never fails or delays the MFA action (mirrors the `void recordAuthEvent` precedent); the failure log
+// carries no PII. The "if this wasn't you" CTA points at the forgot-password flow (the strongest re-secure lever).
+function notifyMfaChanged(email: string, change: MfaChangeKind): void {
+  const secureUrl = authUrl(env.AUTH_ORIGIN, "/forgot");
+  void sendAuthEmail({ to: email, ...mfaChangedEmail({ change, secureUrl }) }).catch((e) =>
+    console.error(
+      "[auth-mail] mfa-changed notification failed:",
+      e instanceof Error ? e.message : e,
+    ),
+  );
+}
+
+// Emit the declared `session.revoked` audit via the SAME dual-sink as password.reset: the tenant audit_log when
+// the current session resolves to a tenant (audit_log.tenant_id is NOT NULL), else platform_audit_log for a
+// tenant-less session — `session.revoked` is now declared in BOTH scopes, so no self-service revoke goes
+// unaudited. Best-effort: both recorders swallow their own failures and never block the revoke.
 async function auditSessionRevoke(
   acct: Awaited<ReturnType<typeof requireUser>>,
   meta: { mode: "single" | "others"; count: number },
 ): Promise<void> {
-  if (!acct.tenantId) return; // tenant-less → PENDING (see note above)
   const ip = clientIpFromHeaders(await headers());
-  await recordAuthEvent({
-    tenantId: acct.tenantId,
-    workspaceId: acct.workspaceId,
-    actorUserId: acct.userId,
-    action: "session.revoked",
-    entityType: "user_session",
-    entityId: acct.userId,
-    metadata: { ...meta, self: true, via: "account_security" },
-    ipAddress: ip,
-  });
+  const metadata = { ...meta, self: true, via: "account_security" };
+  if (acct.tenantId) {
+    await recordAuthEvent({
+      tenantId: acct.tenantId,
+      workspaceId: acct.workspaceId,
+      actorUserId: acct.userId,
+      action: "session.revoked",
+      entityType: "user_session",
+      entityId: acct.userId,
+      metadata,
+      ipAddress: ip,
+    });
+  } else {
+    await recordPlatformAuthEvent({
+      action: "session.revoked",
+      actorUserId: acct.userId,
+      ip,
+      metadata,
+    });
+  }
 }

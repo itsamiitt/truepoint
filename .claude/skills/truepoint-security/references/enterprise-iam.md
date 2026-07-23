@@ -50,11 +50,12 @@ can do, synced from the customer's IdP:
 - **Owned records are reassigned, not orphaned**, on deprovisioning (see
   **truepoint-data** ownership-and-sharing) — losing access must not lose the data.
 
-> **Implementation status:** SCIM is the **target**, currently stubbed (gap **G-AUTH-4**,
-> `docs/planning/28-enterprise-readiness-audit.md` §3.1). Only a `users.scimExternalId`
-> column exists — there is **no SCIM API, no `scim_tokens`, and no group mapping**. The
-> security-critical deprovisioning path is therefore not yet automated; keep the mandate
-> and build the SCIM endpoint + token + group-to-role mapping.
+> **Implementation status:** SCIM user provisioning now exists — the `scim_tokens` table
+> (+ RLS in `packages/db/src/rls/scim.sql`), token mint/list/revoke
+> (`apps/api/src/features/settings/identityRoutes.ts`), and the `/scim/v2/Users` endpoints
+> (`apps/api/src/features/scim/`). Still missing: **group-to-role mapping** (`/scim/v2/Groups`
+> is TODO — gap **G-AUTH-4**, `docs/planning/28-enterprise-readiness-audit.md` §3.1). Keep the
+> mandate for the remaining group mapping, and verify the deprovisioning path is fully wired.
 
 ---
 
@@ -74,12 +75,14 @@ express what organisations need. Roles and permissions are **data**:
   check is the boundary (see `access-control.md`, **truepoint-architecture**
   shared-packages).
 
-> **Implementation status:** data-driven granular tenant roles are the **target** and
-> are currently **MISSING** (gap **G-AUTH-10**, Critical — `docs/planning/28-enterprise-readiness-audit.md`
-> §3.1). The model today is only an `is_tenant_owner` **boolean**, not org-defined roles
-> with permission sets. **Service accounts** are also missing (gap **G-AUTH-5**). Keep
-> the mandate; do not weaken it to the boolean — build the data-driven role/permission
-> model and machine identities.
+> **Implementation status:** org-*defined* data-driven roles are the **target** and
+> remain missing (gap **G-AUTH-10** — `docs/planning/28-enterprise-readiness-audit.md`
+> §3.1). Today the model is a fixed five-value **`org_role` enum** on `tenant_members`
+> (`owner|billing_admin|security_admin|compliance_admin|member`, ADR-0030, enforced by
+> `requireOrgRole`; the old `is_tenant_owner` boolean is legacy, derived into it) plus
+> hardcoded workspace roles — not org-defined roles with permission sets. **Service
+> accounts** are also missing (gap **G-AUTH-5**). Keep the mandate; gate new endpoints
+> on `requireOrgRole`/`requireRole` today, and build the data-driven model.
 
 ---
 

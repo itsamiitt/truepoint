@@ -64,11 +64,17 @@ import {
 import {
   BULK_IMPORTS_DLQ,
   BULK_IMPORTS_QUEUE,
-  type BulkImportJobData,
   type UnifiedImportJobData,
   deadLetterFailedBulkImport,
   makeProcessBulkImport,
 } from "./queues/bulkImports.ts";
+import {
+  BULK_REVEAL_DLQ,
+  BULK_REVEAL_QUEUE,
+  type BulkRevealJobData,
+  deadLetterFailedBulkReveal,
+  makeProcessBulkReveal,
+} from "./queues/bulkReveal.ts";
 import {
   CHANNEL_BACKFILL_SWEEP_QUEUE,
   type ChannelBackfillSweepJobData,
@@ -79,14 +85,6 @@ import {
   type ChannelReconcileSweepJobData,
   makeProcessChannelReconcileSweep,
 } from "./queues/channelReconcileSweep.ts";
-import { deliverImportNotification } from "./queues/importNotify.ts";
-import {
-  BULK_REVEAL_DLQ,
-  BULK_REVEAL_QUEUE,
-  type BulkRevealJobData,
-  deadLetterFailedBulkReveal,
-  makeProcessBulkReveal,
-} from "./queues/bulkReveal.ts";
 import {
   DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
   type DataQualitySnapshotSweepJobData,
@@ -118,26 +116,22 @@ import {
   makeProcessGmailInboxPoll,
 } from "./queues/gmailInboxPollSweep.ts";
 import {
+  IMPORT_ARTIFACT_SWEEP_QUEUE,
+  type ImportArtifactSweepJobData,
+  makeProcessImportArtifactSweep,
+} from "./queues/importArtifactSweep.ts";
+import { deliverImportNotification } from "./queues/importNotify.ts";
+import {
   IMPORT_PROMOTION_SWEEP_EVERY_MS,
   IMPORT_PROMOTION_SWEEP_QUEUE,
   type ImportPromotionSweepJobData,
   makeProcessImportPromotionSweep,
 } from "./queues/importPromotionSweep.ts";
 import {
-  IMPORT_ARTIFACT_SWEEP_QUEUE,
-  type ImportArtifactSweepJobData,
-  makeProcessImportArtifactSweep,
-} from "./queues/importArtifactSweep.ts";
-import {
   IMPORT_REAPER_SWEEP_QUEUE,
   type ImportReaperSweepJobData,
   makeProcessImportReaperSweep,
 } from "./queues/importReaperSweep.ts";
-import {
-  SCHEDULED_IMPORT_SWEEP_QUEUE,
-  type ScheduledImportSweepJobData,
-  makeProcessScheduledImportSweep,
-} from "./queues/scheduledImportSweep.ts";
 import {
   IMPORTS_DLQ,
   IMPORTS_QUEUE,
@@ -193,6 +187,11 @@ import {
   type ReverificationSweepJobData,
   makeProcessReverificationSweep,
 } from "./queues/reverificationSweep.ts";
+import {
+  SCHEDULED_IMPORT_SWEEP_QUEUE,
+  type ScheduledImportSweepJobData,
+  makeProcessScheduledImportSweep,
+} from "./queues/scheduledImportSweep.ts";
 import {
   SCORING_DLQ,
   SCORING_QUEUE,
@@ -1679,9 +1678,12 @@ export function startWorkers(): Worker[] {
   // scheduled — the operator enables it, watches `leadwolf_account_backfill_domain_remaining` drain to 0
   // (the S-A6/C2 gate), re-runs after dual-write is on fleet-wide to close the write-gap tail, then off.
   if (env.ACCOUNT_DOMAINS_DUAL_WRITE && env.ACCOUNT_BACKFILL_ENABLED) {
-    const accountBackfillQueue = new Queue<AccountBackfillSweepJobData>(ACCOUNT_BACKFILL_SWEEP_QUEUE, {
-      connection,
-    });
+    const accountBackfillQueue = new Queue<AccountBackfillSweepJobData>(
+      ACCOUNT_BACKFILL_SWEEP_QUEUE,
+      {
+        connection,
+      },
+    );
     workers.push(
       instrument(
         new Worker<AccountBackfillSweepJobData>(

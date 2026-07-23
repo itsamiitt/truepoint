@@ -25,8 +25,12 @@ tamper-evident.
 
 ## Audit in CI
 
-A vulnerability audit (`bun audit`, or `npm audit` against the same tree) runs in the
-pipeline and surfaces known vulnerabilities in the dependency tree.
+A vulnerability audit (`bun audit`, or `npm audit` against the same tree) belongs
+in the pipeline to surface known vulnerabilities in the dependency tree.
+
+> **Implementation status:** not wired — `.github/workflows/ci.yml` has no audit
+> step today. Add `bun audit` to CI; until then, run it manually before dependency
+> changes.
 
 - Treat a new high/critical advisory as a thing to fix, not a warning to ignore.
 - Fixing is usually updating the affected package to a patched version; sometimes

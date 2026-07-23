@@ -9,7 +9,7 @@
 // Mid-flow steps (org / workspace / mfa / password) are deliberately NOT guarded: they run on the short-lived
 // login-transaction cookie BEFORE a durable session exists and already bounce to /login without it.
 
-import { REFRESH_COOKIE } from "@/lib/cookies";
+import { readRefreshToken } from "@/lib/cookies";
 import { hashRefreshToken } from "@leadwolf/auth";
 import { appOrigins, env, isAllowedOrigin } from "@leadwolf/config";
 import { sessionRepository } from "@leadwolf/db";
@@ -23,7 +23,7 @@ import { redirect } from "next/navigation";
  * origin — a logged-in user is never redirected to an attacker-supplied location.
  */
 export async function redirectIfAuthenticated(appOriginHint?: string): Promise<void> {
-  const token = (await cookies()).get(REFRESH_COOKIE)?.value;
+  const token = readRefreshToken(await cookies());
   if (!token) return; // no session cookie → definitely a guest; skip the DB lookup entirely
 
   let authenticated = false;

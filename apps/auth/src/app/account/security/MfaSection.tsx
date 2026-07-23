@@ -8,6 +8,7 @@ import { Alert, Badge, Input, Label, StatusBadge } from "@leadwolf/ui";
 import { disableMfaMethod, regenerateRecoveryCodes, startTotpEnroll } from "./actions";
 import type { MfaMethodView } from "./data";
 import type { StatusMessage } from "./status";
+import { canStepUp } from "./stepUpEligibility";
 
 function mfaStatusMessage(status: string | undefined): StatusMessage | null {
   switch (status) {
@@ -34,6 +35,7 @@ const TYPE_LABELS: Record<string, string> = {
 export function MfaSection({
   methods,
   hasPassword,
+  setPasswordHref,
   recoveryCodesRemaining,
   status,
 }: {
@@ -41,11 +43,16 @@ export function MfaSection({
   /** Whether the user has a password to step up with. False for SSO/passkey-only users, who step up with a
    * current authenticator (TOTP) code instead — the step-up field then asks for the code, not a password. */
   hasPassword: boolean;
+  /** Where to send a passwordless-and-factorless user to set a password (the reset flow) — AUTH-069. */
+  setPasswordHref: string;
   recoveryCodesRemaining: number;
   status?: string;
 }) {
   const verified = methods.filter((m) => m.verifiedAt);
   const hasTotp = verified.some((m) => m.type === "totp");
+  // AUTH-069: enrolling the first factor is itself step-up-gated. A passwordless user with no verified factor
+  // cannot step up, so we must NOT show an enroll form whose credential field asks for a code they can't have.
+  const canEnroll = canStepUp({ hasPassword, hasVerifiedTotp: hasTotp });
   const msg = mfaStatusMessage(status);
 
   // Step-up credential the forms below collect: a password when the user has one, else a current TOTP code
@@ -115,30 +122,50 @@ export function MfaSection({
         )}
       </ul>
 
-      {/* Enroll TOTP (step-up) */}
+      {/* Enroll TOTP (step-up). A passwordless user with no factor yet cannot step up to enroll a FIRST factor
+          (AUTH-069) — so instead of an unusable form we point them at the one path that works: set a password. */}
       {!hasTotp ? (
-        <form action={startTotpEnroll} noValidate className="mb-6 flex flex-col gap-3">
-          <div>
-            <span className="text-sm font-medium">Set up an authenticator app</span>
-            <p className="mt-1 text-[12px] text-[var(--tp-ink-3)]">
-              You'll scan a QR code, confirm a code, and save one-time recovery codes.
-            </p>
-          </div>
-          <div className="flex items-end gap-2">
-            <div className="flex-1 max-w-[220px]">
-              <Label htmlFor="enroll_current_password">{stepUpLabel}</Label>
-              <Input
-                id="enroll_current_password"
-                name="current_password"
-                type={stepUpType}
-                inputMode={stepUpInputMode}
-                autoComplete={stepUpAutoComplete}
-                required
-              />
+        canEnroll ? (
+          <form action={startTotpEnroll} noValidate className="mb-6 flex flex-col gap-3">
+            <div>
+              <span className="text-sm font-medium">Set up an authenticator app</span>
+              <p className="mt-1 text-[12px] text-[var(--tp-ink-3)]">
+                You'll scan a QR code, confirm a code, and save one-time recovery codes.
+              </p>
             </div>
-            <SubmitButton>Begin setup</SubmitButton>
+            <div className="flex items-end gap-2">
+              <div className="flex-1 max-w-[220px]">
+                <Label htmlFor="enroll_current_password">{stepUpLabel}</Label>
+                <Input
+                  id="enroll_current_password"
+                  name="current_password"
+                  type={stepUpType}
+                  inputMode={stepUpInputMode}
+                  autoComplete={stepUpAutoComplete}
+                  required
+                />
+              </div>
+              <SubmitButton>Begin setup</SubmitButton>
+            </div>
+          </form>
+        ) : (
+          <div className="mb-6 flex flex-col gap-3">
+            <div>
+              <span className="text-sm font-medium">Set up an authenticator app</span>
+              <p className="mt-1 text-[12px] text-[var(--tp-ink-3)]">
+                Your account signs in without a password, so there's no credential to confirm setup
+                with yet. Set a password first — you can still sign in with a link too — then add an
+                authenticator here.
+              </p>
+            </div>
+            <a
+              href={setPasswordHref}
+              className="inline-flex h-9 w-fit items-center rounded-[var(--radius)] border border-[var(--tp-hairline-2)] px-3 text-sm font-medium text-[var(--tp-ink)] no-underline hover:bg-[var(--tp-surface-2)]"
+            >
+              Set a password
+            </a>
           </div>
-        </form>
+        )
       ) : null}
 
       {/* Recovery codes — only relevant once a real factor is enrolled (they are a fallback FOR a factor). */}
@@ -149,7 +176,8 @@ export function MfaSection({
             <Badge>{recoveryCodesRemaining} remaining</Badge>
           </div>
           <p className="mb-3 text-[12px] text-[var(--tp-ink-3)]">
-            One-time codes to sign in if you lose your authenticator. Regenerating replaces any existing codes.
+            One-time codes to sign in if you lose your authenticator. Regenerating replaces any
+            existing codes.
           </p>
           <form action={regenerateRecoveryCodes} noValidate className="flex items-end gap-2">
             <div className="flex-1 max-w-[220px]">

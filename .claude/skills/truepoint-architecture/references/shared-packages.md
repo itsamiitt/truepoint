@@ -26,31 +26,22 @@ structure can change freely without breaking callers.
 
 ---
 
-## `@leadwolf/auth` — One Internal Package, Not Copied
+## `@leadwolf/auth` — Backend Primitives, One Package
 
-The auth package wraps the centralised auth service (the dedicated `apps/auth` IdP,
-`@leadwolf/auth-app`) and is consumed by **both** frontend apps.
+`@leadwolf/auth` is the **backend** auth package: self-built primitives (password
+hashing, session issuance/rotation, token mint/verify in `token.ts`, JWKS, MFA,
+SSO adapters) consumed by `apps/auth` (the IdP origin) and `apps/api` (token
+verification). **The frontend apps do not depend on it** — each owns a small local
+auth client (`apps/{web,admin}/src/lib/authClient.ts` + `pkce.ts`; see `auth.md`).
 
 > **It is a single internal Bun-workspace package, not copied per app.** A per-app
-> copy is by
-> definition *not* a single source of truth — the two copies drift, and drift in
-> auth logic is a security risk (one app gets a fix the other doesn't). It lives once
-> under the `@leadwolf/` scope; both apps depend on the workspace package. This
-> corrects the earlier "copy per repo" framing.
+> copy is by definition *not* a single source of truth — copies drift, and drift in
+> auth logic is a security risk. The same rule governs the two frontend
+> `authClient.ts` files: they are deliberately small and parallel; change both
+> deliberately, and never fork the underlying flow.
 
-```
-packages/auth/src/
-├── index.ts
-├── session.ts       # getSession, refreshSession, clearSession
-├── tokens.ts        # token validation helpers (no hand-decoding by callers)
-├── redirect.ts      # redirectToLogin, redirectAfterLogin
-└── types/auth.types.ts
-```
-
-`session.ts` and `tokens.ts` stay separate — session lifecycle and token parsing are
-different concerns. The client-side usage pattern is in `auth.md`; the enterprise
-identity model and threat model are in **truepoint-security** (enterprise-iam,
-frontend-security).
+The client-side usage pattern is in `auth.md`; the enterprise identity model and
+threat model are in **truepoint-security** (enterprise-iam, frontend-security).
 
 ---
 
@@ -65,8 +56,8 @@ forked or hand-edited away from the shared definition.
 ```
 packages/types/src/
 ├── index.ts             # Re-exports
-├── schemas/             # Zod schemas — the request/response source of truth
-└── ...                  # Inferred types (z.infer) exported for callers
+└── *.ts                 # one Zod-schema module per domain (auth.ts, contacts.ts, …),
+                         #   each exporting its schemas + inferred z.infer types (flat — no schemas/ dir)
 ```
 
 A handwritten client instance (base URL, auth headers from `@leadwolf/auth`,
@@ -90,15 +81,16 @@ sets — but their **brand tokens must not fork**.
 
 ```
 packages/ui/src/
-├── index.ts
-├── tokens/              # ← consumes the single shared token source (not forked)
-├── primitives/          # Atoms: Button, Input, Badge, Avatar (one per component)
-├── composed/            # Molecules: Form, Modal, Dropdown
-└── providers/ThemeProvider.tsx
+├── index.ts             # Public API (re-exports)
+├── cn.ts                # className helper
+├── tokens.css           # the single shared --tp-* token source (not forked)
+├── theme.css            # Tailwind @theme mapping onto the tokens
+├── primitives.css       # .tp-ui-* classes
+└── components/          # Card, DataTable, controls.tsx, ui/* (shadcn), …
 ```
 
-A `primitives/` component never imports from `composed/` — dependencies flow downward.
-The shared tokens (the `--tp-*` namespace) are defined once; each app's `@leadwolf/ui`
+Simpler components never import more complex ones — dependencies flow downward.
+The shared tokens (the `--tp-*` namespace) are defined once (in `tokens.css`); the
 components build on them. Keep the shared package minimal and generic; app-specific
 components stay in the app (see `internal-repo.md`).
 
@@ -106,9 +98,13 @@ components stay in the app (see `internal-repo.md`).
 
 ## `@leadwolf/core`
 
-Pure helpers only (there is no `utils` package). No side effects, no imports from
-other `@leadwolf/` packages, no async. One concern per file (`phone.ts`, `date.ts`,
-`email.ts`), files do not import each other.
+The shared **server-side domain layer** (there is no `utils` package). It depends on
+`@leadwolf/db`, `@leadwolf/config`, and `@leadwolf/types`, hosts service logic
+(ingestion, reveal, projection, feature flags) alongside pure formatters, and runs
+async in-transaction work — so it is **server-only: never import it into
+`apps/web`/`apps/admin`** (it would drag the Postgres client toward the browser
+bundle). Organised by domain module (e.g. `email/`, `enrichment/`, `validation/`),
+one concern per file.
 
 > Note: the *normalisation* logic used for dedup/identity resolution (email, domain,
 > phone) must be deterministic and shared so dedup keys match — its canonical home and

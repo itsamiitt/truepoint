@@ -6,30 +6,23 @@
 //
 // Live enrollment state: the auth origin holds the source of truth (user_mfa_methods) but exposes NO app-API
 // read of it to apps/web yet — a cross-origin auth→app-API MFA-status endpoint is a separate, security-reviewed
-// item (it must not leak factor presence cross-tenant). Until that lands, the factor list stays a muted
-// catalogue (enrolled: false) and the real On/Off state is shown on the auth origin itself. CONFIRM: wiring a
-// `GET enrolled-methods` read here is the tracked follow-up the P1-02 spec flags ("once the methods GET lands").
+// item (it must not leak factor presence cross-tenant). Until that lands, this panel shows NO per-factor On/Off
+// state at all (AUTH-068): the previous hard-coded `enrolled: false` catalogue falsely told a user who HAD
+// two-step on that they had none. Instead it points to the auth origin, where the real status lives and is
+// managed. Wiring a `GET enrolled-methods` read here is the tracked follow-up (0.6 real-read, "once it lands").
 "use client";
 
-import { FormSection, Icon, StatusBadge } from "@leadwolf/ui";
-import { ExternalLink, History, KeyRound, Monitor, ShieldCheck } from "lucide-react";
+import { authSecurityUrl } from "@/lib/authLink";
 import { AUTH_ORIGIN } from "@/lib/publicConfig";
-import type { MfaMethodStatus } from "../types";
+import { FormSection, Icon } from "@leadwolf/ui";
+import { ExternalLink, History, KeyRound, Monitor, ShieldCheck } from "lucide-react";
 import styles from "../settings-user.module.css";
 
-/** Deep-link to a section of the auth-origin account-security screen (17 §10). */
+/** Deep-link to a section of the auth-origin account-security screen (17 §10). The auth app serves under the
+ *  "/auth" basePath, so authSecurityUrl adds it — without the prefix these links 404 (AUTH-062). */
 function authLink(section: string): string {
-  return `${AUTH_ORIGIN}/account/security${section ? `#${section}` : ""}`;
+  return authSecurityUrl(AUTH_ORIGIN, section);
 }
-
-/** The documented MFA factor catalogue (17 §10) shown as a read-only status list. */
-const MFA_METHODS: MfaMethodStatus[] = [
-  { type: "totp", label: "Authenticator app (TOTP)", enrolled: false },
-  { type: "webauthn", label: "Passkey / security key", enrolled: false },
-  { type: "sms", label: "SMS code", enrolled: false },
-  { type: "email", label: "Email code", enrolled: false },
-  { type: "recovery_codes", label: "Recovery codes", enrolled: false },
-];
 
 export function SecurityPanel() {
   return (
@@ -41,9 +34,8 @@ export function SecurityPanel() {
           <Icon icon={ShieldCheck} size={18} />
         </span>
         <span>
-          Your sign-in security is managed on the secure sign-in site
-          (auth.truepoint.in). Use the links below to update your password, two-step methods, sessions,
-          and devices there.
+          Your sign-in security is managed on the secure sign-in site (auth.truepoint.in). Use the
+          links below to update your password, two-step methods, sessions, and devices there.
         </span>
       </div>
 
@@ -79,22 +71,14 @@ export function SecurityPanel() {
         title="Two-step verification"
         description="Add a second factor so a password alone can't unlock your account."
       >
-        <ul className={styles.statusList}>
-          {MFA_METHODS.map((m) => (
-            <li key={m.type} className={styles.statusRow}>
-              <span className={styles.statusMeta}>
-                <span className={styles.statusTitle}>{m.label}</span>
-                {m.detail ? <span className={styles.statusDetail}>{m.detail}</span> : null}
-              </span>
-              <span className={styles.statusEnd}>
-                <StatusBadge tone={m.enrolled ? "success" : "muted"}>
-                  {m.enrolled ? "On" : "Not set up"}
-                </StatusBadge>
-              </span>
-            </li>
-          ))}
-        </ul>
-        <div className={styles.linkRow}>
+        <div className={styles.statusRow}>
+          <span className={styles.statusMeta}>
+            <span className={styles.statusTitle}>Two-step methods</span>
+            <span className={styles.statusDetail}>
+              Set up an authenticator app and recovery codes — and see which factors are on — on the
+              sign-in site.
+            </span>
+          </span>
           <a
             className="tp-ui-btn tp-ui-btn--secondary tp-ui-btn--sm"
             href={authLink("mfa")}

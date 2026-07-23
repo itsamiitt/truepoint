@@ -3,20 +3,13 @@
 // clears the cookie. Idempotent: no cookie, or an unknown/already-revoked session, still clears + 204. Cross-
 // origin, credentialed (CORS to app origins). Never throws into the response — logout must always succeed.
 
-import { REFRESH_COOKIE, clearRefreshCookie } from "@/lib/cookies";
+import { clearRefreshCookie, readRefreshTokenFromHeader } from "@/lib/cookies";
 import { corsHeaders } from "@/lib/cors";
 import { hashRefreshToken, revokeSession } from "@leadwolf/auth";
 import { sessionRepository } from "@leadwolf/db";
 
-function readRefreshCookie(req: Request): string | null {
-  const cookie = req.headers.get("cookie");
-  if (!cookie) return null;
-  for (const part of cookie.split(";")) {
-    const [k, ...v] = part.trim().split("=");
-    if (k === REFRESH_COOKIE) return v.join("=");
-  }
-  return null;
-}
+const readRefreshCookie = (req: Request): string | null =>
+  readRefreshTokenFromHeader(req.headers.get("cookie"));
 
 export async function OPTIONS(req: Request): Promise<Response> {
   return new Response(null, { status: 204, headers: corsHeaders(req.headers.get("origin")) });
@@ -32,7 +25,7 @@ export async function POST(req: Request): Promise<Response> {
   // Always clear the cookie and return 204, regardless of what we find — logout is idempotent and must
   // never reveal whether a session existed. The session revoke is best-effort and swallows any failure.
   const headers = new Headers(cors);
-  headers.append("Set-Cookie", clearRefreshCookie());
+  for (const c of clearRefreshCookie()) headers.append("Set-Cookie", c);
 
   const presented = readRefreshCookie(req);
   if (presented) {

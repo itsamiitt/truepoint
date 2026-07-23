@@ -94,7 +94,7 @@ export async function admittedImportFormData(
     if (parts > IMPORT_MULTIPART_MAX_PARTS) {
       throw new ImportValidationError("The upload form has too many parts.");
     }
-    if (value instanceof File) {
+    if (typeof value !== "string") {
       if (name !== "file" || sawFile) {
         throw new ImportValidationError("Exactly one file part (field 'file') is allowed.");
       }
@@ -144,9 +144,7 @@ export async function assertBulkUploadAdmissible(file: File): Promise<void> {
   if (file.size > IMPORT_CSV_MAX_BYTES) {
     throw new FileTooLargeError("file_too_large", IMPORT_CSV_MAX_BYTES);
   }
-  const prefix = new Uint8Array(
-    await file.slice(0, IMPORT_CSV_SNIFF_PREFIX_BYTES).arrayBuffer(),
-  );
+  const prefix = new Uint8Array(await file.slice(0, IMPORT_CSV_SNIFF_PREFIX_BYTES).arrayBuffer());
   const bom = assertCsvPrefixAdmissible(prefix);
   // The bulk drive parser (streamParseCsv) decodes UTF-8 only — refuse a UTF-16 BOM honestly here rather
   // than stream it to the store and mojibake it in the worker (13 §1.3: never silent mojibake).

@@ -26,6 +26,13 @@ export {
 export { issueCode, exchangeCode, validateBinding, type CodeBinding } from "./code.ts";
 export { normalizeIp, clientIpMatches, type IpBindMode } from "./ipBinding.ts";
 export { log } from "./log.ts";
+export {
+  recordAuthMetric,
+  renderAuthMetrics,
+  __resetAuthMetrics,
+  type AuthMetricName,
+  type AuthMetricLabels,
+} from "./authMetrics.ts";
 export { authenticatePassword, type AuthenticatedUser } from "./login.ts";
 export {
   createLoginTransaction,
@@ -44,7 +51,24 @@ export {
   type FinalizedLogin,
 } from "./flow.ts";
 export { authorizeTenantSelection } from "./scopeGuard.ts";
-export { verifyMfaCode } from "./mfaVerify.ts";
+export { verifyMfaCode, requestEmailOtp } from "./mfaVerify.ts";
+export {
+  type WebauthnCeremony,
+  storeWebauthnChallenge,
+  consumeWebauthnChallenge,
+} from "./webauthnChallenge.ts";
+export {
+  type RegistrationResponseJSON,
+  generatePasskeyRegistration,
+  verifyPasskeyRegistration,
+} from "./webauthnRegistration.ts";
+export {
+  type AuthenticationResponseJSON,
+  generatePasskeyAuthentication,
+  generatePasskeyAuthenticationUsernameless,
+  verifyPasskeyAuthentication,
+  verifyPasskeyAuthenticationUsernameless,
+} from "./webauthnAuthentication.ts";
 export { encryptSecret, decryptSecret } from "./secrets.ts";
 export {
   lookupIdentifier,
@@ -57,6 +81,7 @@ export {
   checkRequestRate,
   checkCaptureRate,
   checkRevealRate,
+  checkEmailOtpSendRate,
   assertCredentialNotLocked,
   recordCredentialFailure,
   recordCredentialSuccess,
@@ -94,7 +119,7 @@ export {
   type CreateInvitationInput,
   type AcceptInvitationResult,
 } from "./invitations.ts";
-export { getSsoProvider } from "./sso/providers.ts";
+export { getSsoProvider, isSsoProviderWired, ssoReadyForEnforcement } from "./sso/providers.ts";
 export { signMockAssertion } from "./sso/mockIdp.ts";
 export { provisionSsoIdentity } from "./sso/jit.ts";
 export type { SsoConfig, SsoAssertion, SsoInitiation, SsoProvider } from "./sso/types.ts";
@@ -117,7 +142,15 @@ export {
   resolveEffectivePolicy,
   strictestMfa,
   isMethodAllowed,
+  composeEffectivePolicy,
+  assembleScopePolicy,
+  resolvePolicyFromRows,
+  findFloorViolations,
+  parsePolicyKeyValue,
+  validatePolicyWrite,
 } from "./policy.ts";
+export type { PolicyWriteDecision } from "./policy.ts";
+export type { AuthPolicyRow } from "./policy.ts";
 export { recordAuthEvent, recordPlatformAuthEvent } from "./auditEvent.ts";
 export {
   PASSWORD_MIN_LENGTH,

@@ -5,8 +5,8 @@
 // never-log-PII invariant instead of trusting it. (The repair CSV legitimately echoes the full row under §4's
 // gate, so it is NOT swept here; the ERROR REPORT, whose small blast radius invites forwarding, is.)
 
-import { type RejectedRow, importRejectCode, rejectReasonToken } from "@leadwolf/types";
 import { expect, test } from "bun:test";
+import { type RejectedRow, importRejectCode, rejectReasonToken } from "@leadwolf/types";
 import { buildErrorReportCsv } from "./artifactWriter.ts";
 
 /** The sanctioned token shape: a lowercase snake_case code, optionally `:column_ref` (a canonical field name —
@@ -15,8 +15,8 @@ const TOKEN_RE = /^[a-z][a-z0-9_]*(?::[a-zA-Z][a-zA-Z0-9_]*)?$/;
 
 /** PII value fingerprints (mirrors artifactWriter.redactValues): an email-like token or a 7+-digit run. If a
  *  token/report ever contains one, a raw value leaked. */
-const PII_RE = [/[^\s,@"']+@[^\s,@"']+\.[^\s,@"']+/, /\d{7,}/];
-function hasPii(s) {
+const PII_RE: [RegExp, RegExp] = [/[^\s,@"']+@[^\s,@"']+\.[^\s,@"']+/, /\d{7,}/];
+function hasPii(s: string) {
   return PII_RE.some((re) => re.test(s));
 }
 

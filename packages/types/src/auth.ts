@@ -159,6 +159,9 @@ export const authPolicySchema = z.object({
   ipAllowlist: z.array(z.string()).default([]), // CIDR strings; empty = no restriction
   sessionTimeoutSeconds: z.number().int().positive().optional(), // ABSOLUTE session-lifetime cap (P1-01 Gate D)
   idleTimeoutSeconds: z.number().int().positive().optional(), // IDLE-window cap, enforced on refresh (Gate D)
+  // Max simultaneous active sessions per user (AUTH-042). Unset = unlimited; a smaller value is STRICTER
+  // (min-wins across scopes, like the timeout caps). Enforced at session creation (evict the oldest over cap).
+  maxConcurrentSessions: z.number().int().positive().optional(),
 });
 export type AuthPolicy = z.infer<typeof authPolicySchema>;
 

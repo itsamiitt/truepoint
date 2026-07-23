@@ -148,8 +148,10 @@ export function decodeAdmittedCsv(bytes: Uint8Array): string {
   const bom = assertCsvBytesAdmissible(bytes);
   let text: string;
   try {
-    // ignoreBOM:false (the default) strips a leading BOM for the detected encoding.
-    text = new TextDecoder(bom ?? "utf-8").decode(bytes);
+    // ignoreBOM:false (the default) strips a leading BOM for the detected encoding. bun-types narrows the
+    // decoder label union; "utf-16le"/"utf-16be" are valid WHATWG labels at runtime.
+    const decoderLabel = (bom ?? "utf-8") as string as ConstructorParameters<typeof TextDecoder>[0];
+    text = new TextDecoder(decoderLabel).decode(bytes);
   } catch {
     // The runtime lacks a decoder for the BOM-declared encoding — refuse honestly, never mojibake.
     throw new ImportValidationError(
@@ -184,9 +186,7 @@ export function assertXlsxAdmissible(bytes: Uint8Array): void {
   }
   const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (buf.indexOf("[Content_Types].xml", 0, "latin1") === -1) {
-    throw new UnsupportedMediaTypeError(
-      "The file is a ZIP archive but not an .xlsx workbook.",
-    );
+    throw new UnsupportedMediaTypeError("The file is a ZIP archive but not an .xlsx workbook.");
   }
 }
 
