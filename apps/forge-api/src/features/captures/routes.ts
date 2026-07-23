@@ -66,7 +66,10 @@ export function createCapturesApp(deps: CapturesDeps): Hono {
     }
 
     // Land verbatim (idempotent on content_hash) + enqueue parse; never blocks on the DAG (202, [S46]).
-    const ack = await deps.land(envelope);
+    // Provenance is server-authoritative (P-01.13): the recorded capturer is the AUTHENTICATED caller, never the
+    // client-declared envelope.capturedBy — the four-eyes maker is later derived from it, so a spoofed value must
+    // not be able to launder a self-approval into the gold layer.
+    const ack = await deps.land({ ...envelope, capturedBy: caller.callerId });
     return c.json(ack, 202);
   });
 

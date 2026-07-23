@@ -111,4 +111,18 @@ describe("POST /v1/captures", () => {
     expect(res.status).toBe(429);
     expect(res.headers.get("retry-after")).toBe("30");
   });
+
+  test("provenance is server-bound: landed capturedBy is the caller, not the client's claim (P-01.13)", async () => {
+    let landed: IngestionEnvelopeV2 | undefined;
+    const deps = baseDeps({
+      land: async (env): Promise<CaptureAck> => {
+        landed = env;
+        return { batchId: "b", accepted: 1, duplicate: 0, rejected: 0 };
+      },
+    });
+    // The client tries to attribute the capture to another user; the server must ignore it.
+    const res = await post(deps, envelope({ capturedBy: "00000000-0000-0000-0000-0000000000ff" }));
+    expect(res.status).toBe(202);
+    expect(landed?.capturedBy).toBe("caller"); // overridden with the authenticated caller's id
+  });
 });
