@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1765,
-  "fileSetHash": "sha256:6d9c3860e12813745b9c7328879a8c2f70e63138153b0a039620f8dfd3a17cf4",
+  "fileCount": 1766,
+  "fileSetHash": "sha256:5cf8beead7279656d239a7a7f46de6edd6c506712f369df86cb506b05e71a96d",
   "features": {
     "account-search": {
       "web": [],
@@ -2376,6 +2376,7 @@
       "packages/auth/src/webauthnRegistration.ts"
     ],
     "packages/config": [
+      "packages/config/src/blindIndexKey.test.ts",
       "packages/config/src/env.ts",
       "packages/config/src/forge.ts",
       "packages/config/src/index.ts",

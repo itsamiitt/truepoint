@@ -1,7 +1,8 @@
 // forge.ts — the TruePoint Forge data-plane config (ADR-0046/0047; re-homed from @forge/config). Read from
 // process.env directly so the big appEnvSchema stays untouched. Capture + sync egress are DARK by default
-// (kill-switches off) until legal sign-off (OQ-2). BLIND_INDEX_KEY is a dev default; production sources a
-// KMS-wrapped key.
+// (kill-switches off) until legal sign-off (OQ-2). The blind-index HMAC secret is deliberately NOT here — it is
+// the single validated, no-default env.BLIND_INDEX_KEY (config/src/env.ts), read via @leadwolf/identity. The old
+// dev-default export was a footgun (a public weak key that would silently de-anonymize the dataset) — P-01.14.
 
 /** Below this size a payload stays inline (column-encrypted); above it offloads to the object store (OQ-4). */
 export const OBJECT_STORE_THRESHOLD_BYTES = 8 * 1024;
@@ -36,9 +37,6 @@ const enabledTenants = new Set(
 export function isTenantCaptureEnabled(tenantId: string): boolean {
   return enabledTenants.has(tenantId);
 }
-
-/** The silver-layer blind-index HMAC key (08). Dev default is deterministic so golden-fixture tests are stable. */
-export const BLIND_INDEX_KEY = process.env.FORGE_BLIND_INDEX_KEY ?? "forge-dev-blind-index-key";
 
 /** S3/MinIO object store for large raw payloads (Phase 4). */
 export const forgeS3Config = {
