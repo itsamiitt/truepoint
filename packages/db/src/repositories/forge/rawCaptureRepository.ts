@@ -1,6 +1,7 @@
 // rawCaptureRepository — the db-backed land primitive (07 §content_hash idempotency). A plain function (no
-// @forge/core import → no cycle); @forge/api adapts it to core's RawCaptureStore port at wiring time. The
-// insert is idempotent: INSERT … ON CONFLICT (content_hash) DO NOTHING, so a replayed capture returns 0 rows.
+// @forge/core import → no cycle); @forge/api adapts it to core's RawCaptureStore port at wiring time. The insert
+// is idempotent PER TENANT: ON CONFLICT (target_tenant_id, content_hash) DO NOTHING (P-01.12 — a global
+// content_hash unique was a cross-tenant existence oracle + poisoning vector). A replay within a tenant is 0 rows.
 import type { Tx } from "../../client.ts";
 import { rawCaptures } from "../../schema/forge.ts";
 
@@ -21,7 +22,7 @@ export interface RawCaptureInsert {
   isGzipped: boolean;
 }
 
-/** Land a raw capture idempotently on content_hash; returns whether a NEW row was inserted. */
+/** Land a raw capture idempotently on (target_tenant_id, content_hash); returns whether a NEW row was inserted. */
 export async function landRawCapture(tx: Tx, row: RawCaptureInsert): Promise<{ landed: boolean }> {
   const inserted = await tx
     .insert(rawCaptures)
@@ -40,7 +41,7 @@ export async function landRawCapture(tx: Tx, row: RawCaptureInsert): Promise<{ l
       byteSize: row.byteSize,
       isGzipped: row.isGzipped,
     })
-    .onConflictDoNothing({ target: rawCaptures.contentHash })
+    .onConflictDoNothing({ target: [rawCaptures.targetTenantId, rawCaptures.contentHash] })
     .returning({ id: rawCaptures.id });
 
   return { landed: inserted.length > 0 };

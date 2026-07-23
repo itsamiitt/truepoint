@@ -46,7 +46,12 @@ export const rawCaptures = forgeSchema.table(
     ingestedAt: timestamp("ingested_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    uniqContentHash: uniqueIndex("uniq_raw_captures_content_hash").on(t.contentHash),
+    // Per-tenant dedup (P-01.12) — a GLOBAL content_hash unique was a cross-tenant existence oracle + poisoning
+    // vector (tenant A's capture would silently dedupe tenant B's identical one). Scope the uniqueness to tenant.
+    uniqTenantContentHash: uniqueIndex("uniq_raw_captures_tenant_content_hash").on(
+      t.targetTenantId,
+      t.contentHash,
+    ),
     ingestedAtIdx: index("idx_raw_captures_ingested_at").on(t.ingestedAt),
     onePayload: check(
       "raw_captures_one_payload",

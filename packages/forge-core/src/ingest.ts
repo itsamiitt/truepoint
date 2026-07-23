@@ -3,7 +3,8 @@
 // @forge/api (db-backed store, S3 object store, BullMQ parse queue). The verbatim payload is immutable and a
 // replayed content_hash is a structural no-op (idempotent on content_hash, mirror source_records §B).
 import { OBJECT_STORE_THRESHOLD_BYTES } from "@leadwolf/config";
-import type { CaptureAck, IngestionEnvelopeV2, RawRecordV2 } from "@leadwolf/types";
+import { contentHashHex } from "@leadwolf/identity";
+import type { CaptureAck, IngestionEnvelopeV2 } from "@leadwolf/types";
 
 /** The raw_captures row the land stage writes (07 §Envelope v2 → raw_captures mapping; schema owned by 05). */
 export interface RawCaptureRow {
@@ -85,17 +86,31 @@ export function inMemoryObjectStore(): ObjectStore & { readonly blobs: Map<strin
   };
 }
 
-/** Route a payload: small → inline JSONB; large → object store under a hash-prefixed key ([S84]), pointer in row. */
+/** Server-authoritative capture hash (P-01.11): the stable content hash of the payload ITSELF, never the
+ *  client-declared record.contentHash. Canonical JSON when the payload parses (order-independent dedup), else
+ *  the raw bytes. Recomputing on the server is what makes the per-tenant dedup key trustworthy — a client can no
+ *  longer pre-claim or forge another capture's identity (hash poisoning / cross-tenant oracle, P-01.12). */
+function captureHash(rawPayload: string): string {
+  try {
+    return contentHashHex(JSON.parse(rawPayload));
+  } catch {
+    return contentHashHex(rawPayload);
+  }
+}
+
+/** Route a payload: small → inline JSONB; large → object store under a TENANT-prefixed hash key, pointer in row.
+ *  The tenant prefix keeps identical content in two tenants from sharing one blob — otherwise one tenant's DSAR
+ *  erasure would delete the other's payload, and the shared key space would be a cross-tenant probe (P-01.12). */
 async function routePayload(
   deps: LandDeps,
-  record: RawRecordV2,
+  args: { rawPayload: string; contentHash: string; byteSize: number; tenantId: string },
 ): Promise<{ inline: string | null; ref: string | null }> {
-  if (record.byteSize > OBJECT_STORE_THRESHOLD_BYTES) {
-    const key = `${record.contentHash.slice(0, 4)}/${record.contentHash}`;
-    const ref = await deps.objectStore.put(key, record.rawPayload);
+  if (args.byteSize > OBJECT_STORE_THRESHOLD_BYTES) {
+    const key = `${args.tenantId}/${args.contentHash.slice(0, 4)}/${args.contentHash}`;
+    const ref = await deps.objectStore.put(key, args.rawPayload);
     return { inline: null, ref };
   }
-  return { inline: record.rawPayload, ref: null };
+  return { inline: args.rawPayload, ref: null };
 }
 
 /** Land an envelope v2 verbatim; RETURN the content-hashes that landed for a POST-COMMIT parse enqueue (P-01.7).
@@ -109,12 +124,20 @@ export async function landEnvelope(
   let duplicate = 0;
 
   for (const record of envelope.records) {
-    const { inline, ref } = await routePayload(deps, record);
+    // Recompute the content hash server-side (P-01.11) — the client-declared record.contentHash is advisory and
+    // never trusted; it can't select, pre-claim, or poison another capture's identity.
+    const contentHash = captureHash(record.rawPayload);
+    const { inline, ref } = await routePayload(deps, {
+      rawPayload: record.rawPayload,
+      contentHash,
+      byteSize: record.byteSize,
+      tenantId: envelope.scope.tenantId,
+    });
     const { landed } = await deps.store.land({
       source: envelope.source,
       endpoint: record.endpoint,
       schemaVersion: record.schemaVersion,
-      contentHash: record.contentHash,
+      contentHash,
       contentType: record.contentType,
       capturedByUserId: envelope.capturedBy,
       targetTenantId: envelope.scope.tenantId,
@@ -127,7 +150,7 @@ export async function landEnvelope(
     });
 
     if (landed) {
-      landedHashes.push(record.contentHash);
+      landedHashes.push(contentHash);
     } else {
       duplicate += 1;
     }
