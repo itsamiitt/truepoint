@@ -4,6 +4,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../../client.ts";
 import {
+  approvalRequests,
   extractionCandidates,
   parsedRecords,
   parserVersions,
@@ -111,6 +112,28 @@ export async function getVerifyInputs(tx: Tx, rawCaptureId: string): Promise<Ver
     capturedByUserId: cap?.capturedByUserId ?? null,
     extractions: cands.map((c) => ({ confidence: Number(c.confidence), band: c.band })),
   };
+}
+
+/** The persisted approval request the four-eyes approve path loads (P-01.10 consumer) — the SERVER-authoritative
+ *  maker + candidate, so the approver's request body supplies nothing but the id and can neither forge the maker
+ *  (to bypass checker≠maker) nor the confidence/fields (to clear the threshold / promote arbitrary data). */
+export interface ApprovalRequestRow {
+  requestedByUserId: string;
+  status: string;
+  payload: unknown;
+}
+
+export async function getApprovalRequest(tx: Tx, id: string): Promise<ApprovalRequestRow | null> {
+  const [row] = await tx
+    .select({
+      requestedByUserId: approvalRequests.requestedByUserId,
+      status: approvalRequests.status,
+      payload: approvalRequests.payload,
+    })
+    .from(approvalRequests)
+    .where(eq(approvalRequests.id, id))
+    .limit(1);
+  return row ?? null;
 }
 
 export interface PipelineOverview {

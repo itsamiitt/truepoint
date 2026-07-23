@@ -16,6 +16,7 @@ import {
 } from "@leadwolf/config";
 import {
   type Tx,
+  getApprovalRequest,
   getPipelineOverviewCounts,
   getSyncStatusCounts,
   landRawCapture,
@@ -24,7 +25,7 @@ import {
   promoteVerifiedRecord,
   withForgeTx,
 } from "@leadwolf/db";
-import { type LandDeps, landEnvelope } from "@leadwolf/forge-core";
+import { type LandDeps, type PromotionCandidate, landEnvelope } from "@leadwolf/forge-core";
 import { forgeObjectStore, forgeRateLimiter } from "@leadwolf/integrations";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
@@ -86,6 +87,18 @@ const app = createForgeApi({
     resolveStaff,
     // the four-eyes promotion write-set (verified_records + sync_outbox in one tx), Phase 5.
     promote: (input) => withForgeTx((tx) => promoteVerifiedRecord(tx, input)),
+    // Load the maker + candidate from the persisted approval_request (P-01.10) — never the request body.
+    loadApprovalRequest: (id) =>
+      withForgeTx(async (tx) => {
+        const row = await getApprovalRequest(tx, id);
+        return row
+          ? {
+              requestedByUserId: row.requestedByUserId,
+              status: row.status,
+              candidate: row.payload as PromotionCandidate,
+            }
+          : null;
+      }),
   },
 });
 

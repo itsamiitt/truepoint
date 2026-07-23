@@ -11,6 +11,7 @@ export {
 } from "./extractionCandidateRepository.ts";
 export { promoteVerifiedRecord, type PromotionInput } from "./promotionRepository.ts";
 export {
+  getApprovalRequest,
   getRawCaptureForParse,
   getRawCaptureById,
   getVerifyInputs,
@@ -18,6 +19,7 @@ export {
   listReviewTasks,
   listParsers,
   getSyncStatusCounts,
+  type ApprovalRequestRow,
   type RawCaptureRowForParse,
   type RawCaptureRowById,
   type VerifyInputsRow,
