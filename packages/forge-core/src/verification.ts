@@ -4,6 +4,7 @@
 // [S57][S115]; a below-threshold record cannot promote; and the promotion + its sync_outbox row commit in ONE
 // transaction (no dual-write, [S20]). The transactional write-set is an injected PORT so this is unit-testable.
 import { createHash } from "node:crypto";
+import { contentHashHex } from "@leadwolf/identity";
 
 // ── review queue prioritization (10 §2) — ranked, never FIFO [S54] ────────────────────────────────────
 export type ReviewTaskType =
@@ -63,6 +64,34 @@ export interface ApprovalRequest {
   id: string;
   requestedByUserId: string;
   candidates: PromotionCandidate[];
+}
+
+/** The silver→gold inputs the verify stage assembles into a candidate: the deterministic parsed fields plus the
+ *  AI-extract per-field confidence/band signal. Channels are blind-index only (no clear PII flows through here). */
+export interface VerifyInputs {
+  entityKind: "person" | "company";
+  parsedFields: unknown;
+  extractions: Array<{ confidence: number; band: string }>;
+  channels?: PromotionChannels;
+}
+
+/** Assemble a gold PromotionCandidate from the silver outputs, SERVER-side — this is what makes four-eyes
+ *  trustworthy (P-01.10): the fields, confidence, and content_hash all come from persisted pipeline state, never
+ *  the approver's request body. The gold fields are the deterministic parse output; confidence is the
+ *  CONSERVATIVE floor across the auto-band AI extractions (the weakest corroborated field gates promotion) and is
+ *  0 when there is no auto-band signal, so a record can never auto-clear VERIFY_THRESHOLD without real evidence.
+ *  content_hash is the stable hash of the content (the gold dedup/idempotency key). F2 refines the per-field
+ *  merge + a calibrated score. */
+export function assembleVerifiedCandidate(input: VerifyInputs): PromotionCandidate {
+  const auto = input.extractions.filter((e) => e.band === "auto");
+  const confidence = auto.length > 0 ? Math.min(...auto.map((e) => e.confidence)) : 0;
+  return {
+    contentHash: contentHashHex({ entityKind: input.entityKind, fields: input.parsedFields }),
+    entityKind: input.entityKind,
+    fields: input.parsedFields,
+    confidence,
+    channels: input.channels,
+  };
 }
 
 export class FourEyesViolationError extends Error {

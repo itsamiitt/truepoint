@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1764,
-  "fileSetHash": "sha256:21c860d230fb6e362a8147ac999278c2103d11b614d0bd049d2fe3c41db91430",
+  "fileCount": 1765,
+  "fileSetHash": "sha256:6d9c3860e12813745b9c7328879a8c2f70e63138153b0a039620f8dfd3a17cf4",
   "features": {
     "account-search": {
       "web": [],
@@ -2498,6 +2498,7 @@
       "packages/db/test/forgeQuarantine.itest.ts",
       "packages/db/test/forgeReviewTaskIdempotency.itest.ts",
       "packages/db/test/forgeSyncState.itest.ts",
+      "packages/db/test/forgeVerifyProducer.itest.ts",
       "packages/db/test/home.itest.ts",
       "packages/db/test/import.itest.ts",
       "packages/db/test/importCopyRouting.itest.ts",

@@ -4,7 +4,9 @@ import {
   FourEyesViolationError,
   type PromotionCandidate,
   type PromotionTx,
+  VERIFY_THRESHOLD,
   approvePromotion,
+  assembleVerifiedCandidate,
   canonicalizeAuditRow,
   computePriority,
   forgeAuditHash,
@@ -68,6 +70,40 @@ describe("four-eyes promotion gate (10 §5)", () => {
     const r = await approvePromotion(fakeTx(seen).tx, req, "checker");
     expect(r.approved).toBe(0);
     expect(r.duplicate).toBe(1);
+  });
+});
+
+describe("assembleVerifiedCandidate (silver → gold, server-side; P-01.10)", () => {
+  test("confidence is the floor across auto-band extractions; content_hash is stable + content-derived", () => {
+    const c = assembleVerifiedCandidate({
+      entityKind: "person",
+      parsedFields: { name: "Ada" },
+      extractions: [
+        { confidence: 0.92, band: "auto" },
+        { confidence: 0.85, band: "auto" },
+        { confidence: 0.3, band: "quarantine" }, // not auto → ignored by the floor
+      ],
+    });
+    expect(c.confidence).toBe(0.85); // the weakest auto-band field gates promotion
+    expect(c.entityKind).toBe("person");
+    expect(c.fields).toEqual({ name: "Ada" });
+    // identical content → identical hash (stable/idempotent gold dedup key)
+    const same = assembleVerifiedCandidate({
+      entityKind: "person",
+      parsedFields: { name: "Ada" },
+      extractions: [],
+    });
+    expect(same.contentHash).toBe(c.contentHash);
+  });
+
+  test("no auto-band signal → confidence 0 → cannot clear VERIFY_THRESHOLD (never auto-promotes)", () => {
+    const c = assembleVerifiedCandidate({
+      entityKind: "company",
+      parsedFields: { domain: "acme.com" },
+      extractions: [{ confidence: 0.99, band: "review" }], // review-band only, no auto signal
+    });
+    expect(c.confidence).toBe(0);
+    expect(c.confidence).toBeLessThan(VERIFY_THRESHOLD);
   });
 });
 

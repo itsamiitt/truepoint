@@ -13,18 +13,24 @@ export { promoteVerifiedRecord, type PromotionInput } from "./promotionRepositor
 export {
   getRawCaptureForParse,
   getRawCaptureById,
+  getVerifyInputs,
   getPipelineOverviewCounts,
   listReviewTasks,
   listParsers,
   getSyncStatusCounts,
   type RawCaptureRowForParse,
   type RawCaptureRowById,
+  type VerifyInputsRow,
   type PipelineOverview,
   type ReviewTaskRow,
   type ParserRow,
   type SyncStatusCounts,
 } from "./readRepository.ts";
-export { insertQuarantine, insertReviewTask } from "./governanceRepository.ts";
+export {
+  insertApprovalRequest,
+  insertQuarantine,
+  insertReviewTask,
+} from "./governanceRepository.ts";
 export {
   drainSyncOutbox,
   markSyncOutboxDispatched,

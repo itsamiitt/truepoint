@@ -4,6 +4,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../../client.ts";
 import {
+  extractionCandidates,
   parsedRecords,
   parserVersions,
   parsers,
@@ -67,6 +68,49 @@ export async function getRawCaptureById(tx: Tx, id: string): Promise<RawCaptureR
     .where(eq(rawCaptures.id, id))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/** The silver inputs the verify stage assembles into a gold candidate (P-01.10 producer): the newest
+ *  non-superseded parsed record for a capture, its channel blind indexes, the capturer (the four-eyes MAKER),
+ *  and the AI-extract per-field confidence/band signal. Null when there is no parsed record (nothing to verify). */
+export interface VerifyInputsRow {
+  entityKind: "person" | "company";
+  parsedFields: unknown;
+  emailBlindIndex: string | null;
+  phoneBlindIndex: string | null;
+  capturedByUserId: string | null;
+  extractions: Array<{ confidence: number; band: string }>;
+}
+
+export async function getVerifyInputs(tx: Tx, rawCaptureId: string): Promise<VerifyInputsRow | null> {
+  const [pr] = await tx
+    .select({
+      entityKind: parsedRecords.entityKind,
+      fields: parsedRecords.fields,
+      emailBlindIndex: parsedRecords.emailBlindIndex,
+      phoneBlindIndex: parsedRecords.phoneBlindIndex,
+    })
+    .from(parsedRecords)
+    .where(and(eq(parsedRecords.rawCaptureId, rawCaptureId), eq(parsedRecords.superseded, false)))
+    .limit(1);
+  if (!pr) return null;
+  const [cap] = await tx
+    .select({ capturedByUserId: rawCaptures.capturedByUserId })
+    .from(rawCaptures)
+    .where(eq(rawCaptures.id, rawCaptureId))
+    .limit(1);
+  const cands = await tx
+    .select({ confidence: extractionCandidates.confidence, band: extractionCandidates.band })
+    .from(extractionCandidates)
+    .where(eq(extractionCandidates.rawCaptureId, rawCaptureId));
+  return {
+    entityKind: pr.entityKind === "company" ? "company" : "person",
+    parsedFields: pr.fields,
+    emailBlindIndex: pr.emailBlindIndex,
+    phoneBlindIndex: pr.phoneBlindIndex,
+    capturedByUserId: cap?.capturedByUserId ?? null,
+    extractions: cands.map((c) => ({ confidence: Number(c.confidence), band: c.band })),
+  };
 }
 
 export interface PipelineOverview {

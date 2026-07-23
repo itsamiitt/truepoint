@@ -10,6 +10,8 @@ import {
   forgeSyncRepository,
   getRawCaptureById,
   getRawCaptureForParse,
+  getVerifyInputs,
+  insertApprovalRequest,
   insertExtractionCandidates,
   insertExtractionRun,
   insertQuarantine,
@@ -23,6 +25,9 @@ import {
 } from "@leadwolf/db";
 import type { BlobFetcher, ExtractionPort, ParserRegistry } from "@leadwolf/forge-core";
 import {
+  VERIFY_THRESHOLD,
+  assembleVerifiedCandidate,
+  computePriority,
   inMemoryBudgetStore,
   runExtraction,
   runParse,
@@ -33,6 +38,9 @@ import type { Job, Queue } from "bullmq";
 /** The fields the AI extraction stage targets from an intercepted profile (09 §target fields). */
 const TARGET_FIELDS = ["full_name", "headline", "current_title", "current_company", "location"];
 const AI_BUDGET_LIMIT = 1000;
+/** The four-eyes MAKER for a capturer-less (system-initiated) capture — the nil uuid, distinct from every real
+ *  user, so a human approver always differs from it and four-eyes still requires a genuine second party. */
+const FORGE_SYSTEM_USER_ID = "00000000-0000-0000-0000-000000000000";
 
 export interface ProcessorDeps {
   blob: BlobFetcher;
@@ -172,17 +180,47 @@ export function makeResolveProcessor(deps: ProcessorDeps) {
   };
 }
 
-/** verify: enqueue a HUMAN review task (four-eyes — the worker never self-approves; promotion is API-driven). */
+/** verify: assemble a SERVER-authoritative gold candidate from the silver outputs, persist it as a pending
+ *  approval_request (four-eyes MAKER = the capturer, never the client), and enqueue a HUMAN review task LINKED to
+ *  it (P-01.10). The worker NEVER self-approves — promotion is API-driven via /v1/review/approve, which loads the
+ *  maker + candidate from the approval_request (not its request body). Idempotent: a redelivered verify converges
+ *  on the approval_request's (op_class, content_hash) partial unique, so the review task dedups too. */
 export function makeVerifyProcessor(_deps: ProcessorDeps) {
   return async (job: Job<{ rawCaptureId: string }>): Promise<void> => {
-    await withForgeTx((tx) =>
-      insertReviewTask(tx, {
-        taskType: "ai_low_confidence",
-        subjectRef: job.data.rawCaptureId,
-        confidence: 0.5,
-        priority: 50,
-      }),
-    );
+    await withForgeTx(async (tx) => {
+      const inputs = await getVerifyInputs(tx, job.data.rawCaptureId);
+      if (!inputs) return; // no parsed record (quarantined / not yet parsed) → nothing to verify
+
+      const candidate = assembleVerifiedCandidate({
+        entityKind: inputs.entityKind,
+        parsedFields: inputs.parsedFields,
+        extractions: inputs.extractions,
+        channels: {
+          emailBlindIndex: inputs.emailBlindIndex ?? undefined,
+          phoneBlindIndex: inputs.phoneBlindIndex ?? undefined,
+        },
+      });
+
+      const approvalRequestId = await insertApprovalRequest(tx, {
+        opClass: "verify.promote",
+        requestedByUserId: inputs.capturedByUserId ?? FORGE_SYSTEM_USER_ID,
+        subjectRef: candidate.contentHash,
+        payload: candidate,
+      });
+
+      await insertReviewTask(tx, {
+        // Below-threshold candidates still need a human; the type/priority just rank the queue (uncertainty first).
+        taskType: candidate.confidence >= VERIFY_THRESHOLD ? "manual" : "ai_low_confidence",
+        subjectRef: approvalRequestId, // the review task points at the approval_request (P-01.10)
+        confidence: candidate.confidence,
+        priority: computePriority({
+          confidence: candidate.confidence,
+          value: 0.5,
+          freshness: 1,
+          risk: 0.5,
+        }),
+      });
+    });
   };
 }
 

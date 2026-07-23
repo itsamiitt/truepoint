@@ -294,17 +294,28 @@ export const masterIdMap = forgeSchema.table(
 );
 
 // ── maker-checker governance ──────────────────────────────────────────────────────────────────────────
-export const approvalRequests = forgeSchema.table("approval_requests", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  opClass: text("op_class").notNull(),
-  requestedByUserId: uuid("requested_by_user_id").notNull(),
-  decidedByUserId: uuid("decided_by_user_id"),
-  status: text("status").notNull().default("pending"),
-  payload: jsonb("payload").notNull().default({}),
-  expiresAt: timestamp("expires_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  executedAt: timestamp("executed_at", { withTimezone: true }),
-});
+export const approvalRequests = forgeSchema.table(
+  "approval_requests",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    opClass: text("op_class").notNull(),
+    requestedByUserId: uuid("requested_by_user_id").notNull(),
+    decidedByUserId: uuid("decided_by_user_id"),
+    status: text("status").notNull().default("pending"),
+    payload: jsonb("payload").notNull().default({}),
+    // The verify stage's idempotency key (P-01.10) — the gold candidate's content_hash. A partial unique keeps
+    // at-most-one PENDING request per (op_class, subject_ref) so a redelivered verify converges.
+    subjectRef: text("subject_ref"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    executedAt: timestamp("executed_at", { withTimezone: true }),
+  },
+  (t) => ({
+    uniqPendingSubject: uniqueIndex("uniq_approval_requests_pending_subject")
+      .on(t.opClass, t.subjectRef)
+      .where(sql`${t.status} = 'pending'`),
+  }),
+);
 
 export const reviewTasks = forgeSchema.table(
   "review_tasks",
