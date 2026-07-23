@@ -5,14 +5,18 @@
 // Handlers are idempotent (keyed writes), so a retry or redelivery converges.
 import {
   type SyncApplyItem,
+  countExtractionCandidates,
   drainSyncOutbox,
   forgeSyncRepository,
   getRawCaptureById,
   getRawCaptureForParse,
   insertExtractionCandidates,
   insertExtractionRun,
+  insertQuarantine,
   insertReviewTask,
   markSyncOutboxDispatched,
+  markSyncStateSynced,
+  upsertMasterIdMap,
   upsertParsedRecord,
   withErTx,
   withForgeTx,
@@ -80,7 +84,10 @@ export function makeParseProcessor(deps: ProcessorDeps) {
           },
           blob: deps.blob,
           quarantine: {
+            // Persist the drift (P-01.8) — same leadwolf_forge tx as the parse, so a quarantined capture and the
+            // absence of a parsed_record commit atomically. Was a bare console.warn; drifted captures were lost.
             record: async (id, route, reason) => {
+              await insertQuarantine(tx, { rawCaptureId: id, route, reason });
               console.warn(`[forge-parse] quarantine ${id} ${route}: ${reason}`);
             },
           },
@@ -113,6 +120,15 @@ export function makeExtractProcessor(deps: ProcessorDeps) {
       return { tenantId: capture.targetTenantId, residue, schemaVersion: capture.schemaVersion };
     });
     if (!ctx) return;
+    // idempotency (P-01.16): a redelivered/retried job must NOT re-bill Anthropic or duplicate metering. If this
+    // capture was already extracted (candidates persisted), skip the paid call and just advance to resolve.
+    const alreadyExtracted = await withForgeTx((tx) =>
+      countExtractionCandidates(tx, job.data.rawCaptureId),
+    );
+    if (alreadyExtracted > 0) {
+      await deps.queues.resolve.add("forge-resolve", { rawCaptureId: job.data.rawCaptureId });
+      return;
+    }
     const extraction = await runExtraction(
       {
         port: deps.extractPort,
@@ -175,7 +191,7 @@ export function makeSyncProcessor(_deps: ProcessorDeps) {
   return async (): Promise<void> => {
     const rows = await withForgeTx((tx) => drainSyncOutbox(tx, 50));
     for (const row of rows) {
-      await withErTx((tx) =>
+      const result = await withErTx((tx) =>
         forgeSyncRepository.applyItem(tx, {
           eventId: row.id,
           eventType: row.eventType,
@@ -187,6 +203,22 @@ export function makeSyncProcessor(_deps: ProcessorDeps) {
           payload: row.payload as SyncApplyItem["payload"],
         }),
       );
+      // Record the forge<->master crosswalk + advance the verified record's sync_state (P-01.20). Skip on a
+      // duplicate (a re-drain of an already-applied event) so a null masterId never clobbers a good one; the
+      // narrow crash window between apply and this write is recovered by the maintenance reconciliation sweep.
+      if (result.outcome !== "duplicate") {
+        const entityKind = row.aggregateKind.replace(/^verified_/, "");
+        await withForgeTx(async (tx) => {
+          await upsertMasterIdMap(tx, {
+            forgeId: row.forgeId,
+            masterId: result.masterId,
+            entityKind,
+            contentHash: row.contentHash,
+            syncedVersion: row.version,
+          });
+          await markSyncStateSynced(tx, row.forgeId);
+        });
+      }
     }
     if (rows.length > 0)
       await withForgeTx((tx) =>

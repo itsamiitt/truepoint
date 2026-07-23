@@ -519,6 +519,20 @@
       "when": 1786700000000,
       "tag": "0072_forge_extraction_candidates",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1786800000000,
+      "tag": "0073_forge_review_task_idempotency",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1786900000000,
+      "tag": "0074_forge_quarantine",
+      "breakpoints": true
     }
   ]
 }

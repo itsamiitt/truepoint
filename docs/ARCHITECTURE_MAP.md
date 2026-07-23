@@ -33,7 +33,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **1695 source files · 83 code-bearing domains · 33 shared areas · 54 domain-vocabulary warnings · 140
+> **1698 source files · 83 code-bearing domains · 33 shared areas · 54 domain-vocabulary warnings · 140
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
 > feature (`apps/api/src/features/master-sync`) + the **nested TruePoint Forge** (fully migrated from the

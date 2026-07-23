@@ -3,7 +3,7 @@
 // were previously discarded. Idempotent on (raw_capture_id, path): a re-extraction converges to the latest values
 // rather than duplicating. Numeric confidence is stored as a Drizzle numeric string; never a channel PII value
 // (email/phone stay blind-index-only at silver).
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Tx } from "../../client.ts";
 import { extractionCandidates } from "../../schema/forge.ts";
 
@@ -51,4 +51,14 @@ export async function insertExtractionCandidates(
     .returning({ id: extractionCandidates.id });
 
   return { written: written.length };
+}
+
+/** How many candidates a capture already has — the extract-stage idempotency guard (P-01.16): a redelivered job
+ *  skips the paid re-extraction when this is > 0. */
+export async function countExtractionCandidates(tx: Tx, rawCaptureId: string): Promise<number> {
+  const rows = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(extractionCandidates)
+    .where(eq(extractionCandidates.rawCaptureId, rawCaptureId));
+  return rows[0]?.n ?? 0;
 }

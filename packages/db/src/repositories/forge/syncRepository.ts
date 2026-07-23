@@ -3,7 +3,7 @@
 // outboxRelay.ts FOR UPDATE SKIP LOCKED drain (ecosystem-facts §C) so many workers drain with no contention.
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import type { Tx } from "../../client.ts";
-import { masterIdMap, syncOutbox } from "../../schema/forge.ts";
+import { masterIdMap, syncOutbox, syncState } from "../../schema/forge.ts";
 
 /** The relay-shaped row (structurally matches @forge/sync's OutboxRow; the worker passes it straight through). */
 export interface DrainedOutboxRow {
@@ -48,6 +48,15 @@ export async function markSyncOutboxDispatched(tx: Tx, ids: string[]): Promise<v
     .update(syncOutbox)
     .set({ status: "dispatched", dispatchedAt: new Date() })
     .where(inArray(syncOutbox.id, ids));
+}
+
+/** Advance a verified record's sync_state to 'synced' after a successful master apply (P-01.20) — the console
+ *  "synced" count and reconciliation both read this; it was previously left at 'pending' forever. */
+export async function markSyncStateSynced(tx: Tx, verifiedId: string): Promise<void> {
+  await tx
+    .update(syncState)
+    .set({ status: "synced", updatedAt: new Date() })
+    .where(eq(syncState.verifiedId, verifiedId));
 }
 
 /** Write back the assigned master_id from the /master-sync response (11 §2). */

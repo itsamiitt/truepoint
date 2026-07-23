@@ -320,6 +320,28 @@ export const reviewTasks = forgeSchema.table(
   (t) => ({
     rankIdx: index("idx_review_tasks_rank").on(t.status, t.priority),
     slaIdx: index("idx_review_tasks_sla").on(t.slaDueAt),
+    // at-most-one OPEN task per (subject, type) — the verify-stage idempotency key (P-01.16).
+    oneOpen: uniqueIndex("uniq_review_tasks_one_open")
+      .on(t.subjectRef, t.taskType)
+      .where(sql`${t.status} = 'open'`),
+  }),
+);
+
+// Drifted/unparseable captures (P-01.8) — the parse quarantine lane, previously console.warn'd and lost.
+export const quarantine = forgeSchema.table(
+  "quarantine",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    rawCaptureId: uuid("raw_capture_id")
+      .notNull()
+      .references(() => rawCaptures.id, { onDelete: "cascade" }),
+    route: text("route").notNull(),
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqCaptureRoute: uniqueIndex("uniq_quarantine_capture_route").on(t.rawCaptureId, t.route),
   }),
 );
 

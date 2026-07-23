@@ -5,6 +5,7 @@ export { landRawCapture, type RawCaptureInsert } from "./rawCaptureRepository.ts
 export { upsertParsedRecord, type ParsedRecordUpsert } from "./parsedRecordRepository.ts";
 export { insertExtractionRun, type ExtractionRunInsert } from "./extractionRunRepository.ts";
 export {
+  countExtractionCandidates,
   insertExtractionCandidates,
   type ExtractionCandidateInsert,
 } from "./extractionCandidateRepository.ts";
@@ -23,10 +24,11 @@ export {
   type ParserRow,
   type SyncStatusCounts,
 } from "./readRepository.ts";
-export { insertReviewTask } from "./governanceRepository.ts";
+export { insertQuarantine, insertReviewTask } from "./governanceRepository.ts";
 export {
   drainSyncOutbox,
   markSyncOutboxDispatched,
+  markSyncStateSynced,
   upsertMasterIdMap,
   type DrainedOutboxRow,
 } from "./syncRepository.ts";
