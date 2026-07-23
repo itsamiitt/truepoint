@@ -30,9 +30,24 @@ import { withDeadline } from "./withDeadline.ts";
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
+// Repeatable-scheduler cadences (P-01.4) — tunable operational defaults.
+const SYNC_DRAIN_MS = 10_000; // drain up to 50 sync_outbox rows every 10s
+const MAINTENANCE_TICK_MS = 60_000; // reconcile/decay tick every 60s (matches the leader-lock TTL)
+
 function makeQueue(stage: string): Queue {
   const { attempts, backoff } = retryFor(stage);
-  return new Queue(`forge-${stage}`, { connection, defaultJobOptions: { attempts, backoff } });
+  return new Queue(`forge-${stage}`, {
+    connection,
+    defaultJobOptions: {
+      attempts,
+      backoff,
+      // Redis hygiene — mirror the platform queues (apps/api import/reveal/reverification): completed jobs age
+      // out (24h or last 1000) so Redis doesn't grow unbounded (the #1 BullMQ outage class); failed jobs are
+      // KEPT for inspection/DLQ triage (P-01.17).
+      removeOnComplete: { age: 24 * 3600, count: 1000 },
+      removeOnFail: false,
+    },
+  });
 }
 
 export const queues = {
@@ -96,8 +111,15 @@ export function startWorkers(): { queues: string[]; workers: Worker[]; env: stri
     makeWorker("verify", makeVerifyProcessor(deps)),
     makeWorker("maintenance", makeMaintenanceProcessor(deps)),
   ];
+  // Repeatable schedulers (P-01.4): nothing else enqueues forge-maintenance / forge-sync, so without these the
+  // maintenance tick never fires and the sync outbox never drains. BullMQ dedups repeatable jobs by their repeat
+  // key, so registering on every boot is idempotent; the maintenance processor is leader-locked (single writer
+  // across replicas) and the sync drain is effectively-once (applyItem dedups on event_id). The sync scheduler is
+  // gated with its worker so drain jobs are never enqueued without a consumer.
+  void queues.maintenance.add("forge-maintenance-tick", {}, { repeat: { every: MAINTENANCE_TICK_MS } });
   if (forgeFlags.syncEgressEnabled) {
     workers.push(makeWorker("sync", makeSyncProcessor(deps)));
+    void queues.sync.add("forge-sync-drain", {}, { repeat: { every: SYNC_DRAIN_MS } });
   }
   return { queues: Object.keys(queues), workers, env: env.NODE_ENV };
 }

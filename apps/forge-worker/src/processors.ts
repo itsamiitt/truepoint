@@ -9,6 +9,7 @@ import {
   forgeSyncRepository,
   getRawCaptureById,
   getRawCaptureForParse,
+  insertExtractionCandidates,
   insertExtractionRun,
   insertReviewTask,
   markSyncOutboxDispatched,
@@ -72,6 +73,9 @@ export function makeParseProcessor(deps: ProcessorDeps) {
                 fields: r.fields,
                 fieldProvenance: r.provenance,
                 parseErrors: r.errors,
+                blockKey: r.blockKey,
+                emailBlindIndex: r.emailBlindIndex,
+                phoneBlindIndex: r.phoneBlindIndex,
               }),
           },
           blob: deps.blob,
@@ -109,7 +113,7 @@ export function makeExtractProcessor(deps: ProcessorDeps) {
       return { tenantId: capture.targetTenantId, residue, schemaVersion: capture.schemaVersion };
     });
     if (!ctx) return;
-    await runExtraction(
+    const extraction = await runExtraction(
       {
         port: deps.extractPort,
         budgetStore,
@@ -124,6 +128,23 @@ export function makeExtractProcessor(deps: ProcessorDeps) {
         schemaVersion: ctx.schemaVersion,
       },
     );
+    // Persist the extracted candidates (P-01.2) — previously discarded, so promotion had no real data to promote.
+    if (extraction.fields.length > 0) {
+      await withForgeTx((tx) =>
+        insertExtractionCandidates(
+          tx,
+          extraction.fields.map((f) => ({
+            rawCaptureId: job.data.rawCaptureId,
+            path: f.path,
+            value: f.value,
+            confidence: f.confidence,
+            band: f.band,
+            grounded: f.grounded,
+            extractSchemaVersion: ctx.schemaVersion,
+          })),
+        ),
+      );
+    }
     await deps.queues.resolve.add("forge-resolve", { rawCaptureId: job.data.rawCaptureId });
   };
 }

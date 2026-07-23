@@ -42,19 +42,24 @@ function makeLandDeps(tx: Tx): LandDeps {
   return {
     store: { land: (row) => landRawCapture(tx, row) },
     objectStore, // real S3/MinIO (Phase 4)
-    enqueue: {
-      enqueue: async (jobId, data) => {
-        await parseQueue.add("forge-parse", data, { jobId });
-      },
-    },
     newBatchId: () => crypto.randomUUID(),
   };
 }
 
 const app = createForgeApi({
   captures: {
-    // Land verbatim + enqueue parse inside ONE leadwolf_forge tx (withForgeTx owns the connection).
-    land: (envelope) => withForgeTx((tx) => landEnvelope(makeLandDeps(tx), envelope)),
+    // Land verbatim in ONE leadwolf_forge tx; enqueue parse AFTER it commits (P-01.7) so a parse job is never
+    // dispatched before its raw_captures row exists and a rolled-back envelope enqueues nothing. jobId = content
+    // hash keeps an accidental double-enqueue a no-op.
+    land: async (envelope) => {
+      const { ack, landed } = await withForgeTx((tx) => landEnvelope(makeLandDeps(tx), envelope));
+      await Promise.all(
+        landed.map((contentHash) =>
+          parseQueue.add("forge-parse", { contentHash }, { jobId: contentHash }),
+        ),
+      );
+      return ack;
+    },
     rateLimit: forgeRateLimiter(connection, {
       recordLimit: RECORD_LIMIT_PER_MIN,
       byteLimit: PAYLOAD_BYTE_LIMIT_PER_MIN,

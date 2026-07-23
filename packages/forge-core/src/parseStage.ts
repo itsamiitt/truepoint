@@ -23,6 +23,11 @@ export interface ParsedRecordUpsert {
   fields: unknown;
   provenance: unknown;
   errors: unknown;
+  /** ER blocking key + silver blind indexes (§B) — carried through to parsed_records so ER blocking and
+   *  DSAR-on-silver actually work (P-01.3); the parser emits HMAC blind indexes only, never clear channel PII. */
+  blockKey?: string;
+  emailBlindIndex?: string;
+  phoneBlindIndex?: string;
 }
 
 /** Idempotent upsert keyed on (raw_capture_id, parser_version_id) — a re-derivation converges (08 §Replay). */
@@ -105,6 +110,9 @@ export async function runParse(
       masking: f.masking,
     })),
     errors: result.errors,
+    blockKey: result.blockKey,
+    emailBlindIndex: result.channels.emailBlindIndex,
+    phoneBlindIndex: result.channels.phoneBlindIndex,
   });
   return { outcome: result.status, parserVersionId: selection.version.id };
 }

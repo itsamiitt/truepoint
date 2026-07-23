@@ -4,6 +4,10 @@
 export { landRawCapture, type RawCaptureInsert } from "./rawCaptureRepository.ts";
 export { upsertParsedRecord, type ParsedRecordUpsert } from "./parsedRecordRepository.ts";
 export { insertExtractionRun, type ExtractionRunInsert } from "./extractionRunRepository.ts";
+export {
+  insertExtractionCandidates,
+  type ExtractionCandidateInsert,
+} from "./extractionCandidateRepository.ts";
 export { promoteVerifiedRecord, type PromotionInput } from "./promotionRepository.ts";
 export {
   getRawCaptureForParse,

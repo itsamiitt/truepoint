@@ -167,6 +167,33 @@ export const extractionRuns = forgeSchema.table(
   }),
 );
 
+// The AI-extract stage (S2) OUTPUT — the per-field candidates {value, confidence, band, grounded} that were
+// previously DISCARDED (P-01.2). Idempotent on (raw_capture_id, path); same PII posture as parsed_records.fields
+// (non-channel profile fields; channel PII stays blind-index-only; encryption-at-rest is the F2 security task).
+export const extractionCandidates = forgeSchema.table(
+  "extraction_candidates",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    rawCaptureId: uuid("raw_capture_id")
+      .notNull()
+      .references(() => rawCaptures.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    value: jsonb("value"),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }).notNull(),
+    band: text("band").notNull(),
+    grounded: boolean("grounded").notNull(),
+    extractSchemaVersion: text("extract_schema_version"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniqCapturePath: uniqueIndex("uniq_extraction_candidates_capture_path").on(
+      t.rawCaptureId,
+      t.path,
+    ),
+  }),
+);
+
 // ── gold + sync ledger ────────────────────────────────────────────────────────────────────────────────
 export const verifiedRecords = forgeSchema.table(
   "verified_records",

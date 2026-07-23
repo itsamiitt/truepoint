@@ -231,6 +231,7 @@
       "dependencies": {
         "@leadwolf/config": "workspace:*",
         "@leadwolf/db": "workspace:*",
+        "@leadwolf/identity": "workspace:*",
         "@leadwolf/types": "workspace:*",
         "libphonenumber-js": "^1.13.6",
         "tldts": "^7.4.3",
@@ -272,7 +273,18 @@
       "dependencies": {
         "@leadwolf/config": "workspace:*",
         "@leadwolf/db": "workspace:*",
+        "@leadwolf/identity": "workspace:*",
         "@leadwolf/types": "workspace:*",
+      },
+      "devDependencies": {
+        "typescript": "5.7.2",
+      },
+    },
+    "packages/identity": {
+      "name": "@leadwolf/identity",
+      "version": "0.0.0",
+      "dependencies": {
+        "@leadwolf/config": "workspace:*",
       },
       "devDependencies": {
         "typescript": "5.7.2",
@@ -543,6 +555,8 @@
     "@leadwolf/forge-core": ["@leadwolf/forge-core@workspace:packages/forge-core"],
 
     "@leadwolf/forge-worker": ["@leadwolf/forge-worker@workspace:apps/forge-worker"],
+
+    "@leadwolf/identity": ["@leadwolf/identity@workspace:packages/identity"],
 
     "@leadwolf/integrations": ["@leadwolf/integrations@workspace:packages/integrations"],
 

@@ -49,7 +49,6 @@ export interface RateLimiter {
 export interface LandDeps {
   store: RawCaptureStore;
   objectStore: ObjectStore;
-  enqueue: ParseQueue;
   newBatchId: () => string;
 }
 
@@ -99,13 +98,14 @@ async function routePayload(
   return { inline: record.rawPayload, ref: null };
 }
 
-/** Land an envelope v2 verbatim + enqueue parse for each NEW record; a replayed content_hash is a no-op. */
+/** Land an envelope v2 verbatim; RETURN the content-hashes that landed for a POST-COMMIT parse enqueue (P-01.7).
+ *  A replayed content_hash lands nothing (idempotent on content_hash). */
 export async function landEnvelope(
   deps: LandDeps,
   envelope: IngestionEnvelopeV2,
-): Promise<CaptureAck> {
+): Promise<{ ack: CaptureAck; landed: string[] }> {
   const batchId = deps.newBatchId();
-  let accepted = 0;
+  const landedHashes: string[] = [];
   let duplicate = 0;
 
   for (const record of envelope.records) {
@@ -127,12 +127,18 @@ export async function landEnvelope(
     });
 
     if (landed) {
-      accepted += 1;
-      await deps.enqueue.enqueue(record.contentHash, { contentHash: record.contentHash });
+      landedHashes.push(record.contentHash);
     } else {
       duplicate += 1;
     }
   }
 
-  return { batchId, accepted, duplicate, rejected: 0 };
+  // The parse enqueue happens AFTER this tx commits (P-01.7): landEnvelope only RECORDS what landed; @forge/api
+  // enqueues `landed` post-commit, so a parse job is never dispatched before its raw_captures row exists and a
+  // rolled-back envelope enqueues nothing. A crash between commit and enqueue is recovered by the maintenance
+  // reconciliation sweep (follow-on).
+  return {
+    ack: { batchId, accepted: landedHashes.length, duplicate, rejected: 0 },
+    landed: landedHashes,
+  };
 }

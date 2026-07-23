@@ -10,6 +10,12 @@ export const VOYAGER_PROFILE_ENDPOINT = "voyager/identity/profiles";
 export const VOYAGER_PROFILE_FINGERPRINT =
   "firstName,geoLocationName,headline,lastName,publicIdentifier";
 
+// Stable identity of the built-in parser + its one active version. The in-memory registry uses
+// VOYAGER_PROFILE_VERSION_ID as the version id, and forge.parsed_records.parser_version_id (a uuid FK) references
+// it — so these MUST equal the seed in packages/db/src/migrations/0071_seed_forge_voyager_parser.sql (P-01.1).
+export const VOYAGER_PROFILE_PARSER_ID = "a0000000-0000-4000-8000-000000000001";
+export const VOYAGER_PROFILE_VERSION_ID = "a0000000-0000-4000-8000-000000000002";
+
 function str(v: unknown): string | null {
   return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
 }

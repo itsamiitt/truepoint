@@ -23,7 +23,7 @@ export interface SyncApplyItem {
   contentHash: string; // base64 sha256
   payload: {
     linkedinPublicId?: string;
-    emailBlindIndex?: string; // base64 HMAC
+    emailBlindIndex?: string; // hex HMAC (Forge silver blind index — @leadwolf/identity; decoded hex→bytea below)
     emailDomain?: string;
     registrableDomain?: string;
     companyName?: string;
@@ -60,8 +60,10 @@ export const forgeSyncRepository = {
     }
 
     // 3. LINK/MINT the golden entity via the existing co-op-safe resolver (idempotent on the UNIQUE keys).
+    // Forge produces the blind index as canonical HEX (@leadwolf/identity.blindIndexHex) — the hex of the SAME
+    // bytes master_emails stores — so decode hex→bytea here to LINK (not mint a duplicate). P-01.6.
     const emailBlindIndex = item.payload.emailBlindIndex
-      ? Buffer.from(item.payload.emailBlindIndex, "base64")
+      ? Buffer.from(item.payload.emailBlindIndex, "hex")
       : undefined;
     const resolved = await masterGraphRepository.resolveForImport(tx, {
       linkedinPublicId: item.payload.linkedinPublicId,

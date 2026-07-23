@@ -141,12 +141,25 @@ describe("runParse (S1 stage)", () => {
     ...over,
   });
 
-  test("parses a matched capture into a parsed_record", async () => {
+  test("parses a matched capture into a parsed_record with the block key (P-01.3)", async () => {
     const d = deps();
     const out = await runParse(d.stage, capture());
     expect(out.outcome).toBe("parsed");
     expect(d.written).toHaveLength(1);
     expect(d.quarantined).toHaveLength(0);
+    // the ER block key is carried through to the upsert (no longer dropped)
+    expect((d.written[0] as { blockKey?: string }).blockKey).toBe("doe");
+  });
+
+  test("carries the silver blind index into the upsert when the capture has an email (P-01.3)", async () => {
+    const d = deps();
+    await runParse(
+      d.stage,
+      capture({
+        payloadInline: JSON.stringify({ ...VOYAGER_FIXTURE, emailAddress: "Jane.Doe@Acme.com" }),
+      }),
+    );
+    expect((d.written[0] as { emailBlindIndex?: string }).emailBlindIndex).toMatch(/^[0-9a-f]{64}$/);
   });
 
   test("routes an unmatched endpoint to the quarantine lane (never into silver)", async () => {

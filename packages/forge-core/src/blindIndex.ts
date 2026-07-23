@@ -1,16 +1,22 @@
-// @forge/core blind index (08 §PII-minimizing, invariant 3). Silver carries HMAC(normalized channel value)
-// only — never clear PII or ciphertext (§B). Runs server-side (parse worker), so node:crypto's SYNC HMAC
-// keeps the parser a pure sync function. The dev key is deterministic (golden-fixture stability); production
-// wraps the key with KMS (P0 §14).
-import { createHmac } from "node:crypto";
-import { BLIND_INDEX_KEY } from "@leadwolf/config";
+// blindIndex.ts — Forge's silver blind index, now derived from the CANONICAL @leadwolf/identity primitives
+// (doc 16 duplication kill-list #1; the P-01.6 / P-01.14 fix). The bytes are HMAC-SHA256 under the single
+// validated env.BLIND_INDEX_KEY — the SAME key + normalization the master graph uses — so a Forge silver index
+// and a master_emails index for the same email are byte-identical, and the sync seam decodes this hex straight
+// to the master bytea (forgeSyncRepository.applyItem). The old forge dev-default key and trim-only normalization
+// are gone; Silver still carries HMAC only, never clear PII (invariant 3).
+import {
+  blindIndexHex,
+  normalizeEmailForIndex,
+  normalizeEmailForStorage,
+} from "@leadwolf/identity";
 
-/** Normalize an email to its canonical lowercased form before hashing. */
+/** Canonical index-form normalization: the storage form (trim+lowercase) minus the local-part "+tag". */
 export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
+  const storage = normalizeEmailForStorage(email);
+  return storage ? normalizeEmailForIndex(storage) : email.trim().toLowerCase();
 }
 
-/** HMAC-SHA256(normalized) hex — the global dedup + DSAR/suppression key at the master layer (ecosystem-facts §B). */
+/** HEX HMAC blind index for Forge's silver `text` columns — the hex of the master graph's exact bytea. */
 export function blindIndex(normalized: string): string {
-  return createHmac("sha256", BLIND_INDEX_KEY).update(normalized).digest("hex");
+  return blindIndexHex(normalized);
 }

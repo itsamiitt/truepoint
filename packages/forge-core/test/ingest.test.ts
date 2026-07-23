@@ -46,29 +46,23 @@ function envelope(records: Array<{ contentHash: string; byteSize: number }>): In
 }
 
 describe("landEnvelope (S0 land stage)", () => {
-  test("a new record lands + enqueues; a replay is a no-op (idempotent on content_hash)", async () => {
+  test("a new record lands + is queued post-commit; a replay is a no-op (idempotent)", async () => {
     const store = fakeStore();
-    const enqueued: string[] = [];
     const deps: LandDeps = {
       store,
       objectStore: inMemoryObjectStore(),
-      enqueue: {
-        enqueue: async (jobId) => {
-          enqueued.push(jobId);
-        },
-      },
       newBatchId: () => "batch-1",
     };
 
     const first = await landEnvelope(deps, envelope([{ contentHash: HASH_A, byteSize: 2 }]));
-    expect(first.accepted).toBe(1);
-    expect(first.duplicate).toBe(0);
-    expect(enqueued).toEqual([HASH_A]);
+    expect(first.ack.accepted).toBe(1);
+    expect(first.ack.duplicate).toBe(0);
+    expect(first.landed).toEqual([HASH_A]); // returned for the POST-COMMIT enqueue (P-01.7), not enqueued in-tx
 
     const replay = await landEnvelope(deps, envelope([{ contentHash: HASH_A, byteSize: 2 }]));
-    expect(replay.accepted).toBe(0);
-    expect(replay.duplicate).toBe(1);
-    expect(enqueued).toEqual([HASH_A]); // NOT enqueued again — a double-enqueue is ignored
+    expect(replay.ack.accepted).toBe(0);
+    expect(replay.ack.duplicate).toBe(1);
+    expect(replay.landed).toEqual([]); // a replay lands nothing → enqueues nothing
   });
 
   test("a large payload offloads to the object store (pointer in row, not inline)", async () => {
@@ -77,7 +71,6 @@ describe("landEnvelope (S0 land stage)", () => {
     const deps: LandDeps = {
       store,
       objectStore: obj,
-      enqueue: { enqueue: async () => {} },
       newBatchId: () => "b",
     };
 

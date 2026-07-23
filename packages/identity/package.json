@@ -1,15 +1,12 @@
 {
-  "name": "@leadwolf/forge-core",
+  "name": "@leadwolf/identity",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit", "test": "bun test" },
   "dependencies": {
-    "@leadwolf/config": "workspace:*",
-    "@leadwolf/db": "workspace:*",
-    "@leadwolf/identity": "workspace:*",
-    "@leadwolf/types": "workspace:*"
+    "@leadwolf/config": "workspace:*"
   },
   "devDependencies": { "typescript": "5.7.2" }
 }

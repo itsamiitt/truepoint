@@ -12,6 +12,7 @@
   "dependencies": {
     "@leadwolf/config": "workspace:*",
     "@leadwolf/db": "workspace:*",
+    "@leadwolf/identity": "workspace:*",
     "@leadwolf/types": "workspace:*",
     "libphonenumber-js": "^1.13.6",
     "tldts": "^7.4.3",
