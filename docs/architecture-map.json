@@ -102,8 +102,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1683,
-  "fileSetHash": "sha256:5617a3784553fbd7ec1dacb889557e225308275b4d336dc3304ff29d40e2e2a1",
+  "fileCount": 1695,
+  "fileSetHash": "sha256:2c4115ff00e5eca4920d07432ea7f7eb49ff272ae27de685a7f12641cdf937c7",
   "features": {
     "account-search": {
       "web": [],
@@ -2422,6 +2422,8 @@
       "packages/db/test/enrichmentPolicy.itest.ts",
       "packages/db/test/featureFlags.itest.ts",
       "packages/db/test/fieldProvenancePin.itest.ts",
+      "packages/db/test/forgeExtractionCandidates.itest.ts",
+      "packages/db/test/forgeParserSeed.itest.ts",
       "packages/db/test/home.itest.ts",
       "packages/db/test/import.itest.ts",
       "packages/db/test/importCopyRouting.itest.ts",
@@ -2680,6 +2682,7 @@
     "packages/db/src/repositories/erRepository.ts",
     "packages/db/src/repositories/evidenceRepository.ts",
     "packages/db/src/repositories/featureFlagRepository.ts",
+    "packages/db/src/repositories/forge/extractionCandidateRepository.ts",
     "packages/db/src/repositories/forge/extractionRunRepository.ts",
     "packages/db/src/repositories/forge/governanceRepository.ts",
     "packages/db/src/repositories/forge/parsedRecordRepository.ts",
@@ -2731,6 +2734,7 @@
     "packages/forge-core/src/ports.ts",
     "packages/forge-core/src/schemaVer.ts",
     "packages/forge-core/src/verification.ts",
+    "packages/forge-core/test/blindIndex.test.ts",
     "packages/forge-core/test/er.test.ts",
     "packages/forge-core/test/extraction.test.ts",
     "packages/forge-core/test/ga.test.ts",
@@ -2738,7 +2742,15 @@
     "packages/forge-core/test/observability.test.ts",
     "packages/forge-core/test/parser.test.ts",
     "packages/forge-core/test/schemaVer.test.ts",
-    "packages/forge-core/test/verification.test.ts"
+    "packages/forge-core/test/verification.test.ts",
+    "packages/identity/src/blindIndex.ts",
+    "packages/identity/src/contentHash.ts",
+    "packages/identity/src/index.ts",
+    "packages/identity/src/normalize.ts",
+    "packages/identity/test/blindIndex.test.ts",
+    "packages/identity/test/contentHash.test.ts",
+    "packages/identity/test/normalize.test.ts",
+    "packages/identity/test/parity.test.ts"
   ],
   "warnings": [
     "undeclared domain 'account-search' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

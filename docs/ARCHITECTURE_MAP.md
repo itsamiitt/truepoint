@@ -33,7 +33,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **1682 source files · 83 code-bearing domains · 33 shared areas · 54 domain-vocabulary warnings · 130
+> **1695 source files · 83 code-bearing domains · 33 shared areas · 54 domain-vocabulary warnings · 140
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
 > feature (`apps/api/src/features/master-sync`) + the **nested TruePoint Forge** (fully migrated from the
@@ -56,6 +56,7 @@ packages/                       # side-effect-free libraries, each exported via 
                                 #   importTemplates, listGovernance, pipelineStages, platformAudit, providerConfigs,
                                 #   savedSearch, scim, sso, staffAdmin, tags, webhooks (+ drift-guard tests)
   config/  src/env.ts           # zod-validated env (ONLY process.env reader); key-material + origin-allowlist tests
+  identity/ src/                # canonical identity primitives — HMAC blind index · email/domain normalization · stable content hash (dedup kill-list #1/#9)  [LIVE]
   ui/      src/                 # TruePoint design system: tokens/primitives/theme.css + cn + headless kit + shadcn-pattern ui/*
   db/      src/                 # Drizzle schema + RLS + repositories (the ONLY data access)  [LIVE]
     schema/{auth,contacts,billing,intel,compliance,activity,salesnav,outreach,lists,savedSearches,customFields,
