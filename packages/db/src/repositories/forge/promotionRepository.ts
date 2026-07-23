@@ -4,7 +4,7 @@
 // in ONE transaction. Idempotent on content_hash: a replayed approval returns { written: false }. The caller
 // wraps the whole call in withForgeTx; this function runs its multi-write body directly on the injected tx.
 import { createHash } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import type { Tx } from "../../client.ts";
 import {
   approvalRequests,
@@ -94,7 +94,12 @@ export async function promoteVerifiedRecord(
     .set({ status: "executed", decidedByUserId: input.approvedByUserId, executedAt: new Date() })
     .where(eq(approvalRequests.id, input.approvalRequestId));
 
-  // Row 8 — forge_audit_log, hash-chained (row_hash = H(prev_hash ‖ canonical), 10 §7).
+  // Row 8 — forge_audit_log, hash-chained (row_hash = H(prev_hash ‖ canonical), 10 §7). Serialize the append
+  // with a transaction-scoped advisory lock (P-01.18): without it two concurrent promotions both read the same
+  // head row and insert with the SAME prev_hash, FORKING the chain and silently destroying tamper-evidence. The
+  // lock releases at commit; contention is negligible (promotions are human-paced; the section is one read + one
+  // insert).
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('forge_audit_log')::bigint)`);
   const prev = await tx
     .select({ rowHash: forgeAuditLog.rowHash })
     .from(forgeAuditLog)
