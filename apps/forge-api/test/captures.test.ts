@@ -16,7 +16,9 @@ function baseDeps(over: Partial<CapturesDeps> = {}): CapturesDeps {
     rateLimit: { check: async () => ({ allowed: true }) },
     resolveCaller: (c) => {
       const tenantId = c.req.header("x-forge-tenant");
-      return tenantId ? { callerId: "caller", tenantId } : null;
+      if (!tenantId) return null;
+      // Capture-scoped by default; `x-no-scope: 1` opts the token OUT to exercise the P-01.15 403.
+      return { callerId: "caller", tenantId, captureScoped: c.req.header("x-no-scope") !== "1" };
     },
     gate: { captureEnabled: true, isTenantEnabled: () => true },
     caps: {
@@ -78,6 +80,15 @@ describe("POST /v1/captures", () => {
   test("no auth → 401", async () => {
     const res = await post(baseDeps(), envelope(), {});
     expect(res.status).toBe(401);
+  });
+
+  test("authenticated but NOT capture-scoped → 403 insufficient_scope (P-01.15)", async () => {
+    const res = await post(baseDeps(), envelope(), {
+      "x-forge-tenant": TENANT,
+      "x-no-scope": "1",
+    });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "insufficient_scope" });
   });
 
   test("capture disabled (kill-switch off) → 403", async () => {

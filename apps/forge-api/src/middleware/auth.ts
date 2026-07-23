@@ -51,10 +51,22 @@ export async function resolveStaff(c: Context): Promise<StaffPrincipal | null> {
   };
 }
 
-/** The capture caller = the verified token's subject + tenant (the extension/service posting envelopes). */
+/** Scopes permitted to POST captures. Capture is the browser extension's job — its token carries
+ *  scope:["extension"] (AUTH-065, apps/api extensionScope.ts). A general web/admin user token (scope:[]) must
+ *  NOT be able to inject raw captures into the pipeline (P-01.15): the capture principal is SCOPED, not "any
+ *  authenticated user". A finer-grained forge:capture scope is a future refinement once the mint issues one. */
+const CAPTURE_SCOPES: ReadonlySet<string> = new Set(["extension"]);
+
+/** The capture caller = the verified token's subject + tenant + whether it carries a capture scope (P-01.15).
+ *  Only the extension/service credential is capture-scoped; the capture route 403s any non-capture-scoped token. */
 export async function resolveCaller(
   c: Context,
-): Promise<{ callerId: string; tenantId: string } | null> {
+): Promise<{ callerId: string; tenantId: string; captureScoped: boolean } | null> {
   const claims = await claimsFromRequest(c);
-  return claims ? { callerId: claims.sub, tenantId: claims.tid } : null;
+  if (!claims) return null;
+  return {
+    callerId: claims.sub,
+    tenantId: claims.tid,
+    captureScoped: claims.scope.some((s) => CAPTURE_SCOPES.has(s)),
+  };
 }

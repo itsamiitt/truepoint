@@ -10,13 +10,13 @@ export interface CapturesDeps {
   /** Bound @leadwolf/forge-core landEnvelope over the real store/object-store/queue. */
   land: (envelope: IngestionEnvelopeV2) => Promise<CaptureAck>;
   rateLimit: RateLimiter;
-  /** Resolve the authenticated caller from the verified Bearer token (@leadwolf/auth). */
+  /** Resolve the authenticated caller + whether it carries a capture scope (P-01.15) from the Bearer token. */
   resolveCaller: (
     c: Context,
   ) =>
-    | { callerId: string; tenantId: string }
+    | { callerId: string; tenantId: string; captureScoped: boolean }
     | null
-    | Promise<{ callerId: string; tenantId: string } | null>;
+    | Promise<{ callerId: string; tenantId: string; captureScoped: boolean } | null>;
   gate: { captureEnabled: boolean; isTenantEnabled: (tenantId: string) => boolean };
   caps: { maxEnvelopeBytes: number; maxRecordBytes: number; endpointAllowlist: readonly string[] };
 }
@@ -27,6 +27,14 @@ export function createCapturesApp(deps: CapturesDeps): Hono {
   app.post("/v1/captures", async (c) => {
     const caller = await deps.resolveCaller(c);
     if (!caller) return c.json({ error: "unauthorized" }, 401);
+
+    // The capture principal must be capture-scoped (P-01.15): an exfiltrated or general web/admin user token
+    // (scope:[]) cannot inject raw captures into the pipeline. Deny-by-default — only the extension credential
+    // (scope:["extension"]) clears this. Checked before the feature gate so a wrong-scope token learns nothing
+    // about whether capture is enabled.
+    if (!caller.captureScoped) {
+      return c.json({ error: "insufficient_scope", scope: "extension" }, 403);
+    }
 
     // Gating: capture is DARK unless the global kill-switch is on AND the tenant is enabled (ADR-0046).
     if (!deps.gate.captureEnabled || !deps.gate.isTenantEnabled(caller.tenantId)) {
