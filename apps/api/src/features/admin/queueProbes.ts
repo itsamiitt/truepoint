@@ -9,7 +9,19 @@
 import { env } from "@leadwolf/config";
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
-import type { QueueReport } from "./systemHealthProbes.ts";
+
+/** Per-queue live reading. Counts are null (NOT 0) when the queue was unreachable — an honest "unknown",
+ *  never a fabricated empty queue. Consumers must check `reachable` before trusting the numbers.
+ *  (Defined here, not in systemHealthProbes.ts, so the probe layer stays cycle-free — 16 §5.) */
+export type QueueReport = {
+  name: string;
+  waiting: number | null;
+  active: number | null;
+  failed: number | null;
+  delayed: number | null;
+  workers: number | null;
+  reachable: boolean;
+};
 
 const HEALTH_PROBE_TIMEOUT_MS = 1500;
 

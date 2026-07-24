@@ -32,22 +32,11 @@ import {
   SCORING_DLQ,
   SCORING_QUEUE,
 } from "@leadwolf/types";
-import { reverificationQueueHealth } from "../home/reverificationQueue.ts";
-import { bulkQueueHealth } from "../import/bulkQueue.ts";
-import { importQueueHealth } from "../import/queue.ts";
-import { genericQueueHealth } from "./queueProbes.ts";
+import { reverificationQueueHealth } from "../home/index.ts";
+import { bulkQueueHealth, importQueueHealth } from "../import/index.ts";
+import { type QueueReport, genericQueueHealth } from "./queueProbes.ts";
 
-/** Per-queue live reading. Counts are null (NOT 0) when the queue was unreachable — an honest "unknown",
- *  never a fabricated empty queue. Consumers must check `reachable` before trusting the numbers. */
-export type QueueReport = {
-  name: string;
-  waiting: number | null;
-  active: number | null;
-  failed: number | null;
-  delayed: number | null;
-  workers: number | null;
-  reachable: boolean;
-};
+export type { QueueReport };
 
 export type SystemHealthProbe = {
   /** "up" if ≥1 queue answered (Redis reachable); "down" if every probe failed (Redis unreachable). */

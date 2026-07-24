@@ -9,3 +9,9 @@ export { importArtifactRoutes } from "./artifactRoutes.ts";
 // P5 scheduled imports (import-redesign 08 §9) — its own CRUD router mounted at /api/v1/imports (before the
 // import router so `/imports/schedules` is never captured as `/:jobId`); gate-on-404 behind the dual gate.
 export { importScheduleRoutes } from "./scheduleRoutes.ts";
+// Cross-feature seams (16 §3.3 — consumers import THIS index, never the internals): the shared bulk-file
+// store (reveal / contacts-bulk / admin exports read staged artifacts) and the queue-health probes the
+// admin system-health surface fans out to.
+export { bulkFileStore } from "./bulkStore.ts";
+export { bulkQueueHealth } from "./bulkQueue.ts";
+export { importQueueHealth } from "./queue.ts";

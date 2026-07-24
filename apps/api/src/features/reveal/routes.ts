@@ -43,7 +43,7 @@ import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { revealRateLimit } from "../../middleware/revealRateLimit.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
-import { bulkFileStore } from "../import/bulkStore.ts";
+import { bulkFileStore } from "../import/index.ts";
 import { enqueueBulkRevealDrive } from "./bulkRevealQueue.ts";
 
 /** Map a viewer-read control row to the PII-free customer status DTO (the reveal-jobs UI polls this).

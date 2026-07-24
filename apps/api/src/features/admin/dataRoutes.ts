@@ -43,7 +43,7 @@ import { type Context, Hono } from "hono";
 import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
-import { bulkFileStore } from "../import/bulkStore.ts";
+import { bulkFileStore } from "../import/index.ts";
 
 // Accept any RFC-4122-shaped UUID (incl. the v7 ids this app mints) for path-param validation.
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

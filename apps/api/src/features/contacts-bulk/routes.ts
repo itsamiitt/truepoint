@@ -36,7 +36,7 @@ import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
-import { bulkFileStore } from "../import/bulkStore.ts";
+import { bulkFileStore } from "../import/index.ts";
 
 export const contactsBulkRoutes = new Hono<{ Variables: RoleVariables }>();
 
