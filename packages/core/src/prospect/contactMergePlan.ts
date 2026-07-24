@@ -28,7 +28,11 @@ import { planFieldWrite, planUserEdit } from "./fieldProvenance.ts";
 export type MergeScalars = Record<(typeof CONTACT_MERGE_DECIDABLE_FIELDS)[number], string | null>;
 
 export interface PlanContactMergeInput {
-  survivor: { scalars: MergeScalars; provenance: FieldProvenanceMap; customFields: Record<string, unknown> };
+  survivor: {
+    scalars: MergeScalars;
+    provenance: FieldProvenanceMap;
+    customFields: Record<string, unknown>;
+  };
   loser: { scalars: MergeScalars; customFields: Record<string, unknown> };
   decisions: MergeFieldDecision[];
   /** Actor of the merge (for planUserEdit pins on explicit loser picks). */
@@ -69,16 +73,21 @@ export function planContactMerge(input: PlanContactMergeInput): PlanContactMerge
   );
 
   // Pin-respecting default fills (a pinned survivor field is dropped from writableFields structurally).
-  const { writableFields, provenance: p1 } = planFieldWrite(survivor.provenance, autoFillCandidates, {
-    src: "merge",
-    obs: mergedAtIso,
-  });
+  const { writableFields, provenance: p1 } = planFieldWrite(
+    survivor.provenance,
+    autoFillCandidates,
+    {
+      src: "merge",
+      obs: mergedAtIso,
+    },
+  );
 
   // Explicit loser picks are human assertions → planUserEdit re-pins (overrides even a survivor pin).
   const provenance = planUserEdit(p1, loserPickFields, userId, mergedAtIso);
 
   const scalarWrites: Partial<MergeScalars> = {};
-  for (const f of writableFields) scalarWrites[f as keyof MergeScalars] = loser.scalars[f as keyof MergeScalars];
+  for (const f of writableFields)
+    scalarWrites[f as keyof MergeScalars] = loser.scalars[f as keyof MergeScalars];
   for (const f of loserPickFields) scalarWrites[f] = loser.scalars[f];
 
   const fieldChanges: Record<string, { b: unknown; a: unknown }> = {};

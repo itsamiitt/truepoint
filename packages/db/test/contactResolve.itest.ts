@@ -65,7 +65,13 @@ beforeAll(async () => {
     sourceName: "manual",
     mapping: MAPPING,
     rows: [
-      { Email: "jane@acme.com", "First Name": "Jane", "Last Name": "Doe", Company: "Acme", Domain: "acme.com" },
+      {
+        Email: "jane@acme.com",
+        "First Name": "Jane",
+        "Last Name": "Doe",
+        Company: "Acme",
+        Domain: "acme.com",
+      },
     ],
   });
   await core.runImport({
@@ -73,7 +79,13 @@ beforeAll(async () => {
     sourceName: "manual",
     mapping: MAPPING,
     rows: [
-      { Email: "bob@globex.com", "First Name": "Bob", "Last Name": "Roe", Company: "Globex", Domain: "globex.com" },
+      {
+        Email: "bob@globex.com",
+        "First Name": "Bob",
+        "Last Name": "Roe",
+        Company: "Globex",
+        Domain: "globex.com",
+      },
     ],
   });
   // Give BOTH workspaces' contacts the SAME LinkedIn slug — the per-workspace uniq index allows it, and it is

@@ -21,8 +21,8 @@ export function DataOpsOverviewPage() {
         <div>
           <h2 className="tp-page-title">Data management</h2>
           <p className="tp-page-sub">
-            Cross-tenant data-operations overview — pipeline jobs, bulk-import outcomes and retention
-            shadow runs at a glance. Read-only; counts and tallies only.
+            Cross-tenant data-operations overview — pipeline jobs, bulk-import outcomes and
+            retention shadow runs at a glance. Read-only; counts and tallies only.
           </p>
         </div>
       </div>

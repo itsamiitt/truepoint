@@ -95,8 +95,8 @@ export function EditPolicyDialog({
         >
           <AlertTriangle size={18} aria-hidden style={{ color: "var(--danger)", flexShrink: 0 }} />
           <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-            This enables permanent deletion of <strong>{policy.dataClass}</strong> rows {ageClause} for
-            tenants with the retention engine enabled. Deleted rows cannot be recovered.
+            This enables permanent deletion of <strong>{policy.dataClass}</strong> rows {ageClause}{" "}
+            for tenants with the retention engine enabled. Deleted rows cannot be recovered.
           </p>
         </div>
       </Dialog>
@@ -115,7 +115,11 @@ export function EditPolicyDialog({
           <TpButton variant="secondary" disabled={busy} onClick={onClose}>
             Cancel
           </TpButton>
-          <TpButton variant={armsDeletion ? "danger" : "primary"} disabled={busy} onClick={onPrimary}>
+          <TpButton
+            variant={armsDeletion ? "danger" : "primary"}
+            disabled={busy}
+            onClick={onPrimary}
+          >
             {armsDeletion ? "Review change" : "Save changes"}
           </TpButton>
         </>

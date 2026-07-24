@@ -12,7 +12,11 @@ import { mergeContacts } from "../mergeApi";
 export function useMergeContacts() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { survivorId: string; loserContactId: string; decisions: MergeFieldDecision[] }) =>
+    mutationFn: (vars: {
+      survivorId: string;
+      loserContactId: string;
+      decisions: MergeFieldDecision[];
+    }) =>
       mergeContacts(vars.survivorId, {
         loserContactId: vars.loserContactId,
         decisions: vars.decisions,

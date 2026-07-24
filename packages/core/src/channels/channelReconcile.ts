@@ -45,11 +45,11 @@
 
 import {
   type ChannelDriftRow,
-  contactChannelRepository,
   type MissingChannelProjectionRow,
   type ReconcileEmailRow,
   type ReconcilePhoneRow,
   type Tx,
+  contactChannelRepository,
   withTenantTx,
 } from "@leadwolf/db";
 import { decryptPii } from "../import/encryptPii.ts";
@@ -57,8 +57,7 @@ import { planContactChannelBackfill } from "./channelBackfill.ts";
 import { isChannelDualWriteEnabled } from "./channelDualWrite.ts";
 import { isChannelReadFromChildEnabled } from "./channelRead.ts";
 
-const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean =>
-  Buffer.from(a).equals(Buffer.from(b));
+const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean => Buffer.from(a).equals(Buffer.from(b));
 
 export type ReconcileDirection = "flat" | "child";
 
@@ -152,7 +151,12 @@ interface PhoneBuilt {
 
 function computeEmailState(
   live: ReconcileEmailRow[],
-  flat: { emailEnc: Uint8Array | null; emailBlindIndex: Uint8Array | null; emailDomain: string | null; emailStatus: string },
+  flat: {
+    emailEnc: Uint8Array | null;
+    emailBlindIndex: Uint8Array | null;
+    emailDomain: string | null;
+    emailStatus: string;
+  },
   built: EmailBuilt | undefined,
 ): ChannelReconcileState {
   const primary = live.find((r) => r.isPrimary);
@@ -318,7 +322,9 @@ async function executeEmailRepair(
     }
     case "create_from_flat": {
       if (!built) return "skipped";
-      await contactChannelRepository.backfillContactChannels(tx, scope, contactId, { email: built });
+      await contactChannelRepository.backfillContactChannels(tx, scope, contactId, {
+        email: built,
+      });
       return "repaired_flat";
     }
     case "promote_oldest_then_project_flat": {
@@ -373,7 +379,9 @@ async function executePhoneRepair(
     }
     case "create_from_flat": {
       if (!built) return "skipped";
-      await contactChannelRepository.backfillContactChannels(tx, scope, contactId, { phone: built });
+      await contactChannelRepository.backfillContactChannels(tx, scope, contactId, {
+        phone: built,
+      });
       return "repaired_flat";
     }
     case "promote_oldest_then_project_flat": {
@@ -448,12 +456,19 @@ export async function runChannelReconcileForWorkspace(
         return out;
       }
       // The phase rule: the READ gate picks the repair direction (ON ⇒ child wins; OFF ⇒ flat wins).
-      const direction: ReconcileDirection = (await isChannelReadFromChildEnabled(tx, scope.tenantId))
+      const direction: ReconcileDirection = (await isChannelReadFromChildEnabled(
+        tx,
+        scope.tenantId,
+      ))
         ? "child"
         : "flat";
       out.readGateOn = direction === "child";
 
-      const rows = await contactChannelRepository.findContactsWithChannelDrift(tx, cursor, batchSize);
+      const rows = await contactChannelRepository.findContactsWithChannelDrift(
+        tx,
+        cursor,
+        batchSize,
+      );
       out.rows = rows.length;
       out.lastId = rows.length > 0 ? (rows[rows.length - 1]?.id ?? null) : null;
 
@@ -485,14 +500,22 @@ export async function runChannelReconcileForWorkspace(
           const live = await contactChannelRepository.loadLiveEmailRowsForReconcile(tx, row.id);
           const state = computeEmailState(live, row, emailBuilt);
           const action = decideChannelReconcile(direction, state);
-          tally(await executeEmailRepair(tx, scope, row.id, action, live, emailBuilt), out, "email");
+          tally(
+            await executeEmailRepair(tx, scope, row.id, action, live, emailBuilt),
+            out,
+            "email",
+          );
         }
         if (row.phoneDrifts) {
           out.detected += 1;
           const live = await contactChannelRepository.loadLivePhoneRowsForReconcile(tx, row.id);
           const state = computePhoneState(live, row, phoneBuilt);
           const action = decideChannelReconcile(direction, state);
-          tally(await executePhoneRepair(tx, scope, row.id, action, live, phoneBuilt), out, "phone");
+          tally(
+            await executePhoneRepair(tx, scope, row.id, action, live, phoneBuilt),
+            out,
+            "phone",
+          );
         }
       }
       return out;

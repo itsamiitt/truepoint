@@ -46,7 +46,11 @@ export type BulkEnrichmentScope = z.infer<typeof bulkEnrichmentScopeSchema>;
  * the apps/api producer and the apps/workers consumer can never drift. The producer only ever enqueues `drive`.
  */
 export const bulkEnrichmentJobDataSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("drive"), jobId: z.string().uuid(), scope: bulkEnrichmentScopeSchema }),
+  z.object({
+    kind: z.literal("drive"),
+    jobId: z.string().uuid(),
+    scope: bulkEnrichmentScopeSchema,
+  }),
   z.object({
     kind: z.literal("chunk"),
     jobId: z.string().uuid(),

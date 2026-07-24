@@ -72,13 +72,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
       {items.length > 0 ? (
-        <div className="tp-ui-toaster" role="region" aria-label="Notifications">
+        <section className="tp-ui-toaster" aria-label="Notifications">
           {items.map((t) => (
             // biome-ignore lint/a11y/useKeyWithClickEvents: click is an optional dismiss; toasts auto-expire
-            // biome-ignore lint/a11y/noStaticElementInteractions: a toast is a status region, click dismisses
             <div
               key={t.id}
               className={cn("tp-ui-toast", t.tone !== "default" && `tp-ui-toast--${t.tone}`)}
+              // biome-ignore lint/a11y/useSemanticElements: toast card holds flow content; <output> takes phrasing only
               role="status"
               onClick={() => remove(t.id)}
             >
@@ -91,7 +91,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               </div>
             </div>
           ))}
-        </div>
+        </section>
       ) : null}
     </ToastContext.Provider>
   );

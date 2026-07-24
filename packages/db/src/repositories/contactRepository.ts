@@ -4,14 +4,14 @@
 // layer never returns plaintext — callers see only the non-PII facets until reveal (M3). 03 §5/§9.
 
 import {
-  ageDaysSince,
-  computeContactDataQuality,
   type ContactChannelSummaries,
   type FieldProvenanceMap,
   type MaskedContact,
   type PhoneLineType,
-  reverifyCutoff,
   type WorkspaceDataQuality,
+  ageDaysSince,
+  computeContactDataQuality,
+  reverifyCutoff,
 } from "@leadwolf/types";
 import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -382,9 +382,11 @@ export const contactRepository = {
   ): Promise<{ id: string } | null> {
     if (keys.emailBlindIndex) {
       if (opts.channelsFromChild) {
-        const hits = await contactChannelRepository.findContactIdsByEmailBlindIndexes(tx, workspaceId, [
-          keys.emailBlindIndex,
-        ]);
+        const hits = await contactChannelRepository.findContactIdsByEmailBlindIndexes(
+          tx,
+          workspaceId,
+          [keys.emailBlindIndex],
+        );
         if (hits[0]) return { id: hits[0].contactId };
       } else {
         const r = await tx
@@ -472,9 +474,13 @@ export const contactRepository = {
           .select({ id: contacts.id, emailBlindIndex: contacts.emailBlindIndex })
           .from(contacts)
           .where(
-            and(eq(contacts.workspaceId, workspaceId), inArray(contacts.emailBlindIndex, emailKeys)),
+            and(
+              eq(contacts.workspaceId, workspaceId),
+              inArray(contacts.emailBlindIndex, emailKeys),
+            ),
           );
-        for (const r of rows) if (r.emailBlindIndex) emailMap.set(byteaKey(r.emailBlindIndex), r.id);
+        for (const r of rows)
+          if (r.emailBlindIndex) emailMap.set(byteaKey(r.emailBlindIndex), r.id);
       }
     }
 

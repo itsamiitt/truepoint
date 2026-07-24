@@ -18,11 +18,11 @@ import { ListPlus, Pause, Play } from "lucide-react";
 import styles from "../sequences.module.css";
 import {
   EMPTY_METRICS,
-  formatPct,
-  rate,
   SEQUENCE_STATUS_LABEL,
   SEQUENCE_STATUS_TONE,
   type SequenceSummary,
+  formatPct,
+  rate,
 } from "../types";
 
 export function SequenceList({
@@ -172,12 +172,7 @@ export function SequenceList({
           />
         }
       >
-        <DataTable
-          columns={columns}
-          rows={sequences}
-          rowKey={(s) => s.id}
-          onRowClick={onSelect}
-        />
+        <DataTable columns={columns} rows={sequences} rowKey={(s) => s.id} onRowClick={onSelect} />
       </StateSwitch>
     </section>
   );

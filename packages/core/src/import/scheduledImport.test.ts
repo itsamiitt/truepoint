@@ -50,7 +50,11 @@ describe("computeNextRunAt — cadence grid + skip-missed-windows (08 §9)", () 
 
   test("the result is ALWAYS strictly greater than both fired-window and now", () => {
     const fired = new Date("2026-07-01T00:00:00.000Z");
-    for (const now of [fired, new Date(fired.getTime() + 1), new Date(fired.getTime() + 3 * WEEK)]) {
+    for (const now of [
+      fired,
+      new Date(fired.getTime() + 1),
+      new Date(fired.getTime() + 3 * WEEK),
+    ]) {
       const next = computeNextRunAt(fired, "weekly", now);
       expect(next.getTime()).toBeGreaterThan(fired.getTime());
       expect(next.getTime()).toBeGreaterThan(now.getTime());
@@ -63,7 +67,9 @@ describe("deriveScheduleIdempotencyKey — window-floored, per-schedule (08 §9)
 
   test("format: sched:<scheduleId>:<windowSeconds>", () => {
     const w = new Date("2026-07-01T00:00:00.000Z");
-    expect(deriveScheduleIdempotencyKey(id, w)).toBe(`sched:${id}:${Math.floor(w.getTime() / 1000)}`);
+    expect(deriveScheduleIdempotencyKey(id, w)).toBe(
+      `sched:${id}:${Math.floor(w.getTime() / 1000)}`,
+    );
   });
 
   test("millisecond jitter within the same second yields the SAME key (one window, one job)", () => {

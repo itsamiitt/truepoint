@@ -102,7 +102,8 @@ export const providerConfigRepository = {
     const out: Record<string, ProviderCallStatusCounts> = {};
     for (const r of rows) {
       const key = r.provider.toLowerCase();
-      const bucket = (out[key] ??= { hit: 0, miss: 0, rateLimited: 0, error: 0 });
+      out[key] ??= { hit: 0, miss: 0, rateLimited: 0, error: 0 };
+      const bucket = out[key];
       const n = Number(r.count);
       if (r.status === "hit") bucket.hit = n;
       else if (r.status === "miss") bucket.miss = n;

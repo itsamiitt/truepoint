@@ -45,9 +45,17 @@ function phoneRows(m: WorkspaceDataQuality): StatusRow[] {
   ];
 }
 
-function StatusTable({ caption, rows, denom }: { caption: string; rows: StatusRow[]; denom: number }) {
+function StatusTable({
+  caption,
+  rows,
+  denom,
+}: { caption: string; rows: StatusRow[]; denom: number }) {
   const columns: Column<StatusRow>[] = [
-    { key: "label", header: "Status", cell: (r) => <StatusBadge tone={r.tone}>{r.label}</StatusBadge> },
+    {
+      key: "label",
+      header: "Status",
+      cell: (r) => <StatusBadge tone={r.tone}>{r.label}</StatusBadge>,
+    },
     {
       key: "count",
       header: "Contacts",
@@ -99,7 +107,11 @@ export function VerificationBreakdown({
     >
       {metrics ? (
         <div className={styles.stack}>
-          <StatusTable caption="Email verification" rows={emailRows(metrics)} denom={metrics.withEmail} />
+          <StatusTable
+            caption="Email verification"
+            rows={emailRows(metrics)}
+            denom={metrics.withEmail}
+          />
           <StatusTable
             caption="Phone verification & line type"
             rows={phoneRows(metrics)}

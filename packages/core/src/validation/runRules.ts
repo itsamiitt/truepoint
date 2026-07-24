@@ -62,7 +62,8 @@ export function runValidationRules(
   const failures: ValidationFailure[] = [];
   for (const rule of rules) {
     const reason = evaluate(rule.checkType, rule.config, row[rule.field]);
-    if (reason) failures.push({ ruleId: rule.id, field: rule.field, message: `${rule.field} ${reason}` });
+    if (reason)
+      failures.push({ ruleId: rule.id, field: rule.field, message: `${rule.field} ${reason}` });
   }
   return failures;
 }

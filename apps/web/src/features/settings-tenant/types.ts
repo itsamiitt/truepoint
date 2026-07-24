@@ -37,7 +37,12 @@ export interface WorkspacesFeed {
 }
 
 /** A tenant-wide member (GET /settings/tenant/members — directory summary, 12 §4 · M2). */
-export type TenantOrgRole = "owner" | "billing_admin" | "security_admin" | "compliance_admin" | "member";
+export type TenantOrgRole =
+  | "owner"
+  | "billing_admin"
+  | "security_admin"
+  | "compliance_admin"
+  | "member";
 
 export interface TenantMember {
   id: string;

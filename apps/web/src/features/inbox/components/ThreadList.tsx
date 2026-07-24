@@ -8,8 +8,8 @@ import { Inbox as InboxIcon } from "lucide-react";
 import { useState } from "react";
 import { formatRelative } from "../format";
 import { useInbox } from "../hooks/useInbox";
-import type { InboxFilter } from "../types";
 import styles from "../inbox.module.css";
+import type { InboxFilter } from "../types";
 import { ThreadView } from "./ThreadView";
 
 const FILTERS = [
@@ -62,7 +62,9 @@ export function ThreadList() {
                   </span>
                   <span className={styles.threadSnippet}>{t.snippet}</span>
                   <span className={styles.threadTags}>
-                    {t.sequenceName ? <StatusBadge tone="muted">{t.sequenceName}</StatusBadge> : null}
+                    {t.sequenceName ? (
+                      <StatusBadge tone="muted">{t.sequenceName}</StatusBadge>
+                    ) : null}
                     {t.unread ? <StatusBadge tone="success">New</StatusBadge> : null}
                   </span>
                 </span>

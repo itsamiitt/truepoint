@@ -134,10 +134,16 @@ beforeAll(async () => {
   await applyMigrations(dbHandle.adminUrl);
 
   admin = postgres(dbHandle.adminUrl, { max: 2, onnotice: () => {} });
-  ({ tenantId: tenantOff, workspaceId: wsOff, ownerId: ownerOff } =
-    await seedTenantWorkspace("ladder-off"));
-  ({ tenantId: tenantOn, workspaceId: wsOn, ownerId: ownerOn } =
-    await seedTenantWorkspace("ladder-on"));
+  ({
+    tenantId: tenantOff,
+    workspaceId: wsOff,
+    ownerId: ownerOff,
+  } = await seedTenantWorkspace("ladder-off"));
+  ({
+    tenantId: tenantOn,
+    workspaceId: wsOn,
+    ownerId: ownerOn,
+  } = await seedTenantWorkspace("ladder-on"));
   // BOTH dual-write; only the ON tenant reads from child (⇒ only it gets rung C2).
   await admin`
     INSERT INTO tenant_feature_flags (flag_key, tenant_id, enabled) VALUES

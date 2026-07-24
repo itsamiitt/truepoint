@@ -19,7 +19,6 @@
 import { clientIpFromHeaders } from "@/lib/clientIp";
 import { LOGIN_TXN_COOKIE } from "@/lib/cookies";
 import { finishLogin } from "@/lib/finishLogin";
-import { env } from "@leadwolf/config";
 import {
   assertCredentialNotLocked,
   encryptSecret,
@@ -33,6 +32,7 @@ import {
   recordCredentialSuccess,
   verifyTotp,
 } from "@leadwolf/auth";
+import { env } from "@leadwolf/config";
 import { userRepository } from "@leadwolf/db";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";

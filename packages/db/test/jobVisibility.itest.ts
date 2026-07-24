@@ -235,10 +235,7 @@ describe("T-V2 admin override — elevated sees all rows with creator attributio
     );
     expect(imports.map((j) => j.id).sort()).toEqual([importA, importB].sort());
     const batches = await db.sourceImportRepository.recentBatches(scope(), adminViewer());
-    expect(batches.map((b) => b.sourceFile).sort()).toEqual([
-      "alice-upload.csv",
-      "bob-upload.csv",
-    ]);
+    expect(batches.map((b) => b.sourceFile).sort()).toEqual(["alice-upload.csv", "bob-upload.csv"]);
   });
 });
 
@@ -268,10 +265,7 @@ describe("T-V4 flag-off parity — scoped:false reads the legacy workspace-wide 
     expect(enrich.map((j) => j.id).sort()).toEqual([enrichA, enrichB, enrichSystem].sort());
 
     const batches = await db.sourceImportRepository.recentBatches(scope(), off);
-    expect(batches.map((b) => b.sourceFile).sort()).toEqual([
-      "alice-upload.csv",
-      "bob-upload.csv",
-    ]);
+    expect(batches.map((b) => b.sourceFile).sort()).toEqual(["alice-upload.csv", "bob-upload.csv"]);
 
     // Detail parity: B's job IS readable by A when the gate is off (the shipped behavior).
     expect(await db.revealJobRepository.getJob(scope(), off, revealB)).not.toBeNull();

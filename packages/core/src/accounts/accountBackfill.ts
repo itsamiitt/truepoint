@@ -26,11 +26,7 @@
 //
 // No decrypt, no crypto here (deliberate contrast with channelBackfill — domains/addresses are clear non-PII).
 
-import {
-  accountChildRepository,
-  type MissingAccountHqRow,
-  withTenantTx,
-} from "@leadwolf/db";
+import { type MissingAccountHqRow, accountChildRepository, withTenantTx } from "@leadwolf/db";
 import { isAccountDomainsDualWriteEnabled } from "./accountDualWrite.ts";
 import { countryToIso } from "./countryToIso.ts";
 
@@ -113,11 +109,20 @@ export async function runAccountBackfillForWorkspace(
       if (!(await isAccountDomainsDualWriteEnabled(tx, scope.tenantId))) {
         return { gateOff: true as const };
       }
-      const rows = await accountChildRepository.findAccountsMissingDomainChild(tx, cursor, batchSize);
+      const rows = await accountChildRepository.findAccountsMissingDomainChild(
+        tx,
+        cursor,
+        batchSize,
+      );
       let created = 0;
       let conflicts = 0;
       for (const row of rows) {
-        const res = await accountChildRepository.backfillAccountDomain(tx, scope, row.id, row.domain);
+        const res = await accountChildRepository.backfillAccountDomain(
+          tx,
+          scope,
+          row.id,
+          row.domain,
+        );
         if (res.inserted) created += 1;
         if (res.conflict) conflicts += 1;
       }
@@ -147,7 +152,11 @@ export async function runAccountBackfillForWorkspace(
       if (!(await isAccountDomainsDualWriteEnabled(tx, scope.tenantId))) {
         return { gateOff: true as const };
       }
-      const rows = await accountChildRepository.findAccountsMissingHqLocation(tx, cursor, batchSize);
+      const rows = await accountChildRepository.findAccountsMissingHqLocation(
+        tx,
+        cursor,
+        batchSize,
+      );
       let created = 0;
       let unmapped = 0;
       let conflicts = 0;

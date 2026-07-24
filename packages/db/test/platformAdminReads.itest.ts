@@ -136,7 +136,11 @@ async function seedImportJob(scope: Scope, f: ImportJobSeed): Promise<string> {
 
 // A high-volume import_job_rows row carrying a recognizable PII marker. The staff read selects from import_jobs
 // ONLY (never an import_job_rows row), so this must NEVER surface — seeding it makes that boundary concrete.
-async function seedImportJobRowWithPii(jobId: string, scope: Scope, piiMarker: string): Promise<void> {
+async function seedImportJobRowWithPii(
+  jobId: string,
+  scope: Scope,
+  piiMarker: string,
+): Promise<void> {
   const [chunk] = await admin`
     INSERT INTO import_job_chunks (job_id, chunk_index, row_start, row_end)
     VALUES (${jobId}, 0, 0, 1) RETURNING id`;
@@ -193,7 +197,8 @@ beforeAll(async () => {
   ({ tenantId: tenantB, workspaceId: wsB } = await seedWorkspace(TENANT_B_NAME));
 
   // A real staff user id for the actor (like listsStaffNoAccess.itest uses its tenant owner — not a random uuid).
-  const [staff] = await admin`INSERT INTO users (email) VALUES ('staff@platform.test') RETURNING id`;
+  const [staff] =
+    await admin`INSERT INTO users (email) VALUES ('staff@platform.test') RETURNING id`;
   staffUserId = staff!.id as string;
 
   // env is set ABOVE, BEFORE this dynamic import loads @leadwolf/config / the db singleton (mirrors
@@ -414,7 +419,12 @@ describe("platform-admin cross-tenant reads (ADR-0032; data-management A4/A5 + p
 
     // Per-provider counts are the CROSS-TENANT sums within the window — the OLD apollo miss is excluded (8, not 9).
     const expectedApollo: ProviderCallStatusCounts = { hit: 3, miss: 8, rateLimited: 1, error: 1 };
-    const expectedClearbit: ProviderCallStatusCounts = { hit: 0, miss: 0, rateLimited: 0, error: 3 };
+    const expectedClearbit: ProviderCallStatusCounts = {
+      hit: 0,
+      miss: 0,
+      rateLimited: 0,
+      error: 3,
+    };
     expect(health.apollo).toEqual(expectedApollo);
     expect(health.clearbit).toEqual(expectedClearbit);
 

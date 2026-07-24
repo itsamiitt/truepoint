@@ -29,6 +29,10 @@ export const verificationJobRepository = {
 
   /** Recent re-verification runs for the caller's workspace, newest first (ops/observability read). */
   async listRecent(tx: Tx, limit = 50): Promise<VerificationJobRow[]> {
-    return tx.select().from(verificationJobs).orderBy(desc(verificationJobs.createdAt)).limit(limit);
+    return tx
+      .select()
+      .from(verificationJobs)
+      .orderBy(desc(verificationJobs.createdAt))
+      .limit(limit);
   },
 };

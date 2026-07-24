@@ -35,6 +35,7 @@ export function ImportDraftsBanner() {
   const discarding = drafts.find((d) => d.jobId === discardId) ?? null;
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: Alert renders a styled div; role=status marks the live region
     <Alert role="status" style={{ marginBottom: "var(--tp-space-3)" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--tp-space-2)" }}>
         <strong>
@@ -64,12 +65,7 @@ export function ImportDraftsBanner() {
             >
               Continue setup
             </TpButton>
-            <TpButton
-              variant="ghost"
-              size="sm"
-              type="button"
-              onClick={() => setDiscardId(d.jobId)}
-            >
+            <TpButton variant="ghost" size="sm" type="button" onClick={() => setDiscardId(d.jobId)}>
               Discard
             </TpButton>
           </div>

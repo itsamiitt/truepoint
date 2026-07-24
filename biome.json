@@ -20,7 +20,14 @@
         "noLabelWithoutControl": {
           "level": "error",
           "options": {
-            "inputComponents": ["TpInput", "TpSelect", "TpTextarea", "TpCheckbox", "Combobox"]
+            "inputComponents": [
+              "TpInput",
+              "TpSelect",
+              "TpTextarea",
+              "TpCheckbox",
+              "TpSwitch",
+              "Combobox"
+            ]
           }
         }
       },

@@ -3,11 +3,19 @@
 // quiet "not available yet" (no fake persistence).
 "use client";
 
-import { FieldGroup, FormSection, StateSwitch, TpButton, TpInput, TpSelect, useToast } from "@leadwolf/ui";
+import {
+  FieldGroup,
+  FormSection,
+  StateSwitch,
+  TpButton,
+  TpInput,
+  TpSelect,
+  useToast,
+} from "@leadwolf/ui";
 import { useEffect, useState } from "react";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { REGIONS, TIMEZONES, type WorkspaceGeneral } from "../types";
 import styles from "../settings-workspace.module.css";
+import { REGIONS, TIMEZONES, type WorkspaceGeneral } from "../types";
 
 const EMPTY: WorkspaceGeneral = { name: "", slug: "", region: "us", timezone: "UTC" };
 
@@ -67,7 +75,11 @@ export function WorkspaceGeneralPanel() {
             htmlFor="ws-region"
             hint="Where this workspace's data lives."
           >
-            <TpSelect id="ws-region" value={form.region} onChange={(e) => set("region", e.target.value)}>
+            <TpSelect
+              id="ws-region"
+              value={form.region}
+              onChange={(e) => set("region", e.target.value)}
+            >
               {REGIONS.map((r) => (
                 <option key={r.value} value={r.value}>
                   {r.label}
@@ -76,7 +88,11 @@ export function WorkspaceGeneralPanel() {
             </TpSelect>
           </FieldGroup>
           <FieldGroup label="Timezone" htmlFor="ws-tz">
-            <TpSelect id="ws-tz" value={form.timezone} onChange={(e) => set("timezone", e.target.value)}>
+            <TpSelect
+              id="ws-tz"
+              value={form.timezone}
+              onChange={(e) => set("timezone", e.target.value)}
+            >
               {TIMEZONES.map((tz) => (
                 <option key={tz} value={tz}>
                   {tz}

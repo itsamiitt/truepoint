@@ -10,7 +10,11 @@
 // in the SAME tx) and is PLATFORM_READ_LIMIT-bounded. METADATA + tallies ONLY — the repo reads the import_jobs /
 // retention_runs CONTROL tables, never import_job_rows, so no imported contact PII crosses the boundary
 // (truepoint-security: a cross-tenant admin read exposes counts, not records).
-import { BUILTIN_VALIDATION_RULES, runStaffContactMerge, staffWorkspaceExport } from "@leadwolf/core";
+import {
+  BUILTIN_VALIDATION_RULES,
+  runStaffContactMerge,
+  staffWorkspaceExport,
+} from "@leadwolf/core";
 import {
   PLATFORM_READ_LIMIT,
   platformAdminRepository,

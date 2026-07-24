@@ -107,7 +107,12 @@ beforeAll(async () => {
     hqCountry: "Freedonia", // deliberately unmappable freetext
     hqCity: "Sylvania",
   });
-  await seedAccount(tOn, wsOn, { name: "Initech", domain: "initech.com", hqCountry: null, hqCity: null });
+  await seedAccount(tOn, wsOn, {
+    name: "Initech",
+    domain: "initech.com",
+    hqCountry: null,
+    hqCity: null,
+  });
   await seedAccount(tOn, wsOn, { name: "Ghost", domain: null, hqCountry: null, hqCity: null });
   // OFF tenant: one domained + HQ account (the fail-closed arm).
   await seedAccount(tOff, wsOff, {

@@ -27,7 +27,9 @@ export function EnvGatesPanel() {
     {
       key: "key",
       header: "Env var",
-      cell: (g) => <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontSize: 12 }}>{g.key}</span>,
+      cell: (g) => (
+        <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontSize: 12 }}>{g.key}</span>
+      ),
     },
     {
       key: "state",
@@ -59,9 +61,9 @@ export function EnvGatesPanel() {
       <div>
         <h2 style={{ fontSize: 15, fontWeight: 600 }}>Master switches (deploy-time)</h2>
         <p style={{ color: "var(--tp-ink-3)", fontSize: 13 }}>
-          Process-level kill-switches set at deploy and read at boot — shown read-only (they can't be
-          toggled from a web UI). A feature is live for a tenant only when its master switch AND its
-          per-tenant flag are both on.
+          Process-level kill-switches set at deploy and read at boot — shown read-only (they can't
+          be toggled from a web UI). A feature is live for a tenant only when its master switch AND
+          its per-tenant flag are both on.
         </p>
       </div>
       <DataTable columns={columns} rows={gates} rowKey={(g) => g.key} />

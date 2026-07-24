@@ -72,7 +72,9 @@ describe("verification_jobs audit ledger: record + per-workspace RLS isolation",
         errored: 1,
       }),
     );
-    const rows = await db.withTenantTx(scopeA(), (tx) => db.verificationJobRepository.listRecent(tx));
+    const rows = await db.withTenantTx(scopeA(), (tx) =>
+      db.verificationJobRepository.listRecent(tx),
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.scanned).toBe(10);
     expect(rows[0]!.reverified).toBe(7);

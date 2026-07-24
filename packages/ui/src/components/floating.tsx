@@ -2,7 +2,15 @@
 // floating.tsx — anchored floating UI: Popover (click), DropdownMenu (click → menu items), Tooltip (hover/focus).
 // Positioned with simple CSS relative/absolute anchoring (no collision engine) on the --tp-z-popover layer;
 // closes on outside-click + Esc. Dependency-free. Styling lives in primitives.css.
-import { Fragment, type ReactNode, type RefObject, useEffect, useId, useRef, useState } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "../cn.ts";
 
 function useOutside(open: boolean, onClose: () => void, ref: RefObject<HTMLElement | null>) {
@@ -34,7 +42,13 @@ export interface PopoverProps {
   className?: string;
 }
 
-export function Popover({ trigger, children, align = "start", side = "bottom", className }: PopoverProps) {
+export function Popover({
+  trigger,
+  children,
+  align = "start",
+  side = "bottom",
+  className,
+}: PopoverProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const close = () => setOpen(false);
@@ -84,6 +98,7 @@ export function DropdownMenu({
           {items.map((it, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: menu items are a static, caller-ordered list
             <Fragment key={i}>
+              {/* biome-ignore lint/a11y/useFocusableInteractive: static menu divider — decorative, never operable */}
               {it.separatorBefore ? <div className="tp-ui-menu-sep" role="separator" /> : null}
               <button
                 type="button"
@@ -113,7 +128,6 @@ export function Tooltip({ label, children }: { label: ReactNode; children: React
   const [show, setShow] = useState(false);
   const id = useId();
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: hover/focus wrapper exposes the tip via aria-describedby
     <span
       className="tp-ui-anchor"
       onMouseEnter={() => setShow(true)}

@@ -63,12 +63,7 @@ export function TemplateControls({
             onChange={(e) => onTemplateName(e.target.value)}
           />
         </label>
-        <TpButton
-          variant="secondary"
-          type="button"
-          disabled={saving || !canSave}
-          onClick={onSave}
-        >
+        <TpButton variant="secondary" type="button" disabled={saving || !canSave} onClick={onSave}>
           {saving ? "Saving…" : "Save as template"}
         </TpButton>
       </div>

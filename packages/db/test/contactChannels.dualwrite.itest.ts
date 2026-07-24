@@ -179,10 +179,16 @@ beforeAll(async () => {
   await applyMigrations(dbHandle.adminUrl);
 
   admin = postgres(dbHandle.adminUrl, { max: 2, onnotice: () => {} });
-  ({ tenantId: tenantOff, workspaceId: wsOff, ownerId: ownerOff } =
-    await seedTenantWorkspace("acme-off"));
-  ({ tenantId: tenantOn, workspaceId: wsOn, ownerId: ownerOn } =
-    await seedTenantWorkspace("acme-on"));
+  ({
+    tenantId: tenantOff,
+    workspaceId: wsOff,
+    ownerId: ownerOff,
+  } = await seedTenantWorkspace("acme-off"));
+  ({
+    tenantId: tenantOn,
+    workspaceId: wsOn,
+    ownerId: ownerOn,
+  } = await seedTenantWorkspace("acme-on"));
   // The ON tenant's per-tenant override; the OFF tenant keeps the 0059 seed (off/off ⇒ effective off).
   await admin`
     INSERT INTO tenant_feature_flags (flag_key, tenant_id, enabled)
@@ -321,7 +327,11 @@ describe("05 §2.2 — collision semantics at the applyChannelWrite layer", () =
     const [janeEmail] = await admin`
       SELECT value_enc, blind_index, email_domain FROM contact_emails
       WHERE contact_id = ${janeId} AND deleted_at IS NULL`;
-    const je = janeEmail as { value_enc: Uint8Array; blind_index: Uint8Array; email_domain: string };
+    const je = janeEmail as {
+      value_enc: Uint8Array;
+      blind_index: Uint8Array;
+      email_domain: string;
+    };
 
     const outcome = await db.withTenantTx(scopeOn(), (tx) =>
       db.contactChannelRepository.applyChannelWrite(tx, scopeOn(), {

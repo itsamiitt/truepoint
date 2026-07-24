@@ -49,7 +49,10 @@ export function freshnessSubScore(ageDays: number, slaDays: number): number {
 /** The re-verify cutoff timestamp (22 §3/§4, ADR-0025): a record whose `last_verified_at` is older than this
  *  (or null) has reached its freshness SLA and is due for re-verification. Defaults to the email SLA — the
  *  dominant, most-decaying field the record-level freshness proxy uses (see `computeContactDataQuality`). Pure. */
-export function reverifyCutoff(now: Date = new Date(), slaDays: number = FRESHNESS_SLA_DAYS.email): Date {
+export function reverifyCutoff(
+  now: Date = new Date(),
+  slaDays: number = FRESHNESS_SLA_DAYS.email,
+): Date {
   return new Date(now.getTime() - slaDays * 86_400_000);
 }
 

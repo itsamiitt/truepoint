@@ -85,9 +85,7 @@ export type ArtifactKind = "repair" | "errors";
  *  server can evaluate the gate + write the download audit row before streaming. A 404 = not entitled OR no
  *  such artifact (uniform, no existence oracle) — surfaced as a plain message by the caller. */
 export async function downloadArtifact(jobId: string, kind: ArtifactKind): Promise<void> {
-  const res = await fetchWithAuth(
-    `${IMPORTS_BASE}/${encodeURIComponent(jobId)}/artifacts/${kind}`,
-  );
+  const res = await fetchWithAuth(`${IMPORTS_BASE}/${encodeURIComponent(jobId)}/artifacts/${kind}`);
   if (!res.ok) throw new Error(await problemMessage(res, "Could not download the file"));
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

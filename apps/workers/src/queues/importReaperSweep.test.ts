@@ -44,7 +44,12 @@ test("hasLiveFastJob matches the base id and any :r<n> deferred variant", () => 
 test("fast: orphaned (no live job, past grace, non-terminal) → honest terminal", () => {
   for (const status of ["queued", "validating", "running"]) {
     expect(
-      decideReaperAction(job({ status }), { liveIds: NONE, now, orphanGraceMs: GRACE, stalled: false }),
+      decideReaperAction(job({ status }), {
+        liveIds: NONE,
+        now,
+        orphanGraceMs: GRACE,
+        stalled: false,
+      }),
     ).toBe("fast_orphan_fail");
   }
 });

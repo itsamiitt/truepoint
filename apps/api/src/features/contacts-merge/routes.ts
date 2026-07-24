@@ -36,7 +36,8 @@ contactsMergeRoutes.get(
     if (!(await contactMergeEnabledForScope(scope))) throw new NotFoundError();
 
     const loser = c.req.query("loser");
-    if (!loser) throw new ValidationError("Query param `loser` (the loser contact id) is required.");
+    if (!loser)
+      throw new ValidationError("Query param `loser` (the loser contact id) is required.");
     const preview = await previewContactMerge({
       scope,
       survivorContactId: c.req.param("id"),
@@ -64,7 +65,9 @@ contactsMergeRoutes.post(
     // requiring it here mirrors the import-commit verb and guarantees a clean first-result replay instead of a
     // confusing 409 on an accidental double-submit. (The loser tombstone remains the real double-merge guard.)
     if (!c.req.header("idempotency-key"))
-      throw new ValidationError("An Idempotency-Key header is required to execute a contact merge.");
+      throw new ValidationError(
+        "An Idempotency-Key header is required to execute a contact merge.",
+      );
 
     const parsed = mergeRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success)

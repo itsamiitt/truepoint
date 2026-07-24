@@ -36,7 +36,14 @@ export interface MarkConflictsInput {
  * present, and their normalized forms DIFFER. Prior conflicts are preserved (sticky). Inputs are never mutated.
  */
 export function markConflicts(input: MarkConflictsInput): FieldProvenanceMap {
-  const { provenance, existingProvenance, existingValues, incomingValues, writtenFields, incomingSrc } = input;
+  const {
+    provenance,
+    existingProvenance,
+    existingValues,
+    incomingValues,
+    writtenFields,
+    incomingSrc,
+  } = input;
   const out: FieldProvenanceMap = { ...provenance };
   for (const f of writtenFields) {
     const desc = out[f];

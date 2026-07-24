@@ -3,13 +3,13 @@
 // inside the single /settings/api-keys page. Each panel owns its own data + empty/connect states.
 "use client";
 
-import { Tabs, type TabItem } from "@leadwolf/ui";
+import { type TabItem, Tabs } from "@leadwolf/ui";
 import { useState } from "react";
+import styles from "../settings-developer.module.css";
 import { ApiDocsPanel } from "./ApiDocsPanel";
 import { ApiKeysPanel } from "./ApiKeysPanel";
 import { OAuthAppsPanel } from "./OAuthAppsPanel";
 import { WebhooksPanel } from "./WebhooksPanel";
-import styles from "../settings-developer.module.css";
 
 type DeveloperTab = "keys" | "oauth" | "webhooks" | "docs";
 

@@ -167,9 +167,7 @@ export const userRepository = {
         createdAt: userMfaMethods.createdAt,
       })
       .from(userMfaMethods)
-      .where(
-        and(eq(userMfaMethods.userId, userId), sql`${userMfaMethods.type} <> 'recovery_code'`),
-      )
+      .where(and(eq(userMfaMethods.userId, userId), sql`${userMfaMethods.type} <> 'recovery_code'`))
       .orderBy(desc(userMfaMethods.createdAt));
     return rows;
   },

@@ -6,7 +6,15 @@
 
 import { useStaffMe } from "@/lib/staffMe";
 import type { ValidationRule } from "@leadwolf/types";
-import { type Column, DataTable, Dialog, EmptyState, StateSwitch, TpButton, useToast } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  Dialog,
+  EmptyState,
+  StateSwitch,
+  TpButton,
+  useToast,
+} from "@leadwolf/ui";
 import { ListChecks } from "lucide-react";
 import { useState } from "react";
 import { deleteValidationRule, toggleValidationRule } from "../api";
@@ -15,7 +23,8 @@ import { RuleFormDialog } from "./RuleFormDialog";
 
 function configSummary(r: ValidationRule): string {
   if (r.checkType === "regex") return r.config.pattern ?? "—";
-  if (r.checkType === "max_length") return r.config.maxLength != null ? `≤ ${r.config.maxLength}` : "—";
+  if (r.checkType === "max_length")
+    return r.config.maxLength != null ? `≤ ${r.config.maxLength}` : "—";
   if (r.checkType === "one_of") return (r.config.allowed ?? []).join(", ") || "—";
   return "—";
 }
@@ -102,12 +111,17 @@ export function ValidationRulesPage() {
       sortValue: (r) => r.checkType,
       cell: (r) => <span className="tp-cell-mono">{r.checkType}</span>,
     },
-    { key: "config", header: "Config", cell: (r) => <span className="tp-cell-mono">{configSummary(r)}</span> },
+    {
+      key: "config",
+      header: "Config",
+      cell: (r) => <span className="tp-cell-mono">{configSummary(r)}</span>,
+    },
     {
       key: "status",
       header: "Status",
       sortValue: (r) => (r.enabled ? "1" : "0"),
-      cell: (r) => (r.enabled ? "Enabled" : <span style={{ color: "var(--tp-ink-3)" }}>Disabled</span>),
+      cell: (r) =>
+        r.enabled ? "Enabled" : <span style={{ color: "var(--tp-ink-3)" }}>Disabled</span>,
     },
     ...(canManage ? [actionsCol] : []),
   ];
@@ -118,8 +132,9 @@ export function ValidationRulesPage() {
         <div>
           <h2 className="tp-page-title">Validation rules</h2>
           <p className="tp-page-sub">
-            The global data-quality checks every import must pass — built-in checks plus your custom rules. A row
-            that fails any enabled rule is rejected (reject-on-fail). Changes are audited.
+            The global data-quality checks every import must pass — built-in checks plus your custom
+            rules. A row that fails any enabled rule is rejected (reject-on-fail). Changes are
+            audited.
           </p>
         </div>
         {canManage ? (

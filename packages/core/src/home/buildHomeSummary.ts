@@ -35,7 +35,10 @@ export interface BuildHomeSummaryInput {
   viewer: JobViewer;
 }
 
-export async function buildHomeSummary({ scope, viewer }: BuildHomeSummaryInput): Promise<HomeSummary> {
+export async function buildHomeSummary({
+  scope,
+  viewer,
+}: BuildHomeSummaryInput): Promise<HomeSummary> {
   const tenantScope: TenantScope = scope;
   const {
     creditBalance,

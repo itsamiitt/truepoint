@@ -97,7 +97,12 @@ export function ApprovalsPage() {
       sortValue: (r) => r.requestedByUserId,
       cell: (r) => <span className="tp-cell-mono">{r.requestedByUserId}</span>,
     },
-    { key: "reason", header: "Reason", sortValue: (r) => r.requestReason, cell: (r) => r.requestReason },
+    {
+      key: "reason",
+      header: "Reason",
+      sortValue: (r) => r.requestReason,
+      cell: (r) => r.requestReason,
+    },
     {
       key: "created",
       header: "Filed",
@@ -119,8 +124,8 @@ export function ApprovalsPage() {
         <div>
           <h2 className="tp-page-title">Approvals</h2>
           <p className="tp-page-sub">
-            Maker-checker review queue — high-risk data operations awaiting a second operator. You cannot
-            decide a request you filed (separation of duties, enforced server-side).
+            Maker-checker review queue — high-risk data operations awaiting a second operator. You
+            cannot decide a request you filed (separation of duties, enforced server-side).
           </p>
         </div>
       </div>
@@ -165,7 +170,10 @@ export function ApprovalsPage() {
           </div>
         }
       >
-        <label htmlFor="approval-reason" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <label
+          htmlFor="approval-reason"
+          style={{ display: "flex", flexDirection: "column", gap: 4 }}
+        >
           <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>Reason (audited)</span>
           <TpTextarea
             id="approval-reason"

@@ -9,9 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { S3StoreError, s3FileStore, sha256Hex, sigV4SigningKey } from "./s3FileStore.ts";
 
 /** Capture every request the adapter makes; answer from a scripted queue (default 200 empty). */
-function fetchRecorder(
-  respond?: (url: string, init: RequestInit) => Response | undefined,
-): {
+function fetchRecorder(respond?: (url: string, init: RequestInit) => Response | undefined): {
   calls: Array<{ url: string; init: RequestInit }>;
   fetchFn: (url: string, init: RequestInit) => Promise<Response>;
 } {
@@ -62,9 +60,7 @@ describe("SigV4 signing key", () => {
   });
 
   test("sha256Hex of empty input is the SigV4 empty-payload constant", () => {
-    expect(sha256Hex("")).toBe(
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    );
+    expect(sha256Hex("")).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   });
 });
 
@@ -181,10 +177,9 @@ describe("putObject streaming", () => {
           return new Response("", { status: 200, headers: { etag: '"etag-x"' } });
         }
         if (url.includes("uploadId=") && init.method === "POST") {
-          return new Response(
-            "<CompleteMultipartUploadResult></CompleteMultipartUploadResult>",
-            { status: 200 },
-          );
+          return new Response("<CompleteMultipartUploadResult></CompleteMultipartUploadResult>", {
+            status: 200,
+          });
         }
         return new Response("", { status: 200 });
       });

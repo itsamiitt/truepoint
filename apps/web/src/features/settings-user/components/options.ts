@@ -30,29 +30,32 @@ export const LOCALE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 /** The four notification events in display order, with a one-line description (12 §2). */
-export const NOTIFICATION_EVENTS: { event: NotificationEvent; title: string; description: string }[] =
-  [
-    {
-      event: "reply",
-      title: "Replies",
-      description: "Someone replies to one of your sequences.",
-    },
-    {
-      event: "task",
-      title: "Tasks due",
-      description: "A task or reminder assigned to you is due.",
-    },
-    {
-      event: "low_credit",
-      title: "Low credits",
-      description: "Your workspace credit balance runs low.",
-    },
-    {
-      event: "digest",
-      title: "Weekly digest",
-      description: "A Monday summary of pipeline and activity.",
-    },
-  ];
+export const NOTIFICATION_EVENTS: {
+  event: NotificationEvent;
+  title: string;
+  description: string;
+}[] = [
+  {
+    event: "reply",
+    title: "Replies",
+    description: "Someone replies to one of your sequences.",
+  },
+  {
+    event: "task",
+    title: "Tasks due",
+    description: "A task or reminder assigned to you is due.",
+  },
+  {
+    event: "low_credit",
+    title: "Low credits",
+    description: "Your workspace credit balance runs low.",
+  },
+  {
+    event: "digest",
+    title: "Weekly digest",
+    description: "A Monday summary of pipeline and activity.",
+  },
+];
 
 /** The two delivery channels, in column order. */
 export const NOTIFICATION_CHANNELS: { channel: NotificationChannel; label: string }[] = [

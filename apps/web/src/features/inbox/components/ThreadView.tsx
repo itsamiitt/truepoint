@@ -3,12 +3,20 @@
 // quiet "not available" toast instead of faking success.
 "use client";
 
-import { Drawer, EmptyState, StateSwitch, StatusBadge, TpButton, TpTextarea, useToast } from "@leadwolf/ui";
+import {
+  Drawer,
+  EmptyState,
+  StateSwitch,
+  StatusBadge,
+  TpButton,
+  TpTextarea,
+  useToast,
+} from "@leadwolf/ui";
 import { useEffect, useState } from "react";
 import { fetchThread, sendReply, updateThread } from "../api";
 import { formatRelative } from "../format";
-import type { InboxThread } from "../types";
 import styles from "../inbox.module.css";
+import type { InboxThread } from "../types";
 
 export function ThreadView({
   threadId,
@@ -41,7 +49,8 @@ export function ThreadView({
         if (!cancelled) setThread(t);
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load the conversation");
+        if (!cancelled)
+          setError(e instanceof Error ? e.message : "Failed to load the conversation");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

@@ -49,7 +49,9 @@ export const scheduledImports = pgTable(
     workspaceId: workspaceId(),
     // The schedule's creator/owner — runs execute AS this user's grant (re-evaluated each fire). NULL after
     // the user is deleted ⇒ the fire-time grant re-eval disables the schedule (never fires as a departed user).
-    createdByUserId: uuid("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     name: varchar("name", { length: 120 }).notNull(),
     // The provider enum recorded on every fired job (import_jobs.source_name — a SourceName, NOT a filename).
     sourceName: varchar("source_name", { length: 40 }).notNull(),
@@ -92,9 +94,7 @@ export const scheduledImports = pgTable(
     ),
     // The sweep's due-schedule read (system-level, owner connection): enabled rows ordered by next_run_at.
     // Partial index over just the enabled rows keeps it tiny regardless of how many schedules are paused.
-    dueIdx: index("idx_scheduled_imports_due")
-      .on(t.nextRunAt)
-      .where(sql`${t.enabled} = true`),
+    dueIdx: index("idx_scheduled_imports_due").on(t.nextRunAt).where(sql`${t.enabled} = true`),
     cadenceEnum: check(
       "scheduled_imports_cadence_enum",
       sql`${t.cadence} IN ('hourly','daily','weekly')`,

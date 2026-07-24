@@ -12,7 +12,7 @@
 // (nothing ever defers) — the §R-P1 knob posture.
 
 import { env } from "@leadwolf/config";
-import { importJobRepository, withTenantTx, type Tx } from "@leadwolf/db";
+import { type Tx, importJobRepository, withTenantTx } from "@leadwolf/db";
 
 /** The states that occupy a workspace's execution slots (09 §2.2 — `queued` waits, it does not execute;
  *  `deferred`/`draft`/`paused` wait on a scheduler/human and never count toward the cap). */

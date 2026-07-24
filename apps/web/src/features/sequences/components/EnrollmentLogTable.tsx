@@ -13,9 +13,9 @@ import {
   ENROLLMENT_STATUS_TONE,
   type EnrollmentEntry,
   type EnrollmentStatus,
+  TERMINAL_ENROLLMENT_STATUSES,
   formatEventDate,
   shortId,
-  TERMINAL_ENROLLMENT_STATUSES,
 } from "../types";
 
 function EnrollmentBadge({ status }: { status: EnrollmentStatus }) {

@@ -53,7 +53,8 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
         <div>
           <h2 className="tp-page-title">Import job</h2>
           <p className="tp-page-sub">
-            <Link href="/data-ops">Data management</Link> — job metadata and per-chunk progress. Counts only.
+            <Link href="/data-ops">Data management</Link> — job metadata and per-chunk progress.
+            Counts only.
           </p>
         </div>
       </div>

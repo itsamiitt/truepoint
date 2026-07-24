@@ -8,8 +8,8 @@ import { FormSection, StateSwitch, TpButton, TpSwitch, useToast } from "@leadwol
 import { useEffect, useMemo, useState } from "react";
 import { saveNotificationPrefs } from "../api";
 import { useNotificationPrefs } from "../hooks/useNotificationPrefs";
-import type { NotificationChannel, NotificationEvent, NotificationPrefs } from "../types";
 import styles from "../settings-user.module.css";
+import type { NotificationChannel, NotificationEvent, NotificationPrefs } from "../types";
 import { NOTIFICATION_CHANNELS, NOTIFICATION_EVENTS } from "./options";
 
 function clone(prefs: NotificationPrefs): NotificationPrefs {
@@ -67,6 +67,7 @@ export function NotificationsPanel() {
               title="How you're notified"
               description="Choose where each kind of update reaches you. In-app shows in the bell; email goes to your sign-in address."
             >
+              {/* biome-ignore lint/a11y/useSemanticElements: CSS-grid table; fieldset's default chrome breaks the grid */}
               <div className={styles.prefTable} role="group" aria-label="Notification preferences">
                 <span className={styles.prefHead}>Event</span>
                 {NOTIFICATION_CHANNELS.map((c) => (

@@ -9,11 +9,13 @@
 
 import { useSessionIdentity } from "@/lib/useSessionIdentity";
 import { isWorkspaceAdmin } from "@/lib/useSessionRole";
-import { Drawer, Progress, Spinner, StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import type { ImportJobListItem } from "@leadwolf/types";
+import { Drawer, Progress, Spinner, StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import { useState } from "react";
 import { useImportJob } from "../hooks/useImportJob";
 import { useCancelImport } from "../hooks/useImportMutations";
+import styles from "./ImportJobsHistoryPage.module.css";
+import { formatDateTime } from "./format";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import {
   CANCEL_CONFIRM_BODY,
@@ -24,8 +26,6 @@ import {
   stateShortLabel,
   stateTone,
 } from "./shared/stateCopy";
-import { formatDateTime } from "./format";
-import styles from "./ImportJobsHistoryPage.module.css";
 
 const MERGE_LABEL: Record<string, string> = {
   create_only: "Only add new records",
@@ -62,7 +62,8 @@ export function ImportJobDrawer({
   // Fresh detail preferred; the clicked row keeps the drawer populated while it loads.
   const { data: fresh } = useImportJob(open ? jobId : null);
 
-  const status = fresh?.statusV2 ?? (fresh ? legacyStatusToV2(fresh.status) : fallback?.status ?? null);
+  const status =
+    fresh?.statusV2 ?? (fresh ? legacyStatusToV2(fresh.status) : (fallback?.status ?? null));
   const counts = fresh?.counts ?? fallback?.counts ?? null;
   const percent = fresh?.percent ?? fallback?.percent ?? 0;
   const filename = fresh?.sourceFilename ?? fallback?.sourceFilename ?? "Import";

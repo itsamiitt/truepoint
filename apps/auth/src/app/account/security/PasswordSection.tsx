@@ -105,8 +105,8 @@ export function PasswordSection({
         </form>
       ) : (
         <p className="text-sm text-[var(--tp-ink-3)]">
-          Your account signs in without a password (single sign-on or a passkey). There is no password to
-          change here.
+          Your account signs in without a password (single sign-on or a passkey). There is no
+          password to change here.
         </p>
       )}
     </AccountSectionCard>

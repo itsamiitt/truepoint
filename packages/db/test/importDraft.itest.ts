@@ -242,20 +242,18 @@ describe("S-I8 T11 — draft lifecycle at the repo seams (guards drive the route
 
   test("commit parity with the one-shot: the same rows land the identical end-state (T11 parity leg)", async () => {
     // ONE-SHOT twin: the S-I3 create shape (queued, mode fast at create, mapping at create).
-    const oneShot = await dbm.withTenantTx(
-      { tenantId: tenantA, workspaceId: wsOneShot },
-      (tx) =>
-        dbm.importJobRepository.createJob(tx, {
-          tenantId: tenantA,
-          workspaceId: wsOneShot,
-          createdByUserId: ownerA,
-          sourceFile: `inline:${crypto.randomUUID()}`,
-          sourceName: "manual",
-          columnMapping: MAPPING,
-          conflictPolicy: "skip",
-          processingMode: "fast",
-          sourceFilename: "acme.csv",
-        }),
+    const oneShot = await dbm.withTenantTx({ tenantId: tenantA, workspaceId: wsOneShot }, (tx) =>
+      dbm.importJobRepository.createJob(tx, {
+        tenantId: tenantA,
+        workspaceId: wsOneShot,
+        createdByUserId: ownerA,
+        sourceFile: `inline:${crypto.randomUUID()}`,
+        sourceName: "manual",
+        columnMapping: MAPPING,
+        conflictPolicy: "skip",
+        processingMode: "fast",
+        sourceFilename: "acme.csv",
+      }),
     );
     const oneShotResult = await core.runFastImport({
       scope: { tenantId: tenantA, workspaceId: wsOneShot },

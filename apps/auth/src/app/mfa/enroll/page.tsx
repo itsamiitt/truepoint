@@ -103,6 +103,7 @@ export default async function MfaEnrollPage({ searchParams }: { searchParams: Se
       title="Save your recovery codes"
       subtitle="Store these somewhere safe — each one signs you in once if you lose your authenticator."
     >
+      {/* biome-ignore lint/a11y/useSemanticElements: Alert renders a styled div; role=status marks the live region */}
       <Alert variant="default" role="status" className="mb-4">
         These codes are shown once. Each one works only a single time.
       </Alert>

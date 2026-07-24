@@ -113,7 +113,9 @@ describe("auth-policy per-tenant enforcement switch (P1-01)", () => {
   });
 
   test("setEnforcement seeds a default policy row when the tenant has none; break-glass disables", async () => {
-    expect((await db.authPolicyRepository.getForEnforcement(tenant2)).enforcementEnabled).toBe(false);
+    expect((await db.authPolicyRepository.getForEnforcement(tenant2)).enforcementEnabled).toBe(
+      false,
+    );
 
     await setEnforcement(tenant2, true);
     const enabled = await db.authPolicyRepository.getForEnforcement(tenant2);
@@ -122,7 +124,9 @@ describe("auth-policy per-tenant enforcement switch (P1-01)", () => {
 
     // Break-glass: disabling re-opens login without a deploy.
     await setEnforcement(tenant2, false);
-    expect((await db.authPolicyRepository.getForEnforcement(tenant2)).enforcementEnabled).toBe(false);
+    expect((await db.authPolicyRepository.getForEnforcement(tenant2)).enforcementEnabled).toBe(
+      false,
+    );
   });
 
   test("every setEnforcement write lands exactly one platform_audit_log row", async () => {

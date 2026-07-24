@@ -16,7 +16,9 @@ const fields: { field: "firstName" | "lastName" | "jobTitle"; survivorPinned: bo
 describe("buildMergeDecisions", () => {
   test("emits nothing when every field keeps the survivor default", () => {
     expect(buildMergeDecisions(fields, {})).toEqual([]);
-    expect(buildMergeDecisions(fields, { firstName: "survivor", jobTitle: "survivor" })).toEqual([]);
+    expect(buildMergeDecisions(fields, { firstName: "survivor", jobTitle: "survivor" })).toEqual(
+      [],
+    );
   });
 
   test("emits only the loser overrides", () => {

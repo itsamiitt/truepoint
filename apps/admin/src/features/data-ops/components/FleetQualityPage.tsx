@@ -68,8 +68,8 @@ export function FleetQualityPage() {
         <div>
           <h2 className="tp-page-title">Fleet data quality</h2>
           <p className="tp-page-sub">
-            Cross-tenant data-quality snapshots — per-workspace fill, email-verification and freshness rates
-            from the daily Data Health sweep. Read-only; counts only.
+            Cross-tenant data-quality snapshots — per-workspace fill, email-verification and
+            freshness rates from the daily Data Health sweep. Read-only; counts only.
           </p>
         </div>
       </div>

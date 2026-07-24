@@ -84,7 +84,10 @@ export interface VerifyInputsRow {
   extractions: Array<{ confidence: number; band: string }>;
 }
 
-export async function getVerifyInputs(tx: Tx, rawCaptureId: string): Promise<VerifyInputsRow | null> {
+export async function getVerifyInputs(
+  tx: Tx,
+  rawCaptureId: string,
+): Promise<VerifyInputsRow | null> {
   const [pr] = await tx
     .select({
       entityKind: parsedRecords.entityKind,

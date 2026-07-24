@@ -98,12 +98,28 @@ export function compareRecords(
   weights: Record<string, FieldWeights> = DEFAULT_FIELD_WEIGHTS,
 ): FieldObservation[] {
   return [
-    { field: "linkedin", comparison: exact(a.linkedinPublicId, b.linkedinPublicId), weights: weights.linkedin! },
-    { field: "email", comparison: exact(a.emailBlindIndexHex, b.emailBlindIndexHex), weights: weights.email! },
-    { field: "phone", comparison: exact(a.phoneBlindIndexHex, b.phoneBlindIndexHex), weights: weights.phone! },
+    {
+      field: "linkedin",
+      comparison: exact(a.linkedinPublicId, b.linkedinPublicId),
+      weights: weights.linkedin!,
+    },
+    {
+      field: "email",
+      comparison: exact(a.emailBlindIndexHex, b.emailBlindIndexHex),
+      weights: weights.email!,
+    },
+    {
+      field: "phone",
+      comparison: exact(a.phoneBlindIndexHex, b.phoneBlindIndexHex),
+      weights: weights.phone!,
+    },
     { field: "name", comparison: nameComparison(a, b), weights: weights.name! },
     { field: "company", comparison: companyComparison(a, b), weights: weights.company! },
     { field: "title", comparison: exactCI(a.jobTitle, b.jobTitle), weights: weights.title! },
-    { field: "seniority", comparison: exactCI(a.seniorityLevel, b.seniorityLevel), weights: weights.seniority! },
+    {
+      field: "seniority",
+      comparison: exactCI(a.seniorityLevel, b.seniorityLevel),
+      weights: weights.seniority!,
+    },
   ];
 }

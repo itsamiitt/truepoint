@@ -12,10 +12,7 @@ import {
   type WhoCanImport,
   type WorkspaceRole,
 } from "@leadwolf/types";
-import {
-  evaluateImportCreateGrant,
-  type ImportCreateGrantVerdict,
-} from "./importCreateGrant.ts";
+import { type ImportCreateGrantVerdict, evaluateImportCreateGrant } from "./importCreateGrant.ts";
 
 /**
  * The next due instant after firing for `firedWindow`, given the cadence and the current time. Advances by

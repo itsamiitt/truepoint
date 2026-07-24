@@ -5,12 +5,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  fetchMembersSummary,
-  fetchOrganization,
-  fetchWorkspaces,
-  saveOrganization,
-} from "../api";
+import { fetchMembersSummary, fetchOrganization, fetchWorkspaces, saveOrganization } from "../api";
 import type { MembersSummary, Organization, WorkspacesFeed } from "../types";
 
 export function useOrganization() {

@@ -49,7 +49,13 @@ export function RetentionRunsPanel() {
       cell: (r) => (
         <div style={{ display: "flex", flexDirection: "column" }}>
           <span style={{ fontWeight: 500, color: "var(--tp-ink)" }}>{r.tenantName}</span>
-          <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontSize: 12, color: "var(--tp-ink-3)" }}>
+          <span
+            style={{
+              fontFamily: "var(--tp-font-mono, monospace)",
+              fontSize: 12,
+              color: "var(--tp-ink-3)",
+            }}
+          >
             {r.tenantId}
           </span>
         </div>
@@ -60,7 +66,9 @@ export function RetentionRunsPanel() {
       header: "Data class",
       sortValue: (r) => r.dataClass,
       cell: (r) => (
-        <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontWeight: 600 }}>{r.dataClass}</span>
+        <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontWeight: 600 }}>
+          {r.dataClass}
+        </span>
       ),
     },
     {
@@ -102,9 +110,9 @@ export function RetentionRunsPanel() {
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <p style={{ color: "var(--tp-ink-3)", fontSize: 13, maxWidth: 720, margin: 0 }}>
-        Recent retention-engine sweeps across all tenants — the SHADOW evidence to review BEFORE a class is
-        flipped to enforce. "Would delete" is the candidate count shadow mode measured but did not purge;
-        "Deleted" is non-zero only once a class enforces for that tenant.
+        Recent retention-engine sweeps across all tenants — the SHADOW evidence to review BEFORE a
+        class is flipped to enforce. "Would delete" is the candidate count shadow mode measured but
+        did not purge; "Deleted" is non-zero only once a class enforces for that tenant.
       </p>
 
       <StateSwitch

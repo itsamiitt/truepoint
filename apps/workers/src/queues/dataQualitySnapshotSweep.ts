@@ -29,7 +29,8 @@ export function makeProcessDataQualitySnapshotSweep(redis: IORedis) {
     _job: Job<DataQualitySnapshotSweepJobData>,
   ): Promise<void> {
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
-      const workspaces = await contactRepository.listWorkspacesWithContacts(MAX_WORKSPACES_PER_SWEEP);
+      const workspaces =
+        await contactRepository.listWorkspacesWithContacts(MAX_WORKSPACES_PER_SWEEP);
       let captured = 0;
       for (const scope of workspaces) {
         try {

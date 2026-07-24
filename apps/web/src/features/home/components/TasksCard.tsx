@@ -7,9 +7,9 @@
 import { StatusBadge, type StatusTone } from "@leadwolf/ui";
 import { CheckCircle2, ListChecks } from "lucide-react";
 import type { TodaysTask } from "../types";
-import { formatRelative } from "./format";
 import styles from "./HomePage.module.css";
 import { WidgetCard } from "./WidgetCard";
+import { formatRelative } from "./format";
 
 const TASK_LABELS: Record<TodaysTask["kind"], string> = {
   follow_up: "Follow up",

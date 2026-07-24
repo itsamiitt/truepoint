@@ -52,7 +52,7 @@ import { assertListInWorkspace } from "../prospect/lists.ts";
 import { type ValidationRuleSpec, runValidationRules } from "../validation/index.ts";
 import { type RawRow, mapRow } from "./columnMap.ts";
 import { contentHash } from "./contentHash.ts";
-import { prepareContact, type PreparedContact } from "./prepareContact.ts";
+import { type PreparedContact, prepareContact } from "./prepareContact.ts";
 import { rejectLabel, rejectedRowsFor, validateRow } from "./validateRow.ts";
 
 export interface RunImportInput {
@@ -305,12 +305,19 @@ async function writeChannelRows(
     }
     // S-C6 cross-key email collision → duplicate suggestion toward the value's owner (never an act).
     if (markSignals && outcome.result === "collision") {
-      const owners = await contactChannelRepository.findContactIdsByEmailBlindIndexes(tx, workspaceId, [
-        emailBlindIndex,
-      ]);
+      const owners = await contactChannelRepository.findContactIdsByEmailBlindIndexes(
+        tx,
+        workspaceId,
+        [emailBlindIndex],
+      );
       const owner = owners.find((h) => h.contactId !== contactId);
-      if (owner && (await contactRepository.markDuplicateSuggestion(tx, contactId, owner.contactId))) {
-        console.warn(`[import] dup signal: email collision (contact ${contactId} → ${owner.contactId})`);
+      if (
+        owner &&
+        (await contactRepository.markDuplicateSuggestion(tx, contactId, owner.contactId))
+      ) {
+        console.warn(
+          `[import] dup signal: email collision (contact ${contactId} → ${owner.contactId})`,
+        );
       }
     }
   }
@@ -339,8 +346,13 @@ async function writeChannelRows(
         [built.e164BlindIndex],
       );
       const other = holders.find((h) => h.contactId !== contactId);
-      if (other && (await contactRepository.markDuplicateSuggestion(tx, contactId, other.contactId))) {
-        console.warn(`[import] dup signal: phone match (contact ${contactId} → ${other.contactId})`);
+      if (
+        other &&
+        (await contactRepository.markDuplicateSuggestion(tx, contactId, other.contactId))
+      ) {
+        console.warn(
+          `[import] dup signal: phone match (contact ${contactId} → ${other.contactId})`,
+        );
       }
     }
   }
@@ -428,7 +440,8 @@ async function importOneRow(
   const { masterPersonId, masterCompanyId } = resolved;
   // I0 evidence dual-write (flag-off by default → no-op; audit P01). Additive + non-fatal; never affects the
   // golden landing below.
-  if (env.INGESTION_EVIDENCE_ENABLED) await recordImportEvidence(input, raw, hash, resolved, prepared);
+  if (env.INGESTION_EVIDENCE_ENABLED)
+    await recordImportEvidence(input, raw, hash, resolved, prepared);
 
   // Company match ladder (06 §5), over LIVE rows only. `prepared.accountDomain` is already DM1-normalized
   // (prepareContact), the exact form both accounts.domain and account_domains store — so no re-normalization.
@@ -498,7 +511,9 @@ async function importOneRow(
     // the pin is the user's override of all automation): drop every pinned scalar key from `values`, then
     // stamp `import:<source>` provenance on the scalars we DO write.
     const existingProv = await contactRepository.getFieldProvenance(tx, match.id);
-    const planned = planFieldWrite(existingProv, scalarFields, { src: `import:${input.sourceName}` });
+    const planned = planFieldWrite(existingProv, scalarFields, {
+      src: `import:${input.sourceName}`,
+    });
     let written = planned.writableFields;
     let provenance = planned.provenance;
     // preserve_populated (08 §5.1 — the orthogonal switch): an update never overwrites an already-POPULATED
@@ -585,7 +600,15 @@ async function importOneRow(
   // S-C6 match-time duplicate SIGNALS ride the S-CH4 read gate (`channelReadFromChild` — 15 §M-SEQ seq 50);
   // `!!match` tells writeChannelRows whether this row created a new contact (phone-signal-only fires there).
   if (channelDualWrite) {
-    await writeChannelRows(tx, input, prepared, contactId, sourceImportId, channelReadFromChild, !!match);
+    await writeChannelRows(
+      tx,
+      input,
+      prepared,
+      contactId,
+      sourceImportId,
+      channelReadFromChild,
+      !!match,
+    );
   }
 
   // S-A2 account-domain dual-write — the account writer (upsertByDomain above) that sets accounts.domain also
@@ -619,9 +642,13 @@ async function importOneRow(
  * invariant — so on error we log and enforce nothing. Built-in checks are deliberately NOT loaded here (they would
  * reject LinkedIn-only / nameless rows the pipeline otherwise accepts); only staff-authored custom rules apply.
  */
-async function loadEnabledValidationRules(scope: RunImportInput["scope"]): Promise<ValidationRuleSpec[]> {
+async function loadEnabledValidationRules(
+  scope: RunImportInput["scope"],
+): Promise<ValidationRuleSpec[]> {
   try {
-    const rows = await withTenantTx(scope, (tx) => validationRuleRepository.listEnabledForImport(tx));
+    const rows = await withTenantTx(scope, (tx) =>
+      validationRuleRepository.listEnabledForImport(tx),
+    );
     return rows.map((r) => ({
       id: r.id,
       name: r.name,
@@ -714,7 +741,10 @@ export async function runImport(input: RunImportInput): Promise<ImportSummary> {
     // row; any failure rejects the row with its per-field reason (built-ins are NOT enforced here). A failed row
     // never reaches the DB — identical treatment to a validateRow rejection.
     if (validationRules.length > 0) {
-      const ruleFailures = runValidationRules(verdict.mapped as Record<string, unknown>, validationRules);
+      const ruleFailures = runValidationRules(
+        verdict.mapped as Record<string, unknown>,
+        validationRules,
+      );
       if (ruleFailures.length > 0) {
         rejectedRows.push(
           ...ruleFailures.map((f) => ({

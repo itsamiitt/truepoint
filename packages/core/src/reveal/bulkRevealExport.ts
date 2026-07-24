@@ -14,7 +14,12 @@
 // selection; a large export should share one tx via an extracted reveal core (see the audit). Bounded by the
 // caller's selection cap.
 
-import { contactChannelRepository, contactRepository, type TenantScope, withTenantTx } from "@leadwolf/db";
+import {
+  type TenantScope,
+  contactChannelRepository,
+  contactRepository,
+  withTenantTx,
+} from "@leadwolf/db";
 import { ForbiddenError, SuppressedError, type WorkspaceRole } from "@leadwolf/types";
 import { channelReadFromChildEnabledForScope } from "../channels/channelRead.ts";
 import { decryptPii } from "../import/encryptPii.ts";
@@ -178,7 +183,10 @@ export async function bulkRevealExport(
           : {}),
       };
     });
-  const csv = toCsv(rows, channelsFromChild ? REVEALED_EXPORT_COLUMNS_CHILD : REVEALED_EXPORT_COLUMNS);
+  const csv = toCsv(
+    rows,
+    channelsFromChild ? REVEALED_EXPORT_COLUMNS_CHILD : REVEALED_EXPORT_COLUMNS,
+  );
 
   // 4) Write through the FileStore port + hand back a download URL (signed + expiring in prod; file:// in dev).
   await input.fileStore.putArtifact(input.exportKey, new TextEncoder().encode(csv));

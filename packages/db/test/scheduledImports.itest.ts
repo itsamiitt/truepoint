@@ -15,8 +15,8 @@
 //   (7) countInWorkspace backs the per-workspace cap.
 //   (8) RLS: workspace B never sees A's schedule via the scoped CRUD.
 
-import { deriveScheduleIdempotencyKey } from "@leadwolf/core";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { deriveScheduleIdempotencyKey } from "@leadwolf/core";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 

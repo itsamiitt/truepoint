@@ -45,8 +45,9 @@ export function Dialog({
     <>
       <div className="tp-ui-scrim" aria-hidden />
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop click is a convenience; Esc is the keyboard path */}
+      {/* biome-ignore lint/a11y/useSemanticElements: custom modal — native <dialog> swaps focus/backdrop machinery */}
       <div className="tp-ui-dialog" role="dialog" aria-modal="true" onClick={onClose}>
-        {/* biome-ignore lint/a11y/noStaticElementInteractions: stops backdrop close when clicking the card */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation only — keeps card clicks from closing */}
         <div
           className="tp-ui-dialog-card"
           role="document"
@@ -89,10 +90,10 @@ export function Drawer({
   return (
     <>
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: backdrop click is a convenience; Esc is the keyboard path */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: the scrim is a dismiss target only */}
       <div className="tp-ui-scrim" aria-hidden onClick={onClose} />
       <aside
         className={cn("tp-ui-drawer", `tp-ui-drawer--${side}`)}
+        // biome-ignore lint/a11y/useSemanticElements: drawer keeps <aside>; native <dialog> swaps focus machinery
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === "string" ? title : undefined}

@@ -37,8 +37,8 @@ import {
   importScheduleRoutes,
 } from "./features/import/index.ts";
 import { ingestRoutes } from "./features/ingest/index.ts";
-import { masterSyncRoutes } from "./features/master-sync/index.ts";
 import { listsRoutes } from "./features/lists/index.ts";
+import { masterSyncRoutes } from "./features/master-sync/index.ts";
 import { notificationsRoutes } from "./features/notifications/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";

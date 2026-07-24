@@ -10,9 +10,7 @@ import { cookies } from "next/headers";
 export const ENROLL_RESULT_COOKIE = "lw_acct_enroll";
 export const ENROLL_RESULT_MAX_AGE = 300; // 5 min — long enough to scan a QR / copy codes, then it self-expires
 
-export type EnrollResult =
-  | { kind: "totp"; secret: string }
-  | { kind: "recovery"; codes: string[] };
+export type EnrollResult = { kind: "totp"; secret: string } | { kind: "recovery"; codes: string[] };
 
 /** Read + parse the enroll cookie, or null when absent/malformed. Does not clear it (finishEnroll does that). */
 export async function readEnrollResult(): Promise<EnrollResult | null> {

@@ -49,7 +49,7 @@ describe("user-scoped auth-table isolation (defense-in-depth REVOKE)", () => {
   test("user_sessions deliberately KEEPS the grant (positive control)", async () => {
     // Must NOT be permission-denied — the workspace-admin session-management path reads it via withTenantTx.
     // Resolving (0 rows) proves the grant is intact; the no-RLS raw-read gap is a noted separate follow-up.
-    await app.unsafe(`SELECT 1 FROM user_sessions LIMIT 1`);
+    await app.unsafe("SELECT 1 FROM user_sessions LIMIT 1");
     expect(true).toBe(true);
   });
 });

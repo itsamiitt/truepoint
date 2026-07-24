@@ -5,8 +5,8 @@
 // simply renders nothing (the honest dark posture, mirroring useImportJobs).
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import type { ImportJobListItem } from "@leadwolf/types";
+import { useQuery } from "@tanstack/react-query";
 import { fetchImportDrafts } from "../apiDrafts";
 import { importKeys } from "../keys";
 
@@ -23,6 +23,7 @@ export function useImportDrafts(opts?: { enabled?: boolean }) {
   });
 
   const drafts: ImportJobListItem[] = query.data?.jobs ?? [];
-  const notEnabled = query.isError && Boolean((query.error as { notEnabled?: boolean })?.notEnabled);
+  const notEnabled =
+    query.isError && Boolean((query.error as { notEnabled?: boolean })?.notEnabled);
   return { ...query, drafts, notEnabled };
 }

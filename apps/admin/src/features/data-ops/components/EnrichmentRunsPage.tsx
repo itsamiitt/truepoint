@@ -97,8 +97,8 @@ export function EnrichmentRunsPage() {
         <div>
           <h2 className="tp-page-title">Enrichment runs</h2>
           <p className="tp-page-sub">
-            Cross-tenant bulk-enrichment monitor — recent runs, match/enrich outcomes and credit spend
-            across all orgs. Read-only; counts only.
+            Cross-tenant bulk-enrichment monitor — recent runs, match/enrich outcomes and credit
+            spend across all orgs. Read-only; counts only.
           </p>
         </div>
       </div>

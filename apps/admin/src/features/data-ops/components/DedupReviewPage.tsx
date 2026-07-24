@@ -66,10 +66,10 @@ export function DedupReviewPage() {
         <div>
           <h2 className="tp-page-title">Dedup review</h2>
           <p className="tp-page-sub">
-            Entity-resolution decisions across all tenants — which records were matched into one. <strong>Pending</strong>{" "}
-            rows await a human decision (populated once probabilistic matching is enabled); <strong>auto</strong> rows are
-            deterministic resolutions, shown for oversight. Merge / split actions are coming next, behind maker-checker
-            approval.
+            Entity-resolution decisions across all tenants — which records were matched into one.{" "}
+            <strong>Pending</strong> rows await a human decision (populated once probabilistic
+            matching is enabled); <strong>auto</strong> rows are deterministic resolutions, shown
+            for oversight. Merge / split actions are coming next, behind maker-checker approval.
           </p>
         </div>
       </div>

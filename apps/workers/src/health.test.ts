@@ -34,7 +34,12 @@ test("unknown path is 404", async () => {
 
 test("probe: /ready flips to 503 only after the consecutive-failure threshold (F14, no blip-flap)", async () => {
   let probeOk = false;
-  const s = startHealthServer(() => true, 0, () => Promise.resolve(probeOk), 3);
+  const s = startHealthServer(
+    () => true,
+    0,
+    () => Promise.resolve(probeOk),
+    3,
+  );
   try {
     // Failures 1 and 2 ride out as 200 — restraint, so one Redis blip can't flap every replica at once.
     expect((await fetch(`http://localhost:${s.port}/ready`)).status).toBe(200);
@@ -54,7 +59,12 @@ test("probe: /ready flips to 503 only after the consecutive-failure threshold (F
 });
 
 test("probe: a throwing probe counts as a failure, never crashes the endpoint", async () => {
-  const s = startHealthServer(() => true, 0, () => Promise.reject(new Error("wedged")), 1);
+  const s = startHealthServer(
+    () => true,
+    0,
+    () => Promise.reject(new Error("wedged")),
+    1,
+  );
   try {
     expect((await fetch(`http://localhost:${s.port}/ready`)).status).toBe(503);
     // Liveness is unaffected by the probe.
@@ -66,7 +76,11 @@ test("probe: a throwing probe counts as a failure, never crashes the endpoint", 
 
 test("probe: draining wins — /ready is 503 for a drain regardless of probe state", async () => {
   let draining = false;
-  const s = startHealthServer(() => !draining, 0, () => Promise.resolve(true));
+  const s = startHealthServer(
+    () => !draining,
+    0,
+    () => Promise.resolve(true),
+  );
   try {
     expect((await fetch(`http://localhost:${s.port}/ready`)).status).toBe(200);
     draining = true;

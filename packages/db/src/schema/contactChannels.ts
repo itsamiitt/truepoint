@@ -122,10 +122,7 @@ export const contactEmails = pgTable(
     wsDomainIdx: index("idx_contact_emails_ws_domain")
       .on(t.workspaceId, t.emailDomain)
       .where(sql`${t.deletedAt} IS NULL`),
-    typeEnum: check(
-      "contact_emails_type_enum",
-      sql`${t.type} IN ('work','personal','other')`,
-    ),
+    typeEnum: check("contact_emails_type_enum", sql`${t.type} IN ('work','personal','other')`),
     // Mirrors contacts_email_status_enum exactly (DM1 — one vocabulary).
     statusEnum: check(
       "contact_emails_status_enum",

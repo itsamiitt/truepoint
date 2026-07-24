@@ -51,7 +51,11 @@ export const scimTooMany = (detail = "Too many SCIM requests. Slow down."): Scim
  * error becomes a generic 500 that leaks nothing. */
 export function renderScimError(err: Error, c: Context): Response {
   if (err instanceof ScimHttpError) {
-    return scimJson(c, scimErrorBody(err.status, err.message, err.scimType), err.status as StatusCode);
+    return scimJson(
+      c,
+      scimErrorBody(err.status, err.message, err.scimType),
+      err.status as StatusCode,
+    );
   }
   return scimJson(c, scimErrorBody(500, "Internal error."), 500);
 }

@@ -9,12 +9,7 @@
 import type { ColumnMapping, ImportMergeMode } from "@leadwolf/types";
 import { ErrorState, TpButton } from "@leadwolf/ui";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import {
-  DRAFT_STEPS,
-  previewBlocked,
-  previewContinueLabel,
-  stepHeading,
-} from "../draftFlow";
+import { DRAFT_STEPS, previewBlocked, previewContinueLabel, stepHeading } from "../draftFlow";
 import type { ImportDraftController } from "../hooks/useImportDraft";
 import { strategySentence } from "../types";
 import { ImportDraftPreviewPanel } from "./ImportDraftPreviewPanel";
@@ -71,7 +66,9 @@ export function ImportDraftFlow({
 
   const resumeMode = draft.isResume;
   const confirmMergeMode = resumeMode ? (draft.resume?.mergeMode ?? null) : mergeMode;
-  const confirmPreserve = resumeMode ? (draft.resume?.preservePopulated ?? null) : preservePopulated;
+  const confirmPreserve = resumeMode
+    ? (draft.resume?.preservePopulated ?? null)
+    : preservePopulated;
   const mappedCount = resumeMode ? null : Object.keys(mapping).length;
 
   async function onCommit(): Promise<void> {
@@ -116,6 +113,7 @@ export function ImportDraftFlow({
         <p className="app-muted" style={{ margin: 0 }}>
           <strong>{fileName}</strong> — uploaded once; validation and the import run from this copy.
         </p>
+        {/* biome-ignore lint/a11y/noLabelWithoutControl: the file input arrives as a node ({fileInput}) */}
         <label className="tp-field">
           <span>Choose a different file</span>
           {fileInput}
@@ -156,18 +154,24 @@ export function ImportDraftFlow({
           />
           {resumeMode && (
             <p className="app-muted">
-              This draft’s column mapping was saved when it was set up. To change the mapping, discard the
-              draft and upload the file again.
+              This draft’s column mapping was saved when it was set up. To change the mapping,
+              discard the draft and upload the file again.
             </p>
           )}
           {previewBlocked(summary) && (
             <p className="app-muted">
-              Every row failed validation — fix the file{resumeMode ? "" : " or the mapping"} and try again.
+              Every row failed validation — fix the file{resumeMode ? "" : " or the mapping"} and
+              try again.
             </p>
           )}
           <div className="tp-row">
             {!resumeMode && (
-              <TpButton variant="secondary" type="button" disabled={busy} onClick={() => draft.goToStep("map")}>
+              <TpButton
+                variant="secondary"
+                type="button"
+                disabled={busy}
+                onClick={() => draft.goToStep("map")}
+              >
                 Back
               </TpButton>
             )}
@@ -196,17 +200,31 @@ export function ImportDraftFlow({
             </p>
             {summary && (
               <p className="app-muted">
-                {summary.valid.toLocaleString()} of {summary.total.toLocaleString()} rows will be imported
-                ({summary.wouldCreate.toLocaleString()} new · {summary.wouldUpdate.toLocaleString()} updates
-                {summary.rejected > 0 ? ` · ${summary.rejected.toLocaleString()} skipped as rejected` : ""}).
+                {summary.valid.toLocaleString()} of {summary.total.toLocaleString()} rows will be
+                imported ({summary.wouldCreate.toLocaleString()} new ·{" "}
+                {summary.wouldUpdate.toLocaleString()} updates
+                {summary.rejected > 0
+                  ? ` · ${summary.rejected.toLocaleString()} skipped as rejected`
+                  : ""}
+                ).
               </p>
             )}
           </div>
           <div className="tp-row">
-            <TpButton variant="secondary" type="button" disabled={busy} onClick={() => draft.goToStep("preview")}>
+            <TpButton
+              variant="secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => draft.goToStep("preview")}
+            >
               Back
             </TpButton>
-            <TpButton variant="primary" type="button" disabled={busy} onClick={() => void onCommit()}>
+            <TpButton
+              variant="primary"
+              type="button"
+              disabled={busy}
+              onClick={() => void onCommit()}
+            >
               {draft.busy === "commit" ? "Starting…" : "Run import"}
             </TpButton>
           </div>
@@ -214,7 +232,12 @@ export function ImportDraftFlow({
       )}
 
       <div className="tp-row">
-        <TpButton variant="ghost" type="button" disabled={busy} onClick={() => setConfirmDiscard(true)}>
+        <TpButton
+          variant="ghost"
+          type="button"
+          disabled={busy}
+          onClick={() => setConfirmDiscard(true)}
+        >
           Discard draft
         </TpButton>
       </div>

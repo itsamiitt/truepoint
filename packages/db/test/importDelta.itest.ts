@@ -93,7 +93,9 @@ describe("P5 delta imports — external_id upsert rung (08 §9 layer 3)", () => 
       sourceName: "manual",
       mapping: MAPPING,
       externalIdUpsert: true,
-      rows: [{ ExternalId: "EXT-A", Email: "alice@acme.com", "First Name": "Alice", Domain: "acme.com" }],
+      rows: [
+        { ExternalId: "EXT-A", Email: "alice@acme.com", "First Name": "Alice", Domain: "acme.com" },
+      ],
     });
     expect(s1.created).toBe(1);
     expect(await countContacts(wsOn)).toBe(1);
@@ -108,7 +110,14 @@ describe("P5 delta imports — external_id upsert rung (08 §9 layer 3)", () => 
       mapping: MAPPING,
       externalIdUpsert: true,
       conflictPolicy: "overwrite", // create_and_update: a match UPDATES
-      rows: [{ ExternalId: "EXT-A", Email: "alice.new@acme.com", "First Name": "Alice", Domain: "acme.com" }],
+      rows: [
+        {
+          ExternalId: "EXT-A",
+          Email: "alice.new@acme.com",
+          "First Name": "Alice",
+          Domain: "acme.com",
+        },
+      ],
     });
     expect(s2.created).toBe(0);
     expect(s2.matched).toBe(1);
@@ -124,7 +133,9 @@ describe("P5 delta imports — external_id upsert rung (08 §9 layer 3)", () => 
       scope: { tenantId: tenantOff, workspaceId: wsOff },
       sourceName: "manual",
       mapping: MAPPING,
-      rows: [{ ExternalId: "EXT-A", Email: "bob@globex.com", "First Name": "Bob", Domain: "globex.com" }],
+      rows: [
+        { ExternalId: "EXT-A", Email: "bob@globex.com", "First Name": "Bob", Domain: "globex.com" },
+      ],
     });
     expect(s1.created).toBe(1);
 
@@ -133,7 +144,14 @@ describe("P5 delta imports — external_id upsert rung (08 §9 layer 3)", () => 
       sourceName: "manual",
       mapping: MAPPING,
       conflictPolicy: "overwrite",
-      rows: [{ ExternalId: "EXT-A", Email: "bob.new@globex.com", "First Name": "Bob", Domain: "globex.com" }],
+      rows: [
+        {
+          ExternalId: "EXT-A",
+          Email: "bob.new@globex.com",
+          "First Name": "Bob",
+          Domain: "globex.com",
+        },
+      ],
     });
     expect(s2.created).toBe(1); // forked — the email rung found no match
     expect(await countContacts(wsOff)).toBe(2);
@@ -151,7 +169,9 @@ describe("P5 delta imports — external_id upsert rung (08 §9 layer 3)", () => 
       sourceName: "manual",
       mapping: MAPPING,
       externalIdUpsert: true,
-      rows: [{ ExternalId: "EXT-A", Email: "alice@acme.com", "First Name": "Alice", Domain: "acme.com" }],
+      rows: [
+        { ExternalId: "EXT-A", Email: "alice@acme.com", "First Name": "Alice", Domain: "acme.com" },
+      ],
     });
     expect(s.skipped).toBe(1);
     expect(s.created).toBe(0);
@@ -166,7 +186,9 @@ describe("P5 delta imports — external_id upsert rung (08 §9 layer 3)", () => 
       sourceName: "manual",
       mapping: MAPPING,
       externalIdUpsert: true,
-      rows: [{ ExternalId: "EXT-Z", Email: "zed@acme.com", "First Name": "Zed", Domain: "acme.com" }],
+      rows: [
+        { ExternalId: "EXT-Z", Email: "zed@acme.com", "First Name": "Zed", Domain: "acme.com" },
+      ],
     });
     expect(s.created).toBe(1);
     // Both external keys now live in the workspace (the new one stamped on create).

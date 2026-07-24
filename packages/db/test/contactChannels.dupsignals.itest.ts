@@ -35,7 +35,12 @@ let db: Db;
 
 const scope = (tenantId: string, workspaceId: string) => ({ tenantId, workspaceId });
 
-const MAPPING = { email: "Email", firstName: "First Name", phone: "Phone", locationCountry: "Country" };
+const MAPPING = {
+  email: "Email",
+  firstName: "First Name",
+  phone: "Phone",
+  locationCountry: "Country",
+};
 const SHARED_PHONE = "(415) 555-2671"; // Alice + Bob share this switchboard line (legal — a review signal)
 const UNIQUE_PHONE = "(212) 555-9000";
 
@@ -151,7 +156,12 @@ describe("S-C6 §2 — phone-signal-only match: marker written, no upsert, no bl
     const s = await seedTenantWorkspace("dsig-uniq");
     await enableFlag(s.tenantId, "channels_dual_write");
     await enableFlag(s.tenantId, "channels_read");
-    await importOne(s, { Email: "carol@acme.com", "First Name": "Carol", Phone: UNIQUE_PHONE, Country: "US" });
+    await importOne(s, {
+      Email: "carol@acme.com",
+      "First Name": "Carol",
+      Phone: UNIQUE_PHONE,
+      Country: "US",
+    });
     const carolId = await contactIdByName(s.workspaceId, "Carol");
     expect(await dupPointer(carolId)).toBeNull();
   });
@@ -162,9 +172,24 @@ describe("S-C6 — the suggestion is a guard, never an act (markDuplicateSuggest
     const s = await seedTenantWorkspace("dsig-guard");
     await enableFlag(s.tenantId, "channels_dual_write");
     // Three distinct contacts (unique phones ⇒ no import-time signal muddies the setup).
-    await importOne(s, { Email: "dan@acme.com", "First Name": "Dan", Phone: "(303) 555-0001", Country: "US" });
-    await importOne(s, { Email: "erin@acme.com", "First Name": "Erin", Phone: "(303) 555-0002", Country: "US" });
-    await importOne(s, { Email: "fran@acme.com", "First Name": "Fran", Phone: "(303) 555-0003", Country: "US" });
+    await importOne(s, {
+      Email: "dan@acme.com",
+      "First Name": "Dan",
+      Phone: "(303) 555-0001",
+      Country: "US",
+    });
+    await importOne(s, {
+      Email: "erin@acme.com",
+      "First Name": "Erin",
+      Phone: "(303) 555-0002",
+      Country: "US",
+    });
+    await importOne(s, {
+      Email: "fran@acme.com",
+      "First Name": "Fran",
+      Phone: "(303) 555-0003",
+      Country: "US",
+    });
     const danId = await contactIdByName(s.workspaceId, "Dan");
     const erinId = await contactIdByName(s.workspaceId, "Erin");
     const franId = await contactIdByName(s.workspaceId, "Fran");
@@ -188,8 +213,18 @@ describe("S-C6 §R-P3 — rides the S-CH4 read gate: gate-off writes no marker",
     const s = await seedTenantWorkspace("dsig-off");
     await enableFlag(s.tenantId, "channels_dual_write"); // child rows STILL written (identical data)
     // channels_read deliberately NOT enabled ⇒ read gate OFF ⇒ S-C6 signals disarmed.
-    await importOne(s, { Email: "fay@acme.com", "First Name": "Fay", Phone: SHARED_PHONE, Country: "US" });
-    await importOne(s, { Email: "gus@other.com", "First Name": "Gus", Phone: SHARED_PHONE, Country: "US" });
+    await importOne(s, {
+      Email: "fay@acme.com",
+      "First Name": "Fay",
+      Phone: SHARED_PHONE,
+      Country: "US",
+    });
+    await importOne(s, {
+      Email: "gus@other.com",
+      "First Name": "Gus",
+      Phone: SHARED_PHONE,
+      Country: "US",
+    });
     const gusId = await contactIdByName(s.workspaceId, "Gus");
     // Gus still has his own phone child (dual-write on) but NO marker (read gate off) — byte-identical pre-S-C6.
     expect(await livePhoneCount(gusId)).toBe(1);

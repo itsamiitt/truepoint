@@ -41,7 +41,12 @@ export function ReverificationActivity({
   );
 
   const columns: Column<ReverificationRun>[] = [
-    { key: "started", header: "Started", sortValue: (r) => r.startedAt, cell: (r) => fmt(r.startedAt) },
+    {
+      key: "started",
+      header: "Started",
+      sortValue: (r) => r.startedAt,
+      cell: (r) => fmt(r.startedAt),
+    },
     {
       key: "finished",
       header: "Finished",

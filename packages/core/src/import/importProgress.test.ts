@@ -8,8 +8,8 @@ import {
   IMPORT_PROGRESS_BATCH_ROWS,
   IMPORT_PROGRESS_MAX_DELTAS_PER_CHUNK,
   IMPORT_PROGRESS_MIN_INTERVAL_MS,
-  deriveImportProgress,
   type ImportProgressSource,
+  deriveImportProgress,
 } from "./importProgress.ts";
 
 function job(partial: Partial<ImportProgressSource>): ImportProgressSource {
@@ -89,7 +89,9 @@ describe("S-Q6 deriveImportProgress — one derivation for poll, SSE, and staff"
   });
 
   test("total: an unknown future state degrades gracefully (poll must always answer, 09 §4.3)", () => {
-    const d = deriveImportProgress(job({ status: "some_future_state", rowsTotal: 4, rowsCreated: 1 }));
+    const d = deriveImportProgress(
+      job({ status: "some_future_state", rowsTotal: 4, rowsCreated: 1 }),
+    );
     expect(d.percent).toBeCloseTo(0.25);
     expect(d.stage).toBe("some_future_state");
   });

@@ -5,8 +5,8 @@
 // retried — the list treats it as an honest "not enabled" state, not a failure.
 "use client";
 
-import { type InfiniteData, useInfiniteQuery } from "@tanstack/react-query";
 import type { ImportJobListItem, ImportJobListResponse } from "@leadwolf/types";
+import { type InfiniteData, useInfiniteQuery } from "@tanstack/react-query";
 import { fetchImportJobs } from "../apiV2";
 import { isTerminalV2 } from "../components/shared/stateCopy";
 import { importKeys } from "../keys";

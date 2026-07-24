@@ -67,8 +67,8 @@ export function VerificationRunsPage() {
         <div>
           <h2 className="tp-page-title">Verification runs</h2>
           <p className="tp-page-sub">
-            Cross-tenant freshness re-verification monitor — recent reverify sweeps and their scanned /
-            reverified / errored tallies across all orgs. Read-only; counts only.
+            Cross-tenant freshness re-verification monitor — recent reverify sweeps and their
+            scanned / reverified / errored tallies across all orgs. Read-only; counts only.
           </p>
         </div>
       </div>

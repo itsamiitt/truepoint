@@ -38,7 +38,12 @@ export function ShortcutsDialog() {
         {SHORTCUTS.map((s) => (
           <div
             key={s.action}
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+            }}
           >
             <span style={{ fontSize: 14, color: "var(--tp-ink-2)" }}>{s.action}</span>
             <kbd

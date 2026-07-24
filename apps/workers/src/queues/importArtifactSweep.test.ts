@@ -61,7 +61,9 @@ describe("artifactKeysToExpire", () => {
   });
 
   test("the legacy key always rides (untracked in the DB; absent-object delete is a no-op)", () => {
-    const keys = artifactKeysToExpire(candidate({ rejectedArtifactKey: null, errorReportKey: null }));
+    const keys = artifactKeysToExpire(
+      candidate({ rejectedArtifactKey: null, errorReportKey: null }),
+    );
     expect(keys).toEqual(["imports/0198ad00-0000-7000-8000-000000000001/rejected-rows.csv"]);
   });
 });

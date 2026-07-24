@@ -5,9 +5,9 @@
 
 import { History } from "lucide-react";
 import type { ActivityFeedItem } from "../types";
-import { formatRelative } from "./format";
 import styles from "./HomePage.module.css";
 import { WidgetCard } from "./WidgetCard";
+import { formatRelative } from "./format";
 
 /** Humanize a closed-enum audit action ("contact.create" → "Contact create") for display. */
 function humanizeAction(action: string): string {

@@ -352,7 +352,9 @@ export async function bulkEnrich(
   input: BulkEnrichInput,
 ): Promise<{ affected: number; jobId: string }> {
   // Resolve the visible ids in their own short tx (createJob opens its own withTenantTx).
-  const ids = await withBulkTx(input.scope, (tx) => resolveVisibleSelection(tx, input.scope.tenantId, input));
+  const ids = await withBulkTx(input.scope, (tx) =>
+    resolveVisibleSelection(tx, input.scope.tenantId, input),
+  );
   if (ids.length === 0) {
     // Nothing visible to enrich — surface 404 rather than create an empty job.
     throw new NotFoundError("No matching contacts to enrich in this workspace.");
@@ -372,7 +374,11 @@ export async function bulkEnrich(
   if (enabled) {
     // Persist the worst-case ceiling + arm the confirm gate (estimating → awaiting_confirmation). No spend yet.
     const ceilingMicros = ids.length * env.ENRICH_COST_MICROS_PER_MATCH;
-    await enrichmentJobRepository.setEstimateAwaitingConfirmation(input.scope, job.id, ceilingMicros);
+    await enrichmentJobRepository.setEstimateAwaitingConfirmation(
+      input.scope,
+      job.id,
+      ceilingMicros,
+    );
   }
   return { affected: ids.length, jobId: job.id };
 }

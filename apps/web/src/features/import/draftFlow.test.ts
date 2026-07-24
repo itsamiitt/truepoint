@@ -108,7 +108,9 @@ describe("preview step affordances", () => {
   test("continue label is honest about skips", () => {
     expect(previewContinueLabel(summary({ rejected: 0 }))).toBe("Continue");
     expect(previewContinueLabel(summary({ rejected: 1 }))).toBe("Continue — 1 row will be skipped");
-    expect(previewContinueLabel(summary({ rejected: 2 }))).toBe("Continue — 2 rows will be skipped");
+    expect(previewContinueLabel(summary({ rejected: 2 }))).toBe(
+      "Continue — 2 rows will be skipped",
+    );
     expect(previewContinueLabel(null)).toBe("Continue");
   });
   test("a 100%-rejected projection blocks; an empty or partly-valid one does not", () => {

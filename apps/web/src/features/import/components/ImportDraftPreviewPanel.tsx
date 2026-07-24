@@ -24,7 +24,9 @@ export function ImportDraftPreviewPanel({
   if (!preview) {
     return (
       <div className="tp-summary">
-        <p className="app-muted">No validation results yet — run validation to see what this import would do.</p>
+        <p className="app-muted">
+          No validation results yet — run validation to see what this import would do.
+        </p>
         <TpButton variant="secondary" type="button" loading={busy} onClick={onRerun}>
           Validate file
         </TpButton>
@@ -85,7 +87,9 @@ export function ImportDraftPreviewPanel({
                 {c.column}: {c.parseFailures.toLocaleString()} value
                 {c.parseFailures === 1 ? "" : "s"} couldn’t be read
                 {c.dominantRejectCode ? ` (mostly ${c.dominantRejectCode})` : ""}
-                {c.sampleLines.length > 0 ? ` — e.g. line ${c.sampleLines.slice(0, 5).join(", ")}` : ""}
+                {c.sampleLines.length > 0
+                  ? ` — e.g. line ${c.sampleLines.slice(0, 5).join(", ")}`
+                  : ""}
               </li>
             ))}
           </ul>

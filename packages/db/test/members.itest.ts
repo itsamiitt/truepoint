@@ -93,9 +93,7 @@ async function seedInvite(
     RETURNING id`;
   return (i as { id: string }).id;
 }
-async function memberRow(
-  memberId: string,
-): Promise<{ role: string; status: string } | null> {
+async function memberRow(memberId: string): Promise<{ role: string; status: string } | null> {
   const [m] = await admin`SELECT role, status FROM workspace_members WHERE id = ${memberId}`;
   return (m as { role: string; status: string }) ?? null;
 }

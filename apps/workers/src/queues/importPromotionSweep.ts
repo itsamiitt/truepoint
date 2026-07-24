@@ -37,15 +37,16 @@ export type ImportPromotionSweepJobData = Record<string, never>;
  */
 export function makeProcessImportPromotionSweep(
   redis: IORedis,
-  enqueueCopyDrive: (jobId: string, scope: { tenantId: string; workspaceId: string }) => Promise<void>,
+  enqueueCopyDrive: (
+    jobId: string,
+    scope: { tenantId: string; workspaceId: string },
+  ) => Promise<void>,
 ) {
   return async function processImportPromotionSweep(
     _job: Job<ImportPromotionSweepJobData>,
   ): Promise<void> {
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
-      const workspaces = await importJobRepository.listDeferredWorkspaces(
-        MAX_WORKSPACES_PER_SWEEP,
-      );
+      const workspaces = await importJobRepository.listDeferredWorkspaces(MAX_WORKSPACES_PER_SWEEP);
       let promoted = 0;
       for (const scope of workspaces) {
         try {

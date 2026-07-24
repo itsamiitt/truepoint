@@ -130,7 +130,11 @@ export type ScimReplaceUser = z.infer<typeof scimReplaceUserSchema>;
 // best-effort name/externalId update; any other op is a 400 invalidValue (we never blindly apply a path).
 const scimPatchOperationSchema = z.object({
   // SCIM ops are case-insensitive per §3.5.2; normalize to lowercase so "Replace"/"replace" both match.
-  op: z.string().trim().toLowerCase().pipe(z.enum(["add", "replace", "remove"])),
+  op: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.enum(["add", "replace", "remove"])),
   path: z.string().trim().optional(),
   // value is intentionally `unknown` — its shape depends on path; the handler narrows it safely per-op.
   value: z.unknown().optional(),
@@ -194,11 +198,7 @@ export function parseScimEqualityFilter(filter: string): ScimEqualityFilter | nu
   if (!m) return null;
   const rawAttr = m[1]!.toLowerCase();
   const attribute: ScimFilterAttribute =
-    rawAttr === "username"
-      ? "userName"
-      : rawAttr === "externalid"
-        ? "externalId"
-        : "emails.value";
+    rawAttr === "username" ? "userName" : rawAttr === "externalid" ? "externalId" : "emails.value";
   // Unescape SCIM string escapes (\" and \\) in the quoted value.
   const value = m[2]!.replace(/\\(["\\])/g, "$1");
   return { attribute, value };

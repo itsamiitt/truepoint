@@ -101,7 +101,7 @@ export function ipInCidr(ip: string, cidr: string): boolean {
     }
     if (prefix === 0) return true;
     // Mask the top `prefix` bits; (-1 << (32-prefix)) underflows in JS bit-ops, so build the mask via >>>.
-    const mask = prefix === 32 ? 0xffffffff : (~((1 << (32 - prefix)) - 1) >>> 0);
+    const mask = prefix === 32 ? 0xffffffff : ~((1 << (32 - prefix)) - 1) >>> 0;
     return (ipV4 & mask) === (netV4 & mask);
   }
 

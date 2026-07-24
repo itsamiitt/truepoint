@@ -173,15 +173,26 @@ describe("S-C4 — T1 inventory completeness + T6 reveal/billing", () => {
     expect(await liveCount("contact_phones", survivor)).toBe(2);
 
     // T6: no double-charge — survivor holds exactly 2 reveal claims (email + phone), no NEW row minted.
-    const [rev] = (await admin`SELECT count(*)::int AS n FROM contact_reveals WHERE contact_id = ${survivor}`) as unknown as Array<{ n: number }>;
+    const [rev] =
+      (await admin`SELECT count(*)::int AS n FROM contact_reveals WHERE contact_id = ${survivor}`) as unknown as Array<{
+        n: number;
+      }>;
     expect(rev.n).toBe(2);
 
     // Marker re-pointed to the survivor.
-    const [m] = (await admin`SELECT duplicate_of_contact_id AS d FROM contacts WHERE id = ${marker}`) as unknown as Array<{ d: string | null }>;
+    const [m] =
+      (await admin`SELECT duplicate_of_contact_id AS d FROM contacts WHERE id = ${marker}`) as unknown as Array<{
+        d: string | null;
+      }>;
     expect(m.d).toBe(survivor);
 
     // Loser tombstoned: soft-deleted + merged_into + PII nulled.
-    const [l] = (await admin`SELECT deleted_at, merged_into_contact_id AS mi, first_name FROM contacts WHERE id = ${loser}`) as unknown as Array<{ deleted_at: string | null; mi: string | null; first_name: string | null }>;
+    const [l] =
+      (await admin`SELECT deleted_at, merged_into_contact_id AS mi, first_name FROM contacts WHERE id = ${loser}`) as unknown as Array<{
+        deleted_at: string | null;
+        mi: string | null;
+        first_name: string | null;
+      }>;
     expect(l.deleted_at).not.toBeNull();
     expect(l.mi).toBe(survivor);
     expect(l.first_name).toBeNull();
@@ -203,7 +214,11 @@ describe("S-C4 — T1 inventory completeness + T6 reveal/billing", () => {
       decisions: [],
       userId: s.ownerId,
     });
-    const [r] = (await admin`SELECT is_revealed, revealed_by_user_id AS by FROM contacts WHERE id = ${survivor}`) as unknown as Array<{ is_revealed: boolean; by: string | null }>;
+    const [r] =
+      (await admin`SELECT is_revealed, revealed_by_user_id AS by FROM contacts WHERE id = ${survivor}`) as unknown as Array<{
+        is_revealed: boolean;
+        by: string | null;
+      }>;
     expect(r.is_revealed).toBe(true);
     expect(r.by).toBe(s.ownerId);
   });
@@ -222,7 +237,10 @@ describe("S-C4 — T3 pin immunity", () => {
       decisions: [],
       userId: s.ownerId,
     });
-    const [a] = (await admin`SELECT job_title FROM contacts WHERE id = ${survivorA}`) as unknown as Array<{ job_title: string | null }>;
+    const [a] =
+      (await admin`SELECT job_title FROM contacts WHERE id = ${survivorA}`) as unknown as Array<{
+        job_title: string | null;
+      }>;
     expect(a.job_title).toBeNull(); // pin immune (survivor blank stays blank)
 
     const survivorB = await insertContact(s, { first_name: "S2", field_provenance: pinnedProv });
@@ -234,7 +252,10 @@ describe("S-C4 — T3 pin immunity", () => {
       decisions: [{ field: "jobTitle", winner: "loser" }],
       userId: s.ownerId,
     });
-    const [b] = (await admin`SELECT job_title FROM contacts WHERE id = ${survivorB}`) as unknown as Array<{ job_title: string | null }>;
+    const [b] =
+      (await admin`SELECT job_title FROM contacts WHERE id = ${survivorB}`) as unknown as Array<{
+        job_title: string | null;
+      }>;
     expect(b.job_title).toBe("VP Sales"); // explicit pick overrides the pin
   });
 });
@@ -254,7 +275,10 @@ describe("S-C4 — T5 idempotent replay", () => {
     await core.runContactMerge(input);
     await expect(core.runContactMerge(input)).rejects.toThrow(/merged|deleted/i);
     // Only one merge event was recorded.
-    const [e] = (await admin`SELECT count(*)::int AS n FROM audit_log WHERE action = 'contact.merge' AND entity_id = ${survivor}`) as unknown as Array<{ n: number }>;
+    const [e] =
+      (await admin`SELECT count(*)::int AS n FROM audit_log WHERE action = 'contact.merge' AND entity_id = ${survivor}`) as unknown as Array<{
+        n: number;
+      }>;
     expect(e.n).toBe(1);
   });
 });
@@ -275,7 +299,11 @@ describe("S-C4 — T2 isolation (IDOR)", () => {
       }),
     ).rejects.toThrow(/exist in this workspace/i);
     // Foreign loser untouched.
-    const [f] = (await admin`SELECT deleted_at, merged_into_contact_id AS mi FROM contacts WHERE id = ${foreignLoser}`) as unknown as Array<{ deleted_at: string | null; mi: string | null }>;
+    const [f] =
+      (await admin`SELECT deleted_at, merged_into_contact_id AS mi FROM contacts WHERE id = ${foreignLoser}`) as unknown as Array<{
+        deleted_at: string | null;
+        mi: string | null;
+      }>;
     expect(f.deleted_at).toBeNull();
     expect(f.mi).toBeNull();
   });

@@ -38,9 +38,10 @@ function writeDraftParamsToUrl(state: DraftUrlState | null): void {
 export function ImportPage() {
   const router = useRouter();
   const { contacts, error, loading, reload } = useContacts();
-  const [deepLink, setDeepLink] = useState<{ draftId: string | null; step: DraftStep | null } | null>(
-    null,
-  );
+  const [deepLink, setDeepLink] = useState<{
+    draftId: string | null;
+    step: DraftStep | null;
+  } | null>(null);
   useEffect(() => setDeepLink(readDraftParamsFromUrl()), []);
 
   return (
