@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   type StatusTone,
@@ -61,15 +62,10 @@ export function SyncStatusPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Sync status</h2>
-          <p className="tp-page-sub">
-            How parsed records are flowing to each downstream destination — and where they are
-            backing up.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Sync status"
+        subtitle="How parsed records are flowing to each downstream destination — and where they are backing up."
+      />
 
       <StateSwitch
         loading={loading}

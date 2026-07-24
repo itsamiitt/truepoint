@@ -1,29 +1,41 @@
-// ForgeShell.tsx — the operator-console chrome and its TWO-STAGE gate for every internal surface (ADR-0011 /
-// ADR-0034), the Forge counterpart to apps/admin's AdminShell. Stage 1 (authn): resolve a token via silent
-// refresh; with none, redirect to the auth origin via PKCE. Stage 2 (authz): verify the signed-in identity is
-// platform staff by probing the forge-api `/bff/*` surface (verifyForgeStaff) — a non-staff caller (403) is
-// shown an access-denied panel, NEVER the console. The forge-api is the gate; the client never trusts a self-set
-// flag. Manages the mobile sidebar overlay.
+// ForgeShell.tsx — the operator console's TWO-STAGE gate (ADR-0011 / ADR-0034), wrapped around the shared
+// AppShellFrame. Stage 1 (authn): resolve a token via silent refresh; with none, redirect to the auth origin
+// via PKCE. Stage 2 (authz): verify the signed-in identity is platform staff by probing the forge-api `/bff/*`
+// surface (verifyForgeStaff) — a non-staff caller (403) is shown an access-denied panel, NEVER the console.
+// The forge-api is the gate; the client never trusts a self-set flag.
+//
+// The chrome (rail, top bar, pin, density, mobile overlay, ⌘K) is @leadwolf/app-shell, shared with apps/web
+// and apps/admin — this file previously carried a near-verbatim copy of apps/admin's. What stays here is the
+// gate, the operator destination list, and the console-only "Forge console" rail tag.
 "use client";
 
-import { fetchWithAuth, getAccessToken, silentRefresh, startLogin } from "@/lib/authClient";
+import { fetchWithAuth, getAccessToken, logout, silentRefresh, startLogin } from "@/lib/authClient";
 import { verifyForgeStaff } from "@/lib/forgeGate";
 import { API_BASE } from "@/lib/publicConfig";
 import { StaffMeProvider } from "@/lib/staffMe";
-import { ToastProvider } from "@leadwolf/ui";
+import {
+  AppShellFrame,
+  Brandmark,
+  CommandPalette,
+  DensityToggle,
+  ShortcutsButton,
+  ShortcutsDialog,
+  Sidebar,
+  TopBar,
+  UserRow,
+  paletteEntriesFrom,
+} from "@leadwolf/app-shell";
+import { Icon, TpButton } from "@leadwolf/ui";
+import { Globe } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
-import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
-import { sectionTitleFor } from "./navConfig";
+import { DESTINATIONS, sectionTitleFor } from "./navConfig";
 
 type GateState = "loading" | "redirecting" | "staff" | "forbidden" | "error";
 
 export function ForgeShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname() ?? "/";
   const [state, setState] = useState<GateState>("loading");
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   async function runGate() {
     try {
@@ -81,12 +93,6 @@ export function ForgeShell({ children }: { children: ReactNode }) {
     void runGate();
   }, []);
 
-  // Close the mobile sidebar whenever the route changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — only pathname triggers close.
-  useEffect(() => {
-    setSidebarOpen(false);
-  }, [pathname]);
-
   if (state === "forbidden") {
     return (
       <div className="tp-center-screen">
@@ -105,19 +111,19 @@ export function ForgeShell({ children }: { children: ReactNode }) {
     return (
       <div className="tp-center-screen">
         <div className="tp-signin-card">
+          <Brandmark size={30} title="TruePoint" />
           <p className="app-muted">
             We couldn't reach the Forge API. Check your connection and try again.
           </p>
-          <button
-            className="app-button"
-            type="button"
+          <TpButton
+            variant="primary"
             onClick={() => {
               setState("loading");
               void runGate();
             }}
           >
             Retry
-          </button>
+          </TpButton>
         </div>
       </div>
     );
@@ -126,39 +132,89 @@ export function ForgeShell({ children }: { children: ReactNode }) {
   if (state !== "staff") {
     return (
       <div className="tp-center-screen">
-        <p className="app-muted">
-          {state === "redirecting" ? "Redirecting to sign in…" : "Checking access…"}
-        </p>
+        <div className="tp-boot">
+          <Brandmark size={34} title="TruePoint" />
+          <p className="app-muted">
+            {state === "redirecting" ? "Redirecting to sign in…" : "Checking access…"}
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <ToastProvider>
-      <StaffMeProvider>
-        <div className="tp-shell" data-density="comfortable">
-          {sidebarOpen && (
-            <button
-              type="button"
-              className="tp-sidebar-scrim"
-              onClick={() => setSidebarOpen(false)}
-              aria-label="Close navigation"
-            />
-          )}
+    <StaffMeProvider>
+      <AppShellFrame
+        renderSidebar={({ isOpen, close }) => (
           <Sidebar
-            userEmail={userEmail}
-            isOpen={sidebarOpen}
-            onClose={() => setSidebarOpen(false)}
+            destinations={DESTINATIONS}
+            homeHref="/overview"
+            badge="Forge console"
+            isOpen={isOpen}
+            onClose={close}
+            footer={
+              <UserRow
+                email={userEmail}
+                roleLabel="Platform staff"
+                onSignOut={() => void logout()}
+              />
+            }
           />
-          <div className="tp-main">
-            <TopBar
-              title={sectionTitleFor(pathname)}
-              onMenuToggle={() => setSidebarOpen((v) => !v)}
+        )}
+        renderTopBar={({ toggleMenu, pinned, togglePin }) => (
+          <ForgeTopBar toggleMenu={toggleMenu} pinned={pinned} togglePin={togglePin} />
+        )}
+        overlays={
+          <>
+            <CommandPalette
+              navigate={paletteEntriesFrom(DESTINATIONS)}
+              actions={[
+                {
+                  id: "log-out",
+                  label: "Log out",
+                  keywords: ["sign out", "logout"],
+                  onSelect: () => void logout(),
+                },
+              ]}
             />
-            <main className="tp-content">{children}</main>
-          </div>
-        </div>
-      </StaffMeProvider>
-    </ToastProvider>
+            <ShortcutsDialog />
+          </>
+        }
+      >
+        {children}
+      </AppShellFrame>
+    </StaffMeProvider>
+  );
+}
+
+/** Split out so it can subscribe to the pathname for its section title. */
+function ForgeTopBar({
+  toggleMenu,
+  pinned,
+  togglePin,
+}: {
+  toggleMenu: () => void;
+  pinned: boolean;
+  togglePin: () => void;
+}) {
+  const pathname = usePathname() ?? "/";
+  return (
+    <TopBar
+      title={sectionTitleFor(pathname)}
+      onMenuToggle={toggleMenu}
+      pinned={pinned}
+      onTogglePin={togglePin}
+      actions={
+        <>
+          <DensityToggle />
+          <ShortcutsButton />
+          {/* Console-only: a quiet standing reminder that this surface reads across tenants. */}
+          <span className="tp-scope-note">
+            <Icon icon={Globe} size={14} />
+            Cross-tenant view
+          </span>
+        </>
+      }
+    />
   );
 }

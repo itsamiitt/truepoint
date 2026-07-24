@@ -7,21 +7,28 @@
 // through StateSwitch. Monochrome; color only via StatusBadge / Progress tones. Public slice component.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
 import { useSessionIdentity } from "@/lib/useSessionIdentity";
 import { isWorkspaceAdmin } from "@/lib/useSessionRole";
-import { DataTable, EmptyState, Progress, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
-import type { Column } from "@leadwolf/ui";
 import type { ImportJobListItem } from "@leadwolf/types";
+import {
+  DataTable,
+  EmptyState,
+  PageHeader,
+  Progress,
+  StateSwitch,
+  StatusBadge,
+  TpButton,
+} from "@leadwolf/ui";
+import type { Column } from "@leadwolf/ui";
 import { Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useImportJobs } from "../hooks/useImportJobs";
-import { isTerminalV2, stateShortLabel, stateTone } from "./shared/stateCopy";
-import { formatPercent, formatRelative } from "./format";
 import { ImportDraftsBanner } from "./ImportDraftsBanner";
 import { ImportJobDrawer } from "./ImportJobDrawer";
 import styles from "./ImportJobsHistoryPage.module.css";
+import { formatPercent, formatRelative } from "./format";
+import { isTerminalV2, stateShortLabel, stateTone } from "./shared/stateCopy";
 
 /** Attribution label for a job's creator, from the id alone (no name join yet — importV2 §createdBy). */
 function attribution(createdByUserId: string | null, myUserId: string | null): string {
@@ -37,8 +44,16 @@ export function ImportJobsHistoryPage() {
   const [scope, setScope] = useState<"all" | "mine">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { jobs, isLoading, isError, error, refetch, hasNextPage, fetchNextPage, isFetchingNextPage } =
-    useImportJobs();
+  const {
+    jobs,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useImportJobs();
 
   const notEnabled = isError && Boolean((error as { notEnabled?: boolean } | null)?.notEnabled);
   const errMsg =
@@ -72,7 +87,9 @@ export function ImportJobsHistoryPage() {
     {
       key: "status",
       header: "Status",
-      cell: (j) => <StatusBadge tone={stateTone(j.status)}>{stateShortLabel(j.status)}</StatusBadge>,
+      cell: (j) => (
+        <StatusBadge tone={stateTone(j.status)}>{stateShortLabel(j.status)}</StatusBadge>
+      ),
       sortValue: (j) => j.status,
     },
     {

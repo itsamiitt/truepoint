@@ -5,8 +5,7 @@
 // Monochrome; color appears only via StatusBadge tones. Public slice component.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
-import { Skeleton, StatTile, StatusBadge, TpButton } from "@leadwolf/ui";
+import { PageHeader, Skeleton, StatTile, StatusBadge, TpButton } from "@leadwolf/ui";
 import { RefreshCw } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useDataQuality } from "../hooks/useDataQuality";

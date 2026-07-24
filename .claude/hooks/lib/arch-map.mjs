@@ -316,7 +316,7 @@ export function classify(p) {
     return { kind: "shared", area: `apps/${m[1]}` };
 
   // Leaf / platform packages.
-  if ((m = p.match(/^packages\/(types|config|ui|auth|search|email|analytics|observability)\//)))
+  if ((m = p.match(/^packages\/(types|config|ui|app-shell|auth|search|email|analytics|observability)\//)))
     return { kind: "shared", area: `packages/${m[1]}` };
 
   return { kind: "unassigned" };

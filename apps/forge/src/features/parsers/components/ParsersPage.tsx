@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   type StatusTone,
@@ -72,15 +73,10 @@ export function ParsersPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Parsers</h2>
-          <p className="tp-page-sub">
-            The registered parsers that turn captures into structured records, and how they are
-            faring.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Parsers"
+        subtitle="The registered parsers that turn captures into structured records, and how they are faring."
+      />
 
       <StateSwitch
         loading={loading}

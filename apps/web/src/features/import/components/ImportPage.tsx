@@ -6,8 +6,7 @@
 // pattern — replace semantics so back/refresh land correctly, and no useSearchParams Suspense constraint).
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
-import { EmptyState, StateSwitch } from "@leadwolf/ui";
+import { EmptyState, PageHeader, StateSwitch } from "@leadwolf/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { type DraftStep, parseStepParam } from "../draftFlow";
@@ -38,9 +37,10 @@ function writeDraftParamsToUrl(state: DraftUrlState | null): void {
 export function ImportPage() {
   const router = useRouter();
   const { contacts, error, loading, reload } = useContacts();
-  const [deepLink, setDeepLink] = useState<{ draftId: string | null; step: DraftStep | null } | null>(
-    null,
-  );
+  const [deepLink, setDeepLink] = useState<{
+    draftId: string | null;
+    step: DraftStep | null;
+  } | null>(null);
   useEffect(() => setDeepLink(readDraftParamsFromUrl()), []);
 
   return (

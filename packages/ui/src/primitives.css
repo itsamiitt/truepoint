@@ -741,3 +741,75 @@ select.tp-ui-field {
 .tp-ui-progress--danger .tp-ui-progress-bar {
   background: var(--danger);
 }
+
+/* ── PageHeader ──────────────────────────────────────────────────────────────────────────────────────── */
+/* The one destination header for every app surface (web, admin, forge). Two variants via [data-variant]:
+   "cockpit" (mono eyebrow + 28px title) and "destination" (22px title, no eyebrow). Values ported verbatim
+   from the apps/web PageHeader.module.css this replaces, so adopting it changes nothing visually. */
+.tp-ui-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--tp-space-4);
+  flex-wrap: wrap;
+}
+.tp-ui-page-header-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+/* Destination headers (no eyebrow) sit tight; cockpit headers breathe a little more. */
+.tp-ui-page-header[data-variant="destination"] .tp-ui-page-header-text {
+  gap: var(--tp-space-1);
+}
+.tp-ui-page-header[data-variant="cockpit"] .tp-ui-page-header-text {
+  gap: var(--tp-space-2);
+}
+/* Mono eyebrow — the Brand Kit's section marker (uppercase, tracked, muted). */
+.tp-ui-page-header-eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tp-ink-4);
+}
+.tp-ui-page-header-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--tp-ink);
+}
+.tp-ui-page-header[data-variant="destination"] .tp-ui-page-header-title {
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.tp-ui-page-header[data-variant="cockpit"] .tp-ui-page-header-title {
+  font-size: 28px;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+.tp-ui-page-header-subtitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--tp-ink-3);
+}
+/* Right-aligned actions slot (e.g. a Refresh button) — never shrinks. */
+.tp-ui-page-header-actions {
+  flex: 0 0 auto;
+  padding-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-2);
+}
+@media (max-width: 860px) {
+  .tp-ui-page-header[data-variant="cockpit"] .tp-ui-page-header-title {
+    font-size: 23px;
+  }
+}
+@media (max-width: 540px) {
+  .tp-ui-page-header[data-variant="cockpit"] .tp-ui-page-header-title {
+    font-size: 20px;
+  }
+}

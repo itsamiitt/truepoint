@@ -6,7 +6,14 @@
 // the sibling read-only directories (Tenants / Users). Renders every async state through the shared State Kit.
 "use client";
 
-import { type Column, DataTable, EmptyState, StateSwitch, StatusBadge } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  EmptyState,
+  PageHeader,
+  StateSwitch,
+  StatusBadge,
+} from "@leadwolf/ui";
 import { FileUp } from "lucide-react";
 import Link from "next/link";
 import { avScanTone, formatInt, jobStatusTone, shortDate } from "../format";
@@ -98,15 +105,10 @@ export function ImportsMonitorPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Bulk imports</h2>
-          <p className="tp-page-sub">
-            Cross-tenant bulk-import monitor — recent jobs, AV scan, row outcomes and failures
-            across all orgs.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Bulk imports"
+        subtitle="Cross-tenant bulk-import monitor — recent jobs, AV scan, row outcomes and failures across all orgs."
+      />
 
       <StateSwitch
         loading={loading}

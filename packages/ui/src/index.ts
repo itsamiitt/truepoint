@@ -3,6 +3,9 @@
 // React/styling only; no logic.
 export { cn } from "./cn.ts";
 
+// ── Page scaffolding — the one destination header shared by apps/web, apps/admin and apps/forge. ───────
+export { PageHeader } from "./components/PageHeader.tsx";
+
 // ── Dashboard surface primitives (token-driven, inline-styled) — used by apps/web. ─────────────────────
 export { Card } from "./components/Card.tsx";
 export { Spinner } from "./components/Spinner.tsx";

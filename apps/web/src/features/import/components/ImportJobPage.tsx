@@ -7,19 +7,28 @@
 // Cancel while the job is still cancellable. Artifact downloads + retry-failed land at S-U6. Public slice component.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
 import { useSessionIdentity } from "@/lib/useSessionIdentity";
 import { isWorkspaceAdmin } from "@/lib/useSessionRole";
-import { EmptyState, Progress, Spinner, StateSwitch, StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import type { ImportJobCounts } from "@leadwolf/types";
+import {
+  EmptyState,
+  PageHeader,
+  Progress,
+  Spinner,
+  StateSwitch,
+  StatusBadge,
+  TpButton,
+  useToast,
+} from "@leadwolf/ui";
 import { ArrowLeft, Download, Upload } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { type ArtifactKind, type ImportJobDetail, downloadArtifact } from "../apiV2";
 import { useImportJob } from "../hooks/useImportJob";
 import { useCancelImport, useRetryFailed } from "../hooks/useImportMutations";
-import { type ArtifactKind, type ImportJobDetail, downloadArtifact } from "../apiV2";
 import { rejectedRowsToCsv } from "../rejectedRowsCsv";
+import styles from "./ImportJobsHistoryPage.module.css";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
 import {
   CANCEL_CONFIRM_BODY,
@@ -32,7 +41,6 @@ import {
   stateShortLabel,
   stateTone,
 } from "./shared/stateCopy";
-import styles from "./ImportJobsHistoryPage.module.css";
 
 /** Trigger a client-side CSV download (the legacy rejected-rows artifact is already in the poll response). */
 function downloadCsv(csv: string, filename: string): void {
@@ -97,9 +105,7 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
 
   const { userId, role } = useSessionIdentity();
 
-  const status = detail
-    ? detail.statusV2 ?? legacyStatusToV2(detail.status)
-    : null;
+  const status = detail ? (detail.statusV2 ?? legacyStatusToV2(detail.status)) : null;
   const counts = toCounts(detail);
   const terminal = status != null && isTerminalV2(status);
   // v2 (gate-on) jobs carry `counts` + a `rejectHistogram`; legacy jobs carry only `summary`. The v2 artifact
@@ -166,7 +172,10 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
     try {
       await downloadArtifact(jobId, kind);
     } catch (e) {
-      toast.error("Couldn’t download the file", e instanceof Error ? e.message : "Please try again.");
+      toast.error(
+        "Couldn’t download the file",
+        e instanceof Error ? e.message : "Please try again.",
+      );
     } finally {
       setDownloading(null);
     }
@@ -249,7 +258,9 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
                     <Stat label="Duplicates" value={summary.duplicates.toLocaleString()} />
                     <Stat label="Skipped" value={summary.skipped.toLocaleString()} />
                     <Stat label="Needs attention" value={summary.needsAttention.toLocaleString()} />
-                    {counts ? <Stat label="Total rows" value={counts.total.toLocaleString()} /> : null}
+                    {counts ? (
+                      <Stat label="Total rows" value={counts.total.toLocaleString()} />
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -270,7 +281,8 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
               {terminal && isV2 && rejectedCount > 0 ? (
                 mayDownloadArtifacts ? (
                   <p className={styles.muted} style={{ margin: 0, fontSize: 13 }}>
-                    These files contain the affected rows’ contact data — handle and share them securely.
+                    These files contain the affected rows’ contact data — handle and share them
+                    securely.
                   </p>
                 ) : (
                   // 10 §2.1 artifact gate (creator ∪ elevated, member+): an honest line, not a hidden section.
@@ -312,7 +324,12 @@ export function ImportJobPage({ jobId }: { jobId: string }) {
                   ) : null}
                   {/* Legacy jobs keep the client-side rejected-rows CSV (no server artifact). */}
                   {!isV2 && legacyRejected.length > 0 ? (
-                    <TpButton variant="secondary" size="sm" type="button" onClick={onDownloadRejected}>
+                    <TpButton
+                      variant="secondary"
+                      size="sm"
+                      type="button"
+                      onClick={onDownloadRejected}
+                    >
                       Download rejected rows ({legacyRejected.length.toLocaleString()})
                     </TpButton>
                   ) : null}
