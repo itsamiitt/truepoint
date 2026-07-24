@@ -48,12 +48,12 @@ const problems = [];
 
 for (const dir of workspaceDirs(root)) {
   const label = dir || "(root)";
-  const manifest = JSON.parse(
-    fs.readFileSync(path.join(root, dir, "package.json"), "utf8"),
-  );
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, dir, "package.json"), "utf8"));
   const mirror = mirrors[dir];
   if (!mirror) {
-    problems.push(`${label}: no entry in bun.lock — the workspace member is missing from the lockfile`);
+    problems.push(
+      `${label}: no entry in bun.lock — the workspace member is missing from the lockfile`,
+    );
     continue;
   }
 
@@ -63,7 +63,9 @@ for (const dir of workspaceDirs(root)) {
 
     for (const [name, range] of Object.entries(declared)) {
       if (locked[name] === undefined) {
-        problems.push(`${label}: ${field}."${name}": "${range}" is declared but absent from bun.lock`);
+        problems.push(
+          `${label}: ${field}."${name}": "${range}" is declared but absent from bun.lock`,
+        );
       } else if (locked[name] !== range) {
         problems.push(
           `${label}: ${field}."${name}" is "${range}" in package.json but "${locked[name]}" in bun.lock`,
@@ -71,13 +73,17 @@ for (const dir of workspaceDirs(root)) {
       }
       // A workspace: range is satisfied by a sibling member, never by an entry in `packages`.
       if (!String(range).startsWith("workspace:") && !resolved.has(name)) {
-        problems.push(`${label}: ${field}."${name}" has no resolved entry in the bun.lock packages map`);
+        problems.push(
+          `${label}: ${field}."${name}" has no resolved entry in the bun.lock packages map`,
+        );
       }
     }
 
     for (const name of Object.keys(locked)) {
       if (declared[name] === undefined) {
-        problems.push(`${label}: ${field}."${name}" is in bun.lock but no longer declared in package.json`);
+        problems.push(
+          `${label}: ${field}."${name}" is in bun.lock but no longer declared in package.json`,
+        );
       }
     }
   }

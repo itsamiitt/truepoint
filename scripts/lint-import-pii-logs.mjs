@@ -10,7 +10,7 @@
 // call for a small closed set of PII-value carriers. Run: `node scripts/lint-import-pii-logs.mjs` (Node ESM;
 // wired as `bun run lint:import-pii`). Exit 0 = clean; exit 1 = a candidate leak (file:line printed).
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 // The import surfaces this discipline covers (13 §3.5). Relative to repo root (cwd when run via the npm script).

@@ -3,7 +3,7 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": true,
-    "ignore": ["**/dist", "**/.next", "**/.turbo", ".claude", "**/src/migrations"]
+    "ignore": ["**/dist", "**/.next", "**/.turbo", ".claude", ".design-sync", "**/src/migrations"]
   },
   "formatter": {
     "enabled": true,
