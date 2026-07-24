@@ -36,7 +36,11 @@ mock.module("@leadwolf/db", () => ({
   ...realDb,
   workspaceRepository: { ...realDb.workspaceRepository, getRoleForUser: async () => nextRole },
   creditRepository: { ...realDb.creditRepository, getBalance: async () => 0 },
-  revealRepository: { ...realDb.revealRepository, listByWorkspace: async () => [] },
+  revealRepository: {
+    ...realDb.revealRepository,
+    listUsagePage: async () => ({ rows: [], nextCursor: null }),
+    listUsageForExport: async () => [],
+  },
 }));
 
 // Import AFTER the mocks are registered so the routers bind to the stubs.
@@ -159,7 +163,7 @@ describe("role-matrix differentials + intentional exclusions (T-2cc02c62)", () =
     nextRole = "viewer";
     const res = await app.request("/api/v1/credits/usage");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ reveals: [] });
+    expect(await res.json()).toEqual({ reveals: [], nextCursor: null });
   });
 
   it("the PUBLIC DSAR intake is NOT role-gated (reaches validation, not a guard rejection)", async () => {
