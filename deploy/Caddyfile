@@ -62,12 +62,14 @@ admin.truepoint.in {
 
 # TruePoint Forge — the data-ops operator console + its capture-ingest/BFF API (ADR-0047; nested).
 # The console's browser code calls its BFF with RELATIVE paths (apps/forge publicConfig API_BASE="",
-# the same-origin proxy deployment), so /bff/* here routes to forge-api and everything else to the Next
-# console. Same-origin means no CORS surface at all — forge-api deliberately ships none. The capture
-# ingest + health/metrics surfaces stay on the forge-api.truepoint.in origin below.
+# the same-origin proxy deployment), so /bff/* AND /v1/* here route to forge-api (P-01.25: the console's
+# review-approve + capture POSTs live under /v1/*) and everything else to the Next console. Same-origin
+# means no CORS surface at all — forge-api deliberately ships none. Health/metrics stay OFF this origin:
+# the capture ingest + health/metrics surfaces remain on the forge-api.truepoint.in origin below.
 forge.truepoint.in {
 	encode zstd gzip
-	handle /bff/* {
+	@forge_api path /bff/* /v1/*
+	handle @forge_api {
 		reverse_proxy forge-api:3005 {
 			lb_try_duration 5s
 			lb_try_interval 250ms

@@ -4,6 +4,7 @@
 "use client";
 
 import { logout } from "@/lib/authClient";
+import { useStaffMe } from "@/lib/staffMe";
 import { Avatar, DropdownMenu, Icon } from "@leadwolf/ui";
 import { X } from "lucide-react";
 import Link from "next/link";
@@ -27,7 +28,9 @@ function NavItem({ dest, pathname }: { dest: NavDestination; pathname: string })
   );
 }
 
-function UserRow({ userEmail }: { userEmail: string | null }) {
+function UserRow() {
+  // Identity from the shared /bff/me read (StaffMeProvider wraps the shell) — no per-rail fetch.
+  const { email } = useStaffMe();
   return (
     <DropdownMenu
       align="start"
@@ -40,9 +43,9 @@ function UserRow({ userEmail }: { userEmail: string | null }) {
           aria-expanded={open}
           onClick={toggle}
         >
-          <Avatar name={userEmail} size={28} />
+          <Avatar name={email} size={28} />
           <span className="tp-user-meta">
-            <span className="tp-user-email">{userEmail ?? "Signed in"}</span>
+            <span className="tp-user-email">{email ?? "Signed in"}</span>
             <span className="tp-user-role">Platform staff</span>
           </span>
         </button>
@@ -53,11 +56,9 @@ function UserRow({ userEmail }: { userEmail: string | null }) {
 }
 
 export function Sidebar({
-  userEmail,
   isOpen,
   onClose,
 }: {
-  userEmail: string | null;
   isOpen?: boolean;
   onClose?: () => void;
 }) {
@@ -92,7 +93,7 @@ export function Sidebar({
 
       <div className="tp-sidebar-footer">
         <div className="tp-divider" />
-        <UserRow userEmail={userEmail} />
+        <UserRow />
       </div>
     </aside>
   );

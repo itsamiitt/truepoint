@@ -47,6 +47,7 @@ export async function resolveStaff(c: Context): Promise<StaffPrincipal | null> {
   return {
     userId: claims.sub,
     capabilities: toDataCapabilities(capabilitiesForRole(role)),
+    staffRole: role,
     isSuperAdmin: role === "super_admin",
   };
 }

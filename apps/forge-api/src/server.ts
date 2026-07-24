@@ -21,8 +21,10 @@ import {
   getSyncStatusCounts,
   landRawCapture,
   listParsers,
+  listRecentCaptures,
   listReviewTasks,
   promoteVerifiedRecord,
+  userRepository,
   withForgeTx,
 } from "@leadwolf/db";
 import { type LandDeps, type PromotionCandidate, landEnvelope } from "@leadwolf/forge-core";
@@ -81,6 +83,16 @@ const app = createForgeApi({
       reviewTasks: () => withForgeTx((tx) => listReviewTasks(tx)),
       parsers: () => withForgeTx((tx) => listParsers(tx)),
       syncStatus: () => withForgeTx((tx) => getSyncStatusCounts(tx)),
+      captures: () =>
+        withForgeTx(async (tx) => {
+          const rows = await listRecentCaptures(tx);
+          return { captures: rows.map((r) => ({ ...r, capturedAt: r.capturedAt.toISOString() })) };
+        }),
+      // Owner-connection read of the caller's OWN identity (same posture as resolveStaff's platform_staff
+      // read). Mapped to { email } only — UserRecord carries passwordHash and must never cross this seam.
+      identity: async (userId) => ({
+        email: (await userRepository.findById(userId))?.email ?? null,
+      }),
     },
   },
   review: {

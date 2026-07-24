@@ -1,7 +1,7 @@
 // readRepository — the read-side queries backing the dashboard BFF + the parse processor (Phase 3). Plain
 // functions over a tx-scoped Tx (no db→core cycle). These replace the API's hardcoded-zero BFF stubs and give
 // the parse worker its raw-capture input.
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "../../client.ts";
 import {
   approvalRequests,
@@ -9,6 +9,7 @@ import {
   parsedRecords,
   parserVersions,
   parsers,
+  quarantine,
   rawCaptures,
   reviewTasks,
   syncState,
@@ -227,4 +228,82 @@ export async function getSyncStatusCounts(tx: Tx): Promise<SyncStatusCounts> {
     synced: by.get("synced") ?? 0,
     failed: by.get("failed") ?? 0,
   };
+}
+
+export interface CaptureListRow {
+  id: string;
+  source: string;
+  /** raw_captures.endpoint — the allowlisted capture API path; no full URL is stored per capture. */
+  sourceUrl: string;
+  /** The newest non-superseded parsed record's parser version; null until parsed. */
+  parser: string | null;
+  status: "captured" | "parsed" | "failed" | "erased";
+  capturedAt: Date;
+}
+
+/** The captured-items feed backing GET /bff/captures — recent-first, bounded. Metadata only: payload,
+ *  consent, content-hash, capturer and tenant columns never cross this seam (staff pipeline view).
+ *  raw_captures.status never advances past 'landed' today, so the display status is derived from the
+ *  parse + quarantine lanes rather than passed through. */
+export async function listRecentCaptures(tx: Tx, limit = 50): Promise<CaptureListRow[]> {
+  const captures = await tx
+    .select({
+      id: rawCaptures.id,
+      source: rawCaptures.source,
+      endpoint: rawCaptures.endpoint,
+      status: rawCaptures.status,
+      ingestedAt: rawCaptures.ingestedAt,
+    })
+    .from(rawCaptures)
+    .orderBy(desc(rawCaptures.ingestedAt), desc(rawCaptures.id))
+    .limit(limit);
+  if (captures.length === 0) return [];
+  const ids = captures.map((c) => c.id);
+
+  // Newest non-superseded parse per capture (the (raw_capture_id, parser_version_id) unique still
+  // allows one row per version — newest wins).
+  const parsedRows = await tx
+    .select({
+      rawCaptureId: parsedRecords.rawCaptureId,
+      parseStatus: parsedRecords.parseStatus,
+      version: parserVersions.version,
+    })
+    .from(parsedRecords)
+    .leftJoin(parserVersions, eq(parserVersions.id, parsedRecords.parserVersionId))
+    .where(and(inArray(parsedRecords.rawCaptureId, ids), eq(parsedRecords.superseded, false)))
+    .orderBy(desc(parsedRecords.createdAt));
+  const newestParsed = new Map<string, { parseStatus: string; version: string | null }>();
+  for (const row of parsedRows) {
+    if (!newestParsed.has(row.rawCaptureId)) {
+      newestParsed.set(row.rawCaptureId, { parseStatus: row.parseStatus, version: row.version });
+    }
+  }
+
+  const quarantined = new Set(
+    (
+      await tx
+        .select({ rawCaptureId: quarantine.rawCaptureId })
+        .from(quarantine)
+        .where(inArray(quarantine.rawCaptureId, ids))
+    ).map((q) => q.rawCaptureId),
+  );
+
+  return captures.map((c) => {
+    const parsed = newestParsed.get(c.id);
+    let status: CaptureListRow["status"] = "captured";
+    if (c.status === "erased") status = "erased";
+    else if (quarantined.has(c.id)) status = "failed";
+    else if (parsed) {
+      status =
+        parsed.parseStatus === "parsed" || parsed.parseStatus === "partial" ? "parsed" : "failed";
+    }
+    return {
+      id: c.id,
+      source: c.source,
+      sourceUrl: c.endpoint,
+      parser: parsed?.version ?? null,
+      status,
+      capturedAt: c.ingestedAt,
+    };
+  });
 }

@@ -6,9 +6,8 @@
 // flag. Manages the mobile sidebar overlay.
 "use client";
 
-import { fetchWithAuth, getAccessToken, silentRefresh, startLogin } from "@/lib/authClient";
+import { getAccessToken, silentRefresh, startLogin } from "@/lib/authClient";
 import { verifyForgeStaff } from "@/lib/forgeGate";
-import { API_BASE } from "@/lib/publicConfig";
 import { StaffMeProvider } from "@/lib/staffMe";
 import { ToastProvider } from "@leadwolf/ui";
 import { usePathname } from "next/navigation";
@@ -17,12 +16,11 @@ import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { sectionTitleFor } from "./navConfig";
 
-type GateState = "loading" | "redirecting" | "staff" | "forbidden" | "error";
+type GateState = "loading" | "redirecting" | "staff" | "forbidden" | "misrouted" | "error";
 
 export function ForgeShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/";
   const [state, setState] = useState<GateState>("loading");
-  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   async function runGate() {
@@ -55,20 +53,15 @@ export function ForgeShell({ children }: { children: ReactNode }) {
         setState("forbidden");
         return;
       }
+      if (verdict === "misrouted") {
+        setState("misrouted");
+        return;
+      }
       if (verdict !== "staff") {
         setState("error");
         return;
       }
-      // Best-effort identity for the rail (the gate above already authorized the session).
-      try {
-        const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
-        if (res.ok) {
-          const session = (await res.json()) as { userId?: string };
-          setUserEmail(session.userId ?? null);
-        }
-      } catch {
-        // Non-fatal: the console still renders without the identity label.
-      }
+      // The rail identity (email/role) comes from /bff/me via StaffMeProvider — no separate fetch here.
       setState("staff");
     } catch (err: unknown) {
       console.warn(`[forge] gate failed: ${err instanceof Error ? err.message : "unknown"}`);
@@ -101,12 +94,14 @@ export function ForgeShell({ children }: { children: ReactNode }) {
     );
   }
 
-  if (state === "error") {
+  if (state === "error" || state === "misrouted") {
     return (
       <div className="tp-center-screen">
         <div className="tp-signin-card">
           <p className="app-muted">
-            We couldn't reach the Forge API. Check your connection and try again.
+            {state === "misrouted"
+              ? "The Forge API returned an unexpected response (404). This usually means a deployment or routing issue on our side — not your connection."
+              : "We couldn't reach the Forge API. Check your connection and try again."}
           </p>
           <button
             className="app-button"
@@ -145,11 +140,7 @@ export function ForgeShell({ children }: { children: ReactNode }) {
               aria-label="Close navigation"
             />
           )}
-          <Sidebar
-            userEmail={userEmail}
-            isOpen={sidebarOpen}
-            onClose={() => setSidebarOpen(false)}
-          />
+          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
           <div className="tp-main">
             <TopBar
               title={sectionTitleFor(pathname)}

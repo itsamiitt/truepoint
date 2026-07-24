@@ -1,7 +1,7 @@
-// staffMe.tsx — the caller's staff role + capabilities, fetched once from the forge-api `/bff/me` read and
-// shared via context so any surface can hide actions the operator can't perform. This is defence-in-depth + UX
-// only — the forge-api enforces every capability server-side, so a stale/forged client value can never grant
-// access. `loaded` lets callers render optimistically (show an action until we know it's denied) to avoid a
+// staffMe.tsx — the caller's staff role, capabilities and identity (email), fetched once from the forge-api
+// `/bff/me` read and shared via context so any surface can hide actions the operator can't perform. This is
+// defence-in-depth + UX only — the forge-api enforces every capability server-side, so a stale/forged client
+// value can never grant access. `loaded` lets callers render optimistically (show an action until we know it's denied) to avoid a
 // flash for the common authorized case.
 "use client";
 
@@ -13,12 +13,14 @@ import { type ReactNode, createContext, useContext, useEffect, useState } from "
 interface StaffMeState {
   staffRole: string | null;
   capabilities: StaffCapability[];
+  email: string | null;
   loaded: boolean;
 }
 
 const StaffMeContext = createContext<StaffMeState>({
   staffRole: null,
   capabilities: [],
+  email: null,
   loaded: false,
 });
 
@@ -26,6 +28,7 @@ export function StaffMeProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<StaffMeState>({
     staffRole: null,
     capabilities: [],
+    email: null,
     loaded: false,
   });
 
@@ -39,10 +42,12 @@ export function StaffMeProvider({ children }: { children: ReactNode }) {
           const data = (await res.json()) as {
             staffRole: string | null;
             capabilities: StaffCapability[];
+            email?: string | null;
           };
           setState({
             staffRole: data.staffRole ?? null,
             capabilities: data.capabilities ?? [],
+            email: data.email ?? null,
             loaded: true,
           });
         } else {
@@ -66,6 +71,7 @@ export function useStaffMe() {
   return {
     staffRole: me.staffRole,
     capabilities: me.capabilities,
+    email: me.email,
     loaded: me.loaded,
     /** Strict: true only once we've confirmed the capability. */
     has: (cap: StaffCapability) => me.capabilities.includes(cap),
