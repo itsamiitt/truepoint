@@ -65,6 +65,17 @@ const WRITTEN = new Set<string>([
   // Import visibility P0 (import-redesign 10 §3, S-V4): the audited per-workspace import-policy change —
   // written in-tx by PUT /settings/import-policy (apps/api settings routes → writeAudit).
   "import.policy_updated",
+  // Import lifecycle writers (import-redesign 08/10): commit + cancel + retry (apps/api import routes),
+  // PII-artifact download (artifactRoutes), infected-upload refusal (packages/core runBulkImport), and the
+  // draft reaper's in-tx audit row (apps/workers importReaperSweep).
+  "import.committed",
+  "import.cancelled",
+  "import.retry_created",
+  "import.artifact_downloaded",
+  "import.av_infected",
+  "import.draft_reaped",
+  // Contact TRUE-MERGE (import-and-data-model-redesign 04): written in-tx by contactMergeRepository.
+  "contact.merge",
 ]);
 
 // §5.2 — defined in the closed enum but not yet wired to a writeAudit() call-site.
@@ -74,6 +85,15 @@ const PENDING = new Set<string>([
   "suppression.remove",
   "dsar.rectify",
   "apikey.use",
+  // Import mapping templates: the enum facet exists ahead of the save-audit wiring (importMappingTemplates
+  // repo has no writeAudit call-site yet).
+  "import.template_saved",
+  // CH-series channel child-table facets (import-and-data-model-redesign 03, CH-INV-1): defined ahead of
+  // the channel-mutation writers.
+  "channel_added",
+  "channel_promoted",
+  "channel_deleted",
+  "channel_primary_demoted",
   // Email M12 (packages/core email): disconnecting a mailbox has no service path yet (the connect/verify
   // writers landed in P0; mailbox.disconnect lands with the mailbox-management surface).
   "mailbox.disconnect",

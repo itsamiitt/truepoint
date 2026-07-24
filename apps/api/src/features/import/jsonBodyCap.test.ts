@@ -41,18 +41,17 @@ describe("readJsonBodyCapped", () => {
   });
 
   test("refuses an over-cap DECLARED Content-Length WITHOUT reading the stream", async () => {
-    let pulled = false;
-    const spyStream = new ReadableStream<Uint8Array>({
-      pull(controller) {
-        pulled = true;
-        controller.enqueue(new Uint8Array([123]));
-        controller.close();
+    // A poisoned stream: any read attempt rejects with the wrong error class. The declared-length check
+    // must win first, so the ImportTooLargeError assertion proves the short-circuit. (A pull-spy can't:
+    // the runtime may eagerly prime pull() at construction regardless of whether the impl reads.)
+    const poison = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(new Error("stream must never be read"));
       },
     });
-    await expect(readJsonBodyCapped(String(CAP + 1), spyStream, CAP)).rejects.toBeInstanceOf(
+    await expect(readJsonBodyCapped(String(CAP + 1), poison, CAP)).rejects.toBeInstanceOf(
       ImportTooLargeError,
     );
-    expect(pulled).toBe(false); // short-circuited before any read
   });
 
   test("aborts a lying/absent Content-Length once streamed bytes exceed the cap", async () => {
