@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   type StatusTone,
@@ -65,14 +66,10 @@ export function ReviewPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Review</h2>
-          <p className="tp-page-sub">
-            Captures a parser couldn't resolve on its own — triaged here for a human decision.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Review"
+        subtitle="Captures a parser couldn't resolve on its own — triaged here for a human decision."
+      />
 
       <StateSwitch
         loading={loading}

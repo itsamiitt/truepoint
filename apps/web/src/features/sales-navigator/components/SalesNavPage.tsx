@@ -3,7 +3,7 @@
 // This is the feature's public component (rendered by the thin (shell)/sales-navigator route). HITL only.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
+import { PageHeader } from "@leadwolf/ui";
 import { useSalesNavLinks } from "../hooks/useSalesNavLinks";
 import { CaptureForm } from "./CaptureForm";
 import { LinksTable } from "./LinksTable";

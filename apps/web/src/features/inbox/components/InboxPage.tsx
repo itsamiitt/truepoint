@@ -2,8 +2,7 @@
 // Composition only; each tab owns its own data + states.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
-import { Tabs } from "@leadwolf/ui";
+import { PageHeader, Tabs } from "@leadwolf/ui";
 import { useState } from "react";
 import styles from "../inbox.module.css";
 import { TasksPanel } from "./TasksPanel";

@@ -1,6 +1,7 @@
+// ShortcutsDialog.tsx — the keyboard-shortcuts help overlay. Opens on "?" (when not typing) or a window
+// "command:shortcuts" event (the top-bar button); closes on Esc. Static content over the shared Dialog.
 "use client";
-// ShortcutsDialog.tsx — the keyboard-shortcuts help overlay (11 §5). Opens on "?" (when not typing) or a window
-// "command:shortcuts" event (the top-bar button); closes on Esc. Static content over the shared Dialog primitive.
+
 import { Dialog } from "@leadwolf/ui";
 import { useEffect, useState } from "react";
 
@@ -38,7 +39,12 @@ export function ShortcutsDialog() {
         {SHORTCUTS.map((s) => (
           <div
             key={s.action}
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+            }}
           >
             <span style={{ fontSize: 14, color: "var(--tp-ink-2)" }}>{s.action}</span>
             <kbd

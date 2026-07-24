@@ -4,7 +4,14 @@
 // (windowed totals + recent runs). NON-PII — counts only. Renders async state through the State Kit.
 "use client";
 
-import { type Column, DataTable, EmptyState, StateSwitch, TpSelect } from "@leadwolf/ui";
+import {
+  type Column,
+  DataTable,
+  EmptyState,
+  PageHeader,
+  StateSwitch,
+  TpSelect,
+} from "@leadwolf/ui";
 import { Gauge } from "lucide-react";
 import { useDataQuality } from "../hooks/useDataQuality";
 import type { VerificationRun } from "../types";
@@ -99,16 +106,10 @@ export function DataQualityPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Data quality</h2>
-          <p className="tp-page-sub">
-            Cross-tenant data health — coverage, validity and freshness from the latest
-            per-workspace snapshots, plus the re-verification ledger. Counts only; no contact data
-            is shown.
-          </p>
-        </div>
-        <TpSelect
+      <PageHeader
+        title="Data quality"
+        subtitle="Cross-tenant data health — coverage, validity and freshness from the latest per-workspace snapshots, plus the re-verification ledger. Counts only; no contact data is shown."
+        actions=<TpSelect
           aria-label="Window"
           value={String(days)}
           disabled={loading}
@@ -120,7 +121,7 @@ export function DataQualityPage() {
             </option>
           ))}
         </TpSelect>
-      </div>
+      />
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {rollup ? (

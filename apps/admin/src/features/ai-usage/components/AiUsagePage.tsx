@@ -4,7 +4,7 @@
 // async state through the State Kit.
 "use client";
 
-import { Card, StatTile, StateSwitch, StatusBadge } from "@leadwolf/ui";
+import { Card, PageHeader, StatTile, StateSwitch, StatusBadge } from "@leadwolf/ui";
 import styles from "../aiUsage.module.css";
 import { useAiUsage } from "../hooks/useAiUsage";
 
@@ -30,15 +30,10 @@ export function AiUsagePage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">AI usage</h2>
-          <p className="tp-page-sub">
-            Cross-tenant AI NL-search metering — request volume, outcomes, repair rate and latency
-            over the window. Call metadata only; the query text is never stored.
-          </p>
-        </div>
-        <label className={styles.window}>
+      <PageHeader
+        title="AI usage"
+        subtitle="Cross-tenant AI NL-search metering — request volume, outcomes, repair rate and latency over the window. Call metadata only; the query text is never stored."
+        actions=<label className={styles.window}>
           <span>Window</span>
           <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
             {WINDOWS.map((w) => (
@@ -48,7 +43,7 @@ export function AiUsagePage() {
             ))}
           </select>
         </label>
-      </div>
+      />
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {data && totals ? (

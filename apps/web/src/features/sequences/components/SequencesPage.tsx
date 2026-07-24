@@ -5,8 +5,7 @@
 // we never double-fetch. Public slice component.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
-import { Tabs } from "@leadwolf/ui";
+import { PageHeader, Tabs } from "@leadwolf/ui";
 import { useCallback, useState } from "react";
 import { useSequences } from "../hooks/useSequences";
 import styles from "../sequences.module.css";

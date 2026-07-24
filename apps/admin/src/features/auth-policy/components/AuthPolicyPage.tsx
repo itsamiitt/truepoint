@@ -16,18 +16,12 @@ const columns: Column<PlatformDefault>[] = [
     key: "key",
     header: "Policy key",
     sortValue: (r) => r.key,
-    cell: (r) => (
-      <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontWeight: 600 }}>{r.key}</span>
-    ),
+    cell: (r) => <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{r.key}</span>,
   },
   {
     key: "value",
     header: "Platform default",
-    cell: (r) => (
-      <code style={{ fontFamily: "var(--tp-font-mono, monospace)" }}>
-        {JSON.stringify(r.value)}
-      </code>
-    ),
+    cell: (r) => <code style={{ fontFamily: "var(--font-mono)" }}>{JSON.stringify(r.value)}</code>,
   },
 ];
 

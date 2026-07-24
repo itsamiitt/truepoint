@@ -2,6 +2,9 @@
 // the apex earns the Cobalt accent (a FILL, never text), the lower two stay ink/currentColor. The wordmark
 // is "True" (Regular) + "Point" (Bold) — the weight shift IS the logo; never set it in a single weight.
 // Reversed variant (white type + lighter cobalt-tint apex) is for the twilight/dark surfaces.
+//
+// Shared by every app shell: apps/admin and apps/forge previously carried their own Brandmark copy and
+// hand-rolled the wordmark as two inline-styled spans, which is how the brand drifted between surfaces.
 import type { CSSProperties } from "react";
 
 /** The three-chevron mark. Apex = Cobalt fill; lower two = ink (currentColor). `reversed` is for dark bg. */

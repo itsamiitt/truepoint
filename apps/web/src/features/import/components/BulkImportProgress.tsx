@@ -7,9 +7,8 @@
 // just mounts it (mirrors EnrichmentJobsPage). Monochrome; color only via the StatusBadge / Progress tones.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
 import type { BulkImportJobStatusResponse } from "@leadwolf/types";
-import { EmptyState, Progress, StateSwitch, StatusBadge } from "@leadwolf/ui";
+import { EmptyState, PageHeader, Progress, StateSwitch, StatusBadge } from "@leadwolf/ui";
 import { Inbox, Upload } from "lucide-react";
 import { useBulkImport } from "../hooks/useBulkImport";
 import styles from "./BulkImportProgress.module.css";

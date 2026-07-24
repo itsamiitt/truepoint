@@ -26,6 +26,7 @@
     "Skeleton": { "cardMode": "column" },
     "StateSwitch": { "cardMode": "column" },
     "StatTile": { "cardMode": "column" },
-    "Tabs": { "cardMode": "column" }
+    "Tabs": { "cardMode": "column" },
+    "TpButton": { "cardMode": "column" }
   }
 }

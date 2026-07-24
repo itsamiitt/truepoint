@@ -5,8 +5,7 @@
 // endpoint. A pure composition shell. Public slice component.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
-import { Tabs, TpButton } from "@leadwolf/ui";
+import { PageHeader, Tabs, TpButton } from "@leadwolf/ui";
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import styles from "../data-health.module.css";

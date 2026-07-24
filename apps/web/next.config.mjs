@@ -4,7 +4,7 @@
 const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
-  transpilePackages: ["@leadwolf/ui", "@leadwolf/types"],
+  transpilePackages: ["@leadwolf/ui", "@leadwolf/app-shell", "@leadwolf/types"],
 
   async rewrites() {
     return [
@@ -18,7 +18,10 @@ const nextConfig = {
       // no /_next/ collision against the web app's own asset chunks.
       // Note: /.well-known/jwks.json lives in apps/auth — rewrite it separately.
       // basePath "/auth" affects ALL routes in the auth app, so /.well-known/* is at /auth/.well-known/*
-      { source: "/.well-known/:path*", destination: "http://localhost:3000/auth/.well-known/:path*" },
+      {
+        source: "/.well-known/:path*",
+        destination: "http://localhost:3000/auth/.well-known/:path*",
+      },
       { source: "/auth/:path*", destination: "http://localhost:3000/auth/:path*" },
     ];
   },

@@ -40,9 +40,7 @@ export function RetentionPoliciesPage() {
       header: "Data class",
       sortValue: (p) => p.dataClass,
       cell: (p) => (
-        <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontWeight: 600 }}>
-          {p.dataClass}
-        </span>
+        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{p.dataClass}</span>
       ),
     },
     {
@@ -68,7 +66,12 @@ export function RetentionPoliciesPage() {
       width: 110,
       cell: (p) =>
         isSuperAdmin ? (
-          <TpButton variant="ghost" size="sm" leftIcon={<Pencil size={14} />} onClick={() => setEditing(p)}>
+          <TpButton
+            variant="ghost"
+            size="sm"
+            leftIcon={<Pencil size={14} />}
+            onClick={() => setEditing(p)}
+          >
             Edit
           </TpButton>
         ) : null,
@@ -78,9 +81,10 @@ export function RetentionPoliciesPage() {
   return (
     <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <p style={{ color: "var(--tp-ink-3)", fontSize: 13, maxWidth: 640, margin: 0 }}>
-        One global policy per data class: its time-to-live and its mode. Shadow counts and audits but
-        deletes nothing; enforce permanently deletes aged rows for tenants with the retention engine
-        enabled. {isSuperAdmin ? "Every change is audited." : "Only a super admin can change a policy."}
+        One global policy per data class: its time-to-live and its mode. Shadow counts and audits
+        but deletes nothing; enforce permanently deletes aged rows for tenants with the retention
+        engine enabled.{" "}
+        {isSuperAdmin ? "Every change is audited." : "Only a super admin can change a policy."}
       </p>
 
       <StateSwitch

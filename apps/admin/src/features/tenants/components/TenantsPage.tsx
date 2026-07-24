@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   TpButton,
@@ -86,14 +87,10 @@ export function TenantsPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Tenants</h2>
-          <p className="tp-page-sub">
-            Cross-tenant directory — plan, status, seats and credits per org.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Tenants"
+        subtitle="Cross-tenant directory — plan, status, seats and credits per org."
+      />
 
       <div
         style={{

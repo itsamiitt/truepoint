@@ -6,8 +6,15 @@
 // Progress tones. Public slice component.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
-import { DataTable, EmptyState, Progress, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
+import {
+  DataTable,
+  EmptyState,
+  PageHeader,
+  Progress,
+  StateSwitch,
+  StatusBadge,
+  TpButton,
+} from "@leadwolf/ui";
 import type { Column } from "@leadwolf/ui";
 import { Database, RefreshCw } from "lucide-react";
 import { useState } from "react";

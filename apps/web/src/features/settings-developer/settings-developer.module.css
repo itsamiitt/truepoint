@@ -99,7 +99,7 @@
 .secretValue {
   flex: 1;
   min-width: 0;
-  font-family: var(--tp-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--font-mono);
   font-size: 13px;
   padding: 8px 10px;
   border: 1px solid var(--tp-hairline-2);
@@ -112,7 +112,7 @@
 
 /* Inline code-ish cells in tables */
 .mono {
-  font-family: var(--tp-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--tp-ink-2);
 }

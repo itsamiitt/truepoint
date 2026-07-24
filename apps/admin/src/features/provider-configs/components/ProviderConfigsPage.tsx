@@ -102,9 +102,7 @@ export function ProviderConfigsPage() {
       cell: (p) => (
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
           <KeyRound size={13} aria-hidden />
-          <span style={{ fontFamily: "var(--tp-font-mono, monospace)" }}>
-            {p.keyHint ?? "not set"}
-          </span>
+          <span style={{ fontFamily: "var(--font-mono)" }}>{p.keyHint ?? "not set"}</span>
         </span>
       ),
     },

@@ -11,6 +11,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   TpButton,
@@ -249,16 +250,11 @@ export function PlansPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Plans</h2>
-          <p className="tp-page-sub">
-            Plan/entitlement templates — seat &amp; workspace caps, an optional monthly credit
-            grant, and feature entitlements.
-          </p>
-        </div>
-        {canManage ? <TpButton onClick={openNew}>New plan</TpButton> : null}
-      </div>
+      <PageHeader
+        title="Plans"
+        subtitle="Plan/entitlement templates — seat &amp; workspace caps, an optional monthly credit grant, and feature entitlements."
+        actions={canManage ? <TpButton onClick={openNew}>New plan</TpButton> : null}
+      />
 
       <StateSwitch
         loading={loading}

@@ -1,0 +1,27 @@
+{
+  "name": "@leadwolf/app-shell",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./shell.css": "./src/shell.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@leadwolf/ui": "workspace:*",
+    "lucide-react": "1.18.0",
+    "cmdk": "^1.1.1"
+  },
+  "peerDependencies": {
+    "next": "^15",
+    "react": "^19"
+  },
+  "devDependencies": {
+    "typescript": "5.7.2",
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.2"
+  }
+}
