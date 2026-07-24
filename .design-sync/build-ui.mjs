@@ -19,7 +19,7 @@
 // (esbuild ts-morph @types/react @tailwindcss/cli@4.3.1) — see .design-sync/NOTES.md. Re-run before the
 // converter on every re-sync.
 
-import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync, cpSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, appendFileSync, rmSync, mkdirSync, cpSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
@@ -116,13 +116,18 @@ const fontPairs = [
   [join(geist, 'geist-mono', 'GeistMono-Variable.woff2'), 'GeistMono-Variable.woff2', 'Geist Mono'],
 ];
 let fontCss = '';
+let copied = 0;
 for (const [srcF, name, fam] of fontPairs) {
   if (!existsSync(srcF)) { console.error(`  ! geist font missing: ${srcF} — skipped`); continue; }
   cpSync(srcF, join(BUILT, name));
+  copied++;
   fontCss += `@font-face{font-family:"${fam}";font-style:normal;font-weight:100 900;font-display:swap;src:url("./${name}") format("woff2");}\n`;
 }
+// NOTE: only the @font-face rules survive into the bundle — the converter parses cfg.extraFonts CSS
+// for @font-face and drops everything else, so the --font-geist-* bindings below go into _compiled.css
+// (cfg.cssEntry, which ships verbatim as _ds_bundle.css), not here.
 writeFileSync(join(BUILT, '_fonts.css'), fontCss);
-step(`geist fonts: ${fontCss ? '2 families → dist' : 'NONE (geist package not found)'}`);
+step(`geist fonts: ${copied === fontPairs.length ? '2 families → dist' : `${copied}/${fontPairs.length} families (geist package incomplete)`} + --font-geist-* bindings`);
 
 // ── 5. Tailwind v4 compile ─────────────────────────────────────────────────
 const twInput = join(ROOT, '.ds-sync', '_tw-input.css');
@@ -141,7 +146,17 @@ step('tailwind compile → packages/ui/dist/_compiled.css');
 const tw = spawnSync(process.execPath, [cliBin, '-i', twInput, '-o', compiled], { cwd: ROOT, encoding: 'utf8' });
 if (tw.stderr?.trim()) console.error(tw.stderr.trim().split('\n').slice(0, 25).join('\n'));
 if (tw.status !== 0 || !existsSync(compiled)) die('tailwind compile failed — see output above');
-console.error(`  _compiled.css: ${(statSync(compiled).size / 1024).toFixed(0)} KB`);
+// Each app sets --font-geist-sans/-mono on <html> via next/font. The DS bundle has no app, so nothing
+// defines them — and tokens.css's `--font-sans: var(--font-geist-sans), "Geist", …` leads with an
+// UNGUARDED var(): undefined makes the whole value guaranteed-invalid, so `font-family: var(--font-sans)`
+// is invalid at computed-value time and every card AND every design built with the DS falls back to the
+// browser default (serif). Bind them to the @font-face families shipped in step 4. Unconditional — even
+// with no woff2 this keeps the rest of the stack (-apple-system, Segoe UI) valid instead of dropping to
+// Times. Appended here (not to _fonts.css) because only @font-face rules survive the extraFonts parse.
+appendFileSync(compiled,
+  '\n/* design-sync: bind the next/font variables the host apps normally set on <html>. */\n' +
+  ':root{--font-geist-sans:"Geist";--font-geist-mono:"Geist Mono";}\n');
+console.error(`  _compiled.css: ${(statSync(compiled).size / 1024).toFixed(0)} KB (+ --font-geist-* bindings)`);
 
 // ── 6. react-dom + scheduler into packages/ui/node_modules ──────────────────
 function copyPkg(label, srcDir, destName) {
