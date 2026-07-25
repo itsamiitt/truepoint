@@ -174,7 +174,7 @@ export const importJobRepository = {
             target: [importJobs.workspaceId, importJobs.idempotencyKey],
             // The unique index is PARTIAL (WHERE idempotency_key IS NOT NULL) — without the same
             // predicate Postgres cannot infer the arbiter and errors 42P10.
-            targetWhere: sql`${importJobs.idempotencyKey} IS NOT NULL`,
+            where: sql`${importJobs.idempotencyKey} IS NOT NULL`,
           })
           .returning({ id: importJobs.id })
       : await insert.returning({ id: importJobs.id });
