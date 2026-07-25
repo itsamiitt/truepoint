@@ -147,7 +147,7 @@ describe("S-C4 — T1 inventory completeness + T6 reveal/billing", () => {
     await insertReveal(s, loser, "email"); // duplicate claim → collapses
     await insertReveal(s, loser, "phone"); // moves
     await admin`INSERT INTO activities (tenant_id, workspace_id, contact_id, activity_type, channel)
-      VALUES (${s.tenantId}, ${s.workspaceId}, ${loser}, 'note', 'system')`;
+      VALUES (${s.tenantId}, ${s.workspaceId}, ${loser}, 'note_added', 'email')`;
     await admin`INSERT INTO source_imports (tenant_id, workspace_id, contact_id, source_name)
       VALUES (${s.tenantId}, ${s.workspaceId}, ${loser}, 'manual')`;
 
