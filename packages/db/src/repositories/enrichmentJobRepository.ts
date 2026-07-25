@@ -230,7 +230,7 @@ export const enrichmentJobRepository = {
             .onConflictDoNothing({
               target: [enrichmentJobs.workspaceId, enrichmentJobs.idempotencyKey],
               // Partial unique (WHERE idempotency_key IS NOT NULL): the arbiter needs the predicate (42P10).
-              targetWhere: sql`${enrichmentJobs.idempotencyKey} IS NOT NULL`,
+              where: sql`${enrichmentJobs.idempotencyKey} IS NOT NULL`,
             })
             .returning({ id: enrichmentJobs.id })
         : await insert.returning({ id: enrichmentJobs.id });

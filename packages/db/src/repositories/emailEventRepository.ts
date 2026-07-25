@@ -77,7 +77,7 @@ export const emailEventRepository = {
         target: emailEvent.providerEventId,
         // The dedup index is PARTIAL (WHERE provider_event_id IS NOT NULL) — the arbiter needs the
         // same predicate or Postgres errors 42P10.
-        targetWhere: sql`${emailEvent.providerEventId} IS NOT NULL`,
+        where: sql`${emailEvent.providerEventId} IS NOT NULL`,
       })
       .returning({ id: emailEvent.id });
     return inserted[0]?.id ?? null;
