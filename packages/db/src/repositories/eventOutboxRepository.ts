@@ -70,7 +70,7 @@ export const eventOutboxRepository = {
   /** Prune old published rows (retention). Returns the count deleted. Owner tx. */
   async prunePublished(tx: Tx, olderThan: Date): Promise<number> {
     const rows = (await tx.execute(sql`
-      DELETE FROM event_outbox WHERE status = 'published' AND published_at < ${olderThan} RETURNING id
+      DELETE FROM event_outbox WHERE status = 'published' AND published_at < ${olderThan.toISOString()} RETURNING id
     `)) as unknown as Array<{ id: string }>;
     return rows.length;
   },

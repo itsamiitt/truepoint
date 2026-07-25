@@ -166,7 +166,7 @@ export const scheduledImportRepository = {
     const rows = (await db.execute(sql`
       SELECT id, tenant_id, workspace_id
       FROM scheduled_imports
-      WHERE enabled = true AND next_run_at <= ${now}
+      WHERE enabled = true AND next_run_at <= ${now.toISOString()}
       ORDER BY next_run_at ASC
       LIMIT ${capped}
     `)) as unknown as Array<{ id: string; tenant_id: string; workspace_id: string }>;
