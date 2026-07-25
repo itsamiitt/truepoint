@@ -579,7 +579,7 @@ export const importJobRepository = {
              (options ->> 'errorReportKey') AS error_report_key
       FROM import_jobs
       WHERE status IN ('completed','partial','failed','cancelled')
-        AND completed_at IS NOT NULL AND completed_at < ${cutoff}
+        AND completed_at IS NOT NULL AND completed_at < ${cutoff.toISOString()}
         AND (rejected_artifact_key IS NOT NULL OR (options ->> 'errorReportKey') IS NOT NULL)
       ORDER BY completed_at ASC
       LIMIT ${capped}
@@ -634,7 +634,7 @@ export const importJobRepository = {
     const rows = (await db.execute(sql`
       SELECT id, tenant_id, workspace_id, source_file, created_at
       FROM import_jobs
-      WHERE status = 'draft' AND created_at < ${cutoff}
+      WHERE status = 'draft' AND created_at < ${cutoff.toISOString()}
       ORDER BY created_at ASC
       LIMIT ${capped}
     `)) as unknown as Array<{
