@@ -352,7 +352,7 @@ export const contactRepository = {
     const rows = (await db.execute(
       sql`SELECT DISTINCT tenant_id, workspace_id FROM contacts
           WHERE is_revealed = true AND deleted_at IS NULL
-            AND (last_verified_at IS NULL OR last_verified_at < ${cutoff})
+            AND (last_verified_at IS NULL OR last_verified_at < ${cutoff.toISOString()})
           LIMIT ${limit}`,
     )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
     return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
@@ -772,8 +772,8 @@ export const contactRepository = {
           count(*) FILTER (WHERE phone_line_type = 'mobile')::int AS phone_mobile,
           count(*) FILTER (WHERE phone_line_type = 'landline')::int AS phone_landline,
           count(*) FILTER (WHERE phone_line_type = 'voip')::int AS phone_voip,
-          count(*) FILTER (WHERE last_verified_at >= ${cutoff})::int AS fresh,
-          count(*) FILTER (WHERE last_verified_at < ${cutoff})::int AS stale,
+          count(*) FILTER (WHERE last_verified_at >= ${cutoff.toISOString()})::int AS fresh,
+          count(*) FILTER (WHERE last_verified_at < ${cutoff.toISOString()})::int AS stale,
           count(*) FILTER (WHERE last_verified_at IS NULL)::int AS never_verified
         FROM contacts
         WHERE deleted_at IS NULL
