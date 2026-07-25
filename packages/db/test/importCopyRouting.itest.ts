@@ -124,13 +124,9 @@ beforeAll(async () => {
 afterAll(async () => {
   // Close the @leadwolf/db singleton pool too — without it the bun test process never exits, which is
   // what parked every pre-shard CI run on this file for the rest of the job's timeout.
-  console.error("[copyrouting] afterAll: closeDb"); // TEMP hang-hunt markers
   await dbm?.closeDb();
-  console.error("[copyrouting] afterAll: admin.end");
   await admin?.end();
-  console.error("[copyrouting] afterAll: dbHandle.stop");
   await dbHandle?.stop();
-  console.error("[copyrouting] afterAll: done");
 });
 
 describe("0057 — the P2 audit-action CHECK train (ruling M1)", () => {
@@ -166,43 +162,23 @@ describe("0057 — the P2 audit-action CHECK train (ruling M1)", () => {
   });
 
   test("the CHECK stays CLOSED — an action outside the enum is rejected by the DB", async () => {
-    // TEMP hang-hunt v2: the INSERT itself parks forever on CI. Race it, and on timeout dump the
-    // server-side truth (who blocks whom) before failing loudly. Markers on stderr.
-    console.error("[copyrouting] t2 start");
-    const insert = admin`
+    // NOT `expect(query).rejects`: postgres.js tagged-template queries are LAZY thenables, and under bun
+    // that form never drove the query — this file parked here until the job timeout on every CI run (the
+    // historical "itests never finish" hang). Attach .then handlers so the query executes, then assert
+    // the captured rejection.
+    const outcome = await admin`
         INSERT INTO audit_log (tenant_id, workspace_id, action, entity_type)
-        VALUES (${tenantA}, ${wsA}, 'import.not_a_real_action', 'import_job')`;
-    const outcome = await Promise.race([
-      insert.then(
-        () => "RESOLVED" as const,
-        (e: unknown) => e as Error,
-      ),
-      new Promise<"TIMEOUT">((r) => setTimeout(() => r("TIMEOUT"), 15_000)),
-    ]);
-    if (outcome === "TIMEOUT") {
-      const probe = postgres(dbHandle.adminUrl, { max: 1, onnotice: () => {} });
-      const act = await probe`
-        SELECT pid, state, wait_event_type, wait_event, left(query, 120) AS query,
-               pg_blocking_pids(pid) AS blockers
-        FROM pg_stat_activity WHERE datname = current_database()`;
-      console.error("[copyrouting] t2 TIMEOUT — pg_stat_activity:", JSON.stringify(act));
-      await probe.end();
-    } else {
-      console.error(
-        "[copyrouting] t2 outcome:",
-        outcome === "RESOLVED" ? "RESOLVED" : String(outcome),
-      );
-    }
-    expect(outcome).not.toBe("TIMEOUT");
+        VALUES (${tenantA}, ${wsA}, 'import.not_a_real_action', 'import_job')`.then(
+      () => "RESOLVED" as const,
+      (e: unknown) => e as Error,
+    );
     expect(outcome).not.toBe("RESOLVED");
     expect(String(outcome)).toMatch(/audit_log_action_enum/);
-    console.error("[copyrouting] t2 done");
   });
 });
 
 describe("S-I9 — submitCopyImport, the one store-then-enqueue copy submission (T7 copy half, seam level)", () => {
   test("over-threshold + engaged ⇒ processing_mode='copy' row + stored object + exactly ONE drive", async () => {
-    console.error("[copyrouting] t3 start"); // TEMP hang-hunt marker
     const h = memHarness();
     const bytes = new TextEncoder().encode("Email,First Name\na@x.test,Ann\n");
 
@@ -252,11 +228,9 @@ describe("S-I9 — submitCopyImport, the one store-then-enqueue copy submission 
     expect(job.av_scan_status).toBe("skipped");
     // The DRIVE's source of truth: the object is stored under the row's exact key, byte-for-byte.
     expect(h.objects.get(job.source_file)).toEqual(bytes);
-    console.error("[copyrouting] t3 done");
   });
 
   test("Idempotency-Key replay collapses: same jobId, nothing re-stored, NO second drive", async () => {
-    console.error("[copyrouting] t4 start"); // TEMP hang-hunt marker
     const h = memHarness();
     const bytes = new TextEncoder().encode("Email\nb@x.test\n");
     const args = {
@@ -284,7 +258,6 @@ describe("S-I9 — submitCopyImport, the one store-then-enqueue copy submission 
   });
 
   test("storage failure ⇒ the job is marked failed and NO drive is enqueued", async () => {
-    console.error("[copyrouting] t5 start"); // TEMP hang-hunt marker
     const h = memHarness();
     const failingStore = {
       ...h.fileStore,
