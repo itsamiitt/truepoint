@@ -22,13 +22,16 @@ import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { accounts } from "../schema/contacts.ts";
 
 /** Workspace-scoped per-account contact rollup. RLS keeps the correlated subquery in the SAME workspace as
- *  the outer accounts row (the tx GUC gates contacts too), so the counts are workspace-isolated automatically. */
+ *  the outer accounts row (the tx GUC gates contacts too), so the counts are workspace-isolated automatically.
+ *  The outer correlation is ${accounts}."id" (table interpolation), NOT ${accounts.id}: drizzle renders a
+ *  base-table COLUMN unqualified inside a select-list fragment, and inside the subquery a bare "id" resolves
+ *  to cc.id — cc.account_id = cc.id is never true and the count silently reads 0. */
 const CONTACT_COUNT = sql<number>`(
-  SELECT count(*)::int FROM contacts cc WHERE cc.account_id = ${accounts.id} AND cc.deleted_at IS NULL
+  SELECT count(*)::int FROM contacts cc WHERE cc.account_id = ${accounts}."id" AND cc.deleted_at IS NULL
 )`;
 const REVEALED_CONTACT_COUNT = sql<number>`(
   SELECT count(*)::int FROM contacts cc
-  WHERE cc.account_id = ${accounts.id} AND cc.deleted_at IS NULL AND cc.is_revealed
+  WHERE cc.account_id = ${accounts}."id" AND cc.deleted_at IS NULL AND cc.is_revealed
 )`;
 
 /** SQL fragment that resolves a facet to its grouping value (facetCounts + suggest). `employee_band` maps the

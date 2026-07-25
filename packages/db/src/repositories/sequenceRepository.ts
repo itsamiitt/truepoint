@@ -132,10 +132,13 @@ export const sequenceRepository = {
           id: outreachSequences.id,
           name: outreachSequences.name,
           status: outreachSequences.status,
+          // Outer correlation via ${outreachSequences}."id" — a base-table COLUMN renders unqualified in a
+          // select-list fragment, and a bare "id" inside the subquery resolves to the INNER table's id
+          // (the accountSearch rollup bug; counts silently read 0/garbage).
           stepCount: sql<number>`(SELECT count(*)::int FROM ${outreachSteps}
-            WHERE ${outreachSteps.sequenceId} = ${outreachSequences.id})`,
+            WHERE ${outreachSteps.sequenceId} = ${outreachSequences}."id")`,
           enrolledCount: sql<number>`(SELECT count(*)::int FROM ${outreachLog}
-            WHERE ${outreachLog.sequenceId} = ${outreachSequences.id})`,
+            WHERE ${outreachLog.sequenceId} = ${outreachSequences}."id")`,
         })
         .from(outreachSequences)
         .orderBy(asc(outreachSequences.name));
