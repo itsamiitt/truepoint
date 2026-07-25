@@ -132,7 +132,7 @@ describe("Phase-5 staff-no-access guarantee (list-plan/07 §8, D2)", () => {
     // id/contact_id, AND no owner EMAIL (the owner is a customer employee — their email is PII). Assert the
     // shape contains exactly the allowed keys.
     expect(Object.keys(row).sort()).toEqual(
-      ["createdAt", "description", "id", "memberCount", "ownerUserId", "updatedAt"].sort(),
+      ["createdAt", "description", "id", "memberCount", "name", "ownerUserId", "updatedAt"].sort(),
     );
     const serialized = JSON.stringify(overview);
     expect(serialized).not.toContain("Jane"); // no member PII anywhere in the staff payload
