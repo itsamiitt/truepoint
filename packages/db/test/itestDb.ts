@@ -56,7 +56,7 @@ function migrationSetHash(): string {
 async function ensureTemplate(external: string, root: postgres.Sql): Promise<string> {
   const tmpl = `itest_tmpl_${migrationSetHash()}`;
   // Serialize builders across processes on this server; same-name check-then-create stays race-free.
-  await root.unsafe(`SELECT pg_advisory_lock(727271)`);
+  await root.unsafe("SELECT pg_advisory_lock(727271)");
   try {
     const exists = await root`SELECT 1 AS ok FROM pg_database WHERE datname = ${tmpl}`;
     if (exists.length === 0) {
@@ -65,7 +65,7 @@ async function ensureTemplate(external: string, root: postgres.Sql): Promise<str
       await applyMigrations(withDatabase(external, tmpl));
     }
   } finally {
-    await root.unsafe(`SELECT pg_advisory_unlock(727271)`);
+    await root.unsafe("SELECT pg_advisory_unlock(727271)");
   }
   return tmpl;
 }
