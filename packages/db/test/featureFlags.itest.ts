@@ -182,11 +182,13 @@ describe("feature flags — access model + tenant isolation (RLS)", () => {
       await db.featureFlagRepository.setTenantOverride(tx, "iso", tenantB, false);
     });
 
-    // Tenant A's scoped read sees only A's override row.
+    // Tenant A's scoped read sees ONLY A-owned rows (earlier tests in this file may have added other A
+    // overrides — the isolation property is "every row is A's", not a row count).
     const overridesA = await db.withTenantTx({ tenantId: tenantA }, (tx) =>
       db.featureFlagRepository.overridesForTenant(tx, tenantA),
     );
-    expect(overridesA.map((o) => o.tenantId)).toEqual([tenantA]);
+    expect(overridesA.length).toBeGreaterThan(0);
+    expect(new Set(overridesA.map((o) => o.tenantId))).toEqual(new Set([tenantA]));
 
     // Even if tenant A asks for tenant B's overrides, RLS exposes nothing (cross-tenant read is empty).
     const leak = await db.withTenantTx({ tenantId: tenantA }, (tx) =>

@@ -74,7 +74,9 @@ interface AccountSeed {
 }
 
 async function seedAccount(s: AccountSeed): Promise<string> {
-  const tech = JSON.stringify(s.technologies ?? []);
+  // Pass the RAW array: the ::jsonb cast makes the driver describe the param as jsonb and JSON-serialize
+  // it — pre-stringifying here double-encodes and lands a jsonb SCALAR STRING instead of an array.
+  const tech = s.technologies ?? [];
   const [a] = await admin`
     INSERT INTO accounts (
       tenant_id, workspace_id, name, domain, industry, sub_industry, employee_count, revenue_range,
