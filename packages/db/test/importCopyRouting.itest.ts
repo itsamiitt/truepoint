@@ -124,9 +124,13 @@ beforeAll(async () => {
 afterAll(async () => {
   // Close the @leadwolf/db singleton pool too — without it the bun test process never exits, which is
   // what parked every pre-shard CI run on this file for the rest of the job's timeout.
+  console.error("[copyrouting] afterAll: closeDb"); // TEMP hang-hunt markers
   await dbm?.closeDb();
+  console.error("[copyrouting] afterAll: admin.end");
   await admin?.end();
+  console.error("[copyrouting] afterAll: dbHandle.stop");
   await dbHandle?.stop();
+  console.error("[copyrouting] afterAll: done");
 });
 
 describe("0057 — the P2 audit-action CHECK train (ruling M1)", () => {
@@ -162,16 +166,19 @@ describe("0057 — the P2 audit-action CHECK train (ruling M1)", () => {
   });
 
   test("the CHECK stays CLOSED — an action outside the enum is rejected by the DB", async () => {
+    console.error("[copyrouting] t2 start"); // TEMP hang-hunt markers (stderr — survives buffering)
     await expect(
       admin`
         INSERT INTO audit_log (tenant_id, workspace_id, action, entity_type)
         VALUES (${tenantA}, ${wsA}, 'import.not_a_real_action', 'import_job')`,
     ).rejects.toThrow(/audit_log_action_enum/);
+    console.error("[copyrouting] t2 done");
   });
 });
 
 describe("S-I9 — submitCopyImport, the one store-then-enqueue copy submission (T7 copy half, seam level)", () => {
   test("over-threshold + engaged ⇒ processing_mode='copy' row + stored object + exactly ONE drive", async () => {
+    console.error("[copyrouting] t3 start"); // TEMP hang-hunt marker
     const h = memHarness();
     const bytes = new TextEncoder().encode("Email,First Name\na@x.test,Ann\n");
 
@@ -221,9 +228,11 @@ describe("S-I9 — submitCopyImport, the one store-then-enqueue copy submission 
     expect(job.av_scan_status).toBe("skipped");
     // The DRIVE's source of truth: the object is stored under the row's exact key, byte-for-byte.
     expect(h.objects.get(job.source_file)).toEqual(bytes);
+    console.error("[copyrouting] t3 done");
   });
 
   test("Idempotency-Key replay collapses: same jobId, nothing re-stored, NO second drive", async () => {
+    console.error("[copyrouting] t4 start"); // TEMP hang-hunt marker
     const h = memHarness();
     const bytes = new TextEncoder().encode("Email\nb@x.test\n");
     const args = {
@@ -251,6 +260,7 @@ describe("S-I9 — submitCopyImport, the one store-then-enqueue copy submission 
   });
 
   test("storage failure ⇒ the job is marked failed and NO drive is enqueued", async () => {
+    console.error("[copyrouting] t5 start"); // TEMP hang-hunt marker
     const h = memHarness();
     const failingStore = {
       ...h.fileStore,
