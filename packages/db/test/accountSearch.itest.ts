@@ -209,6 +209,19 @@ describe("Postgres accountSearchRepository — firmographic company search (24)"
   });
 
   test("per-account contact rollup is workspace-scoped (count + revealed sub-count)", async () => {
+    // TEMP DIAGNOSTIC (rollup-0 investigation — remove with the fix): what does the app-role tx actually
+    // see? Total contacts under RLS, acme-linked contacts, and the workspace GUC in effect.
+    const { sql: dsql } = await import("drizzle-orm");
+    const probe = await db.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, (tx) =>
+      tx.execute(dsql`SELECT
+        (SELECT count(*)::int FROM contacts) AS c_all,
+        (SELECT count(*)::int FROM contacts WHERE account_id = ${aAcme}::uuid) AS c_acme,
+        (SELECT count(*)::int FROM accounts) AS a_all,
+        current_setting('app.current_workspace_id', true) AS ws_guc,
+        current_user AS who`),
+    );
+    console.log("ROLLUP-PROBE", JSON.stringify(probe));
+
     const a = await run(scopeA(), query());
     const acme = a.accounts.find((h) => h.id === aAcme);
     expect(acme?.contactCount).toBe(3);
