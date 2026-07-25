@@ -50,7 +50,9 @@ jobs:
       # --frozen-lockfile fails if any package.json gained a dep without bun.lock being refreshed — the
       # forcing function for "run bun install after pulling a feature branch".
       - name: Install (frozen lockfile)
-        run: bun install --frozen-lockfile
+        # One retry: the registry intermittently fails extracting big tarballs ("failed to download next") —
+        # it has killed whole itest jobs three times; a 10s backoff has always been enough.
+        run: bun install --frozen-lockfile || (sleep 10 && bun install --frozen-lockfile)
       - name: Typecheck
         run: bun run typecheck
       - name: Lint (biome)
@@ -119,7 +121,9 @@ jobs:
         with:
           bun-version: 1.3.14
       - name: Install (frozen lockfile)
-        run: bun install --frozen-lockfile
+        # One retry: the registry intermittently fails extracting big tarballs ("failed to download next") —
+        # it has killed whole itest jobs three times; a 10s backoff has always been enough.
+        run: bun install --frozen-lockfile || (sleep 10 && bun install --frozen-lockfile)
       - name: Run every *.itest.ts in its own process
         run: |
           set -uo pipefail
