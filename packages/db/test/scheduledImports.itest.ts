@@ -16,9 +16,15 @@
 //   (8) RLS: workspace B never sees A's schedule via the scoped CRUD.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { deriveScheduleIdempotencyKey } from "@leadwolf/core";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
+
+// Core arrives via the RELATIVE barrel, dynamically in beforeAll: packages/db cannot depend on
+// @leadwolf/core (core -> db would cycle; bun's linker refuses the undeclared edge), and a static
+// import would load core's module graph — including the db client singleton — before DATABASE_URL
+// points at the test database.
+type Core = typeof import("../../core/src/index.ts");
+let deriveScheduleIdempotencyKey: Core["deriveScheduleIdempotencyKey"];
 
 type Db = typeof import("@leadwolf/db");
 
@@ -58,6 +64,7 @@ beforeAll(async () => {
   ({ tenantId: tenantB, workspaceId: wsB } = await seedWorkspace("globex"));
 
   db = await import("@leadwolf/db");
+  ({ deriveScheduleIdempotencyKey } = await import("../../core/src/index.ts"));
 }, 240_000);
 
 afterAll(async () => {
