@@ -131,7 +131,8 @@ export function SequenceBuilder({
           <Icon icon={ShieldCheck} size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
           <span>
             Every send is checked against the suppression / do-not-contact list at dispatch time — a
-            contact suppressed after enrollment is never sent to. LinkedIn steps stay human-in-the-loop.
+            contact suppressed after enrollment is never sent to. LinkedIn steps stay
+            human-in-the-loop.
           </span>
         </p>
 

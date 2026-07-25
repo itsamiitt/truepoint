@@ -457,7 +457,9 @@ describe("bulk import pipeline: COPY spike + drive/chunk/finalize + sync parity"
     expect(finalize?.fireRollups).toBe(true); // ≥1 contact landed
 
     // Control-row counters (atomic deltas onto the zeroed columns) + terminal status.
-    const job = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJobSystem(tx, jobIdA));
+    const job = await db.withTenantTx(scopeA(), (tx) =>
+      db.importJobRepository.getJobSystem(tx, jobIdA),
+    );
     expect(job?.status).toBe("completed");
     expect(job?.rowsTotal).toBe(4);
     expect(job?.rowsCreated).toBe(2);
@@ -535,7 +537,9 @@ describe("bulk import pipeline: COPY spike + drive/chunk/finalize + sync parity"
     // The bulk control-row counters (case 3) vs the sync summary: created + duplicate agree exactly. The
     // in-file duplicate lands in DIFFERENT buckets by design — bulk `deduped` (dropped at the staging dedup
     // step) vs sync `skipped` (content-hash idempotency) — but BOTH are 1 and BOTH collapse to one B contact.
-    const jobA = await db.withTenantTx(scopeA(), (tx) => db.importJobRepository.getJobSystem(tx, jobIdA));
+    const jobA = await db.withTenantTx(scopeA(), (tx) =>
+      db.importJobRepository.getJobSystem(tx, jobIdA),
+    );
     expect(summary.created).toBe(jobA?.rowsCreated); // 2 === 2
     expect(summary.duplicates).toBe(jobA?.rowsDuplicate); // 1 === 1
     // skipped ↔ deduped: the documented divergence (1 === 1) — the in-file dup, different bucket, same effect.
@@ -641,136 +645,127 @@ function tryGc(): void {
 
 describe("S-P1 — the COPY spike (Gate A / G09): criteria 2–4 as CI assertions", () => {
   // ── 5. CRITERION 2 — throughput floor: ≥ 20k prepared rows/s sustained over ≥ 100k rows ─────────────────
-  test(
-    `5: copyRows sustains ≥ ${SPIKE_MIN_ROWS_PER_SEC} rows/s over ${SPIKE_THROUGHPUT_ROWS} synthetic rows`,
-    async () => {
-      const jobId = randomUUID();
-      await db.importStagingRepository.createStagingTable(jobId, wsA);
-      try {
-        // Warmup band (NOT timed): pool checkout, prepared paths, JIT — the generous CI-variance guard.
-        // The floor itself is NOT discounted: the timed run must clear the 12 §3.2 bar as-is.
-        await db.importStagingRepository.copyRows(jobId, syntheticRows(5_000, wsA, { startAt: 0 }));
+  test(`5: copyRows sustains ≥ ${SPIKE_MIN_ROWS_PER_SEC} rows/s over ${SPIKE_THROUGHPUT_ROWS} synthetic rows`, async () => {
+    const jobId = randomUUID();
+    await db.importStagingRepository.createStagingTable(jobId, wsA);
+    try {
+      // Warmup band (NOT timed): pool checkout, prepared paths, JIT — the generous CI-variance guard.
+      // The floor itself is NOT discounted: the timed run must clear the 12 §3.2 bar as-is.
+      await db.importStagingRepository.copyRows(jobId, syntheticRows(5_000, wsA, { startAt: 0 }));
 
-        const t0 = performance.now();
-        await db.importStagingRepository.copyRows(
-          jobId,
-          syntheticRows(SPIKE_THROUGHPUT_ROWS, wsA, { startAt: 5_000 }),
-        );
-        const elapsedSec = (performance.now() - t0) / 1_000;
-        const rowsPerSec = SPIKE_THROUGHPUT_ROWS / elapsedSec;
+      const t0 = performance.now();
+      await db.importStagingRepository.copyRows(
+        jobId,
+        syntheticRows(SPIKE_THROUGHPUT_ROWS, wsA, { startAt: 5_000 }),
+      );
+      const elapsedSec = (performance.now() - t0) / 1_000;
+      const rowsPerSec = SPIKE_THROUGHPUT_ROWS / elapsedSec;
 
-        // Integrity at volume first (a fast wrong answer is not a pass), then the floor.
-        expect(await db.importStagingRepository.countStaged(jobId)).toBe(
-          5_000 + SPIKE_THROUGHPUT_ROWS,
-        );
-        // The measured number MUST surface in the CI log — it is the figure the ADR-0036 addendum records.
-        console.info(
-          `[S-P1 criterion 2] ${SPIKE_THROUGHPUT_ROWS} rows in ${elapsedSec.toFixed(2)}s = ${Math.round(rowsPerSec)} rows/s (floor ${SPIKE_MIN_ROWS_PER_SEC})`,
-        );
-        expect(rowsPerSec).toBeGreaterThanOrEqual(SPIKE_MIN_ROWS_PER_SEC);
-      } finally {
-        await db.importStagingRepository.dropStagingTable(jobId);
-      }
-    },
-    300_000,
-  );
+      // Integrity at volume first (a fast wrong answer is not a pass), then the floor.
+      expect(await db.importStagingRepository.countStaged(jobId)).toBe(
+        5_000 + SPIKE_THROUGHPUT_ROWS,
+      );
+      // The measured number MUST surface in the CI log — it is the figure the ADR-0036 addendum records.
+      console.info(
+        `[S-P1 criterion 2] ${SPIKE_THROUGHPUT_ROWS} rows in ${elapsedSec.toFixed(2)}s = ${Math.round(rowsPerSec)} rows/s (floor ${SPIKE_MIN_ROWS_PER_SEC})`,
+      );
+      expect(rowsPerSec).toBeGreaterThanOrEqual(SPIKE_MIN_ROWS_PER_SEC);
+    } finally {
+      await db.importStagingRepository.dropStagingTable(jobId);
+    }
+  }, 300_000);
 
   // ── 6. CRITERION 3 — memory plateau: RSS delta ≤ 128 MB at ≥ 1M rows, and NOT row-count-correlated ──────
-  test(
-    `6: producer RSS delta stays ≤ ${Math.round(SPIKE_MAX_RSS_DELTA_BYTES / 1024 / 1024)} MB and plateaus while staging ${SPIKE_MEMORY_ROWS} rows`,
-    async () => {
-      const jobId = randomUUID();
-      await db.importStagingRepository.createStagingTable(jobId, wsA);
-      try {
-        tryGc();
-        const baseline = process.memoryUsage().rss;
-        const samples: Array<{ atRow: number; rss: number }> = [];
-        const SAMPLE_EVERY = 50_000;
+  test(`6: producer RSS delta stays ≤ ${Math.round(SPIKE_MAX_RSS_DELTA_BYTES / 1024 / 1024)} MB and plateaus while staging ${SPIKE_MEMORY_ROWS} rows`, async () => {
+    const jobId = randomUUID();
+    await db.importStagingRepository.createStagingTable(jobId, wsA);
+    try {
+      tryGc();
+      const baseline = process.memoryUsage().rss;
+      const samples: Array<{ atRow: number; rss: number }> = [];
+      const SAMPLE_EVERY = 50_000;
 
-        await db.importStagingRepository.copyRows(
-          jobId,
-          syntheticRows(SPIKE_MEMORY_ROWS, wsA, {
-            onRow: (i) => {
-              if (i > 0 && i % SAMPLE_EVERY === 0) {
-                samples.push({ atRow: i, rss: process.memoryUsage().rss });
-              }
-            },
-          }),
-        );
-        samples.push({ atRow: SPIKE_MEMORY_ROWS, rss: process.memoryUsage().rss });
+      await db.importStagingRepository.copyRows(
+        jobId,
+        syntheticRows(SPIKE_MEMORY_ROWS, wsA, {
+          onRow: (i) => {
+            if (i > 0 && i % SAMPLE_EVERY === 0) {
+              samples.push({ atRow: i, rss: process.memoryUsage().rss });
+            }
+          },
+        }),
+      );
+      samples.push({ atRow: SPIKE_MEMORY_ROWS, rss: process.memoryUsage().rss });
 
-        expect(await db.importStagingRepository.countStaged(jobId)).toBe(SPIKE_MEMORY_ROWS);
+      expect(await db.importStagingRepository.countStaged(jobId)).toBe(SPIKE_MEMORY_ROWS);
 
-        const deltas = samples.map((s) => s.rss - baseline);
-        const overallMax = Math.max(...deltas);
-        const mid = Math.floor(samples.length / 2);
-        const firstHalfMax = Math.max(...deltas.slice(0, Math.max(mid, 1)));
-        // The measured number MUST surface in the CI log — it is the figure the ADR-0036 addendum records.
-        console.info(
-          `[S-P1 criterion 3] RSS delta max ${(overallMax / 1024 / 1024).toFixed(1)} MB over ${SPIKE_MEMORY_ROWS} rows; first-half max ${(firstHalfMax / 1024 / 1024).toFixed(1)} MB (${samples.length} samples)`,
-        );
-        // The ceiling: constant-memory property, absolute.
-        expect(overallMax).toBeLessThanOrEqual(SPIKE_MAX_RSS_DELTA_BYTES);
-        // The PLATEAU: doubling the rows streamed must not keep growing RSS — second-half growth over the
-        // first-half max is bounded by GC-noise headroom, never proportional to row count.
-        expect(overallMax - firstHalfMax).toBeLessThanOrEqual(SPIKE_MAX_PLATEAU_GROWTH_BYTES);
-      } finally {
-        await db.importStagingRepository.dropStagingTable(jobId);
-      }
-    },
-    600_000,
-  );
+      const deltas = samples.map((s) => s.rss - baseline);
+      const overallMax = Math.max(...deltas);
+      const mid = Math.floor(samples.length / 2);
+      const firstHalfMax = Math.max(...deltas.slice(0, Math.max(mid, 1)));
+      // The measured number MUST surface in the CI log — it is the figure the ADR-0036 addendum records.
+      console.info(
+        `[S-P1 criterion 3] RSS delta max ${(overallMax / 1024 / 1024).toFixed(1)} MB over ${SPIKE_MEMORY_ROWS} rows; first-half max ${(firstHalfMax / 1024 / 1024).toFixed(1)} MB (${samples.length} samples)`,
+      );
+      // The ceiling: constant-memory property, absolute.
+      expect(overallMax).toBeLessThanOrEqual(SPIKE_MAX_RSS_DELTA_BYTES);
+      // The PLATEAU: doubling the rows streamed must not keep growing RSS — second-half growth over the
+      // first-half max is bounded by GC-noise headroom, never proportional to row count.
+      expect(overallMax - firstHalfMax).toBeLessThanOrEqual(SPIKE_MAX_PLATEAU_GROWTH_BYTES);
+    } finally {
+      await db.importStagingRepository.dropStagingTable(jobId);
+    }
+  }, 600_000);
 
   // ── 7. CRITERION 4 — mid-stream cancel: abort, no wedge, no partial rows, no backend leak, droppable ────
-  test(
-    "7: destroying the COPY stream mid-flight aborts cleanly; re-drive stages exactly once; table droppable",
-    async () => {
-      const jobId = randomUUID();
-      await db.importStagingRepository.createStagingTable(jobId, wsA);
-      // NO try/finally around the drop here — the DROP is itself an assertion (a wedged/locked staging
-      // table after an aborted COPY is exactly the failure mode criterion 4 exists to catch).
-      const BASELINE = 1_000;
-      const BAND = 50_000;
+  test("7: destroying the COPY stream mid-flight aborts cleanly; re-drive stages exactly once; table droppable", async () => {
+    const jobId = randomUUID();
+    await db.importStagingRepository.createStagingTable(jobId, wsA);
+    // NO try/finally around the drop here — the DROP is itself an assertion (a wedged/locked staging
+    // table after an aborted COPY is exactly the failure mode criterion 4 exists to catch).
+    const BASELINE = 1_000;
+    const BAND = 50_000;
 
-      // A committed baseline band, so atomicity is observable against a non-empty table.
-      await db.importStagingRepository.copyRows(jobId, syntheticRows(BASELINE, wsA, { startAt: 0 }));
-      expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE);
+    // A committed baseline band, so atomicity is observable against a non-empty table.
+    await db.importStagingRepository.copyRows(jobId, syntheticRows(BASELINE, wsA, { startAt: 0 }));
+    expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE);
 
-      // Mid-stream cancel: the producer throws at row 25 000 of the 50 000-row band → stream.pipeline
-      // destroys the COPY Writable → the server-side COPY must abort. copyRows rejects (wrapped with the
-      // jobId; the underlying reason may be the producer error or the driver's premature-close, either is
-      // a correct abort — the load-bearing assertions are the post-conditions below).
-      await expect(
-        db.importStagingRepository.copyRows(
-          jobId,
-          syntheticRows(BAND, wsA, { startAt: BASELINE, abortAt: 25_000 }),
-        ),
-      ).rejects.toThrow(/copyRows failed/);
+    // Mid-stream cancel: the producer throws at row 25 000 of the 50 000-row band → stream.pipeline
+    // destroys the COPY Writable → the server-side COPY must abort. copyRows rejects (wrapped with the
+    // jobId; the underlying reason may be the producer error or the driver's premature-close, either is
+    // a correct abort — the load-bearing assertions are the post-conditions below).
+    await expect(
+      db.importStagingRepository.copyRows(
+        jobId,
+        syntheticRows(BAND, wsA, { startAt: BASELINE, abortAt: 25_000 }),
+      ),
+    ).rejects.toThrow(/copyRows failed/);
 
-      // No wedge: the owner connection keeps serving queries…
-      expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE);
-      // …and COPY atomicity means the aborted band contributed ZERO rows — which is exactly why the
-      // re-drive below can re-stage the whole band without double-staging (15 §2 at this seam).
+    // No wedge: the owner connection keeps serving queries…
+    expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE);
+    // …and COPY atomicity means the aborted band contributed ZERO rows — which is exactly why the
+    // re-drive below can re-stage the whole band without double-staging (15 §2 at this seam).
 
-      // No server-side leak: the aborted COPY backend must wind down (poll — the server needs a moment).
-      let lingering = -1;
-      for (let attempt = 0; attempt < 40; attempt += 1) {
-        lingering = await lingeringCopyBackends();
-        if (lingering === 0) break;
-        await new Promise((r) => setTimeout(r, 250));
-      }
-      expect(lingering).toBe(0);
+    // No server-side leak: the aborted COPY backend must wind down (poll — the server needs a moment).
+    let lingering = -1;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      lingering = await lingeringCopyBackends();
+      if (lingering === 0) break;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    expect(lingering).toBe(0);
 
-      // Re-drive the SAME band to completion: lands exactly once (baseline + band, no dupes possible).
-      await db.importStagingRepository.copyRows(jobId, syntheticRows(BAND, wsA, { startAt: BASELINE }));
-      expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE + BAND);
+    // Re-drive the SAME band to completion: lands exactly once (baseline + band, no dupes possible).
+    await db.importStagingRepository.copyRows(
+      jobId,
+      syntheticRows(BAND, wsA, { startAt: BASELINE }),
+    );
+    expect(await db.importStagingRepository.countStaged(jobId)).toBe(BASELINE + BAND);
 
-      // And the staging table is droppable — no orphan lock from the aborted COPY.
-      await db.importStagingRepository.dropStagingTable(jobId);
-      const stagingName = db.importStagingRepository.stagingTableName(jobId);
-      const [reg] = (await admin`SELECT to_regclass(${stagingName}) AS t`) as { t: string | null }[];
-      expect(reg!.t).toBeNull();
-    },
-    120_000,
-  );
+    // And the staging table is droppable — no orphan lock from the aborted COPY.
+    await db.importStagingRepository.dropStagingTable(jobId);
+    const stagingName = db.importStagingRepository.stagingTableName(jobId);
+    const [reg] = (await admin`SELECT to_regclass(${stagingName}) AS t`) as { t: string | null }[];
+    expect(reg!.t).toBeNull();
+  }, 120_000);
 });

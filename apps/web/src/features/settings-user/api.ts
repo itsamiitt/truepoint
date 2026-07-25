@@ -37,7 +37,8 @@ export async function saveProfile(patch: UserProfilePatch): Promise<UserProfile>
 /** GET the per-event × per-channel notification prefs. */
 export async function fetchNotificationPrefs(): Promise<NotificationPrefs> {
   const res = await fetchWithAuth(`${BASE}/notifications`);
-  if (!res.ok) throw new Error(await problemMessage(res, "Could not load your notification settings"));
+  if (!res.ok)
+    throw new Error(await problemMessage(res, "Could not load your notification settings"));
   return (await res.json()) as NotificationPrefs;
 }
 
@@ -48,6 +49,7 @@ export async function saveNotificationPrefs(prefs: NotificationPrefs): Promise<N
     headers: { "content-type": "application/json" },
     body: JSON.stringify(prefs),
   });
-  if (!res.ok) throw new Error(await problemMessage(res, "Could not save your notification settings"));
+  if (!res.ok)
+    throw new Error(await problemMessage(res, "Could not save your notification settings"));
   return (await res.json()) as NotificationPrefs;
 }

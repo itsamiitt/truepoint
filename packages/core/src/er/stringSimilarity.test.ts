@@ -29,7 +29,9 @@ describe("jaro / jaroWinkler", () => {
   });
 
   test("the prefix bonus makes Jaro-Winkler ≥ Jaro", () => {
-    expect(jaroWinkler("jonathan", "jonathon")).toBeGreaterThanOrEqual(jaro("jonathan", "jonathon"));
+    expect(jaroWinkler("jonathan", "jonathon")).toBeGreaterThanOrEqual(
+      jaro("jonathan", "jonathon"),
+    );
   });
 
   test("output is always within [0,1]", () => {

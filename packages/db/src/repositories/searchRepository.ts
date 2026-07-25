@@ -166,9 +166,13 @@ function clauseCondition(
     switch (clause.field) {
       case "has_email":
         // "∃ live child email" gate-on (secondaries count, correct for no-primary edge states); flat gate-off.
-        return is(opts.channelsFromChild ? emailChildExists : sql`${contacts.emailEnc} IS NOT NULL`);
+        return is(
+          opts.channelsFromChild ? emailChildExists : sql`${contacts.emailEnc} IS NOT NULL`,
+        );
       case "has_phone":
-        return is(opts.channelsFromChild ? phoneChildExists : sql`${contacts.phoneEnc} IS NOT NULL`);
+        return is(
+          opts.channelsFromChild ? phoneChildExists : sql`${contacts.phoneEnc} IS NOT NULL`,
+        );
       case "has_linkedin":
         return is(sql`${contacts.linkedinUrl} IS NOT NULL`);
       case "is_revealed":
@@ -492,10 +496,7 @@ function runSearch(
   const select: typeof MASKED = opts.channelsFromChild
     ? { ...MASKED, hasEmail: hasEmailChild, hasPhone: hasPhoneChild }
     : { ...MASKED };
-  const base = tx
-    .select(select)
-    .from(contacts)
-    .leftJoin(accounts, ACCOUNT_JOIN_LIVE);
+  const base = tx.select(select).from(contacts).leftJoin(accounts, ACCOUNT_JOIN_LIVE);
 
   let seek: SQL | undefined;
   let order: SQL;

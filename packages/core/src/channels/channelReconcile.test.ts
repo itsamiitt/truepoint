@@ -3,10 +3,7 @@
 // packages/db/test/contactChannels.reconcile.itest.ts. Run: `bun test ./packages/core/src/channels/channelReconcile.test.ts`
 
 import { describe, expect, test } from "bun:test";
-import {
-  type ChannelReconcileState,
-  decideChannelReconcile,
-} from "./channelReconcile.ts";
+import { type ChannelReconcileState, decideChannelReconcile } from "./channelReconcile.ts";
 
 /** A fully-coherent, drift-free state (the decider should never be called on it in prod, but noop is correct). */
 const coherent: ChannelReconcileState = {
@@ -19,7 +16,10 @@ const coherent: ChannelReconcileState = {
   builtEqualsPrimary: true,
 };
 
-const s = (over: Partial<ChannelReconcileState>): ChannelReconcileState => ({ ...coherent, ...over });
+const s = (over: Partial<ChannelReconcileState>): ChannelReconcileState => ({
+  ...coherent,
+  ...over,
+});
 
 describe("decideChannelReconcile — degenerate states (05 §Edge, direction-independent)", () => {
   test("both null ⇒ noop", () => {
@@ -55,7 +55,11 @@ describe("decideChannelReconcile — flat wins (read gate OFF, dual-write era)",
   });
 
   test("primary holds the flat value but grades/bytes differ ⇒ refresh in place", () => {
-    const st = s({ primaryCoherent: false, primaryMatchesFlatValue: true, builtEqualsPrimary: false });
+    const st = s({
+      primaryCoherent: false,
+      primaryMatchesFlatValue: true,
+      builtEqualsPrimary: false,
+    });
     expect(decideChannelReconcile("flat", st)).toBe("write_primary_from_flat");
   });
 

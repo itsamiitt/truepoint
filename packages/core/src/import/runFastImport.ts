@@ -19,11 +19,11 @@
 
 import { env } from "@leadwolf/config";
 import {
+  type ImportJobProgressDelta,
+  type ImportJobRowInsert,
   importJobRepository,
   outboxRepository,
   withTenantTx,
-  type ImportJobProgressDelta,
-  type ImportJobRowInsert,
 } from "@leadwolf/db";
 import {
   IMPORT_NOTIFY_TOPIC,
@@ -35,7 +35,7 @@ import {
 import type { FileStore } from "../storage/fileStore.ts";
 import { writeImportArtifacts } from "./artifactWriter.ts";
 import { ACTIVE_IMPORT_STATUSES } from "./importFairness.ts";
-import { runImport, type RunImportInput } from "./runImport.ts";
+import { type RunImportInput, runImport } from "./runImport.ts";
 
 export interface RunFastImportInput {
   scope: { tenantId: string; workspaceId: string };

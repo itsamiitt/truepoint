@@ -278,7 +278,9 @@ async function commitFire(
     policy?.defaultMergeMode ??
     DEFAULT_IMPORT_POLICY.defaultMergeMode) as ImportMergeMode;
   const preservePopulated =
-    row.preservePopulated ?? policy?.defaultPreservePopulated ?? DEFAULT_IMPORT_POLICY.defaultPreservePopulated;
+    row.preservePopulated ??
+    policy?.defaultPreservePopulated ??
+    DEFAULT_IMPORT_POLICY.defaultPreservePopulated;
 
   const idempotencyKey = deriveScheduleIdempotencyKey(row.id, row.nextRunAt);
   // Admission BEFORE create so the verdict IS the create status (the commit-verb precedent — no second write).
@@ -397,7 +399,8 @@ export function makeProcessScheduledImportSweep(redis: IORedis, deps: ScheduledI
 
       if (fired > 0) incrementImportCounter("scheduled_fired_total", fired);
       if (skipped > 0) incrementImportCounter("scheduled_skipped_total", skipped);
-      if (grantDisabled > 0) incrementImportCounter("scheduled_grant_disabled_total", grantDisabled);
+      if (grantDisabled > 0)
+        incrementImportCounter("scheduled_grant_disabled_total", grantDisabled);
       if (failed > 0) incrementImportCounter("scheduled_failed_total", failed);
       if (fired > 0 || grantDisabled > 0 || failed > 0) {
         log.info("scheduled-import sweep: tick complete", {

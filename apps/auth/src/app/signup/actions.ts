@@ -28,7 +28,7 @@ import {
 } from "@leadwolf/auth";
 import { env, isAllowedOrigin } from "@leadwolf/config";
 import { userRepository } from "@leadwolf/db";
-import { ConflictError, signupSchema, ValidationError } from "@leadwolf/types";
+import { ConflictError, ValidationError, signupSchema } from "@leadwolf/types";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 

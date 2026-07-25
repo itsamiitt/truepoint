@@ -25,8 +25,9 @@ const TOKEN_EXPANSIONS: Record<string, string> = {
 export function normalizeTitle(raw: string): string {
   const cleaned = raw
     .toLowerCase()
+    .replace(/[.'’]/g, "") // dotted abbreviations + possessives COLLAPSE ("C.E.O." → "ceo", not "c e o")
     .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, " ") // drop dots, slashes, dashes, commas → spaces
+    .replace(/[^a-z0-9]+/g, " ") // remaining slashes, dashes, commas → spaces
     .trim();
   if (!cleaned) return "";
   return cleaned

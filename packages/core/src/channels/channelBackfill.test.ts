@@ -57,7 +57,11 @@ describe("planContactChannelBackfill — email leg (verbatim bytes, CH-INV-1 by 
 
   test("needsEmail=false ⇒ no email payload even when flat bytes exist (dual-write already projected it)", () => {
     const plan = planContactChannelBackfill(
-      row({ emailEnc: encryptPii(EMAIL), emailBlindIndex: blindIndex(EMAIL), emailDomain: "acme.com" }),
+      row({
+        emailEnc: encryptPii(EMAIL),
+        emailBlindIndex: blindIndex(EMAIL),
+        emailDomain: "acme.com",
+      }),
       null,
     );
     expect(plan.email).toBeUndefined();
@@ -86,7 +90,9 @@ describe("planContactChannelBackfill — phone leg (decrypt→toE164 in-worker; 
     expect(plan.phone?.e164Enc).not.toBeNull();
     expect(decryptPii(plan.phone!.e164Enc!)).toBe("+14155552671");
     // Match signals ride the NORMALIZED key: blindIndex(e164), deterministic.
-    expect(Buffer.from(plan.phone!.e164BlindIndex!)).toEqual(Buffer.from(blindIndex("+14155552671")));
+    expect(Buffer.from(plan.phone!.e164BlindIndex!)).toEqual(
+      Buffer.from(blindIndex("+14155552671")),
+    );
     expect(plan.phone?.countryHint).toBe("US");
     expect(plan.phone?.status).toBe("direct");
     expect(plan.phoneUnparseable).toBe(false);

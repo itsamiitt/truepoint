@@ -6,7 +6,6 @@
 // back silently to today's client-side one-shot flow — the draft path may only ever add, never block.
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
 import type {
   ColumnMapping,
   ImportDraftPreviewResponse,
@@ -14,10 +13,17 @@ import type {
   ImportMergeMode,
   SourceName,
 } from "@leadwolf/types";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { commitDraft, fetchImportDrafts, postDraftPreview, postImportDraft, putDraftMapping } from "../apiDrafts";
+import {
+  commitDraft,
+  fetchImportDrafts,
+  postDraftPreview,
+  postImportDraft,
+  putDraftMapping,
+} from "../apiDrafts";
 import { cancelImportJob, fetchImportJobDetail } from "../apiV2";
-import { clampStep, coerceResumeStep, type DraftStep } from "../draftFlow";
+import { type DraftStep, clampStep, coerceResumeStep } from "../draftFlow";
 import { importKeys } from "../keys";
 
 /** What `?draft=` resume restores from `GET /imports/:id` (ImportJobDetailV2): identity, filename, the 08 §5

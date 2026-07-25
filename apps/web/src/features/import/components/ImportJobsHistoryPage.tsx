@@ -146,6 +146,7 @@ export function ImportJobsHistoryPage() {
       />
 
       {elevated ? (
+        // biome-ignore lint/a11y/useSemanticElements: styled toolbar; fieldset's default chrome breaks the layout
         <div className={styles.toolbar} role="group" aria-label="Whose imports to show">
           <TpButton
             variant={scope === "all" ? "secondary" : "ghost"}

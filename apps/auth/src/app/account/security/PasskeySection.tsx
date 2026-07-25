@@ -105,6 +105,7 @@ export function PasskeySection(): React.JSX.Element {
       description="Sign in with your device's fingerprint, face, or PIN instead of a password or code — phishing-resistant."
     >
       {msg ? (
+        // biome-ignore lint/a11y/useSemanticElements: Alert renders a styled div; role=status marks the live region
         <Alert variant={msg.ok ? "default" : "destructive"} role="status" className="mb-4">
           {msg.text}
         </Alert>

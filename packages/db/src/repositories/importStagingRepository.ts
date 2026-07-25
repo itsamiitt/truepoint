@@ -96,7 +96,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 function stagingTableName(jobId: string): string {
   if (!UUID_RE.test(jobId)) {
-    throw new Error(`importStagingRepository: refusing a non-uuid job id for a staging table: ${jobId}`);
+    throw new Error(
+      `importStagingRepository: refusing a non-uuid job id for a staging table: ${jobId}`,
+    );
   }
   return `stg_import_${jobId.toLowerCase().replace(/-/g, "_")}`;
 }
@@ -218,9 +220,7 @@ export const importStagingRepository = {
     await ownerClient.unsafe(
       `CREATE INDEX IF NOT EXISTS ${name}_sr_idx ON ${name} (source_row_num)`,
     );
-    await ownerClient.unsafe(
-      `CREATE INDEX IF NOT EXISTS ${name}_ik_idx ON ${name} (identity_key)`,
-    );
+    await ownerClient.unsafe(`CREATE INDEX IF NOT EXISTS ${name}_ik_idx ON ${name} (identity_key)`);
   },
 
   /**

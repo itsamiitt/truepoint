@@ -4,6 +4,7 @@
 // registration. Empty-first against the unbuilt /oauth-apps API (M11); no fabricated credentials.
 "use client";
 
+import { AUTH_ORIGIN } from "@/lib/publicConfig";
 import {
   type Column,
   DataTable,
@@ -17,10 +18,9 @@ import {
 } from "@leadwolf/ui";
 import { Boxes, Copy } from "lucide-react";
 import { useState } from "react";
-import { AUTH_ORIGIN } from "@/lib/publicConfig";
 import { useOAuthApps } from "../hooks/useOAuthApps";
-import type { OAuthApp } from "../types";
 import styles from "../settings-developer.module.css";
+import type { OAuthApp } from "../types";
 
 function formatDate(iso?: string | null): string {
   if (!iso) return "—";
@@ -46,9 +46,10 @@ export function OAuthAppsPanel() {
   const [redirectPath, setRedirectPath] = useState("/oauth/callback");
   const [submitting, setSubmitting] = useState(false);
 
-  const [credentials, setCredentials] = useState<{ clientId: string; clientSecret: string | null } | null>(
-    null,
-  );
+  const [credentials, setCredentials] = useState<{
+    clientId: string;
+    clientSecret: string | null;
+  } | null>(null);
   const [toRemove, setToRemove] = useState<OAuthApp | null>(null);
 
   const notWired = () =>
@@ -166,7 +167,10 @@ export function OAuthAppsPanel() {
           <span className={styles.connectNoteIcon}>
             <Boxes size={15} />
           </span>
-          <span>OAuth app registration isn&apos;t connected yet (M11). Registered clients will appear here.</span>
+          <span>
+            OAuth app registration isn&apos;t connected yet (M11). Registered clients will appear
+            here.
+          </span>
         </div>
       ) : null}
 
@@ -278,7 +282,9 @@ export function OAuthAppsPanel() {
                 </div>
               </FieldGroup>
             ) : (
-              <p className={styles.note}>The client secret is available from the backend response.</p>
+              <p className={styles.note}>
+                The client secret is available from the backend response.
+              </p>
             )}
           </div>
         ) : null}
@@ -289,9 +295,7 @@ export function OAuthAppsPanel() {
         open={toRemove != null}
         onClose={() => setToRemove(null)}
         title="Remove OAuth app?"
-        description={
-          toRemove ? `"${toRemove.name}" will stop working immediately.` : undefined
-        }
+        description={toRemove ? `"${toRemove.name}" will stop working immediately.` : undefined}
         footer={
           <>
             <TpButton variant="ghost" onClick={() => setToRemove(null)}>

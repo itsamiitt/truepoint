@@ -44,7 +44,10 @@ export const evidenceRepository = {
    * created it (`created:false` = an identical payload was already ingested → the caller should not re-link).
    * Returns null only on the impossible race where the conflict row vanished before the follow-up read.
    */
-  async appendSourceRecord(tx: Tx, input: SourceRecordInput): Promise<{ id: string; created: boolean } | null> {
+  async appendSourceRecord(
+    tx: Tx,
+    input: SourceRecordInput,
+  ): Promise<{ id: string; created: boolean } | null> {
     const inserted = await tx
       .insert(sourceRecords)
       .values({

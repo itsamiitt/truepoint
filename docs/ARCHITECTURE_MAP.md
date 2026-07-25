@@ -33,7 +33,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **1767 source files · 90 code-bearing domains · 34 shared areas · 55 domain-vocabulary warnings · 143
+> **1768 source files · 84 code-bearing domains · 34 shared areas · 55 domain-vocabulary warnings · 145
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
 > feature (`apps/api/src/features/master-sync`) + the **nested TruePoint Forge** (fully migrated from the
@@ -612,8 +612,10 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the 1354-file JSON (worker-platform Phases 0–5: the
-  hardening layer above, `worker_outbox` + `outboxRepository` → `enrichment` via `REPO_DOMAIN`, admin
-  `queueProbes`, import `queueBackpressure`, `types/workerQueues.ts`). When the source set changes again, re-run
-  `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares the `fileSetHash`) and refresh these purposes.
+- **Map hygiene:** this prose was last refreshed from the 1768-file JSON at the data-mgmt × app-shell merge
+  (delta: `packages/app-shell` becomes the 34th shared area — the rail/topbar/⌘K chrome shared by web, admin
+  and forge — and forge-api gains its RFC-9457 error middleware + test; both forge files sit in `unassigned[]`
+  with the rest of the nested Forge, which has no bucketing rules yet). When the source set changes again,
+  re-run `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares the `fileSetHash`) and refresh
+  these purposes.
 ```

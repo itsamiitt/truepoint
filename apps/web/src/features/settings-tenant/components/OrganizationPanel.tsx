@@ -25,6 +25,7 @@ import {
 import { Building2, FolderKanban, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useOrganization } from "../hooks/useOrganization";
+import styles from "../settings-tenant.module.css";
 import {
   MEMBER_STATUS_TONE,
   ORG_ROLE_LABEL,
@@ -34,7 +35,6 @@ import {
   type TenantWorkspace,
   WORKSPACE_STATUS_TONE,
 } from "../types";
-import styles from "../settings-tenant.module.css";
 
 const EMPTY: Organization = { name: "", logoUrl: "", region: "us" };
 
@@ -71,7 +71,8 @@ const workspaceColumns: Column<TenantWorkspace>[] = [
 
 export function OrganizationPanel() {
   const toast = useToast();
-  const { org, orgAvailable, workspaces, members, error, loading, reload, save } = useOrganization();
+  const { org, orgAvailable, workspaces, members, error, loading, reload, save } =
+    useOrganization();
   const [form, setForm] = useState<Organization>(EMPTY);
   const [saving, setSaving] = useState(false);
 
@@ -79,8 +80,7 @@ export function OrganizationPanel() {
     if (org) setForm({ ...EMPTY, ...org });
   }, [org]);
 
-  const set = (key: keyof Organization, value: string) =>
-    setForm((f) => ({ ...f, [key]: value }));
+  const set = (key: keyof Organization, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   const onSave = async () => {
     setSaving(true);
@@ -139,7 +139,11 @@ export function OrganizationPanel() {
               htmlFor="org-region"
               hint="New workspaces inherit this data-residency region."
             >
-              <TpSelect id="org-region" value={form.region} onChange={(e) => set("region", e.target.value)}>
+              <TpSelect
+                id="org-region"
+                value={form.region}
+                onChange={(e) => set("region", e.target.value)}
+              >
                 {REGIONS.map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}
@@ -167,7 +171,9 @@ export function OrganizationPanel() {
               emptyState={
                 <EmptyState
                   icon={<FolderKanban size={28} />}
-                  title={workspaces?.available ? "No workspaces yet" : "Workspaces API not connected"}
+                  title={
+                    workspaces?.available ? "No workspaces yet" : "Workspaces API not connected"
+                  }
                   description={
                     workspaces?.available
                       ? "Workspaces you create will appear here, with limits set by your plan."
@@ -229,7 +235,9 @@ export function OrganizationPanel() {
                         <span className={styles.memberName}>{m.name || m.email}</span>
                         {m.name ? <span className={styles.memberEmail}>{m.email}</span> : null}
                       </span>
-                      <span className={styles.memberRole}>{ORG_ROLE_LABEL[m.orgRole] ?? m.orgRole}</span>
+                      <span className={styles.memberRole}>
+                        {ORG_ROLE_LABEL[m.orgRole] ?? m.orgRole}
+                      </span>
                       <StatusBadge tone={MEMBER_STATUS_TONE[m.status] as StatusTone}>
                         {m.status === "active"
                           ? "Active"
@@ -245,8 +253,8 @@ export function OrganizationPanel() {
           </FormSection>
 
           <p className={styles.footHint}>
-            <Building2 size={13} aria-hidden /> Tenant-level controls (SSO, domains, retention) live under
-            Security &amp; access.
+            <Building2 size={13} aria-hidden /> Tenant-level controls (SSO, domains, retention) live
+            under Security &amp; access.
           </p>
         </div>
       </StateSwitch>

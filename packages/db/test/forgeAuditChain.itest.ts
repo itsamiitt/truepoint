@@ -80,9 +80,7 @@ describe("forge audit log hash chain (P-01.18)", () => {
 
   test("concurrent promotions do not fork the chain (advisory lock serializes the append)", async () => {
     // Fire a burst of overlapping promotions; the advisory lock must still yield a single linear chain.
-    await Promise.all(
-      Array.from({ length: 8 }, () => promote(`hash-${crypto.randomUUID()}`)),
-    );
+    await Promise.all(Array.from({ length: 8 }, () => promote(`hash-${crypto.randomUUID()}`)));
     assertLinear(await chainRows());
   });
 });

@@ -116,7 +116,11 @@ export function startWorkers(): { queues: string[]; workers: Worker[]; env: stri
   // key, so registering on every boot is idempotent; the maintenance processor is leader-locked (single writer
   // across replicas) and the sync drain is effectively-once (applyItem dedups on event_id). The sync scheduler is
   // gated with its worker so drain jobs are never enqueued without a consumer.
-  void queues.maintenance.add("forge-maintenance-tick", {}, { repeat: { every: MAINTENANCE_TICK_MS } });
+  void queues.maintenance.add(
+    "forge-maintenance-tick",
+    {},
+    { repeat: { every: MAINTENANCE_TICK_MS } },
+  );
   if (forgeFlags.syncEgressEnabled) {
     workers.push(makeWorker("sync", makeSyncProcessor(deps)));
     void queues.sync.add("forge-sync-drain", {}, { repeat: { every: SYNC_DRAIN_MS } });

@@ -88,7 +88,11 @@ async function seedTenantWorkspace(
   return { tenantId, workspaceId: (w as { id: string }).id, ownerId };
 }
 
-async function importFlat(scope: { tenantId: string; workspaceId: string }, ownerId: string, slug: string) {
+async function importFlat(
+  scope: { tenantId: string; workspaceId: string },
+  ownerId: string,
+  slug: string,
+) {
   const res = await core.runImport({
     scope,
     importedByUserId: ownerId,
@@ -358,7 +362,9 @@ describe("S-CH3 atomicity — the §R-P3 backfill wedge drill (injected mid-batc
 
 describe("THE S-CH4 GATE — completeness reaches 0", () => {
   test("after every workspace drains (C's flag enabled last), countContactsMissingChannelProjection() = 0", async () => {
-    expect(await db.contactChannelRepository.countContactsMissingChannelProjection()).toBeGreaterThan(
+    expect(
+      await db.contactChannelRepository.countContactsMissingChannelProjection(),
+    ).toBeGreaterThan(
       0, // C is still flat-only
     );
     await enableFlag(tC);

@@ -32,13 +32,17 @@ describe("planAccountDomainWrite — dedup hit (domain already live on this acco
 
   test("matched non-primary under a live primary ⇒ keep_existing (no flip, no churn)", () => {
     expect(
-      planAccountDomainWrite(state({ matchExists: true, matchIsPrimary: false, hasLivePrimary: true })),
+      planAccountDomainWrite(
+        state({ matchExists: true, matchIsPrimary: false, hasLivePrimary: true }),
+      ),
     ).toBe("keep_existing");
   });
 
   test("matched the primary itself ⇒ keep_existing (idempotent re-import is a no-op)", () => {
     expect(
-      planAccountDomainWrite(state({ matchExists: true, matchIsPrimary: true, hasLivePrimary: true })),
+      planAccountDomainWrite(
+        state({ matchExists: true, matchIsPrimary: true, hasLivePrimary: true }),
+      ),
     ).toBe("keep_existing");
   });
 });

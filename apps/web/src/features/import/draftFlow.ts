@@ -75,7 +75,9 @@ export function coerceResumeStep(requested: DraftStep | null, facts: DraftFlowFa
  *  template (an automation-created proposal must never inject hidden, un-editable mapping state). The
  *  server's auto-map proposal (draft ref `suggestedMapping`) runs through this before it becomes the
  *  wizard's mapping state; the client-side autoMapHeaders is the gate-off fallback only. */
-export function filterMappingToMappable(mapping: ColumnMapping): Partial<Record<CanonicalField, string>> {
+export function filterMappingToMappable(
+  mapping: ColumnMapping,
+): Partial<Record<CanonicalField, string>> {
   const next: Partial<Record<CanonicalField, string>> = {};
   for (const mf of MAPPABLE_FIELDS) {
     const header = mapping[mf.field];

@@ -143,7 +143,9 @@ function pollFingerprint(job: {
 }
 
 async function pollJob(jobId: string) {
-  const job = await db.withTenantTx(scope(), (tx) => db.importJobRepository.getJobSystem(tx, jobId));
+  const job = await db.withTenantTx(scope(), (tx) =>
+    db.importJobRepository.getJobSystem(tx, jobId),
+  );
   if (!job) throw new Error(`soak: job ${jobId} vanished`);
   return job;
 }
@@ -277,11 +279,14 @@ soakDescribe("S-P4 nightly soak — TP-2 (2M soak) + TP-6 (drive memory plateau)
 
       // Staging table dropped on finalize.
       const stagingName = db.importStagingRepository.stagingTableName(jobId);
-      const [reg] = (await admin`SELECT to_regclass(${stagingName}) AS t`) as { t: string | null }[];
+      const [reg] = (await admin`SELECT to_regclass(${stagingName}) AS t`) as {
+        t: string | null;
+      }[];
       expect(reg!.t).toBeNull();
 
       // Wall budget (the §Success bar, scaled) + the per-stage report for the nightly dashboard.
-      const avgChunkMs = chunkDurations.reduce((a, b) => a + b, 0) / Math.max(chunkDurations.length, 1);
+      const avgChunkMs =
+        chunkDurations.reduce((a, b) => a + b, 0) / Math.max(chunkDurations.length, 1);
       console.info(
         `[TP-2] ${SOAK_ROWS} rows: total ${(totalMs / 1000).toFixed(1)}s (budget ${(SOAK_WALL_BUDGET_MS / 1000).toFixed(0)}s) — drive ${(driveMs / 1000).toFixed(1)}s (≈ stages 3–4), ${chunkDurations.length} chunks avg ${(avgChunkMs / 1000).toFixed(2)}s (≈ stage 6)`,
       );
@@ -304,78 +309,76 @@ soakDescribe("S-P4 nightly soak — TP-2 (2M soak) + TP-6 (drive memory plateau)
 });
 
 soakDescribe("S-P4 nightly soak — TP-4 (poll fingerprint probe)", () => {
-  test(
-    "TP-4: the (status, counters, completed_chunks) fingerprint is stable between chunk completions and changes after one",
-    async () => {
-      const fileStore = core.diskFileStore(tmpDir);
-      const batch = `poll${Date.now().toString(36)}`;
-      const sourceKey = `imports/soak/${batch}.csv`;
-      await fileStore.putObject(sourceKey, syntheticCsv(POLL_PROBE_ROWS, batch));
+  test("TP-4: the (status, counters, completed_chunks) fingerprint is stable between chunk completions and changes after one", async () => {
+    const fileStore = core.diskFileStore(tmpDir);
+    const batch = `poll${Date.now().toString(36)}`;
+    const sourceKey = `imports/soak/${batch}.csv`;
+    await fileStore.putObject(sourceKey, syntheticCsv(POLL_PROBE_ROWS, batch));
 
-      const created = await db.withTenantTx(scope(), (tx) =>
-        db.importJobRepository.createJob(tx, {
-          tenantId,
-          workspaceId,
-          sourceFile: sourceKey,
-          sourceName: SOURCE_NAME,
-          columnMapping: MAPPING,
-          conflictPolicy: "skip",
-        }),
-      );
-      const jobId = created.id;
-      const collected: string[] = [];
-      await core.runBulkImport({
-        scope: scope(),
-        jobId,
-        fileStore,
-        enqueueChunk: (_j, _s, chunkId) => {
-          collected.push(chunkId);
-        },
-      });
-      expect(collected.length).toBe(Math.ceil(POLL_PROBE_ROWS / CHUNK_ROWS)); // 3 chunks
+    const created = await db.withTenantTx(scope(), (tx) =>
+      db.importJobRepository.createJob(tx, {
+        tenantId,
+        workspaceId,
+        sourceFile: sourceKey,
+        sourceName: SOURCE_NAME,
+        columnMapping: MAPPING,
+        conflictPolicy: "skip",
+      }),
+    );
+    const jobId = created.id;
+    const collected: string[] = [];
+    await core.runBulkImport({
+      scope: scope(),
+      jobId,
+      fileStore,
+      enqueueChunk: (_j, _s, chunkId) => {
+        collected.push(chunkId);
+      },
+    });
+    expect(collected.length).toBe(Math.ceil(POLL_PROBE_ROWS / CHUNK_ROWS)); // 3 chunks
 
-      // Between completions: two polls ⇒ IDENTICAL fingerprint (a conditional GET would 304).
-      const fp1 = pollFingerprint(await pollJob(jobId));
-      const fp2 = pollFingerprint(await pollJob(jobId));
-      expect(fp2).toBe(fp1);
+    // Between completions: two polls ⇒ IDENTICAL fingerprint (a conditional GET would 304).
+    const fp1 = pollFingerprint(await pollJob(jobId));
+    const fp2 = pollFingerprint(await pollJob(jobId));
+    expect(fp2).toBe(fp1);
 
-      // A chunk completes ⇒ the fingerprint CHANGES (counters + completed_chunks moved) ⇒ 200, new ETag.
-      const res = await core.bulkProcessChunk({ scope: scope(), jobId, chunkId: collected[0]! });
-      expect(res.processed).toBe(true);
+    // A chunk completes ⇒ the fingerprint CHANGES (counters + completed_chunks moved) ⇒ 200, new ETag.
+    const res = await core.bulkProcessChunk({ scope: scope(), jobId, chunkId: collected[0]! });
+    expect(res.processed).toBe(true);
+    await core.finalizeIfLastChunk({ scope: scope(), jobId });
+    const fp3 = pollFingerprint(await pollJob(jobId));
+    expect(fp3).not.toBe(fp1);
+
+    // Quiet again ⇒ stable again.
+    expect(pollFingerprint(await pollJob(jobId))).toBe(fp3);
+
+    // Poll cost: one PK read. Latency sampled (report; generous hard bound only — the production
+    // "poll p95 < 10 ms" §Success number is an API-route SLO measured on the deployed rig, not here).
+    const latencies: number[] = [];
+    for (let i = 0; i < 50; i += 1) {
+      const p0 = performance.now();
+      await pollJob(jobId);
+      latencies.push(performance.now() - p0);
+    }
+    latencies.sort((a, b) => a - b);
+    const p95 = latencies[Math.floor(latencies.length * 0.95)]!;
+    console.info(`[TP-4] poll p95 ${p95.toFixed(1)}ms over ${latencies.length} PK reads`);
+    expect(p95).toBeLessThanOrEqual(100);
+
+    // Drain the job so the workspace is clean for other scenarios.
+    for (const chunkId of collected.slice(1)) {
+      await core.bulkProcessChunk({ scope: scope(), jobId, chunkId });
       await core.finalizeIfLastChunk({ scope: scope(), jobId });
-      const fp3 = pollFingerprint(await pollJob(jobId));
-      expect(fp3).not.toBe(fp1);
-
-      // Quiet again ⇒ stable again.
-      expect(pollFingerprint(await pollJob(jobId))).toBe(fp3);
-
-      // Poll cost: one PK read. Latency sampled (report; generous hard bound only — the production
-      // "poll p95 < 10 ms" §Success number is an API-route SLO measured on the deployed rig, not here).
-      const latencies: number[] = [];
-      for (let i = 0; i < 50; i += 1) {
-        const p0 = performance.now();
-        await pollJob(jobId);
-        latencies.push(performance.now() - p0);
-      }
-      latencies.sort((a, b) => a - b);
-      const p95 = latencies[Math.floor(latencies.length * 0.95)]!;
-      console.info(`[TP-4] poll p95 ${p95.toFixed(1)}ms over ${latencies.length} PK reads`);
-      expect(p95).toBeLessThanOrEqual(100);
-
-      // Drain the job so the workspace is clean for other scenarios.
-      for (const chunkId of collected.slice(1)) {
-        await core.bulkProcessChunk({ scope: scope(), jobId, chunkId });
-        await core.finalizeIfLastChunk({ scope: scope(), jobId });
-      }
-      expect((await pollJob(jobId)).status).toBe("completed");
-    },
-    600_000,
-  );
+    }
+    expect((await pollJob(jobId)).status).toBe("completed");
+  }, 600_000);
 
   // The HTTP half of TP-4 — a real ETag header on GET /imports/:id, If-None-Match ⇒ 304,
   // `Cache-Control: private, max-age=2`, and the per-route rate limiter engaging before measurable DB load
   // (12 §8) — is NOT SHIPPED on the route yet (no ETag/Cache-Control writer exists in apps/api). The probe
   // above proves the fingerprint SEMANTICS the header will carry. Wire the header, then turn this into a
   // real HTTP itest against the route. 16's drift log tracks it.
-  test.todo("TP-4 (HTTP): ETag/304 + Cache-Control: private, max-age=2 on GET /imports/:id — route header not shipped yet");
+  test.todo(
+    "TP-4 (HTTP): ETag/304 + Cache-Control: private, max-age=2 on GET /imports/:id — route header not shipped yet",
+  );
 });

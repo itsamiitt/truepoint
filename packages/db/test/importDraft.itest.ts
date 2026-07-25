@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
-type Core = typeof import("@leadwolf/core");
+type Core = typeof import("../../core/src/index.ts");
 type Db = typeof import("@leadwolf/db");
 let core: Core;
 let dbm: Db;
@@ -147,7 +147,7 @@ beforeAll(async () => {
   ({ workspaceId: wsDraftRun } = await seedWorkspace("acme-draftrun", tenantA));
 
   // Loaded AFTER DATABASE_URL is bound (the db client is a module singleton).
-  core = await import("@leadwolf/core");
+  core = await import("../../core/src/index.ts");
   dbm = await import("@leadwolf/db");
 }, 180_000);
 
@@ -242,20 +242,18 @@ describe("S-I8 T11 — draft lifecycle at the repo seams (guards drive the route
 
   test("commit parity with the one-shot: the same rows land the identical end-state (T11 parity leg)", async () => {
     // ONE-SHOT twin: the S-I3 create shape (queued, mode fast at create, mapping at create).
-    const oneShot = await dbm.withTenantTx(
-      { tenantId: tenantA, workspaceId: wsOneShot },
-      (tx) =>
-        dbm.importJobRepository.createJob(tx, {
-          tenantId: tenantA,
-          workspaceId: wsOneShot,
-          createdByUserId: ownerA,
-          sourceFile: `inline:${crypto.randomUUID()}`,
-          sourceName: "manual",
-          columnMapping: MAPPING,
-          conflictPolicy: "skip",
-          processingMode: "fast",
-          sourceFilename: "acme.csv",
-        }),
+    const oneShot = await dbm.withTenantTx({ tenantId: tenantA, workspaceId: wsOneShot }, (tx) =>
+      dbm.importJobRepository.createJob(tx, {
+        tenantId: tenantA,
+        workspaceId: wsOneShot,
+        createdByUserId: ownerA,
+        sourceFile: `inline:${crypto.randomUUID()}`,
+        sourceName: "manual",
+        columnMapping: MAPPING,
+        conflictPolicy: "skip",
+        processingMode: "fast",
+        sourceFilename: "acme.csv",
+      }),
     );
     const oneShotResult = await core.runFastImport({
       scope: { tenantId: tenantA, workspaceId: wsOneShot },

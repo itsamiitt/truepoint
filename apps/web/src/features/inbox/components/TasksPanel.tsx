@@ -6,8 +6,8 @@ import { EmptyState, StateSwitch, StatusBadge, TpButton, useToast } from "@leadw
 import { ListChecks } from "lucide-react";
 import { formatDue, formatRelative } from "../format";
 import { useTasks } from "../hooks/useTasks";
-import { TASK_SOURCE_LABEL, type InboxTask } from "../types";
 import styles from "../inbox.module.css";
+import { type InboxTask, TASK_SOURCE_LABEL } from "../types";
 
 export function TasksPanel() {
   const toast = useToast();

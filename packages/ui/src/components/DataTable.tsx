@@ -74,6 +74,7 @@ export function DataTable<T>({
               const sortable = !!col.sortValue;
               const active = sort?.key === col.key;
               return (
+                // biome-ignore lint/a11y/useKeyWithClickEvents: header click-sort is a pointer convenience; a keyboard sort control is design-backlog work
                 <th
                   key={col.key}
                   className={cn(sortable && "tp-ui-th-sortable")}
@@ -103,6 +104,7 @@ export function DataTable<T>({
             </tr>
           ) : (
             sorted.map((row, i) => (
+              // biome-ignore lint/a11y/useKeyWithClickEvents: row click is a pointer convenience; the row's focusable controls carry the keyboard path
               <tr
                 key={rowKey(row, i)}
                 className={cn(onRowClick && "tp-ui-tr-clickable")}

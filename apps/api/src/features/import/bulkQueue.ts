@@ -86,7 +86,9 @@ export async function enqueueFastImport(data: ImportFastJobData, delayMs = 0): P
   const job = await q.add("fast", data, {
     priority: IMPORT_QUEUE_PRIORITY.fast,
     // Deferral re-enqueues carry a suffixed id (a completed stable id would otherwise dedupe them away).
-    jobId: data.deferrals ? `import-fast:${data.jobId}:r${data.deferrals}` : `import-fast:${data.jobId}`,
+    jobId: data.deferrals
+      ? `import-fast:${data.jobId}:r${data.deferrals}`
+      : `import-fast:${data.jobId}`,
     delay: delayMs > 0 ? delayMs : undefined,
   });
   return String(job.id);

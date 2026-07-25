@@ -6,8 +6,8 @@
 // copy drive stages CSV only). Boundary rows/bytes (exactly at the ceiling) stay 'fast' in every gate state
 // — the decision half of T-X2's boundary parity (the outcome-parity half rides CI's pipeline itest).
 
-import { IMPORT_FASTPATH_MAX_BYTES, ImportTooLargeError } from "@leadwolf/types";
 import { describe, expect, test } from "bun:test";
+import { IMPORT_FASTPATH_MAX_BYTES, ImportTooLargeError } from "@leadwolf/types";
 import { decideImportRouting } from "./routing.ts";
 
 const CEILING = 5000; // the BULK_IMPORT_THRESHOLD_ROWS default — passed explicitly (the fn is env-free)
@@ -42,9 +42,9 @@ describe("decideImportRouting — the T7 routing matrix", () => {
   test("boundary parity: EXACTLY at the row/byte ceilings ⇒ fast in every gate state (T-X2 decision half)", () => {
     for (const copyEngaged of [false, true]) {
       expect(decideImportRouting(facts({ rowCount: CEILING, copyEngaged }))).toBe("fast");
-      expect(
-        decideImportRouting(facts({ byteSize: IMPORT_FASTPATH_MAX_BYTES, copyEngaged })),
-      ).toBe("fast");
+      expect(decideImportRouting(facts({ byteSize: IMPORT_FASTPATH_MAX_BYTES, copyEngaged }))).toBe(
+        "fast",
+      );
     }
   });
 
@@ -78,9 +78,7 @@ describe("decideImportRouting — the T7 routing matrix", () => {
 
   test("XLSX over the row ceiling ⇒ xlsx_too_large ALWAYS — engaged or not (copy stages CSV only)", () => {
     for (const copyEngaged of [false, true]) {
-      const err = refusal(
-        facts({ fileName: "Contacts.XLSX", rowCount: CEILING + 1, copyEngaged }),
-      );
+      const err = refusal(facts({ fileName: "Contacts.XLSX", rowCount: CEILING + 1, copyEngaged }));
       expect(err.code).toBe("xlsx_too_large");
     }
   });

@@ -2,7 +2,11 @@
 // the floor immovable (fail-safe), exact-match membership (open-redirect guard), and a write-time validator that
 // refuses anything but a bare https origin so a stored entry can never become an open-redirect target.
 import { describe, expect, it } from "bun:test";
-import { canonicalManagedOrigin, isOriginAllowed, resolveAllowedOrigins } from "./managedOrigins.ts";
+import {
+  canonicalManagedOrigin,
+  isOriginAllowed,
+  resolveAllowedOrigins,
+} from "./managedOrigins.ts";
 
 const FLOOR = ["https://app.truepoint.in", "https://admin.truepoint.in"];
 

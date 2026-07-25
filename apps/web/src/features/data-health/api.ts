@@ -28,7 +28,8 @@ export async function fetchDataQuality(): Promise<WorkspaceDataQuality> {
 /** Load the per-workspace Data Health trend series (newest first). */
 export async function fetchDataQualityHistory(): Promise<DataQualityTrendPoint[]> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/home/data-quality/history`);
-  if (!res.ok) throw new Error(await problemMessage(res, "Could not load your data health history"));
+  if (!res.ok)
+    throw new Error(await problemMessage(res, "Could not load your data health history"));
   return (await res.json()) as DataQualityTrendPoint[];
 }
 

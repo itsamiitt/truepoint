@@ -33,7 +33,9 @@ describe("feature_flags seed migrations", () => {
         // the key, #2 the description. A future seed with a different shape trips the sanity check below.
         const literals = literalsOn(line);
         if (literals.length < 2) {
-          violations.push(`${file}: feature_flags INSERT with <2 string literals — update this test's parser`);
+          violations.push(
+            `${file}: feature_flags INSERT with <2 string literals — update this test's parser`,
+          );
           continue;
         }
         const [key, description] = literals;

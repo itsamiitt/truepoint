@@ -128,10 +128,16 @@ beforeAll(async () => {
   await applyMigrations(dbHandle.adminUrl);
 
   admin = postgres(dbHandle.adminUrl, { max: 2, onnotice: () => {} });
-  ({ tenantId: tenantOff, workspaceId: wsOff, ownerId: ownerOff } =
-    await seedTenantWorkspace("acme-off"));
-  ({ tenantId: tenantOn, workspaceId: wsOn, ownerId: ownerOn } =
-    await seedTenantWorkspace("acme-on"));
+  ({
+    tenantId: tenantOff,
+    workspaceId: wsOff,
+    ownerId: ownerOff,
+  } = await seedTenantWorkspace("acme-off"));
+  ({
+    tenantId: tenantOn,
+    workspaceId: wsOn,
+    ownerId: ownerOn,
+  } = await seedTenantWorkspace("acme-on"));
   // The ON tenant's per-tenant override; the OFF tenant keeps the 0062 seed (off/off ⇒ effective off).
   await admin`
     INSERT INTO tenant_feature_flags (flag_key, tenant_id, enabled)
@@ -204,7 +210,9 @@ describe("06 §1 — collision + never-flip at the applyAccountDomainWrite layer
     expect((n as { n: number }).n).toBe(1);
     const [owner] = await admin`
       SELECT account_id FROM account_domains WHERE workspace_id = ${wsOn} AND domain = 'acme.com' AND deleted_at IS NULL`;
-    expect((owner as { account_id: string }).account_id).toBe(await accountIdByDomain(wsOn, "acme.com"));
+    expect((owner as { account_id: string }).account_id).toBe(
+      await accountIdByDomain(wsOn, "acme.com"),
+    );
   });
 
   test("attaching a NEW domain to an account with a live primary ⇒ SECONDARY; primary + flat cache untouched", async () => {

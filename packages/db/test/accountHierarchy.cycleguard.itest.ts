@@ -24,7 +24,9 @@ let db: Db;
 let tenantId = "";
 let workspaceId = "";
 
-async function seedTenantWorkspace(slug: string): Promise<{ tenantId: string; workspaceId: string }> {
+async function seedTenantWorkspace(
+  slug: string,
+): Promise<{ tenantId: string; workspaceId: string }> {
   const [t] = await admin`INSERT INTO tenants (name, slug) VALUES (${slug}, ${slug}) RETURNING id`;
   const tId = (t as { id: string }).id;
   const [u] = await admin`INSERT INTO users (email) VALUES (${`owner@${slug}.test`}) RETURNING id`;

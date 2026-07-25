@@ -45,13 +45,7 @@ export interface InboxFeed {
 export type TaskStatus = "open" | "done" | "snoozed";
 
 /** What created the task — manual or a system signal (11 §4.4). */
-export type TaskSource =
-  | "manual"
-  | "reply"
-  | "follow_up"
-  | "low_credits"
-  | "import"
-  | "dsar";
+export type TaskSource = "manual" | "reply" | "follow_up" | "low_credits" | "import" | "dsar";
 
 export interface InboxTask {
   id: string;

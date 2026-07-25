@@ -49,7 +49,7 @@ import {
   MAX_CHANNEL_VALUES_PER_CONTACT,
 } from "@leadwolf/types";
 import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import { db, type Tx } from "../client.ts";
+import { type Tx, db } from "../client.ts";
 import { contactEmails, contactPhones } from "../schema/contactChannels.ts";
 import { contacts } from "../schema/contacts.ts";
 import { planChannelUpsert } from "./contactChannelPlan.ts";
@@ -320,8 +320,7 @@ const PHONE_DRIFT_RAW = `(
   OR (c.phone_enc IS NOT NULL AND EXISTS (SELECT 1 FROM contact_phones cp WHERE cp.contact_id=c.id AND cp.deleted_at IS NULL) AND NOT EXISTS (SELECT 1 FROM contact_phones cp WHERE cp.contact_id=c.id AND cp.is_primary AND cp.deleted_at IS NULL)))`;
 const CHANNEL_DRIFT_RAW = `(${EMAIL_DRIFT_RAW} OR ${PHONE_DRIFT_RAW})`;
 
-const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean =>
-  Buffer.from(a).equals(Buffer.from(b));
+const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean => Buffer.from(a).equals(Buffer.from(b));
 
 interface LiveRow {
   id: string;

@@ -4,12 +4,21 @@
 // first-class ErrorState with retry — we never invent a profile. Public-ish; mounted by the route page.
 "use client";
 
-import { Avatar, FieldGroup, FormSection, StateSwitch, TpButton, TpInput, TpSelect, useToast } from "@leadwolf/ui";
+import {
+  Avatar,
+  FieldGroup,
+  FormSection,
+  StateSwitch,
+  TpButton,
+  TpInput,
+  TpSelect,
+  useToast,
+} from "@leadwolf/ui";
 import { useEffect, useMemo, useState } from "react";
 import { saveProfile } from "../api";
 import { useProfile } from "../hooks/useProfile";
-import type { UserProfile } from "../types";
 import styles from "../settings-user.module.css";
+import type { UserProfile } from "../types";
 import { LOCALE_OPTIONS, TIMEZONE_OPTIONS } from "./options";
 
 interface Draft {
@@ -36,7 +45,9 @@ export function ProfilePanel() {
 
   const dirty = useMemo(() => {
     if (!data || !draft) return false;
-    return draft.name !== data.name || draft.timezone !== data.timezone || draft.locale !== data.locale;
+    return (
+      draft.name !== data.name || draft.timezone !== data.timezone || draft.locale !== data.locale
+    );
   }, [data, draft]);
 
   const nameInvalid = draft != null && draft.name.trim().length === 0;
@@ -147,9 +158,7 @@ export function ProfilePanel() {
               <TpButton onClick={onSave} loading={saving} disabled={!dirty || nameInvalid}>
                 Save changes
               </TpButton>
-              {dirty && !saving ? (
-                <span className={styles.savedHint}>Unsaved changes</span>
-              ) : null}
+              {dirty && !saving ? <span className={styles.savedHint}>Unsaved changes</span> : null}
             </div>
           </>
         ) : null}

@@ -106,8 +106,14 @@ describe("landEnvelope (S0 land stage)", () => {
     const store = fakeStore();
     const deps: LandDeps = { store, objectStore: inMemoryObjectStore(), newBatchId: () => "b" };
 
-    const a = await landEnvelope(deps, envelope([{ rawPayload: `{"same":1}` }], { tenantId: TENANT_A }));
-    const b = await landEnvelope(deps, envelope([{ rawPayload: `{"same":1}` }], { tenantId: TENANT_B }));
+    const a = await landEnvelope(
+      deps,
+      envelope([{ rawPayload: `{"same":1}` }], { tenantId: TENANT_A }),
+    );
+    const b = await landEnvelope(
+      deps,
+      envelope([{ rawPayload: `{"same":1}` }], { tenantId: TENANT_B }),
+    );
     expect(a.ack.accepted).toBe(1);
     expect(b.ack.accepted).toBe(1); // tenant B is NOT deduped away by tenant A's identical capture
     expect(b.ack.duplicate).toBe(0);

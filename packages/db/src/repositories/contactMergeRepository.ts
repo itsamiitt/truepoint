@@ -381,7 +381,9 @@ export const contactMergeRepository = {
       await tx
         .update(suppressionList)
         .set({ contactId: survivorId })
-        .where(and(eq(suppressionList.matchType, "contact_id"), eq(suppressionList.contactId, loserId)))
+        .where(
+          and(eq(suppressionList.matchType, "contact_id"), eq(suppressionList.contactId, loserId)),
+        )
         .returning({ id: suppressionList.id }),
     );
 

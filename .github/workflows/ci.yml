@@ -30,6 +30,9 @@ env:
   ITEST_REDIS_URL: redis://localhost:6379
   # The itests set this themselves in beforeAll; provided here too for any unit test that touches blind-index/PII.
   BLIND_INDEX_KEY: ci-blind-index-key-0123456789abcdef
+  # packages/auth botCheck.test.ts exercises the ENFORCED Turnstile path; @leadwolf/config snapshots process.env
+  # at import, so the secret must exist before any module loads — a test-only value, never a real key.
+  TURNSTILE_SECRET: ci-turnstile-test-secret
   # Forward-compat with the RLS hardening (work/worker-a): @leadwolf/config requires this in production. CI is
   # not NODE_ENV=production so the guard is inert, but set it so nothing trips once that branch merges.
   DATABASE_APP_ROLE_PASSWORD: leadwolf_app
@@ -54,8 +57,28 @@ jobs:
         run: bun run lint
       - name: Import boundaries (dependency-cruiser)
         run: bun run lint:boundaries
-      - name: Unit tests
-        run: bun test
+      # Each *.test.ts runs in its OWN bun process, mirroring the itests step below and for the same reason:
+      # module singletons (mock.module patches, the auth metrics registry, env snapshots) bleed across files
+      # in one shared process — the suites were authored under per-file isolation.
+      - name: Unit tests (each file in its own process)
+        run: |
+          set -uo pipefail
+          mapfile -t files < <(find packages apps -name '*.test.ts' -o -name '*.test.tsx' | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No *.test.ts found — nothing to run."
+            exit 0
+          fi
+          printf 'Found %d unit test file(s):\n' "${#files[@]}"
+          status=0
+          for f in "${files[@]}"; do
+            echo "::group::bun test ${f}"
+            if ! bun test "./${f}"; then
+              status=1
+              echo "::error file=${f}::unit test failed"
+            fi
+            echo "::endgroup::"
+          done
+          exit "${status}"
 
   itests:
     name: Integration tests — *.itest.ts on Postgres + Redis

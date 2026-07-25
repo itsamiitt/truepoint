@@ -75,7 +75,8 @@ export function AuthEnforcementCard({
           </h3>
           <p className="app-muted" style={{ maxWidth: 520 }}>
             The per-tenant master switch for the P1-01 login gates (IP allowlist, allowed methods,
-            session and idle timeouts, forced MFA). Disabling is the break-glass that re-opens login.
+            session and idle timeouts, forced MFA). Disabling is the break-glass that re-opens
+            login.
           </p>
         </div>
         <StatusBadge tone={enforcementEnabled ? "success" : "muted"}>

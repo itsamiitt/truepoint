@@ -11,11 +11,7 @@
 // single-contact enrichContact is called UNCHANGED (no trigger → manual mode, exactly like processEnrichment).
 // Providers are INJECTED (core stays vendor-free). DARK until BULK_ENRICHMENT_ENABLED — never reached while off.
 
-import {
-  type JobRowInsert,
-  type TenantScope,
-  enrichmentJobRepository,
-} from "@leadwolf/db";
+import { type JobRowInsert, type TenantScope, enrichmentJobRepository } from "@leadwolf/db";
 import {
   type BulkEnrichmentScope,
   type EnrichField,
@@ -71,7 +67,11 @@ function parseRunOptions(raw: unknown): RunOptions {
     typeof o.maxProviderCostMicros === "number" && o.maxProviderCostMicros >= 0
       ? Math.trunc(o.maxProviderCostMicros)
       : null;
-  return { contactIds, fields: fields.length > 0 ? fields : DEFAULT_REVERIFY_FIELDS, maxProviderCostMicros };
+  return {
+    contactIds,
+    fields: fields.length > 0 ? fields : DEFAULT_REVERIFY_FIELDS,
+    maxProviderCostMicros,
+  };
 }
 
 /** Map one enrichContact outcome to its (matchOutcome, matchMethod) ledger facets. */
@@ -206,7 +206,15 @@ export async function bulkProcessEnrichChunk(
   // If a brake stopped the run, pause the JOB so sibling chunks wind down (they see status ≠ running and skip).
   if (braked) {
     await enrichmentJobRepository.updateJobStatus(repoScope, jobId, { status: "paused" });
-    return { processed: true, processedRows, matched, enriched, charged, costMicros: chunkCost, braked };
+    return {
+      processed: true,
+      processedRows,
+      matched,
+      enriched,
+      charged,
+      costMicros: chunkCost,
+      braked,
+    };
   }
 
   // FINALIZE (best-effort): when THIS was the last chunk to complete, flip the job terminal so a finished run never
@@ -225,5 +233,13 @@ export async function bulkProcessEnrichChunk(
     }
   }
 
-  return { processed: true, processedRows, matched, enriched, charged, costMicros: chunkCost, braked };
+  return {
+    processed: true,
+    processedRows,
+    matched,
+    enriched,
+    charged,
+    costMicros: chunkCost,
+    braked,
+  };
 }

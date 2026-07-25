@@ -144,14 +144,14 @@ export async function getRevealedContact(
         (c) => c.revealType === "phone" || c.revealType === "full_profile",
       );
       const emails = ownedEmail
-        ? (await contactChannelRepository.listLiveEmailValuesByContactIds(tx, [contactId])).get(
+        ? ((await contactChannelRepository.listLiveEmailValuesByContactIds(tx, [contactId])).get(
             contactId,
-          ) ?? []
+          ) ?? [])
         : [];
       const phones = ownedPhone
-        ? (await contactChannelRepository.listLivePhoneValuesByContactIds(tx, [contactId])).get(
+        ? ((await contactChannelRepository.listLivePhoneValuesByContactIds(tx, [contactId])).get(
             contactId,
-          ) ?? []
+          ) ?? [])
         : [];
       live = { emails, phones };
     }

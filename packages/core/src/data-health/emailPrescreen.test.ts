@@ -36,7 +36,9 @@ describe("localPrescreenVerifier", () => {
 
   test("disposable → invalid without calling inner", async () => {
     const { v, calls } = makeInner();
-    expect(await localPrescreenVerifier(v).verify("x@mailinator.com", "unverified")).toBe("invalid");
+    expect(await localPrescreenVerifier(v).verify("x@mailinator.com", "unverified")).toBe(
+      "invalid",
+    );
     expect(calls()).toBe(0);
   });
   test("role → risky without calling inner", async () => {

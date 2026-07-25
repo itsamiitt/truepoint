@@ -356,7 +356,11 @@ export const appEnvSchema = z
     // honest "expired" state; the artifact route already 404s a null key). The SOURCE object is NOT
     // TTL'd here — it follows the job's own purge horizon. Sweep cadence below; both revert by env.
     IMPORT_ARTIFACT_TTL_DAYS: z.coerce.number().int().positive().default(90),
-    IMPORT_ARTIFACT_SWEEP_EVERY_MS: z.coerce.number().int().positive().default(6 * 3_600_000),
+    IMPORT_ARTIFACT_SWEEP_EVERY_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(6 * 3_600_000),
     // S-I8 (08 §2.1/§Edge cases): the DRAFT TTL. A draft older than this is REAPED by the import reaper
     // sweep — the row hard-deleted (drafts never entered execution and appear in no history; a tombstone
     // would pollute retention for zero forensic value) and its stored source object deleted. 08 fixes the
@@ -400,10 +404,18 @@ export const appEnvSchema = z
     //     503-shed orphan (drift 16: the "503 shed leaves a visible queued row" edge): copy re-drives from
     //     the durable row (idempotent, watermark-resumed), fast terminalizes `failed` (rows-in-payload
     //     unrecoverable in Phase A — honest terminal, no eternal `queued`/`running` row).
-    IMPORT_REAPER_ORPHAN_GRACE_MS: z.coerce.number().int().positive().default(5 * 60_000),
+    IMPORT_REAPER_ORPHAN_GRACE_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5 * 60_000),
     //   • stall window — a `running` job whose 7-bucket counters have not advanced for longer than this is
     //     flagged (metric + log; NEVER auto-killed) — the durable-truth "is it stuck?" signal (09 §8).
-    IMPORT_REAPER_STALL_WINDOW_MS: z.coerce.number().int().positive().default(10 * 60_000),
+    IMPORT_REAPER_STALL_WINDOW_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10 * 60_000),
     // Scheduled imports (import-and-data-model-redesign 08 §9; P5). GLOBAL kill-switch of the dual gate:
     // effective = (this === "true") AND the per-tenant `scheduled_imports_enabled` flag (seeded off in 0063)
     // AND the import_v2 dual gate on for the tenant (a fired run rides the unified durable pipeline). While

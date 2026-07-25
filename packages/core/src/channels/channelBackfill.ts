@@ -33,8 +33,8 @@
 import {
   type BackfillEmailChild,
   type BackfillPhoneChild,
-  contactChannelRepository,
   type MissingChannelProjectionRow,
+  contactChannelRepository,
   withTenantTx,
 } from "@leadwolf/db";
 import { phoneLineType, phoneStatus } from "@leadwolf/types";

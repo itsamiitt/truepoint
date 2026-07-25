@@ -6,7 +6,11 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { ApprovalRequestView, UpsertValidationRuleInput, ValidationRule } from "@leadwolf/types";
+import type {
+  ApprovalRequestView,
+  UpsertValidationRuleInput,
+  ValidationRule,
+} from "@leadwolf/types";
 import type {
   DataImportDetail,
   DataOpsOverview,
@@ -108,7 +112,10 @@ export async function createValidationRule(input: UpsertValidationRuleInput): Pr
 }
 
 /** PUT /admin/data/validation/rules/:id — update a custom rule (data:manage). */
-export async function updateValidationRule(id: string, input: UpsertValidationRuleInput): Promise<void> {
+export async function updateValidationRule(
+  id: string,
+  input: UpsertValidationRuleInput,
+): Promise<void> {
   const res = await fetchWithAuth(
     `${API_BASE}/api/v1/admin/data/validation/rules/${encodeURIComponent(id)}`,
     {

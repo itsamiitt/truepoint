@@ -162,13 +162,21 @@ describe("G-ENR-4 enrichment job-status surface — workspace scoping + mapping"
   test("getEnrichmentJobStatus is RLS-scoped: A sees its own job, B's id resolves to null", async () => {
     const jobs = await core.listEnrichmentJobs({ scope: scopeA(), viewer: wsWideViewer() });
     const aJobId = jobs[0]!.jobId;
-    const own = await core.getEnrichmentJobStatus({ scope: scopeA(), viewer: wsWideViewer(), jobId: aJobId });
+    const own = await core.getEnrichmentJobStatus({
+      scope: scopeA(),
+      viewer: wsWideViewer(),
+      jobId: aJobId,
+    });
     expect(own?.jobId).toBe(aJobId);
 
     // B's job id — fetched with admin (bypassing RLS) — must be invisible to A (null → 404 at the edge).
     const [bRow] = await admin`SELECT id FROM enrichment_jobs WHERE workspace_id = ${wsB} LIMIT 1`;
     const bJobId = (bRow as { id: string }).id;
-    const leaked = await core.getEnrichmentJobStatus({ scope: scopeA(), viewer: wsWideViewer(), jobId: bJobId });
+    const leaked = await core.getEnrichmentJobStatus({
+      scope: scopeA(),
+      viewer: wsWideViewer(),
+      jobId: bJobId,
+    });
     expect(leaked).toBeNull();
   });
 });

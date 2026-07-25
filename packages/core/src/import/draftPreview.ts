@@ -28,7 +28,12 @@ import type {
 } from "@leadwolf/types";
 import { blindIndex } from "./blindIndex.ts";
 import type { RawRow } from "./columnMap.ts";
-import { type RowIdentity, identitySignature, rejectedRowsFor, validateRow } from "./validateRow.ts";
+import {
+  type RowIdentity,
+  identitySignature,
+  rejectedRowsFor,
+  validateRow,
+} from "./validateRow.ts";
 
 /** Default cap on rejected rows sampled into the response — buildImportPreview's shipped bound. */
 const DEFAULT_SAMPLE_LIMIT = 50;

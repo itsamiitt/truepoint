@@ -38,11 +38,7 @@ import {
   parseImportFile,
   scheduledImportsEnabledForScope,
 } from "@leadwolf/core";
-import {
-  type ScheduledImportRow,
-  scheduledImportRepository,
-  withTenantTx,
-} from "@leadwolf/db";
+import { type ScheduledImportRow, scheduledImportRepository, withTenantTx } from "@leadwolf/db";
 import {
   ForbiddenError,
   type ImportMergeMode,
@@ -110,7 +106,8 @@ function canMutate(row: ScheduledImportRow, userId: string, role: string): boole
 function optionalBool(form: FormData, key: string): boolean | undefined {
   const v = form.get(key);
   if (v == null) return undefined;
-  if (v !== "true" && v !== "false") throw new ImportValidationError(`'${key}' must be 'true' or 'false'.`);
+  if (v !== "true" && v !== "false")
+    throw new ImportValidationError(`'${key}' must be 'true' or 'false'.`);
   return v === "true";
 }
 
@@ -145,7 +142,9 @@ importScheduleRoutes.post("/schedules", requireImportCreateGrant(), async (c) =>
   try {
     mapping = JSON.parse(String(form.get("mapping") ?? ""));
   } catch {
-    throw new ImportValidationError("'mapping' must be a JSON object of canonicalField → column header.");
+    throw new ImportValidationError(
+      "'mapping' must be a JSON object of canonicalField → column header.",
+    );
   }
 
   // Optional strategy pair + list target + parse options (each independently optional; null = inherit policy).
@@ -159,7 +158,8 @@ importScheduleRoutes.post("/schedules", requireImportCreateGrant(), async (c) =>
       );
     mergeMode = p.data;
   }
-  const preservePopulated = optionalBool(form, "preservePopulated") ?? optionalBool(form, "preserve_populated");
+  const preservePopulated =
+    optionalBool(form, "preservePopulated") ?? optionalBool(form, "preserve_populated");
   const enabled = optionalBool(form, "enabled");
   const rawTarget = form.get("targetListId") ?? form.get("listId");
   const targetListId = rawTarget != null && rawTarget !== "" ? String(rawTarget) : undefined;
@@ -348,37 +348,41 @@ importScheduleRoutes.patch("/schedules/:id", requireRole("owner", "admin", "memb
 });
 
 // ── DELETE /imports/schedules/:id — delete (creator ∪ elevated) + best-effort object cleanup ──────────────
-importScheduleRoutes.delete("/schedules/:id", requireRole("owner", "admin", "member"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
-  const tenantId = c.get("tenantId");
-  const scope = { tenantId, workspaceId };
-  const id = c.req.param("id");
-  if (!UUID_RE.test(id) || !(await scheduledImportsEnabledForScope(scope)))
-    throw new NotFoundError("Scheduled import not found.");
-  const userId = c.get("claims").sub;
-  const role = getWorkspaceRole(c);
+importScheduleRoutes.delete(
+  "/schedules/:id",
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const workspaceId = c.get("workspaceId");
+    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+    const tenantId = c.get("tenantId");
+    const scope = { tenantId, workspaceId };
+    const id = c.req.param("id");
+    if (!UUID_RE.test(id) || !(await scheduledImportsEnabledForScope(scope)))
+      throw new NotFoundError("Scheduled import not found.");
+    const userId = c.get("claims").sub;
+    const role = getWorkspaceRole(c);
 
-  const result = await withTenantTx(scope, async (tx) => {
-    const row = await scheduledImportRepository.getByIdForUpdate(tx, id);
-    if (!row || row.workspaceId !== workspaceId) return { kind: "not_found" as const };
-    if (!canMutate(row, userId, role)) return { kind: "forbidden" as const };
-    await scheduledImportRepository.delete(tx, id);
-    return { kind: "ok" as const, objectKey: row.sourceObjectKey };
-  });
+    const result = await withTenantTx(scope, async (tx) => {
+      const row = await scheduledImportRepository.getByIdForUpdate(tx, id);
+      if (!row || row.workspaceId !== workspaceId) return { kind: "not_found" as const };
+      if (!canMutate(row, userId, role)) return { kind: "forbidden" as const };
+      await scheduledImportRepository.delete(tx, id);
+      return { kind: "ok" as const, objectKey: row.sourceObjectKey };
+    });
 
-  if (result.kind === "not_found") throw new NotFoundError("Scheduled import not found.");
-  if (result.kind === "forbidden")
-    throw new ForbiddenError(
-      "insufficient_role",
-      "Only the schedule's creator or an admin can delete it.",
-    );
+    if (result.kind === "not_found") throw new NotFoundError("Scheduled import not found.");
+    if (result.kind === "forbidden")
+      throw new ForbiddenError(
+        "insufficient_role",
+        "Only the schedule's creator or an admin can delete it.",
+      );
 
-  // Delete the stored object AFTER the row delete (best-effort; idempotent — a failure leaves a bounded orphan
-  // the object-store lifecycle bounds, never a live schedule's data since the row is already gone).
-  await bulkFileStore()
-    .deleteObject(result.objectKey)
-    .catch(() => undefined);
-  console.info("scheduled-import deleted", { scheduleId: id, workspaceId, actorUserId: userId });
-  return c.body(null, 204);
-});
+    // Delete the stored object AFTER the row delete (best-effort; idempotent — a failure leaves a bounded orphan
+    // the object-store lifecycle bounds, never a live schedule's data since the row is already gone).
+    await bulkFileStore()
+      .deleteObject(result.objectKey)
+      .catch(() => undefined);
+    console.info("scheduled-import deleted", { scheduleId: id, workspaceId, actorUserId: userId });
+    return c.body(null, 204);
+  },
+);

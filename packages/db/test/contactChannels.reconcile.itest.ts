@@ -43,7 +43,12 @@ let tGate = "";
 let wsGate = "";
 
 const NEW_EMAIL = "jane.new@acme.com"; // already normalized (no plus-tag) ⇒ blindIndex(NEW_EMAIL) is its key
-const MAPPING = { email: "Email", firstName: "First Name", phone: "Phone", locationCountry: "Country" };
+const MAPPING = {
+  email: "Email",
+  firstName: "First Name",
+  phone: "Phone",
+  locationCountry: "Country",
+};
 const rowsFor = (slug: string) => [
   { Email: `jane@${slug}.com`, "First Name": "Jane", Phone: "(415) 555-2671", Country: "US" },
   { Email: `john@${slug}.com`, "First Name": "John", Phone: "", Country: "" },
@@ -68,7 +73,11 @@ async function enableFlag(tenantId: string, key: string) {
   await admin`INSERT INTO tenant_feature_flags (flag_key, tenant_id, enabled) VALUES (${key}, ${tenantId}, true)`;
 }
 
-async function importFlat(s: { tenantId: string; workspaceId: string }, ownerId: string, slug: string) {
+async function importFlat(
+  s: { tenantId: string; workspaceId: string },
+  ownerId: string,
+  slug: string,
+) {
   const res = await core.runImport({
     scope: s,
     importedByUserId: ownerId,
@@ -81,7 +90,8 @@ async function importFlat(s: { tenantId: string; workspaceId: string }, ownerId:
 }
 
 async function contactId(workspaceId: string, name: string): Promise<string> {
-  const [r] = await admin`SELECT id FROM contacts WHERE workspace_id = ${workspaceId} AND first_name = ${name}`;
+  const [r] =
+    await admin`SELECT id FROM contacts WHERE workspace_id = ${workspaceId} AND first_name = ${name}`;
   return (r as { id: string }).id;
 }
 

@@ -185,9 +185,8 @@ export function makeProcessImportReaperSweep(redis: IORedis, deps: ImportReaperD
     _job: Job<ImportReaperSweepJobData>,
   ): Promise<void> {
     await withLeaderLock(redis, LEADER_KEY, LEADER_TTL_MS, async () => {
-      const candidates = await importJobRepository.listNonTerminalImportJobs(
-        MAX_CANDIDATES_PER_SWEEP,
-      );
+      const candidates =
+        await importJobRepository.listNonTerminalImportJobs(MAX_CANDIDATES_PER_SWEEP);
       const liveIds = await deps.snapshotLiveJobIds();
       const now = Date.now();
       const seen = new Set<string>();

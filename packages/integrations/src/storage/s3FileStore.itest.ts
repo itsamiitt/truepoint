@@ -24,7 +24,10 @@ function makeStore(presignTtlSeconds = 300) {
     endpoint: process.env.BULK_IMPORT_S3_ENDPOINT,
     accessKeyId: accessKeyId ?? "unset",
     secretAccessKey: secretAccessKey ?? "unset",
-    sse: process.env.BULK_IMPORT_S3_SSE === "none" ? undefined : (process.env.BULK_IMPORT_S3_SSE ?? undefined),
+    sse:
+      process.env.BULK_IMPORT_S3_SSE === "none"
+        ? undefined
+        : (process.env.BULK_IMPORT_S3_SSE ?? undefined),
     presignTtlSeconds,
   });
 }

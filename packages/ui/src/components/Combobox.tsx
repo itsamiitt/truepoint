@@ -85,15 +85,17 @@ export function Combobox({
         </span>
       </button>
       {open ? (
+        // biome-ignore lint/a11y/useFocusableInteractive: focus lives on the search field and option buttons
         <div
           className="tp-ui-popover tp-ui-popover--start"
+          // biome-ignore lint/a11y/useSemanticElements: searchable option list — a native <select> can't host it
           role="listbox"
           style={{ width: "100%", maxHeight: 280, overflow: "auto" }}
         >
           <div style={{ padding: 8, borderBottom: "1px solid var(--tp-hairline)" }}>
-            {/* biome-ignore lint/a11y/noAutofocus: focus the search field when the listbox opens */}
             <input
               className="tp-ui-field"
+              // biome-ignore lint/a11y/noAutofocus: focus the search field when the listbox opens
               autoFocus
               value={query}
               placeholder={searchPlaceholder}
@@ -110,6 +112,7 @@ export function Combobox({
                 <button
                   key={o.value}
                   type="button"
+                  // biome-ignore lint/a11y/useSemanticElements: ARIA option pattern on a real button; <option> only lives in <select>
                   role="option"
                   aria-selected={o.value === value}
                   className="tp-ui-menu-item"

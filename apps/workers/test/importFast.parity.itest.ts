@@ -55,14 +55,13 @@ async function seedWorkspace(
   tenantId?: string,
 ): Promise<{ tenantId: string; workspaceId: string; ownerId: string }> {
   let tid = tenantId;
-  let uid: string;
   if (!tid) {
     const [t] =
       await admin`INSERT INTO tenants (name, slug) VALUES (${slug}, ${slug}) RETURNING id`;
     tid = (t as { id: string }).id;
   }
   const [u] = await admin`INSERT INTO users (email) VALUES (${`owner@${slug}.test`}) RETURNING id`;
-  uid = (u as { id: string }).id;
+  const uid = (u as { id: string }).id;
   await admin`
     INSERT INTO tenant_members (tenant_id, user_id, is_tenant_owner) VALUES (${tid}, ${uid}, true)
     ON CONFLICT DO NOTHING`;

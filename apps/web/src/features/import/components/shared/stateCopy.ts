@@ -92,10 +92,7 @@ export const CANCEL_CONFIRM_BODY =
 /** Terminal = the poll should stop; the row will not change further. */
 export function isTerminalV2(status: ImportJobStatusV2): boolean {
   return (
-    status === "completed" ||
-    status === "partial" ||
-    status === "failed" ||
-    status === "cancelled"
+    status === "completed" || status === "partial" || status === "failed" || status === "cancelled"
   );
 }
 

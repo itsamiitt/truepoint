@@ -11,11 +11,7 @@ import { type FormEvent, useState } from "react";
 import { useEnrollableContacts } from "../hooks/useEnrollableContacts";
 import { useEnrollment } from "../hooks/useEnrollment";
 import styles from "../sequences.module.css";
-import {
-  contactOptionLabel,
-  SEQUENCE_STATUS_LABEL,
-  type SequenceSummary,
-} from "../types";
+import { SEQUENCE_STATUS_LABEL, type SequenceSummary, contactOptionLabel } from "../types";
 import { EnrollmentLogTable } from "./EnrollmentLogTable";
 
 export function EnrollmentPanel({
@@ -45,12 +41,7 @@ export function EnrollmentPanel({
   const noContacts = !contacts.loading && contacts.enrollable.length === 0 && !contacts.error;
 
   return (
-    <Drawer
-      open
-      onClose={onClose}
-      title={sequence.name}
-      width={620}
-    >
+    <Drawer open onClose={onClose} title={sequence.name} width={620}>
       <p className={styles.cardHint} style={{ marginBottom: 16 }}>
         {SEQUENCE_STATUS_LABEL[sequence.status]} · {sequence.enrolledCount} enrolled ·{" "}
         {sequence.stepCount} step{sequence.stepCount === 1 ? "" : "s"}
@@ -89,7 +80,8 @@ export function EnrollmentPanel({
         <p className={styles.hint}>
           <span className={styles.hintDot} aria-hidden="true" />
           <span>
-            Only revealed contacts can be enrolled; suppressed contacts are blocked at the send gate.
+            Only revealed contacts can be enrolled; suppressed contacts are blocked at the send
+            gate.
           </span>
         </p>
 

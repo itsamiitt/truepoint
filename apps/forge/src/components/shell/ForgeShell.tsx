@@ -6,13 +6,14 @@
 //
 // The chrome (rail, top bar, pin, density, mobile overlay, ⌘K) is @leadwolf/app-shell, shared with apps/web
 // and apps/admin — this file previously carried a near-verbatim copy of apps/admin's. What stays here is the
-// gate, the operator destination list, and the console-only "Forge console" rail tag.
+// gate, the operator destination list, and the console-only "Forge console" rail tag. The rail identity
+// (email) comes from /bff/me via StaffMeProvider — the old same-origin /api/v1/auth/session probe was a
+// main-api route and 404'd forever under the same-origin BFF deployment.
 "use client";
 
-import { fetchWithAuth, getAccessToken, logout, silentRefresh, startLogin } from "@/lib/authClient";
+import { getAccessToken, logout, silentRefresh, startLogin } from "@/lib/authClient";
 import { verifyForgeStaff } from "@/lib/forgeGate";
-import { API_BASE } from "@/lib/publicConfig";
-import { StaffMeProvider } from "@/lib/staffMe";
+import { StaffMeProvider, useStaffMe } from "@/lib/staffMe";
 import {
   AppShellFrame,
   Brandmark,
@@ -31,11 +32,10 @@ import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
 import { DESTINATIONS, sectionTitleFor } from "./navConfig";
 
-type GateState = "loading" | "redirecting" | "staff" | "forbidden" | "error";
+type GateState = "loading" | "redirecting" | "staff" | "forbidden" | "misrouted" | "error";
 
 export function ForgeShell({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GateState>("loading");
-  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   async function runGate() {
     try {
@@ -67,19 +67,13 @@ export function ForgeShell({ children }: { children: ReactNode }) {
         setState("forbidden");
         return;
       }
+      if (verdict === "misrouted") {
+        setState("misrouted");
+        return;
+      }
       if (verdict !== "staff") {
         setState("error");
         return;
-      }
-      // Best-effort identity for the rail (the gate above already authorized the session).
-      try {
-        const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
-        if (res.ok) {
-          const session = (await res.json()) as { userId?: string };
-          setUserEmail(session.userId ?? null);
-        }
-      } catch {
-        // Non-fatal: the console still renders without the identity label.
       }
       setState("staff");
     } catch (err: unknown) {
@@ -107,13 +101,15 @@ export function ForgeShell({ children }: { children: ReactNode }) {
     );
   }
 
-  if (state === "error") {
+  if (state === "error" || state === "misrouted") {
     return (
       <div className="tp-center-screen">
         <div className="tp-signin-card">
           <Brandmark size={30} title="TruePoint" />
           <p className="app-muted">
-            We couldn't reach the Forge API. Check your connection and try again.
+            {state === "misrouted"
+              ? "The Forge API returned an unexpected response (404). This usually means a deployment or routing issue on our side — not your connection."
+              : "We couldn't reach the Forge API. Check your connection and try again."}
           </p>
           <TpButton
             variant="primary"
@@ -152,13 +148,7 @@ export function ForgeShell({ children }: { children: ReactNode }) {
             badge="Forge console"
             isOpen={isOpen}
             onClose={close}
-            footer={
-              <UserRow
-                email={userEmail}
-                roleLabel="Platform staff"
-                onSignOut={() => void logout()}
-              />
-            }
+            footer={<ForgeUserRow />}
           />
         )}
         renderTopBar={({ toggleMenu, pinned, togglePin }) => (
@@ -185,6 +175,12 @@ export function ForgeShell({ children }: { children: ReactNode }) {
       </AppShellFrame>
     </StaffMeProvider>
   );
+}
+
+/** Rail identity from the shared /bff/me read (StaffMeProvider wraps the frame) — one fetch, no side probe. */
+function ForgeUserRow() {
+  const { email } = useStaffMe();
+  return <UserRow email={email} roleLabel="Platform staff" onSignOut={() => void logout()} />;
 }
 
 /** Split out so it can subscribe to the pathname for its section title. */

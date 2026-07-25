@@ -225,6 +225,8 @@ services:
       auth: { condition: service_healthy }
       api: { condition: service_healthy }
       admin: { condition: service_healthy }
+      forge: { condition: service_healthy }
+      forge-api: { condition: service_healthy }
     restart: unless-stopped
 
 volumes:

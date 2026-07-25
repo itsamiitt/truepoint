@@ -18,8 +18,8 @@ import {
 import { Users } from "lucide-react";
 import { useState } from "react";
 import { useMembers } from "../hooks/useMembers";
-import { ASSIGNABLE_ROLES, ROLE_LABEL, type WorkspaceMember, type WorkspaceRole } from "../types";
 import styles from "../settings-workspace.module.css";
+import { ASSIGNABLE_ROLES, ROLE_LABEL, type WorkspaceMember, type WorkspaceRole } from "../types";
 
 export function MembersPanel() {
   const toast = useToast();
@@ -30,7 +30,10 @@ export function MembersPanel() {
   const [toRemove, setToRemove] = useState<WorkspaceMember | null>(null);
 
   const notWired = () =>
-    toast.toast({ title: "Not available yet", description: "Member management connects once the API ships." });
+    toast.toast({
+      title: "Not available yet",
+      description: "Member management connects once the API ships.",
+    });
 
   const onInvite = async () => {
     if (email.trim().length === 0) return;
@@ -167,9 +170,7 @@ export function MembersPanel() {
         open={toRemove != null}
         onClose={() => setToRemove(null)}
         title="Remove member?"
-        description={
-          toRemove ? `${toRemove.email} will lose access to this workspace.` : undefined
-        }
+        description={toRemove ? `${toRemove.email} will lose access to this workspace.` : undefined}
         footer={
           <>
             <TpButton variant="ghost" onClick={() => setToRemove(null)}>

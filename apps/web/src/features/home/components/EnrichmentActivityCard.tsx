@@ -6,9 +6,9 @@
 import { StatusBadge, type StatusTone } from "@leadwolf/ui";
 import { Database } from "lucide-react";
 import type { EnrichmentActivity } from "../types";
-import { formatRelative } from "./format";
 import styles from "./HomePage.module.css";
 import { WidgetCard } from "./WidgetCard";
+import { formatRelative } from "./format";
 
 /** Map a provider call status to a monochrome-system tone (only the badge earns color). */
 function statusTone(status: string): StatusTone {

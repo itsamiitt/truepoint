@@ -55,7 +55,12 @@ let ownerOff = "";
 const SECONDARY_EMAIL = "jane.alt@personal.io"; // distinct DOMAIN so the "no secondary domain" leak is testable
 const SECONDARY_DOMAIN = "personal.io";
 
-const MAPPING = { email: "Email", firstName: "First Name", phone: "Phone", locationCountry: "Country" };
+const MAPPING = {
+  email: "Email",
+  firstName: "First Name",
+  phone: "Phone",
+  locationCountry: "Country",
+};
 const ROWS = [
   { Email: "jane@acme.com", "First Name": "Jane", Phone: "(415) 555-2671", Country: "US" },
   { Email: "john@acme.com", "First Name": "John", Phone: "", Country: "" },
@@ -103,17 +108,21 @@ async function seedLoaded(slug: string) {
   // Append the secondary email through applyChannelWrite (CH-INV-1's single writer) — deterministic bytes so
   // the dedup-rung probe is exact. Jane already holds the primary jane@acme.com ⇒ this lands as a secondary.
   const outcome = await db.withTenantTx(scope(s.tenantId, s.workspaceId), (tx) =>
-    db.contactChannelRepository.applyChannelWrite(tx, { tenantId: s.tenantId, workspaceId: s.workspaceId }, {
-      kind: "email_upsert",
-      contactId: janeId,
-      value: {
-        valueEnc: core.encryptPii(SECONDARY_EMAIL),
-        blindIndex: core.blindIndex(SECONDARY_EMAIL),
-        emailDomain: SECONDARY_DOMAIN,
-        type: "personal",
-        source: "provider:zoominfo",
+    db.contactChannelRepository.applyChannelWrite(
+      tx,
+      { tenantId: s.tenantId, workspaceId: s.workspaceId },
+      {
+        kind: "email_upsert",
+        contactId: janeId,
+        value: {
+          valueEnc: core.encryptPii(SECONDARY_EMAIL),
+          blindIndex: core.blindIndex(SECONDARY_EMAIL),
+          emailDomain: SECONDARY_DOMAIN,
+          type: "personal",
+          source: "provider:zoominfo",
+        },
       },
-    }),
+    ),
   );
   expect(outcome.result).toBe("inserted");
   // An owned full_profile claim so getRevealedContact unmasks Jane's live values (05 §5 — an email claim
@@ -358,7 +367,9 @@ async function fourSurfaces(t: string, ws: string, ownerId: string, listId: stri
   });
   const count = await core.searchCount(scope(t, ws), HAS_EMAIL());
   const resolved = await db.withTenantTx(scope(t, ws), (tx) =>
-    db.searchRepository.resolveVisibleIds(tx, HAS_EMAIL(), RESOLVE_CAP, { channelsFromChild: gate }),
+    db.searchRepository.resolveVisibleIds(tx, HAS_EMAIL(), RESOLVE_CAP, {
+      channelsFromChild: gate,
+    }),
   );
   const list = await core.listListMembers({
     scope: scope(t, ws),
@@ -382,8 +393,20 @@ describe("S-CH4b — page / count / resolve / dynamic-membership agree gate-on; 
   let listOffId = "";
 
   beforeAll(async () => {
-    childOnlyOn = await seedChildOnlyEmail(tOn, wsOn, "ChildOnlyOn", "child@onlyon.io", "onlyon.io");
-    childOnlyOff = await seedChildOnlyEmail(tOff, wsOff, "ChildOnlyOff", "child@onlyoff.io", "onlyoff.io");
+    childOnlyOn = await seedChildOnlyEmail(
+      tOn,
+      wsOn,
+      "ChildOnlyOn",
+      "child@onlyon.io",
+      "onlyon.io",
+    );
+    childOnlyOff = await seedChildOnlyEmail(
+      tOff,
+      wsOff,
+      "ChildOnlyOff",
+      "child@onlyoff.io",
+      "onlyoff.io",
+    );
     listOnId = await seedDynamicHasEmailList(tOn, wsOn, ownerOn);
     listOffId = await seedDynamicHasEmailList(tOff, wsOff, ownerOff);
   }, 60_000);
@@ -422,7 +445,13 @@ describe("S-CH4b — getRevealedContact fetches ONLY owned-channel child ciphert
     // A live email child owned by an EMAIL-only claim (no phone claim). Gate-on, the reveal read must STILL
     // fetch + decrypt the OWNED email channel (the narrowing must not skip it), while the UNOWNED phone channel
     // is never fetched and stays absent — output is identical to fetching both, the fetch is merely narrower.
-    mailClaimId = await seedChildOnlyEmail(tOn, wsOn, "MailClaim", "mail.claim@narrow.io", "narrow.io");
+    mailClaimId = await seedChildOnlyEmail(
+      tOn,
+      wsOn,
+      "MailClaim",
+      "mail.claim@narrow.io",
+      "narrow.io",
+    );
     await admin`
       INSERT INTO contact_reveals (tenant_id, workspace_id, contact_id, revealed_by_user_id, reveal_type, data_source, credits_consumed)
       VALUES (${tOn}, ${wsOn}, ${mailClaimId}, ${ownerOn}, 'email', 'internal', 0)`;

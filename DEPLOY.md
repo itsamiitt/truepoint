@@ -1,8 +1,9 @@
 # Deploying TruePoint — Ubuntu preview runbook
 
-This deploys the full app as a **Docker Compose stack on a single Ubuntu host**: the four
-TruePoint services (`web`, `auth`, `api`, `workers`), local Redis/Typesense/MailHog, and a
-**Caddy** reverse proxy that terminates HTTPS and routes three subdomains. Postgres is
+This deploys the full app as a **Docker Compose stack on a single Ubuntu host**: the
+TruePoint services (`web`, `auth`, `api`, `admin`, `workers`), the nested Forge services
+(`forge`, `forge-api`, `forge-worker`), local Redis/Typesense/MailHog, and a **Caddy**
+reverse proxy that terminates HTTPS and routes the subdomains. Postgres is
 **external** (managed — Neon/RDS). It is a **working preview**, not the production AWS target
 described in [ADR-0010](docs/planning/decisions/ADR-0010-aws-native-self-hosted-stack.md) —
 see [Caveats](#caveats) before exposing it to real users.
@@ -21,12 +22,15 @@ see [Caveats](#caveats) before exposing it to real users.
 | admin     | `https://admin.truepoint.in`| Next.js (`start`) | Internal staff console (platform admin) |
 | api       | `https://api.truepoint.in`  | Bun + Hono        | Public API; `/health` for checks   |
 | workers   | — (internal)                | Bun + BullMQ      | Background jobs                    |
+| forge     | `https://forge.truepoint.in` | Next.js (`start`) | Staff data-refinery console (Forge) |
+| forge-api | `https://forge-api.truepoint.in` | Bun + Hono   | Capture ingest + operator BFF; `/ready` for checks. Also answers `forge.truepoint.in/bff/*` and `/v1/*` via Caddy |
+| forge-worker | — (internal)             | Bun + BullMQ      | Forge parse/extract/verify pipeline |
 | redis     | — (internal)                | redis:7           | cache / queues / pub-sub           |
 | typesense | — (internal)                | typesense:27.1    | search                             |
 | mailhog   | :8025 (localhost)           | mailhog           | captures outgoing email            |
 | postgres  | **external**                | Neon / RDS        | set via `DATABASE_URL`             |
 
-All five app services run from **one image** (`leadwolf:latest`) built once. Only Caddy
+All eight app services run from **one image** (`leadwolf:latest`) built once. Only Caddy
 publishes ports to the internet (80/443); the app services are reached internally.
 
 ---
@@ -35,7 +39,7 @@ publishes ports to the internet (80/443); the app services are reached internall
 
 - Ubuntu **22.04 or 24.04**, **≥ 4 GB RAM** (8 GB comfortable — the Next build is memory-hungry), ≥ 10 GB disk.
 - A managed **Postgres** (Neon/RDS) connection string.
-- **DNS**: `A` records for `app`, `auth`, `api`, and `admin` (`.truepoint.in`) all pointing at this server's public IP.
+- **DNS**: `A` records for `app`, `auth`, `api`, `admin`, `forge`, and `forge-api` (`.truepoint.in`) all pointing at this server's public IP.
 - **Ports 80 + 443** reachable from the internet (open them in the cloud firewall / EC2 Security Group). Caddy needs port 80 for the Let's Encrypt challenge.
 - `sudo` access.
 
@@ -103,8 +107,8 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 ```
 
-> DNS for `app`/`auth`/`api`/`admin.truepoint.in` must resolve to this server **before** you deploy,
-> or Caddy can't obtain TLS certificates.
+> DNS for `app`/`auth`/`api`/`admin`/`forge`/`forge-api.truepoint.in` must resolve to this server
+> **before** you deploy, or Caddy can't obtain TLS certificates.
 
 ## Step 6 — Deploy
 
@@ -122,6 +126,11 @@ app services and Caddy. The first run takes several minutes; Caddy then fetches 
 docker compose -f docker-compose.prod.yml ps             # all services "running"
 docker compose -f docker-compose.prod.yml exec -T api bun -e "fetch('http://localhost:3001/health').then(r=>r.text()).then(t=>console.log(t))"
 curl https://api.truepoint.in/health                     # → {"status":"ok"} (once DNS+TLS are live)
+
+# Forge: the unauthenticated BFF probe must be a 401 problem+json. A 404 here means a STALE image
+# or a Caddyfile still routing /bff/* to the Next console — redeploy, then restart caddy.
+curl -si https://forge.truepoint.in/bff/overview | head -5   # → HTTP/2 401, content-type: application/problem+json
+curl -s https://forge-api.truepoint.in/ready                 # → {"ready":true}
 ```
 
 Then open **`https://app.truepoint.in`** in a browser. Watch Caddy get certs with:
@@ -143,6 +152,10 @@ $C logs -f caddy                     # watch TLS certificate provisioning
 
 # Redeploy after a code or .env change:
 bash deploy/deploy.sh                # rebuilds image + restarts
+
+# After a Caddyfile-only edit: the file is a read-only bind mount, so `up -d` does NOT
+# recreate caddy on content change — restart it explicitly:
+$C restart caddy
 
 # Re-run migrations only (bounded + non-interactive; streams [1/4]…[4/4] then "migrate: done."):
 timeout 300 $C run --rm -T migrate

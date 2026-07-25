@@ -100,7 +100,10 @@ export const suppressionRepository = {
     const inScope = or(
       eq(suppressionList.scope, "global"),
       and(eq(suppressionList.scope, "tenant"), eq(suppressionList.tenantId, keys.tenantId)),
-      and(eq(suppressionList.scope, "workspace"), eq(suppressionList.workspaceId, keys.workspaceId)),
+      and(
+        eq(suppressionList.scope, "workspace"),
+        eq(suppressionList.workspaceId, keys.workspaceId),
+      ),
     );
 
     const rows = await tx

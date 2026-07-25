@@ -225,7 +225,10 @@ function revealError(errorClass?: string): string {
  *  profile; on-open hydration of the active tab's subject is a follow-up. */
 function RevealTab(): React.ReactElement {
   const [subject, setSubject] = useState<{ key: string; status: SubjectStatus } | null>(null);
-  const [reveal, setReveal] = useState<{ phase: "idle" | "busy" | "done" | "error"; text?: string }>({
+  const [reveal, setReveal] = useState<{
+    phase: "idle" | "busy" | "done" | "error";
+    text?: string;
+  }>({
     phase: "idle",
   });
 
@@ -262,7 +265,11 @@ function RevealTab(): React.ReactElement {
     <div>
       <div style={{ fontWeight: 600, fontSize: 14 }}>{slugLabel(subject.key)}</div>
       <div style={{ ...monoOutcome, marginTop: 4 }}>
-        {status.owned ? t("card.revealed") : status.known ? t("card.notRevealed") : t("card.noMatch")}
+        {status.owned
+          ? t("card.revealed")
+          : status.known
+            ? t("card.notRevealed")
+            : t("card.noMatch")}
       </div>
       <div style={{ height: 1, background: "var(--tp-hairline, #f0f0f0)", margin: "12px 0" }} />
 

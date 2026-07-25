@@ -20,8 +20,8 @@ import {
 } from "@leadwolf/core";
 import { retentionRunRepository, withTenantTx } from "@leadwolf/db";
 import {
-  dataQualityTrendSchema,
   ForbiddenError,
+  dataQualityTrendSchema,
   homeSummarySchema,
   retentionRunSchema,
   reverificationRunsSchema,
@@ -141,18 +141,13 @@ homeRoutes.get(
  * the work is bounded to already-revealed, past-SLA contacts + idempotent — the manual form of an existing bounded
  * operation, not a new cost surface. Enqueue-only: no flag bypass; returns 202 + a job ref.
  */
-homeRoutes.post(
-  "/data-quality/reverify",
-  rateLimit,
-  requireRole("owner", "admin"),
-  async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+homeRoutes.post("/data-quality/reverify", rateLimit, requireRole("owner", "admin"), async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
 
-    const jobId = await enqueueReverification({ tenantId: c.get("tenantId"), workspaceId });
-    return c.json(reverificationTriggerAckSchema.parse({ queued: true, jobId }), 202);
-  },
-);
+  const jobId = await enqueueReverification({ tenantId: c.get("tenantId"), workspaceId });
+  return c.json(reverificationTriggerAckSchema.parse({ queued: true, jobId }), 202);
+});
 
 /**
  * GET /data-quality/retention-runs — the per-TENANT retention-engine SHADOW evidence (data-management #6): the

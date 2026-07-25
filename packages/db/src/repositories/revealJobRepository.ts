@@ -132,7 +132,11 @@ export const revealJobRepository = {
       const insert = tx.insert(revealJobs).values({ ...values, status: "awaiting_confirmation" });
       const rows = values.idempotencyKey
         ? await insert
-            .onConflictDoNothing({ target: [revealJobs.workspaceId, revealJobs.idempotencyKey] })
+            .onConflictDoNothing({
+              target: [revealJobs.workspaceId, revealJobs.idempotencyKey],
+              // Partial unique (WHERE idempotency_key IS NOT NULL): the arbiter needs the predicate (42P10).
+              targetWhere: sql`${revealJobs.idempotencyKey} IS NOT NULL`,
+            })
             .returning({ id: revealJobs.id })
         : await insert.returning({ id: revealJobs.id });
       if (rows[0]) return { id: rows[0].id, created: true };

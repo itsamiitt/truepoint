@@ -36,7 +36,10 @@ async function problemMessage(res: Response, fallback: string): Promise<string> 
 
 /** GET /contacts/:survivorId/merge-preview?loser=<loserId> — the side-by-side field matrix + child-impact
  *  counts (04 §6). Non-PII masked scalars only. 404 ⇒ MergeNotEnabledError (dual gate dark). */
-export async function fetchMergePreview(survivorId: string, loserId: string): Promise<MergePreview> {
+export async function fetchMergePreview(
+  survivorId: string,
+  loserId: string,
+): Promise<MergePreview> {
   const res = await fetchWithAuth(
     `${CONTACTS_BASE}/${encodeURIComponent(survivorId)}/merge-preview?loser=${encodeURIComponent(loserId)}`,
   );

@@ -85,7 +85,8 @@ export function makeProcessChannelReconcileSweep(redis: IORedis, runWorkspace: R
           // Direction-labelled repair counters (the zero-dep renderer has no label support, so the direction
           // is encoded in the name — the backfill_* precedent).
           if (res.flatWins > 0) incrementChannelCounter("drift_repaired_flat_total", res.flatWins);
-          if (res.childWins > 0) incrementChannelCounter("drift_repaired_child_total", res.childWins);
+          if (res.childWins > 0)
+            incrementChannelCounter("drift_repaired_child_total", res.childWins);
           if (res.skipped > 0) incrementChannelCounter("drift_skipped_total", res.skipped);
           // Non-PII operational log per workspace (ids + counts only — never a value).
           log.info("channel-reconcile: workspace pass", {

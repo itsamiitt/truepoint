@@ -6,9 +6,9 @@
 import { StatusBadge, type StatusTone } from "@leadwolf/ui";
 import { Sparkles } from "lucide-react";
 import type { RecentReveal } from "../types";
-import { formatRelative } from "./format";
 import styles from "./HomePage.module.css";
 import { WidgetCard } from "./WidgetCard";
+import { formatRelative } from "./format";
 
 const REVEAL_LABEL: Record<RecentReveal["revealType"], string> = {
   email: "Email",

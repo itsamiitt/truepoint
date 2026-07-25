@@ -13,11 +13,15 @@ describe("linkedinAdapter — page detection", () => {
   });
 
   test("classifies profile / company / search / unsupported", () => {
-    expect(linkedinAdapter.pageType(new URL("https://www.linkedin.com/in/jane-doe/"))).toBe("profile");
-    expect(linkedinAdapter.pageType(new URL("https://www.linkedin.com/company/acme/"))).toBe("company");
-    expect(linkedinAdapter.pageType(new URL("https://www.linkedin.com/search/results/people/"))).toBe(
-      "search",
+    expect(linkedinAdapter.pageType(new URL("https://www.linkedin.com/in/jane-doe/"))).toBe(
+      "profile",
     );
+    expect(linkedinAdapter.pageType(new URL("https://www.linkedin.com/company/acme/"))).toBe(
+      "company",
+    );
+    expect(
+      linkedinAdapter.pageType(new URL("https://www.linkedin.com/search/results/people/")),
+    ).toBe("search");
     expect(linkedinAdapter.pageType(new URL("https://www.linkedin.com/feed/"))).toBe("unsupported");
   });
 
@@ -25,8 +29,12 @@ describe("linkedinAdapter — page detection", () => {
     expect(linkedinAdapter.subjectKey(new URL("https://www.linkedin.com/in/jane-doe-8a1b/"))).toBe(
       "jane-doe-8a1b",
     );
-    expect(linkedinAdapter.subjectKey(new URL("https://www.linkedin.com/in/jos%C3%A9/"))).toBe("josé");
-    expect(linkedinAdapter.subjectKey(new URL("https://www.linkedin.com/company/acme/"))).toBeNull();
+    expect(linkedinAdapter.subjectKey(new URL("https://www.linkedin.com/in/jos%C3%A9/"))).toBe(
+      "josé",
+    );
+    expect(
+      linkedinAdapter.subjectKey(new URL("https://www.linkedin.com/company/acme/")),
+    ).toBeNull();
     expect(linkedinAdapter.subjectKey(new URL("https://www.linkedin.com/feed/"))).toBeNull();
   });
 });

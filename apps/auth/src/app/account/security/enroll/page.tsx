@@ -40,8 +40,8 @@ export default async function EnrollPage({ searchParams }: { searchParams: Searc
             1 · Add the key to your app
           </h2>
           <p className="mb-3 text-[13px] text-[var(--tp-ink-3)]">
-            In your authenticator app, add an account using this setup key (or the link below). Keep it
-            secret — anyone with this key can generate your codes.
+            In your authenticator app, add an account using this setup key (or the link below). Keep
+            it secret — anyone with this key can generate your codes.
           </p>
           <dl className="mb-5 flex flex-col gap-2 text-sm">
             <div>
@@ -90,9 +90,10 @@ export default async function EnrollPage({ searchParams }: { searchParams: Searc
         <h2 id="enroll-recovery-heading" className="mb-2 text-[17px] font-semibold">
           Recovery codes
         </h2>
+        {/* biome-ignore lint/a11y/useSemanticElements: Alert renders a styled div; role=status marks the live region */}
         <Alert variant="default" role="status" className="mb-4">
-          These codes are shown once. Store them somewhere safe — each one signs you in if you lose your
-          authenticator, and works only once.
+          These codes are shown once. Store them somewhere safe — each one signs you in if you lose
+          your authenticator, and works only once.
         </Alert>
         <ul
           className="mb-5 grid grid-cols-2 gap-2 font-mono text-[14px]"

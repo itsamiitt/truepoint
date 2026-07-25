@@ -13,6 +13,7 @@ const valid = {
   creditsConsumed: 1,
   revealedAt: "2026-06-14T10:00:00.000Z",
   revealedByUserId: "00000000-0000-7000-8000-0000000000aa",
+  dataSource: "internal",
 };
 
 describe("usageRevealSchema", () => {

@@ -64,7 +64,10 @@ export const savedSearchRepository = {
       .where(
         and(
           eq(savedSearches.id, id),
-          or(eq(savedSearches.visibility, "workspace"), eq(savedSearches.ownerUserId, callerUserId)),
+          or(
+            eq(savedSearches.visibility, "workspace"),
+            eq(savedSearches.ownerUserId, callerUserId),
+          ),
         ),
       )
       .limit(1);

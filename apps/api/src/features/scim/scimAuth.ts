@@ -33,7 +33,10 @@ export type ScimVariables = { tenantId: string; scimTokenId: string };
 
 const sha256Hex = (value: string): string => createHash("sha256").update(value).digest("hex");
 
-export async function scimAuth(c: Context<{ Variables: ScimVariables }>, next: Next): Promise<void> {
+export async function scimAuth(
+  c: Context<{ Variables: ScimVariables }>,
+  next: Next,
+): Promise<void> {
   const header = c.req.header("authorization");
   const token = header?.startsWith("Bearer ") ? header.slice(7).trim() : null;
   // Uniform 401 for missing / malformed / unknown / revoked — never reveal which (no token enumeration).

@@ -28,13 +28,17 @@ describe("jobVisibility predicate (10 §2.1 matrix)", () => {
   it("short-circuits to workspace-wide while the dual gate is off (T-V4 byte-identity)", () => {
     expect(jobVisibility(viewer({ scoped: false }), cols)).toBeUndefined();
     expect(jobVisibility(viewer({ scoped: false, role: "viewer" }), cols)).toBeUndefined();
-    expect(creatorVisibility(viewer({ scoped: false }), importJobs.createdByUserId)).toBeUndefined();
+    expect(
+      creatorVisibility(viewer({ scoped: false }), importJobs.createdByUserId),
+    ).toBeUndefined();
   });
 
   it("elevated roles see all rows (no FURTHER narrowing — RLS walls the workspace)", () => {
     expect(jobVisibility(viewer({ role: "owner" }), cols)).toBeUndefined();
     expect(jobVisibility(viewer({ role: "admin" }), cols)).toBeUndefined();
-    expect(creatorVisibility(viewer({ role: "admin" }), importJobs.createdByUserId)).toBeUndefined();
+    expect(
+      creatorVisibility(viewer({ role: "admin" }), importJobs.createdByUserId),
+    ).toBeUndefined();
   });
 
   it("members and viewers get the creator-or-shared narrowing", () => {

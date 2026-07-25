@@ -170,7 +170,12 @@ export const importJobRepository = {
     const insert = tx.insert(importJobs).values(values);
     const rows = values.idempotencyKey
       ? await insert
-          .onConflictDoNothing({ target: [importJobs.workspaceId, importJobs.idempotencyKey] })
+          .onConflictDoNothing({
+            target: [importJobs.workspaceId, importJobs.idempotencyKey],
+            // The unique index is PARTIAL (WHERE idempotency_key IS NOT NULL) — without the same
+            // predicate Postgres cannot infer the arbiter and errors 42P10.
+            targetWhere: sql`${importJobs.idempotencyKey} IS NOT NULL`,
+          })
           .returning({ id: importJobs.id })
       : await insert.returning({ id: importJobs.id });
     if (rows[0]) return { id: rows[0].id, created: true };

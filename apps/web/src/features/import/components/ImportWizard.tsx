@@ -30,8 +30,8 @@ import { rejectedRowsToCsv } from "../rejectedRowsCsv";
 import { IDENTITY_FIELDS, MAPPABLE_FIELDS, MERGE_OPTIONS, SOURCE_OPTIONS } from "../types";
 import { ImportDraftFlow } from "./ImportDraftFlow";
 import { MappingGrid } from "./MappingGrid";
-import { ConfirmDialog } from "./shared/ConfirmDialog";
 import { TemplateControls } from "./TemplateControls";
+import { ConfirmDialog } from "./shared/ConfirmDialog";
 
 /** Map the chosen merge mode onto the legacy conflict policy so gate-off imports still honor the intent
  *  (08 §5's compatibility mapping, mirrored client-side). `update_only` has no legacy equivalent — it falls
@@ -385,7 +385,9 @@ export function ImportWizard({
         <p className="app-muted">{intro}</p>
         <ImportDraftFlow
           draft={draft}
-          fileName={file?.name ?? draft.ref?.sourceFilename ?? draft.resume?.sourceFilename ?? "your file"}
+          fileName={
+            file?.name ?? draft.ref?.sourceFilename ?? draft.resume?.sourceFilename ?? "your file"
+          }
           fileInput={fileInputNode}
           mergeControls={
             <>
@@ -480,6 +482,7 @@ export function ImportWizard({
             ))}
           </TpSelect>
         </label>
+        {/* biome-ignore lint/a11y/noLabelWithoutControl: the file input arrives as a node ({fileInputNode}) */}
         <label className="tp-field">
           <span>CSV or XLSX file</span>
           {fileInputNode}
@@ -510,9 +513,7 @@ export function ImportWizard({
       )}
 
       {draft.busy === "create" && <p className="app-muted">Uploading file…</p>}
-      {draft.flowError && (
-        <ErrorState title="Couldn’t upload the file" detail={draft.flowError} />
-      )}
+      {draft.flowError && <ErrorState title="Couldn’t upload the file" detail={draft.flowError} />}
 
       {mappingSectionNode}
 

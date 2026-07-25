@@ -5,23 +5,16 @@
 // async chrome via the State Kit. Pure presentation over the sequences the page already loaded.
 "use client";
 
-import {
-  EmptyState,
-  Icon,
-  Progress,
-  StateSwitch,
-  StatTile,
-  TpSelect,
-} from "@leadwolf/ui";
+import { EmptyState, Icon, Progress, StatTile, StateSwitch, TpSelect } from "@leadwolf/ui";
 import { BarChart3 } from "lucide-react";
 import { useMemo, useState } from "react";
 import styles from "../sequences.module.css";
 import {
   EMPTY_METRICS,
-  formatPct,
-  rate,
   type SequenceMetrics,
   type SequenceSummary,
+  formatPct,
+  rate,
 } from "../types";
 
 const STAGES: Array<{ key: keyof SequenceMetrics; label: string }> = [
@@ -120,7 +113,8 @@ export function SendStatusDashboard({
                   />
                   <span className={styles.funnelStageValue}>
                     {metrics[stage.key].toLocaleString()}
-                    {stage.key !== "sent" && ` · ${formatPct(rate(metrics[stage.key], metrics.sent))}`}
+                    {stage.key !== "sent" &&
+                      ` · ${formatPct(rate(metrics[stage.key], metrics.sent))}`}
                   </span>
                 </li>
               ))}

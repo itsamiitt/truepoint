@@ -88,7 +88,13 @@ export async function runBulkEnrich(input: RunBulkEnrichInput): Promise<RunBulkE
       await enqueueChunk(jobId, scope, c.id);
       enqueued += 1;
     }
-    return { jobId, status: job.status, totalChunks: existing.length, enqueuedChunks: enqueued, resumed: true };
+    return {
+      jobId,
+      status: job.status,
+      totalChunks: existing.length,
+      enqueuedChunks: enqueued,
+      resumed: true,
+    };
   }
 
   // Plan bands over the confirmed contact count (totalRows = options.contactIds.length, stored at submit).
@@ -114,5 +120,11 @@ export async function runBulkEnrich(input: RunBulkEnrichInput): Promise<RunBulkE
     enqueued += 1;
   }
 
-  return { jobId, status: "running", totalChunks: bands.length, enqueuedChunks: enqueued, resumed: false };
+  return {
+    jobId,
+    status: "running",
+    totalChunks: bands.length,
+    enqueuedChunks: enqueued,
+    resumed: false,
+  };
 }

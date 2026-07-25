@@ -32,7 +32,7 @@ import { channelDualWriteEnabledForScope } from "../channels/channelDualWrite.ts
 import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
 import { decryptPii } from "../import/encryptPii.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "./emailVerifier.ts";
-import { formatOnlyPhoneVerifier, type PhoneVerifierPort } from "./phoneVerifier.ts";
+import { type PhoneVerifierPort, formatOnlyPhoneVerifier } from "./phoneVerifier.ts";
 import { defaultEmailVerifier } from "./reacherVerifier.ts";
 import { defaultPhoneVerifier } from "./twilioPhoneVerifier.ts";
 

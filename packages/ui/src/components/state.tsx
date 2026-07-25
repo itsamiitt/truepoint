@@ -43,6 +43,7 @@ export function LoadingState({
 }) {
   return (
     <div
+      // biome-ignore lint/a11y/useSemanticElements: skeleton container holds block children; <output> takes phrasing only
       role="status"
       aria-label={label}
       aria-busy="true"

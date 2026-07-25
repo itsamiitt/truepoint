@@ -14,11 +14,7 @@
 /** Normalize a freetext country cell for lookup: lowercase, collapse whitespace, strip surrounding
  *  punctuation/periods, trim. NOT a data normalizer of a stored value — a lookup key only. */
 function normKey(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/[.]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return raw.toLowerCase().replace(/[.]/g, "").replace(/\s+/g, " ").trim();
 }
 
 // Curated name/alias → ISO alpha-2. Keys are normKey() forms. Kept intentionally bounded (06 §3 honesty).

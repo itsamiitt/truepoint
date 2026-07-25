@@ -38,7 +38,6 @@ export function TpButton({
 }: TpButtonProps) {
   return (
     <button
-      // biome-ignore lint/a11y/useButtonType: type is resolved from props (defaults to "button")
       type={type}
       className={cn(
         "tp-ui-btn",
@@ -72,7 +71,6 @@ export function TpIconButton({
 }: TpIconButtonProps) {
   return (
     <button
-      // biome-ignore lint/a11y/useButtonType: type is resolved from props (defaults to "button")
       type={type}
       aria-label={label}
       title={label}
@@ -139,7 +137,10 @@ export function TpCheckbox({ label, className, ...rest }: TpCheckboxProps) {
 
 export type TpSwitchProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type">;
 export function TpSwitch({ className, ...rest }: TpSwitchProps) {
-  return <input type="checkbox" role="switch" className={cn("tp-ui-switch", className)} {...rest} />;
+  return (
+    // biome-ignore lint/a11y/useAriaPropsForRole: the native checkbox supplies checkedness; a hardcoded aria-checked would desync uncontrolled usage
+    <input type="checkbox" role="switch" className={cn("tp-ui-switch", className)} {...rest} />
+  );
 }
 
 export interface TpChipProps {
@@ -156,6 +157,7 @@ export function TpChip({ children, active, onClick, onRemove, className }: TpChi
     onRemove != null ? (
       <span
         className="tp-ui-chip-x"
+        // biome-ignore lint/a11y/useSemanticElements: renders inside the chip's <button>; a nested <button> is invalid HTML
         role="button"
         aria-label="Remove"
         tabIndex={0}
@@ -180,7 +182,12 @@ export function TpChip({ children, active, onClick, onRemove, className }: TpChi
       <button
         type="button"
         onClick={onClick}
-        className={cn("tp-ui-chip", "tp-ui-chip--button", active && "tp-ui-chip--active", className)}
+        className={cn(
+          "tp-ui-chip",
+          "tp-ui-chip--button",
+          active && "tp-ui-chip--active",
+          className,
+        )}
       >
         {children}
         {remove}

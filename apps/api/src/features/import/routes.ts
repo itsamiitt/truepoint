@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { env } from "@leadwolf/config";
 import {
   IMPORT_UPLOAD_REQUEST_MAX_BYTES,
+  type ImportRoutingVerdict,
   apiImportsEnabledForScope,
   applyMappingTemplate,
   assertListInWorkspace,
@@ -21,7 +22,6 @@ import {
   decodeAdmittedCsv,
   deltaImportsEnabledForScope,
   deriveImportProgress,
-  type ImportRoutingVerdict,
   isDeltaImportsEnabled,
   isXlsxFile,
   parseImportFile,
@@ -47,7 +47,6 @@ import {
   type ImportDraftPreviewResponse,
   type ImportDraftRef,
   type ImportFastInput,
-  ImportQuotaExceededError,
   type ImportJobDetailV2,
   type ImportJobListItem,
   type ImportJobListResponse,
@@ -58,6 +57,7 @@ import {
   type ImportMergeMode,
   type ImportPreview,
   type ImportProgress,
+  ImportQuotaExceededError,
   type ImportStrategy,
   type ImportSummary,
   ImportTooLargeError,
@@ -82,9 +82,9 @@ import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueBulkImportDrive, enqueueFastImport } from "./bulkQueue.ts";
 import { bulkFileStore } from "./bulkStore.ts";
-import { readJsonBodyCapped } from "./jsonBodyCap.ts";
 import { requireImportCreateGrant } from "./createGrant.ts";
 import { isCopyModeEngaged, isImportV2Enabled } from "./importV2Gate.ts";
+import { readJsonBodyCapped } from "./jsonBodyCap.ts";
 import { toLegacyStatusV2 } from "./legacyStatus.ts";
 import { scanImportUpload } from "./malwareScan.ts";
 import { enqueueImport, getImportJob } from "./queue.ts";
@@ -737,7 +737,11 @@ importRoutes.post("/", requireImportCreateGrant(), async (c) => {
     // job parks in `deferred` (the visible-backpressure state; the legacy response shape maps it to
     // `queued`, 08 §2.4) and its queue job carries the recheck delay; the leader-locked sweep promotes
     // oldest-first as slots free. Cap 0 = disabled = always `queued` (legacy).
-    const { id: jobId, created, admission } = await withTenantTx(scope, async (tx) => {
+    const {
+      id: jobId,
+      created,
+      admission,
+    } = await withTenantTx(scope, async (tx) => {
       // (named to avoid shadowing the outer ROUTING verdict — this is the S-Q2 ADMISSION verdict)
       const admissionVerdict = await decideFastAdmission(tx, workspaceId);
       const res = await importJobRepository.createJob(tx, {
@@ -827,14 +831,15 @@ importRoutes.post("/rows", requireImportCreateGrant(), async (c) => {
 
   // Gate-on-404 (the S-I8 no-existence-oracle posture): while the API-PUSH dual gate is off the verb is
   // invisible — indistinguishable from an unmounted route — so a dark tenant learns nothing.
-  if (!(await apiImportsEnabledForScope(scope)))
-    throw new NotFoundError("Not found.");
+  if (!(await apiImportsEnabledForScope(scope))) throw new NotFoundError("Not found.");
 
   // Idempotency-Key is REQUIRED for a programmatic caller (a network retry must not double-import) — the
   // multipart one-shot's key is optional (a human clicks once); the push contract mandates it.
   const idempotencyKey = c.req.header("idempotency-key");
   if (!idempotencyKey)
-    throw new ImportValidationError("An 'Idempotency-Key' header is required for API-push imports.");
+    throw new ImportValidationError(
+      "An 'Idempotency-Key' header is required for API-push imports.",
+    );
 
   // Read the JSON body UNDER A HARD BYTE CAP (readJsonBodyCapped — the JSON equivalent of the multipart
   // admission's whole-body gate; over the cap ⇒ 413 before buffering it all), then STRICT safeParse it — the
@@ -912,7 +917,11 @@ importRoutes.post("/rows", requireImportCreateGrant(), async (c) => {
   // Same durable create + fast enqueue as the multipart one-shot (S-I3): the idempotency key collapses a
   // retried push onto the existing job via the (workspace_id, idempotency_key) partial unique; the S-Q2
   // admission verdict is the create status; enqueue post-commit (a deferred job still gets its recheck delay).
-  const { id: jobId, created, admission } = await withTenantTx(scope, async (tx) => {
+  const {
+    id: jobId,
+    created,
+    admission,
+  } = await withTenantTx(scope, async (tx) => {
     // Commit quota (08 §2.3 / 12 §5): one push = +1, the same soft posture as the one-shot/commit verbs.
     const cap = IMPORT_MAX_COMMITS_PER_HOUR;
     if (cap > 0) {
@@ -1092,33 +1101,36 @@ importRoutes.post("/:jobId/cancel", async (c) => {
     | { kind: "noop"; row: ImportJobRow }
     | { kind: "illegal"; status: string }
     | { kind: "cancelled"; row: ImportJobRow; fromStatus: string; sourceKey: string };
-  const result = await withTenantTx({ tenantId, workspaceId }, async (tx): Promise<CancelResult> => {
-    const row = await importJobRepository.getJobForUpdate(tx, viewer, jobIdParam);
-    if (!row || row.workspaceId !== workspaceId) return { kind: "not_found" };
-    if (row.status === "cancelled") return { kind: "noop", row };
-    if (!CANCELLABLE_STATES.has(row.status)) return { kind: "illegal", status: row.status };
-    await importJobRepository.updateJobStatus(tx, jobIdParam, {
-      status: "cancelled",
-      completedAt: new Date(),
-      failedReason: "cancelled",
-    });
-    // In-tx audit (08 §7) — a cancel that can't record its actor can't commit. metadata is non-PII.
-    await writeAudit(tx, {
-      tenantId,
-      workspaceId,
-      actorUserId: viewer.userId,
-      action: "import.cancelled",
-      entityType: "import_job",
-      entityId: jobIdParam,
-      metadata: { fromStatus: row.status },
-    });
-    return {
-      kind: "cancelled",
-      row: { ...row, status: "cancelled", failedReason: "cancelled" },
-      fromStatus: row.status,
-      sourceKey: row.sourceFile,
-    };
-  });
+  const result = await withTenantTx(
+    { tenantId, workspaceId },
+    async (tx): Promise<CancelResult> => {
+      const row = await importJobRepository.getJobForUpdate(tx, viewer, jobIdParam);
+      if (!row || row.workspaceId !== workspaceId) return { kind: "not_found" };
+      if (row.status === "cancelled") return { kind: "noop", row };
+      if (!CANCELLABLE_STATES.has(row.status)) return { kind: "illegal", status: row.status };
+      await importJobRepository.updateJobStatus(tx, jobIdParam, {
+        status: "cancelled",
+        completedAt: new Date(),
+        failedReason: "cancelled",
+      });
+      // In-tx audit (08 §7) — a cancel that can't record its actor can't commit. metadata is non-PII.
+      await writeAudit(tx, {
+        tenantId,
+        workspaceId,
+        actorUserId: viewer.userId,
+        action: "import.cancelled",
+        entityType: "import_job",
+        entityId: jobIdParam,
+        metadata: { fromStatus: row.status },
+      });
+      return {
+        kind: "cancelled",
+        row: { ...row, status: "cancelled", failedReason: "cancelled" },
+        fromStatus: row.status,
+        sourceKey: row.sourceFile,
+      };
+    },
+  );
 
   if (result.kind === "not_found") throw new NotFoundError("Import job not found.");
   if (result.kind === "illegal")
@@ -1394,9 +1406,7 @@ importRoutes.post("/:jobId/preview", async (c) => {
   const scope = { tenantId, workspaceId };
   const viewer = await buildJobViewer({ tenantId, workspaceId, userId: c.get("claims").sub });
 
-  const job = await withTenantTx(scope, (tx) =>
-    importJobRepository.getJob(tx, viewer, jobIdParam),
-  );
+  const job = await withTenantTx(scope, (tx) => importJobRepository.getJob(tx, viewer, jobIdParam));
   if (!job || job.workspaceId !== workspaceId) throw new NotFoundError("Import job not found.");
   if (job.status !== "draft")
     throw new IllegalStateError(
@@ -1460,9 +1470,7 @@ importRoutes.post("/:jobId/commit", async (c) => {
   // Phase 1 (no lock): state/mapping checks + the bounded re-parse OFF the row lock — the stored object is
   // immutable after upload (no re-upload verb exists), so parsing outside the lock is race-free; the locked
   // phase below re-checks the state before transitioning.
-  const job = await withTenantTx(scope, (tx) =>
-    importJobRepository.getJob(tx, viewer, jobIdParam),
-  );
+  const job = await withTenantTx(scope, (tx) => importJobRepository.getJob(tx, viewer, jobIdParam));
   if (!job || job.workspaceId !== workspaceId) throw new NotFoundError("Import job not found.");
   const priorKey = (job.options as Record<string, unknown> | null)?.commitIdempotencyKey;
   if (job.status !== "draft") {
@@ -1496,7 +1504,12 @@ importRoutes.post("/:jobId/commit", async (c) => {
     assertDraftReadable(filename, job.fileSize);
     const bytes = await readDraftSourceObject(job.sourceFile);
     const parsed = parseDraftSource(bytes, filename);
-    verdict = routeImport(filename, job.fileSize ?? bytes.byteLength, parsed.rows.length, copyEngaged);
+    verdict = routeImport(
+      filename,
+      job.fileSize ?? bytes.byteLength,
+      parsed.rows.length,
+      copyEngaged,
+    );
     measuredRows = parsed.rows;
   }
 

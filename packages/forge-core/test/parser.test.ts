@@ -159,7 +159,9 @@ describe("runParse (S1 stage)", () => {
         payloadInline: JSON.stringify({ ...VOYAGER_FIXTURE, emailAddress: "Jane.Doe@Acme.com" }),
       }),
     );
-    expect((d.written[0] as { emailBlindIndex?: string }).emailBlindIndex).toMatch(/^[0-9a-f]{64}$/);
+    expect((d.written[0] as { emailBlindIndex?: string }).emailBlindIndex).toMatch(
+      /^[0-9a-f]{64}$/,
+    );
   });
 
   test("routes an unmatched endpoint to the quarantine lane (never into silver)", async () => {

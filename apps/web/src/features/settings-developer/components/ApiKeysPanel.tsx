@@ -20,8 +20,8 @@ import {
 import { Copy, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { useApiKeys } from "../hooks/useApiKeys";
-import { type ApiKey, type ApiKeyScope, SCOPE_LABEL, SCOPE_OPTIONS } from "../types";
 import styles from "../settings-developer.module.css";
+import { type ApiKey, type ApiKeyScope, SCOPE_LABEL, SCOPE_OPTIONS } from "../types";
 
 function formatDate(iso?: string | null): string {
   if (!iso) return "—";
@@ -48,7 +48,9 @@ export function ApiKeysPanel() {
     });
 
   const toggleScope = (scope: ApiKeyScope) =>
-    setScopes((prev) => (prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope]));
+    setScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
+    );
 
   const resetCreate = () => {
     setCreating(false);
@@ -192,7 +194,10 @@ export function ApiKeysPanel() {
           <span className={styles.connectNoteIcon}>
             <KeyRound size={15} />
           </span>
-          <span>The API-keys backend isn&apos;t connected yet (M10). Keys will appear here once it ships.</span>
+          <span>
+            The API-keys backend isn&apos;t connected yet (M10). Keys will appear here once it
+            ships.
+          </span>
         </div>
       ) : null}
 
@@ -272,9 +277,7 @@ export function ApiKeysPanel() {
         onClose={() => setSecret(null)}
         title="Copy your API key"
         description="This is the only time the full key is shown. Store it somewhere safe."
-        footer={
-          <TpButton onClick={() => setSecret(null)}>Done</TpButton>
-        }
+        footer={<TpButton onClick={() => setSecret(null)}>Done</TpButton>}
       >
         <div className={styles.secretBox}>
           <p className={styles.secretWarn}>You won&apos;t be able to see this secret again.</p>

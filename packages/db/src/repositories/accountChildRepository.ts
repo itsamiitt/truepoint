@@ -30,7 +30,7 @@ import type {
 } from "@leadwolf/types";
 import { ACCOUNT_HIERARCHY_MAX_DEPTH } from "@leadwolf/types";
 import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import { db, type Tx } from "../client.ts";
+import { type Tx, db } from "../client.ts";
 import { accountDomains, accountLocations } from "../schema/accountChildren.ts";
 import { accounts } from "../schema/contacts.ts";
 import { planAccountDomainWrite } from "./accountChildPlan.ts";
@@ -77,7 +77,11 @@ export interface AccountDomainValue {
 }
 
 /** The ops S-A2's account writers compose. Promote/attach/detach user verbs land with doc 06/08's account API. */
-export type AccountDomainWriteOp = { kind: "domain_upsert"; accountId: string; value: AccountDomainValue };
+export type AccountDomainWriteOp = {
+  kind: "domain_upsert";
+  accountId: string;
+  value: AccountDomainValue;
+};
 
 export type AccountDomainWriteOutcome =
   /** A new row was inserted. `becamePrimary` ⇒ the flat accounts.domain cache was re-projected from it. */
@@ -125,8 +129,10 @@ const hqMissing = sql`((${accounts.hqCountry} IS NOT NULL OR ${accounts.hqCity} 
 // Raw analogs (aliased `a`) for the owner-connection census + counts — the drizzle refs above render
 // "accounts"."id", which the aliased owner query does not expose (the listWorkspacesMissingChannelProjection
 // pattern). Kept parallel to the fragments above so the gauge never lies.
-const DOMAIN_MISSING_RAW = `(a.domain IS NOT NULL AND a.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_domains ad WHERE ad.account_id = a.id AND ad.deleted_at IS NULL))`;
-const HQ_MISSING_RAW = `((a.hq_country IS NOT NULL OR a.hq_city IS NOT NULL) AND a.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_locations al WHERE al.account_id = a.id AND al.deleted_at IS NULL))`;
+const DOMAIN_MISSING_RAW =
+  "(a.domain IS NOT NULL AND a.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_domains ad WHERE ad.account_id = a.id AND ad.deleted_at IS NULL))";
+const HQ_MISSING_RAW =
+  "((a.hq_country IS NOT NULL OR a.hq_city IS NOT NULL) AND a.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM account_locations al WHERE al.account_id = a.id AND al.deleted_at IS NULL))";
 
 export interface BackfillAccountChildResult {
   inserted: boolean;
@@ -140,7 +146,10 @@ export interface BackfillAccountChildResult {
  *  same tx (the import upsert) — so this update is value-identical and makes the cache structural rather than
  *  coincidental (the general write path may attach a NEW primary that differs, e.g. a future promote verb). */
 async function projectDomainToFlat(tx: Tx, accountId: string, domain: string): Promise<void> {
-  await tx.update(accounts).set({ domain, updatedAt: new Date() }).where(eq(accounts.id, accountId));
+  await tx
+    .update(accounts)
+    .set({ domain, updatedAt: new Date() })
+    .where(eq(accounts.id, accountId));
 }
 
 /** Recompute `root_account_id` for every DESCENDANT of `accountId` (the moved node itself is set by the caller).
@@ -174,7 +183,11 @@ async function domainUpsert(
   // Live domain rows for this account (small-N: domains ≤ ~10 per account, 06 §Scalability; index-backed under
   // the RLS workspace predicate via idx_account_domains_account).
   const live: LiveDomainRow[] = await tx
-    .select({ id: accountDomains.id, domain: accountDomains.domain, isPrimary: accountDomains.isPrimary })
+    .select({
+      id: accountDomains.id,
+      domain: accountDomains.domain,
+      isPrimary: accountDomains.isPrimary,
+    })
     .from(accountDomains)
     .where(and(eq(accountDomains.accountId, accountId), isNull(accountDomains.deletedAt)));
 
@@ -352,7 +365,11 @@ export const accountChildRepository = {
       })
       .from(accountDomains)
       .where(and(inArray(accountDomains.accountId, accountIds), isNull(accountDomains.deletedAt)))
-      .orderBy(desc(accountDomains.isPrimary), asc(accountDomains.createdAt), asc(accountDomains.id));
+      .orderBy(
+        desc(accountDomains.isPrimary),
+        asc(accountDomains.createdAt),
+        asc(accountDomains.id),
+      );
     for (const r of domainRows) {
       entry(r.accountId).domains.push({
         id: r.id,
@@ -379,7 +396,9 @@ export const accountChildRepository = {
         pinned: accountLocations.pinned,
       })
       .from(accountLocations)
-      .where(and(inArray(accountLocations.accountId, accountIds), isNull(accountLocations.deletedAt)))
+      .where(
+        and(inArray(accountLocations.accountId, accountIds), isNull(accountLocations.deletedAt)),
+      )
       .orderBy(
         desc(accountLocations.isPrimary),
         asc(accountLocations.createdAt),
@@ -436,8 +455,7 @@ export const accountChildRepository = {
     }
 
     // 1 — lock endpoints FOR UPDATE in deterministic id order (live rows only; RLS scopes to the workspace).
-    const lockIds =
-      parentAccountId === null ? [accountId] : [accountId, parentAccountId].sort();
+    const lockIds = parentAccountId === null ? [accountId] : [accountId, parentAccountId].sort();
     const idList = sql.join(
       lockIds.map((i) => sql`${i}::uuid`),
       sql`, `,
@@ -567,7 +585,11 @@ export const accountChildRepository = {
       .where(and(sql`${hqMissing}`, cursor === null ? undefined : gt(accounts.id, cursor)))
       .orderBy(asc(accounts.id))
       .limit(limit);
-    return rows.map((r) => ({ id: r.id, hqCountry: r.hqCountry ?? null, hqCity: r.hqCity ?? null }));
+    return rows.map((r) => ({
+      id: r.id,
+      hqCountry: r.hqCountry ?? null,
+      hqCity: r.hqCity ?? null,
+    }));
   },
 
   /** S-A3's dedicated backfill insert: the primary `hq` location synthesized from the flat cache. NEVER

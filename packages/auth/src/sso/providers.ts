@@ -69,5 +69,5 @@ export function isSsoProviderWired(protocol: "oidc" | "saml"): boolean {
 export function ssoReadyForEnforcement(
   config: { enabled: boolean; protocol: "oidc" | "saml" } | null,
 ): boolean {
-  return config != null && config.enabled && isSsoProviderWired(config.protocol);
+  return config?.enabled === true && isSsoProviderWired(config.protocol);
 }

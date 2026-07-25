@@ -13,7 +13,7 @@ import {
   importStagingRepository,
   withTenantTx,
 } from "@leadwolf/db";
-import type { BulkImportScope, BulkImportJobStatus } from "@leadwolf/types";
+import type { BulkImportJobStatus, BulkImportScope } from "@leadwolf/types";
 import { writeAudit } from "../compliance/writeAudit.ts";
 import { assertListInWorkspace } from "../prospect/lists.ts";
 import type { MalwareScannerPort } from "../security/malwareScanner.ts";
@@ -122,7 +122,9 @@ export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkI
 
   // RESUME — staging already done + chunks exist: re-enqueue only the unfinished chunks (windowed — the
   // continuation refills as they complete); never re-stage.
-  const existingChunks = await withTenantTx(scope, (tx) => importJobRepository.listChunks(tx, jobId));
+  const existingChunks = await withTenantTx(scope, (tx) =>
+    importJobRepository.listChunks(tx, jobId),
+  );
   if (job.stagingTable && existingChunks.length > 0) {
     const pending = existingChunks.filter((c) => c.status !== "completed");
     const limit = chunkWindowLimit(chunkWindow, pending.length);
@@ -182,7 +184,14 @@ export async function runBulkImport(input: RunBulkImportInput): Promise<RunBulkI
           metadata: signature ? { signature } : {},
         });
       });
-      return { jobId, status: "failed", totalChunks: 0, enqueuedChunks: 0, resumed: false, infected: true };
+      return {
+        jobId,
+        status: "failed",
+        totalChunks: 0,
+        enqueuedChunks: 0,
+        resumed: false,
+        infected: true,
+      };
     };
     if (job.avScanStatus === "infected") return failInfected();
     if (malwareScanner?.real) {

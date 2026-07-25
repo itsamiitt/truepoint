@@ -51,7 +51,10 @@ export async function editContactFields(
     const metadata: FieldChangeAuditMetadata = {
       src: "user_edit",
       fields: Object.fromEntries(
-        edited.map((f) => [f, { b: before[f] ?? null, a: edits[f as keyof ContactFieldEdits] ?? null }]),
+        edited.map((f) => [
+          f,
+          { b: before[f] ?? null, a: edits[f as keyof ContactFieldEdits] ?? null },
+        ]),
       ),
     };
     await auditRepository.insert(tx, {

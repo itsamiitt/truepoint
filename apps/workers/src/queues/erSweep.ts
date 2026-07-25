@@ -52,7 +52,10 @@ async function sweepSeed(seed: ErCandidatePerson, scoredPairs: Set<string>): Pro
   if (!seed.currentCompanyId) return 0; // guard + narrows the type for the blocking read
   const companyId = seed.currentCompanyId;
   return withErTx(async (tx) => {
-    const candidates = await erRepository.findBlockingCandidates(tx, { id: seed.id, currentCompanyId: companyId });
+    const candidates = await erRepository.findBlockingCandidates(tx, {
+      id: seed.id,
+      currentCompanyId: companyId,
+    });
     const seedCmp = toComparable(seed);
     let localProposed = 0;
     for (const cand of candidates) {
@@ -95,7 +98,9 @@ export function makeProcessErSweep(redis: IORedis) {
       let reachedEnd = false;
 
       while (seedsSeen < MAX_SEEDS_PER_SWEEP) {
-        const seeds = await withErTx((tx) => erRepository.listPersonsForEr(tx, afterId, SEED_BATCH));
+        const seeds = await withErTx((tx) =>
+          erRepository.listPersonsForEr(tx, afterId, SEED_BATCH),
+        );
         if (seeds.length === 0) {
           reachedEnd = true;
           break;

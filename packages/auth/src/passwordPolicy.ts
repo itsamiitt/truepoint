@@ -26,7 +26,9 @@ export async function checkPasswordAcceptable(password: string): Promise<Passwor
 }
 
 export function passwordRejectionMessage(rejection: PasswordRejection): string {
-  if (rejection === "too_short") return `Choose a password with at least ${PASSWORD_MIN_LENGTH} characters.`;
-  if (rejection === "too_long") return `Choose a password with at most ${PASSWORD_MAX_LENGTH} characters.`;
+  if (rejection === "too_short")
+    return `Choose a password with at least ${PASSWORD_MIN_LENGTH} characters.`;
+  if (rejection === "too_long")
+    return `Choose a password with at most ${PASSWORD_MAX_LENGTH} characters.`;
   return "That password has appeared in a known data breach. Choose a different one."; // "breached"
 }

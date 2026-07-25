@@ -13,13 +13,17 @@ import type { EmailVerifierPort } from "./emailVerifier.ts";
 
 /** Common shared-mailbox local-parts → "risky" (a role inbox is not a 1:1 prospect; matches Reacher's role flag). */
 export const ROLE_LOCAL_PARTS: ReadonlySet<string> = new Set(
-  "info sales support admin administrator contact hello help team billing accounts accounting hr jobs careers recruiting marketing office mail enquiries inquiries enquiry inquiry service services noreply no-reply donotreply postmaster abuse webmaster sysadmin feedback press media legal compliance privacy security".split(" "),
+  "info sales support admin administrator contact hello help team billing accounts accounting hr jobs careers recruiting marketing office mail enquiries inquiries enquiry inquiry service services noreply no-reply donotreply postmaster abuse webmaster sysadmin feedback press media legal compliance privacy security".split(
+    " ",
+  ),
 );
 
 /** Common disposable/throwaway email domains → "invalid". A curated starter set; the wrapped verifier
  *  (Reacher's is_disposable) catches the long tail. */
 export const DISPOSABLE_DOMAINS: ReadonlySet<string> = new Set(
-  "mailinator.com guerrillamail.com guerrillamail.net 10minutemail.com tempmail.com temp-mail.org throwawaymail.com yopmail.com trashmail.com getnada.com dispostable.com maildrop.cc mintemail.com fakeinbox.com sharklasers.com spam4.me mailnesia.com mohmal.com emailondeck.com".split(" "),
+  "mailinator.com guerrillamail.com guerrillamail.net 10minutemail.com tempmail.com temp-mail.org throwawaymail.com yopmail.com trashmail.com getnada.com dispostable.com maildrop.cc mintemail.com fakeinbox.com sharklasers.com spam4.me mailnesia.com mohmal.com emailondeck.com".split(
+    " ",
+  ),
 );
 
 /** Split an email into a lowercased { local, domain }; null for a malformed address (no usable `@`). */
@@ -28,7 +32,10 @@ function splitEmail(email: string): { local: string; domain: string } | null {
   if (at <= 0 || at === email.length - 1) return null;
   return {
     local: email.slice(0, at).toLowerCase().trim(),
-    domain: email.slice(at + 1).toLowerCase().trim(),
+    domain: email
+      .slice(at + 1)
+      .toLowerCase()
+      .trim(),
   };
 }
 

@@ -3,9 +3,9 @@
 // documented locations on the API origin and open in a new tab. No async surface here.
 "use client";
 
-import { Card, TpButton } from "@leadwolf/ui";
-import { BookOpen, FlaskConical, Code2 } from "lucide-react";
 import { API_BASE } from "@/lib/publicConfig";
+import { Card, TpButton } from "@leadwolf/ui";
+import { BookOpen, Code2, FlaskConical } from "lucide-react";
 import styles from "../settings-developer.module.css";
 
 const DOCS = [
@@ -39,7 +39,8 @@ export function ApiDocsPanel() {
         <div className={styles.panelHeadText}>
           <h2 className={styles.panelTitle}>API docs</h2>
           <p className={styles.panelDesc}>
-            Build against the public API with the reference, machine-readable spec, and a credit-free sandbox.
+            Build against the public API with the reference, machine-readable spec, and a
+            credit-free sandbox.
           </p>
         </div>
       </div>

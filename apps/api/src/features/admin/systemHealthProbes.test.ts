@@ -11,7 +11,15 @@ import { type QueueReport, deriveServiceHealth } from "./systemHealthProbes.ts";
 function q(reachable: boolean, workers: number | null): QueueReport {
   return reachable
     ? { name: "x", waiting: 0, active: 0, failed: 0, delayed: 0, workers, reachable: true }
-    : { name: "x", waiting: null, active: null, failed: null, delayed: null, workers: null, reachable: false };
+    : {
+        name: "x",
+        waiting: null,
+        active: null,
+        failed: null,
+        delayed: null,
+        workers: null,
+        reachable: false,
+      };
 }
 
 describe("deriveServiceHealth", () => {

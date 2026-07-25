@@ -50,7 +50,7 @@ describe("verify producer DB primitives (P-01.10)", () => {
       INSERT INTO forge.parsed_records
         (raw_capture_id, parser_version_id, entity_kind, fields, parse_status, email_blind_index)
       VALUES (${rc}, ${VOYAGER_VERSION_ID}, 'person',
-              ${JSON.stringify([{ path: "full_name", value: "Ada" }])}::jsonb, 'ok', 'eb-hex')`;
+              ${JSON.stringify([{ path: "full_name", value: "Ada" }])}::jsonb, 'parsed', 'eb-hex')`;
     await admin`
       INSERT INTO forge.extraction_candidates (raw_capture_id, path, value, confidence, band, grounded)
       VALUES (${rc}, 'current_title', ${JSON.stringify("VP Eng")}::jsonb, 0.91, 'auto', true),

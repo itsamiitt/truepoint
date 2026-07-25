@@ -58,10 +58,10 @@ import {
 } from "@leadwolf/db";
 import {
   type BulkImportScope,
+  CONTACT_PROVENANCE_FIELDS,
   type ConflictPolicy,
   type FieldProvenanceMap,
   type SourceName,
-  CONTACT_PROVENANCE_FIELDS,
 } from "@leadwolf/types";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
 import { markConflicts } from "../prospect/conflictDetect.ts";
@@ -211,14 +211,21 @@ export async function bulkProcessChunk(
 
     // 3) Master resolution for LANDING rows only — ONE withErTx. Non-fatal at chunk granularity: a resolver-tx
     //    failure lands every row with null bridges (backfilled later), never failing the chunk (ADR-0021).
-    const resolverInputs: ResolveForImportInput[] = landingIdx.map((i) => resolverInputOf(staged[i]!));
+    const resolverInputs: ResolveForImportInput[] = landingIdx.map((i) =>
+      resolverInputOf(staged[i]!),
+    );
     let resolved: ResolveForImportResult[];
     try {
       resolved = resolverInputs.length
-        ? await withErTx((erTx) => masterGraphRepository.resolveForImportBatch(erTx, resolverInputs))
+        ? await withErTx((erTx) =>
+            masterGraphRepository.resolveForImportBatch(erTx, resolverInputs),
+          )
         : [];
     } catch (err) {
-      console.error("[bulk-import] master resolution failed for chunk; landing with null bridges", err);
+      console.error(
+        "[bulk-import] master resolution failed for chunk; landing with null bridges",
+        err,
+      );
       resolved = resolverInputs.map(() => NO_MASTER);
     }
     const resolvedByIdx = new Map<number, ResolveForImportResult>();
@@ -242,9 +249,7 @@ export async function bulkProcessChunk(
       : new Map<string, string>();
 
     // 5) Field provenance for the matched (overwrite) rows — the pin-aware overwrite read.
-    const matchedIds = landingIdx
-      .filter((i) => kinds[i] === "matched")
-      .map((i) => matches[i]!.id);
+    const matchedIds = landingIdx.filter((i) => kinds[i] === "matched").map((i) => matches[i]!.id);
     const provMap = matchedIds.length
       ? await contactRepository.getFieldProvenanceBatch(tx, matchedIds)
       : new Map<string, FieldProvenanceMap>();
@@ -266,7 +271,7 @@ export async function bulkProcessChunk(
     const updates: Array<{ id: string; values: Partial<ContactWriteValues> }> = [];
     for (const i of landingIdx) {
       const r = staged[i]!;
-      const accountId = r.accountDomain ? accountMap.get(r.accountDomain) ?? null : null;
+      const accountId = r.accountDomain ? (accountMap.get(r.accountDomain) ?? null) : null;
       const baseValues = stagedToValues(r);
       const scalarFields = Object.keys(baseValues).filter((f) =>
         (CONTACT_PROVENANCE_FIELDS as readonly string[]).includes(f),
@@ -305,7 +310,9 @@ export async function bulkProcessChunk(
         updates.push({ id: matchId, values });
       }
     }
-    const inserted = insertValues.length ? await contactRepository.insertBatch(tx, insertValues) : [];
+    const inserted = insertValues.length
+      ? await contactRepository.insertBatch(tx, insertValues)
+      : [];
     if (updates.length) await contactRepository.updateBatch(tx, updates);
 
     // 7) Resolve the contact id each staged row landed on / matched.
@@ -337,7 +344,9 @@ export async function bulkProcessChunk(
     //    the visible (live, in-workspace) subset first (runImport.addLandedToList's guard), linked added_via=import.
     if (targetListId) {
       const ids = Array.from(
-        new Set(staged.map((_, i) => contactIdByIdx.get(i)).filter((id): id is string => Boolean(id))),
+        new Set(
+          staged.map((_, i) => contactIdByIdx.get(i)).filter((id): id is string => Boolean(id)),
+        ),
       );
       const visible = await listRepository.visibleContactIds(tx, ids);
       if (visible.length) {

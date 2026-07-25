@@ -185,7 +185,9 @@ export function MergeReviewDrawer({
                   </div>
                 </div>
                 <div className={styles.mergeSwapRow}>
-                  <span className={styles.footnote}>The kept contact keeps its ID and history.</span>
+                  <span className={styles.footnote}>
+                    The kept contact keeps its ID and history.
+                  </span>
                   <TpButton variant="ghost" size="sm" onClick={() => setSwapped((s) => !s)}>
                     Swap
                   </TpButton>
@@ -245,7 +247,8 @@ export function MergeReviewDrawer({
 
                 {/* Channels are not a picker (04 §3.3) — stated as fact. */}
                 <p className={styles.mergeNote}>
-                  All emails and phones from both records are kept; the duplicate’s become secondary.
+                  All emails and phones from both records are kept; the duplicate’s become
+                  secondary.
                 </p>
 
                 {/* Consequences: re-point counts + the irreversibility posture (04 §3, §3.6). */}
@@ -276,7 +279,11 @@ export function MergeReviewDrawer({
         maxWidth={460}
         footer={
           <div className={styles.mergeFoot}>
-            <TpButton variant="ghost" onClick={() => setConfirmOpen(false)} disabled={merge.isPending}>
+            <TpButton
+              variant="ghost"
+              onClick={() => setConfirmOpen(false)}
+              disabled={merge.isPending}
+            >
               Keep both
             </TpButton>
             <TpButton variant="danger" onClick={onConfirm} loading={merge.isPending}>

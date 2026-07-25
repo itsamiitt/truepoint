@@ -29,6 +29,7 @@ const CANONICAL_FIELDS = canonicalField.options;
 
 function Labeled({ label, children }: { label: string; children: ReactNode }) {
   return (
+    // biome-ignore lint/a11y/noLabelWithoutControl: the wrapped control arrives as children
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span style={{ fontSize: 12, color: "var(--tp-ink-3)" }}>{label}</span>
       {children}
@@ -51,7 +52,9 @@ export function RuleFormDialog({
   const [field, setField] = useState(rule?.field ?? "");
   const [checkType, setCheckType] = useState<ValidationCheckType>(rule?.checkType ?? "required");
   const [pattern, setPattern] = useState(rule?.config.pattern ?? "");
-  const [maxLength, setMaxLength] = useState(rule?.config.maxLength != null ? String(rule.config.maxLength) : "");
+  const [maxLength, setMaxLength] = useState(
+    rule?.config.maxLength != null ? String(rule.config.maxLength) : "",
+  );
   const [allowed, setAllowed] = useState((rule?.config.allowed ?? []).join(", "));
   const [enabled, setEnabled] = useState(rule?.enabled ?? true);
   const [busy, setBusy] = useState(false);
@@ -181,7 +184,11 @@ export function RuleFormDialog({
           </Labeled>
         ) : null}
         <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <TpSwitch checked={enabled} disabled={busy} onChange={(e) => setEnabled(e.currentTarget.checked)} />
+          <TpSwitch
+            checked={enabled}
+            disabled={busy}
+            onChange={(e) => setEnabled(e.currentTarget.checked)}
+          />
           <span style={{ fontSize: 13 }}>Enabled</span>
         </label>
       </div>

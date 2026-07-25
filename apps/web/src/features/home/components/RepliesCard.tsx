@@ -7,9 +7,9 @@
 import { StatusBadge } from "@leadwolf/ui";
 import { MessageSquare } from "lucide-react";
 import type { RecentReply } from "../types";
-import { formatRelative } from "./format";
 import styles from "./HomePage.module.css";
 import { WidgetCard } from "./WidgetCard";
+import { formatRelative } from "./format";
 
 export function RepliesCard({
   replies,

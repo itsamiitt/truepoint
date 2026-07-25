@@ -5,9 +5,9 @@
 
 import { Upload } from "lucide-react";
 import type { RecentImport } from "../types";
-import { formatRelative } from "./format";
 import styles from "./HomePage.module.css";
 import { WidgetCard } from "./WidgetCard";
+import { formatRelative } from "./format";
 
 export function RecentImportsCard({
   imports,
