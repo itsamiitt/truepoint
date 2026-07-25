@@ -315,7 +315,10 @@ export const accountSearchRepository = {
           .select({ value: sql<string>`${expr}::text`, count: sql<number>`count(*)::int` })
           .from(accounts)
           .where(where)
-          .groupBy(expr)
+          // GROUP BY 1 (the select's value column). Repeating `expr` here re-binds its embedded params
+          // (the employee_band CASE labels) under NEW placeholder numbers, so Postgres sees a different
+          // expression than the selected one and raises 42803 "must appear in the GROUP BY clause".
+          .groupBy(sql`1`)
           .orderBy(desc(sql`count(*)`))
           .limit(50);
         for (const r of rows)
