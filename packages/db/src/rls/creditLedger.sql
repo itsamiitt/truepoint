@@ -15,6 +15,14 @@ CREATE POLICY credit_ledger_tenant_isolation ON credit_ledger
 
 CREATE OR REPLACE FUNCTION credit_ledger_append_only() RETURNS trigger AS $$
 BEGIN
+  -- ONE sanctioned mutation: the reveal_id FK's own ON DELETE SET NULL, fired when the DSAR delete fan-out
+  -- purges contact_reveals (08 §4.2). The financial fields stay byte-identical — only the pointer to the
+  -- erased reveal row nulls out. Everything else (any value edit, any DELETE) still raises.
+  IF TG_OP = 'UPDATE'
+     AND NEW.reveal_id IS NULL AND OLD.reveal_id IS NOT NULL
+     AND (to_jsonb(NEW) - 'reveal_id') = (to_jsonb(OLD) - 'reveal_id') THEN
+    RETURN NEW;
+  END IF;
   RAISE EXCEPTION 'credit_ledger is append-only (ADR-0029)';
 END;
 $$ LANGUAGE plpgsql;

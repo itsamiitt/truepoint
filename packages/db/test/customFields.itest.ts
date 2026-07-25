@@ -130,6 +130,9 @@ describe("ADR-0028 custom fields DoD", () => {
       key: "renewal_count",
       label: "Renewal Count",
       fieldType: "number",
+      // Explicit: listing orders by (ordering, key) — an omitted ordering defaults BELOW account_tier's 1
+      // and would sort renewal_count first.
+      ordering: 2,
     });
 
     const defs = await core.listDefinitions(scopeA(), "contact");
