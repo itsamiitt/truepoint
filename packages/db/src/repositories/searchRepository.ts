@@ -139,10 +139,20 @@ function clauseCondition(
         return inv(inArray(accounts.industry, clause.values));
       case "technology":
         // jsonb array overlap: does accounts.technologies contain ANY of the requested tech slugs.
-        return inv(sql`${accounts.technologies} ?| ${clause.values}::text[]`);
+        // Per-element params (ARRAY[$1,$2]::text[]) — a bare array param reaches the wire as a scalar
+        // ("malformed array literal") under the driver's raw-fragment binding.
+        return inv(
+          sql`${accounts.technologies} ?| ARRAY[${sql.join(
+            clause.values.map((v) => sql`${v}`),
+            sql`, `,
+          )}]::text[]`,
+        );
       case "owner":
         return inv(
-          sql`coalesce(${contacts.ownerUserId}, ${contacts.revealedByUserId}) = ANY(${clause.values})`,
+          sql`coalesce(${contacts.ownerUserId}, ${contacts.revealedByUserId}) = ANY(ARRAY[${sql.join(
+            clause.values.map((v) => sql`${v}`),
+            sql`, `,
+          )}]::uuid[])`,
         );
       case "outreach_status":
         return inv(inArray(contacts.outreachStatus, clause.values));
@@ -150,7 +160,10 @@ function clauseCondition(
         return inv(inArray(contacts.emailStatus, clause.values));
       case "source":
         return inv(
-          sql`EXISTS (SELECT 1 FROM source_imports si WHERE si.contact_id = ${contacts.id} AND si.source_name = ANY(${clause.values}))`,
+          sql`EXISTS (SELECT 1 FROM source_imports si WHERE si.contact_id = ${contacts.id} AND si.source_name = ANY(ARRAY[${sql.join(
+            clause.values.map((v) => sql`${v}`),
+            sql`, `,
+          )}]::text[]))`,
         );
       case "funding_stage":
         return inv(inArray(accounts.fundingStage, clause.values));

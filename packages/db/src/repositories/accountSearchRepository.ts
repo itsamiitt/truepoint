@@ -94,7 +94,14 @@ function clauseCondition(clause: AccountQuery["filters"][number]): SQL | undefin
         return inv(inArray(accounts.subIndustry, values));
       case "technology":
         // jsonb array overlap: does accounts.technologies contain ANY of the requested tech slugs.
-        return inv(sql`${accounts.technologies} ?| ${values}::text[]`);
+        // Per-element params (ARRAY[$1,$2]::text[]) — a bare array param reaches the wire as a scalar
+        // ("malformed array literal") under the driver's raw-fragment binding.
+        return inv(
+          sql`${accounts.technologies} ?| ARRAY[${sql.join(
+            values.map((v) => sql`${v}`),
+            sql`, `,
+          )}]::text[]`,
+        );
       case "funding_stage":
         return inv(inArray(accounts.fundingStage, values));
       case "company_stage":
@@ -288,7 +295,10 @@ export const accountSearchRepository = {
           const whereSql = baseWhere ? sql`WHERE ${baseWhere}` : sql``;
           const rows = (await tx.execute(sql`
             SELECT tech.value AS value, count(*)::int AS count
-            FROM accounts, LATERAL jsonb_array_elements_text(${accounts.technologies}) AS tech(value)
+            FROM accounts, LATERAL jsonb_array_elements_text(
+              CASE WHEN jsonb_typeof(${accounts.technologies}) = 'array'
+                   THEN ${accounts.technologies} ELSE '[]'::jsonb END
+            ) AS tech(value)
             ${whereSql}
             GROUP BY tech.value
             ORDER BY count(*) DESC
@@ -328,7 +338,10 @@ export const accountSearchRepository = {
         // (the repo's LATERAL pattern); RLS applies via the tx GUC + leadwolf_app role.
         const rows = (await tx.execute(sql`
           SELECT tech.value AS value, count(*)::int AS count
-          FROM accounts, LATERAL jsonb_array_elements_text(${accounts.technologies}) AS tech(value)
+          FROM accounts, LATERAL jsonb_array_elements_text(
+            CASE WHEN jsonb_typeof(${accounts.technologies}) = 'array'
+                 THEN ${accounts.technologies} ELSE '[]'::jsonb END
+          ) AS tech(value)
           WHERE tech.value ILIKE ${like} AND ${NOT_DELETED}
           GROUP BY tech.value
           ORDER BY count(*) DESC
