@@ -7,9 +7,14 @@
 // singleton): `bun test ./packages/db/test/forgeParserSeed.itest.ts`. The write path runs under withForgeTx
 // (SET LOCAL ROLE leadwolf_forge), mirroring the worker's makeParseProcessor exactly.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { VOYAGER_PROFILE_PARSER_ID, VOYAGER_PROFILE_VERSION_ID } from "@leadwolf/forge-core";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
+
+// Inlined from @leadwolf/forge-core parsers/voyagerProfile.ts — packages/db cannot depend on forge-core
+// (bun's linker refuses the undeclared edge), and the sibling forge itests inline these the same way. The
+// migration-seed assertions below fail loudly if the canonical ids ever drift.
+const VOYAGER_PROFILE_PARSER_ID = "a0000000-0000-4000-8000-000000000001";
+const VOYAGER_PROFILE_VERSION_ID = "a0000000-0000-4000-8000-000000000002";
 
 type DbModule = typeof import("@leadwolf/db");
 
