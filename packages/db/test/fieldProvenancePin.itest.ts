@@ -127,6 +127,11 @@ beforeAll(async () => {
   // env is set above, BEFORE either singleton loads.
   core = await import("../../core/src/index.ts");
   db = await import("@leadwolf/db");
+  // enrichContact now decrypts the subject's email UP FRONT (it feeds the provider request), so the seeded
+  // facet must be REAL AES-GCM ciphertext — the fixed placeholder bytes would throw at setAuthTag. Encrypt
+  // here (core is loaded, env key set) and overwrite both seeds.
+  await admin`UPDATE contacts SET email_enc = ${Buffer.from(core.encryptPii("jane@acme.com"))}
+    WHERE id IN (${contactId}, ${contactB})`;
   // The waterfall's circuit breakers are per-process state; start from a clean slate so the fake provider is
   // never pre-skipped by a leaked open breaker.
   core.resetBreakers();

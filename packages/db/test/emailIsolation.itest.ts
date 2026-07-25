@@ -137,7 +137,7 @@ beforeAll(async () => {
   await admin`
     INSERT INTO email_message
       (tenant_id, workspace_id, thread_id, mailbox_integration_id, direction, from_addr, body_enc, occurred_at)
-    VALUES (${tenantA}, ${wsA}, ${threadA}, ${mailboxA}, 'outbound', 'sdr@acme.com', '\\xbadc0de'::bytea, now())`;
+    VALUES (${tenantA}, ${wsA}, ${threadA}, ${mailboxA}, 'outbound', 'sdr@acme.com', '\\x0badc0de'::bytea, now())`;
   await admin`
     INSERT INTO email_message
       (tenant_id, workspace_id, thread_id, mailbox_integration_id, direction, from_addr, occurred_at)
