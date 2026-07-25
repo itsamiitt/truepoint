@@ -166,12 +166,36 @@ describe("0057 — the P2 audit-action CHECK train (ruling M1)", () => {
   });
 
   test("the CHECK stays CLOSED — an action outside the enum is rejected by the DB", async () => {
-    console.error("[copyrouting] t2 start"); // TEMP hang-hunt markers (stderr — survives buffering)
-    await expect(
-      admin`
+    // TEMP hang-hunt v2: the INSERT itself parks forever on CI. Race it, and on timeout dump the
+    // server-side truth (who blocks whom) before failing loudly. Markers on stderr.
+    console.error("[copyrouting] t2 start");
+    const insert = admin`
         INSERT INTO audit_log (tenant_id, workspace_id, action, entity_type)
-        VALUES (${tenantA}, ${wsA}, 'import.not_a_real_action', 'import_job')`,
-    ).rejects.toThrow(/audit_log_action_enum/);
+        VALUES (${tenantA}, ${wsA}, 'import.not_a_real_action', 'import_job')`;
+    const outcome = await Promise.race([
+      insert.then(
+        () => "RESOLVED" as const,
+        (e: unknown) => e as Error,
+      ),
+      new Promise<"TIMEOUT">((r) => setTimeout(() => r("TIMEOUT"), 15_000)),
+    ]);
+    if (outcome === "TIMEOUT") {
+      const probe = postgres(dbHandle.adminUrl, { max: 1, onnotice: () => {} });
+      const act = await probe`
+        SELECT pid, state, wait_event_type, wait_event, left(query, 120) AS query,
+               pg_blocking_pids(pid) AS blockers
+        FROM pg_stat_activity WHERE datname = current_database()`;
+      console.error("[copyrouting] t2 TIMEOUT — pg_stat_activity:", JSON.stringify(act));
+      await probe.end();
+    } else {
+      console.error(
+        "[copyrouting] t2 outcome:",
+        outcome === "RESOLVED" ? "RESOLVED" : String(outcome),
+      );
+    }
+    expect(outcome).not.toBe("TIMEOUT");
+    expect(outcome).not.toBe("RESOLVED");
+    expect(String(outcome)).toMatch(/audit_log_action_enum/);
     console.error("[copyrouting] t2 done");
   });
 });
