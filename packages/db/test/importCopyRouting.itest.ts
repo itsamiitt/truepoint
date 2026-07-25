@@ -22,7 +22,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
-type Core = typeof import("@leadwolf/core");
+type Core = typeof import("../../core/src/index.ts");
 type Db = typeof import("@leadwolf/db");
 let core: Core;
 let dbm: Db;
@@ -117,7 +117,7 @@ beforeAll(async () => {
   ({ tenantId: tenantA, workspaceId: wsA, ownerId: ownerA } = await seedWorkspace("copyco"));
 
   // Loaded AFTER DATABASE_URL is bound (the db client is a module singleton).
-  core = await import("@leadwolf/core");
+  core = await import("../../core/src/index.ts");
   dbm = await import("@leadwolf/db");
 }, 180_000);
 

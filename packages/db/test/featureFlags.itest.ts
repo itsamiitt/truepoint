@@ -15,7 +15,7 @@ import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
 type Db = typeof import("@leadwolf/db");
-type Core = typeof import("@leadwolf/core");
+type Core = typeof import("../../core/src/index.ts");
 
 let dbHandle: ItestDb;
 let admin: ReturnType<typeof postgres>;
@@ -64,7 +64,7 @@ beforeAll(async () => {
   tenantB = await seedTenant("globex");
 
   db = await import("@leadwolf/db");
-  core = await import("@leadwolf/core");
+  core = await import("../../core/src/index.ts");
 }, 180_000);
 
 afterAll(async () => {
