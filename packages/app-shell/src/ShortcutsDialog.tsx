@@ -1,6 +1,7 @@
+// ShortcutsDialog.tsx — the keyboard-shortcuts help overlay. Opens on "?" (when not typing) or a window
+// "command:shortcuts" event (the top-bar button); closes on Esc. Static content over the shared Dialog.
 "use client";
-// ShortcutsDialog.tsx — the keyboard-shortcuts help overlay (11 §5). Opens on "?" (when not typing) or a window
-// "command:shortcuts" event (the top-bar button); closes on Esc. Static content over the shared Dialog primitive.
+
 import { Dialog } from "@leadwolf/ui";
 import { useEffect, useState } from "react";
 

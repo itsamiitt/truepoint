@@ -81,8 +81,8 @@ export function ImpersonationBanner() {
         alignItems: "center",
         gap: 12,
         padding: "8px 16px",
-        background: "var(--danger-700, var(--danger, #b91c1c))",
-        color: "#fff",
+        background: "var(--danger-700)",
+        color: "var(--tp-on-fill)",
         fontSize: 13,
         fontWeight: 500,
       }}
@@ -90,16 +90,11 @@ export function ImpersonationBanner() {
       <ShieldAlert size={16} aria-hidden />
       <span>
         Impersonating tenant{" "}
-        <code style={{ fontFamily: "var(--tp-font-mono, monospace)" }}>
-          {session.targetTenantId}
-        </code>
+        <code style={{ fontFamily: "var(--font-mono)" }}>{session.targetTenantId}</code>
         {session.targetUserId ? (
           <>
             {" "}
-            · user{" "}
-            <code style={{ fontFamily: "var(--tp-font-mono, monospace)" }}>
-              {session.targetUserId}
-            </code>
+            · user <code style={{ fontFamily: "var(--font-mono)" }}>{session.targetUserId}</code>
           </>
         ) : null}{" "}
         · {session.reason}

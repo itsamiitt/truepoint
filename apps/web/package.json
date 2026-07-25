@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@leadwolf/app-shell": "workspace:*",
     "@leadwolf/types": "workspace:*",
     "@leadwolf/ui": "workspace:*",
     "@tanstack/react-query": "^5.90.0",

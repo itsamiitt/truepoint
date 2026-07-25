@@ -5,7 +5,15 @@
 // every async state through the shared State Kit.
 "use client";
 
-import { Card, type Column, DataTable, StatTile, StateSwitch, StatusBadge } from "@leadwolf/ui";
+import {
+  Card,
+  type Column,
+  DataTable,
+  PageHeader,
+  StatTile,
+  StateSwitch,
+  StatusBadge,
+} from "@leadwolf/ui";
 import { serviceLabel, serviceTone } from "../format";
 import { useSystemHealth } from "../hooks/useSystemHealth";
 import type { QueueReport } from "../types";
@@ -115,14 +123,10 @@ export function SystemHealthPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">System health</h2>
-          <p className="tp-page-sub">
-            Service status, the live job queues, and the bulk-enrichment job sample.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="System health"
+        subtitle="Service status, the live job queues, and the bulk-enrichment job sample."
+      />
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {health ? (

@@ -4,7 +4,7 @@
 // through the shared State Kit.
 "use client";
 
-import { Card, type Column, DataTable, StateSwitch, StatusBadge } from "@leadwolf/ui";
+import { Card, type Column, DataTable, PageHeader, StateSwitch, StatusBadge } from "@leadwolf/ui";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { formatInt, shortDate, statusTone } from "../format";
@@ -92,12 +92,10 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {detail ? (
           <>
-            <div className="tp-page-head">
-              <div>
-                <h2 className="tp-page-title">{detail.tenant.name}</h2>
-                <p className="tp-page-sub">{detail.tenant.slug}</p>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <PageHeader
+              title={detail.tenant.name}
+              subtitle={detail.tenant.slug}
+              actions=<div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <StatusBadge tone={statusTone(detail.tenant.status)}>
                   {detail.tenant.status === "suspended" && detail.tenant.suspensionReason
                     ? `suspended (${detail.tenant.suspensionReason === "dunning" ? "non-payment" : detail.tenant.suspensionReason})`
@@ -105,7 +103,7 @@ export function TenantDetailPage({ tenantId }: { tenantId: string }) {
                 </StatusBadge>
                 <TenantActions tenant={detail.tenant} onChanged={reload} />
               </div>
-            </div>
+            />
 
             <Card style={{ marginBottom: 24 }}>
               <div className="tp-meta-grid">

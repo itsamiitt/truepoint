@@ -11,6 +11,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   StateSwitch,
   TpButton,
   useToast,
@@ -128,21 +129,17 @@ export function ValidationRulesPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Validation rules</h2>
-          <p className="tp-page-sub">
-            The global data-quality checks every import must pass — built-in checks plus your custom
-            rules. A row that fails any enabled rule is rejected (reject-on-fail). Changes are
-            audited.
-          </p>
-        </div>
-        {canManage ? (
-          <TpButton variant="primary" onClick={openNew}>
-            Add rule
-          </TpButton>
-        ) : null}
-      </div>
+      <PageHeader
+        title="Validation rules"
+        subtitle="The global data-quality checks every import must pass — built-in checks plus your custom rules. A row that fails any enabled rule is rejected (reject-on-fail). Changes are audited."
+        actions={
+          canManage ? (
+            <TpButton variant="primary" onClick={openNew}>
+              Add rule
+            </TpButton>
+          ) : null
+        }
+      />
 
       <StateSwitch
         loading={loading}

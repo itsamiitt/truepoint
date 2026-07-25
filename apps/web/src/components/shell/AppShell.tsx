@@ -1,9 +1,12 @@
-// AppShell.tsx — the app chrome and the single auth gate for every signed-in surface. It authenticates with
+// AppShell.tsx — the customer app's auth gate, wrapped around the shared AppShellFrame. It authenticates with
 // the smallest possible block: as soon as a token exists (from the just-completed login, or a silent refresh)
 // it renders the chrome + children so the route's own data fetch can start, and resolves the session profile
 // (sidebar email/role) in the BACKGROUND rather than holding the whole tree behind a full-screen "Loading…".
-// With no token at all it redirects to the auth-origin login via PKCE. Manages mobile sidebar state
-// (sidebarOpen), closes the rail on route change, and passes toggle/close callbacks to TopBar and Sidebar.
+// With no token at all it redirects to the auth-origin login via PKCE.
+//
+// The chrome itself (rail, top bar, pin, density, mobile overlay) is @leadwolf/app-shell, shared with
+// apps/admin and apps/forge. What stays here is what is genuinely web's: this gate, the customer destination
+// list, and the customer-only top-bar widgets (global search, notifications, credit pill) and rail switchers.
 "use client";
 
 import { AnnouncementBanner } from "@/features/announcements/AnnouncementBanner";
@@ -11,29 +14,40 @@ import {
   clearAccessToken,
   fetchWithAuth,
   getAccessToken,
+  logout,
   silentRefresh,
   startLogin,
 } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import { ToastProvider, TpButton } from "@leadwolf/ui";
-import dynamic from "next/dynamic";
+import {
+  AppShellFrame,
+  Brandmark,
+  CommandPalette,
+  DensityToggle,
+  Logo,
+  NavItem,
+  ShortcutsButton,
+  ShortcutsDialog,
+  Sidebar,
+  TopBar,
+  UserRow,
+} from "@leadwolf/app-shell";
+import { TpButton } from "@leadwolf/ui";
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
-import { DensityProvider } from "./DensityProvider";
-import { Brandmark, Logo } from "./Logo";
-import { Sidebar } from "./Sidebar";
-import { TopBar } from "./TopBar";
-import { sectionTitleFor } from "./navConfig";
-import { useSidebarPin } from "./useSidebarPin";
-
-// Interaction-only widgets: nothing on first paint needs them (they wake on a keypress / ⌘K). Loading them
-// dynamically with ssr:false keeps cmdk and the dialog markup out of the synchronous first-paint bundle.
-const CommandPalette = dynamic(() => import("./CommandPalette").then((m) => m.CommandPalette), {
-  ssr: false,
-});
-const ShortcutsDialog = dynamic(() => import("./ShortcutsDialog").then((m) => m.ShortcutsDialog), {
-  ssr: false,
-});
+import { CreditPill } from "./CreditPill";
+import { GlobalSearch } from "./GlobalSearch";
+import { NotificationsBell } from "./NotificationsBell";
+import { OrgSwitcher } from "./OrgSwitcher";
+import { TeamSwitcher } from "./TeamSwitcher";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import {
+  DESTINATIONS,
+  PALETTE_NAVIGATE,
+  PALETTE_QUICK,
+  SETTINGS_DESTINATION,
+  sectionTitleFor,
+} from "./navConfig";
 
 interface Session {
   userId: string;
@@ -48,12 +62,14 @@ interface Session {
 // in the background). "error" — we couldn't reach sign-in.
 type AuthState = "authenticating" | "redirecting" | "ready" | "error";
 
+function roleLabel(role: string | null): string {
+  if (!role) return "Member";
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
-  const pathname = usePathname() ?? "/";
   const [auth, setAuth] = useState<AuthState>("authenticating");
   const [session, setSession] = useState<Session | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { pinned, togglePinned } = useSidebarPin();
 
   // `live` lets a background probe that resolves after the shell unmounts skip its setState (the probe now
   // runs after first paint, so the component can be gone by the time it returns). Reset on each runGate.
@@ -105,12 +121,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Close the mobile sidebar whenever the route changes.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional — only pathname triggers close.
-  useEffect(() => {
-    setSidebarOpen(false);
-  }, [pathname]);
-
   if (auth === "error") {
     return (
       <div className="tp-center-screen">
@@ -147,39 +157,95 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ToastProvider>
-      <DensityProvider>
-        <div className={`tp-shell${pinned ? " is-pinned" : ""}`}>
-          {/* Mobile scrim — tap anywhere outside sidebar to close */}
-          {sidebarOpen && (
-            <button
-              type="button"
-              className="tp-sidebar-scrim"
-              onClick={() => setSidebarOpen(false)}
-              aria-label="Close navigation"
-              style={{ border: "none", padding: 0, appearance: "none", cursor: "pointer" }}
-            />
-          )}
-          <Sidebar
-            userEmail={session ? session.userId : null}
-            role={session?.role ?? null}
-            isOpen={sidebarOpen}
-            onClose={() => setSidebarOpen(false)}
+    <AppShellFrame
+      renderSidebar={({ isOpen, close }) => (
+        <Sidebar
+          destinations={DESTINATIONS}
+          homeHref="/home"
+          isOpen={isOpen}
+          onClose={close}
+          footer={
+            <>
+              <NavItemSettings />
+              <div className="tp-sidebar-switchers">
+                <TeamSwitcher />
+                <OrgSwitcher />
+                <WorkspaceSwitcher />
+              </div>
+              <UserRow
+                email={session ? session.userId : null}
+                roleLabel={roleLabel(session?.role ?? null)}
+                onSignOut={() => void logout()}
+              />
+            </>
+          }
+        />
+      )}
+      renderTopBar={({ toggleMenu, pinned, togglePin }) => (
+        <TopBarWithTitle toggleMenu={toggleMenu} pinned={pinned} togglePin={togglePin} />
+      )}
+      banner={<AnnouncementBanner />}
+      overlays={
+        <>
+          <CommandPalette
+            navigate={PALETTE_NAVIGATE}
+            quick={PALETTE_QUICK}
+            actions={[
+              {
+                id: "switch-workspace",
+                label: "Switch workspace",
+                keywords: ["team", "tenant"],
+                onSelect: () => window.dispatchEvent(new CustomEvent("command:switch-workspace")),
+              },
+              {
+                id: "log-out",
+                label: "Log out",
+                keywords: ["sign out", "logout"],
+                onSelect: () => void logout(),
+              },
+            ]}
           />
-          <div className="tp-main">
-            <TopBar
-              title={sectionTitleFor(pathname)}
-              onMenuToggle={() => setSidebarOpen((v) => !v)}
-              pinned={pinned}
-              onTogglePin={togglePinned}
-            />
-            <AnnouncementBanner />
-            <main className="tp-content">{children}</main>
-          </div>
-          <CommandPalette />
           <ShortcutsDialog />
-        </div>
-      </DensityProvider>
-    </ToastProvider>
+        </>
+      }
+    >
+      {children}
+    </AppShellFrame>
+  );
+}
+
+/** The settings destination sits below the divider rather than in the primary nav list. */
+function NavItemSettings() {
+  const pathname = usePathname() ?? "/";
+  return <NavItem dest={SETTINGS_DESTINATION} pathname={pathname} />;
+}
+
+/** Splits the top bar out so it can subscribe to the pathname for its section title. */
+function TopBarWithTitle({
+  toggleMenu,
+  pinned,
+  togglePin,
+}: {
+  toggleMenu: () => void;
+  pinned: boolean;
+  togglePin: () => void;
+}) {
+  const pathname = usePathname() ?? "/";
+  return (
+    <TopBar
+      title={sectionTitleFor(pathname)}
+      onMenuToggle={toggleMenu}
+      pinned={pinned}
+      onTogglePin={togglePin}
+      actions={
+        <>
+          <GlobalSearch />
+          <DensityToggle />
+          <ShortcutsButton />
+          <NotificationsBell />
+          <CreditPill />
+        </>
+      }
+    />
   );
 }

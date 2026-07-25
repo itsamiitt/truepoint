@@ -9,6 +9,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   type StatusTone,
@@ -162,15 +163,10 @@ export function CompliancePage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Compliance</h2>
-          <p className="tp-page-sub">
-            DSAR oversight — the data-subject request queue across the platform. Subject identity is
-            never shown here.
-          </p>
-        </div>
-        <TpSelect
+      <PageHeader
+        title="Compliance"
+        subtitle="DSAR oversight — the data-subject request queue across the platform. Subject identity is never shown here."
+        actions=<TpSelect
           aria-label="Status filter"
           value={status}
           onChange={(e) => setStatus(e.currentTarget.value)}
@@ -182,7 +178,7 @@ export function CompliancePage() {
             </option>
           ))}
         </TpSelect>
-      </div>
+      />
 
       <StateSwitch
         loading={loading}

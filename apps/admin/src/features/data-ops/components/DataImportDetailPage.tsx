@@ -5,7 +5,7 @@
 // async state goes through the shared State Kit.
 "use client";
 
-import { type Column, DataTable, StatTile, StateSwitch } from "@leadwolf/ui";
+import { type Column, DataTable, PageHeader, StatTile, StateSwitch } from "@leadwolf/ui";
 import Link from "next/link";
 import { formatInt } from "../format";
 import { useDataImportDetail } from "../hooks/useDataImportDetail";
@@ -49,15 +49,15 @@ export function DataImportDetailPage({ jobId }: { jobId: string }) {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Import job</h2>
-          <p className="tp-page-sub">
+      <PageHeader
+        title="Import job"
+        subtitle={
+          <>
             <Link href="/data-ops">Data management</Link> — job metadata and per-chunk progress.
             Counts only.
-          </p>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {detail ? (

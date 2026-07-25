@@ -11,6 +11,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   type StatusTone,
@@ -126,15 +127,10 @@ export function StaffPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Staff</h2>
-          <p className="tp-page-sub">
-            Platform staff roles — who can operate TruePoint across tenants, and at what role.
-            Grants and revokes are audited.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Staff"
+        subtitle="Platform staff roles — who can operate TruePoint across tenants, and at what role. Grants and revokes are audited."
+      />
 
       {/* Grant form — userId is a server-resolved identity; the api re-validates it as a UUID and audits. */}
       <div

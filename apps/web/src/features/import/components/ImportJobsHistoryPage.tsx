@@ -7,11 +7,18 @@
 // through StateSwitch. Monochrome; color only via StatusBadge / Progress tones. Public slice component.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
 import { useSessionIdentity } from "@/lib/useSessionIdentity";
 import { isWorkspaceAdmin } from "@/lib/useSessionRole";
 import type { ImportJobListItem } from "@leadwolf/types";
-import { DataTable, EmptyState, Progress, StateSwitch, StatusBadge, TpButton } from "@leadwolf/ui";
+import {
+  DataTable,
+  EmptyState,
+  PageHeader,
+  Progress,
+  StateSwitch,
+  StatusBadge,
+  TpButton,
+} from "@leadwolf/ui";
 import type { Column } from "@leadwolf/ui";
 import { Upload } from "lucide-react";
 import { useRouter } from "next/navigation";

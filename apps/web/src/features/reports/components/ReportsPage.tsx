@@ -5,8 +5,15 @@
 // ClickHouse /reports/* pipeline (ADR-0010) is post-MVP. Public slice component.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
-import { Combobox, Icon, SegmentedControl, Tabs, TpButton, useToast } from "@leadwolf/ui";
+import {
+  Combobox,
+  Icon,
+  PageHeader,
+  SegmentedControl,
+  Tabs,
+  TpButton,
+  useToast,
+} from "@leadwolf/ui";
 import { Download, RotateCw } from "lucide-react";
 import { useState } from "react";
 import {

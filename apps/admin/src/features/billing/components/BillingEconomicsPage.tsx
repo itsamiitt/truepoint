@@ -6,6 +6,7 @@
 import {
   type Column,
   DataTable,
+  PageHeader,
   StatTile,
   StateSwitch,
   TpButton,
@@ -113,15 +114,10 @@ export function BillingEconomicsPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Billing economics</h2>
-          <p className="tp-page-sub">
-            Gross credits sold vs consumed, revenue vs metered provider spend, cost-per-reveal and
-            margin — across all tenants.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <PageHeader
+        title="Billing economics"
+        subtitle="Gross credits sold vs consumed, revenue vs metered provider spend, cost-per-reveal and margin — across all tenants."
+        actions=<div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <TpSelect
             aria-label="Period"
             value={String(sinceDays)}
@@ -141,7 +137,7 @@ export function BillingEconomicsPage() {
             {exporting ? "Exporting…" : "Export CSV"}
           </TpButton>
         </div>
-      </div>
+      />
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {summary ? (

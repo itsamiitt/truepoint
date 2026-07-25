@@ -5,7 +5,7 @@
 // the human-decision queue (populated once probabilistic matching ships); `auto` rows are deterministic, for oversight.
 "use client";
 
-import { type Column, DataTable, EmptyState, StateSwitch } from "@leadwolf/ui";
+import { type Column, DataTable, EmptyState, PageHeader, StateSwitch } from "@leadwolf/ui";
 import { GitMerge } from "lucide-react";
 import { shortDate } from "../format";
 import { useDedupReview } from "../hooks/useDedupReview";
@@ -62,17 +62,17 @@ export function DedupReviewPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Dedup review</h2>
-          <p className="tp-page-sub">
+      <PageHeader
+        title="Dedup review"
+        subtitle={
+          <>
             Entity-resolution decisions across all tenants — which records were matched into one.{" "}
             <strong>Pending</strong> rows await a human decision (populated once probabilistic
             matching is enabled); <strong>auto</strong> rows are deterministic resolutions, shown
             for oversight. Merge / split actions are coming next, behind maker-checker approval.
-          </p>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <StateSwitch
         loading={loading}

@@ -10,6 +10,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   TpButton,
@@ -189,15 +190,11 @@ export function PricingPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Pricing</h2>
-          <p className="tp-page-sub">
-            The credit-pack catalog the product sells — transparent, public pricing (no demo gate).
-          </p>
-        </div>
-        {canManage ? <TpButton onClick={openNew}>New pack</TpButton> : null}
-      </div>
+      <PageHeader
+        title="Pricing"
+        subtitle="The credit-pack catalog the product sells — transparent, public pricing (no demo gate)."
+        actions={canManage ? <TpButton onClick={openNew}>New pack</TpButton> : null}
+      />
 
       <StateSwitch
         loading={loading}

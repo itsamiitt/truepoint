@@ -33,7 +33,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **1768 source files · 84 code-bearing domains · 33 shared areas · 55 domain-vocabulary warnings · 145
+> **1768 source files · 84 code-bearing domains · 34 shared areas · 55 domain-vocabulary warnings · 145
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
 > feature (`apps/api/src/features/master-sync`) + the **nested TruePoint Forge** (fully migrated from the
@@ -536,8 +536,18 @@ flowchart TD
 - **`packages/ui`** — the TruePoint **design system**: `tokens/primitives/theme.css` + `cn`; dashboard primitives (StatusBadge,
   Card, StatTile, Spinner, Avatar, Progress, Pagination, Icon), **State Kit** (`state.tsx`: Skeleton/Loading/Empty/Error/StateSwitch),
   Tp-prefixed form `controls.tsx` + `form.tsx`, `Tabs`, overlays (`overlay.tsx` Dialog/Drawer; `floating.tsx` Popover/DropdownMenu/Tooltip),
-  `Toast`, `DataTable`, `Combobox`, and shadcn-pattern `components/ui/*` (used by the auth screens).
-- **`packages/db`** — `client.ts` (`withTenantTx`/`withPrivilegedTx`/`withPlatformTx`/`closeDb`), `applyMigrations.ts`
+  `Toast`, `DataTable`, `Combobox`, `PageHeader` (the one destination header all three frontends render), and
+  shadcn-pattern `components/ui/*` (used by the auth screens).
+- **`packages/app-shell`** — the **shared Next.js app chrome** consumed by `apps/web`, `apps/admin` and
+  `apps/forge`: `AppShellFrame` (rail column + sticky top bar + internally-scrolling content, owning mobile
+  sidebar state, the desktop rail pin and the density context), `Sidebar`/`NavItem`/`UserRow`, `TopBar` (+
+  `DensityToggle`, `ShortcutsButton`), `CommandPalette` (⌘K), `ShortcutsDialog`, `Brandmark`/`Wordmark`/`Logo`,
+  and one `shell.css` carrying the `.tp-shell`/`.tp-sidebar`/`.tp-topbar`/`.tp-nav-*` chrome plus the console
+  page scaffold. Each app keeps only its own auth/staff gate, destination list, and app-specific widgets — this
+  package exists because those three shells had drifted into three near-identical copies. `next` and `react`
+  are peer deps so nothing Next-coupled leaks into `packages/ui` (which is esbuild-bundled for claude.ai/design).
+- **`packages/db`** — `drizzle.config.ts` + `drizzle.worktree.config.ts` (the worktree-scoped variant, for
+  running migrations against a per-worktree database); `client.ts` (`withTenantTx`/`withPrivilegedTx`/`withPlatformTx`/`closeDb`), `applyMigrations.ts`
   (bootstrap → drizzle → RLS sorted → grants), `bootstrapAdmin.ts`, `migrate.ts`, `seed.ts`; `schema/*.ts` (23 schema files incl.
   the system-owned **Layer-0 master graph** `masterGraph.ts` — ADR-0021, walled off from `leadwolf_app` by the
   `applyMigrations` grant-off, no RLS), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
@@ -602,9 +612,10 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the 1768-file JSON (delta: forge-api gains
-  `src/middleware/error.ts` — the RFC-9457 problem+json notFound/onError surface — and `test/errors.test.ts`;
-  both land in `unassigned[]` with the rest of the nested Forge, which has no bucketing rules yet). When the
-  source set changes again, re-run `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares the
-  `fileSetHash`) and refresh these purposes.
+- **Map hygiene:** this prose was last refreshed from the 1768-file JSON at the data-mgmt × app-shell merge
+  (delta: `packages/app-shell` becomes the 34th shared area — the rail/topbar/⌘K chrome shared by web, admin
+  and forge — and forge-api gains its RFC-9457 error middleware + test; both forge files sit in `unassigned[]`
+  with the rest of the nested Forge, which has no bucketing rules yet). When the source set changes again,
+  re-run `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares the `fileSetHash`) and refresh
+  these purposes.
 ```

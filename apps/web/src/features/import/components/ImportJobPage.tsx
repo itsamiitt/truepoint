@@ -7,12 +7,12 @@
 // Cancel while the job is still cancellable. Artifact downloads + retry-failed land at S-U6. Public slice component.
 "use client";
 
-import { PageHeader } from "@/components/PageHeader";
 import { useSessionIdentity } from "@/lib/useSessionIdentity";
 import { isWorkspaceAdmin } from "@/lib/useSessionRole";
 import type { ImportJobCounts } from "@leadwolf/types";
 import {
   EmptyState,
+  PageHeader,
   Progress,
   Spinner,
   StateSwitch,

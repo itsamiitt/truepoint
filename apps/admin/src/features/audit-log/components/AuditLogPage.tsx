@@ -8,6 +8,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageHeader,
   StateSwitch,
   TpButton,
   TpInput,
@@ -122,18 +123,13 @@ export function AuditLogPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Audit log</h2>
-          <p className="tp-page-sub">
-            Privileged platform actions across all tenants — append-only, read-only. Filter and
-            export for review.
-          </p>
-        </div>
-        <TpButton variant="secondary" onClick={() => void onExport()} disabled={exporting}>
+      <PageHeader
+        title="Audit log"
+        subtitle="Privileged platform actions across all tenants — append-only, read-only. Filter and export for review."
+        actions=<TpButton variant="secondary" onClick={() => void onExport()} disabled={exporting}>
           <Download size={14} /> {exporting ? "Exporting…" : "Export CSV"}
         </TpButton>
-      </div>
+      />
 
       {/* Filter bar — all AND-combined; blanks are ignored. */}
       <div

@@ -1,7 +1,7 @@
 // navConfig.ts — the SINGLE source of truth for app navigation. Replaces the three hard-coded copies that used
 // to live in Sidebar.tsx, AppShell.tsx and CommandPalette.tsx — add a destination in exactly one place and the
 // rail, top-bar title, command palette, and settings scope-nav all pick it up.
-import type { IconComponent } from "@leadwolf/ui";
+import { type NavDestination, type PaletteEntry, isActive } from "@leadwolf/app-shell";
 import {
   BarChart2,
   HeartPulse,
@@ -14,13 +14,10 @@ import {
   Upload,
 } from "lucide-react";
 
-export interface NavDestination {
-  label: string;
-  href: string;
-  /** Path prefix that marks this destination active (nested routes still highlight it). */
-  match: string;
-  icon: IconComponent;
-}
+// NavDestination + PaletteEntry + isActive come from @leadwolf/app-shell so the rail, the section-title
+// resolver, and the palette share one contract with apps/admin and apps/forge.
+export type { NavDestination, PaletteEntry };
+export { isActive };
 
 /** The primary rail destinations (11 §2). Inbox is a real destination now (was a placeholder page). */
 /** The Imports destination (import-redesign 11 §1.1) — the section landing at /imports, single-sourced here so
@@ -126,18 +123,6 @@ export function sectionTitleFor(pathname: string): string {
   if (pathname.startsWith("/enrichment/jobs")) return "Enrichment jobs";
   if (pathname.startsWith("/sales-navigator")) return "Sales Navigator";
   return "TruePoint";
-}
-
-/** Whether `pathname` is at or under a `match` prefix. */
-export function isActive(pathname: string, match: string): boolean {
-  return pathname === match || pathname.startsWith(`${match}/`);
-}
-
-export interface PaletteEntry {
-  id: string;
-  label: string;
-  href: string;
-  keywords?: string[];
 }
 
 export const PALETTE_NAVIGATE: PaletteEntry[] = [

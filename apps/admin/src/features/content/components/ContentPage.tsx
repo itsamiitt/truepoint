@@ -10,6 +10,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   type StatusTone,
@@ -217,15 +218,11 @@ export function ContentPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Content</h2>
-          <p className="tp-page-sub">
-            In-app announcements / banners shown to customers — to all tenants or a targeted org.
-          </p>
-        </div>
-        {canManage ? <TpButton onClick={openNew}>New announcement</TpButton> : null}
-      </div>
+      <PageHeader
+        title="Content"
+        subtitle="In-app announcements / banners shown to customers — to all tenants or a targeted org."
+        actions={canManage ? <TpButton onClick={openNew}>New announcement</TpButton> : null}
+      />
 
       <StateSwitch
         loading={loading}

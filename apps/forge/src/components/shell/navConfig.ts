@@ -1,15 +1,11 @@
 // navConfig.ts — the SINGLE source of truth for the Forge operator-console navigation (mirrors the apps/admin
 // pattern). Add a destination here once and the rail + top-bar title pick it up.
-import type { IconComponent } from "@leadwolf/ui";
+import { type NavDestination, makeSectionTitleResolver } from "@leadwolf/app-shell";
 import { Braces, ClipboardCheck, LayoutDashboard, RefreshCw, ScanLine } from "lucide-react";
 
-export interface NavDestination {
-  label: string;
-  href: string;
-  /** Path prefix that marks this destination active (nested routes still highlight it). */
-  match: string;
-  icon: IconComponent;
-}
+// The destination shape + isActive come from @leadwolf/app-shell, shared with apps/web.
+export type { NavDestination };
+export { isActive } from "@leadwolf/app-shell";
 
 /** The Forge operator-console rail destinations. */
 export const DESTINATIONS: NavDestination[] = [
@@ -20,15 +16,5 @@ export const DESTINATIONS: NavDestination[] = [
   { label: "Sync status", href: "/sync-status", match: "/sync-status", icon: RefreshCw },
 ];
 
-/** Whether `pathname` is at or under a `match` prefix. */
-export function isActive(pathname: string, match: string): boolean {
-  return pathname === match || pathname.startsWith(`${match}/`);
-}
-
-/** Map a pathname to its top-bar section title. */
-export function sectionTitleFor(pathname: string): string {
-  for (const d of DESTINATIONS) {
-    if (isActive(pathname, d.match)) return d.label;
-  }
-  return "Forge";
-}
+/** Map a pathname to its top-bar section title (longest match wins). */
+export const sectionTitleFor = makeSectionTitleResolver(DESTINATIONS, "Forge");

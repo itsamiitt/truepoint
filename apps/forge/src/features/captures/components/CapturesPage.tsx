@@ -6,6 +6,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   type StatusTone,
@@ -63,15 +64,10 @@ export function CapturesPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Captures</h2>
-          <p className="tp-page-sub">
-            Everything the sources have captured — what parsed cleanly, what failed, and what is
-            waiting.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Captures"
+        subtitle="Everything the sources have captured — what parsed cleanly, what failed, and what is waiting."
+      />
 
       <StateSwitch
         loading={loading}

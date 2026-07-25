@@ -5,7 +5,7 @@
 // (the verification_jobs ledger carries no PII). Every async state goes through the shared State Kit.
 "use client";
 
-import { type Column, DataTable, EmptyState, StateSwitch } from "@leadwolf/ui";
+import { type Column, DataTable, EmptyState, PageHeader, StateSwitch } from "@leadwolf/ui";
 import { ShieldCheck } from "lucide-react";
 import { formatInt, shortDate } from "../format";
 import { useVerificationRuns } from "../hooks/useVerificationRuns";
@@ -63,15 +63,10 @@ export function VerificationRunsPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Verification runs</h2>
-          <p className="tp-page-sub">
-            Cross-tenant freshness re-verification monitor — recent reverify sweeps and their
-            scanned / reverified / errored tallies across all orgs. Read-only; counts only.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Verification runs"
+        subtitle="Cross-tenant freshness re-verification monitor — recent reverify sweeps and their scanned / reverified / errored tallies across all orgs. Read-only; counts only."
+      />
 
       <StateSwitch
         loading={loading}

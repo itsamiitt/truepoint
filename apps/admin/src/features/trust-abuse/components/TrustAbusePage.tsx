@@ -3,7 +3,14 @@
 // by kind, and the tenant-status mix. NON-PII — counts only. Renders async state through the State Kit.
 "use client";
 
-import { Card, StatTile, StateSwitch, StatusBadge, type StatusTone } from "@leadwolf/ui";
+import {
+  Card,
+  PageHeader,
+  StatTile,
+  StateSwitch,
+  StatusBadge,
+  type StatusTone,
+} from "@leadwolf/ui";
 import { useTrustAbuse } from "../hooks/useTrustAbuse";
 
 function statusTone(status: string): StatusTone {
@@ -18,15 +25,10 @@ export function TrustAbusePage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Trust & abuse</h2>
-          <p className="tp-page-sub">
-            Cross-tenant abuse signals — signup velocity, non-business email signups, active holds
-            and the tenant-status mix. Counts only; no identities are shown.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Trust & abuse"
+        subtitle="Cross-tenant abuse signals — signup velocity, non-business email signups, active holds and the tenant-status mix. Counts only; no identities are shown."
+      />
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {data ? (

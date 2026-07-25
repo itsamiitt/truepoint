@@ -67,9 +67,59 @@ The emitted `<Name>.d.ts` filters DOM/React-inherited props, so native-element w
 - **GRID_OVERFLOW**: the wide/panel/form components are pinned to `cardMode:"column"` and the overlays to `cardMode:"single"` in config `overrides` (10 column + 6 single + DataTable column). cardMode is presentation-only (not in the grade key), so changing it doesn't re-grade; but it DOES change the html → re-run `preview-rebuild` for those after editing, and a full build is needed after adding/removing a `viewport` (viewport IS keyed → `[CONFIG_STALE]`).
 - **Transient design-API 404 / empty `list_projects`** happened once mid-upload (design-auth lapse — watch for repeated "Upgraded your claude.ai login" notices). The project + planId were fine after a re-`list_projects`; just retry. Don't recreate the project on a single 404.
 
+## Fonts — the `--font-geist-*` binding (root-caused 2026-07-24, was broken in the first sync)
+- `tokens.css` sets `--font-sans: var(--font-geist-sans), "Geist", …`. **The leading `var()` has no
+  fallback**, and `--font-geist-sans` is set by `next/font` on `<html>` in each app — nothing defines it
+  in the DS bundle. An undefined unguarded `var()` makes the whole value *guaranteed-invalid*, so
+  `font-family: var(--font-sans)` is invalid at computed-value time and resolves to the browser default:
+  **every card, and every design the agent builds, rendered in Times/serif.** Shipping the Geist woff2s
+  (step 4) does NOT fix this — the chain never reaches the literal `"Geist"`.
+- Fix: `build-ui.mjs` appends `:root{--font-geist-sans:"Geist";--font-geist-mono:"Geist Mono";}` to
+  `_compiled.css` (= `cfg.cssEntry`, shipped verbatim as `_ds_bundle.css`). **It must go there, not in
+  `_fonts.css`** — the converter parses `cfg.extraFonts` CSS for `@font-face` rules only and silently
+  drops everything else (verified: a `:root{}` line in `_fonts.css` never reached `ds-bundle/fonts/fonts.css`).
+- **The tell**: validate's token line. Broken = `tokens: 148 defined, 72 referenced (2 missing, below
+  threshold)`; fixed = `tokens: 150 defined, 72 referenced`. That "(N missing, below threshold)" note is
+  NON-blocking, which is exactly how this shipped unnoticed the first time — treat any missing count on
+  a font token as blocking, and eyeball a text-heavy sheet (DataTable, EmptyState) for serif every sync.
+
+## Render-check browser
+- `%LOCALAPPDATA%\ms-playwright` is empty on this box (playwright's chromium was cleaned). Rather than a
+  ~200 MB re-download, both `package-validate.mjs` and `package-capture.mjs` honour **`DS_CHROMIUM_PATH`**
+  — export it to the installed stock Chrome and everything renders:
+  `export DS_CHROMIUM_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"`.
+
+## Known render warns
+- **None.** After the `overrides` in config.json (11 column + 6 single), validate exits with zero warn
+  lines. Any `!`-prefixed line on a future run is NEW — investigate it, don't wave it through.
+- Watch out: **fixing the font re-flowed text and made `TpButton` overflow its grid cell** — it needed
+  `{"cardMode": "column"}` added to `overrides`. Any future change to type/metrics can trip
+  `[GRID_OVERFLOW]` on a *different* component the same way; apply the override the warn names.
+
+## The project holds user-authored designs — never delete outside the plan
+- Project `8701fad5-fc47-48dc-8b1d-6cfe419da901` ("TruePoint Design System") also contains designs the
+  user built with the DS — as of 2026-07-24: **`CRM Dashboard.html`** and **`Prospects.html`** — plus
+  app-generated `_ds_manifest.json`, `_adherence.oxlintrc.json`, `.thumbnail`. None are produced by this
+  build. The upload plan's delete globs (`components/**`, `_preview/**`, `fonts/**`, `_vendor/**`,
+  `tokens/**`, `guidelines/**`) don't reach root files, so they're safe — **keep it that way**: never
+  broaden `deletes` to a bare `**`, and take `deletePaths` verbatim from `.sync-diff.json`.
+
+## Grades and the canary loop
+- Every driver run re-captures the 5 canary picks and **clears their grade files** — so each run needs
+  those 5 sheets Read and re-graded before upload (they land in `_screenshots/review/`). The picks vary
+  run to run. `EmptyState` currently carries **no** grade file (cleared as "contract changed" and never
+  re-picked); it's verified-by-upload so it's outside the gate, but expect it to want grading if a
+  future run picks it.
+
 ## Re-sync risks (what can silently go stale)
 - **`dist` is regenerated, not committed** — a re-sync MUST run `cfg.buildCmd` first or the converter sees a missing entry.
 - **react-dom/scheduler copies** in `packages/ui/node_modules` are removed by `bun install --force`/clean. build-ui.mjs is idempotent and re-copies if missing.
 - **Geist version pinned via apps/auth/node_modules/geist** (1.3.1). If that path moves, font copy is skipped (warns) → previews fall back to system fonts.
 - **Tailwind compile pulls `@tailwindcss/cli` from `.ds-sync`** — version drift from the repo's tailwindcss (4.3.1) could change generated utilities; keep the pin in sync.
+- **`conventions.md` names real tokens — re-verify them every sync.** The 2026-07-24 pass caught it
+  documenting `--accent`, which `9841501` retired repo-wide (the design agent would have written
+  `var(--accent)` and got nothing). Cheap check: grep every token/class/component the header names
+  against `ds-bundle/tokens/*.css` + `ds-bundle/_ds_bundle.css` and the `ds-bundle/components/general/`
+  dirs. Tokens added since: `--tp-on-fill`, `--tp-scrim`, `--danger-700`, `--tp-radius-card`,
+  `--tp-shadow-card{,-hover}`, `--tp-shadow-rail`, `--tp-rail-w`, `--tp-rail-expanded`.
 - **`rewriteRelativeImportExtensions`** is TS-5.7+ only. If the repo downgrades TS below 5.7, build-ui's tsc emit breaks (fall back to emitDeclarationOnly + a re-export index.js wrapper).

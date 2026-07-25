@@ -5,7 +5,7 @@
 // rates). Every async state goes through the shared State Kit.
 "use client";
 
-import { type Column, DataTable, EmptyState, StateSwitch } from "@leadwolf/ui";
+import { type Column, DataTable, EmptyState, PageHeader, StateSwitch } from "@leadwolf/ui";
 import { Activity } from "lucide-react";
 import { formatInt, pct, shortDate } from "../format";
 import { useFleetQuality } from "../hooks/useFleetQuality";
@@ -64,15 +64,10 @@ export function FleetQualityPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Fleet data quality</h2>
-          <p className="tp-page-sub">
-            Cross-tenant data-quality snapshots — per-workspace fill, email-verification and
-            freshness rates from the daily Data Health sweep. Read-only; counts only.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Fleet data quality"
+        subtitle="Cross-tenant data-quality snapshots — per-workspace fill, email-verification and freshness rates from the daily Data Health sweep. Read-only; counts only."
+      />
 
       <StateSwitch
         loading={loading}

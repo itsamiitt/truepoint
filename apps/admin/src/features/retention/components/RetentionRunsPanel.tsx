@@ -49,13 +49,7 @@ export function RetentionRunsPanel() {
       cell: (r) => (
         <div style={{ display: "flex", flexDirection: "column" }}>
           <span style={{ fontWeight: 500, color: "var(--tp-ink)" }}>{r.tenantName}</span>
-          <span
-            style={{
-              fontFamily: "var(--tp-font-mono, monospace)",
-              fontSize: 12,
-              color: "var(--tp-ink-3)",
-            }}
-          >
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--tp-ink-3)" }}>
             {r.tenantId}
           </span>
         </div>
@@ -66,9 +60,7 @@ export function RetentionRunsPanel() {
       header: "Data class",
       sortValue: (r) => r.dataClass,
       cell: (r) => (
-        <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontWeight: 600 }}>
-          {r.dataClass}
-        </span>
+        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{r.dataClass}</span>
       ),
     },
     {

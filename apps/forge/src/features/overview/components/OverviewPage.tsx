@@ -7,6 +7,7 @@ import {
   type Column,
   DataTable,
   EmptyState,
+  PageHeader,
   StatTile,
   StateSwitch,
   StatusBadge,
@@ -54,14 +55,10 @@ export function OverviewPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Overview</h2>
-          <p className="tp-page-sub">
-            Live health of the capture → parse → review → sync pipeline across every source.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Overview"
+        subtitle="Live health of the capture → parse → review → sync pipeline across every source."
+      />
 
       <StateSwitch loading={loading} error={error} onRetry={() => void reload()}>
         {data ? (

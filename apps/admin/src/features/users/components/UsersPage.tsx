@@ -10,6 +10,7 @@ import {
   DataTable,
   Dialog,
   EmptyState,
+  PageHeader,
   StateSwitch,
   StatusBadge,
   TpButton,
@@ -137,14 +138,10 @@ export function UsersPage() {
 
   return (
     <div className="tp-page">
-      <div className="tp-page-head">
-        <div>
-          <h2 className="tp-page-title">Users</h2>
-          <p className="tp-page-sub">
-            Cross-tenant user directory — status and platform-admin grants across all orgs.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="Users"
+        subtitle="Cross-tenant user directory — status and platform-admin grants across all orgs."
+      />
 
       <div
         style={{

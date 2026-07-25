@@ -4,7 +4,7 @@
 const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
-  transpilePackages: ["@leadwolf/ui", "@leadwolf/types"],
+  transpilePackages: ["@leadwolf/ui", "@leadwolf/app-shell", "@leadwolf/types"],
 
   async rewrites() {
     return [

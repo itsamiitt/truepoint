@@ -13,15 +13,16 @@ Every component loads from the global `window.TruePointUI` — e.g. `const { Car
 
 ## Token vocabulary (CSS custom properties — verbatim)
 
-- **Text**: `--tp-ink` (primary), `--tp-ink-2`, `--tp-ink-3` (muted), `--tp-ink-4` (faint)
-- **Surfaces**: `--tp-surface` (white), `--tp-surface-2`, `--tp-surface-3`
+- **Text**: `--tp-ink` (primary), `--tp-ink-2`, `--tp-ink-3` (muted), `--tp-ink-4` (faint), `--tp-on-fill` (white — text/marks on filled or dark surfaces)
+- **Surfaces**: `--tp-surface` (white), `--tp-surface-2`, `--tp-surface-3`; `--tp-twilight` (near-black feature surface), `--tp-scrim` (backdrop behind overlays)
 - **Borders**: `--tp-hairline`, `--tp-hairline-2`
 - **Brand cobalt** (fills/accents, never body text): `--tp-cobalt`, `--tp-cobalt-700`, `--tp-cobalt-50`
-- **Status**: `--success`, `--warning`, `--danger`, `--accent`
-- **Shape**: `--radius` (8px), `--tp-radius-sm` (6px)
+- **Primary action fill** (ink, not cobalt): `--tp-btn`, `--tp-btn-700` (hover) — with `--tp-on-fill` text
+- **Status**: `--success`, `--warning`, `--danger`, `--danger-700` (destructive hover / error text). There is **no `--accent`** — the old Wolf-Indigo accent was retired; use `--tp-cobalt`.
+- **Shape**: `--radius` (8px), `--tp-radius-sm` (6px), `--tp-radius-card` (14px, for cards/tiles)
 - **Spacing** (4px scale): `--tp-space-1` … `--tp-space-8`
-- **Type**: `--font-sans` (Geist), `--font-mono`
-- **Elevation**: `--tp-shadow-popover`, `--tp-shadow-drawer`, `--tp-shadow-dialog`; **z-scale**: `--tp-z-sticky/-drawer/-overlay/-modal/-popover/-toast`
+- **Type**: `--font-sans` (Geist), `--font-mono` (Geist Mono)
+- **Elevation**: `--tp-shadow-card`, `--tp-shadow-card-hover` (dashboard cards/tiles), `--tp-shadow-popover`, `--tp-shadow-drawer`, `--tp-shadow-dialog`, `--tp-shadow-rail`; **z-scale**: `--tp-z-sticky/-drawer/-overlay/-modal/-popover/-toast`
 
 ## Where the truth lives
 

@@ -27,9 +27,7 @@ export function EnvGatesPanel() {
     {
       key: "key",
       header: "Env var",
-      cell: (g) => (
-        <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontSize: 12 }}>{g.key}</span>
-      ),
+      cell: (g) => <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{g.key}</span>,
     },
     {
       key: "state",

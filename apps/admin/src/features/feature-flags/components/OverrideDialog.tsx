@@ -82,9 +82,7 @@ export function OverrideDialog({
                   borderBottom: "1px solid var(--tp-hairline-2)",
                 }}
               >
-                <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontSize: 12 }}>
-                  {o.tenantId}
-                </span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{o.tenantId}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <StatusBadge tone={o.enabled ? "success" : "danger"}>
                     {o.enabled ? "Forced on" : "Forced off"}

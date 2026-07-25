@@ -101,7 +101,7 @@
     "workspaces"
   ],
   "fileCount": 1768,
-  "fileSetHash": "sha256:7cf0823826bc5bfd2a6733e3409abae9f83236a12890afce3b45d9f7f2b147c9",
+  "fileSetHash": "sha256:0a299f016a6701783cf73d756ee3302749af049c879e5df6a3d9cab6c48e66fb",
   "features": {
     "account-search": {
       "web": [],
@@ -1891,9 +1891,6 @@
       "apps/admin/src/components/TenantPicker.tsx",
       "apps/admin/src/components/UserPicker.tsx",
       "apps/admin/src/components/shell/AdminShell.tsx",
-      "apps/admin/src/components/shell/Brandmark.tsx",
-      "apps/admin/src/components/shell/Sidebar.tsx",
-      "apps/admin/src/components/shell/TopBar.tsx",
       "apps/admin/src/components/shell/navConfig.ts"
     ],
     "apps/admin/lib": [
@@ -2126,10 +2123,7 @@
       "apps/forge/src/app/page.tsx"
     ],
     "apps/forge/components": [
-      "apps/forge/src/components/shell/Brandmark.tsx",
       "apps/forge/src/components/shell/ForgeShell.tsx",
-      "apps/forge/src/components/shell/Sidebar.tsx",
-      "apps/forge/src/components/shell/TopBar.tsx",
       "apps/forge/src/components/shell/navConfig.ts"
     ],
     "apps/forge/lib": [
@@ -2184,22 +2178,15 @@
     "apps/web/components": [
       "apps/web/src/components/PageHeader.tsx",
       "apps/web/src/components/shell/AppShell.tsx",
-      "apps/web/src/components/shell/CommandPalette.tsx",
       "apps/web/src/components/shell/CreditPill.tsx",
-      "apps/web/src/components/shell/DensityProvider.tsx",
       "apps/web/src/components/shell/GlobalSearch.tsx",
-      "apps/web/src/components/shell/Logo.tsx",
       "apps/web/src/components/shell/NotificationsBell.tsx",
       "apps/web/src/components/shell/OrgSwitcher.tsx",
       "apps/web/src/components/shell/RealtimeBridge.tsx",
-      "apps/web/src/components/shell/ShortcutsDialog.tsx",
-      "apps/web/src/components/shell/Sidebar.tsx",
       "apps/web/src/components/shell/TeamSwitcher.tsx",
-      "apps/web/src/components/shell/TopBar.tsx",
       "apps/web/src/components/shell/WorkspaceSwitcher.tsx",
       "apps/web/src/components/shell/navConfig.ts",
-      "apps/web/src/components/shell/useNotifications.ts",
-      "apps/web/src/components/shell/useSidebarPin.ts"
+      "apps/web/src/components/shell/useNotifications.ts"
     ],
     "apps/web/lib": [
       "apps/web/src/lib/authClient.test.ts",
@@ -2240,6 +2227,20 @@
       "apps/workers/test/imports.conflict.itest.ts",
       "apps/workers/test/imports.queue.itest.ts",
       "apps/workers/test/imports.resilience.itest.ts"
+    ],
+    "packages/app-shell": [
+      "packages/app-shell/src/AppShellFrame.tsx",
+      "packages/app-shell/src/CommandPalette.tsx",
+      "packages/app-shell/src/DensityProvider.tsx",
+      "packages/app-shell/src/Logo.tsx",
+      "packages/app-shell/src/NavItem.tsx",
+      "packages/app-shell/src/ShortcutsDialog.tsx",
+      "packages/app-shell/src/Sidebar.tsx",
+      "packages/app-shell/src/TopBar.tsx",
+      "packages/app-shell/src/UserRow.tsx",
+      "packages/app-shell/src/index.ts",
+      "packages/app-shell/src/nav.ts",
+      "packages/app-shell/src/useSidebarPin.ts"
     ],
     "packages/auth": [
       "packages/auth/src/auditEvent.ts",
@@ -2592,6 +2593,7 @@
       "packages/ui/src/components/Combobox.tsx",
       "packages/ui/src/components/DataTable.tsx",
       "packages/ui/src/components/Icon.tsx",
+      "packages/ui/src/components/PageHeader.tsx",
       "packages/ui/src/components/Pagination.tsx",
       "packages/ui/src/components/Progress.tsx",
       "packages/ui/src/components/Spinner.tsx",

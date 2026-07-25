@@ -40,9 +40,7 @@ export function RetentionPoliciesPage() {
       header: "Data class",
       sortValue: (p) => p.dataClass,
       cell: (p) => (
-        <span style={{ fontFamily: "var(--tp-font-mono, monospace)", fontWeight: 600 }}>
-          {p.dataClass}
-        </span>
+        <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{p.dataClass}</span>
       ),
     },
     {
