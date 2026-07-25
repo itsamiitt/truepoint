@@ -209,19 +209,6 @@ describe("Postgres accountSearchRepository — firmographic company search (24)"
   });
 
   test("per-account contact rollup is workspace-scoped (count + revealed sub-count)", async () => {
-    // TEMP DIAGNOSTIC v2 (rollup-0 — remove with the fix). v1 proved RLS/GUC/data are all fine (the raw
-    // count sees 3). Now replicate the repo's mechanism: a correlated drizzle-column fragment inside a
-    // drizzle select — and print the RENDERED SQL, its params, and the rows.
-    const { sql: dsql } = await import("drizzle-orm");
-    const { accounts: accT } = await import("../src/schema/contacts.ts");
-    const frag = dsql<number>`(SELECT count(*)::int FROM contacts cc WHERE cc.account_id = ${accT.id} AND cc.deleted_at IS NULL)`;
-    await db.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, async (tx) => {
-      const b = tx.select({ id: accT.id, n: frag }).from(accT);
-      console.log("ROLLUP-PROBE-SQL", JSON.stringify(b.toSQL()));
-      const rows = await b;
-      console.log("ROLLUP-PROBE-ROWS", JSON.stringify(rows));
-    });
-
     const a = await run(scopeA(), query());
     const acme = a.accounts.find((h) => h.id === aAcme);
     expect(acme?.contactCount).toBe(3);
