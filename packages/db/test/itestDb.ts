@@ -2,7 +2,17 @@
 // EXTERNAL server via ITEST_DATABASE_URL for environments without Docker (CI service containers, local
 // clusters). External mode creates one isolated database per call so itest files never collide; both modes
 // hand back the admin URL plus the non-BYPASSRLS leadwolf_app URL the RLS proofs connect with.
+//
+// External mode clones each per-file database from a MIGRATED TEMPLATE (built once per server, advisory-
+// lock coordinated, keyed by the migration/rls file set): running the full migration chain per file cost
+// ~3 minutes × 91 files and was the reason every CI itest job died at its timeout. The per-file
+// applyMigrations() call the tests still make is a fast no-op on a clone — the drizzle journal is cloned
+// with the database, and the role/rls/grant steps are idempotent.
 
+import { createHash } from "node:crypto";
+import { readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 
 export interface ItestDb {
@@ -26,14 +36,49 @@ function appUrlFrom(adminUrl: string): string {
   return u.toString();
 }
 
+/** Stable key for the template DB: the migration + rls file NAMES (a new/renamed file = new template). */
+function migrationSetHash(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const names: string[] = [];
+  for (const dir of ["../src/migrations", "../src/rls"]) {
+    try {
+      for (const f of readdirSync(join(here, dir))) {
+        if (f.endsWith(".sql")) names.push(`${dir}/${f}`);
+      }
+    } catch {
+      // dir absent in some layouts — the hash just covers what exists
+    }
+  }
+  return createHash("sha256").update(names.sort().join("\n")).digest("hex").slice(0, 12);
+}
+
+/** Build (once per server) the fully-migrated template database and return its name. */
+async function ensureTemplate(external: string, root: postgres.Sql): Promise<string> {
+  const tmpl = `itest_tmpl_${migrationSetHash()}`;
+  // Serialize builders across processes on this server; same-name check-then-create stays race-free.
+  await root.unsafe(`SELECT pg_advisory_lock(727271)`);
+  try {
+    const exists = await root`SELECT 1 AS ok FROM pg_database WHERE datname = ${tmpl}`;
+    if (exists.length === 0) {
+      await root.unsafe(`CREATE DATABASE "${tmpl}"`);
+      const { applyMigrations } = await import("../src/applyMigrations.ts");
+      await applyMigrations(withDatabase(external, tmpl));
+    }
+  } finally {
+    await root.unsafe(`SELECT pg_advisory_unlock(727271)`);
+  }
+  return tmpl;
+}
+
 export async function startItestDb(name: string): Promise<ItestDb> {
   const external = process.env.ITEST_DATABASE_URL;
   if (external) {
     const database = `itest_${name}_${Date.now().toString(36)}`;
     const root = postgres(external, { max: 1, onnotice: () => {} });
+    const tmpl = await ensureTemplate(external, root);
     // Quote the identifier: an uppercase name (e.g. "workspaceSwitch") is otherwise folded to lowercase by
     // CREATE DATABASE while the connection URL keeps the original case -> "database does not exist".
-    await root.unsafe(`CREATE DATABASE "${database}"`);
+    await root.unsafe(`CREATE DATABASE "${database}" TEMPLATE "${tmpl}"`);
     await root.end();
     const adminUrl = withDatabase(external, database);
     return {
