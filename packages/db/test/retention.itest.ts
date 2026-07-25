@@ -246,10 +246,11 @@ describe("retention control plane: RLS / access posture", () => {
     );
     expect(deleted).toHaveLength(0);
 
-    // The owner connection confirms NOTHING changed: still 12 rows, none flipped to enforce, no bogus class.
+    // The owner connection confirms NOTHING changed: still all 14 seeded rows (12 from 0033 + 2 later
+    // classes), none flipped to enforce, no bogus class.
     const [policyCount] = (await admin`
       SELECT count(*)::int AS n FROM retention_class_policies`) as Count[];
-    expect(policyCount!.n).toBe(12);
+    expect(policyCount!.n).toBe(14);
     const [enforceCount] = (await admin`
       SELECT count(*)::int AS n FROM retention_class_policies WHERE mode = 'enforce'`) as Count[];
     expect(enforceCount!.n).toBe(0);
