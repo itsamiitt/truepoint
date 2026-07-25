@@ -48,6 +48,9 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
+  // Close the @leadwolf/db singleton pool — an open pool keeps the bun test process alive at exit
+  // (the importCopyRouting hang).
+  await db?.closeDb();
   await admin?.end();
   await dbHandle?.stop();
 });

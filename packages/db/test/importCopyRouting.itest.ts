@@ -122,6 +122,9 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
+  // Close the @leadwolf/db singleton pool too — without it the bun test process never exits, which is
+  // what parked every pre-shard CI run on this file for the rest of the job's timeout.
+  await dbm?.closeDb();
   await admin?.end();
   await dbHandle?.stop();
 });
