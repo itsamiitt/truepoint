@@ -81,9 +81,15 @@ jobs:
           exit "${status}"
 
   itests:
-    name: Integration tests — *.itest.ts on Postgres + Redis
+    name: Integration tests — *.itest.ts on Postgres + Redis (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 91 itest files × (own DB + full migrations each) never fit one 30-minute job — every prior itests
+    # "cancelled" was this timeout. Four round-robin shards keep each job well under the ceiling.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16
@@ -117,12 +123,16 @@ jobs:
       - name: Run every *.itest.ts in its own process
         run: |
           set -uo pipefail
-          mapfile -t files < <(find packages apps -name '*.itest.ts' | sort)
+          mapfile -t all < <(find packages apps -name '*.itest.ts' | sort)
+          files=()
+          for i in "${!all[@]}"; do
+            if [ $((i % 4)) -eq ${{ matrix.shard }} ]; then files+=("${all[$i]}"); fi
+          done
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No *.itest.ts found — nothing to run."
             exit 0
           fi
-          printf 'Found %d integration test file(s):\n' "${#files[@]}"
+          printf 'Shard ${{ matrix.shard }}/4 — %d of %d integration test file(s):\n' "${#files[@]}" "${#all[@]}"
           printf '  %s\n' "${files[@]}"
           status=0
           for f in "${files[@]}"; do
