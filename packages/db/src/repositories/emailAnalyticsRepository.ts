@@ -39,7 +39,9 @@ export const emailAnalyticsRepository = {
   /** Trailing-window event counts for the workspace (RLS-scoped). `replied` comes from the activity stream. */
   async workspaceMetrics(scope: TenantScope, sinceDays = 30): Promise<EmailMetricCounts> {
     return withTenantTx(scope, async (tx: Tx) => {
-      const since = new Date(Date.now() - sinceDays * 86_400_000);
+      // ISO string, not a Date: a raw-fragment param has no drizzle column mapping, and the driver
+      // serializes the described slot as text — a Date object there throws at Bind time.
+      const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
       const eventRows = (await tx.execute(
         sql`SELECT event_type, count(*)::int AS n FROM email_event
             WHERE occurred_at >= ${since} GROUP BY event_type`,

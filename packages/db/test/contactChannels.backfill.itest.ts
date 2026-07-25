@@ -296,7 +296,7 @@ describe("S-CH3 × S-CH2 — dual-write-then-backfill collision safety (any orde
       UPDATE contacts SET phone_enc = ${Buffer.from(phoneEnc)}
       WHERE workspace_id = ${wsB} AND first_name = 'John'`;
     const emailBefore = await admin`
-      SELECT id, updated_at, encode(value_enc,'hex') AS v FROM contact_emails ce
+      SELECT ce.id, ce.updated_at, encode(ce.value_enc,'hex') AS v FROM contact_emails ce
       JOIN contacts c ON c.id = ce.contact_id
       WHERE c.workspace_id = ${wsB} AND c.first_name = 'John'`;
 
@@ -306,7 +306,7 @@ describe("S-CH3 × S-CH2 — dual-write-then-backfill collision safety (any orde
     expect(res.phonesCreated).toBe(1);
 
     const emailAfter = await admin`
-      SELECT id, updated_at, encode(value_enc,'hex') AS v FROM contact_emails ce
+      SELECT ce.id, ce.updated_at, encode(ce.value_enc,'hex') AS v FROM contact_emails ce
       JOIN contacts c ON c.id = ce.contact_id
       WHERE c.workspace_id = ${wsB} AND c.first_name = 'John'`;
     expect([...emailAfter]).toEqual([...emailBefore]);
