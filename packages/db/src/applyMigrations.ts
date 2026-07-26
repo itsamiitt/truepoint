@@ -3,12 +3,11 @@
 // the non-BYPASSRLS leadwolf_app role) → drizzle-generated table migrations → every src/rls/*.sql
 // (policies + triggers). Takes the connection string as an argument so it has no dependency on @leadwolf/config.
 
+import { createHash } from "node:crypto";
 import { writeSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -20,6 +19,61 @@ const rlsFolder = join(here, "rls");
 // passwords on CREATE ROLE, so the default is strong. leadwolf_admin is NOLOGIN (reached only via SET ROLE
 // by the owner for the audited DSAR/admin path) — it needs no password and cannot be logged into directly.
 const DEFAULT_APP_ROLE_PASSWORD = "Lw_App_Role_2026!x7Qm";
+
+/** SQLSTATEs tolerated during convergence: the object a skipped-then-replayed migration creates may
+ *  already exist under an earlier lineage (renumbered tags = new hashes over old DDL). Everything else
+ *  aborts — tolerance is for "already there", never for real failures. */
+const ALREADY_EXISTS = new Set([
+  "42P07", // duplicate_table
+  "42710", // duplicate_object (constraints, triggers, roles)
+  "42701", // duplicate_column
+  "42P06", // duplicate_schema
+  "42723", // duplicate_function
+  "23505", // unique_violation (idempotent seed rows)
+]);
+
+/**
+ * Apply journal migrations by HASH MEMBERSHIP, not timestamp. Drizzle's own migrator skips any entry
+ * whose journal timestamp is older than the last applied row — after branch lineages interleave (the
+ * data-mgmt × main merge renumbered tags), a live database silently NEVER receives the missing entries
+ * (prod's `relation "auth_policies" does not exist`). This walks the journal in order and executes
+ * exactly the entries whose content-hash is absent from drizzle.__drizzle_migrations, statement by
+ * statement (autocommit, hash row recorded LAST) so an interrupted run resumes convergently. Fresh
+ * databases behave byte-identically to drizzle's migrator; the hash + table shape stay compatible.
+ */
+async function applyJournalByHash(sql: postgres.Sql, log: (m: string) => void): Promise<void> {
+  const journalRaw = await readFile(join(migrationsFolder, "meta", "_journal.json"), "utf8");
+  const journal = JSON.parse(journalRaw) as {
+    entries: Array<{ idx: number; when: number; tag: string }>;
+  };
+  await sql.unsafe(`CREATE SCHEMA IF NOT EXISTS drizzle;
+    CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (
+      id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint
+    );`);
+  const rows = await sql`SELECT hash FROM drizzle.__drizzle_migrations`;
+  const applied = new Set(rows.map((r) => (r as { hash: string }).hash));
+  for (const entry of journal.entries) {
+    const content = await readFile(join(migrationsFolder, `${entry.tag}.sql`), "utf8");
+    const hash = createHash("sha256").update(content).digest("hex");
+    if (applied.has(hash)) continue;
+    log(`migrate:        → ${entry.tag}\n`);
+    for (const statement of content.split("--> statement-breakpoint")) {
+      const q = statement.trim();
+      if (!q) continue;
+      try {
+        await sql.unsafe(q);
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code && ALREADY_EXISTS.has(code)) {
+          log(`migrate:          (tolerated ${code}: object already exists)\n`);
+          continue;
+        }
+        throw err;
+      }
+    }
+    await sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES (${hash}, ${entry.when})`;
+  }
+}
 
 const bootstrap = (appPwd: string): string => `
   CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -211,7 +265,6 @@ export async function applyMigrations(
       statement_timeout: 120000,
     },
   });
-  const db = drizzle(sql);
   // Per-phase progress so the run is never a silent black box — on a managed DB (Neon) the DDL is many
   // network round-trips and can take tens of seconds; without this it looks "frozen" when it's just working.
   // Progress via writeSync(fd 2) — a DIRECT synchronous write to stderr that cannot be buffered. Bun (like
@@ -226,7 +279,7 @@ export async function applyMigrations(
     await sql.unsafe(bootstrap(appPwd));
     if (await exists(migrationsFolder)) {
       log("migrate: [2/4] applying table migrations…\n");
-      await migrate(db, { migrationsFolder });
+      await applyJournalByHash(sql, log);
     } else {
       log(
         `migrate: WARNING no migrations at ${migrationsFolder} — run \`drizzle-kit generate\` first.\n`,
