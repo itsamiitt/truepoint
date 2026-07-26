@@ -175,69 +175,182 @@
   font-size: 12px;
   color: var(--tp-ink-4);
 }
-/* The applied is/is-not conditions for a term facet — each an independent, inline tag. */
-.condList {
+/* ── Progressive exclude (term facets) ──────────────────────────────────────────────────────────────────
+ * Include is the default and owns the full width; exclusion is one click away on the facet's label row and,
+ * once opened, becomes its own labelled + tinted region — so a reopened saved search reads its negations back.
+ * Negation is never carried by colour alone: every excluded value also carries a minus rule, and the block is
+ * a role="group" labelled "Exclude {facet}". */
+.facetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 22px;
+}
+.excToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: var(--tp-radius-sm);
+  background: none;
+  color: var(--tp-ink-3);
+  cursor: pointer;
+  transition: background var(--tp-duration-fast) var(--tp-ease), border-color
+    var(--tp-duration-fast) var(--tp-ease), color var(--tp-duration-fast) var(--tp-ease);
+}
+.excToggle:hover {
+  border-color: var(--tp-hairline-2);
+  background: var(--tp-surface-2);
+  color: var(--tp-ink-2);
+}
+.excToggle[aria-expanded="true"] {
+  border-color: var(--danger-200);
+  background: var(--danger-50);
+  color: var(--danger-700);
+}
+.excSign {
+  width: 9px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1;
+}
+/* A real <fieldset>, so the browser's own default chrome has to be reset before the block treatment. */
+.excBlock {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  margin: 0;
+  min-inline-size: 0;
+  padding: 10px;
+  border: 1px dashed var(--danger-200);
+  border-radius: var(--radius);
+  background: var(--danger-tint);
 }
-.condTag {
+.excHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.excTitle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 4px 2px 2px;
-  border: 1px solid var(--tp-hairline-2);
-  border-radius: 8px;
-  background: var(--tp-surface-2);
-}
-.condType {
-  font: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  padding: 1px 6px;
-  border-radius: 6px;
-  border: 1px solid var(--tp-ink);
-  cursor: pointer;
-  color: var(--tp-surface);
-  background: var(--tp-ink);
-}
-/* "is not" reads as a negative → outline rather than solid, so it's scannable at a glance. */
-.condType[data-op="exclude"] {
-  color: var(--tp-ink-2);
-  background: var(--tp-surface);
-  border-color: var(--tp-hairline-2);
-}
-.condValue {
-  flex: 1;
-  font-size: 12px;
-  color: var(--tp-ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.condRemove {
-  font: inherit;
   font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--danger-700);
+}
+.excClose {
+  font: inherit;
+  font-size: 14px;
   line-height: 1;
   padding: 2px;
   border: 0;
   background: none;
+  color: var(--tp-ink-3);
   cursor: pointer;
-  color: var(--tp-ink-4);
 }
-.condRemove:hover {
+.excClose:hover {
   color: var(--tp-ink);
 }
-.addRow {
+.excNote {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--danger-ink);
+}
+/* Shown INSTEAD of the block when it is closed but still holds values — nothing is silently dropped. */
+.excSummary {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--tp-ink-3);
 }
-.addRow > :last-child {
-  flex: 1;
-  min-width: 0;
+.excSummary b {
+  font-weight: 600;
+  color: var(--danger-700);
+}
+/* The minus rule that marks a value as excluded without relying on the rose colour. */
+.dashMark {
+  display: inline-block;
+  width: 8px;
+  height: 1.5px;
+  flex: none;
+  background: currentColor;
+}
+/* The exclude block's own picker inherits the rose field treatment. */
+.excBlock input {
+  border-color: var(--danger-200);
+}
+.excBlock input:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-50);
+}
+/* Applied values for one direction — cobalt for include, rose for exclude. */
+.termChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.termChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 26px;
+  padding: 0 4px 0 9px;
+  border: 1px solid var(--tp-cobalt-50);
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--tp-cobalt-700);
+  background: var(--tp-cobalt-50);
+}
+.termChip[data-op="exclude"] {
+  padding-left: 8px;
+  border-color: var(--danger-100);
+  color: var(--danger-700);
+  background: var(--danger-50);
+}
+.termChipLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.termChipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.termChipRemove:hover {
+  background: var(--tp-cobalt-tint);
+  color: var(--tp-on-fill);
+}
+.termChip[data-op="exclude"] .termChipRemove:hover {
+  background: var(--danger-100);
+  color: var(--danger-700);
 }
 .opToggle {
   display: inline-flex;
@@ -272,6 +385,15 @@
 .addChip:hover {
   border-style: solid;
   border-color: var(--tp-ink-4);
+}
+/* The same option list inside the exclude block adds to the negative clause — it says so on hover. */
+.addChip[data-op="exclude"] {
+  border-color: var(--danger-200);
+  color: var(--danger-700);
+}
+.addChip[data-op="exclude"]:hover {
+  border-color: var(--danger);
+  background: var(--danger-50);
 }
 .rangeRow {
   display: flex;

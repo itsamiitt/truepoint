@@ -216,7 +216,10 @@ apps/                           # deployable processes (thin transport adapters)
   workspace-visible ids + audit), `tags.ts`, `lists.ts`
 - **web:** `features/prospect/` — masked grid + `RecordDetail`/`QuickViewDrawer` slide-overs + `RevealDialog`; **bulk
   reveal** (`useBulkSelection`, `BulkActionBar`, `BulkRevealDialog`, pure `bulkReveal.ts` policy: stop on 402 / skip 403);
-  **filter rail** (`FilterRail` + `FacetTypeahead` over `searchApi.ts`); **AI search** (`AiSearchBox` + `ParsedFilterPreview`);
+  **filter rail** (`FilterRail` + `FilterPanel`/`AccountFilterPanel` over `filterGroups.ts`/`accountFilterGroups.ts`, with
+  `FacetTypeahead` (server-backed value picker over `searchApi.ts`) + the shared progressive-exclude pattern
+  `TermFacetField` (include by default, exclusion opens its own labelled block) + `TermOptionChips`);
+  **AI search** (`AiSearchBox` + `ParsedFilterPreview`);
   **accounts** (`AccountsTable`/`AccountFilterPanel`/`AccountDetailDrawer` over `accountSearchApi.ts`); **stages/tags**
   (`StageSelector`/`StageManagementPanel`, `TagChip`/`TagPicker`/`tagColors`); `export.ts` (masked CSV, no PII);
   `searchUrlState.ts` (shareable/bookmarkable query); `savedSearchApi.ts` + `RecentSearches`/`SaveSearchPanel`; routed at `(shell)/prospect`

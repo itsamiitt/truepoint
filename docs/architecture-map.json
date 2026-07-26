@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1767,
-  "fileSetHash": "sha256:45b911ff263494f1dc6a894cca79bb22631c9c210a027195b57abff1dd120155",
+  "fileCount": 1769,
+  "fileSetHash": "sha256:f3384edf10b7d8ff26cdb4ab8d2d2ee9b0975e47ba60ae97a2b1f8917a81a4f4",
   "features": {
     "account-search": {
       "web": [],
@@ -1196,6 +1196,8 @@
         "apps/web/src/features/prospect/components/StageSelector.tsx",
         "apps/web/src/features/prospect/components/TagChip.tsx",
         "apps/web/src/features/prospect/components/TagPicker.tsx",
+        "apps/web/src/features/prospect/components/TermFacetField.tsx",
+        "apps/web/src/features/prospect/components/TermOptionChips.tsx",
         "apps/web/src/features/prospect/export.ts",
         "apps/web/src/features/prospect/filterGroups.test.ts",
         "apps/web/src/features/prospect/filterGroups.ts",
