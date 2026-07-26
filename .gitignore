@@ -36,5 +36,6 @@ ds-bundle/
 .design-sync/learnings/
 .design-sync/node_modules
 packages/ui/.ds-tsconfig.json
+.ds-prospect-tsconfig.json
 # (the scratch built-package goes in packages/ui/dist/ — already covered by the dist/ rule above,
 #  and excluded from the architecture-map scan, which skips dist/ segments)
