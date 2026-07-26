@@ -3,6 +3,8 @@
 // and every Forge repo call runs under withForgeTx (@leadwolf/db) — there is NO createDb here, the tx wrapper
 // owns the leadwolf_forge connection. The DB/Redis/object-store are not exercised locally (staging/CI); this
 // wiring only has to typecheck. Capture + sync egress stay DARK until the gating flags flip (ADR-0046).
+
+import { checkRequestRate } from "@leadwolf/auth";
 import {
   ENDPOINT_ALLOWLIST,
   ENVELOPE_MAX_BYTES,
@@ -51,6 +53,10 @@ function makeLandDeps(tx: Tx): LandDeps {
 }
 
 const app = createForgeApi({
+  // Real coarse throttle + the /metrics secret. Both are injected rather than imported inside the app factory so
+  // the test harness composes the same app without a Redis client or a live secret.
+  rateLimit: checkRequestRate,
+  metricsToken: env.METRICS_TOKEN,
   captures: {
     // Land verbatim in ONE leadwolf_forge tx; enqueue parse AFTER it commits (P-01.7) so a parse job is never
     // dispatched before its raw_captures row exists and a rolled-back envelope enqueues nothing. jobId = content

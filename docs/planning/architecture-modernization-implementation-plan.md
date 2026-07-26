@@ -287,7 +287,7 @@ optimization because optimizing a broken path is wasted work.
   `await c.req.json()` at `captures/routes.ts:44` precedes the 413s at `:57-62`, so a single request forces a
   128 MB read plus a parse of it. **needs:** A-0.1, F-0.1.
 
-- [ ] **A-0.3 · Rate-limit forge-api and gate `/metrics`.** `apps/api` applies `rateLimit` to `/api/*`;
+- [x] **A-0.3 · Rate-limit forge-api and gate `/metrics`.** `apps/api` applies `rateLimit` to `/api/*`;
   forge-api applies nothing globally, so every BFF read and the promotion write are unthrottled, and
   `/metrics` is unauthenticated on the public `forge-api.truepoint.in` origin.
   **files:** `apps/forge-api/src/app.ts:19-25`
