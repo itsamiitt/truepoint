@@ -4,8 +4,7 @@
 // the endpoint, so the gate is never UI-only. Mirrors AppShell's session probe; no TanStack Query in apps/web.
 "use client";
 
-import { fetchWithAuth } from "@/lib/authClient";
-import { API_BASE } from "@/lib/publicConfig";
+import { getSessionProbe } from "@/lib/sessionProbe";
 import { useEffect, useState } from "react";
 
 /** Workspace roles that may perform money/admin actions (OD-8 workspace-admin). */
@@ -22,14 +21,10 @@ export function useSessionRole(): string | null {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      try {
-        const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
-        if (!alive || !res.ok) return;
-        const body = (await res.json()) as { role: string | null };
-        setRole(body.role ?? null);
-      } catch {
-        // best-effort: the action stays hidden; the server enforces the real gate
-      }
+      // Shared, de-duplicated read — see sessionProbe. Previously its own /auth/session request.
+      const result = await getSessionProbe();
+      if (!alive || !result.ok) return; // best-effort: the action stays hidden; the server is the real gate
+      setRole(result.session.role);
     })();
     return () => {
       alive = false;

@@ -12,13 +12,14 @@
 import { AnnouncementBanner } from "@/features/announcements/AnnouncementBanner";
 import {
   clearAccessToken,
-  fetchWithAuth,
   getAccessToken,
   logout,
   silentRefresh,
   startLogin,
 } from "@/lib/authClient";
-import { API_BASE } from "@/lib/publicConfig";
+// The shell no longer fetches /auth/session itself (hence no fetchWithAuth/API_BASE here) — sessionProbe owns
+// that request and shares it with the switchers and the session hooks.
+import { getSessionProbe } from "@/lib/sessionProbe";
 import {
   AppShellFrame,
   Brandmark,
@@ -87,17 +88,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       // 2. We have a token — unblock the tree NOW so the route's primary data fetch runs concurrently with the
       //    session probe below (instead of after a serial refresh→/session chain).
       if (live()) setAuth("ready");
-      // 3. Resolve the session profile in the background to fill the sidebar (email/role).
-      const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
+      // 3. Resolve the session profile in the background to fill the sidebar (email/role). Shared with the
+      //    workspace switcher and the useSessionRole/useSessionIdentity hooks via sessionProbe, so the shell
+      //    and its children issue ONE /auth/session request between them instead of one each.
+      const probed = await getSessionProbe();
       if (!live()) return;
-      if (res.ok) {
-        setSession((await res.json()) as Session);
+      if (probed.ok) {
+        setSession(probed.session);
         return;
       }
       // A 401/403 means the SERVER rejected the token even though it passed the client-side expiry check
       // (revoked session, kicked user). The client can't refresh past a revocation, so discard the in-memory
       // token and re-gate to a fresh login — otherwise the user would sit on a shell where every fetch 401s.
-      if (res.status === 401 || res.status === 403) {
+      if (probed.status === 401 || probed.status === 403) {
         clearAccessToken();
         setAuth("redirecting");
         await startLogin();

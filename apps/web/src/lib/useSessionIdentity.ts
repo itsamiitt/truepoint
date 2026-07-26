@@ -5,8 +5,7 @@
 // requireRole on every endpoint, so this is never a security gate. No TanStack in apps/web's shared lib layer.
 "use client";
 
-import { fetchWithAuth } from "@/lib/authClient";
-import { API_BASE } from "@/lib/publicConfig";
+import { getSessionProbe } from "@/lib/sessionProbe";
 import { useEffect, useState } from "react";
 
 export interface SessionIdentity {
@@ -20,14 +19,11 @@ export function useSessionIdentity(): SessionIdentity {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      try {
-        const res = await fetchWithAuth(`${API_BASE}/api/v1/auth/session`);
-        if (!alive || !res.ok) return;
-        const body = (await res.json()) as { userId?: string | null; role?: string | null };
-        setIdentity({ userId: body.userId ?? null, role: body.role ?? null });
-      } catch {
-        // best-effort: attribution stays generic; the server enforces the real gate
-      }
+      // Shared, de-duplicated read: this used to issue its own /auth/session request, so a page mounting this
+      // alongside the shell and the workspace switcher fetched the same endpoint several times over.
+      const result = await getSessionProbe();
+      if (!alive || !result.ok) return; // best-effort: attribution stays generic on a miss
+      setIdentity({ userId: result.session.userId, role: result.session.role });
     })();
     return () => {
       alive = false;

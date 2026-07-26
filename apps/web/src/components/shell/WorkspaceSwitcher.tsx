@@ -6,6 +6,7 @@
 
 import { fetchWithAuth, switchWorkspace } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import { getSessionProbe } from "@/lib/sessionProbe";
 import type { WorkspaceRole } from "@leadwolf/types";
 import { useEffect, useRef, useState } from "react";
 import styles from "./WorkspaceSwitcher.module.css";
@@ -29,9 +30,12 @@ export function WorkspaceSwitcher() {
   useEffect(() => {
     void (async () => {
       try {
-        const [listRes, sessionRes] = await Promise.all([
+        // The workspace LIST is this component's own fetch; the session profile comes from the shared probe
+        // (sessionProbe), so mounting inside the shell no longer re-requests /auth/session that the shell has
+        // already asked for. Still issued concurrently — the probe is usually already resolved by now.
+        const [listRes, probed] = await Promise.all([
           fetchWithAuth(`${API_BASE}/api/v1/workspaces`),
-          fetchWithAuth(`${API_BASE}/api/v1/auth/session`),
+          getSessionProbe(),
         ]);
         if (!listRes.ok) {
           setState("error");
@@ -39,9 +43,8 @@ export function WorkspaceSwitcher() {
         }
         const list = (await listRes.json()) as { workspaces: WorkspaceOption[] };
         setWorkspaces(list.workspaces);
-        if (sessionRes.ok) {
-          const session = (await sessionRes.json()) as { workspaceId: string | null };
-          setActiveId(session.workspaceId);
+        if (probed.ok) {
+          setActiveId(probed.session.workspaceId);
         }
         setState("ready");
       } catch {

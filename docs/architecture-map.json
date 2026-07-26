@@ -100,8 +100,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1778,
-  "fileSetHash": "sha256:8c12e0eeab3e68612c2466d7a185e05321bf8a10063e8dada0723d78ceb09505",
+  "fileCount": 1780,
+  "fileSetHash": "sha256:63c35ba89c08a33e20502d246f50e113eb0d32f2743f318604bdfaf05638ac14",
   "features": {
     "account-search": {
       "web": [],
@@ -2204,6 +2204,8 @@
       "apps/web/src/lib/eventStream.ts",
       "apps/web/src/lib/pkce.ts",
       "apps/web/src/lib/publicConfig.ts",
+      "apps/web/src/lib/sessionProbe.test.ts",
+      "apps/web/src/lib/sessionProbe.ts",
       "apps/web/src/lib/useSessionIdentity.ts",
       "apps/web/src/lib/useSessionRole.ts"
     ],
