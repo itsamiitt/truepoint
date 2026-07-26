@@ -17,7 +17,7 @@ import {
 import {
   type Tx,
   getApprovalRequest,
-  getPipelineOverviewCounts,
+  getOverviewCounts,
   getSyncStatusCounts,
   landRawCapture,
   listParsers,
@@ -78,8 +78,23 @@ const app = createForgeApi({
   bff: {
     resolveStaff,
     readers: {
-      // DB-backed (Phase 3), each read under its own withForgeTx — the shape is the console's contract (13 §5).
-      overview: () => withForgeTx((tx) => getPipelineOverviewCounts(tx)),
+      // DB-backed (Phase 3), each read under its own withForgeTx — the shape is the console's contract (13 §5):
+      // the OverviewSummary the console renders (count tiles + the recent-captures feed), NOT the raw
+      // medallion funnel — serving the funnel here crashed the Overview page on `recentCaptures.length`.
+      overview: () =>
+        withForgeTx(async (tx) => {
+          const counts = await getOverviewCounts(tx);
+          const recent = await listRecentCaptures(tx, 8);
+          return {
+            ...counts,
+            recentCaptures: recent.map((r) => ({
+              id: r.id,
+              source: r.source,
+              status: r.status,
+              capturedAt: r.capturedAt.toISOString(),
+            })),
+          };
+        }),
       reviewTasks: () => withForgeTx((tx) => listReviewTasks(tx)),
       parsers: () => withForgeTx((tx) => listParsers(tx)),
       syncStatus: () => withForgeTx((tx) => getSyncStatusCounts(tx)),
