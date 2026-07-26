@@ -378,7 +378,7 @@ optimization because optimizing a broken path is wasted work.
   `apps/auth/src/lib/cors.ts:8`. Interim until T-2.1 deletes preflights entirely — preflight cache is
   per-exact-URL, so cursor-paginated URLs re-preflight every page today.
 
-- [ ] **L-1.9 · Trust-proxy IP resolution for the root rate limiter.**
+- [x] **L-1.9 · Trust-proxy IP resolution for the root rate limiter.**
   `apps/api/src/app.ts:110` mounts `rateLimit` on `/api/*` **before** authn, so the per-subject branch is
   dead at the root and it keys on spoofable `x-forwarded-for` (`rateLimit.ts:19-20`). Per-subject re-mounts
   *do* exist at router level (e.g. `import/routes.ts:97`) and not verifying a JWT pre-throttle is a

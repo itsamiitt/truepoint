@@ -9,16 +9,19 @@
 // the opposite of the perf goal. So we key by `sub` whenever claims are present (set by an authn that has
 // already run for this request) and fall back to a coarse IP key otherwise. Read-only — no limit is weakened.
 
-import { checkRequestRate } from "@leadwolf/auth";
+import { checkRequestRate, clientIpFromHeaders } from "@leadwolf/auth";
 import type { Context, Next } from "hono";
 
 function clientKey(c: Context): string {
   // claims are set by authn when this runs inside (or after) an authenticated router; absent at the app root.
   const sub = (c.get("claims") as { sub?: string } | undefined)?.sub;
   if (sub) return `sub:${sub}`;
-  const fwd = c.req.header("x-forwarded-for");
-  const ip = fwd?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "unknown";
-  return `ip:${ip}`;
+  // IP fallback. This MUST use the trusted-hop rule, not the first X-Forwarded-For entry: each trusted proxy
+  // APPENDS to that header rather than replacing it, so the leftmost value is whatever the client sent. Reading
+  // it made the throttle trivially evadable — send a different X-Forwarded-For per request and every request
+  // gets a fresh bucket. This is the exact bypass already fixed on the auth origin (W10/#14); it now shares that
+  // implementation from @leadwolf/auth instead of keeping a second, weaker copy here.
+  return `ip:${clientIpFromHeaders({ get: (name) => c.req.header(name) ?? null })}`;
 }
 
 export async function rateLimit(c: Context, next: Next): Promise<void> {
