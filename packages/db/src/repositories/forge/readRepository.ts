@@ -233,6 +233,42 @@ export async function getSyncStatusCounts(tx: Tx): Promise<SyncStatusCounts> {
   };
 }
 
+export interface OverviewCounts {
+  capturesToday: number;
+  pendingReview: number;
+  activeParsers: number;
+  syncBacklog: number;
+}
+
+/** The console Overview header tiles (13 §5 — the OverviewSummary contract's count half; the BFF composes
+ *  it with listRecentCaptures). capturesToday buckets by the UTC day. */
+export async function getOverviewCounts(tx: Tx): Promise<OverviewCounts> {
+  const [captures] = await tx
+    .select({ n: countInt })
+    .from(rawCaptures)
+    .where(
+      sql`${rawCaptures.ingestedAt} >= date_trunc('day', now() AT TIME ZONE 'utc') AT TIME ZONE 'utc'`,
+    );
+  const [review] = await tx
+    .select({ n: countInt })
+    .from(reviewTasks)
+    .where(eq(reviewTasks.status, "open"));
+  const [parsersActive] = await tx
+    .select({ n: countInt })
+    .from(parserVersions)
+    .where(eq(parserVersions.status, "active"));
+  const [backlog] = await tx
+    .select({ n: countInt })
+    .from(syncState)
+    .where(eq(syncState.status, "pending"));
+  return {
+    capturesToday: captures?.n ?? 0,
+    pendingReview: review?.n ?? 0,
+    activeParsers: parsersActive?.n ?? 0,
+    syncBacklog: backlog?.n ?? 0,
+  };
+}
+
 export interface CaptureListRow {
   id: string;
   source: string;

@@ -73,7 +73,7 @@ export function OverviewPage() {
             <h3 className="tp-section-title">Recent captures</h3>
             <DataTable
               columns={columns}
-              rows={data.recentCaptures}
+              rows={data.recentCaptures ?? []}
               rowKey={(c) => c.id}
               empty={
                 <EmptyState
