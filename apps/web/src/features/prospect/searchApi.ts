@@ -27,12 +27,18 @@ async function toError(res: Response, fallback: string): Promise<ApiError> {
   );
 }
 
-/** POST /search/contacts — filtered, keyset-paged masked results (24 §5/§6). */
-export async function searchContacts(query: ContactQuery): Promise<SearchPage<ContactHit>> {
+/** POST /search/contacts — filtered, keyset-paged masked results (24 §5/§6).
+ *  `signal` cancels a superseded request: without it, two searches raced and the LAST one to resolve won,
+ *  which is not necessarily the newest — so fast filter edits could leave stale results on screen. */
+export async function searchContacts(
+  query: ContactQuery,
+  signal?: AbortSignal,
+): Promise<SearchPage<ContactHit>> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/search/contacts`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(query),
+    signal,
   });
   if (!res.ok) throw await toError(res, "Search failed");
   return (await res.json()) as SearchPage<ContactHit>;
@@ -70,11 +76,13 @@ export async function aiSearch(text: string): Promise<AiSearchResponse> {
 export async function fetchFacetCounts(
   query: ContactQuery,
   fields: FacetKey[],
+  signal?: AbortSignal,
 ): Promise<FacetCount[]> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/search/facets`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ query, fields }),
+    signal,
   });
   if (!res.ok) throw await toError(res, "Facet counts failed");
   return ((await res.json()) as { facets: FacetCount[] }).facets;

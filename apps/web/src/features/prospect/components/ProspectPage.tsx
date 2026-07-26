@@ -83,9 +83,20 @@ const TOGGLEABLE_COLUMNS: { key: string; label: string }[] = [
 const DEFAULT_VISIBLE = TOGGLEABLE_COLUMNS.map((c) => c.key);
 
 function ProspectPageInner() {
-  const search = useProspectSearch();
+  // Scope is resolved FIRST, because it gates the two search engines below. React forbids conditional hooks, so
+  // both engines are always mounted — but only the active one may issue requests. Previously scope was read
+  // *after* all four hooks, so every visit to this page fired the inactive scope's search AND facet-count POSTs
+  // for a grid that was never rendered: four wasted round-trips on the app's busiest surface.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const scope: ResultScope = searchParams?.get("scope") === "accounts" ? "accounts" : "contacts";
+  const contactsActive = scope === "contacts";
+  const accountsActive = scope === "accounts";
+
+  const search = useProspectSearch({ enabled: contactsActive });
   const { query, setQuery, hits, loading, error, hasMore, loadMore, reload, markRevealed } = search;
-  const counts = useFacetCounts(query, COUNT_FIELDS);
+  const counts = useFacetCounts(query, COUNT_FIELDS, { enabled: contactsActive });
   const recent = useRecentSearches();
   const { tags } = useTags();
 
@@ -99,15 +110,13 @@ function ProspectPageInner() {
   }, [hits, hydrateRevealed]);
 
   // Company-level (accounts) scope engine — independent of the contacts query, its own URL params (aq/asort/af).
-  const accountSearch = useAccountSearch();
-  const accountCounts = useAccountFacetCounts(accountSearch.query, ACCOUNT_COUNT_FIELDS);
+  const accountSearch = useAccountSearch({ enabled: accountsActive });
+  const accountCounts = useAccountFacetCounts(accountSearch.query, ACCOUNT_COUNT_FIELDS, {
+    enabled: accountsActive,
+  });
   const [accountDetail, setAccountDetail] = useState<MaskedAccount | null>(null);
 
   // Scope lives in the URL (?scope=accounts) so the active surface is shareable + restored on refresh/back.
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const scope: ResultScope = searchParams?.get("scope") === "accounts" ? "accounts" : "contacts";
   const setScope = useCallback(
     (next: ResultScope) => {
       const params = new URLSearchParams(searchParams?.toString() ?? "");

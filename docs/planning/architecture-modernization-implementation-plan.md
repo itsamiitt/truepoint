@@ -389,7 +389,7 @@ optimization because optimizing a broken path is wasted work.
   compose marks the API healthy with a dead database. `apps/workers` already has a drain- and Redis-aware
   `/ready` — copy it.
 
-- [ ] **L-1.11 · Frontend: stop the wasted work on the app's busiest surface.**
+- [x] **L-1.11 (partial: dead-scope gating, aborts, RQ defaults, loading/error) · Frontend: stop the wasted work on the app's busiest surface.**
   - `apps/web/src/features/prospect/components/ProspectPage.tsx:86-103` — contacts **and** accounts
     search+facet hooks all mount unconditionally (no hook takes an `enabled`/skip param and none reads
     `scope`), so **4 dead POSTs** fire on every visit. Gate the inactive scope.

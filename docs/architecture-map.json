@@ -100,8 +100,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1774,
-  "fileSetHash": "sha256:7d59849c6b5ed053d1f43a70597696c25bcfc7198943b8af8debb437e670458a",
+  "fileCount": 1777,
+  "fileSetHash": "sha256:359dc115167b3c24a13257aa3f67255bb03f7d0531a891fbf4ef3a5105b167b9",
   "features": {
     "account-search": {
       "web": [],
@@ -1185,6 +1185,7 @@
         "apps/web/src/features/prospect/hooks/useTypeahead.ts",
         "apps/web/src/features/prospect/index.ts",
         "apps/web/src/features/prospect/savedSearchApi.ts",
+        "apps/web/src/features/prospect/searchAbort.test.ts",
         "apps/web/src/features/prospect/searchApi.ts",
         "apps/web/src/features/prospect/searchUrlState.test.ts",
         "apps/web/src/features/prospect/searchUrlState.ts",
@@ -2142,6 +2143,7 @@
       "apps/web/src/app/(public)/pricing/page.tsx",
       "apps/web/src/app/(shell)/data-health/page.tsx",
       "apps/web/src/app/(shell)/enrichment/jobs/page.tsx",
+      "apps/web/src/app/(shell)/error.tsx",
       "apps/web/src/app/(shell)/home/page.tsx",
       "apps/web/src/app/(shell)/imports/[jobId]/page.tsx",
       "apps/web/src/app/(shell)/imports/new/page.tsx",
@@ -2150,6 +2152,7 @@
       "apps/web/src/app/(shell)/layout.tsx",
       "apps/web/src/app/(shell)/lists/[id]/page.tsx",
       "apps/web/src/app/(shell)/lists/page.tsx",
+      "apps/web/src/app/(shell)/loading.tsx",
       "apps/web/src/app/(shell)/notifications/page.tsx",
       "apps/web/src/app/(shell)/prospect/page.tsx",
       "apps/web/src/app/(shell)/reports/page.tsx",

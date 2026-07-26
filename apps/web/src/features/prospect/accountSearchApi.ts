@@ -28,11 +28,15 @@ export interface AccountSuggestion {
 }
 
 /** POST /account-search/search — filtered, keyset-paged firmographic results → { accounts, nextCursor }. */
-export async function searchAccounts(query: AccountQuery): Promise<AccountSearchPage> {
+export async function searchAccounts(
+  query: AccountQuery,
+  signal?: AbortSignal,
+): Promise<AccountSearchPage> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/account-search/search`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(query),
+    signal,
   });
   if (!res.ok) throw await toApiError(res, "Account search failed");
   return (await res.json()) as AccountSearchPage;
@@ -42,11 +46,13 @@ export async function searchAccounts(query: AccountQuery): Promise<AccountSearch
 export async function fetchAccountFacetCounts(
   query: AccountQuery,
   fields: AccountFacetKey[],
+  signal?: AbortSignal,
 ): Promise<AccountFacetCount[]> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/account-search/facets`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ query, fields }),
+    signal,
   });
   if (!res.ok) throw await toApiError(res, "Account facet counts failed");
   return ((await res.json()) as { facets: AccountFacetCount[] }).facets;

@@ -12,7 +12,7 @@
 
 import type { AccountQuery, AccountSearchPage, MaskedAccount } from "@leadwolf/types";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { searchAccounts } from "../accountSearchApi";
 
 const PAGE_SIZE = 50;
@@ -63,7 +63,10 @@ export function paramsToAccountQuery(params: URLSearchParams): AccountQuery {
   };
 }
 
-export function useAccountSearch(): AccountSearch {
+/** `enabled: false` derives the query from the URL but issues NO request — the Prospect page mounts this engine
+ *  even while the Contacts scope is showing (hooks cannot be conditional), and it used to search anyway. */
+export function useAccountSearch(options?: { enabled?: boolean }): AccountSearch {
+  const enabled = options?.enabled ?? true;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -93,22 +96,29 @@ export function useAccountSearch(): AccountSearch {
     [router, pathname, searchParams],
   );
 
+  // Cancels a superseded search so the newest query wins, rather than whichever response happens to land last.
+  const inFlight = useRef<AbortController | null>(null);
+
   const run = useCallback(
     async (fromCursor: string | null) => {
+      inFlight.current?.abort();
+      const controller = new AbortController();
+      inFlight.current = controller;
       setLoading(true);
       setError(null);
       try {
-        const page: AccountSearchPage = await searchAccounts({
-          ...query,
-          limit: PAGE_SIZE,
-          cursor: fromCursor ?? undefined,
-        });
+        const page: AccountSearchPage = await searchAccounts(
+          { ...query, limit: PAGE_SIZE, cursor: fromCursor ?? undefined },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return; // a newer run owns the state
         setAccounts((prev) => (fromCursor ? [...prev, ...page.accounts] : page.accounts));
         setCursor(page.nextCursor);
       } catch (e) {
+        if (controller.signal.aborted) return; // our own cancellation is not an error
         setError(e instanceof Error ? e.message : "Account search failed");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     },
     [query],
@@ -118,8 +128,11 @@ export function useAccountSearch(): AccountSearch {
   const queryKey = useMemo(() => JSON.stringify(query), [query]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-run is intentionally keyed on queryKey only.
   useEffect(() => {
+    if (!enabled) return;
     void run(null);
-  }, [queryKey]);
+  }, [queryKey, enabled]);
+
+  useEffect(() => () => inFlight.current?.abort(), []);
 
   const loadMore = useCallback(() => {
     if (cursor) void run(cursor);

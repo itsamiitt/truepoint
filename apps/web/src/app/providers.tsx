@@ -9,7 +9,21 @@ import { type ReactNode, useState } from "react";
 
 export function Providers({ children }: { children: ReactNode }) {
   // One client per browser session, created lazily in state so a re-render never resets the cache.
-  // Deliberately default options — per-surface behavior (poll cadence, retries) is pinned per hook (11 §8.2).
-  const [client] = useState(() => new QueryClient());
+  //
+  // These defaults are deliberate, not decoration. TanStack's own defaults are `staleTime: 0` +
+  // `refetchOnWindowFocus: true`, which means every cached read is considered stale the moment it lands and
+  // EVERY tab focus refetches every active query — so simply alt-tabbing back into the app re-issued all of
+  // them. A short staleTime keeps genuinely fresh data out of the network path while remaining far below any
+  // surface's tolerance for staleness, and one retry avoids turning a single blip into a visible error without
+  // hiding a real outage behind a long retry chain. Per-surface overrides (poll cadence, longer staleTime for
+  // near-static reads) are still pinned per hook (11 §8.2) and win over these.
+  const [client] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 },
+        },
+      }),
+  );
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
