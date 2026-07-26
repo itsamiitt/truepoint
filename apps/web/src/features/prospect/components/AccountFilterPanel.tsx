@@ -1,14 +1,15 @@
 // AccountFilterPanel.tsx — the firmographic faceted filter sidebar (the Accounts sibling of FilterPanel.tsx),
 // driving the server `AccountQuery` via the pure helpers in ../accountFilterGroups. Same design as FilterPanel:
-// the firmographic groups are ACCORDIONS COLLAPSED BY DEFAULT (active-count badge per header), term facets
-// support the is/is-not MULTI-CONDITION pattern (each condition an independent inline tag, flips on click, ✕
-// removes), and the Prospect/Account scope switch is hosted at the top of the rail. Reuses FacetTypeahead for
-// the high-cardinality facets that map onto a server FacetKey, and a free-text add for the account-only facets.
+// the firmographic groups are ACCORDIONS COLLAPSED BY DEFAULT (active-count badge per header), term facets use
+// the PROGRESSIVE EXCLUDE pattern (see TermFacetField — include owns the full width, exclusion opens into its
+// own labelled block), and the Prospect/Account scope switch is hosted at the top of the rail. Reuses
+// FacetTypeahead for the high-cardinality facets that map onto a server FacetKey, and a free-text add for the
+// account-only facets.
 "use client";
 
 import type { AccountQuery, AccountTermField, FacetKey } from "@leadwolf/types";
 import { TpButton, TpInput } from "@leadwolf/ui";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   ACCOUNT_FILTER_GROUPS,
   type AccountFacetDef,
@@ -16,7 +17,6 @@ import {
   type TermOp,
   addTermCondition,
   clearAllFilters,
-  flipTermCondition,
   getRange,
   groupActiveCount,
   hasActiveFilters,
@@ -26,6 +26,8 @@ import {
 } from "../accountFilterGroups";
 import styles from "../prospect.module.css";
 import { FacetTypeahead } from "./FacetTypeahead";
+import { TermFacetField } from "./TermFacetField";
+import { TermOptionChips } from "./TermOptionChips";
 
 // Account term fields that ALSO exist on the contacts-side FacetKey index → reuse the server typeahead.
 const TYPEAHEAD_FACET_KEY: Partial<Record<AccountTermField, FacetKey>> = {
@@ -156,145 +158,89 @@ function TermFacet({
   onChange: (q: AccountQuery) => void;
   counts?: Map<string, number>;
 }) {
-  const [addOp, setAddOp] = useState<TermOp>("include");
   const conditions = termConditions(query, facet.field);
   const applied = new Set(conditions.map((c) => c.value));
   const typeaheadKey = facet.input === "typeahead" ? TYPEAHEAD_FACET_KEY[facet.field] : undefined;
+  // A value applied in EITHER direction is never offered again — it can never be both included and excluded.
   const options = (facet.options ?? []).filter((o) => !applied.has(o.value));
+  const add = (op: TermOp, value: string) =>
+    onChange(addTermCondition(query, facet.field, op, value));
+
+  const picker = (op: TermOp, autoFocus: boolean) => {
+    if (facet.input !== "typeahead")
+      return (
+        <TermOptionChips
+          field={facet.field}
+          options={options}
+          op={op}
+          counts={counts}
+          anyApplied={applied.size > 0}
+          onAdd={(v) => add(op, v)}
+        />
+      );
+    return typeaheadKey ? (
+      <FacetTypeahead
+        field={typeaheadKey}
+        label={facet.label}
+        op={op}
+        autoFocus={autoFocus}
+        selected={[...applied]}
+        onAdd={(v) => add(op, v)}
+      />
+    ) : (
+      <FreeTextAdd label={facet.label} op={op} autoFocus={autoFocus} onAdd={(v) => add(op, v)} />
+    );
+  };
 
   return (
-    <div className={styles.facet}>
-      <span className={styles.facetLabel}>{facet.label}</span>
-
-      {conditions.length > 0 ? (
-        <div className={styles.condList}>
-          {conditions.map((c) => (
-            <span key={`${c.op}:${c.value}`} className={styles.condTag}>
-              <button
-                type="button"
-                className={styles.condType}
-                data-op={c.op}
-                title="Toggle is / is not"
-                onClick={() => onChange(flipTermCondition(query, facet.field, c.op, c.value))}
-              >
-                {c.op === "include" ? "is" : "is not"}
-              </button>
-              <span className={styles.condValue}>{c.label}</span>
-              <button
-                type="button"
-                aria-label={`Remove ${c.label}`}
-                className={styles.condRemove}
-                onClick={() => onChange(removeTermCondition(query, facet.field, c.op, c.value))}
-              >
-                ✕
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      <div className={styles.addRow}>
-        <OpToggle op={addOp} onChange={setAddOp} />
-        {facet.input === "typeahead" ? (
-          typeaheadKey ? (
-            <FacetTypeahead
-              field={typeaheadKey}
-              label={facet.label}
-              selected={[...applied]}
-              onAdd={(v) => onChange(addTermCondition(query, facet.field, addOp, v))}
-              onRemove={(v) => onChange(removeTermCondition(query, facet.field, "include", v))}
-            />
-          ) : (
-            <FreeTextAdd
-              label={facet.label}
-              onAdd={(v) => onChange(addTermCondition(query, facet.field, addOp, v))}
-            />
-          )
-        ) : null}
-      </div>
-
-      {facet.input !== "typeahead" ? (
-        <div className={styles.chipWrap}>
-          {options.length === 0 ? (
-            <span className={styles.facetEmpty}>
-              {applied.size > 0 ? "All options selected" : "No options"}
-            </span>
-          ) : (
-            options.map((o) => {
-              const count = counts?.get(`${facet.field}:${o.value}`);
-              return (
-                <button
-                  key={o.value}
-                  type="button"
-                  className={styles.addChip}
-                  onClick={() => onChange(addTermCondition(query, facet.field, addOp, o.value))}
-                >
-                  + {o.label}
-                  {count !== undefined ? ` (${count.toLocaleString()})` : ""}
-                </button>
-              );
-            })
-          )}
-        </div>
-      ) : null}
-    </div>
+    <TermFacetField
+      label={facet.label}
+      conditions={conditions}
+      excludeNoun="Accounts"
+      onRemove={(op, value) => onChange(removeTermCondition(query, facet.field, op, value))}
+      renderPicker={picker}
+    />
   );
 }
 
 /** Free-text value add for account-only facets with no contacts-side typeahead index (hq_country/hq_city/…). */
-function FreeTextAdd({ label, onAdd }: { label: string; onAdd: (value: string) => void }) {
+function FreeTextAdd({
+  label,
+  op,
+  autoFocus,
+  onAdd,
+}: {
+  label: string;
+  op: TermOp;
+  autoFocus: boolean;
+  onAdd: (value: string) => void;
+}) {
   const [value, setValue] = useState("");
+  const anchorRef = useRef<HTMLDivElement>(null);
   const commit = () => {
     const v = value.trim();
     if (v) onAdd(v);
     setValue("");
   };
+  useEffect(() => {
+    // TpInput renders a plain <input> and takes no ref, so reach it through the wrapper.
+    if (autoFocus) anchorRef.current?.querySelector("input")?.focus();
+  }, [autoFocus]);
   return (
-    <TpInput
-      value={value}
-      placeholder={`Add ${label.toLowerCase()}…`}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          commit();
-        }
-      }}
-    />
-  );
-}
-
-function OpToggle({ op, onChange }: { op: TermOp; onChange: (op: TermOp) => void }) {
-  return (
-    <span className={styles.opToggle}>
-      <MiniToggle active={op === "include"} onClick={() => onChange("include")}>
-        is
-      </MiniToggle>
-      <MiniToggle active={op === "exclude"} onClick={() => onChange("exclude")}>
-        is not
-      </MiniToggle>
-    </span>
-  );
-}
-
-function MiniToggle({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={styles.miniToggle}
-      data-active={active ? "true" : undefined}
-    >
-      {children}
-    </button>
+    <div ref={anchorRef}>
+      <TpInput
+        value={value}
+        aria-label={op === "exclude" ? `${label} to exclude` : `Add ${label.toLowerCase()}`}
+        placeholder={op === "exclude" ? `${label} to exclude…` : `Add ${label.toLowerCase()}…`}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+        }}
+      />
+    </div>
   );
 }
 

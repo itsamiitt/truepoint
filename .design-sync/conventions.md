@@ -2,7 +2,7 @@
 
 Every component loads from the global `window.TruePointUI` — e.g. `const { Card, TpButton, DataTable } = window.TruePointUI`. React must already be on the page; mount your tree into a dedicated child node (not the host's root). **Light theme only.**
 
-**No global provider is required** — components render standalone. The one exception is toasts: wrap the subtree in `<ToastProvider>` and call `useToast()` to fire them. Nothing else needs a provider.
+**The primitives need no provider** — everything in the `general` group renders standalone. Two providers exist, and the `prospect` group needs them: wrap the subtree in `<ToastProvider>` (then `useToast()` fires toasts), and in `<RevealStoreProvider>` for anything that touches contact reveal data. See **The prospect surface** below.
 
 ## Two component families, one token system
 
@@ -19,10 +19,32 @@ Every component loads from the global `window.TruePointUI` — e.g. `const { Car
 - **Brand cobalt** (fills/accents, never body text): `--tp-cobalt`, `--tp-cobalt-700`, `--tp-cobalt-50`
 - **Primary action fill** (ink, not cobalt): `--tp-btn`, `--tp-btn-700` (hover) — with `--tp-on-fill` text
 - **Status**: `--success`, `--warning`, `--danger`, `--danger-700` (destructive hover / error text). There is **no `--accent`** — the old Wolf-Indigo accent was retired; use `--tp-cobalt`.
+- **Soft danger** (the *exclusion* surface, not destructive actions): `--danger-tint` (block background), `--danger-50` (chip fill), `--danger-100` / `--danger-200` (borders), `--danger-ink` (muted rose copy, AA-safe). Used by the progressive-exclude blocks in `FilterPanel` / `AccountFilterPanel`.
 - **Shape**: `--radius` (8px), `--tp-radius-sm` (6px), `--tp-radius-card` (14px, for cards/tiles)
 - **Spacing** (4px scale): `--tp-space-1` … `--tp-space-8`
 - **Type**: `--font-sans` (Geist), `--font-mono` (Geist Mono)
 - **Elevation**: `--tp-shadow-card`, `--tp-shadow-card-hover` (dashboard cards/tiles), `--tp-shadow-popover`, `--tp-shadow-drawer`, `--tp-shadow-dialog`, `--tp-shadow-rail`; **z-scale**: `--tp-z-sticky/-drawer/-overlay/-modal/-popover/-toast`
+
+## The prospect surface (`prospect` group)
+
+Alongside the primitives the bundle ships the **real prospect surface** — 27 components from the product itself, not recreations. Use them instead of rebuilding a contact grid out of `DataTable`.
+
+- **Whole page**: `ProspectPage` takes no props. It reads its search/filter state from the URL and loads its own data.
+- **Pieces**: `FilterPanel` / `FilterRail` / `FacetTypeahead` (faceted rails), `AccountFilterPanel` + `AccountsTable` + `AccountDetailDrawer` (the company scope), `ProspectToolbar`, `QuickViewDrawer` → `RecordDetail`, `RowActions`, `BulkActionBar`, `SaveSearchPanel`, `RecentSearches`, `AiSearchBox` + `ParsedFilterPreview`, `TagChip` / `TagPicker`, `StageSelector` / `StageManagementPanel`.
+
+**Providers.** Fourteen of them call `useToast()`, so `<ToastProvider>` is mandatory. `RevealCell`, `RevealDialog` and `RecordDetail` also read the reveal store — wrap those in `<RevealStoreProvider>`, and call `useRevealStore().hydrate(ids)` for the rows on screen or they render the "Revealed" flag without the value:
+
+```jsx
+const { ToastProvider, RevealStoreProvider, ProspectPage } = window.TruePointUI;
+
+<ToastProvider>
+  <RevealStoreProvider>
+    <ProspectPage />
+  </RevealStoreProvider>
+</ToastProvider>
+```
+
+**Masked by default.** A contact row carries no PII — only a masked domain, status flags and counts. `RevealCell` / `RevealDialog` / `BulkRevealDialog` spend credits to unlock a value and always state the cost first; `QuickViewDrawer` is masked-only by design and hands off to `RecordDetail`. Never design a screen that shows an email address on a row that hasn't been revealed.
 
 ## Where the truth lives
 

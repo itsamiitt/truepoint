@@ -1,11 +1,14 @@
-// FacetTypeahead.tsx — a search-box filter facet (24 §3): type to get suggestions drawn from the index
-// (each with its match count), pick one to add a chip. Title suggestions are synonym/abbreviation aware
-// server-side, so typing "ceo" surfaces "Chief Executive Officer". Token-styled via @leadwolf/ui.
+// FacetTypeahead.tsx — a search-box value picker for a high-cardinality facet (24 §3): type to get suggestions
+// drawn from the index (each with its match count), pick one to add it. Title suggestions are synonym/
+// abbreviation aware server-side, so typing "ceo" surfaces "Chief Executive Officer". Token-styled via
+// @leadwolf/ui. It is a PICKER only — the facet's label and its applied values are owned by the caller
+// (TermFacetField), so one instance serves the include direction and one the exclude direction.
 "use client";
 
 import type { FacetKey } from "@leadwolf/types";
-import { TpChip, TpInput } from "@leadwolf/ui";
-import { useState } from "react";
+import { TpInput } from "@leadwolf/ui";
+import { useEffect, useRef, useState } from "react";
+import type { TermOp } from "../filterGroups";
 import { useTypeahead } from "../hooks/useTypeahead";
 
 export function FacetTypeahead({
@@ -13,26 +16,36 @@ export function FacetTypeahead({
   label,
   selected,
   onAdd,
-  onRemove,
+  op = "include",
+  autoFocus = false,
 }: {
   field: FacetKey;
   label: string;
+  /** Values already applied to this facet in EITHER direction — never suggested again. */
   selected: string[];
   onAdd: (value: string) => void;
-  onRemove: (value: string) => void;
+  /** Which clause a pick lands in. Drives the placeholder; the rose field treatment comes from the block. */
+  op?: TermOp;
+  /** Focus the field on mount — set when the user just opened the exclude block. */
+  autoFocus?: boolean;
 }) {
   const { query, setQuery, suggestions, loading } = useTypeahead(field);
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
   const showMenu = open && query.trim().length >= 3;
+  const hits = suggestions.filter((s) => !selected.includes(s.value));
+
+  useEffect(() => {
+    // TpInput renders a plain <input> and takes no ref, so reach it through the anchor.
+    if (autoFocus) anchorRef.current?.querySelector("input")?.focus();
+  }, [autoFocus]);
 
   return (
-    <div className="tp-ui-anchor" style={{ display: "block" }}>
-      <div style={{ fontSize: 12, color: "var(--tp-ink-4)", marginBottom: "var(--tp-space-1)" }}>
-        {label}
-      </div>
+    <div ref={anchorRef} className="tp-ui-anchor" style={{ display: "block" }}>
       <TpInput
         value={query}
-        placeholder={`Search ${label.toLowerCase()}…`}
+        aria-label={op === "exclude" ? `${label} to exclude` : `Search ${label.toLowerCase()}`}
+        placeholder={op === "exclude" ? `${label} to exclude…` : `Search ${label.toLowerCase()}…`}
         onFocus={() => setOpen(true)}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -52,12 +65,12 @@ export function FacetTypeahead({
               <div style={{ padding: "8px 10px", color: "var(--tp-ink-4)", fontSize: 13 }}>
                 Searching…
               </div>
-            ) : suggestions.length === 0 ? (
+            ) : hits.length === 0 ? (
               <div style={{ padding: "8px 10px", color: "var(--tp-ink-4)", fontSize: 13 }}>
                 No matches
               </div>
             ) : (
-              suggestions.map((s) => (
+              hits.map((s) => (
                 <button
                   key={s.canonicalId ?? s.value}
                   type="button"
@@ -79,15 +92,6 @@ export function FacetTypeahead({
               ))
             )}
           </div>
-        </div>
-      ) : null}
-      {selected.length > 0 ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-          {selected.map((v) => (
-            <TpChip key={v} onRemove={() => onRemove(v)}>
-              {v}
-            </TpChip>
-          ))}
         </div>
       ) : null}
     </div>

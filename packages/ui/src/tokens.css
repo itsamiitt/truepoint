@@ -51,6 +51,15 @@
   --danger: #dc2626;
   /* Darker danger tone — destructive-button hover + error text on light surfaces. */
   --danger-700: #b91c1c;
+  /* Soft danger scale — the EXCLUSION/negation surface (the progressive-exclude filter block and its chips).
+     Not for destructive actions (that stays --danger): these read as "this is a negative clause", not "danger".
+     --danger-ink is the muted rose for supporting copy; it is darkened from the design's #a97a7a so 11px text
+     clears WCAG 2.2 AA (5.0:1 on --danger-tint, 5.3:1 on --tp-surface). */
+  --danger-tint: #fef7f7;
+  --danger-50: #fdeaea;
+  --danger-100: #f8d5d5;
+  --danger-200: #f0c7c7;
+  --danger-ink: #8c5f5f;
 
   /* Nav/interaction states */
   --nav-active-fill: #e8e8e8;

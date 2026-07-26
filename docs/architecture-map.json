@@ -100,8 +100,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1768,
-  "fileSetHash": "sha256:0a299f016a6701783cf73d756ee3302749af049c879e5df6a3d9cab6c48e66fb",
+  "fileCount": 1771,
+  "fileSetHash": "sha256:4d7271df8ae65e5166f2c3e4bdc0f5a98f4b41156bef318083cf65ffbac88f00",
   "features": {
     "account-search": {
       "web": [],
@@ -1156,6 +1156,8 @@
         "apps/web/src/features/prospect/components/StageSelector.tsx",
         "apps/web/src/features/prospect/components/TagChip.tsx",
         "apps/web/src/features/prospect/components/TagPicker.tsx",
+        "apps/web/src/features/prospect/components/TermFacetField.tsx",
+        "apps/web/src/features/prospect/components/TermOptionChips.tsx",
         "apps/web/src/features/prospect/export.ts",
         "apps/web/src/features/prospect/filterGroups.test.ts",
         "apps/web/src/features/prospect/filterGroups.ts",
@@ -2321,6 +2323,7 @@
     "packages/core": ["packages/core/src/index.ts"],
     "packages/db": [
       "packages/db/drizzle.config.ts",
+      "packages/db/drizzle.worktree.config.ts",
       "packages/db/src/applyMigrations.ts",
       "packages/db/src/bootstrapAdmin.ts",
       "packages/db/src/client.ts",

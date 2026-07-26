@@ -90,7 +90,12 @@ The emitted `<Name>.d.ts` filters DOM/React-inherited props, so native-element w
   `export DS_CHROMIUM_PATH="C:/Program Files/Google/Chrome/Application/chrome.exe"`.
 
 ## Known render warns
-- **None.** After the `overrides` in config.json (11 column + 6 single), validate exits with zero warn
+- **`[RENDER_THIN] StageSelector: variants render identically`** — legitimate, triaged 2026-07-26.
+  Its two cells (`Assigned` = "Engaged → Replied", `Unset` = "No stage") ARE different, but the component
+  is a single select of fixed size, so only the selected option label changes and the detector reads the
+  two renders as the same. Confirmed by eye on the review sheet. Do not "fix" this by inventing a third
+  state the component does not have.
+- Otherwise **none**. After the `overrides` in config.json, validate exits with zero other warn
   lines. Any `!`-prefixed line on a future run is NEW — investigate it, don't wave it through.
 - Watch out: **fixing the font re-flowed text and made `TpButton` overflow its grid cell** — it needed
   `{"cardMode": "column"}` added to `overrides`. Any future change to type/metrics can trip
@@ -123,3 +128,83 @@ The emitted `<Name>.d.ts` filters DOM/React-inherited props, so native-element w
   dirs. Tokens added since: `--tp-on-fill`, `--tp-scrim`, `--danger-700`, `--tp-radius-card`,
   `--tp-shadow-card{,-hover}`, `--tp-shadow-rail`, `--tp-rail-w`, `--tp-rail-expanded`.
 - **`rewriteRelativeImportExtensions`** is TS-5.7+ only. If the repo downgrades TS below 5.7, build-ui's tsc emit breaks (fall back to emitDeclarationOnly + a re-export index.js wrapper).
+
+---
+
+## The prospect feature slice (added 2026-07-26)
+
+The bundle is no longer just `@leadwolf/ui`: it also carries the **27 public components of
+`apps/web/src/features/prospect`**, in a `prospect` group, as the REAL app code (not recreations).
+
+### How it is wired
+- `.design-sync/prospect/entry.tsx` — the export barrel, and the **single source of truth for the
+  component list**: `build-ui.mjs` parses its `export { X } from "…"` lines. A line exporting TWO names
+  (the `RevealStoreProvider, useRevealStore` one) does NOT match that regex, so those two stay out of the
+  `.d.ts` barrel while still reaching the JS bundle via esbuild — which is what we want (neither is a card).
+- `.design-sync/prospect/stubs/` replaces exactly five modules at bundle time (`next/navigation`,
+  `next/link`, `lucide-react`, `@/lib/authClient`, `@/lib/publicConfig`) plus a narrowed
+  `@leadwolf/types` runtime shim. **Types still come from the real packages** — only the runtime is stubbed.
+- `.design-sync/prospect/fixtures.ts` — the dataset every card renders against, and the payload set the
+  fetch router answers with. Previews import it directly (`../prospect/fixtures`); that cross-directory
+  import from `previews/` works.
+- `build-ui.mjs` steps 7–11 do the rest: place `@leadwolf/types` into `packages/ui/node_modules`, esbuild
+  the slice → `dist/prospect.js`, declaration-emit → `dist/prospect-dts/`, write `dist/ds-entry.{js,d.ts}`,
+  append the slice's CSS-module output to `_compiled.css`.
+
+### Traps that cost time (do not re-learn these)
+- **`PKG_DIR` is `packages/ui/dist`, not `packages/ui`.** That is why `cfg.srcDir` is `"../src"`. So
+  `componentSrcMap` entries need `../../../apps/web/...` (three levels). With two levels the pins silently
+  don't resolve: you get 71 components all in group `general` and no JSDoc, with no error.
+- **The declaration pass needs `strict: true`.** The slice's types are zod-inferred; under `strict:false`
+  zod's discriminated unions collapse to `never` ("Property 'gte' does not exist on type 'never'") and the
+  emitted contracts are hollow. The DS's own pass (step 2) is fine at `strict:false` — it has no zod.
+- **The converter's dts extractor degrades zod-inferred aliases to `z.infer<any>`** even though tsc emitted
+  the correct `ContactQuery` / `MaskedContact` / etc. 18 components were affected; the fix is the
+  `cfg.dtsPropsFor` block, whose bodies were lifted verbatim from `dist/prospect-dts/**`. **If a prospect
+  component's props change, re-lift its body from the emitted `.d.ts` — don't hand-edit the config.**
+- **Fixture shapes must match the contract exactly or the component throws**, because the slice formats
+  fields directly (`.toLocaleString()`, `.replace()`). Ones that bit: `ActivityRow` is
+  `{activityType, note, occurredAt}` (not type/subject); `CustomFieldValueDto` is
+  `{key,label,fieldType,options,value}` (not `type`); `/contacts/reveal-jobs` returns a **RevealJobEstimate**
+  on create but a **RevealJobSummary** everywhere else; `/contacts/bulk/estimate` is a `BulkSpendEstimate`.
+- **The `next/navigation` stub must not notify on a no-op write, and must cache the `URLSearchParams`
+  instance per query string.** The slice syncs state back to the URL from an effect, so either mistake is
+  an infinite render loop and the page paints blank with NO error in the console.
+- **`package-capture.mjs --components X` prunes the review sheets of every other component.** Capture the
+  whole batch you intend to read, then read them — a scoped re-capture deletes sheets you haven't graded.
+- **`_ds_bundle.js` is minified**, so grepping it for an identifier proves nothing. To check an export,
+  open any card and read `Object.keys(window.TruePointUI)` (76 exports as of this run).
+
+### Preview helpers (`.design-sync/previews/_prospectShell.tsx`)
+`Shell` (ToastProvider + optional RevealStoreProvider + `hydrate` ids), `Stage` (sized
+`transform:translateZ(0)` box for the fixed-position Drawers/Dialogs), `useExpandGroups` (force-opens
+FilterPanel/AccountFilterPanel accordions — they are `useState(false)` with no open prop),
+`useOpenMenu` (force-opens DropdownMenu triggers: ProspectToolbar's column chooser, TagPicker's Edit,
+RowActions). AiSearchBox is driven through its real flow by setting the input via React's value setter and
+clicking Ask.
+
+### Component behaviour worth knowing before you "fix" a card
+- **`QuickViewDrawer` is masked-only BY DESIGN** — it calls `maskedEmail(contact)` and renders a literal
+  "Locked — reveal" for phone regardless of reveal state. A "revealed" cell for it would be a lie; its
+  honest variant axis is how contactable the record is.
+- **`RevealCell`/`RecordDetail` need `useRevealStore().hydrate(ids)`**, not just the provider, or they show
+  the coarse "Revealed" badge with no value.
+- **`BulkRevealDialog` ignores its `balance` prop for display** and uses the server estimate's balance, so
+  vary those cards by selection size, not by that prop.
+
+### Found while syncing — app bug, NOT a preview problem
+- `AccountDetailDrawer` renders `foundedYear` through a thousands separator: **"Founded 2,019"**. It is
+  real app code (`apps/web/src/features/prospect/components/AccountDetailDrawer.tsx`) and was left
+  unchanged by this sync. Worth a one-line fix in the app.
+
+### Re-sync risks for the prospect slice
+- **The slice is live app source.** Any change to `features/prospect` flows straight into the bundle —
+  including breakage. If a card goes blank after a re-sync, probe it (`chromium` + the card's
+  `?story=` URL) and read the pageerror before touching the preview.
+- **Adding a runtime import from `@leadwolf/types` to the slice fails the bundle loudly** ("No matching
+  export in types-values.ts"). That is intended: add the symbol to the shim.
+- **Adding a lucide icon to a slice component fails the same way** — add a glyph to
+  `.design-sync/prospect/stubs/lucide-react.tsx`. Never let the real barrel in (memory hang, see above).
+- **`packages/ui/node_modules/@leadwolf/types` is a copy refreshed on every build-ui run**, so it tracks
+  `packages/types`. A `bun install --force` that wipes it is self-healing on the next build.
+- **`.ds-prospect-tsconfig.json`** is generated at the repo root each build and is gitignored.

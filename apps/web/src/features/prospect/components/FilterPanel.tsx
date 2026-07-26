@@ -1,10 +1,10 @@
 // FilterPanel.tsx — the Apollo/ZoomInfo-style faceted filter sidebar (24 §2). Drives the server `ContactQuery`
 // via the pure helpers in ../filterGroups. Design: the five FILTER_GROUPS are ACCORDIONS COLLAPSED BY DEFAULT
-// (a count badge on each header keeps active filters discoverable while collapsed); a term facet supports the
-// full is/is-not MULTI-CONDITION pattern — each condition renders as its own inline tag (its type flips on
-// click, ✕ removes), and a value picker + an is/is-not add-type toggle add new ones. Applied tags live INLINE
-// inside their own section (no separate chip row). The Prospect/Account scope switch is hosted here (top of the
-// rail). Presentation only — the page owns query state, URL persistence, and counts.
+// (a count badge on each header keeps active filters discoverable while collapsed); a term facet uses the
+// PROGRESSIVE EXCLUDE pattern (see TermFacetField) — include owns the full width, exclusion opens into its own
+// labelled block, and both clauses coexist on the same field. Applied values live INLINE inside their own
+// section (no separate chip row). The Prospect/Account scope switch is hosted here (top of the rail).
+// Presentation only — the page owns query state, URL persistence, and counts.
 "use client";
 
 import type { BoolFilterField, ContactQuery } from "@leadwolf/types";
@@ -17,7 +17,6 @@ import {
   type TermOp,
   addTermCondition,
   clearAllFilters,
-  flipTermCondition,
   getBool,
   getRange,
   groupActiveCount,
@@ -29,6 +28,8 @@ import {
 } from "../filterGroups";
 import styles from "../prospect.module.css";
 import { FacetTypeahead } from "./FacetTypeahead";
+import { TermFacetField } from "./TermFacetField";
+import { TermOptionChips } from "./TermOptionChips";
 
 export interface OwnerOption {
   value: string;
@@ -171,7 +172,7 @@ function FacetControl({
   );
 }
 
-// ── term facet: multi-condition (is / is not), each condition an independent inline tag ──────────────────
+// ── term facet: progressive exclude (include by default; exclusion opens into its own block) ─────────────
 function TermFacet({
   facet,
   query,
@@ -185,96 +186,43 @@ function TermFacet({
   counts?: Map<string, number>;
   owners: OwnerOption[];
 }) {
-  // The type a newly-picked value is added as. Each value is single-typed; this only controls NEW additions.
-  const [addOp, setAddOp] = useState<TermOp>("include");
   const conditions = termConditions(query, facet.field);
   const applied = new Set(conditions.map((c) => c.value));
+  // A value applied in EITHER direction is never offered again — it can never be both included and excluded.
   const options = (facet.input === "owner" ? owners : (facet.options ?? [])).filter(
     (o) => !applied.has(o.value),
   );
+  const add = (op: TermOp, value: string) =>
+    onChange(addTermCondition(query, facet.field, op, value));
 
   return (
-    <div className={styles.facet}>
-      <span className={styles.facetLabel}>{facet.label}</span>
-
-      {conditions.length > 0 ? (
-        <div className={styles.condList}>
-          {conditions.map((c) => (
-            <span key={`${c.op}:${c.value}`} className={styles.condTag}>
-              <button
-                type="button"
-                className={styles.condType}
-                data-op={c.op}
-                title="Toggle is / is not"
-                onClick={() => onChange(flipTermCondition(query, facet.field, c.op, c.value))}
-              >
-                {c.op === "include" ? "is" : "is not"}
-              </button>
-              <span className={styles.condValue}>{c.label}</span>
-              <button
-                type="button"
-                aria-label={`Remove ${c.label}`}
-                className={styles.condRemove}
-                onClick={() => onChange(removeTermCondition(query, facet.field, c.op, c.value))}
-              >
-                ✕
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      <div className={styles.addRow}>
-        <OpToggle op={addOp} onChange={setAddOp} />
-        {facet.input === "typeahead" ? (
+    <TermFacetField
+      label={facet.label}
+      conditions={conditions}
+      excludeNoun="Contacts"
+      onRemove={(op, value) => onChange(removeTermCondition(query, facet.field, op, value))}
+      renderPicker={(op, autoFocus) =>
+        facet.input === "typeahead" ? (
           <FacetTypeahead
             field={facet.field}
             label={facet.label}
+            op={op}
+            autoFocus={autoFocus}
             selected={[...applied]}
-            onAdd={(v) => onChange(addTermCondition(query, facet.field, addOp, v))}
-            onRemove={(v) => onChange(removeTermCondition(query, facet.field, "include", v))}
+            onAdd={(v) => add(op, v)}
           />
-        ) : null}
-      </div>
-
-      {facet.input !== "typeahead" ? (
-        <div className={styles.chipWrap}>
-          {options.length === 0 ? (
-            <span className={styles.facetEmpty}>
-              {applied.size > 0 ? "All options selected" : "No options"}
-            </span>
-          ) : (
-            options.map((o) => {
-              const count = counts?.get(`${facet.field}:${o.value}`);
-              return (
-                <button
-                  key={o.value}
-                  type="button"
-                  className={styles.addChip}
-                  onClick={() => onChange(addTermCondition(query, facet.field, addOp, o.value))}
-                >
-                  + {o.label}
-                  {count !== undefined ? ` (${count.toLocaleString()})` : ""}
-                </button>
-              );
-            })
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function OpToggle({ op, onChange }: { op: TermOp; onChange: (op: TermOp) => void }) {
-  return (
-    <span className={styles.opToggle}>
-      <MiniToggle active={op === "include"} onClick={() => onChange("include")}>
-        is
-      </MiniToggle>
-      <MiniToggle active={op === "exclude"} onClick={() => onChange("exclude")}>
-        is not
-      </MiniToggle>
-    </span>
+        ) : (
+          <TermOptionChips
+            field={facet.field}
+            options={options}
+            op={op}
+            counts={counts}
+            anyApplied={applied.size > 0}
+            onAdd={(v) => add(op, v)}
+          />
+        )
+      }
+    />
   );
 }
 

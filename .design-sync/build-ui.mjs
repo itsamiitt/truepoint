@@ -15,13 +15,28 @@
 //   5. react-dom + scheduler copied into packages/ui/node_modules (React 19 has no UMD, so the converter's
 //      vendorReact esbuild-bundles react+react-dom+react-dom/client+scheduler from --node-modules).
 //
+// Steps 7–11 add the PROSPECT FEATURE SLICE (apps/web/src/features/prospect) to the same bundle, so the
+// design agent builds with the real prospect surface and not just the primitives under it:
+//   7.  @leadwolf/types placed into packages/ui/node_modules — the emitted prospect .d.ts files import it,
+//       and packages/ui doesn't depend on it, so without this ts-morph resolves every prop to `any`.
+//   8.  esbuild bundles .design-sync/prospect/entry.tsx → dist/prospect.js, swapping five modules for the
+//       stubs in .design-sync/prospect/stubs (next/navigation, next/link, lucide-react, @/lib/authClient,
+//       @/lib/publicConfig). @leadwolf/ui stays EXTERNAL as './index.js' so the DS resolves to the single
+//       copy step 2 emitted rather than being inlined a second time. The slice's CSS module compiles out
+//       to dist/prospect.css.
+//   9.  a second tsc pass declaration-emits the slice → dist/prospect-dts/, and dist/prospect.d.ts
+//       re-exports each component from there (types come from the REAL modules, runtime from the stubs).
+//   10. dist/ds-entry.{js,d.ts} = the DS + the slice; dist/package.json points at it.
+//   11. dist/prospect.css appended to _compiled.css so the slice's styles reach cfg.cssEntry.
+//
 // Run from the repo root: `node .design-sync/build-ui.mjs`. Requires `.ds-sync` staged + its deps installed
 // (esbuild ts-morph @types/react @tailwindcss/cli@4.3.1) — see .design-sync/NOTES.md. Re-run before the
 // converter on every re-sync.
 
 import { existsSync, readFileSync, writeFileSync, appendFileSync, rmSync, mkdirSync, cpSync, readdirSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { createRequire } from 'node:module';
+import { join, relative, resolve } from 'node:path';
 
 const ROOT = process.cwd();
 const UI = join(ROOT, 'packages', 'ui');
@@ -104,9 +119,12 @@ function rewriteDts(dir) {
 step(`rewrote .ts/.tsx → .js specifiers in ${rewriteDts(BUILT)} .d.ts file(s)`);
 
 // ── 3. scratch package.json ────────────────────────────────────────────────
+// Points at ds-entry (step 10), not index — that's the combined DS + prospect-slice surface the converter
+// discovers components from. `exportedNames` walks the `types` .d.ts tree, so this is what decides whether
+// the prospect components exist at all as far as the converter is concerned.
 writeFileSync(join(BUILT, 'package.json'), JSON.stringify({
   name: '@leadwolf/ui', version: '0.0.0', type: 'module',
-  module: './index.js', main: './index.js', types: './index.d.ts', sideEffects: false,
+  module: './ds-entry.js', main: './ds-entry.js', types: './ds-entry.d.ts', sideEffects: false,
 }, null, 2) + '\n');
 
 // ── 4. Geist fonts ─────────────────────────────────────────────────────────
@@ -174,5 +192,158 @@ if (existsSync(bunStore)) {
   if (e) schedSrc = join(bunStore, e, 'node_modules', 'scheduler');
 }
 copyPkg('scheduler', schedSrc, 'scheduler');
+
+// ── 7. @leadwolf/types into packages/ui/node_modules ───────────────────────
+// The emitted prospect .d.ts files import @leadwolf/types, but packages/ui doesn't depend on it. Without a
+// resolvable copy, ts-morph types every prospect prop as `any` and the design agent gets a useless contract.
+// Refreshed (not skip-if-present) every build: packages/types is live source that moves with the repo.
+function refreshPkg(label, srcDir, destName) {
+  const dest = join(UI_NM, destName);
+  if (!srcDir || !existsSync(srcDir)) die(`${label} source not found: ${srcDir}`);
+  rmSync(dest, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
+  cpSync(srcDir, dest, { recursive: true, dereference: true });
+  console.error(`  ${label}: refreshed → packages/ui/node_modules/${destName}`);
+}
+step('place @leadwolf/types for the prospect .d.ts tree');
+refreshPkg('@leadwolf/types', join(ROOT, 'apps', 'web', 'node_modules', '@leadwolf', 'types'), join('@leadwolf', 'types'));
+
+// ── 8. bundle the prospect feature slice ───────────────────────────────────
+const require_ = createRequire(join(ROOT, '.ds-sync', 'package.json'));
+let esbuild;
+try {
+  esbuild = require_('esbuild');
+} catch {
+  die('esbuild not staged — run: (cd .ds-sync && npm i esbuild)');
+}
+
+const PROSPECT = join(ROOT, '.design-sync', 'prospect');
+const STUBS = join(PROSPECT, 'stubs');
+const entryFile = join(PROSPECT, 'entry.tsx');
+if (!existsSync(entryFile)) die(`missing ${entryFile}`);
+
+// entry.tsx is the single source of truth for which components ship — parse it rather than keeping a second
+// list here that would silently drift from it.
+const entrySrc = readFileSync(entryFile, 'utf8');
+const slice = [...entrySrc.matchAll(/export\s*\{\s*([A-Za-z0-9_]+)\s*\}\s*from\s*["']([^"']+)["']/g)]
+  .map((m) => ({ name: m[1], abs: resolve(PROSPECT, m[2]) }));
+if (!slice.length) die('no `export { X } from "…"` lines in .design-sync/prospect/entry.tsx');
+
+// @leadwolf/ui resolves to the copy step 2 emitted, as an EXTERNAL relative specifier: prospect.js sits in
+// the same dist/ dir, so the converter's outer esbuild pass folds both into one module instance. Inlining it
+// instead would ship a second, non-identical copy of all 43 primitives.
+const dsExternal = {
+  name: 'ds-external',
+  setup(b) {
+    b.onResolve({ filter: /^@leadwolf\/ui$/ }, () => ({ path: './index.js', external: true }));
+  },
+};
+
+step(`esbuild ${slice.length} prospect components → packages/ui/dist/prospect.js`);
+try {
+  const out = await esbuild.build({
+    entryPoints: [entryFile],
+    outfile: join(BUILT, 'prospect.js'),
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    jsx: 'automatic',
+    legalComments: 'none',
+    logLevel: 'silent',
+    // React stays external for the same reason the DS does: the converter's vendorReact owns the one copy.
+    external: ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client'],
+    loader: { '.module.css': 'local-css', '.css': 'css', '.svg': 'dataurl', '.woff2': 'file' },
+    alias: {
+      'next/navigation': join(STUBS, 'next-navigation.tsx'),
+      'next/link': join(STUBS, 'next-link.tsx'),
+      'lucide-react': join(STUBS, 'lucide-react.tsx'),
+      '@/lib/authClient': join(STUBS, 'authClient.ts'),
+      '@/lib/publicConfig': join(STUBS, 'publicConfig.ts'),
+      // The narrowed runtime surface, not the barrel — see the header of types-values.ts.
+      '@leadwolf/types': join(STUBS, 'types-values.ts'),
+    },
+    plugins: [dsExternal],
+  });
+  for (const w of out.warnings.slice(0, 10)) console.error(`  ! ${w.text} (${w.location?.file}:${w.location?.line})`);
+} catch (e) {
+  for (const err of (e.errors ?? []).slice(0, 20))
+    console.error(`  ✗ ${err.text}\n      ${err.location?.file}:${err.location?.line}:${err.location?.column}`);
+  die('prospect bundle failed — see errors above');
+}
+console.error(`  prospect.js: ${(statSync(join(BUILT, 'prospect.js')).size / 1024).toFixed(0)} KB`);
+
+// ── 9. declaration emit for the slice ──────────────────────────────────────
+// Types come from the REAL modules (next, lucide-react, @/lib/*) via apps/web's own resolution — only the
+// RUNTIME is stubbed. That keeps every emitted prop contract identical to what the app compiles against.
+const DTS_DIR = join(BUILT, 'prospect-dts');
+const pTsconfigPath = join(ROOT, '.ds-prospect-tsconfig.json');
+writeFileSync(pTsconfigPath, JSON.stringify({
+  compilerOptions: {
+    jsx: 'react-jsx', target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler',
+    lib: ['ES2023', 'DOM', 'DOM.Iterable'],
+    declaration: true, emitDeclarationOnly: true, noEmit: false, noEmitOnError: false,
+    allowImportingTsExtensions: true, rewriteRelativeImportExtensions: true,
+    // strict:true is REQUIRED here (unlike step 2's DS pass): the slice's types come from zod-inferred
+    // schemas in @leadwolf/types, and zod's inference collapses discriminated unions to `never` under
+    // strict:false — which showed up as "Property 'gte' does not exist on type 'never'" and would have
+    // shipped hollow prop contracts.
+    skipLibCheck: true, strict: true, verbatimModuleSyntax: false, isolatedModules: false,
+    esModuleInterop: true, resolveJsonModule: true,
+    outDir: relative(ROOT, DTS_DIR).split('\\').join('/'),
+    rootDir: '.',
+    baseUrl: '.',
+    paths: {
+      '@/*': ['apps/web/src/*'],
+      '@leadwolf/ui': ['packages/ui/src/index.ts'],
+      '@leadwolf/types': ['packages/types/src/index.ts'],
+    },
+    types: ['react', 'react-dom'],
+    // The repo root has no node_modules/@types (bun isolates per package), so the default lookup finds
+    // nothing and every React type silently degrades. Point at the two packages that do carry them.
+    typeRoots: ['packages/ui/node_modules/@types', 'apps/web/node_modules/@types'],
+  },
+  include: [
+    'apps/web/src/features/prospect/**/*.ts',
+    'apps/web/src/features/prospect/**/*.tsx',
+    '.design-sync/prospect/css-shim.d.ts',
+  ],
+  exclude: ['**/*.test.ts', '**/*.test.tsx'],
+}, null, 2));
+step('tsc declaration emit → packages/ui/dist/prospect-dts');
+const ptsc = spawnSync(process.execPath, [tscBin, '-p', pTsconfigPath], { cwd: ROOT, encoding: 'utf8' });
+if (ptsc.stdout?.trim()) console.error(ptsc.stdout.trim().split('\n').slice(0, 20).join('\n'));
+// Same gate as step 2: tsc exits non-zero on type errors it still emitted through (noEmitOnError:false).
+const emittedFor = (abs) => join(DTS_DIR, `${relative(ROOT, abs).replace(/\.(tsx|ts)$/, '')}.d.ts`);
+const missingDts = slice.filter((s) => !existsSync(emittedFor(s.abs)));
+if (missingDts.length)
+  die(`no .d.ts emitted for: ${missingDts.map((s) => s.name).join(', ')} — see tsc errors above`);
+if (ptsc.status !== 0) console.error('  (tsc reported type errors but emitted declarations — continuing)');
+rewriteDts(DTS_DIR);
+
+// The barrel the converter reads. `.js` specifiers (not extensionless) because that is what the rest of the
+// emitted tree uses after rewriteDts, and a .js specifier resolves to its .d.ts sibling.
+writeFileSync(join(BUILT, 'prospect.d.ts'),
+  `${slice.map((s) => {
+    const rel = relative(ROOT, s.abs).split('\\').join('/').replace(/\.(tsx|ts)$/, '');
+    return `export { ${s.name} } from './prospect-dts/${rel}.js';`;
+  }).join('\n')}\n`);
+
+// ── 10. combined entry ─────────────────────────────────────────────────────
+writeFileSync(join(BUILT, 'ds-entry.js'), "export * from './index.js';\nexport * from './prospect.js';\n");
+writeFileSync(join(BUILT, 'ds-entry.d.ts'), "export * from './index.js';\nexport * from './prospect.js';\n");
+step(`ds-entry: ${slice.length} prospect components + the @leadwolf/ui primitives`);
+
+// ── 11. slice CSS into the shipped stylesheet ──────────────────────────────
+// cfg.cssEntry (_compiled.css) ships verbatim as _ds_bundle.css, which styles.css @imports — the only path
+// by which CSS reaches a design the agent builds. The slice's module CSS has to land here or every prospect
+// card renders unstyled.
+const prospectCss = join(BUILT, 'prospect.css');
+if (existsSync(prospectCss)) {
+  const css = readFileSync(prospectCss, 'utf8');
+  appendFileSync(compiled, `\n/* design-sync: prospect feature slice (prospect.module.css) */\n${css}`);
+  console.error(`  prospect.css: ${(css.length / 1024).toFixed(0)} KB appended to _compiled.css`);
+} else {
+  console.error('  ! prospect.css not emitted — the slice\'s CSS module produced no output');
+}
 
 step('done — packages/ui/dist ready for the converter');
