@@ -134,7 +134,7 @@ echo "==> Verifying Redis reachability…"
   || { echo "ERROR: Redis did not answer PONG — code issuance/exchange will fail."; exit 1; }
 
 echo "==> Smoke test: minting a token inside the auth container (assertSigningKey)…"
-if "${COMPOSE[@]}" exec -T auth bun -e "import('@leadwolf/auth').then(m=>m.assertSigningKey()).then(()=>process.exit(0),(e)=>{console.error(String((e&&e.message)||e));process.exit(1)})"; then
+if "${COMPOSE[@]}" exec -T -w /app/apps/auth auth bun -e "import('@leadwolf/auth').then(m=>m.assertSigningKey()).then(()=>process.exit(0),(e)=>{console.error(String((e&&e.message)||e));process.exit(1)})"; then
   echo "==> Smoke test PASSED — auth can mint tokens; sign-in should work."
 else
   echo "ERROR: JWT signing self-test FAILED in the auth container — sign-in would 503 (token_mint_failed)."
