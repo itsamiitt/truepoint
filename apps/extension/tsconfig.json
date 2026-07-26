@@ -2,10 +2,13 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["chrome", "node", "bun"]
   },
-  "include": ["src"]
+  // The build configs are included deliberately: `typecheck` is the ONLY gate that reads this app, so with
+  // just "src" a malformed manifest or vite config passed every check and failed at build time instead.
+  // (`rootDir: "src"` was dropped to allow that — it is meaningless here anyway, since the base config sets
+  // noEmit and CRXJS/Vite owns the actual output.)
+  "include": ["src", "manifest.config.ts", "vite.config.ts"]
 }

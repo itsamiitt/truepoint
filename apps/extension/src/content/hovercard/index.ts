@@ -107,6 +107,14 @@ export class HoverCard {
       return;
     }
     this.button.style.display = "block";
+    // Queued: durably buffered locally, not yet acknowledged by the server. Say so rather than falling through
+    // to "Not revealed", which reads as though nothing happened. The pill is replaced when the drain reports
+    // the real outcome via SUBJECT_STATUS.
+    if (this.status?.outcome === "queued") {
+      this.pillEl.textContent = t("card.queued");
+      this.button.textContent = t("card.save");
+      return;
+    }
     if (this.status?.contactId && !this.status.owned) {
       this.pillEl.textContent = t("card.notRevealed");
       this.button.textContent = t("card.reveal");

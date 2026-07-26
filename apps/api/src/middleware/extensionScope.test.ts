@@ -29,6 +29,10 @@ describe("extensionRouteAllowed", () => {
     expect(extensionRouteAllowed("GET", "/api/v1/credits/reveal-costs")).toBe(true);
     expect(extensionRouteAllowed("GET", "/api/v1/me")).toBe(true);
     expect(extensionRouteAllowed("GET", "/api/v1/orgs")).toBe(true);
+    // The LinkedIn→contact seam: TWO segments after /contacts, so the `/contacts/:id` rule cannot match it.
+    expect(extensionRouteAllowed("GET", "/api/v1/contacts/by-linkedin/satyanadella")).toBe(true);
+    // The SW-held SSE consumer (dark behind the realtimeSse flag, but must not need an authz change to enable).
+    expect(extensionRouteAllowed("GET", "/api/v1/events/stream")).toBe(true);
   });
 
   it("is method-aware (an allowed path with the wrong verb is denied)", () => {
@@ -51,6 +55,61 @@ describe("extensionRouteAllowed", () => {
 
   it("ignores a query string and is case-insensitive on the verb", () => {
     expect(extensionRouteAllowed("get", "/api/v1/credits/balance?ts=1")).toBe(true);
+  });
+});
+
+// ── drift guard ───────────────────────────────────────────────────────────────────────────────────────
+// The allow-list is deny-by-default, so an endpoint the extension calls but nobody allow-listed does not fail
+// loudly — it silently 403s the live extension the moment EXTENSION_SCOPE_ENFORCE flips. That is exactly how
+// GET /contacts/by-linkedin/:publicId and GET /events/stream came to be missing. This reads the extension's
+// ACTUAL request sites and asserts each path is reachable, so adding a call without an allow-list entry fails
+// here instead of in production. Reading a sibling app's source is fine: dependency-cruiser excludes test
+// files from the apps-never-import-apps rule, and this is a runtime file read, not an import.
+const EXTENSION_SOURCES = [
+  "../../../extension/src/background/api/client.ts",
+  "../../../extension/src/background/eventStream.ts",
+  "../../../extension/src/background/auth/account.ts",
+] as const;
+
+/** Path literals reached via the SW's two call shapes: `fetch(`${API_BASE}<path>`)` and `this.request("<path>")`. */
+function extractCalledPaths(source: string): string[] {
+  const paths = new Set<string>();
+  for (const m of source.matchAll(/API_BASE\}(\/[^`"']*)/g)) if (m[1]) paths.add(m[1]);
+  for (const m of source.matchAll(/this\.request(?:<[^>]*>)?\(\s*[`"'](\/[^`"']*)/g))
+    if (m[1]) paths.add(m[1]);
+  return [...paths];
+}
+
+/** `/contacts/${encodeURIComponent(id)}/reveal` → `/contacts/sample/reveal` so it can be matched as a route. */
+const normalize = (p: string): string => p.replace(/\$\{[^}]*\}/g, "sample");
+
+const VERBS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+
+describe("extension allow-list covers every endpoint the extension actually calls", () => {
+  it("finds the request sites (guards against this test silently reading nothing)", async () => {
+    const all: string[] = [];
+    for (const rel of EXTENSION_SOURCES) {
+      const src = await Bun.file(new URL(rel, import.meta.url)).text();
+      all.push(...extractCalledPaths(src));
+    }
+    // If the extension's call shapes are refactored, this floor fails and the guard gets fixed rather than
+    // quietly passing on an empty set.
+    expect(all.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it("allow-lists each called path under at least one verb", async () => {
+    for (const rel of EXTENSION_SOURCES) {
+      const src = await Bun.file(new URL(rel, import.meta.url)).text();
+      for (const raw of extractCalledPaths(src)) {
+        const path = `/api/v1${normalize(raw)}`;
+        const reachable = VERBS.some((v) => extensionRouteAllowed(v, path));
+        if (!reachable) {
+          throw new Error(
+            `${raw} is called by apps/extension but is NOT on EXTENSION_ALLOW_LIST — it will 403 once EXTENSION_SCOPE_ENFORCE=true. Add a rule in extensionScope.ts.`,
+          );
+        }
+      }
+    }
   });
 });
 

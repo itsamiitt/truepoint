@@ -31,15 +31,25 @@ export class JobScheduler {
     this.ctx.broadcast({ type: "STATE_CHANGED", state: await this.ctx.getState() });
   }
 
+  /** Never DELETE a capture on failure — park it.
+   *
+   *  A validation error used to remove the item outright, on the assumption that a 400 means a permanently
+   *  malformed payload. It does not: `/ingest` answers 400 `No connector is registered for source
+   *  'chrome_extension'` whenever CHROME_EXTENSION_ENABLED is unset — which is the production default. So every
+   *  capture was classified as a client-side validation failure and destroyed, while the user had already been
+   *  told it was saved. Configuration state and bad payloads are indistinguishable to this client by status
+   *  alone, so it must not gamble a user's data on the guess.
+   *
+   *  Backoff is the safe answer for both: a genuinely malformed payload exhausts MAX_ATTEMPTS and parks as
+   *  `failed` (retained and inspectable, never silently gone), while a not-yet-enabled connector recovers on
+   *  its own once the flag flips. Captures are machine-generated, so a 400 almost always means a contract or
+   *  configuration problem — exactly the case worth retrying. */
   private async handleError(item: QueueItem, error: unknown): Promise<void> {
-    if (error instanceof ApiError && error.errorClass === "validation") {
-      await this.ctx.queue.remove(item.idempotencyKey);
-      await this.ctx.telemetry.error("validation", { status: error.status });
-      return;
-    }
     const errorClass = error instanceof ApiError ? error.errorClass : "transient";
     await this.ctx.queue.backoff(item);
-    await this.ctx.telemetry.error(errorClass, {});
+    await this.ctx.telemetry.error(errorClass, {
+      ...(error instanceof ApiError ? { status: error.status } : {}),
+    });
   }
 
   private async addRecent(item: QueueItem, outcome: string): Promise<void> {

@@ -4,7 +4,6 @@
 import { renderAuthMetrics } from "@leadwolf/auth";
 import { appOrigins, env } from "@leadwolf/config";
 import { Hono } from "hono";
-import { compress } from "hono/compress";
 import { cors } from "hono/cors";
 import { accountSearchRoutes } from "./features/account-search/index.ts";
 import { activityRoutes } from "./features/activity/index.ts";
@@ -58,30 +57,43 @@ import {
   workspaceSecurityRoutes,
   workspacesRoutes,
 } from "./features/workspaces/index.ts";
+import { isDraining } from "./lifecycle.ts";
 import { onError } from "./middleware/error.ts";
 import { rateLimit } from "./middleware/rateLimit.ts";
+import { requestId } from "./middleware/requestId.ts";
 
 export const app = new Hono();
 
 // How long (seconds) a browser may cache the credentialed CORS preflight. Without it, every sign-in re-runs
-// an OPTIONS round-trip before each /api/v1 JSON POST and the Bearer GET /session (perf RC#5). 10 min is well
-// under Chromium's cap; the origin/credentials decision is still re-applied server-side on the actual request.
-const CORS_PREFLIGHT_MAX_AGE = 600;
+// an OPTIONS round-trip before each /api/v1 JSON POST and the Bearer GET /session (perf RC#5). The origin/
+// credentials decision is still re-applied server-side on the actual request.
+//
+// 2h (Chromium's cap) rather than 10min because the preflight cache is keyed per EXACT URL: with cursor
+// pagination every page is a new URL and therefore a fresh OPTIONS round-trip, so a short max-age re-pays the
+// preflight constantly during normal browsing. This is an interim measure — routing /api under the app origin
+// (deploy/Caddyfile, mirroring the forge.truepoint.in block) removes the preflight surface entirely.
+const CORS_PREFLIGHT_MAX_AGE = 7200;
 
 app.onError(onError);
-// SSE realtime stream (reveal-experience Phase 4, ADR-0027) — registered BEFORE compress() so the long-lived
-// event stream is never buffered/broken by the compressor. Carries its own CORS (the global cors is registered
-// after this). Dark until REALTIME_SSE_ENABLED (the route 404s); authn+tenancy run inside eventsRoutes.
+// Correlation id FIRST, so every response carries one — including 500s rendered by onError above (which logs
+// the id alongside the stack) and the long-lived SSE stream registered below.
+app.use("*", requestId);
+// SSE realtime stream (reveal-experience Phase 4, ADR-0027). It carries its own CORS (the global cors is
+// registered after this). Dark until REALTIME_SSE_ENABLED (the route 404s); authn+tenancy run inside
+// eventsRoutes. It used to be mounted here specifically to sit ahead of compress() so the long-lived stream
+// could not be buffered by the compressor; compress() is gone (see below), but the ordering is kept because
+// the stream also wants its own narrower CORS ahead of the global one.
 app.use(
   "/api/v1/events/*",
   cors({ origin: [...appOrigins()], credentials: true, maxAge: CORS_PREFLIGHT_MAX_AGE }),
 );
 app.route("/api/v1/events", eventsRoutes);
-// Compress text/JSON responses (perf RC#10). Mounted first so it wraps every downstream response body; it
-// honours Accept-Encoding, skips HEAD and already-encoded responses, and only reads the response (no request
-// body), so authn/parsing are untouched. The api serves no SSE/long-poll surface, so there is no stream to
-// buffer; the one non-JSON body (the bulk CSV export) is a complete in-memory string that gzips well.
-app.use("*", compress());
+// NO app-level compress(). Compression happens at the edge (`encode zstd gzip`, deploy/Caddyfile) and Caddy
+// SKIPS bodies that already carry a Content-Encoding — so compressing here does not double-compress, it just
+// (a) burns CPU in this single-threaded Bun process on every response and (b) PREVENTS the edge from applying
+// zstd, which compresses better than the gzip hono can emit. hono 4.6.13 also has no `threshold` option, so it
+// paid a CompressionStream setup on tiny JSON bodies too. Revisit only if a deployment ever runs without an
+// encoding-capable proxy in front.
 // CORS: origin allow-list + credentials unchanged. maxAge caches the credentialed preflight (RC#5).
 // exposeHeaders makes ETag readable cross-origin (app.* → api.*) — else the browser strips it and the Home
 // summary's conditional-request (If-None-Match → 304) revalidation is silently dead in production.
@@ -95,7 +107,14 @@ app.use(
   }),
 );
 
-app.get("/health", (c) => c.json({ status: "ok" }));
+// Liveness + drain awareness. Returns 503 once SIGTERM has started a drain so the orchestrator/edge stops
+// routing new work to a process that is on its way out (compose gates `caddy` on this healthcheck). This is
+// still only a LIVENESS probe — it deliberately does not touch Postgres or Redis, so it cannot be used to
+// answer "can this process actually serve traffic"; a real dependency-probing /ready (as apps/workers already
+// has) is tracked separately.
+app.get("/health", (c) =>
+  isDraining() ? c.json({ status: "draining" }, 503) : c.json({ status: "ok" }),
+);
 // Internal auth-SLI scrape (Phase 1 observability, doc 03 §10). OFF BY DEFAULT: 404 unless METRICS_TOKEN is set
 // AND the request carries `Authorization: Bearer <token>` — a scraper has no user JWT, so the shared secret IS
 // the gate. A wrong/absent token also 404s: the endpoint is invisible to anyone without the secret (don't

@@ -11,13 +11,13 @@
   "dependencies": {
     "@leadwolf/config": "workspace:*",
     "@leadwolf/core": "workspace:*",
+    "@leadwolf/db": "workspace:*",
     "@leadwolf/types": "workspace:*",
     "bullmq": "^5.0.0",
     "ioredis": "^5.4.1",
     "@leadwolf/integrations": "workspace:*"
   },
   "devDependencies": {
-    "@leadwolf/db": "workspace:*",
     "@testcontainers/postgresql": "^10.13.0",
     "postgres": "3.4.5",
     "testcontainers": "^10.13.0",

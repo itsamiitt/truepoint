@@ -61,7 +61,12 @@ async function handle(
       });
       void scheduler.drain();
       ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
-      return { status: { contactId: null, known: true, owned: false, outcome: "saved" } };
+      // QUEUED, not saved. The drain above is fire-and-forget: at this point the record is only in the local
+      // IndexedDB queue, the POST has not been attempted, and it may still fail or back off. Reporting "saved"
+      // (and `known: true`, asserting the server has a contact) told the user the capture had landed before a
+      // single byte left the browser. The real outcome arrives later via the SUBJECT_STATUS broadcast the
+      // scheduler emits once /ingest answers.
+      return { status: { contactId: null, known: false, owned: false, outcome: "queued" } };
     }
 
     case "REVEAL": {

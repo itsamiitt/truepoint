@@ -44,10 +44,17 @@ const EXTENSION_ALLOW_LIST: readonly RouteRule[] = [
   rule("POST", "/api/v1/ingest"),
   rule("POST", "/api/v1/contacts/:id/reveal"),
   rule("GET", "/api/v1/contacts/:id"),
+  // The LinkedIn→contact seam (background/api/client.ts resolveByLinkedIn). TWO segments after
+  // /contacts, so the `/contacts/:id` rule above CANNOT match it (`:id` → `[^/]+`, one segment) —
+  // it needs its own rule or the hover card's lookup 403s the moment EXTENSION_SCOPE_ENFORCE flips.
+  rule("GET", "/api/v1/contacts/by-linkedin/:publicId"),
   rule("GET", "/api/v1/credits/balance"),
   rule("GET", "/api/v1/credits/reveal-costs"),
   rule("GET", "/api/v1/me"),
   rule("GET", "/api/v1/orgs"),
+  // The SW-held SSE consumer (background/eventStream.ts), itself dark behind the realtimeSse flag.
+  // Allow-listed now so enabling the flag can never be gated on an authz change.
+  rule("GET", "/api/v1/events/stream"),
 ];
 
 /** Drop a query string, keeping just the path (split always yields ≥1 element; `?? path` satisfies the strict

@@ -10,6 +10,10 @@ export interface QueueItem {
   nextAttemptAt: number;
   status: "pending" | "inflight" | "failed";
   capturedAt: number;
+  /** When the current drain claimed this item. Set by markInflight; used to reap items abandoned by a service
+   *  worker that died mid-drain (MV3 kills idle workers, so that is routine, not exceptional). Optional because
+   *  rows written by an earlier build predate the field — those are abandoned by definition and reap at once. */
+  inflightSince?: number;
 }
 
 export interface RecentItem {

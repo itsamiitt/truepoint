@@ -117,8 +117,9 @@ async function decideApprovalRoute(
   decision: "approved" | "rejected",
   action: string,
 ) {
+  // `!id` is required as well as the regex: hono >=4.12 types c.req.param() as `string | undefined`.
   const id = c.req.param("id");
-  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  if (!id || !UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
   const parsed = decideApprovalSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const actor = actorOf(c);
@@ -307,8 +308,9 @@ dataRoutes.get("/approvals", requireCapability("data:review"), async (c) => {
 
 /** Approve a pending request (the CHECKER; requester != approver enforced). data:review. */
 dataRoutes.post("/approvals/:id/approve", requireCapability("data:review"), async (c) => {
+  // `!id` is required as well as the regex: hono >=4.12 types c.req.param() as `string | undefined`.
   const id = c.req.param("id");
-  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  if (!id || !UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
   const parsed = decideApprovalSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const actor = actorOf(c);
@@ -495,8 +497,9 @@ dataRoutes.put("/validation/rules/:id", requireCapability("data:manage"), async 
 
 /** Enable/disable a custom rule. data:manage. Audited. */
 dataRoutes.post("/validation/rules/:id/toggle", requireCapability("data:manage"), async (c) => {
+  // `!id` is required as well as the regex: hono >=4.12 types c.req.param() as `string | undefined`.
   const id = c.req.param("id");
-  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  if (!id || !UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
   const parsed = toggleValidationRuleSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   await withPlatformTx(
@@ -571,8 +574,9 @@ dataRoutes.get("/dedup/links", requireCapability("data:review"), async (c) => {
  * the bounded file; streaming is a follow-up.)
  */
 dataRoutes.get("/approvals/:id/export", requireCapability("data:export"), async (c) => {
+  // `!id` is required as well as the regex: hono >=4.12 types c.req.param() as `string | undefined`.
   const id = c.req.param("id");
-  if (!UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
+  if (!id || !UUID_RE.test(id)) throw new ValidationError("id must be a UUID");
   let bytes: Uint8Array;
   try {
     const stream = await bulkFileStore().getObjectStream(`exports/staff/${id}.csv`);

@@ -25,14 +25,26 @@ export class TagNameConflictError extends AppError {
 }
 
 /** True for a Postgres unique-violation (SQLSTATE 23505) on the per-workspace tag-name index — the race
- *  backstop when two concurrent creates/renames both pass existsByName before either commits. */
+ *  backstop when two concurrent creates/renames both pass existsByName before either commits.
+ *
+ *  Walks the `cause` chain rather than reading the top-level error: since drizzle-orm 0.44 EVERY driver error
+ *  is wrapped in a `DrizzleQueryError`, so the postgres.js error carrying `code`/`constraint_name` is no longer
+ *  the thrown object — it is `err.cause`. Checking only the top level silently stopped matching, which would
+ *  turn this 409 into a raw 500 on the concurrent-create race. Walking the chain handles both shapes. */
 function isTagNameUniqueViolation(e: unknown): boolean {
-  return (
-    typeof e === "object" &&
-    e !== null &&
-    (e as { code?: string }).code === "23505" &&
-    String((e as { constraint_name?: string }).constraint_name ?? "").includes("uniq_tags_ws_name")
-  );
+  // Bounded walk: a wrapped driver error is 1-2 levels deep; the cap just prevents a cyclic `cause` hanging.
+  for (let current: unknown = e, depth = 0; current !== null && depth < 5; depth++) {
+    if (typeof current !== "object") break;
+    const candidate = current as { code?: string; constraint_name?: string; cause?: unknown };
+    if (
+      candidate.code === "23505" &&
+      String(candidate.constraint_name ?? "").includes("uniq_tags_ws_name")
+    ) {
+      return true;
+    }
+    current = candidate.cause;
+  }
+  return false;
 }
 
 export interface CreateTagInput {

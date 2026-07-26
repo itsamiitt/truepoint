@@ -152,6 +152,36 @@ export function makeExtractProcessor(deps: ProcessorDeps) {
         schemaVersion: ctx.schemaVersion,
       },
     );
+    // ACT ON THE OUTCOME. It used to be computed and dropped: resolve was enqueued unconditionally and the job
+    // COMPLETED, so BullMQ never retried. A provider blip or a bad request therefore produced zero candidates,
+    // verify then scored confidence 0, and the capture became a permanently unpromotable review task — silently,
+    // because nothing in the pipeline reported a failure. Two classes, two behaviours:
+    //
+    //   retryable  (ai_unavailable) — throw, so the queue's backoff/DLQ machinery owns the retry. Bounded by
+    //              the queue's attempt limit, so a genuine outage lands in the DLQ instead of looping.
+    //   terminal   (refused | truncated | ai_invalid_output) — retrying the same residue cannot change the
+    //              result, so quarantine it (same table the parse stage uses) and do NOT advance the DAG. The
+    //              extraction_runs row written by `meter` already records the outcome for audit.
+    //
+    // Only ok/repaired fall through to persist candidates and enqueue resolve.
+    if (extraction.outcome === "ai_unavailable") {
+      throw new Error(
+        `[forge-extract] provider unavailable for ${job.data.rawCaptureId} — retrying via queue backoff`,
+      );
+    }
+    if (extraction.outcome !== "ok" && extraction.outcome !== "repaired") {
+      await withForgeTx((tx) =>
+        insertQuarantine(tx, {
+          rawCaptureId: job.data.rawCaptureId,
+          route: "ai-extract",
+          reason: extraction.outcome,
+        }),
+      );
+      console.warn(
+        `[forge-extract] quarantine ${job.data.rawCaptureId} ai-extract: ${extraction.outcome}`,
+      );
+      return;
+    }
     // Persist the extracted candidates (P-01.2) — previously discarded, so promotion had no real data to promote.
     if (extraction.fields.length > 0) {
       await withForgeTx((tx) =>

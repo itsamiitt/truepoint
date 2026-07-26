@@ -16,6 +16,7 @@ import {
 } from "@leadwolf/config";
 import {
   type Tx,
+  closeDb,
   getApprovalRequest,
   getOverviewCounts,
   getSyncStatusCounts,
@@ -131,4 +132,46 @@ const app = createForgeApi({
 
 const port = Number(process.env.FORGE_API_PORT ?? 3005);
 
-export default { port, fetch: app.fetch };
+/** Idle timeout (seconds). Bun's default is 10s; raised for parity with apps/api so a slow capture upload on a
+ *  poor connection is not severed mid-body. */
+const IDLE_TIMEOUT_SECONDS = 65;
+
+/** Bound the graceful drain, mirroring apps/api and apps/workers. */
+const DRAIN_TIMEOUT_MS = 15_000;
+
+let draining = false;
+
+// An explicit Bun.serve (rather than `export default { port, fetch }`) so shutdown has a handle to stop
+// accepting connections. `maxRequestBodySize` is pinned to the SAME envelope cap the capture route enforces:
+// without it Bun's 128MB default means a single request is fully buffered into memory and JSON.parsed BEFORE
+// the route's 413 can fire, so the cap was bypassable by simply sending a big body.
+const server = Bun.serve({
+  port,
+  fetch: app.fetch,
+  maxRequestBodySize: ENVELOPE_MAX_BYTES,
+  idleTimeout: IDLE_TIMEOUT_SECONDS,
+});
+
+// Graceful shutdown. This matters more here than in apps/api: the capture route COMMITS the landing tx and
+// THEN enqueues the parse job, so a SIGTERM inside that window permanently loses the enqueue (the
+// reconciliation sweep that would recover it is still a TODO in the worker). Draining in-flight requests
+// closes that window for the common case. Redis and the DB pool are closed after the drain, not before.
+async function shutdown(signal: string): Promise<void> {
+  if (draining) return;
+  draining = true;
+  console.info(`forge-api: draining (${signal})`);
+  const drained = await Promise.race([
+    Promise.resolve(server.stop()).then(() => true),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), DRAIN_TIMEOUT_MS)),
+  ]);
+  if (!drained)
+    console.error(`forge-api: drain timed out after ${DRAIN_TIMEOUT_MS}ms, closing anyway`);
+  await parseQueue.close().catch(() => {});
+  await connection.quit().catch(() => {});
+  await closeDb().catch(() => {});
+  console.info("forge-api: drained, exiting");
+  process.exit(0);
+}
+
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));

@@ -4,24 +4,40 @@
 // token resolves to null and the route maps that to 401 with no detail leak. The operator/capture resolvers
 // reuse the shipped platform-staff role → data:* capability system (staffCapability) — no new capability.
 import { verifyAccessToken } from "@leadwolf/auth";
-import { appOrigins } from "@leadwolf/config";
+import { appOrigins, env } from "@leadwolf/config";
 import { platformStaffRepository } from "@leadwolf/db";
 import { type AccessTokenClaims, type StaffCapability, capabilitiesForRole } from "@leadwolf/types";
 import type { Context } from "hono";
 import type { Capability, StaffPrincipal } from "./capability.ts";
 
-/** Extract + verify the Bearer access token; return its claims, or null on any failure (never leak which). */
-export async function claimsFromRequest(c: Context): Promise<AccessTokenClaims | null> {
+/** Extract + verify the Bearer access token against an EXPLICIT audience list; null on any failure.
+ *
+ *  The audience list is a parameter, not a constant, because the two principals this file resolves accept
+ *  different credentials: capture legitimately accepts the extension's token, staff must not. Passing
+ *  `appOrigins()` (which unions EXTENSION_ORIGINS) to a staff route is precisely the hole fixed below. */
+async function claimsForAudience(
+  c: Context,
+  audiences: readonly string[],
+): Promise<AccessTokenClaims | null> {
   const header = c.req.header("authorization");
   const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return null;
   try {
-    // appOrigins already spans the app + extension origins (the ADR-0045 companion-window token audience).
-    return await verifyAccessToken(token, [...appOrigins()]);
+    return await verifyAccessToken(token, [...audiences]);
   } catch {
     return null; // invalid signature / issuer / audience / expiry — never leak which
   }
 }
+
+/** Verify against the app + extension origins (the ADR-0045 companion-window token audience). Capture only. */
+export async function claimsFromRequest(c: Context): Promise<AccessTokenClaims | null> {
+  return claimsForAudience(c, appOrigins());
+}
+
+/** The scope an /auth/extension/mint token carries (AUTH-065). Duplicated as a literal rather than imported:
+ *  it lives in apps/api, and `apps-never-import-apps` (dependency-cruiser) forbids reaching across. It is a
+ *  wire constant — if it ever changes, both copies must change. */
+const EXTENSION_SCOPE = "extension";
 
 /** The closed data:* subset of the staff capability matrix this edge honours (13 §3). */
 const DATA_CAPABILITIES: readonly Capability[] = [
@@ -40,8 +56,17 @@ function toDataCapabilities(caps: StaffCapability[]): Capability[] {
  *  Resolved per-request against platform_staff (owner-connection read) so a revoked grant takes effect at once;
  *  null if the caller is not active platform staff. Reuses the shipped data_ops → data:* bundle — no new cap. */
 export async function resolveStaff(c: Context): Promise<StaffPrincipal | null> {
-  const claims = await claimsFromRequest(c);
+  // TWO gates, deliberately redundant. Previously this verified against appOrigins() — which unions
+  // EXTENSION_ORIGINS — and applied no scope check, so an extension-minted token belonging to a data_ops
+  // staffer authenticated the entire staff surface: every /bff/* cross-tenant read AND the review/approve
+  // promotion write. apps/api's extension-scope confinement (extensionScope.ts) is apps/api middleware and
+  // does not run on this edge, so nothing else was stopping it.
+  //   1. Audience: APP_ORIGINS only. An extension-audience token no longer verifies here at all.
+  //   2. Scope: reject scope:["extension"] even on an app-audience token, so a future mint that widens the
+  //      audience cannot silently re-open this.
+  const claims = await claimsForAudience(c, env.APP_ORIGINS);
   if (!claims) return null;
+  if (claims.scope.includes(EXTENSION_SCOPE)) return null;
   const role = await platformStaffRepository.getActiveRole(claims.sub);
   if (!role) return null;
   return {

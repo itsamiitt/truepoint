@@ -33,7 +33,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **1768 source files · 84 code-bearing domains · 34 shared areas · 55 domain-vocabulary warnings · 145
+> **1774 source files · 84 code-bearing domains · 34 shared areas · 55 domain-vocabulary warnings · 145
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
 > feature (`apps/api/src/features/master-sync`) + the **nested TruePoint Forge** (fully migrated from the
@@ -73,7 +73,9 @@ packages/                       # side-effect-free libraries, each exported via 
   integrations/ src/            # vendor adapters: enrichment (apollo/zoominfo/clearbit over httpProvider) + anthropic NL-search adapter
 apps/                           # deployable processes (thin transport adapters)
   api/   src/                   # Hono on Bun — validates the access JWT; never issues tokens  [LIVE]
-    middleware/{authn,tenancy,error,rateLimit,idempotency,requireRole,requireOrgRole,requireStaffRole,platformAdmin}.ts
+    middleware/{requestId,authn,tenancy,error,rateLimit,revealRateLimit,idempotency,jobViewer,extensionScope,
+                requireRole,requireOrgRole,requireStaffRole,requireCapability,platformAdmin,syncPrincipal}.ts
+    lifecycle.ts                  # drain state shared by server.ts (SIGTERM) and the readiness endpoint
     features/{auth,workspaces,settings,scim,import,import-mapping-templates,reveal,billing,enrichment,enrichment via jobs,
               scoring,compliance,activity,sales-navigator,outreach,email,home,search,account-search,saved-searches,
               tags,pipeline-stages,custom-fields,contacts-bulk,lists,ai,webhooks,admin}/  app.ts  server.ts  instrumentation.ts

@@ -7,14 +7,14 @@
 
 import { scimErrorBody } from "@leadwolf/types";
 import type { Context } from "hono";
-import type { StatusCode } from "hono/utils/http-status";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 export const SCIM_CONTENT_TYPE = "application/scim+json";
 
 /** Emit a JSON body with the SCIM content-type (application/scim+json). We build the Response directly rather
  * than via c.json(), because c.json() forces content-type: application/json and would clobber a pre-set header
  * — an IdP expects scim+json on EVERY SCIM response. */
-export function scimJson(c: Context, body: unknown, status: StatusCode = 200): Response {
+export function scimJson(c: Context, body: unknown, status: ContentfulStatusCode = 200): Response {
   return c.body(JSON.stringify(body), status, { "content-type": SCIM_CONTENT_TYPE });
 }
 
@@ -54,7 +54,7 @@ export function renderScimError(err: Error, c: Context): Response {
     return scimJson(
       c,
       scimErrorBody(err.status, err.message, err.scimType),
-      err.status as StatusCode,
+      err.status as ContentfulStatusCode,
     );
   }
   return scimJson(c, scimErrorBody(500, "Internal error."), 500);

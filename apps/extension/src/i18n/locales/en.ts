@@ -16,6 +16,7 @@ export const en = {
   "card.revealed": "Revealed",
   "card.notRevealed": "Not revealed",
   "card.save": "Save to TruePoint",
+  "card.queued": "Queued — sending",
   "card.openInApp": "Open in TruePoint",
   "card.noMatch": "No TruePoint match",
   "card.noMatchHint": "We couldn't find this profile.",

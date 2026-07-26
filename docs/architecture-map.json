@@ -100,8 +100,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1771,
-  "fileSetHash": "sha256:4d7271df8ae65e5166f2c3e4bdc0f5a98f4b41156bef318083cf65ffbac88f00",
+  "fileCount": 1774,
+  "fileSetHash": "sha256:7d59849c6b5ed053d1f43a70597696c25bcfc7198943b8af8debb437e670458a",
   "features": {
     "account-search": {
       "web": [],
@@ -1906,6 +1906,7 @@
       "apps/api/src/app.authz.test.ts",
       "apps/api/src/app.ts",
       "apps/api/src/instrumentation.ts",
+      "apps/api/src/lifecycle.ts",
       "apps/api/src/metricsRoute.test.ts",
       "apps/api/src/server.ts"
     ],
@@ -1921,6 +1922,7 @@
       "apps/api/src/middleware/platformAdmin.ts",
       "apps/api/src/middleware/rateLimit.test.ts",
       "apps/api/src/middleware/rateLimit.ts",
+      "apps/api/src/middleware/requestId.ts",
       "apps/api/src/middleware/requireCapability.ts",
       "apps/api/src/middleware/requireOrgRole.ts",
       "apps/api/src/middleware/requireRole.ts",
@@ -2068,6 +2070,7 @@
       "apps/extension/src/background/eventStream.ts",
       "apps/extension/src/background/events/manager.ts",
       "apps/extension/src/background/index.ts",
+      "apps/extension/src/background/queue/captureQueue.test.ts",
       "apps/extension/src/background/queue/captureQueue.ts",
       "apps/extension/src/background/queue/scheduler.ts",
       "apps/extension/src/background/telemetry/telemetry.ts"
@@ -2323,7 +2326,6 @@
     "packages/core": ["packages/core/src/index.ts"],
     "packages/db": [
       "packages/db/drizzle.config.ts",
-      "packages/db/drizzle.worktree.config.ts",
       "packages/db/src/applyMigrations.ts",
       "packages/db/src/bootstrapAdmin.ts",
       "packages/db/src/client.ts",
@@ -2486,6 +2488,7 @@
       "packages/integrations/src/enrichment/httpProvider.ts",
       "packages/integrations/src/enrichment/providers.test.ts",
       "packages/integrations/src/enrichment/providers.ts",
+      "packages/integrations/src/forgeAnthropicExtraction.test.ts",
       "packages/integrations/src/forgeAnthropicExtraction.ts",
       "packages/integrations/src/forgeObjectStore.ts",
       "packages/integrations/src/forgeRateLimiter.ts",

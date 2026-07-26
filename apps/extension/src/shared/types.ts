@@ -41,7 +41,10 @@ export const subjectStatus = z.object({
   contactId: z.string().nullable(),
   known: z.boolean(),
   owned: z.boolean(),
-  outcome: z.enum(["saved", "duplicate", "suppressed", "rejected", "unknown"]),
+  // "queued" is a LOCAL, client-only outcome: the capture is durably in the IndexedDB queue but has not been
+  // acknowledged by the server yet. It exists so the capture path can stop reporting "saved" the instant it
+  // enqueues — the drain happens later, off the alarm, and can still fail. The server never sends it.
+  outcome: z.enum(["saved", "queued", "duplicate", "suppressed", "rejected", "unknown"]),
   emailAvailable: z.boolean().optional(),
   phoneAvailable: z.boolean().optional(),
   score: z.number().int().min(0).max(100).nullable().optional(),

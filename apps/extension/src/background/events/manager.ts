@@ -22,8 +22,20 @@ export class BrowserEventManager {
     chrome.alarms.onAlarm.addListener((alarm) => {
       void this.onAlarm(alarm);
     });
-    chrome.alarms.create("drain", { periodInMinutes: 1 });
-    chrome.alarms.create("flush", { periodInMinutes: 5 });
+    // Create each alarm ONLY if it does not already exist. chrome.alarms.create() on an existing name replaces
+    // it and restarts its period from zero — and register() runs on every service-worker evaluation, which the
+    // 1-minute `drain` alarm itself triggers. So the old unconditional create meant every drain wake reset the
+    // 5-minute `flush` countdown before it could elapse: `flush` never fired, and the IndexedDB telemetry store
+    // was never trimmed. Fire-and-forget is fine — a missed create is recovered on the next wake.
+    void this.ensureAlarm("drain", 1);
+    void this.ensureAlarm("flush", 5);
+  }
+
+  private async ensureAlarm(name: string, periodInMinutes: number): Promise<void> {
+    const existing = await chrome.alarms.get(name);
+    if (!existing) {
+      chrome.alarms.create(name, { periodInMinutes });
+    }
   }
 
   private async onWake(): Promise<void> {

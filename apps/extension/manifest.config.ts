@@ -27,13 +27,19 @@ export default defineManifest({
   },
   // No `identity` — the companion-window auth (ADR-0045) uses chrome.windows + externally_connectable,
   // not launchWebAuthFlow.
-  permissions: ["storage", "alarms", "activeTab", "scripting", "sidePanel"],
+  // Least privilege (truepoint-extension-architecture rule 3): every entry here must be a permission the code
+  // actually calls. `activeTab` and `scripting` were declared but never used — no chrome.scripting call and no
+  // tab injection anywhere — and unused broad permissions are both a review-surface expansion and a leading
+  // cause of Web Store rejection. `storage`, `alarms`, and `sidePanel` are each in use.
+  permissions: ["storage", "alarms", "sidePanel"],
   // Standing hosts: the SW reaches the API for capture/reveal + the extension token endpoints; the content
   // script runs on LinkedIn. (The companion window navigates to app.truepoint.in — a window nav needs no
   // host permission; the handoff arrives via externally_connectable below.)
   host_permissions: ["https://api.truepoint.in/*", "https://*.linkedin.com/*"],
-  // "Capture anywhere" is requested per-host on a user gesture, never granted at install.
-  optional_host_permissions: ["https://*/*", "http://*/*"],
+  // NO optional_host_permissions. "Capture anywhere" was declared as https://*/* + http://*/* against a
+  // user-gesture request flow that does not exist: chrome.permissions.request is never called, so the entry
+  // could only ever widen what the store listing asks for. `http://*/*` additionally advertised plaintext
+  // capture. Re-add a NARROW list at the moment the request flow actually ships — https only.
   // Only the TruePoint web app may message the extension (the auth handoff, ADR-0043/0045). Never a wildcard;
   // the SW still verifies sender.origin + a state nonce before trusting any message (doc 12 §7).
   externally_connectable: { matches: ["https://app.truepoint.in/*"] },

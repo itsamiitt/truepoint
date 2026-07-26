@@ -4,7 +4,7 @@
 
 import { idempotencyRepository } from "@leadwolf/db";
 import type { Context, Next } from "hono";
-import type { StatusCode } from "hono/utils/http-status";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { TenancyVariables } from "./tenancy.ts";
 
 export async function idempotency(
@@ -23,7 +23,7 @@ export async function idempotency(
     c.header("idempotency-replayed", "true");
     return c.json(
       stored.responseBody as Record<string, unknown>,
-      stored.responseStatus as StatusCode,
+      stored.responseStatus as ContentfulStatusCode,
     );
   }
 

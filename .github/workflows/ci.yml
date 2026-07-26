@@ -39,9 +39,9 @@ env:
 
 jobs:
   gates:
-    name: Gates — typecheck · biome · boundaries · unit tests
+    name: Gates — typecheck · biome · boundaries · build · unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -59,6 +59,30 @@ jobs:
         run: bun run lint
       - name: Import boundaries (dependency-cruiser)
         run: bun run lint:boundaries
+      # Build every buildable workspace (4 Next apps + the Vite extension). CI previously never built
+      # ANYTHING, so a broken production build reached main and first surfaced inside deploy/deploy.sh,
+      # minutes into a deploy. Two classes this catches that typecheck cannot:
+      #   • packages/* are consumed as raw TS source through their barrels, and tsconfig.base.json sets
+      #     noUnusedLocals — so an unused local in packages/ui fails `next build` while `tsc --noEmit`
+      #     on that package alone can pass.
+      #   • bundler-only resolution failures (a malformed workspace package.json, a bad export map) that
+      #     no other gate reads.
+      # Env: next build imports packages/config, whose schema fails fast on missing keys. These are
+      # throwaway CI values — the same ones the unit-test preload uses — never real credentials. The
+      # production superRefine asserts (origin agreement) only fire under NODE_ENV=production, so a
+      # development-mode build does not need the NEXT_PUBLIC_* set.
+      - name: Build (turbo — 4 Next apps + extension)
+        env:
+          NODE_ENV: development
+          AUTH_ORIGIN: https://auth.test
+          APP_ORIGINS: https://app.test,https://admin.test,https://forge.test
+          AUTH_COOKIE_DOMAIN: auth.test
+          AUTH_BIND_IP: "off"
+          JWT_SIGNING_KID: ci-kid
+          DATABASE_URL: postgres://leadwolf:leadwolf@localhost:5432/leadwolf
+          REDIS_URL: redis://localhost:6379
+          BLIND_INDEX_KEY: ci-blind-index-key-0123456789abcdef
+        run: bun run build
       # Each *.test.ts runs in its OWN bun process, mirroring the itests step below and for the same reason:
       # module singletons (mock.module patches, the auth metrics registry, env snapshots) bleed across files
       # in one shared process — the suites were authored under per-file isolation.

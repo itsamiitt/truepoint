@@ -1,6 +1,7 @@
 // @forge/ai — the outbound-adapter seam (04 §G-FORGE-402): implements @forge/core's ExtractionPort against
 // Anthropic (ADR-0023), a FAITHFUL mirror of TruePoint's nlSearchAdapter.ts (ecosystem-facts §C): Messages
-// API with output_config.format JSON, adaptive thinking, an AUTHORITATIVE Zod validator downstream of the
+// API with output_config.format JSON, a MODEL-AWARE thinking parameter (see thinkingParamFor), an
+// AUTHORITATIVE Zod validator downstream of the
 // grammar, ONE repair pass (bills both calls), fail-closed on a missing key. The transport (fetchJson) is
 // INJECTABLE, so contract/unit tests run on recorded responses at ZERO live spend. Structured decoding
 // guarantees STRUCTURE, not CORRECTNESS [S47] — grounding + confidence + review live in @forge/core (09).
@@ -114,8 +115,67 @@ function validate(text: string | null): ExtractedField[] | null {
   }
 }
 
+/** The thinking parameter is MODEL-DEPENDENT and mismatches are rejected with a 400 — which this adapter
+ *  swallows as `ai_unavailable`, so a mismatch takes the extract stage silently offline rather than failing
+ *  loudly. That is exactly what happened: `{type:"adaptive"}` was sent to claude-haiku-4-5, which does not
+ *  support it, so every extraction 400'd and reported "unavailable".
+ *
+ *  - Adaptive thinking (`{type:"adaptive"}`) exists on the 4.6 generation and later.
+ *  - Earlier models take manual extended thinking (`{type:"enabled", budget_tokens:N}`), where N must be
+ *    at least 1024 AND strictly less than max_tokens. They also reject `output_config.effort`.
+ *
+ *  Unknown models throw at construction rather than defaulting, so adding a model is a deliberate choice
+ *  instead of a silent 400 discovered weeks later in production. */
+const ADAPTIVE_THINKING_MODELS = [
+  "claude-fable-5",
+  "claude-mythos-5",
+  "claude-opus-5",
+  "claude-opus-4-8",
+  "claude-opus-4-7",
+  "claude-opus-4-6",
+  "claude-sonnet-5",
+  "claude-sonnet-4-6",
+] as const;
+
+/** Models that require manual extended thinking with an explicit budget. */
+const BUDGETED_THINKING_MODELS = [
+  "claude-haiku-4-5",
+  "claude-sonnet-4-5",
+  "claude-opus-4-5",
+] as const;
+
+/** Minimum `budget_tokens` the API accepts for manual extended thinking. */
+const MIN_THINKING_BUDGET = 1024;
+
+type ThinkingParam = { type: "adaptive" } | { type: "enabled"; budget_tokens: number };
+
+/** Resolve the thinking parameter for `model`, or throw if the model's requirements are unknown/unmet. */
+export function thinkingParamFor(model: string, maxTokens: number): ThinkingParam {
+  const matches = (prefix: string): boolean => model.startsWith(prefix);
+  if (ADAPTIVE_THINKING_MODELS.some(matches)) return { type: "adaptive" };
+  if (BUDGETED_THINKING_MODELS.some(matches)) {
+    // budget_tokens must be < max_tokens, so max_tokens has to leave room for the floor above it.
+    if (maxTokens <= MIN_THINKING_BUDGET) {
+      throw new Error(
+        `forge extraction: model ${model} needs manual thinking (budget_tokens >= ${MIN_THINKING_BUDGET} and < max_tokens), so max_tokens must exceed ${MIN_THINKING_BUDGET} — got ${maxTokens}.`,
+      );
+    }
+    return {
+      type: "enabled",
+      budget_tokens: Math.max(MIN_THINKING_BUDGET, Math.floor(maxTokens / 2)),
+    };
+  }
+  throw new Error(
+    `forge extraction: unknown thinking support for model ${model}. Add it to ADAPTIVE_THINKING_MODELS or BUDGETED_THINKING_MODELS in forgeAnthropicExtraction.ts — do not guess, a wrong thinking parameter 400s and silently disables extraction.`,
+  );
+}
+
 export function anthropicExtractionPort(cfg: AnthropicExtractionConfig): ExtractionPort {
-  const maxTokens = cfg.maxTokens ?? 1024;
+  // Default raised from 1024: the budgeted-thinking models need max_tokens > budget_tokens > 1024, so 1024
+  // could not satisfy its own thinking floor. Structured output here is a small field list, not prose.
+  const maxTokens = cfg.maxTokens ?? 4096;
+  // Resolved ONCE at construction so a model/param mismatch throws where it is configured, not per request.
+  const thinking = thinkingParamFor(cfg.model, maxTokens);
 
   const call = (userContent: string): Promise<AnthropicResponse> =>
     cfg.fetchJson(`${cfg.baseUrl}/v1/messages`, {
@@ -129,7 +189,7 @@ export function anthropicExtractionPort(cfg: AnthropicExtractionConfig): Extract
         model: cfg.model,
         max_tokens: maxTokens,
         system: SYSTEM_PROMPT,
-        thinking: { type: "adaptive" },
+        thinking,
         output_config: { format: { type: "json_schema", schema: EXTRACTION_JSON_SCHEMA } },
         messages: [{ role: "user", content: userContent }],
       }),

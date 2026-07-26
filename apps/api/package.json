@@ -15,7 +15,7 @@
     "@leadwolf/db": "workspace:*",
     "@leadwolf/search": "workspace:*",
     "@leadwolf/types": "workspace:*",
-    "hono": "4.6.13",
+    "hono": "4.12.32",
     "@leadwolf/integrations": "workspace:*",
     "bullmq": "^5.0.0",
     "ioredis": "^5.4.1"
