@@ -198,7 +198,16 @@ app.route("/api/v1/lists", listsRoutes); // 24: static prospect lists (bulk add-
 app.route("/api/v1/ingest", ingestRoutes);
 // Machine-only Forge master-sync ingress (docs/planning/forge/11, ADR-0047) — its own scope-gated principal,
 // NOT the human authn→tenancy→requireRole chain.
-app.route("/api/v1/master-sync", masterSyncRoutes);
+//
+// DARK BY DEFAULT (F-0.10). ADR-0047 replaced this HTTP push with an in-process withErTx promotion, and
+// nothing in this repo calls the endpoint any more — so what remained was a live, orphaned SECOND write path
+// into the Layer-0 master graph, reachable by anyone holding a service JWT carrying the master-sync scope.
+// Two write paths into the golden record is one more than the ER model assumes. Not deleted, because it is a
+// documented ADR-0047 ingress an externally-hosted Forge could still need; gated, so enabling it is a
+// deliberate reviewable act rather than the status quo.
+if (env.MASTER_SYNC_INGRESS_ENABLED) {
+  app.route("/api/v1/master-sync", masterSyncRoutes);
+}
 app.route("/api/v1/ai-search", aiSearchRoutes); // 23/ADR-0023: NL → validated filter (for confirmation)
 app.route("/api/v1/sales-navigator", salesNavRoutes);
 app.route("/api/v1/custom-fields", customFieldsRoutes); // ADR-0028: field definitions + typed-jsonb values

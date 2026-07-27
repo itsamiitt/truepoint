@@ -626,6 +626,19 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // The HTTP master-sync ingress (POST /api/v1/master-sync, docs/planning/forge/11, ADR-0047). DEFAULT-OFF,
+    // and off is the correct steady state: ADR-0047 replaced this push with an IN-PROCESS withErTx promotion,
+    // so nothing in this repo calls it — forge-worker, forge-api and the integrations package contain no
+    // reference to it. What remained was a live, orphaned SECOND write path into the Layer-0 master graph,
+    // reachable by anyone holding a service JWT with the master-sync scope. Two write paths into the golden
+    // record is one more than the ER model assumes, and an unused one accrues risk without accruing value.
+    // Gated rather than deleted because it is a documented ADR-0047 ingress and an externally-hosted Forge
+    // could still need it: flipping this to "true" is a deliberate, reviewable act, whereas deleting it would
+    // need an ADR amendment to undo. While off the router is not mounted and the route 404s.
+    MASTER_SYNC_INGRESS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Probabilistic ER shadow mode (prospect-database-platform I5 / audit P02, A10): when ON, the leader-locked ER
     // sweep scores candidate person pairs (Fellegi-Sunter) and PROPOSES dups as match_links rows with
     // review_status='pending' + match_method='splink' — the human-review queue the DB-Ops surface reads. SHADOW-ONLY:

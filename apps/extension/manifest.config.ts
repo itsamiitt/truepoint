@@ -1,12 +1,17 @@
 import { defineManifest } from "@crxjs/vite-plugin";
 import pkg from "./package.json" with { type: "json" };
+import { hostPermissionsForMode } from "./src/shared/origins.ts";
 
 // MV3 manifest — least-privilege, thin-producer, compliant capture.
 // Design + rationale: docs/planning/chrome-extension/02, 03 §1, ADR-0043.
 // - No `*://*/*`: only the API/auth origins (needed by the SW) + LinkedIn (content script) are
 //   granted at install; every other host is opt-in via `optional_host_permissions` on a user gesture.
 // - No MAIN-world injection, no `webRequest`, no `cookies` — we read only the visible DOM.
-export default defineManifest({
+// A FUNCTION, not a literal: host_permissions must follow the build mode. They were production-only, so a
+// development build could not reach a local API even once shared/env.ts pointed at one — the permission model
+// that protects the release build would have blocked the dev build instead. Derived from the same
+// src/shared/origins.ts the Vite `define` uses, so the granted host and the called host cannot drift.
+export default defineManifest((env) => ({
   manifest_version: 3,
   name: "TruePoint — Prospect Capture",
   short_name: "TruePoint",
@@ -35,7 +40,7 @@ export default defineManifest({
   // Standing hosts: the SW reaches the API for capture/reveal + the extension token endpoints; the content
   // script runs on LinkedIn. (The companion window navigates to app.truepoint.in — a window nav needs no
   // host permission; the handoff arrives via externally_connectable below.)
-  host_permissions: ["https://api.truepoint.in/*", "https://*.linkedin.com/*"],
+  host_permissions: hostPermissionsForMode(env.mode),
   // NO optional_host_permissions. "Capture anywhere" was declared as https://*/* + http://*/* against a
   // user-gesture request flow that does not exist: chrome.permissions.request is never called, so the entry
   // could only ever widen what the store listing asks for. `http://*/*` additionally advertised plaintext
@@ -62,4 +67,4 @@ export default defineManifest({
     // Self-hosted Geist woff2 load as 'self' (MV3 blocks remote fonts); no remote code.
     extension_pages: "script-src 'self'; object-src 'self'; font-src 'self'",
   },
-});
+}));
