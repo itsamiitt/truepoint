@@ -103,7 +103,34 @@ async function applyJournalByHash(sql: postgres.Sql, log: (m: string) => void): 
   }
 }
 
-const bootstrap = (appPwd: string): string => `
+/**
+ * Build the `leadwolf_forge` role clauses (E-6.6).
+ *
+ * No password configured ⇒ NOLOGIN, exactly as before, and `withForgeTx` keeps using the owner connection
+ * plus SET LOCAL ROLE. A password ⇒ the role gets LOGIN so the Forge pool can AUTHENTICATE as it, which makes
+ * the same-repo firewall a property of the connection instead of a statement that has to succeed every time.
+ * That matters more than it looks: if the SET LOCAL ROLE were ever skipped or errored, withForgeTx would run
+ * as the OWNER — which CAN read customer contacts, the exact thing the firewall exists to prevent.
+ *
+ * The ELSE branch converges an EXISTING role. Every deployment created it NOLOGIN, so without it the flag
+ * would only ever take effect on a fresh database and the hardening would silently never reach production.
+ * It only ever GRANTS login, never revokes: a running deployment may already be authenticating as this role,
+ * and pulling LOGIN out from under it mid-migrate would take Forge down.
+ */
+function forgeRoleClauses(forgePwd: string | undefined): {
+  create: string;
+  converge: string;
+} {
+  if (!forgePwd) return { create: "NOLOGIN", converge: "" };
+  return {
+    create: `LOGIN PASSWORD '${forgePwd}'`,
+    converge: `    ELSE\n      ALTER ROLE leadwolf_forge LOGIN PASSWORD '${forgePwd}';\n`,
+  };
+}
+
+const bootstrap = (appPwd: string, forgePwd: string | undefined): string => {
+  const { create: forgeRoleClause, converge: forgeConvergeClause } = forgeRoleClauses(forgePwd);
+  return `
   CREATE EXTENSION IF NOT EXISTS pgcrypto;
   CREATE EXTENSION IF NOT EXISTS citext;
 
@@ -142,8 +169,8 @@ const bootstrap = (appPwd: string): string => `
     -- ONLY the forge schema (raw to parsed to verified + ER/governance) and has NO grant on the public/overlay
     -- tables, so the ingest-to-verify pipeline can never read a customer's contacts. Reached only via withForgeTx.
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_forge') THEN
-      CREATE ROLE leadwolf_forge NOLOGIN;
-    END IF;
+      CREATE ROLE leadwolf_forge ${forgeRoleClause};
+${forgeConvergeClause}    END IF;
   END $$;
   GRANT USAGE ON SCHEMA public TO leadwolf_app;
   GRANT USAGE ON SCHEMA public TO leadwolf_admin;
@@ -155,6 +182,7 @@ const bootstrap = (appPwd: string): string => `
   GRANT leadwolf_er TO CURRENT_USER;
   GRANT leadwolf_forge TO CURRENT_USER;
 `;
+};
 
 // Table/sequence privileges for the app role, applied AFTER tables exist (RLS still gates which rows it sees).
 const GRANTS = `
@@ -274,10 +302,25 @@ async function exists(path: string): Promise<boolean> {
 
 export async function applyMigrations(
   connectionString: string,
-  opts: { appRolePassword?: string; adminRolePassword?: string } = {},
+  opts: {
+    appRolePassword?: string;
+    adminRolePassword?: string;
+    /** Login password for `leadwolf_forge` (E-6.6). ABSENT means the role stays NOLOGIN, exactly as before —
+     *  the Forge connection then keeps using the owner + SET LOCAL ROLE. Present means the role is granted
+     *  LOGIN so `withForgeTx` can AUTHENTICATE as it, making the same-repo firewall a property of the
+     *  connection rather than of a statement that has to succeed every time. */
+    forgeRolePassword?: string;
+  } = {},
 ): Promise<void> {
   // Single-quote-escape so a password containing ' can't break the bootstrap SQL.
   const appPwd = (opts.appRolePassword ?? DEFAULT_APP_ROLE_PASSWORD).replace(/'/g, "''");
+  // The forge login password falls back to process.env rather than @leadwolf/config: this module is
+  // deliberately standalone (a connection string plus explicit options, no config dependency), and the
+  // fallback is what lets the integration suite exercise the LOGIN path — the itests call applyMigrations()
+  // with no options, so without it every one of them would keep the NOLOGIN role and the path would ship
+  // untested. An explicit option still wins.
+  const forgePwdRaw = opts.forgeRolePassword ?? process.env.DATABASE_FORGE_ROLE_PASSWORD;
+  const forgePwd = forgePwdRaw?.replace(/'/g, "''");
   // `prepare: false` is REQUIRED here: Drizzle's migrator issues prepared statements, which a
   // transaction-pooling proxy (Neon `-pooler` / PgBouncer / RDS Proxy) can't keep across checkouts —
   // the classic "migration hangs forever" on Neon's default pooled host. Mirrors client.ts. The timeouts
@@ -304,7 +347,7 @@ export async function applyMigrations(
   };
   try {
     log("migrate: [1/4] bootstrap (extensions, roles, uuid_generate_v7)…\n");
-    await sql.unsafe(bootstrap(appPwd));
+    await sql.unsafe(bootstrap(appPwd, forgePwd));
     if (await exists(migrationsFolder)) {
       log("migrate: [2/4] applying table migrations…\n");
       await applyJournalByHash(sql, log);

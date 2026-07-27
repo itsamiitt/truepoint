@@ -95,6 +95,24 @@ describe("forge plane ↔ tenant plane isolation (ADR-0047 same-repo firewall)",
     }
   });
 
+  test("withForgeTx AUTHENTICATES as leadwolf_forge when the role has LOGIN (E-6.6)", async () => {
+    // Same silent-inertness problem as the tenant pool: the forge URL falls back to the owner connection when
+    // no forge-role password is configured, and every other test passes either way because the owner can do
+    // everything leadwolf_forge can and more. session_user is the only thing that distinguishes "firewall
+    // enforced by the connection" from "firewall enforced by a SET LOCAL ROLE that happened to run".
+    const dbmod = await import("@leadwolf/db");
+    const identity = await dbmod.withForgeTx(async (tx) => {
+      const rows = (await tx.execute(
+        "SELECT session_user::text AS session_user, current_user::text AS current_user",
+      )) as unknown as Array<{ session_user: string; current_user: string }>;
+      return rows[0];
+    });
+    expect(identity?.session_user).toBe("leadwolf_forge");
+    // current_user was already leadwolf_forge before this change, so it alone proves nothing — asserted so a
+    // regression that drops the SET LOCAL ROLE is still caught.
+    expect(identity?.current_user).toBe("leadwolf_forge");
+  });
+
   test("the forge role cannot reach the tenant overlay either — the firewall is TWO-WAY", async () => {
     // The direction that matters for PII: the ingest→verify pipeline must never be able to read a customer's
     // contacts. Asserted from the owner connection by dropping into leadwolf_forge, mirroring withForgeTx.
