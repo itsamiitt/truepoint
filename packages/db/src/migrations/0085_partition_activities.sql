@@ -41,11 +41,16 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Build alongside, under a temporary name, so the live table keeps serving until the swap. The primary key
-  -- gains occurred_at because a partitioned table's unique constraints must include the partition key; nothing
-  -- depends on `id` alone being unique (no inbound foreign keys — verified), so this is a widening, not a
-  -- semantic change.
-  CREATE TABLE activities_partitioned (
+  -- The OLD table steps aside first so the new one can take the canonical name immediately. That ordering
+  -- matters more than it looks: partitions are named after their parent at creation time, so building under a
+  -- temporary name and renaming afterwards would leave every partition called activities_partitioned_YYYY_MM
+  -- while the sweep went on creating activities_YYYY_MM beside them.
+  ALTER TABLE activities RENAME TO activities_pre_partition;
+
+  -- The primary key gains occurred_at because a partitioned table's unique constraints must include the
+  -- partition key. Nothing depends on `id` alone being unique (no inbound foreign keys — verified), so this is
+  -- a widening, not a semantic change.
+  CREATE TABLE activities (
     id uuid NOT NULL DEFAULT uuid_generate_v7(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -66,26 +71,29 @@ BEGIN
       'positive','negative','neutral'))
   ) PARTITION BY RANGE (occurred_at);
 
-  -- The catch-all first, so the copy below cannot fail on a historical row older than the months created next.
-  CREATE TABLE activities_default PARTITION OF activities_partitioned DEFAULT;
-  PERFORM ensure_month_partitions('activities_partitioned'::regclass, 3);
+  -- Months FIRST, then the catch-all, and BOTH before the copy. Rows must land in their real month where one
+  -- exists: anything sitting in the DEFAULT partition blocks a later CREATE ... PARTITION OF for that month
+  -- outright, because the new partition's constraint would be violated by the rows already there.
+  -- Rows OLDER than the current month land in the default by design — the sweep only ever creates the current
+  -- month and forward, so no future CREATE can collide with them.
+  PERFORM ensure_month_partitions('activities'::regclass, 3);
+  CREATE TABLE activities_default PARTITION OF activities DEFAULT;
 
-  INSERT INTO activities_partitioned (id, tenant_id, workspace_id, contact_id, actor_user_id, activity_type,
-                                      channel, outcome, note, metadata, occurred_at)
+  INSERT INTO activities (id, tenant_id, workspace_id, contact_id, actor_user_id, activity_type,
+                          channel, outcome, note, metadata, occurred_at)
        SELECT id, tenant_id, workspace_id, contact_id, actor_user_id, activity_type,
               channel, outcome, note, metadata, occurred_at
-         FROM activities;
+         FROM activities_pre_partition;
   GET DIAGNOSTICS copied = ROW_COUNT;
 
-  -- Drop before rename so the canonical index names are free. CASCADE takes the old table's indexes and the
-  -- last_activity_at trigger with it; rls/activity.sql recreates the trigger on the new table on this same
-  -- applyMigrations run.
-  DROP TABLE activities CASCADE;
-  ALTER TABLE activities_partitioned RENAME TO activities;
+  -- CASCADE takes the old table's indexes and its last_activity_at trigger with it. Dropping BEFORE the index
+  -- creation below is what frees the canonical index names; rls/activity.sql recreates the trigger on the new
+  -- table later in this same applyMigrations run.
+  DROP TABLE activities_pre_partition CASCADE;
 
-  -- Recreated with their canonical names: the timeline read (newest-first per contact within a workspace) and
-  -- the workspace-wide recency aggregate that Home's summary runs on every load (migration 0080). Partitioned
-  -- indexes are created on the parent and propagate to every partition, existing and future.
+  -- The timeline read (newest-first per contact within a workspace) and the workspace-wide recency aggregate
+  -- Home's summary runs on every load (migration 0080). Created on the parent, so they propagate to every
+  -- partition, existing and future.
   CREATE INDEX idx_activities_ws_contact_occurred
     ON activities (workspace_id, contact_id, occurred_at DESC NULLS LAST);
   CREATE INDEX idx_activities_ws_occurred_type
