@@ -15,6 +15,10 @@ const nextConfig = {
     "@leadwolf/types",
     "@leadwolf/config",
   ],
+  // Tree-shake the @leadwolf/ui barrel at import time, matching web/admin/forge. This app was the only one
+  // without it: a component importing one control pulled the whole barrel into that route's chunk, and the
+  // auth screens are the FIRST thing an unauthenticated visitor downloads.
+  experimental: { optimizePackageImports: ["@leadwolf/ui"] },
   // Server-only / native deps reached via the transpiled workspace packages above. Keep them OUT of the
   // webpack bundle and `require()` them at runtime from node_modules — otherwise webpack tries to parse
   // @node-rs/argon2's native .node binary and the build fails. (They run only in server routes/actions.)
