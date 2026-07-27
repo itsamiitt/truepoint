@@ -1,20 +1,24 @@
 // RealtimeBridge.tsx — app-wide realtime (reveal-experience Phase 4). Opens the SSE stream and re-broadcasts
-// domain events onto the window-event bus the shell + reveal store already listen to: `credits:changed`
-// (balance moved → the CreditPill / bulk bar re-read) and `reveal:changed` {contactId} (a reveal committed,
-// possibly by a teammate or another tab → the reveal store refreshes that row). Renders nothing. Inert while
+// domain events into the query cache and onto the window bus: a balance move INVALIDATES the shared credit
+// and notification keys (so the CreditPill and bulk bar re-read from one request), and `reveal:changed`
+// {contactId} still goes out as a window event for the reveal store, which tracks per-row client state
+// rather than a server read. Renders nothing. Inert while
 // realtime is dark (the stream 404s → the reader stops without reconnecting), so the existing polling/refetch
 // remains the source of truth until REALTIME_SSE_ENABLED is flipped.
 "use client";
 
+import { invalidateCreditSignals } from "@/lib/credits";
 import { connectEventStream } from "@/lib/eventStream";
 import {
   EVENT_CREDITS_CHANGED,
   EVENT_REVEAL_COMPLETED,
   EVENT_REVEAL_JOB_COMPLETED,
 } from "@leadwolf/types";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 export function RealtimeBridge() {
+  const qc = useQueryClient();
   useEffect(() => {
     const stop = connectEventStream((ev) => {
       if (
@@ -22,7 +26,7 @@ export function RealtimeBridge() {
         ev.event === EVENT_REVEAL_COMPLETED ||
         ev.event === EVENT_REVEAL_JOB_COMPLETED
       ) {
-        window.dispatchEvent(new Event("credits:changed"));
+        invalidateCreditSignals(qc);
       }
       if (ev.event === EVENT_REVEAL_COMPLETED) {
         try {
@@ -37,6 +41,6 @@ export function RealtimeBridge() {
       }
     });
     return stop;
-  }, []);
+  }, [qc]);
   return null;
 }

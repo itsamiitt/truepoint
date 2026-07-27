@@ -1,58 +1,54 @@
-// useMembers.ts — loads the workspace members (GET /workspaces/current/members) with loading/error + reload,
-// plus invite / change-role / remove mutators that refresh on success. Presentation state only.
+// useMembers.ts — the workspace members (GET /workspaces/current/members) plus invite / change-role / remove.
+// Presentation state only.
+//
+// Each mutator invalidates on success, which is what the `if (ok) await reload()` chain did — the difference
+// is that invalidation refreshes every mounted reader of the members feed, not just the hook instance the
+// action happened to be called from.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchMembers, inviteMember, removeMember, updateMemberRole } from "../api";
+import { settingsWorkspaceKeys } from "../keys";
 import type { MembersFeed, WorkspaceRole } from "../types";
 
 export function useMembers() {
-  const [feed, setFeed] = useState<MembersFeed | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const key = settingsWorkspaceKeys.members();
+  const query = useQuery<MembersFeed>({ queryKey: key, queryFn: fetchMembers });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setFeed(await fetchMembers());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load members");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const refreshIfOk = ({ ok }: { ok: boolean }) => {
+    if (ok) void qc.invalidateQueries({ queryKey: key });
+  };
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const invite = useMutation({
+    mutationFn: (vars: { email: string; role: WorkspaceRole }) =>
+      inviteMember(vars.email, vars.role),
+    onSuccess: refreshIfOk,
+  });
+  const changeRole = useMutation({
+    mutationFn: (vars: { id: string; role: WorkspaceRole }) => updateMemberRole(vars.id, vars.role),
+    onSuccess: refreshIfOk,
+  });
+  const remove = useMutation({
+    mutationFn: (id: string) => removeMember(id),
+    onSuccess: refreshIfOk,
+  });
 
-  const invite = useCallback(
-    async (email: string, role: WorkspaceRole): Promise<boolean> => {
-      const { ok } = await inviteMember(email, role);
-      if (ok) await reload();
-      return ok;
+  return {
+    feed: query.data ?? null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load members"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
     },
-    [reload],
-  );
-
-  const changeRole = useCallback(
-    async (id: string, role: WorkspaceRole): Promise<boolean> => {
-      const { ok } = await updateMemberRole(id, role);
-      if (ok) await reload();
-      return ok;
-    },
-    [reload],
-  );
-
-  const remove = useCallback(
-    async (id: string): Promise<boolean> => {
-      const { ok } = await removeMember(id);
-      if (ok) await reload();
-      return ok;
-    },
-    [reload],
-  );
-
-  return { feed, error, loading, reload, invite, changeRole, remove };
+    invite: async (email: string, role: WorkspaceRole): Promise<boolean> =>
+      (await invite.mutateAsync({ email, role })).ok,
+    changeRole: async (id: string, role: WorkspaceRole): Promise<boolean> =>
+      (await changeRole.mutateAsync({ id, role })).ok,
+    remove: async (id: string): Promise<boolean> => (await remove.mutateAsync(id)).ok,
+  };
 }

@@ -1,38 +1,36 @@
-// usePublicPricing.ts — view state for the public pricing page: loads the active plan tiers + credit packs
-// together, exposing one loading/error pair and a reload. No auth, no tenant — purely the public catalog
-// (ADR-0012 transparent self-serve). Presentation state only.
+// usePublicPricing.ts — the public pricing page: the active plan tiers + credit packs loaded together behind
+// one loading/error pair. No auth, no tenant — purely the public catalog (ADR-0012 transparent self-serve).
 "use client";
 
-import type { PublicCreditPack, PublicPlan } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchPublicPacks, fetchPublicPlans } from "../api";
+import { publicPricingKeys } from "../keys";
 
 export function usePublicPricing() {
-  const [plans, setPlans] = useState<PublicPlan[]>([]);
-  const [packs, setPacks] = useState<PublicCreditPack[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery({
+    queryKey: publicPricingKeys.catalog(),
+    // RQ owns the AbortSignal, which is what the hand-rolled controller and its three `signal.aborted` guards
+    // were for — an aborted fetch is a cancellation, not a state update to suppress after the fact.
+    queryFn: async ({ signal }) => {
+      const [plans, packs] = await Promise.all([
+        fetchPublicPlans(signal),
+        fetchPublicPacks(signal),
+      ]);
+      return { plans, packs };
+    },
+  });
 
-  const reload = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [pl, pk] = await Promise.all([fetchPublicPlans(signal), fetchPublicPacks(signal)]);
-      setPlans(pl);
-      setPacks(pk);
-    } catch (e) {
-      if (signal?.aborted) return;
-      setError(e instanceof Error ? e.message : "Failed to load pricing");
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void reload(controller.signal);
-    return () => controller.abort();
-  }, [reload]);
-
-  return { plans, packs, error, loading, reload };
+  return {
+    plans: query.data?.plans ?? [],
+    packs: query.data?.packs ?? [],
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load pricing"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+  };
 }

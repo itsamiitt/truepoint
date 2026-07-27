@@ -1,31 +1,28 @@
-// useContacts.ts — loads the workspace's masked contacts for the post-import view, with a `reload` the
-// wizard calls after a successful import. Presentation state only; the masking happens server-side.
+// useContacts.ts — the workspace's masked contacts for the post-import view, with a `reload` the wizard calls
+// after a successful import. Presentation state only; the masking happens server-side.
 "use client";
 
 import type { MaskedContact } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchContacts } from "../api";
+import { importKeys } from "../keys";
 
 export function useContacts() {
-  const [contacts, setContacts] = useState<MaskedContact[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const query = useQuery<MaskedContact[]>({
+    queryKey: importKeys.contacts(),
+    queryFn: fetchContacts,
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setContacts(await fetchContacts());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load contacts");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { contacts, error, loading, reload };
+  return {
+    contacts: query.data ?? [],
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load contacts"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+  };
 }

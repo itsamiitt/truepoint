@@ -6,7 +6,9 @@
 // itself still runs server-side; this only mirrors the outcome.
 "use client";
 
+import { invalidateCreditSignals } from "@/lib/credits";
 import type { RevealCosts, RevealResponse, RevealType, RevealedContact } from "@leadwolf/types";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   type ReactNode,
   createContext,
@@ -86,6 +88,7 @@ function mergeReveal(
 }
 
 export function RevealStoreProvider({ children }: { children: ReactNode }) {
+  const qc = useQueryClient();
   const [byId, setById] = useState<Map<string, RevealedContact>>(() => new Map());
   const [revealing, setRevealing] = useState<Set<string>>(() => new Set());
   const [costs, setCosts] = useState<RevealCosts | null>(null);
@@ -172,8 +175,8 @@ export function RevealStoreProvider({ children }: { children: ReactNode }) {
         const result = await revealContact(contactId, revealType);
         setById((prev) => mergeReveal(prev, contactId, revealType, result));
         hydratedRef.current.add(contactId);
-        // The top-bar CreditPill re-reads the balance off this event (the one place credits change here).
-        window.dispatchEvent(new Event("credits:changed"));
+        // Credits moved — invalidate so the top-bar pill and the bulk bar both re-read.
+        invalidateCreditSignals(qc);
         return { ok: true, result };
       } catch (e) {
         if (e instanceof ApiError) return { ok: false, error: e.message, code: e.code };
@@ -187,7 +190,7 @@ export function RevealStoreProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [],
+    [qc],
   );
 
   const store: RevealStore = useMemo(

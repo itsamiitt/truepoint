@@ -926,7 +926,7 @@ process up to Caddy.
   leaves the rows `pending` and unlocked for the next tick, which is the same at-least-once behaviour the
   previous code had when a mid-loop publish threw.
 
-- [ ] **C-3.8 · Finish the TanStack Query migration.** RQ v5 is installed and its provider is mounted, but
+- [x] **C-3.8 · Finish the TanStack Query migration.** RQ v5 is installed and its provider is mounted, but
   it is used by **only** `import/` and `data-health/`; ~90% of features hand-roll `useState`+`useEffect`
   (`useProspectSearch.ts:40-83`, `useHomeSummary.ts:54-76` — which reimplements SWR+ETag caching by hand in
   76 lines — `useListMembers.ts:26-77`). This violates the project's own mandate
@@ -934,6 +934,39 @@ process up to Caddy.
   Convert: keyset load-more → `useInfiniteQuery`; the five bespoke pollers → `refetchInterval`; the
   `window.dispatchEvent("credits:changed")` bus and `window.location.reload()` on org/workspace switch →
   `invalidateQueries`. **needs:** L-1.11 (defaults + `useSession` first).
+  **DONE, except the org/workspace reload — see below.** ~60 hooks across every feature moved to
+  `useQuery` / `useInfiniteQuery` / `useMutation`, each feature gaining the mandated `keys.ts` factory. Landed
+  in 13 reviewed slices so each was independently gated and CI-verified.
+  **The conversions that were more than mechanical:**
+  - **Five pollers became `refetchInterval`** (reveal job, enrichment jobs, bulk import, import run, the
+    notification bell). Two carried real defects that the shape removed rather than the rewrite: `useRevealJob`
+    never rescheduled from its catch, so ONE transient poll error froze a job on screen until a remount; and
+    every raw `setInterval`/`setTimeout` loop kept polling a hidden tab and could overlap a fetch with itself.
+  - **Four hand-rolled races disappeared** because results are keyed by their input, not guarded after the
+    fact: the two search grids' AbortController "latest wins" refs, `useImport`'s monotonic run token,
+    `useBulkImport`'s `active` token, and `useEnrichmentJobDetail`'s ignore-late-response guard.
+  - **Three duplicate reads of one endpoint collapsed to one entry**: the credit balance (top-bar pill + bulk
+    bar, which could show two different numbers in one viewport), the two data-quality reads (Home + the Data
+    Health page), and the lists detail header (which re-fetched the whole index a second time because there is
+    no per-id GET).
+  - **The `credits:changed` window bus is retired** — 5 dispatchers, 3 listeners — in favour of invalidation,
+    which reaches readers that do not exist yet. `reveal:changed` deliberately stays a window event: it carries
+    per-row client state, not a server read.
+  - **`useTypeahead`'s per-term memo** was a `useRef(new Map())`, private to one mount and discarded on
+    unmount; as cache keys it is shared and garbage-collected.
+  - **Two dead hooks were deleted, not converted** (`prospect/useContacts`, `prospect/useContactSearch`) —
+    superseded by `useProspectSearch`, zero importers, alive only as barrel exports.
+  **Deliberately NOT converted, each for a reason:** `useRecentSearches` (localStorage, not server state);
+  `useImportDraft` (a wizard state machine of one-shot POSTs against a session-lived draft — nothing to cache;
+  it already reads the shared drafts probe through the cache); the range/member/status/filter state in reports,
+  templates and usage history (client state — what the user picked); and the notices and per-entry send
+  failures in `useEnrollment` (the outcome of one interaction).
+  **Still open: `window.location.reload()` on org/workspace switch.** The plan treats it as a caching
+  inefficiency; it is not. It is the only thing that guarantees NO workspace- or tenant-scoped client state
+  survives a switch — open drawers, selected row ids, in-flight wizard state, every component-local `useState`
+  in the tree. `queryClient.clear()` drops the server cache but leaves all of that. Trading a guaranteed clean
+  slate at a TENANT boundary for a faster switch is a security-shaped decision, not a performance one, and it
+  needs an audit of every stateful surface first. Recorded rather than half-done.
 
 - [ ] **C-3.9 · Virtualize `DataTable`.** `packages/ui/src/components/DataTable.tsx:3,105-118` renders
   **all** accumulated rows (its own comment admits it) while the search/list hooks append 50–100 per "Load

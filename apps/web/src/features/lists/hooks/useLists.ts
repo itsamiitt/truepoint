@@ -1,12 +1,12 @@
-// useLists.ts — the engine for the Lists index grid: loads the workspace's lists once on mount, exposes the
-// four-state signals (loading/error + the rows), and a reload the CRUD actions call after a mutation so the
-// list (and its member counts) re-reads from the server. Mirrors the prospect slice's custom-hook pattern
-// (api client + local state, not a global cache). Lists are workspace-shared; ownership is a per-row flag.
+// useLists.ts — the engine for the Lists index grid: the workspace's lists, the four-state signals, and a
+// reload the CRUD actions call after a mutation so the list (and its member counts) re-reads from the server.
+// Lists are workspace-shared; ownership is a per-row flag.
 "use client";
 
 import type { List } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchLists } from "../api";
+import { listKeys } from "../keys";
 
 export interface ListsState {
   lists: List[];
@@ -16,25 +16,18 @@ export interface ListsState {
 }
 
 export function useLists(): ListsState {
-  const [lists, setLists] = useState<List[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery<List[]>({ queryKey: listKeys.index(), queryFn: fetchLists });
 
-  const run = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setLists(await fetchLists());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load lists");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void run();
-  }, [run]);
-
-  return { lists, loading, error, reload: run };
+  return {
+    lists: query.data ?? [],
+    loading: query.isPending,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Could not load lists"
+      : null,
+    reload: () => {
+      void query.refetch();
+    },
+  };
 }

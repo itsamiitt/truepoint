@@ -1,80 +1,61 @@
-// useUsageHistory.ts — view state for the billing hub's Usage tab: keyset-paginated, filterable credit-usage
-// history with a "Load more" cursor and CSV export. Owns its own loading/error so the tab is independent of the
-// Plan/Credits load (useBilling). Presentation state only; the reveal accounting is server-side (07 §3).
+// useUsageHistory.ts — the billing hub's Usage tab: keyset-paginated, filterable credit-usage history with a
+// "Load more" cursor and CSV export. Independent of the Plan/Credits load (useBilling). Presentation state
+// only; the reveal accounting is server-side (07 §3).
+//
+// A `useInfiniteQuery` keyed by the filters: page accumulation and the cursor were hand-rolled, and changing a
+// filter re-fetched from scratch every time — including going back to a filter set already looked at.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { exportUsageCsv, fetchUsagePage } from "../api";
+import { settingsBillingKeys } from "../keys";
 import type { UsageFilters, UsageReveal } from "../types";
 
 const PAGE_SIZE = 50;
 
+type UsagePage = Awaited<ReturnType<typeof fetchUsagePage>>;
+
 export function useUsageHistory() {
+  // The filters are CLIENT state (what the user picked); the rows they select are server state.
   const [filters, setFilters] = useState<UsageFilters>({});
-  const [rows, setRows] = useState<UsageReveal[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (f: UsageFilters) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const page = await fetchUsagePage({ ...f, limit: PAGE_SIZE });
-      setRows(page.reveals);
-      setCursor(page.nextCursor);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load usage history");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const query = useInfiniteQuery<UsagePage>({
+    queryKey: settingsBillingKeys.usage(filters),
+    initialPageParam: null,
+    queryFn: ({ pageParam }) =>
+      fetchUsagePage({
+        ...filters,
+        limit: PAGE_SIZE,
+        cursor: (pageParam as string | null) ?? undefined,
+      }),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
 
-  // Reload whenever the filter object changes (a new object identity per setFilters call).
-  useEffect(() => {
-    void load(filters);
-  }, [load, filters]);
+  const rows = useMemo<UsageReveal[]>(
+    () => query.data?.pages.flatMap((page) => page.reveals) ?? [],
+    [query.data],
+  );
 
-  const loadMore = useCallback(async () => {
-    if (!cursor) return;
-    setLoadingMore(true);
-    setError(null);
-    try {
-      const page = await fetchUsagePage({ ...filters, limit: PAGE_SIZE, cursor });
-      setRows((prev) => [...prev, ...page.reveals]);
-      setCursor(page.nextCursor);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load more");
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [cursor, filters]);
+  const exportCsv = useMutation({ mutationFn: () => exportUsageCsv(filters) });
 
-  const exportCsv = useCallback(async () => {
-    setExporting(true);
-    setError(null);
-    try {
-      await exportUsageCsv(filters);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to export usage");
-    } finally {
-      setExporting(false);
-    }
-  }, [filters]);
+  const error = query.error ?? exportCsv.error;
 
   return {
     rows,
     filters,
     setFilters,
-    loading,
-    loadingMore,
-    exporting,
-    error,
-    hasMore: cursor != null,
-    loadMore,
-    exportCsv,
-    reload: () => load(filters),
+    loading: query.isPending,
+    loadingMore: query.isFetchingNextPage,
+    exporting: exportCsv.isPending,
+    error: error ? (error instanceof Error ? error.message : "Failed to load usage history") : null,
+    hasMore: query.hasNextPage,
+    loadMore: () => {
+      if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+    },
+    exportCsv: () => exportCsv.mutateAsync(),
+    reload: () => {
+      void query.refetch();
+    },
   };
 }

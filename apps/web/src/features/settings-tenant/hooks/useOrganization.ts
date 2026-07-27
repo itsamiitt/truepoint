@@ -1,49 +1,55 @@
-// useOrganization.ts — view state for the Tenant ▸ Organization surface: loads the organization identity, the
-// tenant's workspaces, and a members-directory summary together, exposing one loading/error pair, a `reload`,
-// and a save() for the org form. Presentation state only; typed fetches live in api.ts. When a route isn't
-// built the value reports it (org null / feed.available false) so the panel degrades to disabled/empty states.
+// useOrganization.ts — the organization profile plus its workspaces and members summary. A backend that has
+// not built the value reports it (org null / feed.available false) so the panel degrades to disabled/empty
+// states rather than erroring.
+//
+// The three reads stay one query: they are fetched together, rendered together, and a partial result would
+// leave the panel in a state no component handles. A successful save invalidates — previously it returned ok
+// and left whatever was on screen, so the panel showed the pre-save value until something else reloaded it.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchMembersSummary, fetchOrganization, fetchWorkspaces, saveOrganization } from "../api";
-import type { MembersSummary, Organization, WorkspacesFeed } from "../types";
+import { settingsTenantKeys } from "../keys";
+import type { Organization } from "../types";
 
 export function useOrganization() {
-  const [org, setOrg] = useState<Organization | null>(null);
-  const [orgAvailable, setOrgAvailable] = useState(true);
-  const [workspaces, setWorkspaces] = useState<WorkspacesFeed | null>(null);
-  const [members, setMembers] = useState<MembersSummary | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [o, w, m] = await Promise.all([
+  const qc = useQueryClient();
+  const query = useQuery({
+    queryKey: settingsTenantKeys.organization(),
+    queryFn: async () => {
+      const [org, workspaces, members] = await Promise.all([
         fetchOrganization(),
         fetchWorkspaces(),
         fetchMembersSummary(),
       ]);
-      setOrg(o);
-      setOrgAvailable(o != null);
-      setWorkspaces(w);
-      setMembers(m);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load organization settings");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return { org, workspaces, members };
+    },
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const save = useMutation({
+    mutationFn: (patch: Partial<Organization>) => saveOrganization(patch),
+    onSuccess: ({ ok }) => {
+      if (ok) void qc.invalidateQueries({ queryKey: settingsTenantKeys.organization() });
+    },
+  });
 
-  const save = useCallback(async (patch: Partial<Organization>): Promise<boolean> => {
-    const { ok } = await saveOrganization(patch);
-    return ok;
-  }, []);
-
-  return { org, orgAvailable, workspaces, members, error, loading, reload, save };
+  return {
+    org: query.data?.org ?? null,
+    // Distinct from "not loaded": the endpoint answering with no organization is how a not-built backend says
+    // so, and the panel disables itself rather than erroring.
+    orgAvailable: query.data ? query.data.org != null : true,
+    workspaces: query.data?.workspaces ?? null,
+    members: query.data?.members ?? null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load organization settings"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    save: async (patch: Partial<Organization>): Promise<boolean> =>
+      (await save.mutateAsync(patch)).ok,
+  };
 }

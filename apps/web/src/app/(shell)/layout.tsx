@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 export default function ShellLayout({ children }: { children: ReactNode }) {
   return (
     <AppShell>
-      {/* App-wide realtime → window-event bus (credits:changed / reveal:changed). Inert while dark. */}
+      {/* App-wide realtime → query invalidation (credits) + the reveal:changed window event. Inert while dark. */}
       <RealtimeBridge />
       {children}
     </AppShell>

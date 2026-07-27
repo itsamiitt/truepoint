@@ -1,30 +1,8 @@
-// useCreditBalance.ts — reads the tenant's reveal-credit balance for the bulk bar and keeps it live by
-// re-reading on the "credits:changed" window event (the same signal the top-bar CreditPill listens to, so
-// the bar and the pill never drift). Presentation state only; the authoritative balance is server-side
-// (07 §3) — the UI never computes or mutates it.
+// useCreditBalance.ts — the bulk bar's view of the tenant's reveal-credit balance.
+//
+// The implementation moved to `@/lib/credits`, because the top-bar CreditPill reads the same endpoint and the
+// two were drifting: each kept its own copy of the number and re-fetched independently on the same window
+// event. Re-exported from here so the feature's callers keep importing it from the feature.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { getCreditBalance } from "../api";
-
-export function useCreditBalance() {
-  const [balance, setBalance] = useState<number | null>(null);
-
-  const reload = useCallback(async () => {
-    try {
-      setBalance(await getCreditBalance());
-    } catch {
-      // A balance read failure must never block selection/reveal — the bar simply shows "—".
-      setBalance(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-    const onChange = () => void reload();
-    window.addEventListener("credits:changed", onChange);
-    return () => window.removeEventListener("credits:changed", onChange);
-  }, [reload]);
-
-  return { balance, reload };
-}
+export { useCreditBalance } from "@/lib/credits";

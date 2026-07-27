@@ -70,7 +70,7 @@ export async function fetchContacts(limit = 100): Promise<MaskedContact[]> {
 
 /**
  * GET /credits/balance — the tenant's spendable reveal-credit balance (07 §3). Non-PII; the bulk-action
- * bar shows it as the remaining balance and re-reads it on the "credits:changed" event after a reveal.
+ * bar shows it as the remaining balance; a reveal invalidates the shared credit key so it re-reads.
  * The balance is authoritative server-side; the UI only displays it (never computes the spend).
  */
 export async function getCreditBalance(): Promise<number> {

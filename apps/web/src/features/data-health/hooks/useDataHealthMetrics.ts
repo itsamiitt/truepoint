@@ -1,32 +1,29 @@
-// useDataHealthMetrics.ts — loads the per-workspace Data Health rollup (GET /home/data-quality) with loading/error
-// + a reload. Presentation state only; the shape comes from @leadwolf/types. Mirrors features/home's useDataQuality
-// (the useState + useEffect + useCallback pattern) — apps/web has no TanStack Query, so we keep the manual pattern.
+// useDataHealthMetrics.ts — the per-workspace Data Health rollup (GET /home/data-quality) for the Data Health
+// page. Shares its query key with features/home's useDataQuality because it is the SAME endpoint — so the two
+// surfaces cannot show two different versions of one number, and moving between them is not a refetch.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { sharedKeys } from "@/lib/queryKeys";
+import { useQuery } from "@tanstack/react-query";
 import { fetchDataQuality } from "../api";
 import type { WorkspaceDataQuality } from "../types";
 
 export function useDataHealthMetrics() {
-  const [metrics, setMetrics] = useState<WorkspaceDataQuality | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery<WorkspaceDataQuality>({
+    queryKey: sharedKeys.dataQuality(),
+    queryFn: fetchDataQuality,
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setMetrics(await fetchDataQuality());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load your data health");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { metrics, error, loading, reload };
+  return {
+    metrics: query.data ?? null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load your data health"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+  };
 }

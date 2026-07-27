@@ -11,4 +11,8 @@ export const importKeys = {
   /** The viewer's live DRAFTS (`GET /imports?state=draft` — the 08 §7 wizard-resume opt-in). One entry
    *  serves both S-U7 surfaces: the wizard's gate probe and the history page's resume banner. */
   drafts: () => ["imports", "drafts"] as const,
+  /** One BULK import job's status — polled while the job is in flight. */
+  bulkJob: (jobId: string) => ["imports", "bulk-job", jobId] as const,
+  /** The workspace's masked contacts, as the post-import view's list. */
+  contacts: () => ["imports", "contacts"] as const,
 };

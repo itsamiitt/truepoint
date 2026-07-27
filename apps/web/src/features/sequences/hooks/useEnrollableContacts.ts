@@ -1,34 +1,27 @@
-// useEnrollableContacts.ts — loads the workspace's masked contacts and narrows to revealed rows, the only
-// ones the outreach API accepts for enrollment (unrevealed → 422 validation_error). Presentation state only.
+// useEnrollableContacts.ts — the workspace's masked contacts, narrowed to revealed rows: the only ones the
+// outreach API accepts for enrollment (unrevealed → 422 validation_error). Presentation state only.
+//
+// The narrowing is a `select`, so the filter runs on cache updates rather than on every render, and the
+// unfiltered rows stay in the cache for anything else that wants them.
 "use client";
 
 import type { MaskedContact } from "@leadwolf/types";
-import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchContacts } from "../api";
+import { sequenceKeys } from "../keys";
 
 export function useEnrollableContacts() {
-  const [contacts, setContacts] = useState<MaskedContact[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery<MaskedContact[], Error, MaskedContact[]>({
+    queryKey: sequenceKeys.enrollableContacts(),
+    // Wrapped, not passed by reference: fetchContacts takes an optional `limit`, and RQ calls queryFn with
+    // its context object — which would arrive as that argument.
+    queryFn: () => fetchContacts(),
+    select: (rows) => rows.filter((c) => c.isRevealed),
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const rows = await fetchContacts();
-        if (!cancelled) setContacts(rows);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load contacts");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const enrollable = useMemo(() => contacts.filter((c) => c.isRevealed), [contacts]);
-
-  return { enrollable, error, loading };
+  return {
+    enrollable: query.data ?? [],
+    error: query.error ? query.error.message : null,
+    loading: query.isPending,
+  };
 }

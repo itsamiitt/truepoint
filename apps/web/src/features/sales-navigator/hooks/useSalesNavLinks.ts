@@ -1,61 +1,63 @@
-// useSalesNavLinks.ts — view state for the Sales Navigator capture surface (05 §5, M7): loads the workspace's
-// captured links and exposes capture/remove mutations that keep the list in sync. Presentation state only —
-// dedup, parsing, and persistence all happen server-side; the hook just reflects the result.
+// useSalesNavLinks.ts — the Sales Navigator capture surface (05 §5, M7): the workspace's captured links plus
+// capture/remove. Presentation state only — dedup, parsing and persistence all happen server-side; the hook
+// just reflects the result.
 "use client";
 
 import type { SalesNavLinkDTO, SalesNavLinkRequest } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { captureLink, deleteLink, fetchLinks } from "../api";
+import { salesNavKeys } from "../keys";
 
 export interface CaptureOutcome {
   deduped: boolean;
 }
 
 export function useSalesNavLinks() {
-  const [links, setLinks] = useState<SalesNavLinkDTO[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const key = salesNavKeys.links();
+  const query = useQuery<SalesNavLinkDTO[]>({ queryKey: key, queryFn: fetchLinks });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setLinks(await fetchLinks());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load captured links");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const capture = useMutation({
+    mutationFn: captureLink,
+    // Refreshed from the server rather than appended locally: a capture may DEDUPE into an existing row, so
+    // what the list should now contain is the server's answer, not the request body.
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const remove = useMutation({
+    mutationFn: deleteLink,
+    // Optimistic with a real rollback: the row disappears immediately, and a failed delete puts back exactly
+    // the list that was there before rather than re-fetching to discover it.
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<SalesNavLinkDTO[]>(key);
+      qc.setQueryData<SalesNavLinkDTO[]>(key, (rows) => rows?.filter((l) => l.id !== id));
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) qc.setQueryData(key, context.previous);
+    },
+  });
 
-  /** Capture a link, then refresh so the (possibly deduped) row is reflected. Throws on failure. */
-  const capture = useCallback(
-    async (body: SalesNavLinkRequest): Promise<CaptureOutcome> => {
-      const result = await captureLink(body);
-      await reload();
+  return {
+    links: query.data ?? [],
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load captured links"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    /** Capture a link; the (possibly deduped) row is reflected once the list refreshes. Throws on failure. */
+    capture: async (body: SalesNavLinkRequest): Promise<CaptureOutcome> => {
+      const result = await capture.mutateAsync(body);
       return { deduped: result.deduped };
     },
-    [reload],
-  );
-
-  /** Optimistically drop the row, then delete server-side; reload to reconcile on failure. */
-  const remove = useCallback(
-    async (id: string): Promise<void> => {
-      const prev = links;
-      setLinks((rows) => rows.filter((l) => l.id !== id));
-      try {
-        await deleteLink(id);
-      } catch (e) {
-        setLinks(prev); // roll back the optimistic removal
-        throw e;
-      }
+    /** Drop a link. Throws on failure, after rolling the row back. */
+    remove: async (id: string): Promise<void> => {
+      await remove.mutateAsync(id);
     },
-    [links],
-  );
-
-  return { links, error, loading, reload, capture, remove };
+  };
 }

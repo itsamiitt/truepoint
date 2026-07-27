@@ -1,45 +1,38 @@
-// useSsoConfig.ts — loads the tenant SSO config (Tenant ▸ Single sign-on) with loading/error/reload + an
-// explicit `forbidden` flag for callers without the security_admin/owner org role (the API returns 403).
-// `config` is null when the org has not configured SSO yet — the panel renders an unconfigured default form.
+// useSsoConfig.ts — the tenant SSO configuration, with an explicit `forbidden` flag for callers without the
+// required org role (the API returns 403).
+//
+// A successful save INVALIDATES rather than patching: the server returns a masked view (hasClientSecret rather
+// than the secret), so the only correct post-save value is the one the server computes.
 "use client";
 
-import type { SsoConfigUpdate, SsoConfigView } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import type { SsoConfigUpdate } from "@leadwolf/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { settingsTenantKeys } from "../keys";
 import { fetchSsoConfig, saveSsoConfig } from "../ssoApi";
 
 export function useSsoConfig() {
-  const [config, setConfig] = useState<SsoConfigView | null>(null);
-  const [forbidden, setForbidden] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const query = useQuery({ queryKey: settingsTenantKeys.ssoConfig(), queryFn: fetchSsoConfig });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setForbidden(false);
-    try {
-      const res = await fetchSsoConfig();
-      setForbidden(res.forbidden);
-      setConfig(res.config);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load the SSO configuration");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const save = useCallback(
-    async (next: SsoConfigUpdate): Promise<boolean> => {
-      const { ok } = await saveSsoConfig(next);
-      if (ok) await reload(); // re-read the masked view (hasClientSecret) after a successful save
-      return ok;
+  const save = useMutation({
+    mutationFn: (next: SsoConfigUpdate) => saveSsoConfig(next),
+    onSuccess: ({ ok }) => {
+      if (ok) void qc.invalidateQueries({ queryKey: settingsTenantKeys.ssoConfig() });
     },
-    [reload],
-  );
+  });
 
-  return { config, forbidden, error, loading, reload, save };
+  return {
+    config: query.data?.config ?? null,
+    forbidden: query.data?.forbidden ?? false,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load the SSO configuration"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    save: async (next: SsoConfigUpdate): Promise<boolean> => (await save.mutateAsync(next)).ok,
+  };
 }

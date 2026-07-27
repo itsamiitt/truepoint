@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1802,
-  "fileSetHash": "sha256:a2cfc18253d0f4918938a12dfc6fd2f1a1528f951818c769da2034a68aba73d7",
+  "fileCount": 1820,
+  "fileSetHash": "sha256:21b052e750f6ce3d102b051205469651abde04b59ec2dfd87f19605f674175e5",
   "features": {
     "account-search": {
       "web": [],
@@ -698,6 +698,7 @@
         "apps/web/src/features/enrichment-jobs/hooks/useEnrichmentJobDetail.ts",
         "apps/web/src/features/enrichment-jobs/hooks/useEnrichmentJobs.ts",
         "apps/web/src/features/enrichment-jobs/index.ts",
+        "apps/web/src/features/enrichment-jobs/keys.ts",
         "apps/web/src/features/enrichment-jobs/types.ts"
       ],
       "admin": [],
@@ -790,6 +791,7 @@
         "apps/web/src/features/home/hooks/useDataQualityTrend.ts",
         "apps/web/src/features/home/hooks/useHomeSummary.ts",
         "apps/web/src/features/home/index.ts",
+        "apps/web/src/features/home/keys.ts",
         "apps/web/src/features/home/types.ts"
       ],
       "admin": [],
@@ -990,6 +992,7 @@
         "apps/web/src/features/inbox/hooks/useInbox.ts",
         "apps/web/src/features/inbox/hooks/useTasks.ts",
         "apps/web/src/features/inbox/index.ts",
+        "apps/web/src/features/inbox/keys.ts",
         "apps/web/src/features/inbox/types.ts"
       ],
       "admin": [],
@@ -1038,7 +1041,8 @@
         "apps/web/src/features/lists/hooks/useList.ts",
         "apps/web/src/features/lists/hooks/useListMembers.ts",
         "apps/web/src/features/lists/hooks/useLists.ts",
-        "apps/web/src/features/lists/index.ts"
+        "apps/web/src/features/lists/index.ts",
+        "apps/web/src/features/lists/keys.ts"
       ],
       "admin": [],
       "api": [
@@ -1069,7 +1073,8 @@
         "apps/web/src/features/notifications/api.ts",
         "apps/web/src/features/notifications/components/NotificationsPage.tsx",
         "apps/web/src/features/notifications/hooks/useNotificationHistory.ts",
-        "apps/web/src/features/notifications/index.ts"
+        "apps/web/src/features/notifications/index.ts",
+        "apps/web/src/features/notifications/keys.ts"
       ],
       "admin": [],
       "api": [
@@ -1221,8 +1226,6 @@
         "apps/web/src/features/prospect/hooks/useActivities.ts",
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
-        "apps/web/src/features/prospect/hooks/useContactSearch.ts",
-        "apps/web/src/features/prospect/hooks/useContacts.ts",
         "apps/web/src/features/prospect/hooks/useCreditBalance.ts",
         "apps/web/src/features/prospect/hooks/useCustomFields.ts",
         "apps/web/src/features/prospect/hooks/useFacetCounts.ts",
@@ -1239,6 +1242,7 @@
         "apps/web/src/features/prospect/hooks/useTags.ts",
         "apps/web/src/features/prospect/hooks/useTypeahead.ts",
         "apps/web/src/features/prospect/index.ts",
+        "apps/web/src/features/prospect/keys.ts",
         "apps/web/src/features/prospect/savedSearchApi.ts",
         "apps/web/src/features/prospect/searchAbort.test.ts",
         "apps/web/src/features/prospect/searchApi.ts",
@@ -1296,7 +1300,8 @@
         "apps/web/src/features/public-pricing/api.ts",
         "apps/web/src/features/public-pricing/components/PublicPricingPage.tsx",
         "apps/web/src/features/public-pricing/hooks/usePublicPricing.ts",
-        "apps/web/src/features/public-pricing/index.ts"
+        "apps/web/src/features/public-pricing/index.ts",
+        "apps/web/src/features/public-pricing/keys.ts"
       ],
       "admin": [],
       "api": [],
@@ -1329,6 +1334,7 @@
         "apps/web/src/features/reports/export/xlsxWriter.ts",
         "apps/web/src/features/reports/hooks/useReports.ts",
         "apps/web/src/features/reports/index.ts",
+        "apps/web/src/features/reports/keys.ts",
         "apps/web/src/features/reports/rollups.ts",
         "apps/web/src/features/reports/types.ts"
       ],
@@ -1404,6 +1410,7 @@
         "apps/web/src/features/sales-navigator/components/SalesNavPage.tsx",
         "apps/web/src/features/sales-navigator/hooks/useSalesNavLinks.ts",
         "apps/web/src/features/sales-navigator/index.ts",
+        "apps/web/src/features/sales-navigator/keys.ts",
         "apps/web/src/features/sales-navigator/types.ts"
       ],
       "admin": [],
@@ -1533,6 +1540,7 @@
         "apps/web/src/features/sequences/hooks/useSequences.ts",
         "apps/web/src/features/sequences/hooks/useTemplates.ts",
         "apps/web/src/features/sequences/index.ts",
+        "apps/web/src/features/sequences/keys.ts",
         "apps/web/src/features/sequences/types.ts"
       ],
       "admin": [],
@@ -1572,6 +1580,7 @@
         "apps/web/src/features/settings-billing/hooks/useBilling.ts",
         "apps/web/src/features/settings-billing/hooks/useUsageHistory.ts",
         "apps/web/src/features/settings-billing/index.ts",
+        "apps/web/src/features/settings-billing/keys.ts",
         "apps/web/src/features/settings-billing/tabs.ts",
         "apps/web/src/features/settings-billing/types.ts"
       ],
@@ -1604,6 +1613,7 @@
         "apps/web/src/features/settings-custom-fields/components/CustomFieldsPanel.tsx",
         "apps/web/src/features/settings-custom-fields/hooks/useCustomFieldDefinitions.ts",
         "apps/web/src/features/settings-custom-fields/index.ts",
+        "apps/web/src/features/settings-custom-fields/keys.ts",
         "apps/web/src/features/settings-custom-fields/types.ts"
       ],
       "admin": [],
@@ -1625,6 +1635,7 @@
         "apps/web/src/features/settings-developer/hooks/useOAuthApps.ts",
         "apps/web/src/features/settings-developer/hooks/useWebhooks.ts",
         "apps/web/src/features/settings-developer/index.ts",
+        "apps/web/src/features/settings-developer/keys.ts",
         "apps/web/src/features/settings-developer/types.ts"
       ],
       "admin": [],
@@ -1640,6 +1651,7 @@
         "apps/web/src/features/settings-enrichment/components/AutoEnrichPanel.tsx",
         "apps/web/src/features/settings-enrichment/hooks/useAutoEnrichPolicy.ts",
         "apps/web/src/features/settings-enrichment/index.ts",
+        "apps/web/src/features/settings-enrichment/keys.ts",
         "apps/web/src/features/settings-enrichment/types.ts"
       ],
       "admin": [],
@@ -1660,6 +1672,7 @@
         "apps/web/src/features/settings-mailboxes/hooks/useMailboxes.ts",
         "apps/web/src/features/settings-mailboxes/hooks/useSendingDomains.ts",
         "apps/web/src/features/settings-mailboxes/index.ts",
+        "apps/web/src/features/settings-mailboxes/keys.ts",
         "apps/web/src/features/settings-mailboxes/types.ts"
       ],
       "admin": [],
@@ -1710,6 +1723,7 @@
         "apps/web/src/features/settings-tenant/hooks/useSsoConfig.ts",
         "apps/web/src/features/settings-tenant/identityApi.ts",
         "apps/web/src/features/settings-tenant/index.ts",
+        "apps/web/src/features/settings-tenant/keys.ts",
         "apps/web/src/features/settings-tenant/ssoApi.ts",
         "apps/web/src/features/settings-tenant/types.ts"
       ],
@@ -1730,6 +1744,7 @@
         "apps/web/src/features/settings-user/hooks/useNotificationPrefs.ts",
         "apps/web/src/features/settings-user/hooks/useProfile.ts",
         "apps/web/src/features/settings-user/index.ts",
+        "apps/web/src/features/settings-user/keys.ts",
         "apps/web/src/features/settings-user/types.ts"
       ],
       "admin": [],
@@ -1749,6 +1764,7 @@
         "apps/web/src/features/settings-workspace/hooks/useSessions.ts",
         "apps/web/src/features/settings-workspace/hooks/useWorkspace.ts",
         "apps/web/src/features/settings-workspace/index.ts",
+        "apps/web/src/features/settings-workspace/keys.ts",
         "apps/web/src/features/settings-workspace/types.ts"
       ],
       "admin": [],
@@ -2292,8 +2308,10 @@
       "apps/web/src/lib/authClient.ts",
       "apps/web/src/lib/authLink.test.ts",
       "apps/web/src/lib/authLink.ts",
+      "apps/web/src/lib/credits.ts",
       "apps/web/src/lib/eventStream.ts",
       "apps/web/src/lib/publicConfig.ts",
+      "apps/web/src/lib/queryKeys.ts",
       "apps/web/src/lib/sessionProbe.test.ts",
       "apps/web/src/lib/sessionProbe.ts",
       "apps/web/src/lib/useSessionIdentity.ts",

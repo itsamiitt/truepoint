@@ -1,39 +1,42 @@
-// useWorkspace.ts — loads the workspace general settings (GET /workspaces/current) with loading/error + reload,
-// and exposes save(). Presentation state only; typed fetches live in api.ts.
+// useWorkspace.ts — the workspace's general settings.
+//
+// A null value from the endpoint is how a not-built backend reports itself, so it is carried as `available`
+// rather than an error. A successful save invalidates — previously it returned ok and left the pre-save value
+// on screen until something else reloaded it.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchWorkspace, saveWorkspace } from "../api";
+import { settingsWorkspaceKeys } from "../keys";
 import type { WorkspaceGeneral } from "../types";
 
 export function useWorkspace() {
-  const [data, setData] = useState<WorkspaceGeneral | null>(null);
-  const [available, setAvailable] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const query = useQuery<WorkspaceGeneral | null>({
+    queryKey: settingsWorkspaceKeys.general(),
+    queryFn: fetchWorkspace,
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const ws = await fetchWorkspace();
-      setData(ws);
-      setAvailable(ws != null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load workspace settings");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const save = useMutation({
+    mutationFn: (patch: Partial<WorkspaceGeneral>) => saveWorkspace(patch),
+    onSuccess: ({ ok }) => {
+      if (ok) void qc.invalidateQueries({ queryKey: settingsWorkspaceKeys.general() });
+    },
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const save = useCallback(async (patch: Partial<WorkspaceGeneral>): Promise<boolean> => {
-    const { ok } = await saveWorkspace(patch);
-    return ok;
-  }, []);
-
-  return { data, available, error, loading, reload, save };
+  return {
+    data: query.data ?? null,
+    available: query.data !== undefined ? query.data !== null : true,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load workspace settings"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    save: async (patch: Partial<WorkspaceGeneral>): Promise<boolean> =>
+      (await save.mutateAsync(patch)).ok,
+  };
 }

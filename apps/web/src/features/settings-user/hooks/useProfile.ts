@@ -1,31 +1,28 @@
-// useProfile.ts — loads the editable user profile (GET /settings/user/profile) with loading/error state and a
-// `reload`. Presentation state only; the typed fetch lives in api.ts. One hook per resource (slice pattern).
+// useProfile.ts — the editable user profile (GET /settings/user/profile). Presentation state only;
+// the typed fetch lives in api.ts. One hook per resource (slice pattern).
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchProfile } from "../api";
+import { settingsUserKeys } from "../keys";
 import type { UserProfile } from "../types";
 
 export function useProfile() {
-  const [data, setData] = useState<UserProfile | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery<UserProfile>({
+    queryKey: settingsUserKeys.profile(),
+    queryFn: fetchProfile,
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await fetchProfile());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load your profile");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { data, loading, error, reload };
+  return {
+    data: query.data ?? null,
+    loading: query.isPending,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load your profile"
+      : null,
+    reload: () => {
+      void query.refetch();
+    },
+  };
 }

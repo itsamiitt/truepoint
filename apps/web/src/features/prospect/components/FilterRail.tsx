@@ -32,7 +32,7 @@ export function FilterRail({
   contacts: MaskedContact[];
   /**
    * Apply a VALIDATED filter compiled by the AI NL box (23, ADR-0023). Wired by the page to
-   * useContactSearch setText/setFilters. Optional so the rail still renders where AI isn't wired.
+   * useProspectSearch setQuery. Optional so the rail still renders where AI isn't wired.
    */
   onAiApply?: (query: ContactQuery) => void;
   /** The workspace's tags (ADR-0028, G-REV-6) — rendered as toggleable filter facets. */

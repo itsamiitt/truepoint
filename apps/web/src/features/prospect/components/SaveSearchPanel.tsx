@@ -2,7 +2,7 @@
 // to name the current filter set + choose private/workspace visibility; the list below applies (re-runs the
 // search by feeding the persisted ContactQuery back into the rail), and the owner can rename/delete each.
 // Composition + view state only — all persistence goes through useSavedSearches; applying is delegated to the
-// caller via onApply (which calls useContactSearch's setText/setFilters). Token-styled via @leadwolf/ui.
+// caller via onApply (which calls useProspectSearch's setQuery). Token-styled via @leadwolf/ui.
 "use client";
 
 import type { ContactQuery, SavedSearch, SavedSearchVisibility } from "@leadwolf/types";

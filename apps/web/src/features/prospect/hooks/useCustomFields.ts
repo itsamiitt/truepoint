@@ -1,54 +1,48 @@
-// useCustomFields.ts — loads one contact's custom-field values (ADR-0028) for the record-detail Drawer, with a
-// `reload` + a `save` that shallow-merges edits. The custom-fields backend is an M8 gate, so api.fetchCustomFields
-// maps a 404/501 to available:false and this hook surfaces that as an empty (not error) state. Presentation only.
+// useCustomFields.ts — one contact's custom-field feed plus the save path. Presentation state only; the
+// definitions and validation are server-side.
 "use client";
 
 import type { CustomFieldValueInput } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type CustomFieldsFeed, fetchCustomFields, setCustomFields } from "../api";
+import { prospectKeys } from "../keys";
 
 export function useCustomFields(contactId: string | null) {
-  const [feed, setFeed] = useState<CustomFieldsFeed | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const qc = useQueryClient();
+  const query = useQuery<CustomFieldsFeed>({
+    queryKey: prospectKeys.customFields(contactId ?? ""),
+    // No contact selected is not a load — the drawer is closed. `enabled` keeps it out of the cache entirely
+    // rather than storing an entry under an empty id.
+    enabled: contactId !== null,
+    queryFn: () => fetchCustomFields(contactId as string),
+  });
 
-  const reload = useCallback(async () => {
-    if (!contactId) {
-      setFeed(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      setFeed(await fetchCustomFields(contactId));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load custom fields");
-    } finally {
-      setLoading(false);
-    }
-  }, [contactId]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const save = useCallback(
-    async (values: Record<string, CustomFieldValueInput>): Promise<boolean> => {
-      if (!contactId) return false;
-      setSaving(true);
-      try {
-        const next = await setCustomFields(contactId, values);
-        // Only adopt the response when it's a real save — a not-built backend returns available:false with an
-        // empty list, which must NOT clobber the values already on screen.
-        if (next.available) setFeed(next);
-        return next.available;
-      } finally {
-        setSaving(false);
-      }
+  const save = useMutation({
+    mutationFn: (values: Record<string, CustomFieldValueInput>) =>
+      setCustomFields(contactId as string, values),
+    onSuccess: (next) => {
+      // Only adopt the response when it is a real save — a not-built backend answers available:false with an
+      // empty list, which must NOT clobber the values already on screen.
+      if (next.available) qc.setQueryData(prospectKeys.customFields(contactId ?? ""), next);
     },
-    [contactId],
-  );
+  });
 
-  return { feed, error, loading, saving, reload, save };
+  return {
+    feed: contactId ? (query.data ?? null) : null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Could not load custom fields"
+      : null,
+    loading: query.isPending && contactId !== null,
+    saving: save.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    save: async (values: Record<string, CustomFieldValueInput>): Promise<boolean> => {
+      if (!contactId) return false;
+      const next = await save.mutateAsync(values);
+      return next.available;
+    },
+  };
 }

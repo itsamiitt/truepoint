@@ -1,9 +1,17 @@
 // useTypeahead.ts — debounced, server-driven typeahead for a filter facet (24 §3.4). Fires only after a
-// 300ms pause and ≥3 chars, caches results per query in-memory, and aborts stale requests (latest wins).
+// 300ms pause and ≥3 chars.
+//
+// The per-term memo this kept in a `useRef(new Map())` is now the query cache keyed by (field, term), which
+// makes it shared across every mount of the same facet and bounded by RQ's garbage collection — the ref map
+// grew for the lifetime of the component and was thrown away on unmount, so the same three keystrokes cost a
+// request again every time the panel reopened. RQ also owns the abort, so a stale request is cancelled rather
+// than resolved and discarded.
 "use client";
 
 import type { FacetKey, Suggestion } from "@leadwolf/types";
-import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { prospectKeys } from "../keys";
 import { suggestField } from "../searchApi";
 
 const MIN_CHARS = 3;
@@ -11,41 +19,31 @@ const DEBOUNCE_MS = 300;
 
 export function useTypeahead(field: FacetKey) {
   const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [loading, setLoading] = useState(false);
-  const cache = useRef(new Map<string, Suggestion[]>());
+  // The debounce still belongs here: it decides WHEN a term becomes a request, which is a property of typing,
+  // not of fetching. RQ then dedupes and caches whatever terms come out of it.
+  const [debounced, setDebounced] = useState("");
 
   useEffect(() => {
-    const q = query.trim();
-    if (q.length < MIN_CHARS) {
-      setSuggestions([]);
-      setLoading(false);
-      return;
-    }
-    const cached = cache.current.get(q);
-    if (cached) {
-      setSuggestions(cached);
-      return;
-    }
-    const controller = new AbortController();
-    setLoading(true);
-    const timer = setTimeout(async () => {
-      try {
-        const result = await suggestField(field, q, 10, controller.signal);
-        cache.current.set(q, result);
-        setSuggestions(result);
-      } catch (e) {
-        if (!(e instanceof DOMException && e.name === "AbortError")) setSuggestions([]);
-      } finally {
-        setLoading(false);
-      }
-    }, DEBOUNCE_MS);
+    const timer = setTimeout(() => setDebounced(query.trim()), DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-    return () => {
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [query, field]);
+  const term = debounced.length >= MIN_CHARS ? debounced : "";
+  const result = useQuery<Suggestion[]>({
+    queryKey: prospectKeys.typeahead(field, term),
+    enabled: term !== "",
+    queryFn: ({ signal }) => suggestField(field, term, 10, signal),
+    // A suggestion list is disposable; retrying it while the user keeps typing only queues work for a term
+    // they have already moved past.
+    retry: false,
+  });
 
-  return { query, setQuery, suggestions, loading };
+  return {
+    query,
+    setQuery,
+    suggestions: term ? (result.data ?? []) : [],
+    // Typing past the threshold should read as "loading" from the keystroke, not from the request that starts
+    // 300ms later — otherwise the panel shows an empty list in the gap.
+    loading: query.trim().length >= MIN_CHARS && (query.trim() !== debounced || result.isFetching),
+  };
 }

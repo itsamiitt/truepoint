@@ -2,7 +2,7 @@
 // types a plain-English query ("VPs of Eng at EU fintechs"); on submit the backend compiles it into a
 // VALIDATED structured filter (a contactQuery) and returns it for confirmation. We PREVIEW the parsed filter
 // in a Dialog so the user sees exactly what will run, and only on confirm do we apply it via the provided
-// onApply callback (which wires into useContactSearch setText/setFilters). The AI never runs the search and
+// onApply callback (which wires into useProspectSearch setQuery). The AI never runs the search and
 // never returns results — human-in-the-loop (23 §1). Token-styled via @leadwolf/ui; light theme only.
 "use client";
 

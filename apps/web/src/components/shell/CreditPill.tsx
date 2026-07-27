@@ -1,34 +1,19 @@
-// CreditPill.tsx — the top-bar tenant credit balance (11 §1 "Credits is not a tab"). Fetches the balance
-// via fetchWithAuth and deep-links into Settings ▸ Billing & Credits; the dot turns warning-amber when the
-// balance runs low. Re-fetches whenever the reveal flow dispatches the "credits:changed" window event so
-// the pill stays truthful right after a spend (the one place credits change in the prospect surface).
+// CreditPill.tsx — the top-bar tenant credit balance (11 §1 "Credits is not a tab"). Deep-links into
+// Settings ▸ Billing & Credits; the dot turns warning-amber when the balance runs low.
+//
+// The balance comes from the shared `useCreditBalance` query rather than a fetch of its own: the prospect
+// bulk bar reads the same endpoint, and two independent copies of one number could show two different values
+// in the same viewport for as long as only one of them had re-read after a spend. A reveal now invalidates
+// the key and both surfaces update from one request.
 "use client";
 
-import { fetchWithAuth } from "@/lib/authClient";
-import { API_BASE } from "@/lib/publicConfig";
+import { useCreditBalance } from "@/lib/credits";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
 
 const LOW_BALANCE = 20;
 
 export function CreditPill() {
-  const [balance, setBalance] = useState<number | null>(null);
-
-  const load = useCallback(async () => {
-    const res = await fetchWithAuth(`${API_BASE}/api/v1/credits/balance`);
-    if (res.ok) {
-      const data = (await res.json()) as { balance: number };
-      setBalance(data.balance);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-    const onChange = () => void load();
-    window.addEventListener("credits:changed", onChange);
-    return () => window.removeEventListener("credits:changed", onChange);
-  }, [load]);
-
+  const { balance } = useCreditBalance();
   const low = balance !== null && balance < LOW_BALANCE;
 
   return (
