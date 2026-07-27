@@ -53,7 +53,50 @@ if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
 }
 const forgeClient = postgres(env.FORGE_DATABASE_URL ?? env.DATABASE_URL, forgePoolOptions);
 
+/**
+ * The TENANT-TRAFFIC pool, logged in AS `leadwolf_app` (E-6.3).
+ *
+ * `applyMigrations` creates that role `LOGIN` and its header has always said "the app connects AS
+ * leadwolf_app (RLS-enforced)" — but the runtime pool never did. It logs in as the DB OWNER, which is
+ * BYPASSRLS, and `withTenantTx` compensates by dropping to `leadwolf_app` per transaction.
+ *
+ * That compensation is one statement away from failing open. If the role assignment is ever skipped, reordered
+ * or silently errors, the queries inside still run — as the owner, with RLS bypassed and no tenant predicate.
+ * Connecting as the non-BYPASSRLS role instead makes the isolation a property of the CONNECTION rather than of
+ * a statement that has to succeed every time: an unscoped read fails closed (the RLS policies use the
+ * NULLIF idiom, so an unset GUC matches nothing) instead of returning another tenant's rows.
+ *
+ * Derived rather than configured separately: same host/database as DATABASE_URL, with the username and
+ * password swapped to the app role. Falls back to the owner connection when no app-role password is available,
+ * which is exactly today's behaviour — so this hardens a deployment that sets the password and changes nothing
+ * for one that does not.
+ *
+ * `withPrivilegedTx` / `withErTx` / `withForgeTx` deliberately do NOT use this pool: they `SET LOCAL ROLE` to
+ * roles `leadwolf_app` is not a member of (by design), so they must keep the owner connection.
+ */
+function appConnectionUrl(): string {
+  if (!env.DATABASE_APP_ROLE_PASSWORD) return env.DATABASE_URL;
+  try {
+    const url = new URL(env.DATABASE_URL);
+    url.username = env.DATABASE_APP_ROLE;
+    url.password = env.DATABASE_APP_ROLE_PASSWORD;
+    return url.toString();
+  } catch {
+    // An unparseable DATABASE_URL is not this function's problem to report — postgres() will fail with a far
+    // better message on the owner connection above. Fall back rather than masking it.
+    return env.DATABASE_URL;
+  }
+}
+
+const appPoolOptions: Parameters<typeof postgres>[1] = { max: env.DB_POOL_MAX, prepare: false };
+if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
+  appPoolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
+}
+const appClient = postgres(appConnectionUrl(), appPoolOptions);
+
 export const db = drizzle(client, { schema });
+/** Drizzle bound to the tenant pool (leadwolf_app when configured). Used ONLY by withTenantTx. */
+const appDb = drizzle(appClient, { schema });
 /** Drizzle bound to the Forge pool. Same schema; only the connection budget differs. */
 const forgeDb = drizzle(forgeClient, { schema });
 export type Db = typeof db;
@@ -74,7 +117,11 @@ export { client as ownerClient };
 export async function closeDb(): Promise<void> {
   // Both pools: the Forge one is lazy, so in a process that never touched it this is a no-op — but leaving it
   // open would keep the process alive in exactly the tests and workers this function exists to let exit.
-  await Promise.all([client.end({ timeout: 5 }), forgeClient.end({ timeout: 5 })]);
+  await Promise.all([
+    client.end({ timeout: 5 }),
+    appClient.end({ timeout: 5 }),
+    forgeClient.end({ timeout: 5 }),
+  ]);
 }
 
 /** Connectivity check for readiness probes: the cheapest statement that still proves the whole path — a free
@@ -153,7 +200,10 @@ export interface TenantScope {
  * in a single round-trip. 03 §9, architecture-contract §6.
  */
 export async function withTenantTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return db.transaction(async (tx) => {
+  // The TENANT pool (leadwolf_app when configured) — see appDb. The set_config below still runs: it is what
+  // pins the tenant/workspace GUCs, and setting `role` to the role we are already logged in as is a no-op
+  // that keeps behaviour identical when the app URL falls back to the owner connection.
+  return appDb.transaction(async (tx) => {
     // RLS setup in ONE round-trip (perf root cause #7 — this is the per-read latency floor under every
     // authenticated endpoint, and the DB is remote, so each avoided round-trip is real milliseconds × every
     // scoped query). Previously two: a `SET LOCAL ROLE` statement plus a set_config SELECT.
