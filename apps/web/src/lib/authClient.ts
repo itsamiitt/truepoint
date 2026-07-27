@@ -3,6 +3,14 @@
 // exchanges the returned code, and silently refreshes against auth.*/token/refresh (same-site, credentialed
 // fetch — the refresh cookie stays on the auth origin) shortly before expiry.
 
+import {
+  type ElectionChannel,
+  type ElectionDeps,
+  broadcastRefreshResult,
+  parseRefreshMessage,
+  releaseRefreshLock,
+  tryAcquireRefreshLock,
+} from "@leadwolf/app-shell";
 import { createPkcePair, randomState } from "./pkce";
 import { APP_ORIGIN, AUTH_ORIGIN } from "./publicConfig";
 
@@ -39,12 +47,79 @@ export function getAccessToken(): string | null {
   return accessToken && Date.now() < expiresAtMs ? accessToken : null;
 }
 
+/** Per-tab identity + the cross-tab channel for the refresh election (T-2.6). Both are created lazily and
+ *  degrade to undefined outside a browser, so nothing here runs during SSR. */
+const TAB_ID =
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Math.random()}`;
+
+let electionChannel: ElectionChannel | undefined;
+function electionDeps(): ElectionDeps | null {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return null;
+  if (!electionChannel && typeof BroadcastChannel !== "undefined") {
+    const channel = new BroadcastChannel("tp.auth");
+    // Adopt a token another tab just minted instead of rotating our own. Everything arriving here is
+    // untrusted same-origin input, so it is validated by parseRefreshMessage rather than cast.
+    channel.onmessage = (event: MessageEvent) => {
+      const result = parseRefreshMessage(event.data);
+      if (result) adoptToken(result.token, result.expiresIn);
+    };
+    electionChannel = channel;
+  }
+  return { storage: localStorage, channel: electionChannel, now: () => Date.now(), tabId: TAB_ID };
+}
+
+/** Install a token WITHOUT re-broadcasting it — the path a follower takes when adopting the winner's result.
+ *  Re-broadcasting would put the tabs in a message loop. */
+function adoptToken(token: string, expiresIn: number): void {
+  accessToken = token;
+  expiresAtMs = Date.now() + expiresIn * 1000;
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => void scheduledRefresh(), Math.max(5, expiresIn - 60) * 1000);
+}
+
+/**
+ * The TIMER-driven refresh, elected across tabs (T-2.6).
+ *
+ * Each tab used to arm its own ~14 min timer, so N open tabs fired N rotation chains within milliseconds —
+ * each a full rotation (DB revoke + insert, plus a Redis write), with the losers presenting a refresh token
+ * the winner had just replaced. That only survived on the 30s reuse-grace: a race that happened to be
+ * forgiven rather than a design.
+ *
+ * Only the elected tab refreshes; it broadcasts the result and the others adopt it. A tab that loses does
+ * nothing, which is safe: if it never receives the broadcast, its token simply expires and the ON-DEMAND path
+ * in fetchWithAuth refreshes it — exactly today's behaviour, so the worst case is no worse than before.
+ */
+async function scheduledRefresh(): Promise<void> {
+  const deps = electionDeps();
+  if (!deps) {
+    // No browser storage (SSR, or a surface without localStorage): behave exactly as before.
+    await silentRefresh();
+    return;
+  }
+  if (!tryAcquireRefreshLock(deps)) return; // another tab is doing it
+  try {
+    const ok = await silentRefresh();
+    const token = ok ? getAccessToken() : null;
+    if (token) {
+      broadcastRefreshResult(deps, {
+        token,
+        expiresIn: Math.max(1, Math.round((expiresAtMs - Date.now()) / 1000)),
+      });
+    }
+  } finally {
+    releaseRefreshLock(deps);
+  }
+}
+
 function setToken(token: string, expiresIn: number): void {
   accessToken = token;
   expiresAtMs = Date.now() + expiresIn * 1000;
   if (refreshTimer) clearTimeout(refreshTimer);
   const leadMs = Math.max(5, expiresIn - 60) * 1000; // refresh ~60s before expiry
-  refreshTimer = setTimeout(() => void silentRefresh(), leadMs);
+  // Goes through the cross-tab election rather than straight to silentRefresh (T-2.6).
+  refreshTimer = setTimeout(() => void scheduledRefresh(), leadMs);
 }
 
 /** Drop the in-memory token + cancel the pending refresh. The auth-origin cookie is cleared server-side.

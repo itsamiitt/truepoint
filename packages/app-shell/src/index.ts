@@ -26,3 +26,16 @@ export {
   type NavDestination,
   type PaletteEntry,
 } from "./nav.ts";
+
+// Cross-tab refresh election (T-2.6) — one token rotation per browser instead of one per tab.
+export {
+  type ElectionChannel,
+  type ElectionDeps,
+  type ElectionStorage,
+  type RefreshResult,
+  LOCK_TTL_MS,
+  broadcastRefreshResult,
+  parseRefreshMessage,
+  releaseRefreshLock,
+  tryAcquireRefreshLock,
+} from "./refreshElection.ts";
