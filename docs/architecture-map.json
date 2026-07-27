@@ -102,7 +102,7 @@
     "workspaces"
   ],
   "fileCount": 1799,
-  "fileSetHash": "sha256:9244052aa684997afba2bf339f0379a7a71c00c1368bcc6191b653f0f085473b",
+  "fileSetHash": "sha256:d8301a70452c6470743360494dab52dd384c61c0f908a70ebf2de48b376ac651",
   "features": {
     "account-search": {
       "web": [],
@@ -1916,7 +1916,6 @@
     "apps/admin/lib": [
       "apps/admin/src/lib/adminGate.ts",
       "apps/admin/src/lib/authClient.ts",
-      "apps/admin/src/lib/pkce.ts",
       "apps/admin/src/lib/publicConfig.ts",
       "apps/admin/src/lib/staffMe.tsx"
     ],
@@ -2158,7 +2157,6 @@
     "apps/forge/lib": [
       "apps/forge/src/lib/authClient.ts",
       "apps/forge/src/lib/forgeGate.ts",
-      "apps/forge/src/lib/pkce.ts",
       "apps/forge/src/lib/publicConfig.ts",
       "apps/forge/src/lib/staffMe.tsx"
     ],
@@ -2225,7 +2223,6 @@
       "apps/web/src/lib/authLink.test.ts",
       "apps/web/src/lib/authLink.ts",
       "apps/web/src/lib/eventStream.ts",
-      "apps/web/src/lib/pkce.ts",
       "apps/web/src/lib/publicConfig.ts",
       "apps/web/src/lib/sessionProbe.test.ts",
       "apps/web/src/lib/sessionProbe.ts",
@@ -2273,8 +2270,6 @@
       "packages/app-shell/src/UserRow.tsx",
       "packages/app-shell/src/index.ts",
       "packages/app-shell/src/nav.ts",
-      "packages/app-shell/src/refreshElection.test.ts",
-      "packages/app-shell/src/refreshElection.ts",
       "packages/app-shell/src/useSidebarPin.ts"
     ],
     "packages/auth": [
@@ -2716,6 +2711,11 @@
     "apps/workers/src/queues/retentionSweep.ts",
     "apps/workers/src/queues/sequenceTick.ts",
     "apps/workers/src/queues/tokenRefresh.ts",
+    "packages/auth-client/src/createAuthClient.ts",
+    "packages/auth-client/src/index.ts",
+    "packages/auth-client/src/pkce.ts",
+    "packages/auth-client/src/refreshElection.test.ts",
+    "packages/auth-client/src/refreshElection.ts",
     "packages/db/src/repositories/accountHoldRepository.ts",
     "packages/db/src/repositories/accountSearchRepository.ts",
     "packages/db/src/repositories/announcementRepository.ts",

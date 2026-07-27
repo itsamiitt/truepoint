@@ -1,231 +1,46 @@
-// authClient.ts — the app-domain token client (ADR-0016). The access token lives IN MEMORY only (never
-// localStorage, never an app-domain cookie). It starts login via a PKCE redirect to the auth origin,
-// exchanges the returned code, and silently refreshes against auth.*/token/refresh (same-site, credentialed
-// fetch — the refresh cookie stays on the auth origin) shortly before expiry.
-
-import {
-  type ElectionChannel,
-  type ElectionDeps,
-  broadcastRefreshResult,
-  parseRefreshMessage,
-  releaseRefreshLock,
-  tryAcquireRefreshLock,
-} from "@leadwolf/app-shell";
-import { createPkcePair, randomState } from "./pkce";
+// authClient.ts — the app-domain token client (ADR-0016). A thin instantiation of @leadwolf/auth-client plus
+// the multi-org / multi-workspace switching that only the customer app has.
+//
+// The access token lives IN MEMORY only (never localStorage, never an app-domain cookie). Login is a PKCE
+// redirect to the auth origin; the session silently refreshes against auth.*/token/refresh (same-site
+// credentialed fetch — the refresh cookie stays on the auth origin) shortly before expiry.
+//
+// This was a ~280-line file duplicated (with drift) into apps/admin and apps/forge. The shared 90% now lives
+// in @leadwolf/auth-client, so a fix lands in all three at once; what stays here is genuinely web-only
+// (T-2.3).
+import { createAuthClient } from "@leadwolf/auth-client";
 import { APP_ORIGIN, AUTH_ORIGIN } from "./publicConfig";
 
-let accessToken: string | null = null;
-let expiresAtMs = 0;
-let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-// In-flight de-dup: the auth gate and the route's first data fetch both call silentRefresh on cold load.
-// Without this they'd fire two redundant cross-origin /token/refresh calls (and the slower one could rotate
-// the cookie out from under the faster one). A single shared promise collapses them into one network round-trip.
-let refreshInFlight: Promise<boolean> | null = null;
+const client = createAuthClient({
+  appOrigin: APP_ORIGIN,
+  authOrigin: AUTH_ORIGIN,
+  storagePrefix: "lw_",
+});
 
-const PKCE_VERIFIER_KEY = "lw_pkce_verifier";
-const STATE_KEY = "lw_oauth_state";
+export type { RecoveryAction } from "@leadwolf/auth-client";
+export { recoveryActionFor } from "@leadwolf/auth-client";
 
 /** One-shot flag the callback sets before auto-restarting login, so recovery happens AT MOST once. */
-export const RECOVERY_KEY = "lw_auth_recovery";
+export const RECOVERY_KEY = client.RECOVERY_KEY;
 
-export type RecoveryAction = "restart" | "retry" | "fail";
+export const getAccessToken = client.getAccessToken;
+export const clearAccessToken = client.clearAccessToken;
+export const startLogin = client.startLogin;
+export const completeLogin = client.completeLogin;
+export const silentRefresh = client.silentRefresh;
+export const fetchWithAuth = client.fetchWithAuth;
+export const logout = client.logout;
 
-/**
- * Classify an exchange failure into a recovery action (pure, DOM-free):
- *   restart — the stale/expired/single-use class (a fresh login can succeed) → auto-start a new login;
- *   retry   — the auth origin is down → show "temporarily unavailable", do NOT auto-loop;
- *   fail    — anything else → generic message.
- */
-export function recoveryActionFor(reason: string): RecoveryAction {
-  if (reason === "invalid_state" || reason === "pkce_mismatch" || reason === "code_not_found")
-    return "restart";
-  if (reason === "auth_unavailable") return "retry";
-  return "fail";
-}
-
-export function getAccessToken(): string | null {
-  return accessToken && Date.now() < expiresAtMs ? accessToken : null;
-}
-
-/** Per-tab identity + the cross-tab channel for the refresh election (T-2.6). Both are created lazily and
- *  degrade to undefined outside a browser, so nothing here runs during SSR. */
-const TAB_ID =
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Math.random()}`;
-
-let electionChannel: ElectionChannel | undefined;
-function electionDeps(): ElectionDeps | null {
-  if (typeof window === "undefined" || typeof localStorage === "undefined") return null;
-  if (!electionChannel && typeof BroadcastChannel !== "undefined") {
-    const channel = new BroadcastChannel("tp.auth");
-    // Adopt a token another tab just minted instead of rotating our own. Everything arriving here is
-    // untrusted same-origin input, so it is validated by parseRefreshMessage rather than cast.
-    channel.onmessage = (event: MessageEvent) => {
-      const result = parseRefreshMessage(event.data);
-      if (result) adoptToken(result.token, result.expiresIn);
-    };
-    electionChannel = channel;
-  }
-  return { storage: localStorage, channel: electionChannel, now: () => Date.now(), tabId: TAB_ID };
-}
-
-/** Install a token WITHOUT re-broadcasting it — the path a follower takes when adopting the winner's result.
- *  Re-broadcasting would put the tabs in a message loop. */
-function adoptToken(token: string, expiresIn: number): void {
-  accessToken = token;
-  expiresAtMs = Date.now() + expiresIn * 1000;
-  if (refreshTimer) clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => void scheduledRefresh(), Math.max(5, expiresIn - 60) * 1000);
-}
+// ── Web-only: org + workspace switching ────────────────────────────────────────────────────────────────
+// These are not in the shared client because admin and forge have no org/workspace switcher — the staff
+// consoles are cross-tenant by construction. Each mints a FRESH access JWT carrying the new tid/wid, which is
+// why they need installToken rather than going through the normal exchange.
 
 /**
- * The TIMER-driven refresh, elected across tabs (T-2.6).
- *
- * Each tab used to arm its own ~14 min timer, so N open tabs fired N rotation chains within milliseconds —
- * each a full rotation (DB revoke + insert, plus a Redis write), with the losers presenting a refresh token
- * the winner had just replaced. That only survived on the 30s reuse-grace: a race that happened to be
- * forgiven rather than a design.
- *
- * Only the elected tab refreshes; it broadcasts the result and the others adopt it. A tab that loses does
- * nothing, which is safe: if it never receives the broadcast, its token simply expires and the ON-DEMAND path
- * in fetchWithAuth refreshes it — exactly today's behaviour, so the worst case is no worse than before.
- */
-async function scheduledRefresh(): Promise<void> {
-  const deps = electionDeps();
-  if (!deps) {
-    // No browser storage (SSR, or a surface without localStorage): behave exactly as before.
-    await silentRefresh();
-    return;
-  }
-  if (!tryAcquireRefreshLock(deps)) return; // another tab is doing it
-  try {
-    const ok = await silentRefresh();
-    const token = ok ? getAccessToken() : null;
-    if (token) {
-      broadcastRefreshResult(deps, {
-        token,
-        expiresIn: Math.max(1, Math.round((expiresAtMs - Date.now()) / 1000)),
-      });
-    }
-  } finally {
-    releaseRefreshLock(deps);
-  }
-}
-
-function setToken(token: string, expiresIn: number): void {
-  accessToken = token;
-  expiresAtMs = Date.now() + expiresIn * 1000;
-  if (refreshTimer) clearTimeout(refreshTimer);
-  const leadMs = Math.max(5, expiresIn - 60) * 1000; // refresh ~60s before expiry
-  // Goes through the cross-tab election rather than straight to silentRefresh (T-2.6).
-  refreshTimer = setTimeout(() => void scheduledRefresh(), leadMs);
-}
-
-/** Drop the in-memory token + cancel the pending refresh. The auth-origin cookie is cleared server-side.
- * Exported so the shell can discard a token the SERVER has rejected (a 401/403 on a protected read) and
- * re-gate to a fresh login — the client-side expiry check alone can't detect a server-side revocation. */
-export function clearAccessToken(): void {
-  accessToken = null;
-  expiresAtMs = 0;
-  if (refreshTimer) clearTimeout(refreshTimer);
-  refreshTimer = null;
-}
-
-/** Begin login: generate PKCE + state, stash the verifier, and redirect to the auth origin.
- * The auth app runs at basePath="/auth" so the login page is at /auth/login (not /login). */
-export async function startLogin(): Promise<void> {
-  const { verifier, challenge } = await createPkcePair();
-  const state = randomState();
-  sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
-  sessionStorage.setItem(STATE_KEY, state);
-  const params = new URLSearchParams({ app_origin: APP_ORIGIN, code_challenge: challenge, state });
-  window.location.assign(`${AUTH_ORIGIN}/auth/login?${params.toString()}`);
-}
-
-/** Complete login at /auth/callback: validate state, exchange the code server-side at the auth origin. */
-export async function completeLogin(code: string, returnedState: string): Promise<void> {
-  const verifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
-  const state = sessionStorage.getItem(STATE_KEY);
-  // Validate BEFORE consuming: a failed check leaves the single-use keys intact so a re-entrant
-  // callback (StrictMode double-run) doesn't clobber a still-valid attempt.
-  if (!verifier || !state || state !== returnedState) throw new Error("invalid_state");
-  // Single-use: clear the verifier/state now that they've validated; the code is consumed by the exchange.
-  sessionStorage.removeItem(PKCE_VERIFIER_KEY);
-  sessionStorage.removeItem(STATE_KEY);
-
-  const res = await fetch(`${AUTH_ORIGIN}/auth/token/exchange`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code, codeVerifier: verifier, state }),
-  });
-  if (!res.ok) {
-    // Surface the server's diagnostic so the callback can log/show the real cause instead of swallowing it.
-    // For an invalid code the body carries a `reason` (ip_mismatch | origin_mismatch | pkce_mismatch |
-    // code_not_found); for a server fault it carries `code: "auth_unavailable"`.
-    const body = (await res.json().catch(() => null)) as { code?: string; reason?: string } | null;
-    throw new Error(body?.reason ?? body?.code ?? "exchange_failed");
-  }
-  const data = (await res.json()) as { accessToken: string; expiresIn: number };
-  setToken(data.accessToken, data.expiresIn);
-}
-
-/** Silent refresh against the auth origin (the refresh cookie rides the same-site credentialed fetch).
- * Concurrent callers share one in-flight request: the shell gate and the route's first data fetch both ask
- * for a refresh on cold load, and collapsing them avoids a duplicate cross-origin round-trip + cookie race. */
-export async function silentRefresh(): Promise<boolean> {
-  if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = (async () => {
-    try {
-      const res = await fetch(`${AUTH_ORIGIN}/auth/token/refresh`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!res.ok) return false;
-      const data = (await res.json()) as { accessToken: string; expiresIn: number };
-      setToken(data.accessToken, data.expiresIn);
-      return true;
-    } catch {
-      return false;
-    } finally {
-      refreshInFlight = null;
-    }
-  })();
-  return refreshInFlight;
-}
-
-/** Fetch with the in-memory access token, attempting one silent refresh if it's missing/expired. */
-export async function fetchWithAuth(input: string, init: RequestInit = {}): Promise<Response> {
-  let token = getAccessToken();
-  if (!token) {
-    await silentRefresh();
-    token = getAccessToken();
-  }
-  const headers = new Headers(init.headers);
-  if (token) headers.set("authorization", `Bearer ${token}`);
-  return fetch(input, { ...init, headers });
-}
-
-/**
- * End the session: revoke + clear the refresh cookie on the auth origin (idempotent 204), drop the
- * in-memory access token, then send the browser back to the app origin (the shell re-gates to sign-in).
- */
-export async function logout(): Promise<void> {
-  try {
-    await fetch(`${AUTH_ORIGIN}/auth/logout`, { method: "POST", credentials: "include" });
-  } catch {
-    // Best-effort: logout must always feel complete to the user even if the network call fails.
-  }
-  clearAccessToken();
-  window.location.assign(APP_ORIGIN);
-}
-
-/**
- * Re-pin the active workspace: the auth origin authorizes the target, rotates the session cookie, and
- * mints a fresh access JWT carrying the new wid. On success we store the new token (resetting the refresh
- * timer), announce workspace:changed, and reload so every per-workspace surface re-fetches under the new
- * scope. Throws on a non-200 (e.g. 403 no-access) so the caller can surface it and keep the current scope.
+ * Re-pin the active workspace: the auth origin authorizes the target, rotates the session cookie, and mints a
+ * fresh access JWT carrying the new wid. On success we store the new token (resetting the refresh timer),
+ * announce workspace:changed, and reload so every per-workspace surface re-fetches under the new scope.
+ * Throws on a non-200 (e.g. 403 no-access) so the caller can surface it and keep the current scope.
  */
 export async function switchWorkspace(workspaceId: string): Promise<void> {
   const res = await fetch(`${AUTH_ORIGIN}/auth/workspace/switch`, {
@@ -236,7 +51,7 @@ export async function switchWorkspace(workspaceId: string): Promise<void> {
   });
   if (!res.ok) throw new Error("switch_failed");
   const data = (await res.json()) as { accessToken: string; expiresIn: number };
-  setToken(data.accessToken, data.expiresIn);
+  client.installToken(data.accessToken, data.expiresIn);
   window.dispatchEvent(new CustomEvent("workspace:changed", { detail: { workspaceId } }));
   window.location.reload();
 }
@@ -248,9 +63,9 @@ export interface OrgOption {
 }
 
 /**
- * The organizations the signed-in user belongs to (auth origin, credentialed — the org list is cross-tenant, so
- * it cannot come from api.* which is scoped to the active tenant). Returns the active tenant id so the switcher
- * can mark the current org. Throws on a non-200 so the caller can show an error state.
+ * The organizations the signed-in user belongs to (auth origin, credentialed — the org list is cross-tenant,
+ * so it cannot come from api.* which is scoped to the active tenant). Returns the active tenant id so the
+ * switcher can mark the current org. Throws on a non-200 so the caller can show an error state.
  */
 export async function listOrgs(): Promise<{ orgs: OrgOption[]; activeTenantId: string | null }> {
   const res = await fetch(`${AUTH_ORIGIN}/auth/orgs`, { credentials: "include" });
@@ -259,10 +74,11 @@ export async function listOrgs(): Promise<{ orgs: OrgOption[]; activeTenantId: s
 }
 
 /**
- * Re-pin the active ORGANIZATION (tenant): the auth origin authorizes the target org, lands the session on that
- * org's remembered/default workspace, rotates the session cookie, and mints a fresh access JWT carrying the new
- * tid/wid. On success we store the new token, announce org:changed, and reload so every scoped surface
- * re-fetches under the new org. Throws on a non-200 (e.g. 403 not-a-member) so the caller keeps the current org.
+ * Re-pin the active ORGANIZATION (tenant): the auth origin authorizes the target org, lands the session on
+ * that org's remembered/default workspace, rotates the session cookie, and mints a fresh access JWT carrying
+ * the new tid/wid. On success we store the new token, announce org:changed, and reload so every scoped
+ * surface re-fetches under the new org. Throws on a non-200 (e.g. 403 not-a-member) so the caller keeps the
+ * current org.
  */
 export async function switchOrg(tenantId: string): Promise<void> {
   const res = await fetch(`${AUTH_ORIGIN}/auth/org/switch`, {
@@ -273,7 +89,7 @@ export async function switchOrg(tenantId: string): Promise<void> {
   });
   if (!res.ok) throw new Error("switch_failed");
   const data = (await res.json()) as { accessToken: string; expiresIn: number };
-  setToken(data.accessToken, data.expiresIn);
+  client.installToken(data.accessToken, data.expiresIn);
   window.dispatchEvent(new CustomEvent("org:changed", { detail: { tenantId } }));
   window.location.reload();
 }

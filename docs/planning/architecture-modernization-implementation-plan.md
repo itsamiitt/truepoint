@@ -689,7 +689,19 @@ process up to Caddy.
   must survive intact.
   **needs:** T-2.1, X-0.1..X-0.5 (don't move the handoff while the capture path is lossy).
 
-- [ ] **T-2.3 · Extract `packages/auth-client`.** `authClient.ts` is triplicated with real drift
+- [x] **T-2.3 · Extract `packages/auth-client`.** (shipped. `createAuthClient({appOrigin, authOrigin,
+  storagePrefix})` — the drift was never a decision, it was one copy getting fixed: web had the in-flight
+  refresh de-dup AND the T-2.6 cross-tab election, admin and forge had neither, so every staff tab still fired
+  its own rotation chain. Both now apply to all three. What genuinely differed is parametric — the app origin
+  and the sessionStorage prefix, which is what stops a web tab and an admin tab clobbering each other's PKCE
+  verifier mid-login; the BroadcastChannel name is per-app for the same reason, since an admin tab must not
+  adopt a token minted for the web audience. `pkce.ts` was byte-identical in all three and moved in too; the
+  three copies are deleted. Web keeps org/workspace switching, which admin and forge have no equivalent of —
+  those mint a fresh JWT outside the normal exchange, hence the explicit `installToken`. `refreshElection`
+  moved from `@leadwolf/app-shell` to here: it is auth logic, not app chrome, and importing the shell barrel
+  for it dragged JSX into a pure module. Net −310 lines across the three apps. T-2.4/T-2.5 are unblocked.)
+  **superseded description below:**
+- **Extract `packages/auth-client`.**** `authClient.ts` is triplicated with real drift
   (web 204 / admin 140 / forge 129 lines) and `pkce.ts` is **byte-identical in three apps**; `apps/forge` is
   the only copy missing the `refreshInFlight` single-flight guard, whose documented (AUTH-078) absence
   double-rotates the refresh token and trips reuse-detection, revoking the family — so forge staff get
