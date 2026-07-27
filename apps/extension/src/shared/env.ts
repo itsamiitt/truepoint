@@ -1,11 +1,24 @@
-// Per-environment origins. Defaults target production; a build can override via Vite `define`
-// (see vite.config.ts) or the signed RemoteConfig at runtime (background/config/remoteConfig.ts).
-// The extension only ever talks to these first-party origins (host_permissions in manifest.config.ts).
+// Per-environment origins. Production by default; a development build overrides them through the Vite
+// `define` in vite.config.ts. The extension only ever talks to these first-party origins (host_permissions in
+// manifest.config.ts, derived from the same source — shared/origins.ts).
+//
+// The `define` this comment used to promise did not exist. env.ts hard-coded production, vite.config.ts had no
+// `define` at all, so `bun run dev` pointed the service worker at PRODUCTION — and a reveal triggered while
+// developing spent real credits against a real tenant. The injection is now real, and the constant below is
+// the fallback rather than the only value.
+
+import { PRODUCTION_ORIGINS } from "./origins.ts";
+
+/** Injected by vite.config.ts at build time. Declared (not imported) because `define` performs a textual
+ *  replacement — the identifier does not exist unless the build substituted it, hence the `typeof` guard. */
+declare const __TP_ORIGINS__: { api: string; auth: string; app: string } | undefined;
+
+const injected = typeof __TP_ORIGINS__ === "undefined" ? undefined : __TP_ORIGINS__;
 
 export const ENV = {
-  apiOrigin: "https://api.truepoint.in",
-  authOrigin: "https://auth.truepoint.in",
-  appOrigin: "https://app.truepoint.in",
+  apiOrigin: injected?.api ?? PRODUCTION_ORIGINS.api,
+  authOrigin: injected?.auth ?? PRODUCTION_ORIGINS.auth,
+  appOrigin: injected?.app ?? PRODUCTION_ORIGINS.app,
 } as const;
 
 export const API_BASE = `${ENV.apiOrigin}/api/v1`;

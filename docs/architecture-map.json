@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1792,
-  "fileSetHash": "sha256:de783c55b91645672cb7271edb1ce2eccc83ee69a21079078f4affae36e3c5f0",
+  "fileCount": 1794,
+  "fileSetHash": "sha256:0a6085d6cc771055fec2a137ee84f74f618ff6bbb71b4343e237b133ab4c33dd",
   "features": {
     "account-search": {
       "web": [],
@@ -2115,6 +2115,8 @@
       "apps/extension/src/shared/env.ts",
       "apps/extension/src/shared/idb.ts",
       "apps/extension/src/shared/messages.ts",
+      "apps/extension/src/shared/origins.test.ts",
+      "apps/extension/src/shared/origins.ts",
       "apps/extension/src/shared/storage.ts",
       "apps/extension/src/shared/types.ts"
     ],

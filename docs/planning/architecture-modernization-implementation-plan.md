@@ -190,7 +190,7 @@ optimization because optimizing a broken path is wasted work.
   full unminified source, including the token/handoff logic, in the store ZIP); add a `zip`/package script.
   **files:** `apps/extension/vite.config.ts:14` · **needs:** P-1.4 (so CI builds it at all).
 
-- [ ] **X-0.8 · Environment override that actually exists.** `shared/env.ts:5-9` hard-codes prod origins and
+- [x] **X-0.8 · Environment override that actually exists.** `shared/env.ts:5-9` hard-codes prod origins and
   its comment points at a Vite `define` that `vite.config.ts` does not have — so `bun run dev` points the SW
   at **production** and reveals spend real credits. Add the `define` per mode; make `host_permissions` follow.
 
@@ -363,9 +363,19 @@ optimization because optimizing a broken path is wasted work.
   401 and 403 write nothing, `/bff/me` is not audited (it reads only the caller's own identity), and a failing
   audit sink prevents the read from running at all.
 
-- [ ] **F-0.10 · Retire the orphaned second write path into `master_*`.** ADR-0047 replaced the HTTP push
+- [x] **F-0.10 · Retire the orphaned second write path into `master_*`.** ADR-0047 replaced the HTTP push
   with in-process `withErTx`, but `POST /api/v1/master-sync` + `syncPrincipal` remain live — two write paths
   into Layer 0. Decide: delete, or gate behind a flag and document as the ER fallback.
+  **decided: gated dark, not deleted.** Confirmed orphaned first — `forge-worker`, `forge-api` and
+  `/integrations` contain no reference to the endpoint, because ADR-0047 replaced the HTTP push with
+  an in-process `withErTx` promotion. What remained was a live SECOND write path into the Layer-0 master graph,
+  reachable by anyone holding a service JWT carrying the `master-sync` scope. Two write paths into the golden
+  record is one more than the ER model assumes, and an unused one accrues risk without accruing value.
+  Now behind `MASTER_SYNC_INGRESS_ENABLED` (default off, explicit-"true"-only, the same posture as
+  `REALTIME_SSE_ENABLED`): while off the router is not mounted and the route 404s.
+  **Why not delete:** it is a documented ADR-0047 ingress and an externally-hosted Forge could still need it.
+  Gating makes enabling it a deliberate reviewable act; deleting would need an ADR amendment to undo. The
+  risk — a live unused write path — is removed either way.
 
 ### 3.3 Shared API/runtime P0s
 
