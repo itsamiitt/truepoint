@@ -229,6 +229,50 @@ describe("P1-03 workspace members management DoD", () => {
     expect((await memberRow(owner!.id))?.role).toBe("owner"); // untouched
   });
 
+  test("a role change invalidates the cached role, AFTER the row is committed", async () => {
+    // L-1.5: the role cache is only safe if a mutation clears it, and only correct if the clear happens once
+    // the new role is durable — invalidating inside the transaction would let a concurrent request
+    // re-populate from the pre-commit state, which is precisely a stale-authorization bug.
+    const { setRoleCacheInvalidator } = await import("@leadwolf/db");
+    const seen: Array<{
+      tenantId: string;
+      workspaceId: string;
+      userId: string;
+      role: string | null;
+    }> = [];
+    setRoleCacheInvalidator(async (tenantId, workspaceId, userId) => {
+      // Read the row from INSIDE the invalidator: if this fires before the commit, the old role is what a
+      // separate connection still sees, and this assertion is what catches that ordering.
+      const [row] = await admin`
+        SELECT role FROM workspace_members WHERE workspace_id = ${workspaceId} AND user_id = ${userId}`;
+      seen.push({
+        tenantId,
+        workspaceId,
+        userId,
+        role: (row as { role: string } | undefined)?.role ?? null,
+      });
+    });
+
+    try {
+      const members = await core.listWorkspaceMembers(asAdmin());
+      // member1 was demoted to viewer by the test above, so promoting it back to `member` is a REAL change
+      // rather than a no-op write that would pass even if nothing committed.
+      const target = members.find((x) => x.email === "member1@acme.test");
+      expect(target?.id).toBeDefined();
+      const [before] = await admin`SELECT user_id FROM workspace_members WHERE id = ${target!.id}`;
+      const targetUserId = (before as { user_id: string }).user_id;
+
+      await core.changeMemberRole(asAdmin(), target!.id, "member");
+
+      expect(seen).toHaveLength(1);
+      expect(seen[0]?.userId).toBe(targetUserId);
+      // Committed before the invalidation ran — the whole point.
+      expect(seen[0]?.role).toBe("member");
+    } finally {
+      setRoleCacheInvalidator(null);
+    }
+  });
+
   test("remove soft-removes an active member (audits member.remove); owner can never be removed", async () => {
     const before = await auditCount("member.remove");
     const members = await core.listWorkspaceMembers(asAdmin());

@@ -7,6 +7,7 @@
 import { closeDb } from "@leadwolf/db";
 import { app } from "./app.ts";
 import { runBootWarmup } from "./instrumentation.ts";
+import { installRoleCacheInvalidator } from "./lib/roleCache.ts";
 import { beginDraining } from "./lifecycle.ts";
 
 // Fire-and-forget boot warmup (perf root cause #8): fill the DB pool + prefetch JWKS so the first real user
@@ -27,6 +28,11 @@ const IDLE_TIMEOUT_SECONDS = 65;
 /** Bound the graceful drain, mirroring apps/workers/src/index.ts: in-flight requests get this long to finish
  *  before we close the pool and exit anyway. Comfortably exceeds a healthy request; a wedged one is abandoned. */
 const DRAIN_TIMEOUT_MS = 15_000;
+
+// Registers the role-cache invalidator into @leadwolf/db's seam so a membership mutation clears this
+// process's cached role. A no-op unless ROLE_CACHE_TTL_MS is set — and it must run BEFORE the first request,
+// or a mutation early in the process's life would leave a stale entry behind.
+installRoleCacheInvalidator();
 
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 3001),

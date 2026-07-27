@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1827,
-  "fileSetHash": "sha256:5e5ede13c507cf36a33fcd25fb585aec2dcfcf2ab1b3b4ecfbcd5fde79c0296f",
+  "fileCount": 1831,
+  "fileSetHash": "sha256:7b5ff884714c7c47bbad06e369309bfd591715bf456bc8f4b86f2485f03c8f7d",
   "features": {
     "account-search": {
       "web": [],
@@ -2012,7 +2012,9 @@
       "apps/api/src/server.ts"
     ],
     "apps/api/lib": [
-      "apps/api/src/lib/csvDownload.ts"
+      "apps/api/src/lib/csvDownload.ts",
+      "apps/api/src/lib/roleCache.test.ts",
+      "apps/api/src/lib/roleCache.ts"
     ],
     "apps/api/middleware": [
       "apps/api/src/middleware/authn.ts",
@@ -2468,6 +2470,8 @@
       "packages/db/src/repositories/platformTrustReads.ts",
       "packages/db/src/repositories/subscriptionResetMath.test.ts",
       "packages/db/src/repositories/subscriptionResetMath.ts",
+      "packages/db/src/roleCache.test.ts",
+      "packages/db/src/roleCache.ts",
       "packages/db/src/schema/accountChildren.ts",
       "packages/db/src/schema/activity.ts",
       "packages/db/src/schema/aiRequests.ts",

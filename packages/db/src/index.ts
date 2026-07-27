@@ -215,6 +215,11 @@ export {
   type OwnerReader,
 } from "./repositories/retentionScanRepository.ts";
 export {
+  type RoleCacheInvalidator,
+  invalidateCachedRole,
+  setRoleCacheInvalidator,
+} from "./roleCache.ts";
+export {
   PARTITION_MONTHS_AHEAD,
   type PartitionEnsureResult,
   partitionRepository,

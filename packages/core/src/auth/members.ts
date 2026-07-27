@@ -21,6 +21,7 @@ import { createHash, randomBytes } from "node:crypto";
 import {
   type Tx,
   type WorkspaceMemberRecord,
+  invalidateCachedRole,
   invitationRepository,
   withTenantTx,
   workspaceRepository,
@@ -148,6 +149,10 @@ export async function changeMemberRole(
   role: AssignableWorkspaceRole,
 ): Promise<{ updated: number }> {
   await assertWorkspaceAdmin(scope);
+  // Captured inside the transaction, used AFTER it. The role cache must be invalidated once the new role is
+  // actually committed — doing it inside the tx would let a concurrent request re-populate the cache from the
+  // pre-commit state, which is the one ordering that turns a cache into a stale-authorization bug.
+  let changedUserId: string | null = null;
   const handledActive = await withTenantTx(
     { tenantId: scope.tenantId, workspaceId: scope.workspaceId },
     async (tx: Tx): Promise<{ updated: number } | null> => {
@@ -158,6 +163,7 @@ export async function changeMemberRole(
         throw new ValidationError("The workspace owner's role cannot be changed.");
       }
       await workspaceRepository.updateMemberRoleInTx(tx, scope.workspaceId, memberId, role);
+      changedUserId = member.userId;
       await writeAudit(tx, {
         tenantId: scope.tenantId,
         workspaceId: scope.workspaceId,
@@ -170,7 +176,12 @@ export async function changeMemberRole(
       return { updated: 1 };
     },
   );
-  if (handledActive) return handledActive;
+  if (handledActive) {
+    if (changedUserId) {
+      await invalidateCachedRole(scope.tenantId, scope.workspaceId, changedUserId);
+    }
+    return handledActive;
+  }
 
   // Fall back to a pending invite (owner-connection write — same boundary as inviteMember).
   const invite = await invitationRepository.findPendingInWorkspaceById(
@@ -211,6 +222,9 @@ export async function removeMember(
 ): Promise<{ removed: number }> {
   await assertWorkspaceAdmin(scope);
 
+  // Same after-commit rule as changeMemberRole: a removed member must stop authorizing, and invalidating
+  // before the commit lands would let a concurrent read cache the membership that is about to disappear.
+  let removedUserId: string | null = null;
   const handledActive = await withTenantTx(
     { tenantId: scope.tenantId, workspaceId: scope.workspaceId },
     async (tx: Tx): Promise<{ removed: number } | null> => {
@@ -220,6 +234,7 @@ export async function removeMember(
         throw new ValidationError("The workspace owner cannot be removed.");
       }
       const removed = await workspaceRepository.removeMemberInTx(tx, scope.workspaceId, memberId);
+      removedUserId = member.userId;
       await writeAudit(tx, {
         tenantId: scope.tenantId,
         workspaceId: scope.workspaceId,
@@ -232,7 +247,12 @@ export async function removeMember(
       return { removed };
     },
   );
-  if (handledActive) return handledActive;
+  if (handledActive) {
+    if (removedUserId) {
+      await invalidateCachedRole(scope.tenantId, scope.workspaceId, removedUserId);
+    }
+    return handledActive;
+  }
 
   // Fall back to a pending invite (owner-connection write — same boundary as inviteMember).
   const invite = await invitationRepository.findPendingInWorkspaceById(
