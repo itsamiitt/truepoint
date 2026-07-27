@@ -11,9 +11,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { type ReportsSource, fetchReportsSource } from "../api";
+import { type ReportsSource, fetchReportsSource, fetchReportsSummary } from "../api";
 import { reportKeys } from "../keys";
-import { rollupCreditUsage, rollupDataHealth, rollupFunnel, rollupTeam } from "../rollups";
+import {
+  creditUsageFromBuckets,
+  dataHealthFromCounts,
+  funnelFromCounts,
+  teamFromCounts,
+} from "../rollups";
 
 /** Date-range presets for the filter row (trailing windows over the loaded sample). */
 export type RangeId = "7d" | "14d" | "30d" | "all";
@@ -25,74 +30,82 @@ export const RANGE_OPTIONS: { value: RangeId; label: string; days: number | null
   { value: "all", label: "All time", days: null },
 ];
 
-const DAY_MS = 86_400_000;
-
 export function useReports() {
+  // The balance tile still comes from the raw source; everything else is now counted server-side.
   const query = useQuery<ReportsSource>({
     queryKey: reportKeys.source(),
     queryFn: fetchReportsSource,
   });
   const source = query.data ?? null;
-  const error = query.error
-    ? query.error instanceof Error
-      ? query.error.message
-      : "Failed to load reports"
-    : null;
-  const loading = query.isPending;
-  const reload = () => {
-    void query.refetch();
-  };
-
-  // The range and member filters are CLIENT state — what the user picked, applied to the loaded sample.
+  // The range and member filters are CLIENT state — what the user picked. They are sent to the SERVER now
+  // rather than applied to loaded rows, so they form part of the query key below.
   const [range, setRange] = useState<RangeId>("14d");
   const [member, setMember] = useState<string>("all");
 
-  // The member options come from the loaded data (owner ids on contacts + reveals); labels mirror rollups.
-  const memberOptions = useMemo(() => {
-    if (!source) return [];
-    const ids = new Set<string>();
-    for (const c of source.contacts) if (c.ownerUserId) ids.add(c.ownerUserId);
-    for (const r of source.reveals) if (r.revealedByUserId) ids.add(r.revealedByUserId);
-    return [...ids].map((id) => ({
-      value: id,
-      label: `Member ${id.replace(/-/g, "").slice(-4).toUpperCase() || id.slice(0, 4).toUpperCase()}`,
-    }));
-  }, [source]);
+  // The SERVER-aggregated counts, keyed by the filters — they are server inputs now, not client-side row
+  // predicates, so a filter change is a new query rather than a re-filter of a 200-row sample.
+  const summaryQuery = useQuery({
+    queryKey: reportKeys.summary(range, member),
+    queryFn: () => fetchReportsSummary(range, member),
+  });
+  const summary = summaryQuery.data ?? null;
 
-  // Apply the date-range + member filters to the raw rows before rolling up. The range is a trailing window
-  // over the loaded sample (contacts by createdAt, reveals by revealedAt) — a stand-in until /reports/* lands.
-  const filtered = useMemo(() => {
-    if (!source) return null;
-    const days = RANGE_OPTIONS.find((o) => o.value === range)?.days ?? null;
-    const cutoff = days != null ? Date.now() - days * DAY_MS : null;
+  // Either query failing is a page-level failure: the dashboards are meaningless without the counts, and the
+  // balance tile without them is a number floating on an empty page.
+  const failure = summaryQuery.error ?? query.error;
+  const error = failure
+    ? failure instanceof Error
+      ? failure.message
+      : "Failed to load reports"
+    : null;
+  const loading = query.isPending || summaryQuery.isPending;
+  const reload = () => {
+    void query.refetch();
+    void summaryQuery.refetch();
+  };
 
-    const inRange = (iso: string): boolean => {
-      if (cutoff == null) return true;
-      const t = new Date(iso).getTime();
-      return Number.isNaN(t) ? true : t >= cutoff;
-    };
-
-    const contacts = source.contacts.filter(
-      (c) => inRange(c.createdAt) && (member === "all" || c.ownerUserId === member),
-    );
-    const reveals = source.reveals.filter(
-      (r) => inRange(r.revealedAt) && (member === "all" || r.revealedByUserId === member),
-    );
-    return { contacts, reveals };
-  }, [source, range, member]);
-
-  const credit = useMemo(() => (filtered ? rollupCreditUsage(filtered.reveals) : null), [filtered]);
-  const funnel = useMemo(() => (filtered ? rollupFunnel(filtered.contacts) : null), [filtered]);
-  const health = useMemo(() => (filtered ? rollupDataHealth(filtered.contacts) : null), [filtered]);
-  const team = useMemo(
-    () => (filtered ? rollupTeam(filtered.contacts, filtered.reveals) : null),
-    [filtered],
+  // From the whole workspace, not from whichever rows happened to load. The label is still synthesised from
+  // the id — the server deliberately returns ids only rather than making a report a new place names appear.
+  const memberOptions = useMemo(
+    () =>
+      (summary?.memberOptions ?? []).map((id) => ({
+        value: id,
+        label: `Member ${id.replace(/-/g, "").slice(-4).toUpperCase() || id.slice(0, 4).toUpperCase()}`,
+      })),
+    [summary],
   );
 
+  const credit = useMemo(
+    () => (summary ? creditUsageFromBuckets(summary.creditsByDay, summary.creditsByType) : null),
+    [summary],
+  );
+  const funnel = useMemo(
+    () =>
+      summary
+        ? funnelFromCounts(
+            new Map(summary.funnel.map((f) => [f.status, f.count])),
+            summary.contactTotal,
+          )
+        : null,
+    [summary],
+  );
+  const health = useMemo(
+    () =>
+      summary
+        ? dataHealthFromCounts(
+            new Map(summary.health.map((h) => [h.status, h.count])),
+            summary.contactTotal,
+            summary.withEmail,
+          )
+        : null,
+    [summary],
+  );
+  const team = useMemo(() => (summary ? teamFromCounts(summary.team) : null), [summary]);
+
   return {
-    // True when the loaded rows hit the fetch limit, i.e. these rollups describe the most recent sample
-    // rather than the workspace. Surfaced so the page can say so instead of presenting a partial as a total.
-    sampled: source?.sampled ?? false,
+    // The rollups are counted server-side over the WHOLE workspace now, so there is no sample to disclose.
+    // Kept in the shape so the page does not have to change again if a future surface reintroduces one.
+    sampled: false,
     balance: source?.balance ?? null,
     credit,
     funnel,
