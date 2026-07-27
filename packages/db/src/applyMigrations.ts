@@ -21,8 +21,16 @@ const rlsFolder = join(here, "rls");
 const DEFAULT_APP_ROLE_PASSWORD = "Lw_App_Role_2026!x7Qm";
 
 /** SQLSTATEs tolerated during convergence: the object a skipped-then-replayed migration creates may
- *  already exist under an earlier lineage (renumbered tags = new hashes over old DDL). Everything else
- *  aborts — tolerance is for "already there", never for real failures.
+ *  already exist under an earlier lineage. Everything else aborts — tolerance is for "already there", never
+ *  for real failures.
+ *
+ *  Precision on what "lineage" means here, because the previous wording ("renumbered tags = new hashes over
+ *  old DDL") was misleading: identity is `sha256(CONTENT)` only — see the hash below — so RENAMING a migration
+ *  changes nothing and a renamed file is still recognised as applied. What produced divergent hashes over
+ *  equivalent DDL was the branch merge REWRITING file contents, not the renumbering that accompanied it.
+ *  The distinction matters: a pure rename is safe and needs no tolerance; a content edit to an applied
+ *  migration is a new migration wearing an old name, and this tolerance is the only thing standing between
+ *  that and a failed deploy.
  *
  *  Every code here is a DDL "this object already exists" error, where skipping the statement leaves the database
  *  in exactly the state the statement intended. That is what makes tolerance safe.
