@@ -28,7 +28,7 @@
   for f in $(find packages apps -name '*.itest.ts' | sort); do bun test --timeout 120000 "./$f"; done
   ```
   Baseline arithmetic: **typecheck 21/21 · boundaries 0 violations · 192 unit files · 92 itest files ·
-  81 journal entries · 43 RLS files · 14 DB flag keys (all off)**.
+  82 journal entries · 42 RLS files · 14 DB flag keys (all off)**.
 - SLO acceptance targets come from **ADR-0024**: masked search p95 200 ms / p99 500 ms · reveal 300/800 ·
   list-grid 150/400 · record detail 150/400 · import enqueue 100/300 · availability 99.9% · search-sync
   (CDC→index) p95 < 5 s.
@@ -42,7 +42,7 @@ produces an outage.** Every work item below is written to obey them.
 
 | # | Rule | Why (evidence) |
 |---|---|---|
-| **G1** | **Migrations are HAND-WRITTEN `.sql` + a hand-appended `_journal.json` entry. Never run `drizzle-kit generate`.** Next file = `0080_*`, `idx: 81`. | Snapshots stop at `meta/0028_snapshot.json` while the journal has **81** entries. `generate` would diff against the 0028 state, emit ~51 migrations of duplicate DDL, **and silently drop hand-written seed INSERTs** (e.g. `0033_retention_engine.sql:31-42`). Max numeric prefix is `0079`; max `idx` is 80 — they differ because two files share the `0053` prefix (both journaled, both apply: identity is the journal order + file sha256, not the filename). |
+| **G1** | **Migrations are HAND-WRITTEN `.sql` + a hand-appended `_journal.json` entry. Never run `drizzle-kit generate`.** Next file = `0081_*`, `idx: 82` (0080 landed). | Snapshots stop at `meta/0028_snapshot.json` while the journal has **81** entries. `generate` would diff against the 0028 state, emit ~51 migrations of duplicate DDL, **and silently drop hand-written seed INSERTs** (e.g. `0033_retention_engine.sql:31-42`). Max numeric prefix is `0079`; max `idx` is 80 — they differ because two files share the `0053` prefix (both journaled, both apply: identity is the journal order + file sha256, not the filename). |
 | **G2** | **RLS changes ship by editing `packages/db/src/rls/*.sql` — no migration needed.** But never put `CREATE INDEX CONCURRENTLY` there, and never add a file that sorts before `contacts.sql` and needs `set_updated_at()`. | Phase 3 of `applyMigrations` re-applies **all 43** files, sorted by filename, on **every** migrate, idempotently (`applyMigrations.ts:288-293`). Each file is executed as **one whole-file `sql.unsafe()`** = one implicit transaction. `rls/masterGraph.sql:12-14` documents that it relies on `contacts.sql` having already defined `set_updated_at()` because `c` < `m`. |
 | **G3** | **`CREATE INDEX CONCURRENTLY` is allowed in a migration** — but the statement must stand **alone** between `--> statement-breakpoint` markers, and the chunk must first raise `statement_timeout`. | `applyJournalByHash` runs statement-by-statement in **autocommit — there is no `BEGIN`** (`applyMigrations.ts:60-73`), and `sql.unsafe(q)` with no args uses the simple query protocol. But the migrator connection sets `statement_timeout: 120000` (2 min), which will kill a real index build, and a failed CONCURRENTLY leaves an **INVALID** index while `25001` is *not* in the tolerated-SQLSTATE list, so the run aborts. (An in-repo comment at `0061_…:188-191` claims the opposite — it is stale, from Drizzle's old migrator.) |
 | **G4** | **Barrel-only imports.** Every new cross-package export must be added to that package's `src/index.ts`. `@leadwolf/types` and `@leadwolf/config` are locked leaves. `apps/extension` may not import `db`/`integrations`. `packages/core` may not import `integrations`. | 11 error-severity depcruise rules gate CI (`.dependency-cruiser.cjs`): `no-deep-import-from-app`, `no-deep-import-cross-package`, `types-is-a-leaf`, `config-imports-only-types`, `extension-stays-thin`, `forge-capture-sdk-stays-thin`, `core-must-not-import-integrations`, `apps-never-import-apps`, `no-cross-feature-import`, `no-circular`, `forge-core-must-not-import-integrations`. |
@@ -111,7 +111,7 @@ produces an outage.** Every work item below is written to obey them.
 - [ ] **P-1.7 · Repair the drizzle snapshot chain (0029 → 0080) and CI-assert it.**
   `needs:` P-1.3 · **files:** `packages/db/src/migrations/meta/*`, `.github/workflows/ci.yml`,
   delete `packages/db/src/migrations/_MAIN_MERGE_TODO.md` when done
-  **why:** 29 snapshots vs 81 journal entries. This is the gate on any Drizzle upgrade (a newer drizzle-kit
+  **why:** 29 snapshots vs 82 journal entries. This is the gate on any Drizzle upgrade (a newer drizzle-kit
   on a broken chain makes `generate` unusable *and* hides the break). Correctness gate, from the TODO file
   itself: after stitching, `generate` must report **no further diff**.
   **also:** renumber one of the duplicate `0053_*` files (cosmetic; identity is journal order + sha256, so
@@ -302,7 +302,7 @@ optimization because optimizing a broken path is wasted work.
 
 ## 4. Phase 1 — Latency quick wins (days; no ADR changes)
 
-- [ ] **L-1.1 · Collapse the tenant-context bootstrap to 1 round-trip.**
+- [x] **L-1.1 · Collapse the tenant-context bootstrap to 1 round-trip.**
   **files:** `packages/db/src/client.ts:88-108`
   Today: `SET LOCAL ROLE leadwolf_app` **then** a parameterised `SELECT set_config(tenant), set_config(ws)`
   = 2 setup RTTs on every scoped operation (≈5 RTTs per transaction to a remote Neon). `role` **is** a GUC,
@@ -314,7 +314,7 @@ optimization because optimizing a broken path is wasted work.
   specifically `rlsIsolation`, `masterGraphIsolation`, `roleModel`, `jobVisibility`.
   **rollback:** revert one function.
 
-- [ ] **L-1.2 · Initplan-wrap every RLS policy.** Mechanical rewrite across all 43 `rls/*.sql`:
+- [x] **L-1.2 · Initplan-wrap every RLS policy.** Mechanical rewrite across all 43 `rls/*.sql`:
   `workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)`.
   **why:** on index scans the bare form is fine (STABLE = once per scan), but on seq scans, hash joins and
   aggregate paths — facet counts, `countContacts`, list member counts — the GUC read + NULLIF + text→uuid
@@ -333,7 +333,7 @@ optimization because optimizing a broken path is wasted work.
   (`schema/forge.ts:38-39`). Every forge read is unscoped (`readRepository.ts:287`); the only wall is app code.
   **needs:** L-1.2 (decide the sweep's scope first).
 
-- [ ] **L-1.4 · Migration `0080`: the missing hot-path indexes.** Hand-written per G1/G3.
+- [x] **L-1.4 · Migration `0080`: the missing hot-path indexes.** Hand-written per G1/G3.
   - `contacts (workspace_id, created_at DESC, id DESC) WHERE deleted_at IS NULL` — **the default sort of
     every search/list page has no index today**; `accounts` already has its equivalent
     (`idx_accounts_ws_created_at`), contacts was simply missed.
