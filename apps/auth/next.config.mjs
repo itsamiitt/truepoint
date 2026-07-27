@@ -18,7 +18,11 @@ const nextConfig = {
   // Tree-shake the @leadwolf/ui barrel at import time, matching web/admin/forge. This app was the only one
   // without it: a component importing one control pulled the whole barrel into that route's chunk, and the
   // auth screens are the FIRST thing an unauthenticated visitor downloads.
-  experimental: { optimizePackageImports: ["@leadwolf/ui"] },
+  // `@leadwolf/types` is a 75-line barrel of 74 `export *` lines carrying Zod SCHEMAS — runtime values, not
+  // erased types — so importing one schema pulled the whole surface into that route's chunk. Listing it here
+  // is what the plan's "subpath exports instead of the barrel" asks for, achieved by the compiler rewriting
+  // barrel imports to their direct paths, rather than by rewriting several hundred import sites by hand.
+  experimental: { optimizePackageImports: ["@leadwolf/ui", "@leadwolf/types"] },
   // Server-only / native deps reached via the transpiled workspace packages above. Keep them OUT of the
   // webpack bundle and `require()` them at runtime from node_modules — otherwise webpack tries to parse
   // @node-rs/argon2's native .node binary and the build fails. (They run only in server routes/actions.)
