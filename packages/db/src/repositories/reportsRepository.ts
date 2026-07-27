@@ -91,7 +91,11 @@ export const reportsRepository = {
       // ── reveals per LOCAL day (the viewer's zone) and per reveal type ─────────────────────────────────
       const dayRows = await tx
         .select({
-          day: sql<string>`to_char(date_trunc('day', ${contactReveals.revealedAt}, ${filters.tz}), 'YYYY-MM-DD')`,
+          // `AT TIME ZONE` after the truncation is load-bearing. date_trunc(..., tz) returns a TIMESTAMPTZ —
+          // the instant of local midnight — and to_char would then format it in the SESSION zone (UTC),
+          // labelling IST's 11th as the 10th. Converting to a local timestamp first makes the label the
+          // viewer's actual calendar day.
+          day: sql<string>`to_char(date_trunc('day', ${contactReveals.revealedAt}, ${filters.tz}) AT TIME ZONE ${filters.tz}, 'YYYY-MM-DD')`,
           reveals: sql<number>`count(*)`,
           credits: sql<number>`coalesce(sum(${contactReveals.creditsConsumed}), 0)`,
         })
