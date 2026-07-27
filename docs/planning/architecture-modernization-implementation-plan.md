@@ -1079,12 +1079,22 @@ process up to Caddy.
   DATE RANGE and a MEMBER filter — and derives the member dropdown options from the loaded rows. A summary
   endpoint ignoring both cannot serve the surface. There is also a `rollupTeam` view (per-member
   revealed/credits/engaged) needing a GROUP BY owner that those three aggregates do not cover.
-  **Two semantic decisions the real fix must make**, neither of which is an implementer's to take alone
-  because both change what users see: (1) day buckets are currently LOCAL to the viewer and no server
-  aggregate can reproduce that — UTC days would match the rest of the platform (`capturesToday`,
-  `startOfUtcDay`) but shift every chart for non-UTC users; (2) the member dropdown currently lists only
-  members present in the loaded 200 rows, so a correct server version starts listing members the old one
-  silently omitted.
+  **One of the two "semantic decisions" recorded here was WRONG, and it was blocking the item for no reason.**
+  (1) claimed day buckets are local to the viewer and *no server aggregate can reproduce that*. Postgres does
+  it directly: `date_trunc('day', ts, $tz)` (three-arg, PG16 — which is what CI and production run) buckets by
+  any IANA zone, so the client sending its `Intl.DateTimeFormat().resolvedOptions().timeZone` reproduces the
+  current local-day behaviour EXACTLY. There is no local-vs-UTC trade to make.
+  (2) stands but is smaller than written: the member dropdown listing members the old one omitted is not a
+  semantic change to weigh, it is the truncation bug being fixed — the old list was short because the sample
+  was, not by intent.
+  **So C-3.10 needs no product decision.** The remaining work is the build: four SQL rollups (funnel,
+  credits-by-day, credits-by-type, team GROUP BY owner) + the member options, a `@leadwolf/types` contract
+  taking `range`, `member` and `tz`, the endpoint, and rewiring `useReports`.
+  **What HAS landed meanwhile:** the numbers are no longer silently wrong. `fetchReportsSource` now derives a
+  `sampled` flag (either source coming back full means there is more behind it) and the page states that the
+  totals describe the most recent 200 rows. That does not make them exact — only the server aggregation does
+  — but presenting a partial rollup AS a total was the actual defect, and it is worse than an approximate
+  number precisely because nothing indicated it was one.
   **Correct shape for whoever picks it up:** `GET /reports/summary?range=&member=` returning funnel +
   credit-day + credit-type + team buckets AND the member options, with the contacts/data-health half reading
   the already-memoised `dataQualitySummary` (C-3.2) rather than re-deriving from a page. Until then the

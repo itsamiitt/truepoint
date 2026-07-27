@@ -6,6 +6,7 @@
 "use client";
 
 import {
+  Alert,
   Combobox,
   Icon,
   PageHeader,
@@ -16,6 +17,7 @@ import {
 } from "@leadwolf/ui";
 import { Download, RotateCw } from "lucide-react";
 import { useState } from "react";
+import { REPORT_SAMPLE_LIMIT } from "../api";
 import {
   type ExportFormat,
   type ReportDataset,
@@ -68,6 +70,7 @@ export function ReportsPage() {
     error,
     loading,
     reload,
+    sampled,
   } = useReports();
   const { success, toast } = useToast();
   const [tab, setTab] = useState<DashboardId>("funnel");
@@ -114,6 +117,18 @@ export function ReportsPage() {
         title="Reports"
         subtitle="Pipeline, spend, deliverability, team, and data health for this workspace."
       />
+
+      {sampled ? (
+        // The rollups below are computed in the browser over the most recent REPORT_SAMPLE_LIMIT rows, so once
+        // a workspace exceeds that they describe a sample rather than the workspace. Saying so is not a
+        // cosmetic nicety: presenting a partial rollup as a total is the actual defect in C-3.10, and it is
+        // worse than an approximate number because nothing on the page indicated it was one. The numbers
+        // become exact when the aggregation moves server-side; until then the page states its own scope.
+        <Alert variant="default" style={{ marginBottom: "var(--tp-space-4)" }}>
+          Showing the most recent {REPORT_SAMPLE_LIMIT.toLocaleString()} contacts and reveals.
+          Totals below describe that sample, not the whole workspace.
+        </Alert>
+      ) : null}
 
       <div className={styles.tabsRow}>
         <Tabs
