@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1789,
-  "fileSetHash": "sha256:48fe023c3160d306ace16894ce424213e6ac735c2503ee7ebaa278c9194b81f3",
+  "fileCount": 1791,
+  "fileSetHash": "sha256:2e1555ec96a0537e0284a14b4f483fb5ce4cbbeb6ce98f721080b05e4b7ec843",
   "features": {
     "account-search": {
       "web": [],
@@ -707,7 +707,11 @@
     "events": {
       "web": [],
       "admin": [],
-      "api": ["apps/api/src/features/events/routes.ts"],
+      "api": [
+        "apps/api/src/features/events/hub.test.ts",
+        "apps/api/src/features/events/hub.ts",
+        "apps/api/src/features/events/routes.ts"
+      ],
       "core": [],
       "db": [],
       "workers": [],

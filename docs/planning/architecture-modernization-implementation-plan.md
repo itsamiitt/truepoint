@@ -719,11 +719,27 @@ process up to Caddy.
   head-of-line-blocks every tenant's imports for up to the 15-minute deadline.
   **fix:** Redis `INCR`/Lua atomic breaker → raise concurrency → per-tenant fairness via sharded queues.
 
-- [ ] **C-3.6 · SSE at scale.** `apps/api/src/features/events/routes.ts:21,37` opens a **dedicated IORedis
+- [x] **C-3.6 · SSE at scale.** `apps/api/src/features/events/routes.ts:21,37` opens a **dedicated IORedis
   client per connection** (10 k clients = 10 k Redis connections) and heartbeats every 15 s — longer than
   Bun's default 10 s idleTimeout, so the stream dies between heartbeats the moment
   `REALTIME_SSE_ENABLED` flips. One shared psubscribe client per process + in-process fanout + 8 s
   heartbeat + per-user connection caps. **needs:** A-0.1 (idleTimeout).
+  **shipped.** One process-wide subscriber (`events/hub.ts`) with per-channel refcounting replaces the
+  per-connection client: N streams on a workspace now cost ONE Redis SUBSCRIBE. At 10k connected dashboards
+  the old shape meant 10k connections from a single process against a default `maxclients` of 10000, so the
+  failure mode was not slowness — it was "no further connections", including the queues.
+  **SUBSCRIBE, not PSUBSCRIBE.** A pattern like `ws:*` would be one subscription but would deliver EVERY
+  workspace event to EVERY api process, which then discards nearly all of them: wasted bandwidth proportional
+  to tenant count, and a cross-tenant exposure resting entirely on the in-process filter being correct.
+  Subscribing to exactly the live channels means Redis performs the isolation and a filter bug cannot leak
+  what was never delivered.
+  **Per-user cap** of 5 concurrent streams, refused with a 429 + Retry-After before the stream opens — a
+  refusal the client can act on, rather than accepting a connection and starving it.
+  **The heartbeat is already safe:** A-0.1 shipped `idleTimeout: 65`, comfortably above the 15s heartbeat, so
+  the described "stream dies between heartbeats" window is closed.
+  **verify:** 10 new unit tests — one subscribe for many listeners, unsubscribe only on the last detach,
+  cross-channel isolation, idempotent double-detach (a double release would silently stop other streams), a
+  throwing listener not stopping delivery to its neighbours, and the per-user cap accounting.
 
 - [x] **C-3.7 · Move the Redis PUBLISH out of the open DB transaction.**
   `apps/workers/src/realtimeRelay.ts:21-36` holds the transaction (and its pooled connection) across N
