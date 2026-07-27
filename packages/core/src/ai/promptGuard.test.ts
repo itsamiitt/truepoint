@@ -44,4 +44,26 @@ describe("sanitizeNlQuery", () => {
     expect(sanitizeNlQuery("  a\n\n  b   c  ")).toBe("a b c");
     expect(sanitizeNlQuery("x".repeat(5000)).length).toBeLessThanOrEqual(1000);
   });
+
+  // The control-char class was written with LITERAL control bytes, which no diff could show and any
+  // formatter, editor, or copy-paste could silently alter — narrowing a security control invisibly. It is now
+  // written as \x escapes; these two tests pin the exact set so a future change to it has to be deliberate.
+  test("strips every C0 control char and DEL, and keeps the surrounding words", () => {
+    for (let code = 0x00; code <= 0x1f; code++) {
+      const ch = String.fromCharCode(code);
+      const out = sanitizeNlQuery(`VPs${ch}of Eng`);
+      expect(out).not.toContain(ch);
+      // Stripped chars become a space, which the \s+ collapse then folds — so the words survive either way.
+      expect(out).toBe("VPs of Eng");
+    }
+    expect(sanitizeNlQuery("VPs\x7fof Eng")).toBe("VPs of Eng");
+  });
+
+  test("does NOT strip printable characters that sit just outside the class", () => {
+    // 0x20 (space) and 0x21 ('!') bound the class from above; ordinary punctuation must pass through.
+    expect(sanitizeNlQuery("VPs of Eng!")).toBe("VPs of Eng!");
+    expect(sanitizeNlQuery("50-200 person EU fintechs")).toBe("50-200 person EU fintechs");
+    // Non-ASCII must survive — the class is ASCII-only, and names/titles are not.
+    expect(sanitizeNlQuery("Ingénieur à Zürich")).toBe("Ingénieur à Zürich");
+  });
 });

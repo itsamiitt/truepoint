@@ -22,15 +22,35 @@ const DEFAULT_APP_ROLE_PASSWORD = "Lw_App_Role_2026!x7Qm";
 
 /** SQLSTATEs tolerated during convergence: the object a skipped-then-replayed migration creates may
  *  already exist under an earlier lineage (renumbered tags = new hashes over old DDL). Everything else
- *  aborts — tolerance is for "already there", never for real failures. */
+ *  aborts — tolerance is for "already there", never for real failures.
+ *
+ *  Every code here is a DDL "this object already exists" error, where skipping the statement leaves the database
+ *  in exactly the state the statement intended. That is what makes tolerance safe.
+ *
+ *  `23505` (unique_violation) was previously in this set, annotated "idempotent seed rows", and it did not belong:
+ *  it is a DATA error, not an "already exists" one. Tolerating it meant that ANY unique violation, in ANY
+ *  statement of ANY migration — including a genuine conflict in a data backfill — was swallowed, the statement
+ *  silently skipped, and the migration then marked applied. The result is a half-migrated database that reports
+ *  success, which is the worst possible outcome for a forward-only migrator with no `down`.
+ *
+ *  Nothing needed it: every INSERT across all 16 seed-bearing migrations is already guarded with ON CONFLICT
+ *  (verified — no file has more INSERTs than ON CONFLICT clauses), so re-running a seed raises nothing at all.
+ *  A future seed must do the same; that is the correct idempotency mechanism, and it is expressed in the SQL
+ *  where a reader can see it rather than in a blanket exception here. */
 const ALREADY_EXISTS = new Set([
   "42P07", // duplicate_table
   "42710", // duplicate_object (constraints, triggers, roles)
   "42701", // duplicate_column
   "42P06", // duplicate_schema
   "42723", // duplicate_function
-  "23505", // unique_violation (idempotent seed rows)
 ]);
+
+/** True when a failed statement can be skipped without changing the database's intended end state.
+ *  Exported so the tolerance policy itself is unit-testable — it is the difference between a migrator that
+ *  converges and one that reports success on a half-applied migration. */
+export function isTolerableMigrationError(code: string | undefined): boolean {
+  return code !== undefined && ALREADY_EXISTS.has(code);
+}
 
 /**
  * Apply journal migrations by HASH MEMBERSHIP, not timestamp. Drizzle's own migrator skips any entry
@@ -64,7 +84,7 @@ async function applyJournalByHash(sql: postgres.Sql, log: (m: string) => void): 
         await sql.unsafe(q);
       } catch (err) {
         const code = (err as { code?: string }).code;
-        if (code && ALREADY_EXISTS.has(code)) {
+        if (isTolerableMigrationError(code)) {
           log(`migrate:          (tolerated ${code}: object already exists)\n`);
           continue;
         }

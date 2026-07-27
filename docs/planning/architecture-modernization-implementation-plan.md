@@ -227,13 +227,25 @@ optimization because optimizing a broken path is wasted work.
   **fix:** reject `scope ∋ extension` in `resolveStaff`; verify staff routes against `APP_ORIGINS` only.
   **verify:** new test minting an extension-audience token and asserting 403 on `/v1/review/approve`.
 
-- [ ] **F-0.5 · Scope the tolerated `23505`.**
+- [x] **F-0.5 · Scope the tolerated `23505`.**
   **files:** `packages/db/src/applyMigrations.ts:26-33,67-70`
   **defect:** `unique_violation` is tolerated on **every statement of every migration**, so a genuine
   integrity conflict during a backfill is swallowed, the migration is marked applied, and the database is
   left half-migrated with no error.
   **fix:** honour it only for opted-in statements (`-- @tolerate-duplicate`) or seed-only files.
   **verify:** itest that a real unique conflict now aborts the run; full itest sweep unchanged otherwise.
+  **shipped — simpler than planned, and the audit is why.** No opt-in marker was added, because nothing
+  needs one: every INSERT across all 16 seed-bearing migrations is already `ON CONFLICT`-guarded (verified
+  mechanically — no migration file has more `INSERT INTO` occurrences than `ON CONFLICT` clauses), so a
+  replayed seed raises nothing at all and `23505` was pure downside. It is simply **removed** from
+  `ALREADY_EXISTS`; the remaining five codes are all DDL "object already exists", where skipping the
+  statement leaves exactly the state the statement intended — that property is what makes tolerance safe,
+  and a data error never has it. Adding a `-- @tolerate-duplicate` mechanism no caller needs would have
+  been speculative machinery; `ON CONFLICT` in the SQL is the correct idempotency expression and it is
+  visible where a reviewer reads it. The policy is now `isTolerableMigrationError()`, exported and pinned
+  by `packages/db/src/migrationTolerance.test.ts` (4 tests) so re-widening it has to be deliberate. A
+  dedicated itest was **not** added: the tolerance is a pure predicate, and the CI itest template DB is
+  built by `applyMigrations`, so all 92 itests already exercise the changed path on every run.
 
 - [ ] **F-0.6 · Bound Forge LLM spend and record it.**
   **files:** `packages/forge-core/src/extraction.ts:204,283-303`
@@ -255,7 +267,23 @@ optimization because optimizing a broken path is wasted work.
 - [x] **F-0.8 · Make the injection sanitizer readable again.** A literal NUL byte in the control-char class
   makes the file **binary** to `grep` and invisible to `git grep -I`, so a security-relevant sanitizer cannot
   be reviewed in a diff. **files:** `packages/forge-core/src/extraction.ts:70` · **fix:** write as escapes
-  (`/[ -]/g`).
+  (`/[\u0000-\u001f]/g`).
+
+  **A second instance was found and fixed.** A repo-wide byte scan (all 2618 tracked text files) turned up the
+  same anti-pattern in `packages/core/src/ai/promptGuard.ts:41`: `sanitizeNlQuery`'s control-char class was
+  written in literal bytes — NUL, BS, VT, FF, SO, US, **and DEL** (0x7F is why a first scan that only looked
+  below 0x20 mis-read the set and a byte-level replace failed on a wrong pattern). The class is unchanged in
+  behaviour but now written as escapes covering 0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F, so the set is
+  reviewable; before, any formatter, editor, or copy-paste could have narrowed a prompt-injection control with
+  nothing visible in the diff. Pinned by two new tests in `promptGuard.test.ts` asserting all 32 C0 codes plus
+  DEL are stripped and that printable and non-ASCII text survives. The same scan found and repaired two
+  control bytes written into the prose of **this document** — which is what had made it `grep`-binary and
+  unsearchable for its own work-item IDs. The repo is now at zero stray control/DEL bytes.
+  **Method note, because this recurs:** an escape typed into a tool call is delivered as the real control
+  byte, which is how all three instances were created. Fixing one therefore has to be done at the byte level
+  (read bytes, splice, assert the resulting length, write bytes) — and when splicing in PowerShell, cast the
+  slices with `[byte[]]`: `List.AddRange` rejects a boxed `Object[]`, and a partial failure there truncated
+  `promptGuard.ts` to 35 bytes before `git checkout` restored it.
 
 - [ ] **F-0.9 · Audit-log cross-tenant staff reads.** All five `/bff/*` readers run under `withForgeTx`,
   which writes **no** `platform_audit_log` row, while the console renders a standing "Cross-tenant view"
