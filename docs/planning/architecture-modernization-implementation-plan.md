@@ -1090,6 +1090,19 @@ process up to Caddy.
   **So C-3.10 needs no product decision.** The remaining work is the build: four SQL rollups (funnel,
   credits-by-day, credits-by-type, team GROUP BY owner) + the member options, a `@leadwolf/types` contract
   taking `range`, `member` and `tz`, the endpoint, and rewiring `useReports`.
+  **LAYER 1 IS BUILT AND PROVEN** — `packages/types/src/reports.ts` (the contract, counts + `range`/`member`/
+  `tz`) and `packages/db/src/repositories/reportsRepository.ts` (the SQL), covered by
+  `reportsRepository.itest.ts` against a real Postgres. It returns COUNTS only: labels, conversion percentages
+  and bar maxima stay in the existing pure client rollups, which are unit-tested and have no reason to move.
+  Two bugs the itest caught that nothing else would have:
+  - `date_trunc('day', ts, tz)` returns a TIMESTAMPTZ (local midnight), so `to_char` then formatted it in the
+    SESSION zone and labelled IST's 11th as the 10th — every bucket shifted back for viewers east of UTC,
+    silently. `AT TIME ZONE` before formatting fixes it.
+  - A JS `Date` bound through drizzle's raw `sql` is never serialised (the typed builders convert it; `execute`
+    has no column context), so the date-FILTERED queries threw at bind time while every unfiltered one passed.
+  **Layer 2 — the endpoint + rewiring `useReports` — is NOT done.** Deliberately a separate step: the last
+  attempt at this item was reverted for having the wrong CONTRACT, so the contract and its SQL are landed
+  proven first. Until layer 2 lands the page still rolls up client-side and still says so.
   **What HAS landed meanwhile:** the numbers are no longer silently wrong. `fetchReportsSource` now derives a
   `sampled` flag (either source coming back full means there is more behind it) and the page states that the
   totals describe the most recent 200 rows. That does not make them exact — only the server aggregation does

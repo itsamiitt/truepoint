@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1832,
-  "fileSetHash": "sha256:c2fe6a9643c911359bf6c537c06f0de62b868bcf2e13f2f0ee307faf16d70d91",
+  "fileCount": 1835,
+  "fileSetHash": "sha256:385255555bd94bb94f8e566c180f4b7e2b795b504812f6308af1a1a498e88941",
   "features": {
     "account-search": {
       "web": [],
@@ -2587,6 +2587,7 @@
       "packages/db/test/platformAdminReads.itest.ts",
       "packages/db/test/platformAuditLog.itest.ts",
       "packages/db/test/providerConfigs.itest.ts",
+      "packages/db/test/reportsRepository.itest.ts",
       "packages/db/test/retention.itest.ts",
       "packages/db/test/reveal.itest.ts",
       "packages/db/test/roleModel.itest.ts",
@@ -2704,6 +2705,7 @@
       "packages/types/src/providerConfigs.test.ts",
       "packages/types/src/providerConfigs.ts",
       "packages/types/src/realtimeEvents.ts",
+      "packages/types/src/reports.ts",
       "packages/types/src/retention.ts",
       "packages/types/src/retentionAdmin.ts",
       "packages/types/src/reverification.ts",
@@ -2861,6 +2863,7 @@
     "packages/db/src/repositories/platformStaffRepository.ts",
     "packages/db/src/repositories/projectorRepository.ts",
     "packages/db/src/repositories/providerConfigRepository.ts",
+    "packages/db/src/repositories/reportsRepository.ts",
     "packages/db/src/repositories/retentionClassPolicyRepository.ts",
     "packages/db/src/repositories/revealJobRepository.ts",
     "packages/db/src/repositories/savedSearchRepository.ts",
