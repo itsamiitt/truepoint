@@ -1,13 +1,18 @@
-// useListMembers.ts — the engine for the list-detail members grid: loads the first MASKED, keyset-paged page
-// on mount (and whenever the list id changes), exposes the four-state signals + keyset "load more", and a
-// reload the remove-from-list action calls after a mutation. Mirrors useProspectSearch's keyset pattern
-// (accumulate pages, advance by cursor) but over a fixed list id rather than a URL-derived query. The members
-// are masked (email domain only, phone locked) — reveal is the only de-masking path, never this read.
+// useListMembers.ts — the engine for the list-detail members grid: MASKED, keyset-paged members for one list,
+// the four-state signals, keyset "load more", and a reload the remove-from-list action calls after a mutation.
+// The members are masked (email domain only, phone locked) — reveal is the only de-masking path, never this read.
+//
+// A `useInfiniteQuery`, like its prospect-search sibling: page accumulation and cursor tracking were both
+// hand-rolled here. Keying by list id also removes a real hazard in the old version — it accumulated pages
+// into one useState and re-ran on id change, so nothing structurally prevented a slow first page of the
+// previous list from appending onto the new one.
 "use client";
 
 import type { MaskedContact } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 import { fetchListMembers } from "../api";
+import { listKeys } from "../keys";
 
 const PAGE_SIZE = 100;
 
@@ -22,56 +27,60 @@ export interface ListMembersState {
   markRevealed: (id: string) => void;
 }
 
-export function useListMembers(listId: string): ListMembersState {
-  const [members, setMembers] = useState<MaskedContact[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type MembersPage = Awaited<ReturnType<typeof fetchListMembers>>;
 
-  const run = useCallback(
-    async (fromCursor: string | null) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const page = await fetchListMembers(listId, {
-          limit: PAGE_SIZE,
-          cursor: fromCursor ?? undefined,
-        });
-        setMembers((prev) => (fromCursor ? [...prev, ...page.members] : page.members));
-        setCursor(page.nextCursor);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not load list members");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [listId],
+export function useListMembers(listId: string): ListMembersState {
+  const qc = useQueryClient();
+  const queryKey = listKeys.members(listId);
+
+  const query = useInfiniteQuery<MembersPage>({
+    queryKey,
+    initialPageParam: null,
+    queryFn: ({ pageParam }) =>
+      fetchListMembers(listId, {
+        limit: PAGE_SIZE,
+        cursor: (pageParam as string | null) ?? undefined,
+      }),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+
+  const members = useMemo(
+    () => query.data?.pages.flatMap((page) => page.members) ?? [],
+    [query.data],
   );
 
-  // (Re)load from the first page whenever the list id changes.
-  useEffect(() => {
-    void run(null);
-  }, [run]);
-
-  const loadMore = useCallback(() => {
-    if (cursor) void run(cursor);
-  }, [cursor, run]);
-
-  const reload = useCallback(() => {
-    void run(null);
-  }, [run]);
-
-  const markRevealed = useCallback((id: string) => {
-    setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, isRevealed: true } : m)));
-  }, []);
+  const markRevealed = useCallback(
+    (id: string) => {
+      qc.setQueryData<{ pages: MembersPage[]; pageParams: unknown[] }>(
+        queryKey,
+        (old) =>
+          old && {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              members: page.members.map((m) => (m.id === id ? { ...m, isRevealed: true } : m)),
+            })),
+          },
+      );
+    },
+    [qc, queryKey],
+  );
 
   return {
     members,
-    loading,
-    error,
-    hasMore: cursor !== null,
-    loadMore,
-    reload,
+    loading: query.isPending,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Could not load list members"
+      : null,
+    hasMore: query.hasNextPage,
+    loadMore: () => {
+      if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+    },
+    reload: () => {
+      void query.refetch();
+    },
     markRevealed,
   };
 }
