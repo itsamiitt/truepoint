@@ -1066,7 +1066,7 @@ process up to Caddy.
   DOM test setup, so the render path is covered by the Next build (which also proves the window virtualizer
   is SSR-safe).
 
-- [ ] **C-3.10 · Server-side report aggregates.** `apps/web/src/features/reports/api.ts:31-53` fetches 200
+- [x] **C-3.10 · Server-side report aggregates.** `apps/web/src/features/reports/api.ts:31-53` fetches 200
   raw contacts + 200 reveals to the browser and rolls up client-side — so the numbers are **silently wrong
   past 200 rows** while being presented as totals. A naive SQL rollup endpoint suffices before ClickHouse
   (ADR-0010 puts the warehouse post-MVP).
@@ -1100,9 +1100,19 @@ process up to Caddy.
     silently. `AT TIME ZONE` before formatting fixes it.
   - A JS `Date` bound through drizzle's raw `sql` is never serialised (the typed builders convert it; `execute`
     has no column context), so the date-FILTERED queries threw at bind time while every unfiltered one passed.
-  **Layer 2 — the endpoint + rewiring `useReports` — is NOT done.** Deliberately a separate step: the last
-  attempt at this item was reverted for having the wrong CONTRACT, so the contract and its SQL are landed
-  proven first. Until layer 2 lands the page still rolls up client-side and still says so.
+  **LAYER 2 IS DONE.** `GET /api/v1/reports/summary` (transport only — range → cutoff, `all` as the no-member
+  sentinel, response validated against the contract) and `useReports` reading it. The dashboards no longer
+  roll up a sample, so the numbers are correct at any workspace size.
+  - **The rollups now exist in two halves sharing ONE implementation.** `*FromCounts` owns the presentation
+    (labels, conversion percentages, bar maxima, stage order); the legacy `rollup*` functions count rows and
+    delegate to it. The two paths cannot drift into disagreeing about what a percentage means, and the
+    existing unit tests exercise the same code the server path runs through.
+  - **The 14-day window stays client-side**: the chart needs a bucket for every day including the empty ones,
+    and a GROUP BY only returns days with spend. The server's keys are already in the viewer's zone.
+  - **The filters are query-key inputs now**, not predicates over loaded rows — changing one is a new query.
+  - **The sample disclosure shipped earlier in this item was REMOVED**, with its test. It existed because the
+    rollups described a sample; they no longer do, and a permanent warning about an impossible condition is
+    worse than none.
   **What HAS landed meanwhile:** the numbers are no longer silently wrong. `fetchReportsSource` now derives a
   `sampled` flag (either source coming back full means there is more behind it) and the page states that the
   totals describe the most recent 200 rows. That does not make them exact — only the server aggregation does
