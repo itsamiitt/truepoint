@@ -2,7 +2,7 @@
 // is server-authoritative — gating (kill-switch + per-tenant flag) → size caps → schema validate → scope
 // re-pin → endpoint allowlist → rate-limit (fail-open) → land + enqueue → 202. Client-side SDK guards are
 // never trusted (07 §Security). Exposed as a factory so it is unit-testable with injected fakes.
-import type { RateLimiter } from "@leadwolf/forge-core";
+import { type RateLimiter, envelopeByteSize, recordByteSize } from "@leadwolf/forge-core";
 import { type CaptureAck, type IngestionEnvelopeV2, ingestionEnvelopeV2 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
 
@@ -41,17 +41,40 @@ export function createCapturesApp(deps: CapturesDeps): Hono {
       return c.json({ error: "capture_disabled" }, 403);
     }
 
+    // Cheap pre-parse reject. Content-Length is client-declared and therefore advisory — it is a fast path for
+    // an honest oversized client, NOT the enforcement point (that is the derived-size check below, and the
+    // socket-level `maxRequestBodySize` pinned to this same cap in server.ts). Rejecting here avoids buffering
+    // and JSON-parsing a body we already know we will refuse.
+    const declaredLength = Number(c.req.header("content-length") ?? Number.NaN);
+    if (Number.isFinite(declaredLength) && declaredLength > deps.caps.maxEnvelopeBytes) {
+      return c.json({ error: "envelope_too_large" }, 413);
+    }
+
     const raw = await c.req.json().catch(() => null);
     const parsed = ingestionEnvelopeV2.safeParse(raw);
     if (!parsed.success) {
       return c.json({ error: "invalid_envelope", detail: parsed.error.issues[0]?.message }, 400);
     }
-    const envelope = parsed.data;
+    const parsedEnvelope = parsed.data;
 
     // Trust boundary: the envelope tenant MUST match the token (never ingest into another tenant, §A).
-    if (envelope.scope.tenantId !== caller.tenantId) {
+    if (parsedEnvelope.scope.tenantId !== caller.tenantId) {
       return c.json({ error: "scope_mismatch" }, 403);
     }
+
+    // MEASURE the payloads; do not ask the client how big they are (F-0.1). `size` and `byteSize` arrive as
+    // plain numbers on the wire and fed every size decision below — so `size: 1` cleared the envelope cap and
+    // the byte throttle, and `byteSize: 0` cleared the per-record cap. Both are overwritten here with the real
+    // UTF-8 lengths, so the client's values never reach a decision; the same derivation runs again inside
+    // landEnvelope, which is what makes the object-store threshold trustworthy too.
+    const envelope: IngestionEnvelopeV2 = {
+      ...parsedEnvelope,
+      records: parsedEnvelope.records.map((r) => ({
+        ...r,
+        byteSize: recordByteSize(r.rawPayload),
+      })),
+      size: envelopeByteSize(parsedEnvelope.records),
+    };
 
     // Hard size caps (413) — the SDK should have chunked a too-large batch.
     if (envelope.size > deps.caps.maxEnvelopeBytes) {

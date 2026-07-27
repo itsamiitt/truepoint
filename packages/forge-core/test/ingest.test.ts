@@ -135,4 +135,21 @@ describe("landEnvelope (S0 land stage)", () => {
     expect(obj.blobs.size).toBe(1);
     expect([...obj.blobs.keys()][0]?.startsWith(`${TENANT_A}/`)).toBe(true); // tenant-isolated blob key
   });
+
+  test("a LYING byteSize cannot force a large payload inline (F-0.1)", async () => {
+    // The routing decision used to read the client's byteSize, so `byteSize: 0` on a multi-megabyte payload
+    // skipped the object store and wrote the whole thing into a JSONB column. landEnvelope now measures the
+    // payload itself, exactly as it already recomputed the content hash.
+    const store = fakeStore();
+    const obj = inMemoryObjectStore();
+    const deps: LandDeps = { store, objectStore: obj, newBatchId: () => "b" };
+
+    const big = JSON.stringify({ blob: "x".repeat(100 * 1024) });
+    await landEnvelope(deps, envelope([{ rawPayload: big, byteSize: 0 }], { tenantId: TENANT_A }));
+    const row = store.rows[0];
+    expect(row?.payloadInline).toBeNull();
+    expect(row?.payloadRef).toMatch(/^mem:\/\//);
+    // The persisted size is the measured one, so downstream cost/quota reporting is not fed a zero either.
+    expect(row?.byteSize).toBe(Buffer.byteLength(big, "utf8"));
+  });
 });

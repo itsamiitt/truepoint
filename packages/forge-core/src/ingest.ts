@@ -98,6 +98,27 @@ function captureHash(rawPayload: string): string {
   }
 }
 
+/** Server-authoritative payload size, for exactly the reason `captureHash` above is server-authoritative: the
+ *  client-declared `record.byteSize` is advisory and must never be the number a decision is made on.
+ *
+ *  It fed four of them — the 20 MB envelope 413, the 5 MB per-record 413, the 64 MB/min byte throttle, and the
+ *  inline-vs-object-store routing below — so `byteSize: 0` on a 5 MB payload cleared every cap and then landed
+ *  the whole thing inline in JSONB, and `size: 1` on a large envelope cleared the throttle. The real size is
+ *  simply the payload's UTF-8 length; there was never a reason to ask the client for it.
+ *
+ *  Exported because the capture route has to enforce its caps BEFORE landing, and both must measure the same
+ *  way — see F-0.1. */
+export function recordByteSize(rawPayload: string): number {
+  return Buffer.byteLength(rawPayload, "utf8");
+}
+
+/** Server-authoritative envelope size: the sum of its records' true payload sizes. */
+export function envelopeByteSize(records: ReadonlyArray<{ rawPayload: string }>): number {
+  let total = 0;
+  for (const r of records) total += recordByteSize(r.rawPayload);
+  return total;
+}
+
 /** Route a payload: small → inline JSONB; large → object store under a TENANT-prefixed hash key, pointer in row.
  *  The tenant prefix keeps identical content in two tenants from sharing one blob — otherwise one tenant's DSAR
  *  erasure would delete the other's payload, and the shared key space would be a cross-tenant probe (P-01.12). */
@@ -127,10 +148,15 @@ export async function landEnvelope(
     // Recompute the content hash server-side (P-01.11) — the client-declared record.contentHash is advisory and
     // never trusted; it can't select, pre-claim, or poison another capture's identity.
     const contentHash = captureHash(record.rawPayload);
+    // Same treatment as the hash above, and for the same reason: measure the payload, never believe the
+    // client's `record.byteSize`. Deriving it HERE (not only at the route) means the object-store threshold and
+    // the stored row are truthful even for a caller that forgot to sanitise — `byteSize: 0` used to force a
+    // multi-megabyte payload inline into JSONB.
+    const byteSize = recordByteSize(record.rawPayload);
     const { inline, ref } = await routePayload(deps, {
       rawPayload: record.rawPayload,
       contentHash,
-      byteSize: record.byteSize,
+      byteSize,
       tenantId: envelope.scope.tenantId,
     });
     const { landed } = await deps.store.land({
@@ -145,7 +171,7 @@ export async function landEnvelope(
       consentSnapshot: envelope.consent ?? null,
       payloadInline: inline,
       payloadRef: ref,
-      byteSize: record.byteSize,
+      byteSize,
       isGzipped: envelope.gzip,
     });
 

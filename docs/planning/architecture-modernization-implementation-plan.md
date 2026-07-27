@@ -189,7 +189,7 @@ optimization because optimizing a broken path is wasted work.
 
 ### 3.2 Forge (`apps/forge-api`, `apps/forge-worker`, `packages/forge-core`)
 
-- [ ] **F-0.1 · Derive sizes server-side; never trust client-declared bytes.**
+- [x] **F-0.1 · Derive sizes server-side; never trust client-declared bytes.**
   **files:** `apps/forge-api/src/features/captures/routes.ts:57,60,70`, `packages/types/src/forge.ts:44,72`
   **defect:** `envelope.size` / `record.byteSize` are plain `z.number()` and are what the 20 MB envelope
   413, the 5 MB per-record 413, the 64 MB/min byte throttle, **and** the object-store offload threshold all
@@ -198,6 +198,17 @@ optimization because optimizing a broken path is wasted work.
   (`forge-core/src/ingest.ts:129`).
   **fix:** compute `Buffer.byteLength` per record and sum; treat client values as advisory only.
   **verify:** new unit tests for each cap with a lying `size`.
+  **shipped, in TWO places on purpose.** The route overwrites `size`/`byteSize` with measured UTF-8 lengths
+  before any of its decisions, so the caps and the byte throttle can never read a client number. `landEnvelope`
+  *also* re-derives, immediately beside the `captureHash` call that already re-derives the content hash for the
+  identical reason — that is what makes the object-store threshold and the persisted `byte_size` trustworthy
+  even for a caller that forgot to sanitise. One place would have left the other wrong.
+  **verify:** 5 new tests — a lying `byteSize: 0` on an oversized payload is 413'd rather than accepted, a
+  lying envelope `size: 1` no longer clears the envelope cap, the throttle is charged the real byte count, and
+  in `forge-core` a `byteSize: 0` multi-megabyte payload now offloads to the object store instead of landing
+  inline in JSONB (with the measured size persisted, so cost reporting is not fed a zero either). The existing
+  "oversize record → 413" test had to change: it declared `byteSize: 999` on a 2-byte payload, so it was
+  asserting that the server *believed the client* — it now sends a genuinely oversized payload.
 
 - [x] **F-0.2 · Fix the model/params mismatch that has the AI extract stage 100% dead in prod.**
   **files:** `packages/integrations/src/forgeAnthropicExtraction.ts:132`, `packages/config/src/forge.ts:55`
@@ -360,9 +371,16 @@ optimization because optimizing a broken path is wasted work.
   SIGTERM/SIGINT → stop accepting → drain → `closeDb()`.
   **verify:** a 3 MB body gets `413` not an OOM; `docker compose restart api` mid-request completes it.
 
-- [ ] **A-0.2 · Gate `content-length` before parsing in forge-api capture.**
+- [x] **A-0.2 · Gate `content-length` before parsing in forge-api capture.**
   `await c.req.json()` at `captures/routes.ts:44` precedes the 413s at `:57-62`, so a single request forces a
   128 MB read plus a parse of it. **needs:** A-0.1, F-0.1.
+  **the 128 MB half was already closed** earlier in this effort: `server.ts` pins Bun's `maxRequestBodySize` to
+  `ENVELOPE_MAX_BYTES`, so an oversized body is refused at the socket and never reaches the handler — the
+  128 MB default was the actual bypass. Added the `content-length` fast path on top, which still earns its
+  keep: it returns the API's own 413 shape instead of an abrupt transport-level rejection, and it avoids
+  buffering and JSON-parsing up to a full 20 MB body that is already known to be refusable. It is explicitly
+  **advisory** — `Content-Length` is client-declared like everything else here, so the enforcement points
+  remain the socket cap and F-0.1's derived sizes.
 
 - [x] **A-0.3 · Rate-limit forge-api and gate `/metrics`.** `apps/api` applies `rateLimit` to `/api/*`;
   forge-api applies nothing globally, so every BFF read and the promotion write are unthrottled, and
