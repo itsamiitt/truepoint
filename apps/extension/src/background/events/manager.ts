@@ -40,7 +40,8 @@ export class BrowserEventManager {
 
   private async onWake(): Promise<void> {
     await this.ctx.config.load();
-    await this.ctx.auth.init();
+    // No auth.init() here either (X-0.5). It was a DUPLICATE of the module-level wake path — the service
+    // worker re-evaluates the whole module on wake, so this ran a second eager refresh on top of that one.
     void this.eventStream.start();
   }
 

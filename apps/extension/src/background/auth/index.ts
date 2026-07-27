@@ -48,14 +48,18 @@ export class AuthModule {
 
   constructor(private readonly deps: AuthDeps) {}
 
-  /** On worker wake: if a rotating refresh token survived (storage.session), refresh silently. */
-  async init(): Promise<void> {
-    if (await loadRefreshToken()) {
-      await this.refresh();
-    }
-  }
-
-  /** Used by ApiClient before every request; refreshes if the token is missing/near-expiry. */
+  /**
+   * Used by ApiClient before every request; refreshes if the token is missing/near-expiry.
+   *
+   * This is the ONLY thing that refreshes on a worker wake, deliberately (X-0.5). There used to be an
+   * `init()` that refreshed eagerly whenever the service worker evaluated — and because refresh ROTATES, and
+   * the worker dies after ~30s idle while a 1-minute alarm wakes it, that produced roughly 1440 rotations per
+   * install per day whether or not the user did anything. Load on apps/auth scaled with INSTALLS rather than
+   * usage.
+   *
+   * Nothing was lost by deleting it: `doRefresh` loads the stored refresh token itself, so the first request
+   * that actually needs a token still gets one.
+   */
   async getAccessToken(): Promise<string | null> {
     if (this.tokens.isFresh(REFRESH_SKEW_MS)) {
       return this.tokens.raw;

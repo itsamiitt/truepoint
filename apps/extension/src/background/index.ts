@@ -108,10 +108,11 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 void (async () => {
   await config.load();
-  await auth.init();
-  // If a session survived (refresh token in storage.session), prime the credits pill for the first open.
-  if (auth.tenantId) {
-    await credits.refresh(true);
-    broadcastAuthState();
-  }
+  // No auth work on wake (X-0.5). Refreshing here rotated a token on every service-worker evaluation, and the
+  // worker is woken by its own 1-minute alarm, so an idle install spent ~1440 rotations a day.
+  //
+  // The credits pre-warm went with it, for the same reason and one more: without a refresh there is no access
+  // token yet, so `getState()` would report signed_out. Broadcasting THAT on wake would flash every open
+  // surface to signed-out for the moment before the first real request refreshes. Saying nothing is correct —
+  // the popup asks for state when it opens, and that request refreshes on demand.
 })();
