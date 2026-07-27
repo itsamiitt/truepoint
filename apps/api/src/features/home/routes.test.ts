@@ -4,6 +4,7 @@
 // mocked (bun module mocks are process-global) so the test drives the REAL route through app.request().
 
 import { describe, expect, it, mock } from "bun:test";
+import * as realCore from "@leadwolf/core";
 import type {
   DataQualityTrendPoint,
   HomeSummary,
@@ -92,7 +93,17 @@ mock.module("../../middleware/requireRole.ts", () => ({
   getWorkspaceRole: (c: { get: (k: string) => unknown }) => c.get("role"),
 }));
 
+// The `...realCore` spread is load-bearing. mock.module REPLACES the whole module, so a stub that lists only
+// the functions this test stubs silently removes every other export from the barrel — and then any module in
+// the route's import graph that imports one of them fails to link, with an error naming a symbol this file
+// never mentions (it surfaced as "Export named 'AiParseError' not found").
+//
+// It is also invisible locally: a full `bun test` run loads the real barrel via some other file first, so
+// this only fails when the file runs in its own process — which is exactly how CI runs it. Spreading first
+// means this mock overrides the four readers it means to and leaves the rest of the barrel intact, so adding
+// an import to routes.ts cannot break the test again.
 mock.module("@leadwolf/core", () => ({
+  ...realCore,
   buildHomeSummary: async () => summary,
   buildDataQualitySummary: async () => dataQuality,
   recentDataQualityTrend: async () => trend,
