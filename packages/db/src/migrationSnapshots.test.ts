@@ -19,7 +19,11 @@ import { join } from "node:path";
 
 const META_DIR = join(import.meta.dir, "migrations", "meta");
 
-/** The known, pre-existing gap (P-1.7). NOT a target — a ceiling that must never rise. */
+/** The historical gap (P-1.7): 84 journal entries, 30 snapshots. NOT a target — a ceiling that must never
+ *  rise. The chain has been REBASELINED (migration 0083 carries a snapshot derived from the current schema,
+ *  so `generate` diffs correctly and reports no changes), but the 54 missing HISTORICAL snapshots are not
+ *  restored and point-in-time diffing before 0083 remains impossible. That is acceptable — the chain is only
+ *  consumed forward — and this constant keeps the gap from widening again. */
 const EXPECTED_DEFICIT = 54;
 
 function journalEntryCount(): number {

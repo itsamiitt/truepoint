@@ -1,0 +1,25 @@
+-- 0083_tan_wolfpack.sql — INTENTIONALLY A NO-OP. This file exists to carry its SNAPSHOT (P-1.7).
+--
+-- The drizzle snapshot chain was broken: 29 snapshots against 83 journal entries. drizzle-kit derives the next
+-- migration by diffing the schema against the NEWEST snapshot, so with 54 missing links it was diffing against
+-- a 0029-era view of the world. Running `generate` in that state emitted 722 lines of `CREATE TABLE` for
+-- tables that have existed for dozens of migrations — silently, with no indication anything was wrong. That
+-- is the real cost of the break: not the missing files, but that the tool confidently produces destructive
+-- nonsense and calls it a migration.
+--
+-- (Worth noting it would not even have failed loudly: applyMigrations tolerates the DDL "already exists"
+-- SQLSTATEs by design, so this would have "succeeded" while doing nothing and then been recorded as applied.)
+--
+-- The repair is to REBASELINE. `generate` also wrote meta/0083_snapshot.json, and that snapshot is correct —
+-- it is derived from the current schema files, not from the broken chain. Keeping the snapshot and the journal
+-- entry while emptying the SQL gives drizzle-kit an accurate starting point for every FUTURE diff, which is
+-- what P-1.7's correctness gate asks for: `generate` must now report no further changes.
+--
+-- Emptying the SQL is correct for a fresh database too: migrations 0000-0082 already create every one of these
+-- tables, so re-creating them here would be redundant at best.
+--
+-- What this does NOT do is restore the 54 missing historical snapshots. Point-in-time diffing against any
+-- migration before 0083 is still not possible. That is acceptable — the chain is only ever consumed
+-- forward — but it means this file is the floor: do not delete it, and do not hand-edit the snapshot beside it.
+
+SELECT 1;

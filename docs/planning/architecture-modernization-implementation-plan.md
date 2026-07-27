@@ -142,6 +142,21 @@ produces an outage.** Every work item below is written to obey them.
   `snapshots == journal entries`; full itest sweep green (a renamed migration changes
   `migrationSetHash()` so CI builds a fresh template DB — expect one slow first run).
   **rollback:** restore `meta/` from git.
+  **REBASELINED — the correctness gate now passes.** Running `generate` on the broken chain proved the danger
+  rather than theorising it: with 54 missing links it diffed against a 0029-era snapshot and emitted 722 lines
+  of `CREATE TABLE` for tables that have existed for dozens of migrations, silently and with no indication
+  anything was wrong. Worse, it would not have failed loudly either — `applyMigrations` tolerates the DDL
+  "already exists" SQLSTATEs by design, so it would have "succeeded" doing nothing and been recorded applied.
+  The fix keeps the SNAPSHOT `generate` produced (correct — derived from the current schema files, not from the
+  broken chain) and its journal entry, and empties the SQL to a documented no-op. That gives drizzle-kit an
+  accurate starting point for every future diff. **`bun run --filter /db generate` now reports "No
+  schema changes, nothing to migrate"**, which is exactly the gate this item specifies. Emptying the SQL is
+  correct on a fresh database too: 0000-0082 already create every one of those tables.
+  **What it does NOT do:** restore the 54 missing HISTORICAL snapshots, so point-in-time diffing against any
+  migration before 0083 is still impossible. Acceptable — the chain is only ever consumed forward — and the
+  ratchet test keeps the gap from widening again.
+  **Still open:** the duplicate `0053_*` filename (cosmetic; a rename plus a journal `tag` edit, never a
+  content change) and the CI assertion, which the ratchet test now covers in substance.
 
 ---
 
