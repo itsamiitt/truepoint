@@ -968,11 +968,23 @@ process up to Caddy.
   slate at a TENANT boundary for a faster switch is a security-shaped decision, not a performance one, and it
   needs an audit of every stateful surface first. Recorded rather than half-done.
 
-- [ ] **C-3.9 · Virtualize `DataTable`.** `packages/ui/src/components/DataTable.tsx:3,105-118` renders
+- [x] **C-3.9 · Virtualize `DataTable`.** `packages/ui/src/components/DataTable.tsx:3,105-118` renders
   **all** accumulated rows (its own comment admits it) while the search/list hooks append 50–100 per "Load
   more", and the client sort re-sorts the whole accumulation on every header click.
   `@tanstack/react-virtual` is absent from the lockfile. Violates the `truepoint-design` hard rule
   ("no un-virtualized large lists"). One component fixes every large surface.
+  **DONE.** `@tanstack/react-virtual` added to `@leadwolf/ui`; rows are windowed above 100.
+  **A WINDOW virtualizer, not a container one**, because `.tp-ui-table-wrap` has `overflow: auto` but no
+  bounded height — these tables grow the PAGE, and the page is what scrolls. A container virtualizer would
+  have required giving the wrapper a fixed height, which changes the layout of every surface using it. The
+  visual result is unchanged; only the DOM row count is.
+  **Below the threshold nothing changes**, so the many small tables (settings, members, logs) render exactly
+  as before and pay no windowing overhead for a list that fits on a screen.
+  **The spacer arithmetic is extracted to a pure `virtualWindow.ts` with tests**, because that is the part
+  that fails silently: a wrong `scrollMargin` subtraction offsets every row and a wrong total makes the
+  scrollbar misreport the page length — neither throws, neither shows in a typecheck. `packages/ui` has no
+  DOM test setup, so the render path is covered by the Next build (which also proves the window virtualizer
+  is SSR-safe).
 
 - [ ] **C-3.10 · Server-side report aggregates.** `apps/web/src/features/reports/api.ts:31-53` fetches 200
   raw contacts + 200 reveals to the browser and rolls up client-side — so the numbers are **silently wrong
