@@ -167,6 +167,11 @@ import {
   makeProcessOutreach,
 } from "./queues/outreach.ts";
 import {
+  PARTITION_SWEEP_QUEUE,
+  type PartitionSweepJobData,
+  makeProcessPartitionSweep,
+} from "./queues/partitionSweep.ts";
+import {
   PROJECTION_SWEEP_QUEUE,
   type ProjectionSweepJobData,
   makeProcessProjectionSweep,
@@ -319,6 +324,11 @@ export const dataRetentionSweepQueue = new Queue<DataRetentionSweepJobData>(
   DATA_RETENTION_SWEEP_QUEUE,
   { connection },
 );
+// E-6.4: the daily partition-maintenance sweep. Registered before any table is partitioned — it finds no
+// partitioned tables and does nothing — so a conversion migration is the only change needed later.
+export const partitionSweepQueue = new Queue<PartitionSweepJobData>(PARTITION_SWEEP_QUEUE, {
+  connection,
+});
 // M12 P1: the proactive OAuth token-refresh sweep (leader-locked, every 2 min) — refreshes tokens nearing
 // expiry off the send path so a send never pays the refresh latency.
 export const tokenRefreshQueue = new Queue<TokenRefreshJobData>(EMAIL_TOKEN_REFRESH_QUEUE, {
@@ -376,6 +386,7 @@ export async function collectWorkerMetricsText(): Promise<string> {
     { name: REVERIFICATION_SWEEP_QUEUE, queue: reverificationSweepQueue },
     { name: DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE, queue: dataQualitySnapshotSweepQueue },
     { name: DATA_RETENTION_SWEEP_QUEUE, queue: dataRetentionSweepQueue },
+    { name: PARTITION_SWEEP_QUEUE, queue: partitionSweepQueue },
     { name: EMAIL_TOKEN_REFRESH_QUEUE, queue: tokenRefreshQueue },
   ];
   // The UNIFIED import queue + its DLQ are constructed conditionally (gated) inside startWorkers; scrape their
@@ -564,6 +575,18 @@ export async function scheduleDataRetentionSweep(): Promise<void> {
     "sweep",
     {},
     { repeat: { every: 24 * 60 * 60_000 }, jobId: "data-retention-sweep" },
+  );
+}
+
+/** Register the daily partition-maintenance sweep (E-6.4). Stable jobId → exactly one repeatable.
+ *  Safe to schedule unconditionally: with no partitioned tables it finds nothing to do. It is scheduled
+ *  BEFORE any conversion on purpose — a partitioned table whose next month does not exist stops accepting
+ *  writes, so the maintenance has to be running by the time the first conversion lands, not after. */
+export async function schedulePartitionSweep(): Promise<void> {
+  await partitionSweepQueue.add(
+    "sweep",
+    {},
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "partition-sweep" },
   );
 }
 
@@ -905,6 +928,16 @@ export function startWorkers(): Worker[] {
         { connection, ...SWEEP_WORKER_TUNING },
       ),
       DATA_RETENTION_SWEEP_QUEUE,
+    ),
+    // E-6.4 partition maintenance consumer: leader-locked daily; creates the next months' partitions for
+    // every partitioned table. Inert while none exist.
+    instrument(
+      new Worker<PartitionSweepJobData>(
+        PARTITION_SWEEP_QUEUE,
+        makeProcessPartitionSweep(connection),
+        { connection, ...SWEEP_WORKER_TUNING },
+      ),
+      PARTITION_SWEEP_QUEUE,
     ),
     // M12 P1: the proactive OAuth token-refresh consumer (leader-locked, every 2 min).
     instrument(
@@ -1739,6 +1772,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleDataRetentionSweep().catch((e) =>
     log.error("failed to schedule the data-retention sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void schedulePartitionSweep().catch((e) =>
+    log.error("failed to schedule the partition sweep", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );

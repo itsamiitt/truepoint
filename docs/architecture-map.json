@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1823,
-  "fileSetHash": "sha256:962e06e694777084bac800c02b17785e672e0b13631939de3793ff2e1554ede4",
+  "fileCount": 1826,
+  "fileSetHash": "sha256:6b7771107b135a51b88c869e506753158baff0fd764b989bb5b985cbf95054cd",
   "features": {
     "account-search": {
       "web": [],
@@ -2575,6 +2575,7 @@
       "packages/db/test/members.itest.ts",
       "packages/db/test/migrationSeedLengths.test.ts",
       "packages/db/test/outreach.itest.ts",
+      "packages/db/test/partitionMaintenance.itest.ts",
       "packages/db/test/partitioningFeasibility.itest.ts",
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/platformAdminReads.itest.ts",
@@ -2803,6 +2804,7 @@
     "apps/workers/src/queues/masterBackfill.test.ts",
     "apps/workers/src/queues/masterBackfill.ts",
     "apps/workers/src/queues/masterBackfillSweep.ts",
+    "apps/workers/src/queues/partitionSweep.ts",
     "apps/workers/src/queues/projectionSweep.ts",
     "apps/workers/src/queues/retentionSweep.ts",
     "apps/workers/src/queues/sequenceTick.ts",
@@ -2847,6 +2849,7 @@
     "packages/db/src/repositories/mailboxRepository.ts",
     "packages/db/src/repositories/masterGraphRepository.ts",
     "packages/db/src/repositories/oauthConnectStateRepository.ts",
+    "packages/db/src/repositories/partitionRepository.ts",
     "packages/db/src/repositories/pipelineStageRepository.ts",
     "packages/db/src/repositories/planTemplateRepository.ts",
     "packages/db/src/repositories/platformStaffRepository.ts",
