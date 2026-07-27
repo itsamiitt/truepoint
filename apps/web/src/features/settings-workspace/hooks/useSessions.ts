@@ -1,50 +1,40 @@
-// useSessions.ts — loads the workspace's active member sessions (GET /workspaces/security/sessions) with
-// loading/error + reload, plus revoke / force-reauth mutators that refresh on success. Presentation state
-// only — authorization + auditing live in the API/core layers (G-AUTH-2).
+// useSessions.ts — the workspace's active member sessions (GET /workspaces/security/sessions) plus revoke /
+// force-reauth. Presentation state only — authorization and auditing live in the API/core layers (G-AUTH-2).
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchSessions, forceReauthMember, revokeSession } from "../api";
+import { settingsWorkspaceKeys } from "../keys";
 import type { SessionsFeed } from "../types";
 
 export function useSessions() {
-  const [feed, setFeed] = useState<SessionsFeed | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const key = settingsWorkspaceKeys.sessions();
+  const query = useQuery<SessionsFeed>({ queryKey: key, queryFn: fetchSessions });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setFeed(await fetchSessions());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load sessions");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Refreshed from the SERVER after a revoke rather than dropped locally: which sessions a revoke actually
+  // ended is the server's answer, and a security surface showing a stale "still active" row is the one thing
+  // it must not do.
+  const refreshIfOk = ({ ok }: { ok: boolean }) => {
+    if (ok) void qc.invalidateQueries({ queryKey: key });
+  };
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const revoke = useMutation({ mutationFn: revokeSession, onSuccess: refreshIfOk });
+  const forceReauth = useMutation({ mutationFn: forceReauthMember, onSuccess: refreshIfOk });
 
-  const revoke = useCallback(
-    async (sessionId: string): Promise<boolean> => {
-      const { ok } = await revokeSession(sessionId);
-      if (ok) await reload();
-      return ok;
+  return {
+    feed: query.data ?? null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load sessions"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
     },
-    [reload],
-  );
-
-  const forceReauth = useCallback(
-    async (userId: string): Promise<boolean> => {
-      const { ok } = await forceReauthMember(userId);
-      if (ok) await reload();
-      return ok;
-    },
-    [reload],
-  );
-
-  return { feed, error, loading, reload, revoke, forceReauth };
+    revoke: async (sessionId: string): Promise<boolean> => (await revoke.mutateAsync(sessionId)).ok,
+    forceReauth: async (userId: string): Promise<boolean> =>
+      (await forceReauth.mutateAsync(userId)).ok,
+  };
 }

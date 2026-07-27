@@ -1,50 +1,41 @@
-// useOAuthApps.ts — loads the tenant's registered OAuth clients (GET /tenants/me/oauth-apps) with loading/error
-// + reload, plus register / remove mutators that refresh on success. Register returns the client id + one-time
-// client secret to the caller (shown once). Presentation state only; no fabricated credentials.
+// useOAuthApps.ts — the tenant's registered OAuth apps plus register / remove. Register returns the one-time
+// client credentials to the CALLER (shown once) and is deliberately never cached.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteOAuthApp, fetchOAuthApps, registerOAuthApp } from "../api";
+import { settingsDeveloperKeys } from "../keys";
 import type { OAuthAppCredentials, OAuthAppsFeed } from "../types";
 
 export function useOAuthApps() {
-  const [feed, setFeed] = useState<OAuthAppsFeed | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const key = settingsDeveloperKeys.oauthApps();
+  const query = useQuery<OAuthAppsFeed>({ queryKey: key, queryFn: fetchOAuthApps });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setFeed(await fetchOAuthApps());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load OAuth apps");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const refreshIfOk = ({ ok }: { ok: boolean }) => {
+    if (ok) void qc.invalidateQueries({ queryKey: key });
+  };
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const register = useMutation({
+    mutationFn: (vars: { name: string; redirectUris: string[] }) =>
+      registerOAuthApp(vars.name, vars.redirectUris),
+    onSuccess: refreshIfOk,
+  });
+  const remove = useMutation({ mutationFn: deleteOAuthApp, onSuccess: refreshIfOk });
 
-  const register = useCallback(
-    async (name: string, redirectUris: string[]): Promise<OAuthAppCredentials> => {
-      const result = await registerOAuthApp(name, redirectUris);
-      if (result.ok) await reload();
-      return result;
+  return {
+    feed: query.data ?? null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load OAuth apps"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
     },
-    [reload],
-  );
-
-  const remove = useCallback(
-    async (id: string): Promise<boolean> => {
-      const { ok } = await deleteOAuthApp(id);
-      if (ok) await reload();
-      return ok;
-    },
-    [reload],
-  );
-
-  return { feed, error, loading, reload, register, remove };
+    register: (name: string, redirectUris: string[]): Promise<OAuthAppCredentials> =>
+      register.mutateAsync({ name, redirectUris }),
+    remove: async (id: string): Promise<boolean> => (await remove.mutateAsync(id)).ok,
+  };
 }
