@@ -209,13 +209,28 @@ optimization because optimizing a broken path is wasted work.
   **files:** `apps/extension/manifest.config.ts:30,36`
   **why:** violates `truepoint-extension-architecture` rule 3 and is a top Web-Store rejection reason.
 
-- [ ] **X-0.5 · Stop the ~1440 refresh-token rotations/day/install.**
+- [x] **X-0.5 · Stop the ~1440 refresh-token rotations/day/install.**
   **files:** `apps/extension/src/background/index.ts:109-117`, `.../auth/index.ts:52-56`,
   `.../events/manager.ts:29-33`
   **defect:** `auth.init()` refreshes unconditionally on every SW wake and refresh **rotates**; the worker
   dies ~30 s idle and the 1-min drain alarm wakes it. Load on `apps/auth` scales with installs, not usage.
   **fix:** lazy refresh only (`ApiClient.getAccessToken` already drives it on demand); delete the eager
   `init` refresh and the duplicate `onWake` path.
+  **DONE.** `AuthModule.init()` is deleted along with both call sites — the module-level wake IIFE and the
+  duplicate in `events/manager.onWake` (the service worker re-evaluates the module on wake, so that one ran a
+  SECOND eager refresh on top of the first).
+  **Nothing was lost by deleting it:** `doRefresh` loads the stored refresh token itself, so the first request
+  that actually needs a token still gets one through `getAccessToken`.
+  **The eager credits pre-warm went too**, and not only for the round trip: without a refresh there is no
+  access token, so `getState()` would report signed_out — broadcasting that on wake would flash every open
+  surface to signed-out until the first real request refreshed. Saying nothing on wake is the correct
+  behaviour; the popup asks for state when it opens.
+  **The concern about ADR-0044 does not apply.** That ADR is SUPERSEDED by ADR-0045 (companion-window handoff)
+  — the extension holds a rotating refresh token in `storage.session` either way, and this changes only WHEN
+  it is spent, never how it is obtained or stored.
+  **Covered by `tokenStore.test.ts`**, which pins the property the deletion depends on: an empty store is
+  never `isFresh`, so the first request after a wake refreshes. If that ever answered otherwise, nothing would
+  refresh at all and requests would go out unauthenticated.
 
 - [x] **X-0.6 · Alarm re-creation resets the flush countdown.** `register()` runs at top level, so the
   1-min drain wake re-creates the 5-min `flush` alarm and **`flush` never fires** — the IDB telemetry store
