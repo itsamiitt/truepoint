@@ -39,3 +39,11 @@ packages/ui/.ds-tsconfig.json
 .ds-prospect-tsconfig.json
 # (the scratch built-package goes in packages/ui/dist/ — already covered by the dist/ rule above,
 #  and excluded from the architecture-map scan, which skips dist/ segments)
+
+# Redis snapshot artifacts — a local redis-server writes dump.rdb into the repo root. It was tracked from
+# commit 54c937a; it is data, not source, and can contain whatever the dev instance held.
+*.rdb
+
+# Dev secrets generated on first boot by start.sh (Ed25519 signing key, blind-index key, bootstrap password).
+# Generated per machine so two developers never share a signing key — never commit this.
+.dev-secrets.env

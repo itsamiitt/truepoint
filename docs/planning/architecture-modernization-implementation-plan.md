@@ -92,7 +92,7 @@ produces an outage.** Every work item below is written to obey them.
   new job fails, revert.
   **rollback:** remove the step.
 
-- [ ] **P-1.5 · Secret + artifact hygiene.**
+- [x] **P-1.5 · Secret + artifact hygiene.**
   `needs:` — · **files:** `start.sh`, `.gitignore`, delete tracked `dump.rdb`
   - Rotate the dev Ed25519 signing key; generate on first boot into a gitignored path (the in-file comment
     claims "gitignored" but `git ls-files` shows `start.sh` **is** tracked, key inline at `:22`, bootstrap
@@ -100,6 +100,18 @@ produces an outage.** Every work item below is written to obey them.
   - `git rm --cached dump.rdb` + gitignore (tracked since commit `54c937a`).
   **verify:** `git ls-files | grep -E 'dump.rdb'` empty; `bash start.sh` still boots and writes a key.
   **rollback:** n/a (do not restore secrets to VCS).
+  **shipped.** `dump.rdb` untracked (`git rm --cached`) with `*.rdb` gitignored — it was a 799-byte Redis
+  snapshot of whatever the dev instance held, tracked since 54c937a. `start.sh` no longer carries secrets: the
+  Ed25519 signing key, the blind-index HMAC key and the bootstrap admin password are GENERATED on first boot
+  into `.dev-secrets.env` (chmod 600, gitignored) and sourced. Generated with bun WebCrypto rather than
+  openssl, since bun is guaranteed present in this repo and openssl is not guaranteed on every dev host.
+  **The real fix is per-machine keys, not secrecy of a known-dev value.** Two developers previously shared one
+  signing key committed in a file whose own comment claimed it was gitignored — so a token minted on any
+  checkout verified on any other. Generation makes them per-machine.
+  **Note on history:** untracking removes these from HEAD, not from history. The dev key and bootstrap
+  password should still be treated as disclosed — they are in every existing clone and in the reflog.
+  **verify:** `git ls-files | grep dump.rdb` empty; `bash -n start.sh` clean; the generator dry-run produces a
+  valid Ed25519 PKCS8/SPKI pair and 32-char random keys.
 
 - [x] **P-1.6 · Fix `APP_ORIGINS` completeness.** Add the admin + forge origins to `.env.example` and
   `deploy/env.production.template` (today only `app.truepoint.in` is listed).
@@ -744,6 +756,21 @@ process up to Caddy.
   read-check-act, so **the whole platform's paid enrichment is serialized**, and one tenant's big import
   head-of-line-blocks every tenant's imports for up to the 15-minute deadline.
   **fix:** Redis `INCR`/Lua atomic breaker → raise concurrency → per-tenant fairness via sharded queues.
+  **PARTIALLY OBSOLETE — the premise is out of date, and the raise is still gated.** The breaker is no longer a
+  racy read-check-act: `providerCallRepository.lockDailyBudget` already takes a per-WORKSPACE advisory xact
+  lock around the check-through-record window, so concurrent enrichments cannot collectively overshoot the
+  daily cap. No Redis/Lua breaker is needed.
+  **The concurrency raise is still correctly blocked, by the OTHER precondition.** `tuning.test.ts` carries a
+  deliberate F3 tripwire whose entry gate is two-part: the atomic breaker AND the per-batch **credit lease**.
+  I raised `enrichment` to 2, the tripwire failed, and on checking, `packages/core/src/enrichment/policy.ts`
+  states hard reserve-then-spend is still owned by billing / the bulk pipeline (ADR-0029) and outstanding.
+  Without it, concurrent jobs can each clear the daily breaker and still spend a tenant past its credit
+  balance — a different overshoot from the one the lock fixed. **Reverted to 1**; the tripwire did its job and
+  crossing it is not a call to make unilaterally on a spend path.
+  **Remaining work for this item:** the per-batch credit lease (billing-owned), then the raise, then
+  per-tenant fairness. `imports: 1` is blocked on C-3.4 (the chunked pipeline), not on the breaker.
+  tuning.ts now records which half of the gate is met and which is not, so the next reader does not have to
+  re-derive it.
 
 - [x] **C-3.6 · SSE at scale.** `apps/api/src/features/events/routes.ts:21,37` opens a **dedicated IORedis
   client per connection** (10 k clients = 10 k Redis connections) and heartbeats every 15 s — longer than
