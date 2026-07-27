@@ -33,12 +33,6 @@ services:
       retries: 12
       start_period: 5s
 
-  typesense:
-    image: typesense/typesense:27.1
-    command: ["--data-dir", "/data", "--api-key", "${TYPESENSE_API_KEY:-dev}", "--enable-cors"]
-    volumes: [tsdata:/data]
-    restart: unless-stopped
-
   mailhog:
     image: mailhog/mailhog:latest
     # Web UI on 8025 (localhost only — view captured email via SSH tunnel).
@@ -238,6 +232,5 @@ services:
 
 volumes:
   redisdata:
-  tsdata:
   caddy_data:
   caddy_config:

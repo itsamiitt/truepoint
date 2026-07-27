@@ -87,8 +87,8 @@ echo "==> [1/5] Building leadwolf:latest (bun install + next build — first run
 DOCKER_BUILDKIT=1 docker build --secret id=dotenv,src="$ENV_FILE" -t leadwolf:latest .
 
 # ── 2. Local infrastructure (Postgres is external — Neon/RDS — via DATABASE_URL) ──
-echo "==> [2/4] Starting local infrastructure (redis, typesense, mailhog)…"
-"${COMPOSE[@]}" up -d redis typesense mailhog
+echo "==> [2/4] Starting local infrastructure (redis, mailhog)…"
+"${COMPOSE[@]}" up -d redis mailhog
 
 # ── 3. Migrations against DATABASE_URL (bootstrap roles/extensions → tables → RLS) ─
 # Hard 5-min backstop: the migrator now sets prepare:false + connect/lock timeouts so it can't
