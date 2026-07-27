@@ -947,10 +947,25 @@ process up to Caddy.
   Without it, concurrent jobs can each clear the daily breaker and still spend a tenant past its credit
   balance — a different overshoot from the one the lock fixed. **Reverted to 1**; the tripwire did its job and
   crossing it is not a call to make unilaterally on a spend path.
-  **Remaining work for this item:** the per-batch credit lease (billing-owned), then the raise, then
-  per-tenant fairness. `imports: 1` is blocked on C-3.4 (the chunked pipeline), not on the breaker.
-  tuning.ts now records which half of the gate is met and which is not, so the next reader does not have to
-  re-derive it.
+  **The "credit lease" precondition is MIS-SCOPED — re-checked against the tree, and it changes what is left.**
+  Building a credit lease for enrichment would be building the wrong thing:
+  - **This queue spends provider budget in MICROS, not credits.** `enrichContact` never touches the credit
+    ledger — there is no `lockBalance` / `decrement` / `insertLedger` anywhere under `core/src/enrichment`. So
+    there is no credit balance for it to overshoot, and no lease for it to take.
+  - **The lease already EXISTS and is wired.** `creditRepository.leaseForJob` / `releaseForJob` (ADR-0029) are
+    implemented — FOR UPDATE lock, subscription-first accounting, idempotent paired ledger entries — and used
+    by `revealJobRepository` for bulk REVEAL. It was never missing; it belongs to a different spend path.
+  - **The monthly cap that note pointed at guards nothing live.** `decideAutoEnrich` is a genuine
+    non-reserving pre-check, but it has NO production caller (a barrel export and one itest), so no concurrent
+    path can currently overshoot it.
+  **What actually blocks the raise:** (a) the bulk-enrichment WORKER slice — the thing that would spend
+  against a confirmed ceiling — does not exist (`confirmJob.ts` says so, and the surface is dark behind
+  `BULK_ENRICHMENT_ENABLED`); and (b) measurement. This is the one queue holding its transaction across
+  provider NETWORK I/O, so each concurrent job pins a pooled connection for seconds against the shared pool;
+  p99 provider latency and pool saturation have to be measured before a number is picked, which needs a
+  running deployment.
+  **Also still open:** per-tenant fairness via sharded queues. `imports: 1` is blocked on C-3.4 (the chunked
+  pipeline), not on the breaker. tuning.ts carries the same correction inline.
 
 - [x] **C-3.6 · SSE at scale.** `apps/api/src/features/events/routes.ts:21,37` opens a **dedicated IORedis
   client per connection** (10 k clients = 10 k Redis connections) and heartbeats every 15 s — longer than
