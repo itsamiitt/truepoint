@@ -28,7 +28,34 @@ if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
 }
 const client = postgres(env.DATABASE_URL, poolOptions);
 
+/**
+ * The Forge data plane's OWN pool (E-6.6).
+ *
+ * `withForgeTx` used to run on the pool above — the customer request path's. The Forge DAG holds transactions
+ * across provider network I/O (extraction calls Anthropic mid-transaction), so a backlog there could occupy
+ * every one of those connections and starve customer requests. There was no capacity isolation and no failure
+ * isolation between a background pipeline and the thing users are waiting on.
+ *
+ * A separate pool fixes the capacity half even when both point at the SAME database, which is the default
+ * (`FORGE_DATABASE_URL` unset). Pointing it at a different database or a replica later adds failure isolation
+ * with no further code change.
+ *
+ * This does not double connection usage in practice: postgres.js connects LAZILY, so an api process that
+ * never calls `withForgeTx` opens zero Forge connections. The budget is also deliberately smaller — Forge is
+ * throughput work behind a queue and can wait; a customer request cannot.
+ */
+const forgePoolOptions: Parameters<typeof postgres>[1] = {
+  max: env.FORGE_DB_POOL_MAX,
+  prepare: false,
+};
+if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
+  forgePoolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
+}
+const forgeClient = postgres(env.FORGE_DATABASE_URL ?? env.DATABASE_URL, forgePoolOptions);
+
 export const db = drizzle(client, { schema });
+/** Drizzle bound to the Forge pool. Same schema; only the connection budget differs. */
+const forgeDb = drizzle(forgeClient, { schema });
 export type Db = typeof db;
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
@@ -45,7 +72,9 @@ export { client as ownerClient };
 /** Drain the shared pool — graceful shutdown for apps/workers and test teardown (open sockets otherwise
  * keep the process alive). Safe to call once at the end of a process's life; not for per-request use. */
 export async function closeDb(): Promise<void> {
-  await client.end({ timeout: 5 });
+  // Both pools: the Forge one is lazy, so in a process that never touched it this is a no-op — but leaving it
+  // open would keep the process alive in exactly the tests and workers this function exists to let exit.
+  await Promise.all([client.end({ timeout: 5 }), forgeClient.end({ timeout: 5 })]);
 }
 
 /** Connectivity check for readiness probes: the cheapest statement that still proves the whole path — a free
@@ -104,7 +133,8 @@ export async function withErTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
  * `SET LOCAL ROLE` is transaction-local (RDS-Proxy/PgBouncer-safe). Promotion into master_* still uses withErTx.
  */
 export async function withForgeTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return db.transaction(async (tx) => {
+  // Runs on the FORGE pool, not the customer request pool (E-6.6) — see forgeDb above for why.
+  return forgeDb.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE leadwolf_forge`);
     return fn(tx);
   });

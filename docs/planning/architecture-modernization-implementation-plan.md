@@ -1147,6 +1147,22 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
 - [ ] **E-6.6 · Forge isolation** — `FORGE_DATABASE_URL` + its own login role and pool (today `withForgeTx`
   shares the customer request path's `max: 10` pool, so there is no capacity or failure isolation), plus a
   runtime `statement_timeout` (migrations set one; the runtime pool does not).
+  **PARTIAL — pool isolation shipped; the separate ROLE/credential did not.** `withForgeTx` now runs on its
+  own pool (`FORGE_DATABASE_URL`, optional, defaulting to the same database; `FORGE_DB_POOL_MAX`, default 5).
+  That fixes the capacity half, which is the half that bites first: the Forge DAG holds transactions across
+  provider network I/O (extraction calls Anthropic mid-transaction), so a backlog could occupy every one of
+  the customer request path.s ten connections and starve the thing users are waiting on.
+  **A separate pool against the SAME database is still real isolation** — it is a connection budget, not a
+  topology. Pointing `FORGE_DATABASE_URL` at another database or replica later adds failure isolation with no
+  further code change. It does not double connection usage either: postgres.js connects lazily, so an api
+  process that never calls `withForgeTx` opens zero Forge connections, and the Forge budget is deliberately
+  smaller because queue-backed throughput work can wait where a request cannot.
+  **`closeDb` now drains both pools** — leaving the second open would keep a worker or test process alive,
+  which is precisely what that function exists to prevent.
+  **Still open:** a distinct LOGIN role/credential for the Forge connection (today it is the same owner login,
+  with `leadwolf_forge` reached via SET LOCAL ROLE — so the isolation is capacity, not authentication), and
+  the runtime `statement_timeout`, whose knob landed in E-6.3 but stays off until the api/worker pool split
+  lets one value be correct for both.
 
 ---
 
