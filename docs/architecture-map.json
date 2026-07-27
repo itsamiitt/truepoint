@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1800,
-  "fileSetHash": "sha256:08c46cddbcdbacf37227fc621636911a14807f8fe2b48b6cd2447f9302a0c2c9",
+  "fileCount": 1801,
+  "fileSetHash": "sha256:566be6507b968c50d00db7c959bb9b715a94318b9324e5d0735b90cd2b8741ad",
   "features": {
     "account-search": {
       "web": [],
@@ -2336,6 +2336,7 @@
     ],
     "packages/config": [
       "packages/config/src/blindIndexKey.test.ts",
+      "packages/config/src/dbPooling.test.ts",
       "packages/config/src/env.ts",
       "packages/config/src/forge.ts",
       "packages/config/src/index.ts",
