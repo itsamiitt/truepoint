@@ -12,7 +12,7 @@
 "use client";
 
 import { getAccessToken, logout, silentRefresh, startLogin } from "@/lib/authClient";
-import { verifyForgeStaff } from "@/lib/forgeGate";
+import { type StaffMePayload, verifyForgeStaff } from "@/lib/forgeGate";
 import { StaffMeProvider, useStaffMe } from "@/lib/staffMe";
 import {
   AppShellFrame,
@@ -36,6 +36,9 @@ type GateState = "loading" | "redirecting" | "staff" | "forbidden" | "misrouted"
 
 export function ForgeShell({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GateState>("loading");
+  // Seeded from the gate probe so StaffMeProvider does not repeat the /bff/me read it already performed
+  // (T-2.5). Null until the gate resolves; the provider falls back to fetching if it stays null.
+  const [staffMe, setStaffMe] = useState<StaffMePayload | null>(null);
 
   async function runGate() {
     try {
@@ -50,10 +53,10 @@ export function ForgeShell({ children }: { children: ReactNode }) {
       // A 401 here means we DID hold a token but the api rejected it (expired, or an audience/JWKS mismatch).
       // Try ONE silent refresh + re-probe; only restart login if that yields a fresh token. We never re-login on
       // a still-rejected token — that would be a tight redirect loop — so we fall through to the error state.
-      if (verdict === "unauthenticated") {
+      if (verdict.result === "unauthenticated") {
         const refreshed = await silentRefresh();
         if (refreshed) verdict = await verifyForgeStaff();
-        if (verdict === "unauthenticated") {
+        if (verdict.result === "unauthenticated") {
           if (!getAccessToken()) {
             setState("redirecting");
             await startLogin();
@@ -63,18 +66,19 @@ export function ForgeShell({ children }: { children: ReactNode }) {
           return;
         }
       }
-      if (verdict === "forbidden") {
+      if (verdict.result === "forbidden") {
         setState("forbidden");
         return;
       }
-      if (verdict === "misrouted") {
+      if (verdict.result === "misrouted") {
         setState("misrouted");
         return;
       }
-      if (verdict !== "staff") {
+      if (verdict.result !== "staff") {
         setState("error");
         return;
       }
+      if (verdict.me) setStaffMe(verdict.me);
       setState("staff");
     } catch (err: unknown) {
       console.warn(`[forge] gate failed: ${err instanceof Error ? err.message : "unknown"}`);
@@ -139,7 +143,7 @@ export function ForgeShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <StaffMeProvider>
+    <StaffMeProvider initial={staffMe}>
       <AppShellFrame
         renderSidebar={({ isOpen, close }) => (
           <Sidebar

@@ -709,12 +709,22 @@ process up to Caddy.
   **guardrail:** G4 — new package, barrel export, browser-only.
   **needs:** T-2.2 (migrate all three apps together, or forge is stranded on a deleted contract).
 
-- [ ] **T-2.4 · Admin gate: unblock first paint.** `apps/admin/src/components/shell/AdminShell.tsx:43-60`
+- [x] **T-2.4 · Admin gate: unblock first paint.** (shipped: a new "verifying" state renders the chrome as soon
+  as stage 1 holds a token, with the staff check running underneath. Safe because the verdict was never the
+  security boundary — the api `/admin/*` surface re-checks the signed `pa` claim on every request and 403s a
+  non-staff caller regardless of what the component shows; the cost is a brief chrome flash for the rare
+  non-staff visitor, the gain is that every staff visitor stops waiting on a serial probe and the page.s own
+  fetches overlap it.) **superseded description:** `apps/admin/src/components/shell/AdminShell.tsx:43-60`
   runs its two stages **serially** (silentRefresh → `verifyPlatformAdmin`) holding the console blank —
   strictly worse than web's already-fixed pattern. Render chrome after stage 1; verify staff in background
   with a forbidden interstitial.
 
-- [ ] **T-2.5 · Forge console gate.** `apps/forge/src/lib/forgeGate.ts:23` + `useOverview.ts:27` — same
+- [x] **T-2.5 · Forge console gate.** (shipped: the gate now probes `/bff/me` instead of using `/bff/overview`
+  as a status-code probe with the BODY DISCARDED, and RETURNS the payload so `StaffMeProvider` is seeded rather
+  than re-fetching the same endpoint. Cold load drops from refresh → overview-probe → /bff/me → overview to
+  refresh → /bff/me → overview: three uncached `platform_staff` lookups become two, and nothing is fetched
+  twice. Classification is on the `data:read` capability — the exact thing the old overview probe tested — so a
+  non-staff user and a zero-capability staff account still both resolve to `forbidden`.) **superseded:** `apps/forge/src/lib/forgeGate.ts:23` + `useOverview.ts:27` — same
   client-only pattern, and `/bff/overview` is fetched **twice** (cold `/overview` = 4 serial round-trips:
   refresh → overview-as-probe with the body discarded → `/bff/me` → overview again) with **3 uncached
   `platform_staff` lookups**. Use the single `/bff/me` (it already returns role + capabilities + email) and

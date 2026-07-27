@@ -33,7 +33,15 @@ import { type ReactNode, useEffect, useState } from "react";
 import { ImpersonationBanner } from "../ImpersonationBanner";
 import { DESTINATIONS, sectionTitleFor } from "./navConfig";
 
-type GateState = "loading" | "redirecting" | "staff" | "forbidden" | "error";
+// "verifying" is the T-2.4 addition: a token is held and the chrome is ALREADY RENDERED while the staff check
+// runs. Previously the two stages ran strictly serially — silentRefresh, then verifyPlatformAdmin — with the
+// console blank for the sum of both round-trips, which was worse than apps/web.s already-fixed pattern.
+//
+// Rendering before the staff verdict is safe because the verdict was never the security boundary: the api
+// `/admin/*` surface re-checks the signed `pa` claim on every request and 403s a non-staff caller regardless
+// of what this component shows. The cost is a brief chrome flash for the rare non-staff visitor; the gain is
+// that every staff visitor stops waiting on a serial probe, and the page.s own data fetches overlap it.
+type GateState = "loading" | "redirecting" | "verifying" | "staff" | "forbidden" | "error";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GateState>("loading");
@@ -47,6 +55,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
         await startLogin();
         return;
       }
+      // Stage 1 done — a token is held. Show the console NOW and verify staff underneath it.
+      setState("verifying");
       // Authoritative staff check: the api `/admin/*` guard (signed `pa` claim).
       let verdict = await verifyPlatformAdmin();
       // A 401 here means we DID hold a token but the api rejected it (expired, or an audience/JWKS
@@ -132,7 +142,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     );
   }
 
-  if (state !== "staff") {
+  if (state !== "staff" && state !== "verifying") {
     return (
       <div className="tp-center-screen">
         <div className="tp-boot">

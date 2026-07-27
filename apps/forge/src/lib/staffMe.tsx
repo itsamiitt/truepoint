@@ -6,6 +6,7 @@
 "use client";
 
 import { fetchWithAuth } from "@/lib/authClient";
+import type { StaffMePayload } from "@/lib/forgeGate";
 import { API_BASE } from "@/lib/publicConfig";
 import type { StaffCapability } from "@leadwolf/types";
 import { type ReactNode, createContext, useContext, useEffect, useState } from "react";
@@ -24,15 +25,26 @@ const StaffMeContext = createContext<StaffMeState>({
   loaded: false,
 });
 
-export function StaffMeProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<StaffMeState>({
-    staffRole: null,
-    capabilities: [],
-    email: null,
-    loaded: false,
-  });
+/** `initial` is the payload the shell.s gate probe already fetched from `/bff/me` (T-2.5). When present the
+ *  provider adopts it and performs NO request: the gate and this provider were both reading the same endpoint
+ *  on every cold load, so one of the two round-trips — and one uncached `platform_staff` lookup — was pure
+ *  duplication. It stays optional so any other mount point still works standalone. */
+export function StaffMeProvider({
+  children,
+  initial = null,
+}: { children: ReactNode; initial?: StaffMePayload | null }) {
+  const [state, setState] = useState<StaffMeState>(() =>
+    initial
+      ? { ...initial, loaded: true }
+      : { staffRole: null, capabilities: [], email: null, loaded: false },
+  );
 
   useEffect(() => {
+    // Seeded by the gate — nothing to fetch. Adopt any later seed too (the gate resolves after first paint).
+    if (initial) {
+      setState({ ...initial, loaded: true });
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -61,7 +73,7 @@ export function StaffMeProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initial]);
 
   return <StaffMeContext.Provider value={state}>{children}</StaffMeContext.Provider>;
 }
