@@ -9,6 +9,7 @@ import { app } from "./app.ts";
 import { runBootWarmup } from "./instrumentation.ts";
 import { installRoleCacheInvalidator } from "./lib/roleCache.ts";
 import { beginDraining } from "./lifecycle.ts";
+import { startTelemetry, stopTelemetry } from "./telemetry.ts";
 
 // Fire-and-forget boot warmup (perf root cause #8): fill the DB pool + prefetch JWKS so the first real user
 // after a deploy/restart doesn't pay those handshakes. Not awaited — listening must start immediately — and
@@ -32,6 +33,10 @@ const DRAIN_TIMEOUT_MS = 15_000;
 // Registers the role-cache invalidator into @leadwolf/db's seam so a membership mutation clears this
 // process's cached role. A no-op unless ROLE_CACHE_TTL_MS is set — and it must run BEFORE the first request,
 // or a mutation early in the process's life would leave a stale entry behind.
+// Before anything that might emit a span. A provider registered after the first traced call would silently
+// drop it, and boot is exactly where the interesting slow paths are.
+startTelemetry();
+
 installRoleCacheInvalidator();
 
 const server = Bun.serve({
@@ -54,6 +59,9 @@ async function shutdown(signal: string): Promise<void> {
   ]);
   if (!drained) console.error(`api: drain timed out after ${DRAIN_TIMEOUT_MS}ms, closing anyway`);
   await closeDb().catch(() => {});
+  // Flush pending spans LAST: the batch still in memory at this point covers the drain itself, which is
+  // exactly the window worth having a trace for when a shutdown goes wrong.
+  await stopTelemetry();
   console.info("api: drained, exiting");
   process.exit(0);
 }

@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1837,
-  "fileSetHash": "sha256:57b8663f1c979f355b604c38a41d3b53a4749c9bc2353498170f98d2dfd987fc",
+  "fileCount": 1841,
+  "fileSetHash": "sha256:a7a03b965005bc1d741267f56841d7558c7f35cecdcf111de7fda241b083be6d",
   "features": {
     "account-search": {
       "web": [],
@@ -2012,7 +2012,9 @@
       "apps/api/src/metricsRoute.test.ts",
       "apps/api/src/readiness.test.ts",
       "apps/api/src/readiness.ts",
-      "apps/api/src/server.ts"
+      "apps/api/src/server.ts",
+      "apps/api/src/telemetry.test.ts",
+      "apps/api/src/telemetry.ts"
     ],
     "apps/api/lib": [
       "apps/api/src/lib/csvDownload.ts",
@@ -2440,6 +2442,8 @@
       "packages/config/src/managedOrigins.ts",
       "packages/config/src/originAllowlist.test.ts",
       "packages/config/src/originConsistency.test.ts",
+      "packages/config/src/tracing.test.ts",
+      "packages/config/src/tracing.ts",
       "packages/config/src/webauthnConfig.test.ts",
       "packages/config/src/workerSurface.test.ts"
     ],
