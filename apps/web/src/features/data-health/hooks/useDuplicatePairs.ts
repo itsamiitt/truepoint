@@ -1,52 +1,58 @@
-// useDuplicatePairs.ts — loads the workspace's auto-flagged duplicate contact pairs (GET /contacts/duplicates) with
-// loading/error + reload, plus an `unmark` action ("this is not a duplicate") that clears the flag then drops the
-// row locally. Mirrors useReverificationRuns (useState + useEffect + useCallback; no TanStack Query in apps/web).
+// useDuplicatePairs.ts — the workspace's auto-flagged duplicate contact pairs (GET /contacts/duplicates), plus
+// the two ways a pair leaves the queue: `unmark` ("this is not a duplicate", which clears the flag server-side)
+// and `remove` (the merge verb already tombstoned the loser, so this is a local drop with no network).
+//
+// Both drop the row by patching the cache rather than a private useState array, so the merge drawer and the
+// queue cannot disagree about what is still pending review.
 "use client";
 
 import type { DuplicatePairView } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { fetchDuplicatePairs, unmarkDuplicate } from "../api";
+import { duplicateKeys } from "../keys";
 
 export function useDuplicatePairs() {
-  const [pairs, setPairs] = useState<DuplicatePairView[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [unmarking, setUnmarking] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const key = duplicateKeys.pairs();
+  const query = useQuery<DuplicatePairView[]>({ queryKey: key, queryFn: fetchDuplicatePairs });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setPairs(await fetchDuplicatePairs());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load your duplicate contacts");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const drop = useCallback(
+    (duplicateId: string) => {
+      qc.setQueryData<DuplicatePairView[]>(key, (rows) =>
+        rows?.filter((p) => p.duplicateId !== duplicateId),
+      );
+    },
+    [qc, key],
+  );
 
-  const unmark = useCallback(async (contactId: string) => {
-    setUnmarking(contactId);
-    try {
-      await unmarkDuplicate(contactId);
-      // The row is no longer a duplicate — drop it locally (the server is now authoritative on a reload).
-      setPairs((cur) => (cur ? cur.filter((p) => p.duplicateId !== contactId) : cur));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to update this contact");
-    } finally {
-      setUnmarking(null);
-    }
-  }, []);
+  const unmark = useMutation({
+    mutationFn: (contactId: string) => unmarkDuplicate(contactId),
+    // Dropped only on success — a failed unmark must leave the pair in the queue, or the row disappears while
+    // the server still considers it a duplicate.
+    onSuccess: (_result, contactId) => drop(contactId),
+  });
 
-  // Drop a pair the merge verb resolved (the loser is tombstoned server-side) — the row leaves the visible queue;
-  // the server stays authoritative on the next reload. No network here: the merge mutation already committed.
-  const remove = useCallback((duplicateId: string) => {
-    setPairs((cur) => (cur ? cur.filter((p) => p.duplicateId !== duplicateId) : cur));
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { pairs, error, loading, unmarking, reload, unmark, remove };
+  return {
+    pairs: query.data ?? null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load your duplicate contacts"
+      : unmark.error
+        ? unmark.error instanceof Error
+          ? unmark.error.message
+          : "Failed to update this contact"
+        : null,
+    loading: query.isPending,
+    unmarking: unmark.isPending ? (unmark.variables ?? null) : null,
+    reload: () => {
+      void query.refetch();
+    },
+    unmark: async (contactId: string) => {
+      // The queue tolerates a failed unmark (the row stays); swallow so the caller does not have to.
+      await unmark.mutateAsync(contactId).catch(() => undefined);
+    },
+    remove: drop,
+  };
 }

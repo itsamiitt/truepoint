@@ -9,4 +9,9 @@ export const sharedKeys = {
   creditBalance: () => ["credits", "balance"] as const,
   /** The top-bar bell's feed (`GET /notifications`). */
   notifications: () => ["notifications", "list"] as const,
+  /** The per-workspace Data Health rollup (`GET /home/data-quality`) — the Home card and the Data Health
+   *  page read the SAME endpoint, so they share one entry rather than each fetching it. */
+  dataQuality: () => ["data-quality", "rollup"] as const,
+  /** The Data Health trend series (`GET /home/data-quality/history`), read by the same two surfaces. */
+  dataQualityTrend: () => ["data-quality", "history"] as const,
 };

@@ -3,14 +3,14 @@
 // separate endpoint — but now a real cache entry, so two cards mounting it share one request instead of two.
 "use client";
 
+import { sharedKeys } from "@/lib/queryKeys";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDataQuality } from "../api";
-import { homeKeys } from "../keys";
 import type { WorkspaceDataQuality } from "../types";
 
 export function useDataQuality() {
   const query = useQuery<WorkspaceDataQuality>({
-    queryKey: homeKeys.dataQuality(),
+    queryKey: sharedKeys.dataQuality(),
     queryFn: fetchDataQuality,
   });
 

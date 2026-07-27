@@ -1,12 +1,16 @@
-// useEnrichmentJobs.ts — loads the workspace's enrichment jobs (GET /enrichment/jobs) with loading/error state
-// and live polling: while ANY visible job is still in flight (not completed/failed/cancelled), it re-fetches on
-// a fixed interval so status/progress/counts update without a manual refresh (31 §8 "poll now; SSE on M12").
-// Polling pauses once every job is terminal and resumes if a fresh job appears on a manual reload. Presentation
-// state only — the typed fetch lives in api.ts and the shape comes from @leadwolf/types.
+// useEnrichmentJobs.ts — the workspace's enrichment jobs (GET /enrichment/jobs), polled while ANY visible job
+// is still in flight so status/progress/counts update without a manual refresh (31 §8 "poll now; SSE on M12").
+// Polling stops once every job is terminal and resumes when a fresh job appears.
+//
+// `refetchInterval` reads the current data to decide whether to schedule the next tick, which is exactly the
+// condition the hand-rolled timer expressed — minus the two things it got wrong: it kept polling a hidden tab,
+// and a reload racing a pending tick needed explicit cancellation to stop the slow tick from reverting to
+// stale rows. RQ will not overlap a fetch with itself.
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchEnrichmentJobs } from "../api";
+import { enrichmentJobKeys } from "../keys";
 import { type EnrichmentJobSummary, TERMINAL_STATUSES } from "../types";
 
 /** Poll cadence while a job is in flight (ms). Conservative — these jobs run for minutes, not seconds. */
@@ -20,55 +24,27 @@ function anyInFlight(jobs: EnrichmentJobSummary[]): boolean {
 }
 
 export function useEnrichmentJobs() {
-  const [jobs, setJobs] = useState<EnrichmentJobSummary[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loaded, setLoaded] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const query = useQuery<EnrichmentJobSummary[]>({
+    queryKey: enrichmentJobKeys.list(),
+    queryFn: fetchEnrichmentJobs,
+    refetchInterval: (q) => (anyInFlight(q.state.data ?? []) ? POLL_INTERVAL_MS : false),
+  });
 
-  // A polling tick: refetch WITHOUT toggling the page-level loading spinner (the table just updates in place).
-  const poll = useCallback(async () => {
-    try {
-      const next = await fetchEnrichmentJobs();
-      setJobs(next);
-      setError(null);
-    } catch (e) {
-      // A transient poll failure shouldn't blow away the table — surface it but keep the last-good rows.
-      setError(e instanceof Error ? e.message : "Failed to refresh your enrichment jobs");
-    }
-  }, []);
+  const jobs = query.data ?? [];
 
-  const reload = useCallback(async () => {
-    // Cancel any pending poll so a slow in-flight tick can't land AFTER this reload and revert to stale rows.
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      setJobs(await fetchEnrichmentJobs());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load your enrichment jobs");
-    } finally {
-      setLoading(false);
-      setLoaded(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  // Schedule the next poll only while a job is in flight; clean up on unmount / when jobs settle.
-  useEffect(() => {
-    if (!loaded || !anyInFlight(jobs)) return;
-    timer.current = setTimeout(() => void poll(), POLL_INTERVAL_MS);
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-      timer.current = null;
-    };
-  }, [jobs, loaded, poll]);
-
-  return { jobs, error, loading, reload, polling: loaded && anyInFlight(jobs) };
+  return {
+    jobs,
+    // A transient poll failure must not blow away the table: RQ keeps the last good data alongside the error,
+    // so both are surfaced and the rows stay put.
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load your enrichment jobs"
+      : null,
+    loading: query.isPending,
+    reload: async () => {
+      await query.refetch();
+    },
+    polling: !query.isPending && anyInFlight(jobs),
+  };
 }

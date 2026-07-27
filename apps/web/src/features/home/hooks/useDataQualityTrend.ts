@@ -3,14 +3,14 @@
 // independently of the shared summary because it is a separate endpoint.
 "use client";
 
+import { sharedKeys } from "@/lib/queryKeys";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDataQualityHistory } from "../api";
-import { homeKeys } from "../keys";
 import type { DataQualityTrendPoint } from "../types";
 
 export function useDataQualityTrend() {
   const query = useQuery<DataQualityTrendPoint[]>({
-    queryKey: homeKeys.dataQualityTrend(),
+    queryKey: sharedKeys.dataQualityTrend(),
     queryFn: fetchDataQualityHistory,
   });
 
