@@ -1174,7 +1174,16 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   the owner. CI also had to be taught to set DATABASE_APP_ROLE_PASSWORD, or the path would have shipped
   untested — which surfaced a latent bug: the workflow declared that key TWICE and the winning value did not
   match the password `applyMigrations` creates the role with.
-  **Still open:** `prepare` gated on `DB_POOLED`, and replica routing.
+  **`DB_POOLED` shipped.** `prepare` is now gated on it across all three runtime pools, defaulting to POOLED —
+  i.e. prepared statements OFF, exactly what the file hardcoded before. The asymmetry is the point: under a
+  transaction-pooling proxy a connection changes hands between statements, so a statement prepared on one
+  backend is missing on the next and the failure is an intermittent "prepared statement does not exist" UNDER
+  LOAD — not at boot, not in a smoke test, and never on a developer.s direct connection. Assuming pooled costs
+  a re-plan per query; assuming direct costs correctness. Opt-out is explicit-"false"-only, so a hand-edited
+  `DB_POOLED=0` or `False` keeps the safe behaviour instead of silently enabling prepared statements —
+  pinned by `dbPooling.test.ts`. (`applyMigrations` keeps its own hardcoded `prepare: false`; the migrator
+  needs it regardless of how the runtime is deployed.)
+  **Still open:** replica routing for list/dashboard reads — which needs a replica to route to.
 - [ ] **E-6.4 · Partition the append-heavy tables** — `activities`, `email_events`, `platform_audit_log`,
   `provider_calls`, `source_imports`, `credit_ledger` (zero `PARTITION BY` in the repo today). Monthly range
   partitions; the partition key is already in the hot predicates. Gives retention real detach-and-archive

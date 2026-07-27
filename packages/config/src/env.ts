@@ -133,6 +133,22 @@ export const appEnvSchema = z
     // wait. Customer requests cannot. Sizing it low is how "isolation" stays a budget rather than a doubling
     // of total connections against the same server.
     FORGE_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
+    // Is the runtime connection behind a TRANSACTION-pooling proxy (RDS Proxy, PgBouncer, Neon's pooled
+    // endpoint)? This decides `prepare` (E-6.3).
+    //
+    // DEFAULTS TO TRUE, and the asymmetry is the whole point. Under transaction pooling a connection is handed
+    // to a different client between statements, so a prepared statement named on one backend is not there on
+    // the next — the failure is intermittent "prepared statement does not exist" under load, which is a
+    // miserable thing to diagnose. Assuming pooled is therefore the safe default: it costs a re-plan per
+    // query, whereas assuming direct costs correctness on a pooled deployment.
+    //
+    // Set to "false" ONLY for a genuinely direct connection (a session-pooled endpoint, or Postgres itself).
+    // Explicit-"false"-only, so a typo or an empty value keeps the safe behaviour rather than silently
+    // enabling prepared statements.
+    DB_POOLED: z
+      .string()
+      .optional()
+      .transform((v) => v !== "false"),
     REDIS_URL: z.string().url(),
 
     BLIND_INDEX_KEY: z.string().min(8),

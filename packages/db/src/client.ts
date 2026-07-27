@@ -9,7 +9,12 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema/index.ts";
 
-// `prepare: false` is required for transaction-pooling proxies (RDS Proxy / PgBouncer).
+// `prepare` is gated on DB_POOLED (E-6.3), defaulting to POOLED — i.e. prepared statements OFF, which is what
+// this file has always hardcoded. Under a transaction-pooling proxy (RDS Proxy / PgBouncer / Neon pooled) a
+// connection changes hands between statements, so a statement prepared on one backend is missing on the next
+// and the failure is an intermittent "prepared statement does not exist" under load. Assuming pooled costs a
+// re-plan per query; assuming direct costs correctness — so the default assumes pooled, and a genuinely direct
+// deployment opts in by setting DB_POOLED=false.
 //
 // Pool size and statement timeout come from config rather than being baked in (E-6.3). The size was hardcoded
 // at 10, which is a DEPLOY-shaped decision living in source: the right number depends on the host's connection
@@ -22,7 +27,9 @@ import * as schema from "./schema/index.ts";
 // statement profiles — a request-path query running 30s is pathological, while the daily data-quality sweep's
 // jsonb scans over a large tenant can legitimately run for minutes. One value cannot bound the first without
 // killing the second; that needs the per-surface pool split E-6.3/E-6.6 describe.
-const poolOptions: Parameters<typeof postgres>[1] = { max: env.DB_POOL_MAX, prepare: false };
+const PREPARE = !env.DB_POOLED;
+
+const poolOptions: Parameters<typeof postgres>[1] = { max: env.DB_POOL_MAX, prepare: PREPARE };
 if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
   poolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
 }
@@ -46,7 +53,7 @@ const client = postgres(env.DATABASE_URL, poolOptions);
  */
 const forgePoolOptions: Parameters<typeof postgres>[1] = {
   max: env.FORGE_DB_POOL_MAX,
-  prepare: false,
+  prepare: PREPARE,
 };
 if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
   forgePoolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
@@ -88,7 +95,7 @@ function appConnectionUrl(): string {
   }
 }
 
-const appPoolOptions: Parameters<typeof postgres>[1] = { max: env.DB_POOL_MAX, prepare: false };
+const appPoolOptions: Parameters<typeof postgres>[1] = { max: env.DB_POOL_MAX, prepare: PREPARE };
 if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
   appPoolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
 }
@@ -104,7 +111,7 @@ export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * The raw OWNER (RLS-BYPASSING) postgres.js connection — the SAME base connection `db` wraps (so it inherits
- * `prepare: false`, RDS-Proxy/PgBouncer-safe). Exported ONLY for `importStagingRepository`, which drives the
+ * its DB_POOLED-gated `prepare` setting). Exported ONLY for `importStagingRepository`, which drives the
  * per-job UNLOGGED, NON-RLS staging table: Postgres forbids COPY on an RLS table (15-bulk-import-design §1),
  * so the COPY fast-load + the staging DDL/dedup/read run on this owner connection. NEVER use it for
  * tenant-scoped data — that MUST go through `withTenantTx` (drops to leadwolf_app, RLS enforced). The only
