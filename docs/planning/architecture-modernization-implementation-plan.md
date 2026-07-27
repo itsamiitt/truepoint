@@ -868,6 +868,25 @@ process up to Caddy.
   raw contacts + 200 reveals to the browser and rolls up client-side — so the numbers are **silently wrong
   past 200 rows** while being presented as totals. A naive SQL rollup endpoint suffices before ClickHouse
   (ADR-0010 puts the warehouse post-MVP).
+  **NOT done — attempted, then reverted, and the premise above is wrong: a naive rollup endpoint does NOT
+  suffice.** The server half was built and typechecked clean — a `reportsRepository` with SQL rollups
+  (`funnelByOutreachStatus`, `creditsByDay`, `creditsByType`), a `reportsSummarySchema` contract, and
+  `GET /api/v1/reports/summary`. Wiring the client then showed the contract was wrong, so it was reverted
+  rather than landed as an endpoint with no consumer.
+  **Why it does not suffice:** `useReports` applies TWO interactive filters before every rollup — a trailing
+  DATE RANGE and a MEMBER filter — and derives the member dropdown options from the loaded rows. A summary
+  endpoint ignoring both cannot serve the surface. There is also a `rollupTeam` view (per-member
+  revealed/credits/engaged) needing a GROUP BY owner that those three aggregates do not cover.
+  **Two semantic decisions the real fix must make**, neither of which is an implementer's to take alone
+  because both change what users see: (1) day buckets are currently LOCAL to the viewer and no server
+  aggregate can reproduce that — UTC days would match the rest of the platform (`capturesToday`,
+  `startOfUtcDay`) but shift every chart for non-UTC users; (2) the member dropdown currently lists only
+  members present in the loaded 200 rows, so a correct server version starts listing members the old one
+  silently omitted.
+  **Correct shape for whoever picks it up:** `GET /reports/summary?range=&member=` returning funnel +
+  credit-day + credit-type + team buckets AND the member options, with the contacts/data-health half reading
+  the already-memoised `dataQualitySummary` (C-3.2) rather than re-deriving from a page. Until then the
+  displayed numbers stay wrong above 200 rows — a correctness bug, not a performance one.
 
 - [x] **C-3.11 · Column projections on masked surfaces.** `contactRepository.ts:702,728,1085` use bare
   `.select()`, pulling AES-GCM `email_enc`/`phone_enc` bytea + `custom_fields` + `field_provenance` jsonb —
