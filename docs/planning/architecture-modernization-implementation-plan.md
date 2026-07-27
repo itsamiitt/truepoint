@@ -537,7 +537,7 @@ optimization because optimizing a broken path is wasted work.
   **verify:** `EXPLAIN` shows index scans for the default list query; itest sweep (new migration ⇒ fresh CI
   template DB, expect one slow run); `bun run db:migrate` twice (idempotence).
 
-- [ ] **L-1.5 · Put `role` in the access-token claims.** Today every `requireRole`-guarded request runs an
+- [x] **L-1.5 (built, shipped OFF) · Put `role` in the access-token claims.** Today every `requireRole`-guarded request runs an
   **extra full `withTenantTx`** (~5 RTTs: BEGIN + SET ROLE + set_config + SELECT + COMMIT) purely to read the
   caller's role, before the handler opens its own transaction — and on the Home path that stacks with
   `buildJobViewer` for **3 sequential transaction groups per request**.
@@ -599,9 +599,25 @@ optimization because optimizing a broken path is wasted work.
   decides correctness: `updateMemberRoleInTx` / `removeMemberInTx` run inside the CALLER's transaction, so
   invalidating there can be repopulated by a concurrent read before the commit lands — the invalidation has to
   fire after commit, at the handful of call sites that own the transaction.
-  **Deliberately not built in the same pass as the rest of this plan.** This is the authorization path; a bug
-  in it is a window where a demoted user keeps elevated access, which is the one failure mode here that is
-  worse than the latency it fixes.
+  **BUILT, and shipped OFF.** `ROLE_CACHE_TTL_MS` defaults to 0 — today's exact behaviour, a database read on
+  every guarded request. Enabling it is an operator decision, for the reason above: the one path where
+  invalidation would not be immediate is a failed DELETE while Redis still serves reads, and that trade is not
+  a default to pick on someone's behalf.
+  - **`apps/api/src/lib/roleCache.ts`** — read-through, fail-open to the database (safe here in a way it is
+    not for the revocation deny-list: the fallback IS the authoritative path). A null role is deliberately not
+    cached, so a freshly invited member is never locked out for a TTL.
+  - **`packages/db/src/roleCache.ts`** — a settable invalidator defaulting to a no-op. The implementation is
+    INJECTED by apps/api at boot rather than imported, so the workers and the auth app do not acquire a Redis
+    client by touching the data layer. Same shape as forge-worker's budget store.
+  - **Invalidation fires AFTER the mutating transaction commits** (`packages/core/src/auth/members.ts`), not
+    inside the `*InTx` helpers — clearing the key mid-transaction lets a concurrent request re-populate it from
+    the pre-commit state. `members.itest.ts` pins the ordering by reading the row from inside the invalidator:
+    it must see the NEW role, which is only true post-commit.
+  **The role-in-claims option stays rejected**, and the item's title now overstates what was done: the role is
+  NOT in the token. It cannot be invalidated without revoking the session, i.e. logging the user out on every
+  role change.
+  **Still open:** turning it on (an operator decision + a value for the TTL), and whether the same seam should
+  serve `jobViewer`'s membership read.
   The write surface is not a single chokepoint: `apps/api/src/features/teams/routes.ts`,
   `apps/api/src/features/workspaces/memberRoutes.ts`, `packages/core/src/auth/members.ts`, the SCIM
   deprovisioning path, and tenant-level membership all mutate what `getRoleForUser` returns. Missing ONE leaves
