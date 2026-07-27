@@ -123,6 +123,26 @@ fi
 # a request arriving mid-recreate retries the dial for a few seconds and waits for the new container
 # instead of 502-ing immediately. Caddy is recreated LAST (it depends_on the apps being healthy), so the
 # proxy is the last thing to blip and its retry cushion covers the apps' recreate gaps.
+# Validate the Caddyfile BEFORE anything restarts the edge. Caddy exits on an invalid config, and it is the
+# only thing terminating TLS for every subdomain — so a typo here does not degrade one service, it takes the
+# whole site down until someone reverts and restarts. `caddy validate` parses the exact file the container
+# will mount and costs a second.
+#
+# Fails SAFE in both directions, which is the point of the `||` structure below: if the validator itself
+# cannot run (image not pulled yet, docker hiccup) the deploy CONTINUES, because refusing to deploy over a
+# tooling problem is its own outage. Only a config the validator actively rejects aborts.
+echo "==> Validating the Caddyfile…"
+caddy_check="$("${COMPOSE[@]}" run --rm --no-deps --entrypoint caddy caddy validate --config /etc/caddy/Caddyfile 2>&1)" && caddy_ok=1 || caddy_ok=0
+if [ "$caddy_ok" = "0" ]; then
+  if printf '%s' "$caddy_check" | grep -qiE "adapt|invalid|error during parsing|unrecognized"; then
+    echo "ERROR: deploy/Caddyfile is invalid — refusing to restart the edge:" >&2
+    printf '%s
+' "$caddy_check" >&2
+    exit 1
+  fi
+  echo "    (validator could not run; continuing — see the note above)" >&2
+fi
+
 echo "==> [4/4] Starting app services + Caddy (api, auth, workers, web, admin, caddy)…"
 "${COMPOSE[@]}" up -d api auth workers web admin forge-api forge-worker forge caddy
 
