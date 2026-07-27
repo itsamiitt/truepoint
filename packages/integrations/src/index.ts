@@ -62,6 +62,7 @@ export {
 // TruePoint Forge adapters (ADR-0046/0047; re-homed from @forge/integrations): the Redis rate limiter,
 // the S3/MinIO object store, and the Anthropic extraction port the forge-api/forge-worker composition
 // roots inject. Forge-core declares the ports and never imports this package.
+export { forgeAiBudgetStore } from "./forgeAiBudgetStore.ts";
 export { forgeRateLimiter } from "./forgeRateLimiter.ts";
 export { forgeObjectStore, type ForgeS3Config } from "./forgeObjectStore.ts";
 export {

@@ -247,7 +247,7 @@ optimization because optimizing a broken path is wasted work.
   dedicated itest was **not** added: the tolerance is a pure predicate, and the CI itest template DB is
   built by `applyMigrations`, so all 92 itests already exercise the changed path on every run.
 
-- [ ] **F-0.6 · Bound Forge LLM spend and record it.**
+- [x] **F-0.6 · Bound Forge LLM spend and record it.**
   **files:** `packages/forge-core/src/extraction.ts:204,283-303`
   **defect:** `budgetKey = ${ctx.jobId}:${ctx.tenantId}` where `jobId` is the `rawCaptureId` — so every
   capture gets a fresh 1000-unit budget and burns 1, making `AI_BUDGET_LIMIT` decorative on a metered,
@@ -256,6 +256,31 @@ optimization because optimizing a broken path is wasted work.
   bills 2 calls against 1 reserved unit.
   **fix:** key on `tenantId` + time window in Redis (`INCR` + TTL, mirroring `forgeRateLimiter`); persist
   token counts; reserve 2 and refund 1.
+  **shipped, all four.** The key is now `aiBudgetKey(tenantId, window)` (a UTC day), so spend aggregates
+  instead of resetting per capture — the limit is reachable and therefore actually a limit. The store became a
+  port with an **async, atomic** shape: `reserve()` returns the POST-increment total, because the old
+  get-then-set is a read-modify-write that two concurrent extractions both win. `forgeAiBudgetStore`
+  (`@leadwolf/integrations`, Redis INCRBY + TTL) is injected into `ProcessorDeps` and wired in the worker's
+  composition root, so the cap holds across replicas rather than per process — the in-memory store bounded one
+  worker, so N workers billed N × the limit. Its entries now also expire, closing the leak (the old map grew
+  one permanent entry per capture). Repair is handled by reserving the worst case (2) and refunding the unused
+  unit once the outcome reports whether repair ran: reserving 1 and discovering the second call afterwards let
+  a tenant whose payloads reliably trigger repair bill double its authorised limit. `latencyMs`/`inputTokens`/
+  `outputTokens` now reach the metering row — the port returned them and `extraction_runs` has had the columns
+  all along, so the spend record was structurally present and always empty; `runRow` also moved to an options
+  object, since it had ended in three interchangeable numbers that every error path passed as `0, 0, 0` and
+  this change added three more.
+  **the one judgement call: it fails CLOSED**, diverging from `forgeRateLimiter` right beside it. That one
+  fails open with the correct reasoning for what it guards — it throttles abuse, abuse is not a security
+  boundary, and a Redis blip must not halt capture. This guards **money**, on a path an outsider triggers by
+  sending a capture, so failing open during an outage silently re-opens the exact unbounded-spend hole the
+  budget exists to close. The costs are not symmetric either: an unavailable budget returns `budget_exceeded`,
+  which PARKS an already-durably-queued job, so a false stop costs delay while a false allow costs an unbounded
+  provider bill.
+  **verify:** 12 new tests — accumulation across captures parks the tenant, one-pass costs 1 and a repaired
+  pass costs 2, a rejected reservation does not consume the budget it was denied, tenants cannot spend each
+  other's, in-memory entries expire, tokens reach the metering row, quarantined outcomes are still billed, and
+  the Redis adapter fails closed / sets its TTL once / cannot leave a negative counter.
 
 - [ ] **F-0.7 · Adopt `@anthropic-ai/sdk` for the extraction adapter** (or at minimum add
   `AbortSignal.timeout`, 429/5xx-vs-4xx branching, `retry-after`, and error-body logging).

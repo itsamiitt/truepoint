@@ -23,12 +23,16 @@ import {
   withErTx,
   withForgeTx,
 } from "@leadwolf/db";
-import type { BlobFetcher, ExtractionPort, ParserRegistry } from "@leadwolf/forge-core";
+import type {
+  AiBudgetStore,
+  BlobFetcher,
+  ExtractionPort,
+  ParserRegistry,
+} from "@leadwolf/forge-core";
 import {
   VERIFY_THRESHOLD,
   assembleVerifiedCandidate,
   computePriority,
-  inMemoryBudgetStore,
   runExtraction,
   runParse,
   shapeFingerprint,
@@ -37,6 +41,8 @@ import type { Job, Queue } from "bullmq";
 
 /** The fields the AI extraction stage targets from an intercepted profile (09 §target fields). */
 const TARGET_FIELDS = ["full_name", "headline", "current_title", "current_company", "location"];
+/** Paid provider calls per TENANT per budget window (a UTC day — AI_BUDGET_WINDOW_MS). The window matters:
+ *  the same number keyed per capture, as it was, is not a limit at all. */
 const AI_BUDGET_LIMIT = 1000;
 /** The four-eyes MAKER for a capturer-less (system-initiated) capture — the nil uuid, distinct from every real
  *  user, so a human approver always differs from it and four-eyes still requires a genuine second party. */
@@ -48,6 +54,9 @@ export interface ProcessorDeps {
   extractPort: ExtractionPort;
   queues: { aiExtract: Queue; resolve: Queue; verify: Queue };
   leader: <T>(fn: () => Promise<T>) => Promise<T | null>;
+  /** The Forge AI spend cap. INJECTED rather than constructed here: it must be the Redis-backed store in a
+   *  deployment, because a process-local one bounds a single worker and N workers then bill N × the limit. */
+  budgetStore: AiBudgetStore;
 }
 
 async function readPayload(
@@ -119,7 +128,6 @@ export function makeParseProcessor(deps: ProcessorDeps) {
 
 /** ai-extract: parsed residue → grounded candidate fields (REAL Anthropic), then enqueue resolve. */
 export function makeExtractProcessor(deps: ProcessorDeps) {
-  const budgetStore = inMemoryBudgetStore();
   return async (job: Job<{ rawCaptureId: string }>): Promise<void> => {
     const ctx = await withForgeTx(async (tx) => {
       const capture = await getRawCaptureById(tx, job.data.rawCaptureId);
@@ -140,7 +148,7 @@ export function makeExtractProcessor(deps: ProcessorDeps) {
     const extraction = await runExtraction(
       {
         port: deps.extractPort,
-        budgetStore,
+        budgetStore: deps.budgetStore,
         budgetLimit: AI_BUDGET_LIMIT,
         meter: (r) => withForgeTx((tx) => insertExtractionRun(tx, r)),
       },

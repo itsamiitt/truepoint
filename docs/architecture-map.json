@@ -100,8 +100,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1783,
-  "fileSetHash": "sha256:e0d84d75feccd7aa7b1f3b305e3b170fa8b3d9517f2d1b5d687de9f0eb0fed06",
+  "fileCount": 1785,
+  "fileSetHash": "sha256:25ccd03c7a2465f72ae0ea7a790c0b53a5cc0e63f1a708ab6103dbcc324acc74",
   "features": {
     "account-search": {
       "web": [],
@@ -2496,6 +2496,8 @@
       "packages/integrations/src/enrichment/httpProvider.ts",
       "packages/integrations/src/enrichment/providers.test.ts",
       "packages/integrations/src/enrichment/providers.ts",
+      "packages/integrations/src/forgeAiBudgetStore.test.ts",
+      "packages/integrations/src/forgeAiBudgetStore.ts",
       "packages/integrations/src/forgeAnthropicExtraction.test.ts",
       "packages/integrations/src/forgeAnthropicExtraction.ts",
       "packages/integrations/src/forgeObjectStore.ts",
