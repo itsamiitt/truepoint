@@ -2,13 +2,16 @@
 // (GET /api/v1/notifications) — the workspace-scoped, per-user store — replacing the earlier client-derived
 // stub. Maps each server Notification to the bell's view shape (tone + deep-link href), tracks the server's
 // unread count, and `dismiss` marks one read (optimistic remove + badge decrement, persisted via POST
-// /:id/read). Polls on an interval + on the existing "credits:changed" signal so the badge stays truthful.
+// /:id/read). Polls on an interval so the badge stays truthful without a realtime channel; a credit-spending
+// action invalidates the same key, which is what the "credits:changed" window event used to do by hand.
 "use client";
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import { sharedKeys } from "@/lib/queryKeys";
 import type { Notification, NotificationType } from "@leadwolf/types";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 
 export type NotificationTone = "warning" | "success" | "muted";
 
@@ -65,63 +68,83 @@ interface NotificationsState {
   loading: boolean;
 }
 
+interface NotificationFeed {
+  notifications: Notification[];
+  unreadCount: number;
+}
+
+const EMPTY: NotificationFeed = { notifications: [], unreadCount: 0 };
+
+async function fetchFeed(signal?: AbortSignal): Promise<NotificationFeed> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/notifications?limit=20`, { signal });
+  // Best-effort: the bell stays quiet rather than surfacing a network blip as a notification. Returning the
+  // empty feed rather than throwing keeps that behaviour — an error state would light up the top bar.
+  if (!res.ok) return EMPTY;
+  return (await res.json()) as NotificationFeed;
+}
+
 export function useNotifications(): NotificationsState {
-  const [raw, setRaw] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const query = useQuery({
+    queryKey: sharedKeys.notifications(),
+    queryFn: ({ signal }) => fetchFeed(signal),
+    // The hand-rolled setInterval kept polling while the tab was hidden and while the request was already in
+    // flight. RQ pauses the interval for a background tab and never overlaps a fetch with itself.
+    refetchInterval: POLL_MS,
+  });
+  const feed = query.data ?? EMPTY;
 
-  const load = useCallback(async () => {
-    try {
-      const res = await fetchWithAuth(`${API_BASE}/api/v1/notifications?limit=20`);
-      if (!res.ok) return;
-      const data = (await res.json()) as { notifications: Notification[]; unreadCount: number };
-      setRaw(data.notifications);
-      setUnreadCount(data.unreadCount);
-    } catch {
-      // Best-effort: the bell stays quiet (empty) rather than surfacing a network blip as a notification.
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  /** Both mark-read calls are optimistic: the cache is patched first, and a failed write is repaired by the
+   *  next poll (or by the settled invalidation) rather than by rolling the UI back under the user. */
+  const patch = useCallback(
+    (fn: (feed: NotificationFeed) => NotificationFeed) => {
+      qc.setQueryData<NotificationFeed>(sharedKeys.notifications(), (old) => fn(old ?? EMPTY));
+    },
+    [qc],
+  );
 
-  useEffect(() => {
-    void load();
-    const onChange = () => void load();
-    window.addEventListener("credits:changed", onChange);
-    const timer = window.setInterval(() => void load(), POLL_MS);
-    return () => {
-      window.removeEventListener("credits:changed", onChange);
-      window.clearInterval(timer);
-    };
-  }, [load]);
+  const markRead = useMutation({
+    mutationFn: (id: string) =>
+      fetchWithAuth(`${API_BASE}/api/v1/notifications/${encodeURIComponent(id)}/read`, {
+        method: "POST",
+      }),
+    onSettled: () => qc.invalidateQueries({ queryKey: sharedKeys.notifications() }),
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: () =>
+      fetchWithAuth(`${API_BASE}/api/v1/notifications/read-all`, { method: "POST" }),
+    onSettled: () => qc.invalidateQueries({ queryKey: sharedKeys.notifications() }),
+  });
 
   const dismiss = useCallback(
     (id: string) => {
-      const target = raw.find((n) => n.id === id);
-      // Optimistic: drop it from the dropdown; only decrement the badge if it was actually unread.
-      setRaw((prev) => prev.filter((n) => n.id !== id));
-      if (target && target.readAt === null) setUnreadCount((c) => Math.max(0, c - 1));
-      void fetchWithAuth(`${API_BASE}/api/v1/notifications/${encodeURIComponent(id)}/read`, {
-        method: "POST",
-      }).catch(() => {
-        // If the mark-read fails, the next poll re-syncs the true state.
+      patch((old) => {
+        const target = old.notifications.find((n) => n.id === id);
+        return {
+          notifications: old.notifications.filter((n) => n.id !== id),
+          // Only decrement when the row was actually unread, or dismissing a read row would drift the badge.
+          unreadCount:
+            target && target.readAt === null ? Math.max(0, old.unreadCount - 1) : old.unreadCount,
+        };
       });
+      markRead.mutate(id);
     },
-    [raw],
+    [patch, markRead],
   );
 
   const markAll = useCallback(() => {
-    // Optimistic: zero the badge + mark every loaded row read (so a later dismiss won't double-decrement).
-    setRaw((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })));
-    setUnreadCount(0);
-    void fetchWithAuth(`${API_BASE}/api/v1/notifications/read-all`, { method: "POST" }).catch(
-      () => {
-        // If it fails, the next poll re-syncs the true unread count.
-      },
-    );
-  }, []);
+    // Mark every loaded row read as well as zeroing the badge, so a later dismiss cannot double-decrement.
+    patch((old) => ({
+      notifications: old.notifications.map((n) =>
+        n.readAt ? n : { ...n, readAt: new Date().toISOString() },
+      ),
+      unreadCount: 0,
+    }));
+    markAllRead.mutate();
+  }, [patch, markAllRead]);
 
-  const items = useMemo(() => raw.map(toApp), [raw]);
+  const items = useMemo(() => feed.notifications.map(toApp), [feed.notifications]);
 
-  return { items, unreadCount, dismiss, markAll, loading };
+  return { items, unreadCount: feed.unreadCount, dismiss, markAll, loading: query.isPending };
 }
