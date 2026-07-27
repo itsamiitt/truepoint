@@ -157,3 +157,88 @@ describe("activities after the partitioning conversion (0085)", () => {
     expect(text).not.toMatch(/activities_default/);
   });
 });
+
+describe("platform_audit_log after the partitioning conversion (0086)", () => {
+  test("is partitioned, keeps its composite key, and still refuses mutation", async () => {
+    const [rel] = await sql<{ relkind: string }[]>`
+      SELECT relkind FROM pg_class
+       WHERE relname = 'platform_audit_log' AND relnamespace = 'public'::regnamespace
+    `;
+    expect(rel?.relkind).toBe("p");
+
+    const cols = await sql<{ attname: string }[]>`
+      SELECT a.attname
+        FROM pg_constraint con
+        JOIN unnest(con.conkey) WITH ORDINALITY AS k(attnum, ord) ON true
+        JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = k.attnum
+       WHERE con.conrelid = 'platform_audit_log'::regclass AND con.contype = 'p'
+       ORDER BY k.ord
+    `;
+    expect(cols.map((c) => c.attname)).toEqual(["id", "occurred_at"]);
+
+    // The append-only trigger (ADR-0032) is the property most easily lost in a rebuild, and losing it turns
+    // an immutable audit trail into an editable one without anything failing.
+    const [trg] = await sql<{ tgname: string }[]>`
+      SELECT tgname FROM pg_trigger
+       WHERE tgrelid = 'platform_audit_log'::regclass AND NOT tgisinternal
+    `;
+    expect(trg?.tgname).toBe("platform_audit_log_no_mutation");
+
+    // RLS still ENABLED (not FORCED — the owner is the withPlatformTx writer) with no policy, which is what
+    // denies leadwolf_app every row.
+    const [rls] = await sql<{ relrowsecurity: boolean; relforcerowsecurity: boolean }[]>`
+      SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'platform_audit_log'::regclass
+    `;
+    expect(rls?.relrowsecurity).toBe(true);
+    expect(rls?.relforcerowsecurity).toBe(false);
+
+    const [policies] = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM pg_policies WHERE tablename = 'platform_audit_log'
+    `;
+    expect(policies?.n).toBe(0);
+
+    const [idx] = await sql<{ indexname: string }[]>`
+      SELECT indexname FROM pg_indexes
+       WHERE tablename = 'platform_audit_log' AND indexname = 'idx_platform_audit_tenant_time'
+    `;
+    expect(idx?.indexname).toBe("idx_platform_audit_tenant_time");
+  });
+
+  test("an audit row lands in its month and cannot then be updated or deleted", async () => {
+    const [{ id: actorId }] = await sql<{ id: string }[]>`
+      INSERT INTO users (email) VALUES (${`audit-${Date.now()}@t.test`}) RETURNING id
+    `;
+    await sql`
+      INSERT INTO platform_audit_log (actor_user_id, action) VALUES (${actorId}, 'test.action')
+    `;
+    const [row] = await sql<{ part: string }[]>`
+      SELECT tableoid::regclass::text AS part FROM platform_audit_log WHERE actor_user_id = ${actorId}
+    `;
+    expect(row?.part).toMatch(/^platform_audit_log_\d{4}_\d{2}$/);
+
+    // Append-only holds through the partition, not just on the parent. Written as an explicit try/catch
+    // rather than expect(...).rejects: a postgres.js tagged template is a lazy PendingQuery, and handing one
+    // to `.rejects` risks leaving it unsettled on the single pooled connection — which then blocks the DROP
+    // DATABASE in teardown rather than failing.
+    const mutationError = async (run: () => Promise<unknown>): Promise<string> => {
+      try {
+        await run();
+        return "";
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e);
+      }
+    };
+
+    expect(
+      await mutationError(
+        () =>
+          sql`UPDATE platform_audit_log SET action = 'tampered' WHERE actor_user_id = ${actorId}`,
+      ),
+    ).toMatch(/append-only/i);
+    expect(
+      await mutationError(
+        () => sql`DELETE FROM platform_audit_log WHERE actor_user_id = ${actorId}`,
+      ),
+    ).toMatch(/append-only/i);
+  });
+});

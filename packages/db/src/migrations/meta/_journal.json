@@ -603,6 +603,13 @@
       "when": 1785139425017,
       "tag": "0085_partition_activities",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1785139425018,
+      "tag": "0086_partition_platform_audit_log",
+      "breakpoints": true
     }
   ]
 }
