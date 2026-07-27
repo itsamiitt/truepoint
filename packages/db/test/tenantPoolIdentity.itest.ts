@@ -52,7 +52,7 @@ test("withTenantTx AUTHENTICATES as leadwolf_app, not merely SET ROLEs to it", a
   const identity = await dbmod.withTenantTx({ tenantId, workspaceId }, async (tx) => {
     const rows = (await tx.execute(
       // session_user = the role that logged in; current_user = the role after SET ROLE.
-      `SELECT session_user::text AS session_user, current_user::text AS current_user`,
+      "SELECT session_user::text AS session_user, current_user::text AS current_user",
     )) as unknown as Array<{ session_user: string; current_user: string }>;
     return rows[0];
   });
@@ -72,7 +72,7 @@ test("the privileged paths still authenticate as the OWNER — they need roles a
   // them outright. This pins that they stayed put.
   const sessionUser = await dbmod.withPrivilegedTx(async (tx) => {
     const rows = (await tx.execute(
-      `SELECT session_user::text AS session_user`,
+      "SELECT session_user::text AS session_user",
     )) as unknown as Array<{ session_user: string }>;
     return rows[0]?.session_user;
   });
