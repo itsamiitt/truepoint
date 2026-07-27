@@ -1,5 +1,5 @@
 // savedSearchApi.ts — typed, authenticated calls to the saved-searches API (24 §8). A saved search persists
-// the active ContactQuery blob; "applying" one is just feeding its `filters` back into useContactSearch
+// the active ContactQuery blob; "applying" one is just feeding its `filters` back into useProspectSearch
 // (setText/setFilters) so the grid re-runs POST /search/contacts. Reuses ApiError from ./api.
 
 import { fetchWithAuth } from "@/lib/authClient";

@@ -1,23 +1,28 @@
-// useBulkImport.ts — view state for tracking ONE bulk import: keyed by a job id, it POLLS getBulkImportJob on an
-// interval until the job settles, exposing loading / error / disabled / job. Mirrors useEnrichmentJobs' "poll
-// while in flight" loop and useEnrichmentJobDetail's id-keyed effect (NO TanStack — useState + useEffect). Polling
-// STOPS on a terminal status (completed | partial | failed | cancelled); a 403 bulk_import_disabled is surfaced as
-// the `disabled` flag (a clear "not enabled" state), NOT a generic error. Holds no business logic — the import
-// runs server-side in apps/workers; the shape is the @leadwolf/types contract so producer + consumer can't drift.
+// useBulkImport.ts — tracking ONE bulk import: keyed by job id, polls getBulkImportJob until the job settles.
+// Polling STOPS on a terminal status (completed | partial | failed | cancelled); `paused` is NOT terminal (an
+// ops/budget hold can resume), so polling continues through it. A 403 bulk_import_disabled surfaces as the
+// `disabled` flag — a clear "not enabled" state, not a generic error. Holds no business logic — the import
+// runs server-side in apps/workers; the shape is the @leadwolf/types contract so producer and consumer cannot
+// drift.
+//
+// `refetchInterval` replaces the self-rescheduling timeout, and RQ's retry replaces the hand-counted error
+// streak: both express "tolerate a few consecutive transient failures, reset on success", except RQ also
+// backs off between attempts and keeps the last good job rendered throughout. The `active` cancel token is
+// unnecessary once results are keyed by job id — a poll that resolves after the id changed lands on the old
+// job's entry, not on the one being displayed.
 "use client";
 
 import type { BulkImportJobStatus, BulkImportJobStatusResponse } from "@leadwolf/types";
-import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { BulkImportDisabledError, getBulkImportJob } from "../api";
+import { importKeys } from "../keys";
 
 /** Poll cadence while a bulk job is in flight (ms) — these run for minutes, so a calm cadence (cf. enrichment). */
 const POLL_INTERVAL_MS = 3_000;
-/** Tolerate a few CONSECUTIVE transient poll failures (a dropped connection / 5xx) before giving up; the streak
- *  resets on every successful poll, so one flaky GET never aborts a job that is still running fine server-side. */
+/** Tolerate a few CONSECUTIVE transient poll failures (a dropped connection / 5xx) before giving up. */
 const MAX_CONSECUTIVE_POLL_ERRORS = 3;
 
-/** Statuses at which polling STOPS — the job will not change further from the client's view. `paused` is NOT
- *  terminal (an ops / budget hold can resume), so polling continues through it. */
+/** Statuses at which polling STOPS — the job will not change further from the client's view. */
 const TERMINAL = new Set<BulkImportJobStatus>(["completed", "partial", "failed", "cancelled"]);
 
 export interface UseBulkImport {
@@ -30,68 +35,32 @@ export interface UseBulkImport {
 }
 
 export function useBulkImport(jobId: string | null): UseBulkImport {
-  const [job, setJob] = useState<BulkImportJobStatusResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(jobId != null);
-  const [disabled, setDisabled] = useState(false);
-  // The active poll timer — a ref so cleanup never depends on a re-render.
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const query = useQuery<BulkImportJobStatusResponse>({
+    queryKey: importKeys.bulkJob(jobId ?? ""),
+    enabled: jobId !== null,
+    queryFn: () => getBulkImportJob(jobId as string),
+    refetchInterval: (q) => {
+      const status = q.state.data?.status;
+      return status && TERMINAL.has(status) ? false : POLL_INTERVAL_MS;
+    },
+    // "Not enabled" is a settled answer, not a blip — retrying it would just repeat the same 403.
+    retry: (failureCount, err) =>
+      !(err instanceof BulkImportDisabledError) && failureCount < MAX_CONSECUTIVE_POLL_ERRORS,
+  });
 
-  useEffect(() => {
-    if (jobId == null) {
-      setJob(null);
-      setError(null);
-      setDisabled(false);
-      setLoading(false);
-      return;
-    }
-    // `active` is the cancel token: a poll/timer that resolves after the id changed (or unmount) is ignored.
-    let active = true;
-    setJob(null);
-    setError(null);
-    setDisabled(false);
-    setLoading(true);
+  const disabled = query.error instanceof BulkImportDisabledError;
+  const settled = query.data ? TERMINAL.has(query.data.status) : false;
 
-    const poll = async (errorStreak: number): Promise<void> => {
-      if (!active) return;
-      try {
-        const next = await getBulkImportJob(jobId);
-        if (!active) return;
-        setJob(next);
-        setError(null);
-        // Terminal → stop the loop and clear loading (the settled job stays rendered).
-        if (TERMINAL.has(next.status)) {
-          setLoading(false);
-          return;
-        }
-        timerRef.current = setTimeout(() => void poll(0), POLL_INTERVAL_MS);
-      } catch (e) {
-        if (!active) return;
-        if (e instanceof BulkImportDisabledError) {
-          setDisabled(true);
-          setLoading(false);
-          return;
-        }
-        if (errorStreak + 1 >= MAX_CONSECUTIVE_POLL_ERRORS) {
-          setError(e instanceof Error ? e.message : "Could not check the bulk import status.");
-          setLoading(false);
-          return;
-        }
-        // Transient blip — keep the job rendered and retry on the next tick.
-        timerRef.current = setTimeout(() => void poll(errorStreak + 1), POLL_INTERVAL_MS);
-      }
-    };
-
-    void poll(0);
-
-    return () => {
-      active = false;
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [jobId]);
-
-  return { job, error, loading, disabled };
+  return {
+    job: jobId ? (query.data ?? null) : null,
+    // The disabled case owns its own flag; surfacing it as an error too would render both messages.
+    error:
+      query.error && !disabled
+        ? query.error instanceof Error
+          ? query.error.message
+          : "Could not check the bulk import status."
+        : null,
+    loading: jobId !== null && !settled && !disabled && !query.isError,
+    disabled,
+  };
 }

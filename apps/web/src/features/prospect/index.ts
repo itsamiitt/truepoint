@@ -23,10 +23,9 @@ export { displayName, emailGlyphFor, maskedEmail } from "./types";
 export { bulkEnrich, bulkEstimate } from "./bulkActionsApi";
 
 // Advanced search/filter (24, ADR-0035): server-driven typeahead filter rail + search hooks/client.
-// Wire <FilterRail onChange={setFilters}/> + useContactSearch() into ProspectPage's left rail + grid.
+// Wire <FilterRail onChange={setFilters}/> + useProspectSearch() into ProspectPage's left rail + grid.
 export { FilterRail } from "./components/FilterRail";
 export { FacetTypeahead } from "./components/FacetTypeahead";
-export { useContactSearch } from "./hooks/useContactSearch";
 export { useTypeahead } from "./hooks/useTypeahead";
 
 // Pipeline stages (G-REV-7, ADR-0028): the workspace stage-management panel + the record StageSelector, plus
@@ -37,7 +36,7 @@ export { useStages } from "./hooks/useStages";
 export { fetchStages, createStage, updateStage, assignStage } from "./stagesApi";
 // Saved searches / segments (M8, 24 §8): "Save search" + the apply/rename/delete list for the rail. Wire
 // <SaveSearchPanel currentQuery={…} onApply={(f) => { setText(f.text ?? ""); setFilters(f.filters); }}/>
-// into ProspectPage's left rail; the panel re-runs the search via useContactSearch on apply.
+// into ProspectPage's left rail; the panel re-runs the search via useProspectSearch on apply.
 export { SaveSearchPanel } from "./components/SaveSearchPanel";
 export { useSavedSearches } from "./hooks/useSavedSearches";
 export {
@@ -64,7 +63,7 @@ export {
 } from "./accountSearchApi";
 
 // AI NL→search (23, ADR-0023): the natural-language box + the validated-filter preview. The box compiles
-// NL → a validated contactQuery and applies it on confirm via useContactSearch (human-in-the-loop).
+// NL → a validated contactQuery and applies it on confirm via useProspectSearch (human-in-the-loop).
 export { AiSearchBox } from "./components/AiSearchBox";
 export { ParsedFilterPreview } from "./components/ParsedFilterPreview";
 // Record-customization tag layer (ADR-0028, G-REV-6): tag chip + picker (RecordDetail) + the workspace-tag
