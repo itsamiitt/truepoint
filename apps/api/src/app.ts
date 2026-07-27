@@ -61,6 +61,7 @@ import { isDraining } from "./lifecycle.ts";
 import { onError } from "./middleware/error.ts";
 import { rateLimit } from "./middleware/rateLimit.ts";
 import { requestId } from "./middleware/requestId.ts";
+import { createReadinessGate, dbReadinessProbe } from "./readiness.ts";
 
 export const app = new Hono();
 
@@ -108,13 +109,24 @@ app.use(
 );
 
 // Liveness + drain awareness. Returns 503 once SIGTERM has started a drain so the orchestrator/edge stops
-// routing new work to a process that is on its way out (compose gates `caddy` on this healthcheck). This is
-// still only a LIVENESS probe — it deliberately does not touch Postgres or Redis, so it cannot be used to
-// answer "can this process actually serve traffic"; a real dependency-probing /ready (as apps/workers already
-// has) is tracked separately.
+// routing new work to a process that is on its way out. This is a LIVENESS probe and stays that way: it
+// deliberately does not touch Postgres, because coupling liveness to a dependency means one database blip
+// fails every replica's probe simultaneously and the orchestrator recycles the whole fleet. "Can this process
+// serve traffic" is a different question, answered by /ready below.
 app.get("/health", (c) =>
   isDraining() ? c.json({ status: "draining" }, 503) : c.json({ status: "ok" }),
 );
+// Readiness — drain state plus a bounded, threshold-gated Postgres probe (see readiness.ts for why bounded
+// and why thresholded). This is what compose gates `caddy` on, so a dead database actually stops traffic
+// instead of being reported healthy. The body is a coarse label for whoever reads a probe log; it is not a
+// diagnostic surface and intentionally leaks nothing about the failure.
+const readinessGate = createReadinessGate({ isDraining, probe: dbReadinessProbe() });
+app.get("/ready", async (c) => {
+  const verdict = await readinessGate();
+  return verdict.ready
+    ? c.json({ status: "ready" }, 200)
+    : c.json({ status: "not_ready", reason: verdict.reason }, 503);
+});
 // Internal auth-SLI scrape (Phase 1 observability, doc 03 §10). OFF BY DEFAULT: 404 unless METRICS_TOKEN is set
 // AND the request carries `Authorization: Bearer <token>` — a scraper has no user JWT, so the shared secret IS
 // the gate. A wrong/absent token also 404s: the endpoint is invisible to anyone without the secret (don't

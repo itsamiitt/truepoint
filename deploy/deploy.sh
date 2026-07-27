@@ -150,7 +150,9 @@ echo
 echo "Endpoints:"
 echo "  App   : $(grep '^NEXT_PUBLIC_APP_ORIGIN='  "$ENV_FILE" | cut -d= -f2-)"
 echo "  Auth  : $(grep '^NEXT_PUBLIC_AUTH_ORIGIN=' "$ENV_FILE" | cut -d= -f2-)"
-echo "  API   : $(grep '^NEXT_PUBLIC_API_BASE='    "$ENV_FILE" | cut -d= -f2-)/health"
+# /ready, not /health: it additionally proves Postgres is reachable, which is what an operator actually wants
+# to confirm after a deploy. /health answers 200 with a dead database.
+echo "  API   : $(grep '^NEXT_PUBLIC_API_BASE='    "$ENV_FILE" | cut -d= -f2-)/ready"
 echo "  Mail  : http://127.0.0.1:8025  (MailHog — view via SSH tunnel)"
 echo
 echo "Tail logs with:  docker compose -f docker-compose.prod.yml logs -f api auth web workers"

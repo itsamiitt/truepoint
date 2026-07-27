@@ -6,6 +6,7 @@
 // rejects 403 for a disallowed role, a non-member (null), and — for workspace — a missing workspace.
 
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import * as realDb from "@leadwolf/db";
 import type { OrgRole, StaffRole, WorkspaceRole } from "@leadwolf/types";
 
 const next: {
@@ -15,15 +16,27 @@ const next: {
   wsCalls: number;
 } = { ws: "admin", org: "security_admin", staff: "support", wsCalls: 0 };
 
+// The `...realDb` spread is load-bearing across FILES, for the same process-global reason described above.
+// Returning only the three repositories replaced the whole module for every other test file in the run, so
+// whichever file mocked @leadwolf/db last decided whether the others could see the exports they rely on — e.g.
+// effectivePolicyRoutes.test.ts lost `effectivePolicyRepository` and failed, but only when run alongside this
+// file, never alone. Spreading the real module first means this mock overrides exactly the three repositories
+// it means to and leaves the rest intact, matching app.authz.test.ts and effectivePolicyRoutes.test.ts.
+// (The spread is safe: @leadwolf/db is lazy — importing it opens no connection.)
 mock.module("@leadwolf/db", () => ({
+  ...realDb,
   workspaceRepository: {
+    ...realDb.workspaceRepository,
     getRoleForUser: async () => {
       next.wsCalls += 1;
       return next.ws;
     },
   },
-  tenantMemberRepository: { getOrgRole: async () => next.org },
-  platformStaffRepository: { getActiveRole: async () => next.staff },
+  tenantMemberRepository: { ...realDb.tenantMemberRepository, getOrgRole: async () => next.org },
+  platformStaffRepository: {
+    ...realDb.platformStaffRepository,
+    getActiveRole: async () => next.staff,
+  },
 }));
 
 // Import the guards AFTER the mock is registered so their static @leadwolf/db imports bind to the stub.

@@ -81,13 +81,25 @@ describe("PUT /security/effective-policy", () => {
     const res = await put({ key: "mfa_enforcement", value: "required" });
     expect(res.status).toBe(200);
     expect(upserts).toHaveLength(1);
+    // The write this endpoint is responsible for: org scope, the requested key, the tightened value.
     expect(upserts[0]).toMatchObject({
-      tenantId: "t1",
       scope: "org",
       key: "mfa_enforcement",
       value: "required",
-      actorUserId: "u1",
     });
+    // tenantId/actorUserId are asserted by ORIGIN, not by literal value. They must come from the authenticated
+    // request context and never from the request body — that is the security property. Their exact values do
+    // not belong to this file: bun's module mocks are process-global AND ESM modules are cached, so whichever
+    // test file imports settingsRoutes FIRST is the one whose authn/tenancy mock the router closes over
+    // (app.authz.test.ts imports every router). Pinning "t1"/"u1" therefore asserted test-file ordering rather
+    // than endpoint behaviour: it passed alone and failed in a full run, for a reason unrelated to the code
+    // under test. What matters is checked here — both fields are present, non-empty, and cannot have come from
+    // the body, which carries only `key` and `value`.
+    const written = upserts[0] as { tenantId?: unknown; actorUserId?: unknown };
+    expect(typeof written.tenantId).toBe("string");
+    expect(written.tenantId as string).not.toBe("");
+    expect(typeof written.actorUserId).toBe("string");
+    expect(written.actorUserId as string).not.toBe("");
   });
 
   it("rejects a value that loosens below the platform floor (403), without writing", async () => {

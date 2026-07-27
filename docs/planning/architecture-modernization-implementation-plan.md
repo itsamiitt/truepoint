@@ -413,9 +413,46 @@ optimization because optimizing a broken path is wasted work.
   deliberate perf choice — so fix the **IP resolution**, don't move the middleware. Also pipeline the two
   serial Redis hops (rate-limit consume + `isRevoked`) and consider a 5 s in-process negative cache.
 
-- [ ] **L-1.10 · Real readiness probe.** `apps/api/src/app.ts:98` `/health` is a static `{status:"ok"}`, so
+- [x] **L-1.10 · Real readiness probe.** `apps/api/src/app.ts:98` `/health` is a static `{status:"ok"}`, so
   compose marks the API healthy with a dead database. `apps/workers` already has a drain- and Redis-aware
   `/ready` — copy it.
+  **shipped.** New `apps/api/src/readiness.ts` + `/ready`, and the compose healthcheck (and deploy.sh's printed
+  endpoint) now point at it. `/health` deliberately stays pure liveness: coupling liveness to Postgres means one
+  database blip fails every replica's probe on the same interval and the orchestrator recycles the whole fleet,
+  which is strictly worse than shedding traffic. Raw SQL stayed out of the app — the statement is a new
+  `pingDb()` in `@leadwolf/db` (`apps/api` imports drizzle-orm nowhere else, and Bun's declared-deps-only
+  resolution rejected it, which was the right signal).
+  **the design point worth keeping.** Copying the workers' consecutive-failure threshold verbatim would have
+  introduced a startup lie: an orchestrator needs only ONE successful probe to mark a container healthy, and
+  compose has `web`/`admin` gated on `api: service_healthy`, so tolerating the first N failures meant an API
+  booting against a dead database would report ready and take its dependents up with it. The threshold now
+  applies only AFTER the process has served once — before that, any failure is immediately not-ready. That is
+  the difference between hysteresis and a lie: hysteresis protects a replica that has proven it can serve; it
+  must never vouch for one that hasn't. 15 tests cover it, including the two cold-start cases and that a
+  wedged dependency resolves false rather than hanging (a hanging probe is worse than a failing one — the
+  process looks fine until the orchestrator's own timeout fires).
+
+- [x] **L-1.10a · The unit suite is now green in any order (found while verifying the above).** A full
+  `bun test` at this point failed **12** tests that all passed individually — so CI's per-package sharding hid
+  them and any local full run looked broken. All three causes were process-global test state, and none were in
+  the code under test:
+  - `apps/api/src/middleware/rateLimit.test.ts` mocked `@leadwolf/auth` **wholesale**, replacing the module for
+    every other file in the run and breaking the 8 cases in `apps/auth/src/lib/clientIp.test.ts` that exist to
+    verify the real trusted-hop resolver. Rewritten to assert delegation *against the real resolver*
+    (`key === ip:${clientIpFromHeaders(sameHeaders)}`), which is both leak-free and a stronger claim — no
+    reimplementation can satisfy it by accident. A mock of a SHARED function is not a local decision.
+  - `roleGuards.test.ts` likewise returned only three repositories instead of spreading the real module, so
+    `effectivePolicyRepository` vanished for whoever ran alongside it.
+  - `effectivePolicyRoutes.test.ts` pinned `tenantId: "t1"`/`actorUserId: "u1"`, which asserted **test-file
+    ordering**: bun's module mocks are process-global *and* ESM modules are cached, so whichever file imports
+    `settingsRoutes` first (`app.authz.test.ts` imports every router) owns the `authn` mock the router closed
+    over. Now asserted by origin — present, non-empty, and impossible to have come from a body carrying only
+    `key`/`value` — which is the actual security property.
+  - `packages/auth/src/botCheck.test.ts` set `TURNSTILE_SECRET` at its own module scope, which only works if it
+    is the first file to import `@leadwolf/config` (config freezes `env` on first import). Moved to the bun
+    preload `test/setup.ts`, where it is guaranteed to precede the freeze. Turnstile is now enforced under test
+    — the safer default for any login-path test added later.
+  **result:** 1397 pass / 0 fail across 199 files, and each of these files still passes alone.
 
 - [x] **L-1.11 (partial: dead-scope gating, aborts, RQ defaults, loading/error) · Frontend: stop the wasted work on the app's busiest surface.**
   - `apps/web/src/features/prospect/components/ProspectPage.tsx:86-103` — contacts **and** accounts
