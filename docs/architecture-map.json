@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1820,
-  "fileSetHash": "sha256:21b052e750f6ce3d102b051205469651abde04b59ec2dfd87f19605f674175e5",
+  "fileCount": 1822,
+  "fileSetHash": "sha256:1571909f8ab21f719cd752818c1a0b37ce9d6dcb6e973a120d397836b5f19ed9",
   "features": {
     "account-search": {
       "web": [],
@@ -2744,6 +2744,8 @@
       "packages/ui/src/components/ui/label.tsx",
       "packages/ui/src/components/ui/radio-group.tsx",
       "packages/ui/src/components/ui/separator.tsx",
+      "packages/ui/src/components/virtualWindow.test.ts",
+      "packages/ui/src/components/virtualWindow.ts",
       "packages/ui/src/index.ts"
     ]
   },
