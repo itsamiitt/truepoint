@@ -1235,7 +1235,7 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   pinned by `dbPooling.test.ts`. (`applyMigrations` keeps its own hardcoded `prepare: false`; the migrator
   needs it regardless of how the runtime is deployed.)
   **Still open:** replica routing for list/dashboard reads — which needs a replica to route to.
-- [ ] **E-6.4 · Partition the append-heavy tables** — `activities`, `email_events`, `platform_audit_log`,
+- [x] **E-6.4 (partial: the two convertible tables) · Partition the append-heavy tables** — `activities`, `email_events`, `platform_audit_log`,
   `provider_calls`, `source_imports`, `credit_ledger` (zero `PARTITION BY` in the repo today). Monthly range
   partitions; the partition key is already in the hot predicates. Gives retention real detach-and-archive
   mechanics. **check:** whether Neon permits `pg_partman`; if not, hand-rolled monthly partitions.
@@ -1269,12 +1269,29 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   boundary, and that `leadwolf_app` holds no EXECUTE — creating a partition is DDL).
   This also settles the `pg_partman` question by making it moot: the maintenance is ~40 lines of plpgsql the
   repo owns, so nothing depends on whether the managed provider permits the extension.
-  **Remaining:** the conversions themselves. The four FK-free tables (`activities`, `email_events`,
-  `platform_audit_log`, `provider_calls`) are the tractable slice — each needs its table rebuilt with the
-  composite key, data copied, and its indexes, RLS policies, grants and triggers reattached.
-  `source_imports` and `credit_ledger` are a SEPARATE decision, not a mechanical follow-on: partitioning them
-  adds a column to four referencing tables and to every write path that sets the reference, one of which is
-  a financial ledger whose FK is a real integrity constraint.
+  **DONE for the two tables that can actually take it** — `activities` (migration 0085) and
+  `platform_audit_log` (0086 + rls/platform.sql), both monthly RANGE on their time column, both verified by
+  `activitiesPartitioned.itest.ts` against a real Postgres.
+  **The item's own list was wrong on three counts, found by trying it:**
+  - **`email_events` does not exist.** The table is `email_event` (singular) — and it cannot be partitioned as
+    written: its partial UNIQUE on `provider_event_id` IS the webhook ingestion idempotency key. Forcing
+    `occurred_at` into that constraint means a redelivered provider event inserts twice, which corrupts
+    open/click/bounce analytics and can re-trigger reply auto-pause.
+  - **`provider_calls` cannot either.** Its UNIQUE `(workspace_id, request_hash)` IS the provider-response
+    cache dedup. Partitioning turns "one persisted answer per request" into "one per timestamp" — i.e.
+    re-billing the provider on every miss. Both need their uniqueness moved somewhere partition-compatible
+    first; that is a design change, not a migration.
+  - **`source_imports` / `credit_ledger`** remain blocked on inbound FKs as described above.
+  **Both conversions are ONE `DO` block each**, because applyMigrations runs statements with autocommit — a
+  rebuild split across statements could not roll back if it failed partway. `platform_audit_log` needed a
+  two-sided approach on top: it is not a Drizzle table (rls/platform.sql creates it, and the rls files run
+  AFTER the migrations), so that file and the duplicate DDL in `bootstrapAdmin.ts` now create it partitioned
+  on a fresh database while 0086 converts an existing one. The duplicate had to move in lockstep — with
+  `CREATE TABLE IF NOT EXISTS`, whichever ran first would have won.
+  **The retention sweep gained an `occurred_at` predicate** on its bulk DELETE: keyed only on `id` it carried
+  no partition key, so it would have scanned every month to delete rows already located in the oldest few.
+  **Still open:** detach-and-archive of cold partitions (the retention mechanics this unlocks), and the two
+  uniqueness redesigns above if `email_event` / `provider_calls` are ever to be partitioned.
 - [ ] **E-6.5 · OTel end-to-end** api → workers → db, on top of A-0.4's request IDs.
 - [ ] **E-6.6 · Forge isolation** — `FORGE_DATABASE_URL` + its own login role and pool (today `withForgeTx`
   shares the customer request path's `max: 10` pool, so there is no capacity or failure isolation), plus a
