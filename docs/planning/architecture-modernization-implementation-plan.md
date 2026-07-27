@@ -777,6 +777,16 @@ process up to Caddy.
   `access-control-*` needed; sign-in works end-to-end.
   **rollback:** revert the Caddyfile and `docker compose restart caddy` (it is a read-only bind mount, so
   `up -d` will **not** notice a content change).
+  **NOT built — and the blocker here is genuine, not a stale note.** The item's own `verify` step is a `curl`
+  against the live domain, and Caddy is the single thing terminating TLS for every subdomain: an invalid
+  config does not degrade one service, it exits and takes the whole site down. The routing itself is a
+  mechanical mirror of the `forge.truepoint.in` block, but "mechanical" is not "verified" when nothing here
+  can parse a Caddyfile.
+  **What HAS landed is the safety net that change needs**: `deploy.sh` now runs `caddy validate` against the
+  exact file the container mounts, BEFORE anything restarts the edge. It fails safe in both directions — a
+  config the validator rejects aborts the deploy, but a validator that cannot RUN (image not pulled, docker
+  hiccup) lets the deploy continue, because refusing to deploy over a tooling problem is its own outage.
+  So whoever writes the routing gets a loud failure at deploy time instead of a dark site.
 
 - [ ] **T-2.2 · Access token into an `__Host-` httpOnly cookie on the app origin.**
   **files:** a new `apps/web` route handler that sets the cookie from the existing `/auth/callback`
