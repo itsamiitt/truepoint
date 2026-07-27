@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1798,
-  "fileSetHash": "sha256:43821c8bef9f6d9e5420b01a8ef34cb3b360840eb6e542123968c0d06bdc035b",
+  "fileCount": 1799,
+  "fileSetHash": "sha256:9244052aa684997afba2bf339f0379a7a71c00c1368bcc6191b653f0f085473b",
   "features": {
     "account-search": {
       "web": [],
@@ -2362,6 +2362,7 @@
       "packages/db/src/index.ts",
       "packages/db/src/migrate.ts",
       "packages/db/src/migrationShape.test.ts",
+      "packages/db/src/migrationSnapshots.test.ts",
       "packages/db/src/migrationTolerance.test.ts",
       "packages/db/src/repositories/accountChildPlan.test.ts",
       "packages/db/src/repositories/accountChildPlan.ts",
