@@ -1,11 +1,16 @@
-// useRevealJob.ts — polls a single async bulk-reveal job's status/progress until it reaches a terminal state
-// (completed / failed / cancelled). Vanilla React (no query lib): a self-rescheduling timeout that stops once
-// the job is terminal; a transient poll error keeps the last-good row. Mirrors the enrichment-jobs poller.
+// useRevealJob.ts — polls a single async bulk-reveal job until it reaches a terminal state (completed /
+// failed / cancelled).
+//
+// The self-rescheduling setTimeout this replaces is `refetchInterval` returning false once the row is
+// terminal. Two things the manual version could not do: it kept polling a hidden tab, and a transient error
+// stopped the chain entirely — the catch never rescheduled, so one failed poll left the job frozen on screen
+// until something remounted it. RQ retries on its own schedule and keeps the last good row meanwhile.
 "use client";
 
 import { REVEAL_JOB_TERMINAL, type RevealJobSummary } from "@leadwolf/types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchRevealJob } from "../api";
+import { prospectKeys } from "../keys";
 
 const POLL_MS = 2000;
 
@@ -14,34 +19,26 @@ export function useRevealJob(jobId: string | null): {
   error: string | null;
   reload: () => Promise<void>;
 } {
-  const [job, setJob] = useState<RevealJobSummary | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const query = useQuery<RevealJobSummary>({
+    queryKey: prospectKeys.revealJob(jobId ?? ""),
+    enabled: jobId !== null,
+    queryFn: () => fetchRevealJob(jobId as string),
+    refetchInterval: (q) => {
+      const status = q.state.data?.status;
+      // Keep polling until the job is terminal; an unknown status (nothing loaded yet) also keeps polling.
+      return status && REVEAL_JOB_TERMINAL.has(status) ? false : POLL_MS;
+    },
+  });
 
-  const poll = useCallback(async () => {
-    if (!jobId) return;
-    try {
-      const j = await fetchRevealJob(jobId);
-      setJob(j);
-      setError(null);
-      if (!REVEAL_JOB_TERMINAL.has(j.status)) {
-        if (timer.current) clearTimeout(timer.current);
-        timer.current = setTimeout(() => void poll(), POLL_MS);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load job");
-    }
-  }, [jobId]);
-
-  useEffect(() => {
-    setJob(null);
-    setError(null);
-    if (timer.current) clearTimeout(timer.current);
-    if (jobId) void poll();
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [jobId, poll]);
-
-  return { job, error, reload: poll };
+  return {
+    job: jobId ? (query.data ?? null) : null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Could not load job"
+      : null,
+    reload: async () => {
+      await query.refetch();
+    },
+  };
 }

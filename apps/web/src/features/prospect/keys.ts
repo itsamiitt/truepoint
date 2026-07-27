@@ -25,6 +25,14 @@ export const prospectKeys = {
   stages: (includeArchived: boolean) => ["prospect", "stages", includeArchived] as const,
   /** One contact's custom-field feed. */
   customFields: (contactId: string) => ["prospect", "custom-fields", contactId] as const,
+  /** One contact's activity timeline. */
+  activities: (contactId: string) => ["prospect", "activities", contactId] as const,
+  /** One contact's lead-score history. */
+  scores: (contactId: string) => ["prospect", "scores", contactId] as const,
+  /** Typeahead suggestions for one facet + term — the cache entry IS the per-term memo. */
+  typeahead: (field: string, term: string) => ["prospect", "typeahead", field, term] as const,
+  /** One async bulk-reveal job's status/progress. */
+  revealJob: (jobId: string) => ["prospect", "reveal-job", jobId] as const,
   /** The viewer's saved searches. */
   savedSearches: () => ["prospect", "saved-searches"] as const,
   /** Facet counts for one account search + field set. */
