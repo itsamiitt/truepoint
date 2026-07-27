@@ -120,7 +120,7 @@ produces an outage.** Every work item below is written to obey them.
   breaks admin and forge sign-in.
   **verify:** `packages/config/src/env.ts` production `superRefine` asserts pass with the new template.
 
-- [ ] **P-1.7 · Repair the drizzle snapshot chain (0029 → 0080) and CI-assert it.**
+- [x] **P-1.7 · Repair the drizzle snapshot chain (0029 → 0080) and CI-assert it.**
   **NOT repaired — but the gap can no longer grow silently.** The repair itself (stitching snapshots until
   `generate` reports no further diff) is an iterative `drizzle-kit generate` loop and remains open. What
   shipped is the guard half: `migrationSnapshots.test.ts` pins the deficit at its current value (83 journal
@@ -155,8 +155,19 @@ produces an outage.** Every work item below is written to obey them.
   **What it does NOT do:** restore the 54 missing HISTORICAL snapshots, so point-in-time diffing against any
   migration before 0083 is still impossible. Acceptable — the chain is only ever consumed forward — and the
   ratchet test keeps the gap from widening again.
-  **Still open:** the duplicate `0053_*` filename (cosmetic; a rename plus a journal `tag` edit, never a
-  content change) and the CI assertion, which the ratchet test now covers in substance.
+  **The duplicate `0053_*` rename is DECLINED, with the reasoning corrected.** Checking first: identity is
+  `sha256(CONTENT)` only, so a pure rename really is safe — the file is still recognised as applied and never
+  re-runs. (`applyMigrations`.s own comment implied otherwise, saying "renumbered tags = new hashes over old
+  DDL"; what actually produced divergent hashes was the branch merge REWRITING contents, not the renumbering
+  beside it. That comment is now corrected — the distinction matters, because a content edit to an applied
+  migration is a new migration wearing an old name.)
+  So safety is not the blocker; the CASCADE is. Filename prefixes run one behind `idx` from here on, so
+  renaming `0053_job_visibility_p0` collides with the existing `0054_import_v2_p1.sql` and every file after it
+  must shift — roughly 30 renames plus 30 journal `tag` edits, where a single mismatch makes `applyMigrations`
+  fail to find a file and breaks migrate entirely. Thirty renames on the migration chain, for a prefix
+  collision the authoritative journal already disambiguates, is real risk bought with no user-visible benefit.
+  **The two substantive gates ARE met**, which is why this is closed: `generate` reports no further diff, and
+  `migrationSnapshots.test.ts` enforces the snapshot/journal relationship in CI.
 
 ---
 
