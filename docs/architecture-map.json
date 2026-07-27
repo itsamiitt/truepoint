@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1826,
-  "fileSetHash": "sha256:6b7771107b135a51b88c869e506753158baff0fd764b989bb5b985cbf95054cd",
+  "fileCount": 1827,
+  "fileSetHash": "sha256:5e5ede13c507cf36a33fcd25fb585aec2dcfcf2ab1b3b4ecfbcd5fde79c0296f",
   "features": {
     "account-search": {
       "web": [],
@@ -2516,6 +2516,7 @@
       "packages/db/test/accountHierarchy.cycleguard.itest.ts",
       "packages/db/test/accountLadder.readcutover.itest.ts",
       "packages/db/test/accountSearch.itest.ts",
+      "packages/db/test/activitiesPartitioned.itest.ts",
       "packages/db/test/activity.itest.ts",
       "packages/db/test/adminSessions.itest.ts",
       "packages/db/test/authAllowedOriginsIsolation.itest.ts",
