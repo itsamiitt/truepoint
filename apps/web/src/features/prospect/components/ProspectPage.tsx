@@ -27,6 +27,7 @@ import {
   TpInput,
 } from "@leadwolf/ui";
 import { Building2, Users } from "lucide-react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAccountFacetCounts } from "../hooks/useAccountFacetCounts";
@@ -43,7 +44,18 @@ import { AccountDetailDrawer } from "./AccountDetailDrawer";
 import { AccountFilterPanel } from "./AccountFilterPanel";
 import { AccountsTable } from "./AccountsTable";
 import { AiSearchBox } from "./AiSearchBox";
-import { BulkActionBar, type RowBulkAction } from "./BulkActionBar";
+import type { RowBulkAction } from "./BulkActionBar";
+
+// The bulk bar is ~930 lines and renders ONLY once rows are selected (`bulk.count > 0` below), so it has no
+// business in the initial chunk of the surface every prospect session lands on. `next/dynamic` defers it to
+// the first selection. `ssr: false` because it is selection-driven client state that never exists during a
+// server render — asking for its markup up front would be work with no output.
+//
+// The type import above stays static: types are erased at build time, so it costs nothing and keeps the
+// props checked.
+const BulkActionBar = dynamic(() => import("./BulkActionBar").then((m) => m.BulkActionBar), {
+  ssr: false,
+});
 import { FilterPanel } from "./FilterPanel";
 import { ProspectToolbar } from "./ProspectToolbar";
 import { QuickViewDrawer } from "./QuickViewDrawer";
