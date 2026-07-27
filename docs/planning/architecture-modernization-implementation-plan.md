@@ -693,10 +693,22 @@ process up to Caddy.
   past 200 rows** while being presented as totals. A naive SQL rollup endpoint suffices before ClickHouse
   (ADR-0010 puts the warehouse post-MVP).
 
-- [ ] **C-3.11 · Column projections on masked surfaces.** `contactRepository.ts:702,728,1085` use bare
+- [x] **C-3.11 · Column projections on masked surfaces.** `contactRepository.ts:702,728,1085` use bare
   `.select()`, pulling AES-GCM `email_enc`/`phone_enc` bytea + `custom_fields` + `field_provenance` jsonb —
   TOAST fetches and ciphertext into app memory — for surfaces that then **mask** it. The correct masked
   projection already exists in the same package (`searchRepository.ts:249-280`).
+  **shipped.** One `MASKED_COLUMNS` projection now serves `listByWorkspace`, `resolveByLinkedinPublicId`, and
+  `listMaskedByIds`. The mapper never actually wanted the expensive columns: `email_enc`/`phone_enc` were read
+  ONLY as `!= null`, and `custom_fields`/`field_provenance` were not read at all. So presence is computed in
+  SQL (`IS NOT NULL`, the same `hasEmailFlat`/`hasPhoneFlat` shape `searchRepository` already used) and the
+  ciphertext stays in the database — no TOAST fan-out, and no PII in application memory on surfaces whose whole
+  contract is that they return none.
+  **the type is the guard.** `MaskedContactRow` is a `Pick` of the full row plus the two booleans, so the
+  projection and its consumers drift together: remove a column and the mapper stops compiling rather than
+  silently reading `undefined`.
+  **verify:** unit suite green, but the real proof is SQL-level and comes from CI — 8 itest files exercise
+  these three reads, and `contactChannels.readcutover.itest.ts:220` asserts the gate-off `hasEmail`, which is
+  exactly the derivation that moved from `r.emailEnc != null` to the SQL presence column.
 
 - [ ] **C-3.12 · List counts + the activity write-amplification trigger.** `member_count` counter column
   instead of counting every membership row per sidebar render (`listRepository.ts:220-235`); batch the

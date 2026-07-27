@@ -155,8 +155,75 @@ export interface StaleRevealedRow {
   phoneStatus: string | null;
 }
 
-/** The full `contacts` select row — the input the masked projection maps from. */
+/** The full `contacts` select row. */
 type ContactRow = typeof contacts.$inferSelect;
+
+/**
+ * The columns a MASKED read actually needs — the projection every non-PII surface selects instead of `*`.
+ *
+ * A bare `.select()` on `contacts` pulls the AES-GCM `email_enc`/`phone_enc` bytea plus the `custom_fields` and
+ * `field_provenance` jsonb. Those are large enough to be TOASTed, so the row read fans out into extra heap
+ * fetches, and then the ciphertext is carried into application memory — on surfaces whose entire contract is
+ * that they never return PII. The mapper below never wanted any of it: `email_enc`/`phone_enc` are read ONLY as
+ * `!= null` presence, and the two jsonb columns are not read at all.
+ *
+ * So presence is computed in SQL (`IS NOT NULL`) and the ciphertext stays in the database. `searchRepository`'s
+ * MASKED projection already did exactly this; this is the same idea applied to the three list/lookup/export
+ * reads that had been left on `select()`.
+ */
+const MASKED_COLUMNS = {
+  id: contacts.id,
+  firstName: contacts.firstName,
+  lastName: contacts.lastName,
+  jobTitle: contacts.jobTitle,
+  emailDomain: contacts.emailDomain,
+  emailStatus: contacts.emailStatus,
+  phoneStatus: contacts.phoneStatus,
+  phoneLineType: contacts.phoneLineType,
+  seniorityLevel: contacts.seniorityLevel,
+  department: contacts.department,
+  locationCountry: contacts.locationCountry,
+  locationCity: contacts.locationCity,
+  outreachStatus: contacts.outreachStatus,
+  isRevealed: contacts.isRevealed,
+  ownerUserId: contacts.ownerUserId,
+  revealedByUserId: contacts.revealedByUserId,
+  accountId: contacts.accountId,
+  linkedinPublicId: contacts.linkedinPublicId,
+  linkedinUrl: contacts.linkedinUrl,
+  createdAt: contacts.createdAt,
+  lastVerifiedAt: contacts.lastVerifiedAt,
+  // Presence, never the ciphertext — the only thing the mapper ever asked these columns.
+  hasEmailFlat: sql<boolean>`${contacts.emailEnc} IS NOT NULL`,
+  hasPhoneFlat: sql<boolean>`${contacts.phoneEnc} IS NOT NULL`,
+} as const;
+
+/** The row shape MASKED_COLUMNS yields. Written as a `Pick` of the full row so the two drift together: drop a
+ *  column from the projection and every consumer stops compiling, rather than silently reading `undefined`. */
+type MaskedContactRow = Pick<
+  ContactRow,
+  | "id"
+  | "firstName"
+  | "lastName"
+  | "jobTitle"
+  | "emailDomain"
+  | "emailStatus"
+  | "phoneStatus"
+  | "phoneLineType"
+  | "seniorityLevel"
+  | "department"
+  | "locationCountry"
+  | "locationCity"
+  | "outreachStatus"
+  | "isRevealed"
+  | "ownerUserId"
+  | "revealedByUserId"
+  | "accountId"
+  | "linkedinPublicId"
+  | "linkedinUrl"
+  | "createdAt"
+  | "lastVerifiedAt"
+> & { hasEmailFlat: boolean; hasPhoneFlat: boolean };
 
 /**
  * Map a full `contacts` row → the masked, non-PII DTO the search/results + export surfaces read, INCLUDING the
@@ -164,15 +231,15 @@ type ContactRow = typeof contacts.$inferSelect;
  * from the canonical single source in @leadwolf/types (the SAME composition as listRepository.toMaskedMember —
  * never re-derived). All inputs are non-PII present-flags + statuses + the last-verified age, so it is safe here.
  */
-function toMaskedContact(r: ContactRow, channels?: ContactChannelSummaries): MaskedContact {
+function toMaskedContact(r: MaskedContactRow, channels?: ContactChannelSummaries): MaskedContact {
   const emailStatus = r.emailStatus as MaskedContact["emailStatus"];
   const phoneStatus = r.phoneStatus as MaskedContact["phoneStatus"];
   // S-CH4 gate-on (channels present): has_email/has_phone derive from live child-row counts ("∃ live value"
   // — identical to the flat derivation in steady state by CH-INV-1, correct for no-primary edges, and
   // secondaries count). dataHealth follows. Gate-off (channels absent) both are the flat-column presence,
   // byte-identical to the pre-S-CH4 projection.
-  const hasEmail = channels ? channels.emailCount > 0 : r.emailEnc != null;
-  const hasPhone = channels ? channels.phoneCount > 0 : r.phoneEnc != null;
+  const hasEmail = channels ? channels.emailCount > 0 : r.hasEmailFlat;
+  const hasPhone = channels ? channels.phoneCount > 0 : r.hasPhoneFlat;
   const lastVerifiedAt = r.lastVerifiedAt?.toISOString() ?? null;
   const dataHealth = computeContactDataQuality({
     hasName: r.firstName !== null || r.lastName !== null,
@@ -218,7 +285,7 @@ function toMaskedContact(r: ContactRow, channels?: ContactChannelSummaries): Mas
  *  query per table for the whole page (no N+1). Gate-off ⇒ the rows pass through untouched, byte-identical. */
 async function withChannelSummaries(
   tx: Tx,
-  rows: ContactRow[],
+  rows: MaskedContactRow[],
   opts: ContactReadOpts,
 ): Promise<MaskedContact[]> {
   if (!opts.channelsFromChild || rows.length === 0) return rows.map((r) => toMaskedContact(r));
@@ -705,7 +772,7 @@ export const contactRepository = {
     return withTenantTx(scope, async (tx) => {
       // DSAR tombstones never surface (08 §4.2).
       const rows = await tx
-        .select()
+        .select(MASKED_COLUMNS)
         .from(contacts)
         .where(isNull(contacts.deletedAt))
         .orderBy(desc(contacts.createdAt))
@@ -731,7 +798,7 @@ export const contactRepository = {
   ): Promise<MaskedContact | null> {
     return withTenantTx(scope, async (tx) => {
       const rows = await tx
-        .select()
+        .select(MASKED_COLUMNS)
         .from(contacts)
         .where(and(eq(contacts.linkedinPublicId, linkedinPublicId), isNull(contacts.deletedAt)))
         .limit(1);
@@ -1088,7 +1155,7 @@ export const contactRepository = {
   ): Promise<MaskedContact[]> {
     if (ids.length === 0) return [];
     const rows = await tx
-      .select()
+      .select(MASKED_COLUMNS)
       .from(contacts)
       .where(and(inArray(contacts.id, ids), isNull(contacts.deletedAt)))
       .orderBy(desc(contacts.createdAt), desc(contacts.id));
