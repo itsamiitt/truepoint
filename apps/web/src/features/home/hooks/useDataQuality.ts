@@ -1,33 +1,29 @@
-// useDataQuality.ts — loads the per-workspace Data Health rollup (GET /home/data-quality) with loading/error +
-// a reload. Presentation state only; the shape comes from @leadwolf/types. A lighter sibling of useHomeSummary
-// (no module cache — the payload is small + server-cached); the Data Health card fetches it independently of the
-// shared summary because it is a separate endpoint.
+// useDataQuality.ts — loads the per-workspace Data Health rollup (GET /home/data-quality). Presentation state
+// only; the shape comes from @leadwolf/types. A separate query from the cockpit summary because it is a
+// separate endpoint — but now a real cache entry, so two cards mounting it share one request instead of two.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchDataQuality } from "../api";
+import { homeKeys } from "../keys";
 import type { WorkspaceDataQuality } from "../types";
 
 export function useDataQuality() {
-  const [metrics, setMetrics] = useState<WorkspaceDataQuality | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery<WorkspaceDataQuality>({
+    queryKey: homeKeys.dataQuality(),
+    queryFn: fetchDataQuality,
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setMetrics(await fetchDataQuality());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load your data health");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { metrics, error, loading, reload };
+  return {
+    metrics: query.data ?? null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load your data health"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+  };
 }

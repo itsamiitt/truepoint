@@ -3,11 +3,20 @@
 // a search is shareable and restored on refresh / back. setQuery writes back through router.replace; the search
 // re-runs whenever the (URL-derived) query changes. Exposes keyset "load more" and an optimistic markRevealed
 // so a reveal flips the row without a refetch. Replaces the client-side useContacts path for the filtered grid.
+//
+// The keyset pages are a TanStack `useInfiniteQuery`, which is what this hook was hand-rolling: accumulate
+// pages in useState, track the cursor, and cancel the previous request through an AbortController ref so a
+// superseded search could not write stale rows. RQ does all three, and does the last one properly — results
+// are keyed by the search, so an in-flight older search cannot land on a newer one's entry no matter what
+// order the responses arrive in. It also means going back to a previous filter combination is instant rather
+// than a fresh round trip, which the ref-based version could never offer because it kept exactly one result set.
 "use client";
 
-import type { ContactHit, ContactQuery } from "@leadwolf/types";
+import type { ContactHit, ContactQuery, SearchPage } from "@leadwolf/types";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { prospectKeys } from "../keys";
 import { searchContacts } from "../searchApi";
 import { paramsToQuery, queryToSearchString } from "../searchUrlState";
 
@@ -39,17 +48,13 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const qc = useQueryClient();
 
   // URL → query (the source of truth). Re-derives whenever the query string changes (refresh, back, share).
   const query = useMemo(
     () => paramsToQuery(new URLSearchParams(searchParams?.toString() ?? "")),
     [searchParams],
   );
-
-  const [hits, setHits] = useState<ContactHit[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Write a new query to the URL. replace (not push) so per-edit changes don't flood history; the URL still
   // fully captures the search for refresh/share. pathname-relative so it stays on the prospect route. The
@@ -63,71 +68,61 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     [router, pathname, searchParams],
   );
 
-  // The request in flight, so a newer search can cancel it. Two searches used to race with no cancellation and
-  // the LAST to resolve won — which is not necessarily the newest, so a fast filter edit could leave the
-  // previous query's results on screen. Every abandoned keystroke also cost the backend a full search.
-  const inFlight = useRef<AbortController | null>(null);
+  const queryKey = prospectKeys.contactSearch(query);
+  const search = useInfiniteQuery<SearchPage<ContactHit>>({
+    queryKey,
+    enabled,
+    initialPageParam: null,
+    // RQ owns the AbortSignal: it aborts on unmount and on cancellation, so an abandoned keystroke stops
+    // costing the backend a full search without this hook tracking a controller itself.
+    queryFn: ({ pageParam, signal }) =>
+      searchContacts(
+        { ...query, limit: PAGE_SIZE, cursor: (pageParam as string | null) ?? undefined },
+        signal,
+      ),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
 
-  const run = useCallback(
-    async (fromCursor: string | null) => {
-      inFlight.current?.abort();
-      const controller = new AbortController();
-      inFlight.current = controller;
-      setLoading(true);
-      setError(null);
-      try {
-        const page = await searchContacts(
-          { ...query, limit: PAGE_SIZE, cursor: fromCursor ?? undefined },
-          controller.signal,
-        );
-        // Superseded while awaiting — a newer run owns the state now; do not write stale results.
-        if (controller.signal.aborted) return;
-        setHits((prev) => (fromCursor ? [...prev, ...page.hits] : page.hits));
-        setCursor(page.nextCursor);
-      } catch (e) {
-        // Our own cancellation is not a failure and must not surface as an error to the user.
-        if (controller.signal.aborted) return;
-        setError(e instanceof Error ? e.message : "Search failed");
-      } finally {
-        // Leave `loading` true when superseded: the newer run already set it and owns clearing it.
-        if (!controller.signal.aborted) setLoading(false);
-      }
+  const hits = useMemo(() => search.data?.pages.flatMap((page) => page.hits) ?? [], [search.data]);
+
+  const markRevealed = useCallback(
+    (id: string) => {
+      // Written straight into the cache rather than into a parallel useState, so the optimistic flip survives
+      // a remount and stays consistent with what a later refetch replaces it with.
+      qc.setQueryData<{ pages: SearchPage<ContactHit>[]; pageParams: unknown[] }>(
+        queryKey,
+        (old) =>
+          old && {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              hits: page.hits.map((h) => (h.id === id ? { ...h, isRevealed: true } : h)),
+            })),
+          },
+      );
     },
-    [query],
+    [qc, queryKey],
   );
-
-  // Re-run from the first page whenever the URL-derived query changes (keyed on its serialization).
-  const queryKey = useMemo(() => JSON.stringify(query), [query]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run is intentionally keyed on queryKey only.
-  useEffect(() => {
-    if (!enabled) return;
-    void run(null);
-  }, [queryKey, enabled]);
-
-  // Cancel whatever is in flight when the consumer unmounts, so a late response cannot set state on a dead tree.
-  useEffect(() => () => inFlight.current?.abort(), []);
-
-  const loadMore = useCallback(() => {
-    if (cursor) void run(cursor);
-  }, [cursor, run]);
-
-  const reload = useCallback(() => {
-    void run(null);
-  }, [run]);
-
-  const markRevealed = useCallback((id: string) => {
-    setHits((prev) => prev.map((h) => (h.id === id ? { ...h, isRevealed: true } : h)));
-  }, []);
 
   return {
     query,
     setQuery,
     hits,
-    loading,
-    error,
-    hasMore: cursor !== null,
-    loadMore,
-    reload,
+    // A filter edit is a NEW cache entry, so isPending covers exactly what the old cold-load flag did; a
+    // "load more" is deliberately not a full-grid loading state.
+    loading: search.isPending && enabled,
+    error: search.error
+      ? search.error instanceof Error
+        ? search.error.message
+        : "Search failed"
+      : null,
+    hasMore: search.hasNextPage,
+    loadMore: () => {
+      if (search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();
+    },
+    reload: () => {
+      void search.refetch();
+    },
     markRevealed,
   };
 }

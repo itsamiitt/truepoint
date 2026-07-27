@@ -4,6 +4,10 @@
 // router.replace; the search re-runs whenever the (URL-derived) query changes. Exposes keyset "load more".
 //
 // It is deliberately INDEPENDENT of useProspectSearch and does NOT touch searchUrlState (the Contacts codec).
+// The keyset pages are a TanStack `useInfiniteQuery` for the same reasons as its Contacts sibling — page
+// accumulation, cursor tracking and supersede-cancellation were all hand-rolled here, and RQ keys results by
+// the search so a late response cannot overwrite a newer one.
+//
 // Its codec uses its own URL params (`aq`/`asort`/`af`) so the Accounts query can coexist with the Contacts
 // query in one URL without either clobbering the other. The filter blob is the SAME base64url-of-JSON shape as
 // the Contacts codec, re-validated defensively on read (a hand-mangled URL degrades to an empty query, never
@@ -11,9 +15,11 @@
 "use client";
 
 import type { AccountQuery, AccountSearchPage, MaskedAccount } from "@leadwolf/types";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { searchAccounts } from "../accountSearchApi";
+import { prospectKeys } from "../keys";
 
 const PAGE_SIZE = 50;
 
@@ -77,11 +83,6 @@ export function useAccountSearch(options?: { enabled?: boolean }): AccountSearch
     [searchParams],
   );
 
-  const [accounts, setAccounts] = useState<MaskedAccount[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   // Write a new query to the URL. replace (not push) so per-edit changes don't flood history; merges into the
   // existing params (so a coexisting Contacts query is preserved), pathname-relative.
   const setQuery = useCallback(
@@ -96,61 +97,42 @@ export function useAccountSearch(options?: { enabled?: boolean }): AccountSearch
     [router, pathname, searchParams],
   );
 
-  // Cancels a superseded search so the newest query wins, rather than whichever response happens to land last.
-  const inFlight = useRef<AbortController | null>(null);
+  const search = useInfiniteQuery<AccountSearchPage>({
+    queryKey: prospectKeys.accountSearch(query),
+    enabled,
+    initialPageParam: null,
+    // RQ owns the AbortSignal and keys results by the search, so a superseded request can neither cost the
+    // backend a full search nor land its rows on the newer query's entry.
+    queryFn: ({ pageParam, signal }) =>
+      searchAccounts(
+        { ...query, limit: PAGE_SIZE, cursor: (pageParam as string | null) ?? undefined },
+        signal,
+      ),
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
 
-  const run = useCallback(
-    async (fromCursor: string | null) => {
-      inFlight.current?.abort();
-      const controller = new AbortController();
-      inFlight.current = controller;
-      setLoading(true);
-      setError(null);
-      try {
-        const page: AccountSearchPage = await searchAccounts(
-          { ...query, limit: PAGE_SIZE, cursor: fromCursor ?? undefined },
-          controller.signal,
-        );
-        if (controller.signal.aborted) return; // a newer run owns the state
-        setAccounts((prev) => (fromCursor ? [...prev, ...page.accounts] : page.accounts));
-        setCursor(page.nextCursor);
-      } catch (e) {
-        if (controller.signal.aborted) return; // our own cancellation is not an error
-        setError(e instanceof Error ? e.message : "Account search failed");
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    },
-    [query],
+  const accounts = useMemo<MaskedAccount[]>(
+    () => search.data?.pages.flatMap((page) => page.accounts) ?? [],
+    [search.data],
   );
-
-  // Re-run from the first page whenever the URL-derived query changes (keyed on its serialization).
-  const queryKey = useMemo(() => JSON.stringify(query), [query]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run is intentionally keyed on queryKey only.
-  useEffect(() => {
-    if (!enabled) return;
-    void run(null);
-  }, [queryKey, enabled]);
-
-  useEffect(() => () => inFlight.current?.abort(), []);
-
-  const loadMore = useCallback(() => {
-    if (cursor) void run(cursor);
-  }, [cursor, run]);
-
-  const reload = useCallback(() => {
-    void run(null);
-  }, [run]);
 
   return {
     query,
     setQuery,
     accounts,
-    loading,
-    error,
-    hasMore: cursor !== null,
-    loadMore,
-    reload,
+    loading: search.isPending && enabled,
+    error: search.error
+      ? search.error instanceof Error
+        ? search.error.message
+        : "Account search failed"
+      : null,
+    hasMore: search.hasNextPage,
+    loadMore: () => {
+      if (search.hasNextPage && !search.isFetchingNextPage) void search.fetchNextPage();
+    },
+    reload: () => {
+      void search.refetch();
+    },
   };
 }
 
