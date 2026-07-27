@@ -860,7 +860,7 @@ all**, and a **Typesense 27.1 container runs in prod compose with zero readers**
 `TYPESENSE_API_KEY` are declared in env and read by nothing. So this phase is *implementing the accepted
 ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one must be minted (G5).
 
-- [ ] **S-4.1 · Interim: make Postgres search index-served.** `CREATE EXTENSION pg_trgm` + GIN trgm on
+- [x] **S-4.1 · Interim: make Postgres search index-served.** `CREATE EXTENSION pg_trgm` + GIN trgm on
   `contacts(job_title, email_domain)` + a generated `full_name` column, and `accounts(name, domain)`;
   generated `tsvector` + `websearch_to_tsquery` for ranked text.
   **why now:** prod search is 6-leg `ILIKE '%…%'` ORs including an **unindexed concat expression**
@@ -869,6 +869,21 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   is a full workspace scan. Label this explicitly as a **stopgap with a kill date**, not a replacement for
   S-4.2. **needs:** L-1.4 (same migration discipline) · **check:** Neon must allow `CREATE EXTENSION pg_trgm`
   without superuser.
+  **trgm half shipped** (migration 0081): GIN trgm on every ILIKE-d leg — first/last name, the concat
+  expression, job_title, email_domain, linkedin_url, and accounts name/domain. Verified on real Postgres by
+  CI.
+  **citext was the trap.** `email_domain` and `accounts.domain` are citext, and `gin_trgm_ops` is defined over
+  `text` with citext not binary-coercible to it — so a bare column index does not merely go unused, it FAILS
+  to create, breaking every migrate run. Both are indexed as `(…::text)` expressions and the queries cast to
+  match (an expression index is only consulted on a textual match). Matching is unchanged; ILIKE is
+  case-insensitive regardless.
+  **tsvector half deliberately NOT shipped.** It is not a speedup but a change of meaning — `ILIKE %eng%`
+  matches "Engineering", a tsquery does not — so it would alter which contacts an existing saved search
+  returns. That belongs with S-4.2 and a product decision.
+  **Neon check still open:** CI runs plain postgres:16 where the migration role is superuser, so a green CI
+  does NOT prove `CREATE EXTENSION pg_trgm` is permitted on Neon. Confirm before the next production migrate.
+  **Marked in the file as a stopgap with a kill date** — trgm indexes are large and write-amplifying, so drop
+  them when S-4.2 lands rather than paying for them forever.
 
 - [ ] **S-4.2 · Build the real Typesense adapter behind `SearchPort`.** Overlay search + facets + suggest,
   every query filtered by `workspace_id` (ADR-0002 §4; `truepoint-security` has final say on the filter).
