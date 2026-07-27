@@ -625,16 +625,57 @@ process up to Caddy.
   served from a stale cache**.
   **first consumers:** `L-1.6` home summary, facet counts, credit balance, the public pricing catalog
   (`app.ts:190-193` hits the DB per anonymous request with no `Cache-Control`).
+  **the tier is built.** `@leadwolf/core` owns the policy (`createReadThroughCache`, `tenantKey`,
+  `systemKey`); `@leadwolf/integrations` has the thin ioredis adapter; `apps/api/src/cache.ts` is the wired
+  singleton. **Tenant scoping is a TYPE, not a convention** — the only way to build a normal key is
+  `tenantKey(scope, …)`, which cannot be called without a tenantId, and genuinely tenant-less data must go
+  through the deliberately-conspicuous `systemKey`. Key parts are charset-validated so nothing can smuggle a
+  `:` or `*` into a prefix or widen an invalidation.
+  **Properties that made this non-trivial, each pinned by a test:** fail-open (an unreachable Redis degrades
+  to the uncached path — a cache outage must not become a data outage); a failed load is never cached (one
+  transient DB error would otherwise be served for a whole TTL); single-flight (a cold or just-expired hot key
+  otherwise lets every in-flight request run the same query at once — the cache making the worst moment
+  worse); TTL jitter, upward only, so a caller's freshness bound is never silently shortened.
+  **The stale-write-back race is the one worth reading about.** A reader that misses, then loads, can have a
+  mutation land in between — and its loader would write the PRE-mutation value into the cache AFTER the
+  invalidation, undoing the write for a full TTL. My first implementation marked the in-flight record, which a
+  test proved insufficient: the race also covers the window before the load is even registered (the reader is
+  still awaiting its own cache lookup). Fixed with a per-key epoch captured synchronously on entry and
+  compared before the write, with both bookkeeping maps reference-counted so they stay bounded.
+  **Connection options are the inverse of the queue connections in the same app, deliberately.** BullMQ uses
+  `maxRetriesPerRequest: null` so a job waits out a blip. A cache must do the opposite: `enableOfflineQueue:
+  false`, one retry, 150 ms command timeout — otherwise a wedged Redis silently BUFFERS the command and every
+  cached read hangs on the very outage the fail-open path exists to survive.
+  **First consumer wired:** the public pricing catalog — 60 s TTL plus explicit invalidation on all four
+  `credit_pack.set`/`plan_template.set` write paths (invalidating after commit, so a concurrent read cannot
+  repopulate from pre-write rows), and a `Cache-Control` header where there was none. Its own file had
+  documented exactly this as the deferred follow-up, blocked on "never serve a stale-forever price" — which
+  the TTL-plus-invalidation pair is precisely the answer to. Display data, not a money decision: checkout
+  re-reads the authoritative row.
+  **Still to wire:** L-1.6 home summary, facet counts, entitlements. Credit balances and permission decisions
+  are deliberately NOT candidates.
 
 - [ ] **C-3.2 · Precompute the aggregates.** `dataQualitySummary` (`contactRepository.ts:745-748`) is a live
   per-view aggregate scan **despite a `data_quality_snapshots` table already existing** — wire the worker
   refresh. Same for burn-by-day.
 
-- [ ] **C-3.3 · Facet counts in one pass.** `searchRepository.ts:438-459` +
+- [x] **C-3.3 · Facet counts in one pass.** `searchRepository.ts:438-459` +
   `accountSearchRepository.ts:264-346` run one full GROUP-BY aggregate scan **per facet, sequentially, per
   request** (8 facets = 8 re-executions of the whole WHERE, ILIKE legs and account join included), and
   select-all does an exact uncapped `COUNT(*)`. Move to `GROUPING SETS`, cache, and switch to estimated
   counts past a threshold.
+  **shipped, both halves.** Facets whose own term filter is not active share an identical WHERE (each facet's
+  WHERE differs only by excluding its own filter), so they collapse into one `GROUPING SETS` pass; only the
+  actively-filtered ones keep a query. `grouping(expr)` separates a real NULL from "not in this row's set",
+  which the shared WHERE makes impossible to express as the old per-facet `expr IS NOT NULL`; `row_number()`
+  over the grouping-set bitmask reproduces the per-facet top-50 that came from the per-query LIMIT.
+  **Two accounts facets cannot join the batch, and the reasons are worth keeping:** `technology` counts
+  unnested jsonb through a LATERAL (not one-row-per-account), and `employee_band` is a CASE carrying bound
+  parameters — `GROUPING SETS` must repeat the expression, and re-rendering re-binds those params under new
+  placeholder numbers so Postgres raises 42803 against the selected expression. That is the same trap the
+  existing `GROUP BY 1` comment documents. Eight scans become one plus at most two.
+  **Not done here:** the caching and the estimated-count-past-a-threshold half, which both depend on C-3.1's
+  cache tier; the uncapped select-all `COUNT(*)` is untouched.
 
 - [ ] **C-3.4 · Flip the import v2 pipeline on.** CSV/**XLSX** is parsed synchronously on the API event loop
   (blocking the single Bun loop for all concurrent users) and the **job payload carries the parsed rows**
@@ -710,12 +751,32 @@ process up to Caddy.
   these three reads, and `contactChannels.readcutover.itest.ts:220` asserts the gate-off `hasEmail`, which is
   exactly the derivation that moved from `r.emailEnc != null` to the SQL presence column.
 
-- [ ] **C-3.12 · List counts + the activity write-amplification trigger.** `member_count` counter column
+- [x] **C-3.12 · List counts + the activity write-amplification trigger.** `member_count` counter column
   instead of counting every membership row per sidebar render (`listRepository.ts:220-235`); batch the
   dynamic-list N+1 (`packages/core/src/prospect/lists.ts:187-203` — a saved-search fetch + filtered
   `COUNT(*)` per dynamic list, serially, inside one held transaction); convert
   `rls/activity.sql:14-24`'s per-row AFTER-INSERT contact UPDATE to a statement-level trigger with
   transition tables (today bulk email-event ingest = one contact UPDATE per row + hot-row lock contention).
+  **shipped, all three — but the counts one deliberately NOT as a counter column.**
+  - *Trigger:* now `FOR EACH STATEMENT` with a `NEW TABLE` transition table, aggregating `max(occurred_at)`
+    per contact first. The row-level version did N single-row `UPDATE contacts` per bulk insert and, when
+    several rows shared a contact (the normal case — opens/clicks arrive batched per contact), re-updated the
+    same row once per event, taking the lock and leaving another dead tuple each time. Semantics unchanged:
+    newest-wins, and the `<` guard still stops a backfilled older activity regressing the cache. CI proves
+    both — a new multi-row single-statement test asserting each contact lands on ITS OWN max, and the
+    pre-existing no-regression test.
+  - *Dynamic-list N+1:* `listLists` did a saved-search fetch plus a filtered `COUNT(*)` per dynamic list,
+    sequentially, inside one held transaction — N lists serialised 2N network waits while holding a pooled
+    connection. Now two round-trips total: `savedSearchRepository.findManyByIds` (same visibility rule as
+    `findById`) and `searchRepository.countContactsBatchTx` (a `UNION ALL` of the same per-query counts).
+    Postgres still evaluates one aggregate per query; what collapses is the waiting, which is what dominated.
+  - *Counts:* the item asked for a denormalised `member_count`. **Rejected in favour of a correlated
+    index-only count.** The old query was not an N+1 — it was one `LEFT JOIN list_members … GROUP BY`, which
+    reads every membership row the workspace owns on every sidebar render, so its cost tracks total
+    memberships. A correlated `count(*)` per list is served by the existing `list_id`-leading indexes
+    (`uniq_list_members_list_contact`, `idx_list_members_list_added_at`), so cost tracks the number of LISTS
+    (tens) instead. That gets the same win without a counter trigger on every membership write, a backfill, or
+    the standing risk of a drifted counter showing users a wrong number with nothing to reconcile against.
 
 ---
 

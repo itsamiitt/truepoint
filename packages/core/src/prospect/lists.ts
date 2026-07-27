@@ -179,29 +179,43 @@ export async function createDynamicList(input: CreateDynamicListInput): Promise<
 export async function listLists(actor: ListActor): Promise<List[]> {
   return withTenantTx(actor.scope, async (tx) => {
     const rows = await listRepository.listByWorkspaceTx(tx);
-    const out: List[] = [];
-    // S-CH4b: dynamic-list counts must use the SAME child-presence predicates the members page / search does.
-    // Evaluated lazily at most ONCE (only if a dynamic list is present; env-off ⇒ zero queries, byte-identical
-    // gate-off) — the per-tenant flag is stable within the tx.
-    let channelsFromChild: boolean | undefined;
-    for (const r of rows) {
-      if (r.kind !== "dynamic" || !r.savedSearchId) {
-        out.push(toDto(r, actor.callerUserId));
-        continue;
+    // Resolve the dynamic lists in TWO round-trips rather than two per list. This loop used to do a
+    // saved-search fetch and then a filtered COUNT(*) for each dynamic list, sequentially, inside this one
+    // held transaction — so N dynamic lists serialised 2N network waits (and held a pooled connection for all
+    // of them) before the sidebar could render. The work Postgres does is the same; the waiting is not.
+    const dynamic = rows.filter((r) => r.kind === "dynamic" && r.savedSearchId);
+    const counts = new Map<string, number>();
+    if (dynamic.length > 0) {
+      const saved = await savedSearchRepository.findManyByIds(
+        tx,
+        dynamic.map((r) => r.savedSearchId as string),
+        actor.callerUserId,
+      );
+      // A dynamic list whose backing query is missing or invalid degrades to 0 rather than failing the whole
+      // index — unchanged; it simply never enters the batch.
+      const countable: { key: string; query: ContactQuery }[] = [];
+      for (const r of dynamic) {
+        const row = saved.get(r.savedSearchId as string);
+        const parsed = row ? contactQuery.safeParse(row.filters) : null;
+        if (parsed?.success === true)
+          countable.push({ key: r.id, query: expandTitleFilters(parsed.data) });
       }
-      const saved = await savedSearchRepository.findById(tx, r.savedSearchId, actor.callerUserId);
-      const parsed = saved ? contactQuery.safeParse(saved.filters) : null;
-      let count = 0;
-      if (parsed?.success === true) {
-        if (channelsFromChild === undefined)
-          channelsFromChild = await isChannelReadFromChildEnabled(tx, actor.scope.tenantId);
-        count = await searchRepository.countContactsTx(tx, expandTitleFilters(parsed.data), {
+      if (countable.length > 0) {
+        // S-CH4b: dynamic-list counts must use the SAME child-presence predicates the members page / search
+        // does. Read at most ONCE, and only when something is actually countable (env-off ⇒ zero extra
+        // queries, byte-identical gate-off) — the per-tenant flag is stable within the tx.
+        const channelsFromChild = await isChannelReadFromChildEnabled(tx, actor.scope.tenantId);
+        const batched = await searchRepository.countContactsBatchTx(tx, countable, {
           channelsFromChild,
         });
+        for (const [k, v] of batched) counts.set(k, v);
       }
-      out.push(toDto({ ...r, memberCount: count }, actor.callerUserId));
     }
-    return out;
+    return rows.map((r) =>
+      r.kind === "dynamic" && r.savedSearchId
+        ? toDto({ ...r, memberCount: counts.get(r.id) ?? 0 }, actor.callerUserId)
+        : toDto(r, actor.callerUserId),
+    );
   });
 }
 

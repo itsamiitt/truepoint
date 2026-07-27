@@ -23,6 +23,7 @@
     "auth",
     "auth-policy",
     "billing",
+    "cache",
     "channels",
     "compliance",
     "contacts-bulk",
@@ -100,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1785,
-  "fileSetHash": "sha256:25ccd03c7a2465f72ae0ea7a790c0b53a5cc0e63f1a708ab6103dbcc324acc74",
+  "fileCount": 1789,
+  "fileSetHash": "sha256:48fe023c3160d306ace16894ce424213e6ac735c2503ee7ebaa278c9194b81f3",
   "features": {
     "account-search": {
       "web": [],
@@ -294,6 +295,18 @@
         "apps/workers/src/queues/subscriptionDunningSweep.ts",
         "apps/workers/src/queues/subscriptionGrantSweep.ts"
       ],
+      "integrations": []
+    },
+    "cache": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/cache/readThrough.test.ts",
+        "packages/core/src/cache/readThrough.ts"
+      ],
+      "db": [],
+      "workers": [],
       "integrations": []
     },
     "channels": {
@@ -1906,6 +1919,7 @@
     "apps/api": [
       "apps/api/src/app.authz.test.ts",
       "apps/api/src/app.ts",
+      "apps/api/src/cache.ts",
       "apps/api/src/instrumentation.ts",
       "apps/api/src/lifecycle.ts",
       "apps/api/src/metricsRoute.test.ts",
@@ -2503,6 +2517,7 @@
       "packages/integrations/src/forgeObjectStore.ts",
       "packages/integrations/src/forgeRateLimiter.ts",
       "packages/integrations/src/index.ts",
+      "packages/integrations/src/redisCacheStore.ts",
       "packages/integrations/src/security/clamdScanner.test.ts",
       "packages/integrations/src/security/clamdScanner.ts",
       "packages/integrations/src/storage/s3FileStore.itest.ts",
@@ -2788,6 +2803,7 @@
     "undeclared domain 'announcements' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'audit-log' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'auth-policy' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'cache' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'channels' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-bulk' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'contacts-dedup' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

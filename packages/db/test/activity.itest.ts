@@ -258,4 +258,37 @@ describe("M7+M8 activity timeline, engagement scoring & Sales Nav links DoD", ()
     expect(String(dup)).toContain("duplicate key");
     expect(String(dup)).toContain("uniq_sales_nav_links_ws_url");
   });
+
+  test("MULTI-ROW insert: the statement trigger sets each contact to ITS OWN newest (C-3.12)", async () => {
+    // The row-level trigger this replaced fired once per inserted row, so a bulk ingest of N activities did N
+    // single-row `UPDATE contacts` — and re-updated the SAME contact repeatedly when several rows belonged to
+    // it, taking the row lock and leaving another dead tuple each time. The statement-level version aggregates
+    // the transition table first: one UPDATE, each affected contact touched exactly once.
+    //
+    // A single-row insert cannot tell the two implementations apart, which is why this inserts many rows in ONE
+    // statement, spanning two contacts, deliberately out of chronological order.
+    const initech = await contactIdByDomain(wsA, "initech.com");
+    const acme = await contactIdByDomain(wsA, "acme.com");
+    const acmeBefore = await lastActivityAt(acme);
+
+    const tOld = new Date(Date.now() - 5 * DAY);
+    const tNewInitech = new Date(Date.now() - 2 * DAY);
+    const tNewAcme = new Date(Date.now() + 1 * DAY); // ahead of every existing acme activity
+    await admin`
+      INSERT INTO activities (tenant_id, workspace_id, contact_id, activity_type, channel, occurred_at)
+      VALUES
+        (${tenantA}, ${wsA}, ${initech}, 'email_opened',  'email', ${tNewInitech}),
+        (${tenantA}, ${wsA}, ${initech}, 'email_opened',  'email', ${tOld}),
+        (${tenantA}, ${wsA}, ${acme},    'email_opened',  'email', ${tOld}),
+        (${tenantA}, ${wsA}, ${acme},    'email_clicked', 'email', ${tNewAcme}),
+        (${tenantA}, ${wsA}, ${acme},    'email_opened',  'email', ${tOld})`;
+
+    // Per contact: the max of ITS OWN rows — not the max of the statement, which would have leaked
+    // acme's newer timestamp onto initech.
+    expect(await lastActivityAt(initech)).toBe(tNewInitech.getTime());
+    expect(await lastActivityAt(acme)).toBe(tNewAcme.getTime());
+    // The older rows in the same statement never dragged a cache backwards (the no-regress guard still holds
+    // when newest and oldest for one contact arrive together).
+    expect(await lastActivityAt(acme)).toBeGreaterThan(acmeBefore);
+  });
 });

@@ -227,11 +227,22 @@ export const listRepository = {
         savedSearchId: lists.savedSearchId,
         createdAt: lists.createdAt,
         updatedAt: lists.updatedAt,
-        memberCount: sql<number>`count(${listMembers.id})::int`,
+        // A CORRELATED count, not a LEFT JOIN + GROUP BY over the whole membership table.
+        //
+        // The join form had to read every `list_members` row the workspace owns and hash-aggregate them on
+        // every sidebar render, so its cost tracked total memberships. This form does one count per list, and
+        // each one is served by the existing `list_id`-leading indexes (uniq_list_members_list_contact,
+        // idx_list_members_list_added_at) — so cost tracks the number of LISTS, which is tens, rather than the
+        // number of memberships, which is not.
+        //
+        // Deliberately NOT a denormalised `member_count` column: that would need a counter trigger on every
+        // membership insert/delete plus a backfill, and a counter that drifts shows users a wrong number with
+        // nothing to reconcile against. An index-only count is exact by construction and needs no migration.
+        memberCount: sql<number>`(
+          SELECT count(*)::int FROM ${listMembers} WHERE ${listMembers.listId} = ${lists.id}
+        )`,
       })
       .from(lists)
-      .leftJoin(listMembers, eq(listMembers.listId, lists.id))
-      .groupBy(lists.id)
       .orderBy(asc(lists.name));
     // The join-count is the EXPLICIT `list_members` size — authoritative for static lists. A dynamic list has
     // no `list_members` rows, so it reads 0 here; core recomputes its count from the saved query (the index

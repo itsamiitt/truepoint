@@ -16,6 +16,11 @@ import {
   planTemplateUpsertSchema,
 } from "@leadwolf/types";
 import { type Context, Hono } from "hono";
+// Every write here changes what the PUBLIC pricing page shows, so each one drops the matching cached catalog
+// entry. Invalidation runs AFTER the audited transaction commits: dropping the key before the commit would let
+// a concurrent public read repopulate it from the pre-write rows, and that stale value would then survive a
+// full TTL.
+import { PRICING_PACKS_KEY, PRICING_PLANS_KEY, cache } from "../../cache.ts";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
 
@@ -71,6 +76,7 @@ pricingRoutes.put("/credit-packs", async (c) => {
       metadata: { credits: input.credits, priceCents: input.priceCents },
     },
   );
+  await cache().invalidate(PRICING_PACKS_KEY);
   return c.json({ pack: toView(pack) });
 });
 
@@ -88,6 +94,7 @@ pricingRoutes.post("/credit-packs/:key/active", async (c) => {
     },
     { targetType: "credit_pack", targetId: key, metadata: { active: parsed.data.active } },
   );
+  await cache().invalidate(PRICING_PACKS_KEY);
   return c.json({ ok: true, key, active: parsed.data.active });
 });
 
@@ -138,6 +145,7 @@ pricingRoutes.put("/plan-templates", async (c) => {
     (tx) => planTemplateRepository.upsert(tx, input),
     { targetType: "plan_template", targetId: input.key, metadata: { seatLimit: input.seatLimit } },
   );
+  await cache().invalidate(PRICING_PLANS_KEY);
   return c.json({ template: toTemplateView(template) });
 });
 
@@ -155,5 +163,6 @@ pricingRoutes.post("/plan-templates/:key/active", async (c) => {
     },
     { targetType: "plan_template", targetId: key, metadata: { active: parsed.data.active } },
   );
+  await cache().invalidate(PRICING_PLANS_KEY);
   return c.json({ ok: true, key, active: parsed.data.active });
 });
