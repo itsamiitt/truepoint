@@ -753,6 +753,13 @@ optimization because optimizing a broken path is wasted work.
   **needs:** P-1.1 (G7 — the moment dev deps are pruned, workers break) · **also:** the "Turbo refuses the
   package graph" comment at `Dockerfile:20-24` is **stale** (the db↔core cycle is gone; the graph is
   acyclic), so `turbo run build` can replace the 4 serial `next build`s — verify empirically.
+  **The stale comment is CONFIRMED stale and now says so.** Verified empirically rather than by reading:
+  `@leadwolf/core` is absent from `packages/db/package.json` (the cycle is gone), `turbo run build --dry-run`
+  resolves the graph, and CI ALREADY builds every workspace with `turbo run build`. The Dockerfile comment now
+  records that, so the next reader is not warned off an improvement that is available.
+  **The build command itself is unchanged**, deliberately: swapping 4 serial `next build`s for `turbo run
+  build` cannot be verified without building the image, and Turbo 2's strict env handling is exactly the kind
+  of difference that would surface only there. Safe to make when someone can run a build.
 
 ---
 
@@ -1367,8 +1374,13 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   HTTP/3 at the edge, WAF; add its ranges to `trusted_proxies` (currently `private_ranges`, correct only
   while Caddy is the edge). Also add HSTS/CSP to `apps/web`/`apps/admin`, which ship **no** security headers
   today (needed by T-2.2 anyway).
-  **The headers half is DONE, and the claim was accurate — there were none anywhere**: not in any of the four
-  `next.config.mjs`, not in the Caddyfile. All four apps now send `X-Content-Type-Options: nosniff`,
+  **The headers half is DONE — with one correction to the item AND to my first pass at it.** The claim
+  "ship **no** security headers today" is true of `web`, `admin` and `forge`, but NOT of `apps/auth`: it
+  already has a middleware sending a nonce-based CSP, HSTS with `preload`, `X-Frame-Options: DENY` and
+  nosniff. My first attempt added a config block there too, which created TWO sources for one header with
+  DIFFERENT values (the middleware sends `preload`, the config block did not) — and which one survives depends
+  on where Next applies each. Reverted: one owner per header, and the stricter owner keeps it.
+  The three apps that genuinely had none now send `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin` and a framing policy: `DENY` for auth/admin/forge
   (framing a login screen is clickjacking; the staff consoles have no legitimate embedder) and `SAMEORIGIN`
   for web (same third-party protection, without ruling out a first-party embed later).
@@ -1381,7 +1393,8 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   browser, blocking scripts or styles on surfaces nobody re-tests. It wants a report-only rollout against a
   real deployment, which is why it stays with the CDN work here.
   `securityHeaders.test.ts` asserts all of it by EXECUTING each real `next.config.mjs`, so the test fails when
-  the config changes rather than when someone forgets to update a copy of it.
+  the config changes rather than when someone forgets to update a copy of it — including an assertion that
+  `apps/auth` defines NO `headers()`, so the duplicate-owner conflict cannot be reintroduced.
   **Still open:** the CDN itself, and the `trusted_proxies` update that depends on it.
 - [x] **E-6.3 · Read replicas + pool split.** `DB_POOL_MAX` env (today `max: 10` hardcoded), a
   `leadwolf_app` LOGIN pool for tenant traffic vs a small owner pool for the audited platform paths (today

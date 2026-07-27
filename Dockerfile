@@ -17,9 +17,13 @@ WORKDIR /app
 COPY . .
 RUN bun install --frozen-lockfile
 
-# Build the Next apps directly — NOT `turbo run build`. The workspace has a declared
-# dependency cycle (@leadwolf/db's test-only devDependency on @leadwolf/core) that makes
-# Turbo refuse the package graph. The Next apps don't need Turbo orchestration: they
+# Build the Next apps directly, serially. NOTE: the reason recorded here for years — "the workspace has a
+# declared dependency cycle (@leadwolf/db's test-only devDependency on @leadwolf/core) that makes Turbo refuse
+# the package graph" — is STALE. That devDependency is gone, the graph is acyclic, `turbo run build --dry-run`
+# resolves it, and CI already builds every workspace with `turbo run build`. So this can become one `turbo run
+# build` (parallel, cached) whenever someone can run an image build to confirm it — the only reason it has not
+# been changed here is that a Dockerfile edit cannot be verified without building the image.
+# The Next apps don't need Turbo orchestration either way: they
 # transpile the workspace TS packages themselves, and there is no runtime module cycle
 # (db/src never imports core). api/workers need no build step (Bun runs their TS directly).
 # Load the env so NEXT_PUBLIC_* inline correctly and @leadwolf/config's fail-fast boot
