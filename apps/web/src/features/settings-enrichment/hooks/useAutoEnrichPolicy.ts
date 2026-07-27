@@ -1,41 +1,44 @@
-// useAutoEnrichPolicy.ts — loads the workspace auto-enrich policy (GET /settings/auto-enrich) with
-// loading/error + reload, and exposes save(). Presentation state only; typed fetches live in api.ts.
+// useAutoEnrichPolicy.ts — the tenant's auto-enrich policy.
+//
+// A null policy from the endpoint is how a not-built backend reports itself, so it is carried as `available`
+// rather than an error — and the save answers the same way: null means "the route is not built", which is a
+// false return, not a failure. A real save returns the persisted policy, which goes straight into the cache
+// (it is the value the server just accepted, so refetching to learn it would be a wasted round trip).
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type AutoEnrichPolicyPatch, fetchAutoEnrichPolicy, saveAutoEnrichPolicy } from "../api";
+import { settingsEnrichmentKeys } from "../keys";
 import type { AutoEnrichPolicy } from "../types";
 
 export function useAutoEnrichPolicy() {
-  const [data, setData] = useState<AutoEnrichPolicy | null>(null);
-  const [available, setAvailable] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const query = useQuery<AutoEnrichPolicy | null>({
+    queryKey: settingsEnrichmentKeys.autoEnrichPolicy(),
+    queryFn: fetchAutoEnrichPolicy,
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const policy = await fetchAutoEnrichPolicy();
-      setData(policy);
-      setAvailable(policy != null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load the auto-enrich policy");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const save = useMutation({
+    mutationFn: (patch: AutoEnrichPolicyPatch) => saveAutoEnrichPolicy(patch),
+    onSuccess: (saved) => {
+      if (saved) qc.setQueryData(settingsEnrichmentKeys.autoEnrichPolicy(), saved);
+    },
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  /** Save the policy. Returns true when persisted; false when the route isn't built yet. */
-  const save = useCallback(async (patch: AutoEnrichPolicyPatch): Promise<boolean> => {
-    const saved = await saveAutoEnrichPolicy(patch);
-    if (saved) setData(saved);
-    return saved != null;
-  }, []);
-
-  return { data, available, error, loading, reload, save };
+  return {
+    data: query.data ?? null,
+    available: query.data !== undefined ? query.data !== null : true,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load the auto-enrich policy"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    /** True when persisted; false when the route is not built yet. */
+    save: async (patch: AutoEnrichPolicyPatch): Promise<boolean> =>
+      (await save.mutateAsync(patch)) != null,
+  };
 }

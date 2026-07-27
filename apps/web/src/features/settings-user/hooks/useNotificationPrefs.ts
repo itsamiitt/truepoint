@@ -1,31 +1,28 @@
-// useNotificationPrefs.ts — loads the per-channel notification prefs (GET /settings/user/notifications) with
-// loading/error state and a `reload`. Presentation state only; the typed fetch lives in api.ts.
+// useNotificationPrefs.ts — the per-channel notification prefs (GET /settings/user/notifications).
+// Presentation state only; the typed fetch lives in api.ts.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchNotificationPrefs } from "../api";
+import { settingsUserKeys } from "../keys";
 import type { NotificationPrefs } from "../types";
 
 export function useNotificationPrefs() {
-  const [data, setData] = useState<NotificationPrefs | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery<NotificationPrefs>({
+    queryKey: settingsUserKeys.notificationPrefs(),
+    queryFn: fetchNotificationPrefs,
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await fetchNotificationPrefs());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load your notification settings");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { data, loading, error, reload };
+  return {
+    data: query.data ?? null,
+    loading: query.isPending,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load your notification settings"
+      : null,
+    reload: () => {
+      void query.refetch();
+    },
+  };
 }

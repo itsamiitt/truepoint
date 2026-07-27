@@ -1,41 +1,50 @@
-// useAuthPolicy.ts — loads the tenant auth policy (Tenant ▸ Security & access) with loading/error/reload +
-// an explicit `forbidden` flag for callers without the security_admin/owner org role (the API returns 403).
-// The endpoint always returns a policy (the platform default when unset), so there is no "unavailable" state.
+// useAuthPolicy.ts — the tenant auth policy (Tenant ▸ Security & access), with an explicit `forbidden` flag
+// for callers without the security_admin/owner org role (the API returns 403). The endpoint always returns a
+// policy (the platform default when unset), so there is no "unavailable" state.
+//
+// A successful save writes the policy straight into the cache: it is the value the server just accepted, so a
+// refetch to learn it would be a round trip for something already known.
 "use client";
 
 import type { AuthPolicy } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchAuthPolicy, saveAuthPolicy } from "../api";
+import { settingsTenantKeys } from "../keys";
 
 export function useAuthPolicy() {
-  const [policy, setPolicy] = useState<AuthPolicy | null>(null);
-  const [forbidden, setForbidden] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const query = useQuery({
+    queryKey: settingsTenantKeys.authPolicy(),
+    queryFn: fetchAuthPolicy,
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setForbidden(false);
-    try {
-      const res = await fetchAuthPolicy();
-      setForbidden(res.forbidden);
-      setPolicy(res.policy);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load the auth policy");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const save = useMutation({
+    mutationFn: async (next: AuthPolicy) => {
+      const { ok } = await saveAuthPolicy(next);
+      return { ok, next };
+    },
+    onSuccess: ({ ok, next }) => {
+      if (ok) {
+        qc.setQueryData(settingsTenantKeys.authPolicy(), (old: unknown) => ({
+          ...(old as { forbidden: boolean }),
+          policy: next,
+        }));
+      }
+    },
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const save = useCallback(async (next: AuthPolicy): Promise<boolean> => {
-    const { ok } = await saveAuthPolicy(next);
-    return ok;
-  }, []);
-
-  return { policy, forbidden, error, loading, reload, save };
+  return {
+    policy: query.data?.policy ?? null,
+    forbidden: query.data?.forbidden ?? false,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load the auth policy"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    save: async (next: AuthPolicy): Promise<boolean> => (await save.mutateAsync(next)).ok,
+  };
 }
