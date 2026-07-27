@@ -215,6 +215,11 @@ export {
   type OwnerReader,
 } from "./repositories/retentionScanRepository.ts";
 export {
+  type ReportsSummaryFilters,
+  type ReportsSummaryRows,
+  reportsRepository,
+} from "./repositories/reportsRepository.ts";
+export {
   type RoleCacheInvalidator,
   invalidateCachedRole,
   setRoleCacheInvalidator,
