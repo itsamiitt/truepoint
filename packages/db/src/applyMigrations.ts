@@ -128,8 +128,32 @@ function forgeRoleClauses(forgePwd: string | undefined): {
   };
 }
 
-const bootstrap = (appPwd: string, forgePwd: string | undefined): string => {
+/**
+ * Converge an EXISTING `leadwolf_app` role's password — but ONLY when one was explicitly configured.
+ *
+ * The role was created with its password and never updated afterwards, which is a live deployment hazard now
+ * that the runtime derives an app-role connection from `DATABASE_APP_ROLE_PASSWORD` (E-6.3). On any database
+ * where the role already exists, setting that variable for the first time would leave the role on its OLD
+ * password while the app connected with the NEW one: authentication fails, and every tenant query fails with
+ * it. CI cannot catch this — it builds a fresh database each run, where creation and configuration always
+ * agree — so it would only ever have appeared on a real deployment.
+ *
+ * Gated on an EXPLICIT password rather than converging unconditionally: `appPwd` falls back to a built-in
+ * default, and an unconditional ALTER would quietly reset a password an operator had rotated out of band back
+ * to that default. Explicit configuration is a statement of intent; the fallback is not.
+ */
+function appConvergeClause(explicitAppPwd: string | undefined): string {
+  if (!explicitAppPwd) return "";
+  return `    ELSE\n      ALTER ROLE leadwolf_app LOGIN PASSWORD '${explicitAppPwd}';\n`;
+}
+
+const bootstrap = (
+  appPwd: string,
+  explicitAppPwd: string | undefined,
+  forgePwd: string | undefined,
+): string => {
   const { create: forgeRoleClause, converge: forgeConvergeClause } = forgeRoleClauses(forgePwd);
+  const appConvergeClause_ = appConvergeClause(explicitAppPwd);
   return `
   CREATE EXTENSION IF NOT EXISTS pgcrypto;
   CREATE EXTENSION IF NOT EXISTS citext;
@@ -146,7 +170,7 @@ const bootstrap = (appPwd: string, forgePwd: string | undefined): string => {
   DO $$ BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_app') THEN
       CREATE ROLE leadwolf_app LOGIN PASSWORD '${appPwd}';
-    END IF;
+${appConvergeClause_}    END IF;
     -- The privileged cross-tenant role (03 §9, ADR-0011): BYPASSRLS, used ONLY by the audited DSAR path
     -- (and later apps/admin). Authored at M0 per the plan; first wired at M5.
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_admin') THEN
@@ -313,7 +337,13 @@ export async function applyMigrations(
   } = {},
 ): Promise<void> {
   // Single-quote-escape so a password containing ' can't break the bootstrap SQL.
-  const appPwd = (opts.appRolePassword ?? DEFAULT_APP_ROLE_PASSWORD).replace(/'/g, "''");
+  // EXPLICIT configuration (option, then env) is tracked apart from the built-in fallback, because only an
+  // explicit value may converge an existing role's password — see appConvergeClause.
+  const explicitAppPwd = (opts.appRolePassword ?? process.env.DATABASE_APP_ROLE_PASSWORD)?.replace(
+    /'/g,
+    "''",
+  );
+  const appPwd = explicitAppPwd ?? DEFAULT_APP_ROLE_PASSWORD.replace(/'/g, "''");
   // The forge login password falls back to process.env rather than @leadwolf/config: this module is
   // deliberately standalone (a connection string plus explicit options, no config dependency), and the
   // fallback is what lets the integration suite exercise the LOGIN path — the itests call applyMigrations()
@@ -347,7 +377,7 @@ export async function applyMigrations(
   };
   try {
     log("migrate: [1/4] bootstrap (extensions, roles, uuid_generate_v7)…\n");
-    await sql.unsafe(bootstrap(appPwd, forgePwd));
+    await sql.unsafe(bootstrap(appPwd, explicitAppPwd, forgePwd));
     if (await exists(migrationsFolder)) {
       log("migrate: [2/4] applying table migrations…\n");
       await applyJournalByHash(sql, log);
