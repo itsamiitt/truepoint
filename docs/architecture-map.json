@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1794,
-  "fileSetHash": "sha256:0a6085d6cc771055fec2a137ee84f74f618ff6bbb71b4343e237b133ab4c33dd",
+  "fileCount": 1795,
+  "fileSetHash": "sha256:81a7524ab8f1321e24bffa54fc5d24cfd3e3bf23a13f8cb755d9b027945fd467",
   "features": {
     "account-search": {
       "web": [],
@@ -2459,6 +2459,7 @@
       "packages/db/test/forgeParserSeed.itest.ts",
       "packages/db/test/forgeQuarantine.itest.ts",
       "packages/db/test/forgeReviewTaskIdempotency.itest.ts",
+      "packages/db/test/forgeSchemaIsolation.itest.ts",
       "packages/db/test/forgeSyncState.itest.ts",
       "packages/db/test/forgeVerifyProducer.itest.ts",
       "packages/db/test/home.itest.ts",

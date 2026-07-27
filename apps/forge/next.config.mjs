@@ -7,6 +7,10 @@ const nextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: ["@leadwolf/ui", "@leadwolf/app-shell", "@leadwolf/types"],
+  // Tree-shake the barrel re-exports at import time. /ui is a single large barrel, so a component
+  // importing one control pulled the whole surface into that route chunk; this rewrites such imports to their
+  // direct paths during compilation. Build-time only — no runtime behaviour changes.
+  experimental: { optimizePackageImports: ["@leadwolf/ui"] },
 };
 
 export default nextConfig;

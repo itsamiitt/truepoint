@@ -6,7 +6,10 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { API_BASE, AUTH_ORIGIN } from "../lib/publicConfig";
 import { Providers } from "./providers";
-import "@leadwolf/ui/tokens.css";
+// tokens.css is NOT imported here: globals.css already `@import`s it (line 4), so a JS import as well pulled
+// the same stylesheet into the graph twice — duplicate custom-property blocks in the emitted CSS for nothing.
+// The `@import` is the one that has to stay, since it also fixes the ORDER: tokens must be defined before the
+// primitives and shell sheets that consume them, and only the CSS side can guarantee that.
 import "./globals.css";
 
 // Warm the cross-origin connections on the sign-in critical path. The first fetch to the auth
