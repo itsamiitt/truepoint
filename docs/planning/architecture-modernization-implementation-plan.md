@@ -559,6 +559,26 @@ optimization because optimizing a broken path is wasted work.
     regression against the standard, not a bound that satisfies it.
   Either becomes permissible only with **immediate invalidation on every role/membership mutation**, which is
   the "bust via the existing revocation path" clause — and that is the part that needs care rather than code.
+  **UNBLOCKED as a design; not yet built.** The objection above is against a TTL-ONLY memo. A memo with
+  **explicit invalidation** does not have it: cache `(tenantId, workspaceId, userId) → role`, and DELETE that
+  key inside the repository functions that mutate membership, so the next request re-reads from the database.
+  Staleness is then zero, not "within TTL" — which is what `enterprise-iam.md:112` actually requires — and no
+  one is logged out, because nothing touches the session.
+  The machinery already exists to model it on: `packages/auth/src/revocation.ts` is the same shape (a
+  short-lived Redis key, fail-open, mirrored from a durable source of truth), and the mutation sites are
+  concentrated — `workspaceRepository` lines ~185/200/365/662 plus `scimService`, so invalidating inside the
+  repository covers every caller regardless of route.
+  **Two things to decide before building it**, both real:
+  1. **Where the cache lives.** `packages/db` holds the mutation choke point but has no Redis dependency
+     today; putting it there adds one to the data layer. Lifting invalidation to the API/core layer keeps db
+     clean but means a future non-API writer silently misses it.
+  2. **Whether to skip the cache entirely.** The cost being removed is not the SELECT, it is the
+     `withTenantTx` round trips around it (BEGIN + SET ROLE + set_config + SELECT + COMMIT). Sending those as
+     ONE multi-statement command would cut ~5 RTTs to ~1 with no cache, no Redis, no invalidation path, and no
+     staleness question at all — but it means a bespoke path through the tenancy mechanism, which is the most
+     security-critical code in the repo and not something to add in passing.
+  The role-in-claims option stays rejected either way: it cannot be invalidated without revoking the session,
+  i.e. logging the user out on every role change.
   The write surface is not a single chokepoint: `apps/api/src/features/teams/routes.ts`,
   `apps/api/src/features/workspaces/memberRoutes.ts`, `packages/core/src/auth/members.ts`, the SCIM
   deprovisioning path, and tenant-level membership all mutate what `getRoleForUser` returns. Missing ONE leaves
