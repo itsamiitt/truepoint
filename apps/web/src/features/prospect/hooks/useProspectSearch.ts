@@ -68,7 +68,9 @@ export function useProspectSearch(options?: UseProspectSearchOptions): ProspectS
     [router, pathname, searchParams],
   );
 
-  const queryKey = prospectKeys.contactSearch(query);
+  // Memoized because the factory returns a NEW array each call: without this `markRevealed` below would be
+  // rebuilt on every render, and it is passed down to the grid rows.
+  const queryKey = useMemo(() => prospectKeys.contactSearch(query), [query]);
   const search = useInfiniteQuery<SearchPage<ContactHit>>({
     queryKey,
     enabled,

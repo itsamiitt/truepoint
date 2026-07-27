@@ -31,7 +31,9 @@ type MembersPage = Awaited<ReturnType<typeof fetchListMembers>>;
 
 export function useListMembers(listId: string): ListMembersState {
   const qc = useQueryClient();
-  const queryKey = listKeys.members(listId);
+  // Memoized because the factory returns a NEW array each call: without this `markRevealed` below would be
+  // rebuilt on every render, and it is passed down to the grid rows.
+  const queryKey = useMemo(() => listKeys.members(listId), [listId]);
 
   const query = useInfiniteQuery<MembersPage>({
     queryKey,
