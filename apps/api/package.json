@@ -13,11 +13,15 @@
     "@leadwolf/config": "workspace:*",
     "@leadwolf/core": "workspace:*",
     "@leadwolf/db": "workspace:*",
+    "@leadwolf/integrations": "workspace:*",
     "@leadwolf/search": "workspace:*",
     "@leadwolf/types": "workspace:*",
-    "hono": "4.12.32",
-    "@leadwolf/integrations": "workspace:*",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-trace-node": "^2.10.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
     "bullmq": "^5.0.0",
+    "hono": "4.12.32",
     "ioredis": "^5.4.1"
   },
   "devDependencies": {

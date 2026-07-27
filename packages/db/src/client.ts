@@ -2,7 +2,7 @@
 // opens a tenant/workspace-scoped transaction. It sets the RLS GUCs LOCAL to the transaction (RDS Proxy
 // transaction pooling resets them per checkout, so they must be set in-tx). 03 §9, architecture-contract §6.
 
-import { env } from "@leadwolf/config";
+import { env, withSpan } from "@leadwolf/config";
 import type { PlatformAuditAction } from "@leadwolf/types";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -294,6 +294,16 @@ export interface TenantScope {
  * which connection budget the query draws from.
  */
 export async function withReplicaTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  // A separate span NAME from the tenant path on purpose: "why is this read slow" and "is it even hitting the
+  // replica" are the two questions here, and one shared name answers neither.
+  return withSpan(
+    "db.replica.tx",
+    { "tenant.id": scope.tenantId, "workspace.id": scope.workspaceId },
+    () => replicaTx(scope, fn),
+  );
+}
+
+async function replicaTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return replicaDb.transaction(async (tx) => {
     // The same single-round-trip RLS setup as withTenantTx — see the long note there for why `role` rides
     // along in the SELECT and why transaction-local matters under a pooling proxy.
@@ -314,6 +324,16 @@ export async function withReplicaTx<T>(scope: TenantScope, fn: (tx: Tx) => Promi
 }
 
 export async function withTenantTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  // Traced (E-6.5). Tenant and workspace ids are opaque uuids and are exactly what makes a latency trace
+  // actionable ("which tenant is slow"); no row data ever goes on a span — see the note in tracing.ts.
+  return withSpan(
+    "db.tenant.tx",
+    { "tenant.id": scope.tenantId, "workspace.id": scope.workspaceId },
+    () => tenantTx(scope, fn),
+  );
+}
+
+async function tenantTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
   // The TENANT pool (leadwolf_app when configured) — see appDb. The set_config below still runs: it is what
   // pins the tenant/workspace GUCs, and setting `role` to the role we are already logged in as is a no-op
   // that keeps behaviour identical when the app URL falls back to the owner connection.

@@ -1444,7 +1444,26 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   no partition key, so it would have scanned every month to delete rows already located in the oldest few.
   **Still open:** detach-and-archive of cold partitions (the retention mechanics this unlocks), and the two
   uniqueness redesigns above if `email_event` / `provider_calls` are ever to be partitioned.
-- [ ] **E-6.5 · OTel end-to-end** api → workers → db, on top of A-0.4's request IDs.
+- [x] **E-6.5 (partial: the seam + api/db; workers pending) · OTel end-to-end** api → workers → db, on top of
+  A-0.4's request IDs.
+  **The seam is in `@leadwolf/config` (`withSpan`), and that placement is a boundary decision**: `@leadwolf/db`
+  may depend only on config and types, so a seam anywhere else could not instrument the layer whose latency
+  matters most. Only `@opentelemetry/api` is imported there, and it is a NO-OP until something registers a
+  provider — which is what lets instrumentation live in shared code without every process paying for
+  telemetry nothing collects.
+  **The SDK registers only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set**, and only from the app entrypoint. A
+  library that installed a global tracer provider on import would be deciding telemetry policy for every
+  process that imported it, tests and one-shot scripts included.
+  **Instrumented so far:** `withTenantTx` and `withReplicaTx` (`db.tenant.tx` / `db.replica.tx`, carrying
+  tenant + workspace ids — opaque uuids, which is what makes "which tenant is slow" answerable; no row data
+  ever goes on a span). Deliberately NOT auto-instrumentation: wholesale HTTP/socket patching would bury the
+  spans the code knows are meaningful and pull in a far larger dependency surface.
+  **Verified without a collector.** A collector is needed to DELIVER spans, not to prove they are produced:
+  `telemetry.test.ts` uses an in-memory exporter to assert span names, attributes, parent/child nesting, that
+  an undefined attribute is omitted rather than recorded as `"undefined"`, and that a failure is recorded AND
+  rethrown — a swallowing instrument would show a healthy span for work that did nothing.
+  **Still open:** worker-side spans and trace-context propagation across the BullMQ boundary, which is what
+  makes the api → workers half a single trace rather than two.
 - [ ] **E-6.6 · Forge isolation** — `FORGE_DATABASE_URL` + its own login role and pool (today `withForgeTx`
   shares the customer request path's `max: 10` pool, so there is no capacity or failure isolation), plus a
   runtime `statement_timeout` (migrations set one; the runtime pool does not).

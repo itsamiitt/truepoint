@@ -170,6 +170,11 @@ export const appEnvSchema = z
     //
     // Only reads whose contract ALREADY tolerates staleness are routed here (see withReplicaTx), because a
     // replica is behind by definition and a read-your-writes surface routed to one is a correctness bug.
+    // E-6.5. UNSET = no SDK is registered, so `withSpan` stays the no-op the OTel API gives us and no process
+    // pays for telemetry nothing collects. Setting it is what turns tracing on — a deploy decision, like the
+    // role cache and the replica pool.
+    OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+    OTEL_SERVICE_NAME: z.string().default("leadwolf-api"),
     REPLICA_DATABASE_URL: z.string().url().optional(),
     REPLICA_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
     // Is the runtime connection behind a TRANSACTION-pooling proxy (RDS Proxy, PgBouncer, Neon's pooled
