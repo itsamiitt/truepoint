@@ -72,3 +72,4 @@ export {
   type AnthropicResponse,
   type FetchJson as ForgeExtractionFetchJson,
 } from "./forgeAnthropicExtraction.ts";
+export { redisCacheStore } from "./redisCacheStore.ts";

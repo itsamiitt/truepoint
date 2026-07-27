@@ -625,6 +625,35 @@ process up to Caddy.
   served from a stale cache**.
   **first consumers:** `L-1.6` home summary, facet counts, credit balance, the public pricing catalog
   (`app.ts:190-193` hits the DB per anonymous request with no `Cache-Control`).
+  **the tier is built.** `@leadwolf/core` owns the policy (`createReadThroughCache`, `tenantKey`,
+  `systemKey`); `@leadwolf/integrations` has the thin ioredis adapter; `apps/api/src/cache.ts` is the wired
+  singleton. **Tenant scoping is a TYPE, not a convention** — the only way to build a normal key is
+  `tenantKey(scope, …)`, which cannot be called without a tenantId, and genuinely tenant-less data must go
+  through the deliberately-conspicuous `systemKey`. Key parts are charset-validated so nothing can smuggle a
+  `:` or `*` into a prefix or widen an invalidation.
+  **Properties that made this non-trivial, each pinned by a test:** fail-open (an unreachable Redis degrades
+  to the uncached path — a cache outage must not become a data outage); a failed load is never cached (one
+  transient DB error would otherwise be served for a whole TTL); single-flight (a cold or just-expired hot key
+  otherwise lets every in-flight request run the same query at once — the cache making the worst moment
+  worse); TTL jitter, upward only, so a caller's freshness bound is never silently shortened.
+  **The stale-write-back race is the one worth reading about.** A reader that misses, then loads, can have a
+  mutation land in between — and its loader would write the PRE-mutation value into the cache AFTER the
+  invalidation, undoing the write for a full TTL. My first implementation marked the in-flight record, which a
+  test proved insufficient: the race also covers the window before the load is even registered (the reader is
+  still awaiting its own cache lookup). Fixed with a per-key epoch captured synchronously on entry and
+  compared before the write, with both bookkeeping maps reference-counted so they stay bounded.
+  **Connection options are the inverse of the queue connections in the same app, deliberately.** BullMQ uses
+  `maxRetriesPerRequest: null` so a job waits out a blip. A cache must do the opposite: `enableOfflineQueue:
+  false`, one retry, 150 ms command timeout — otherwise a wedged Redis silently BUFFERS the command and every
+  cached read hangs on the very outage the fail-open path exists to survive.
+  **First consumer wired:** the public pricing catalog — 60 s TTL plus explicit invalidation on all four
+  `credit_pack.set`/`plan_template.set` write paths (invalidating after commit, so a concurrent read cannot
+  repopulate from pre-write rows), and a `Cache-Control` header where there was none. Its own file had
+  documented exactly this as the deferred follow-up, blocked on "never serve a stale-forever price" — which
+  the TTL-plus-invalidation pair is precisely the answer to. Display data, not a money decision: checkout
+  re-reads the authoritative row.
+  **Still to wire:** L-1.6 home summary, facet counts, entitlements. Credit balances and permission decisions
+  are deliberately NOT candidates.
 
 - [ ] **C-3.2 · Precompute the aggregates.** `dataQualitySummary` (`contactRepository.ts:745-748`) is a live
   per-view aggregate scan **despite a `data_quality_snapshots` table already existing** — wire the worker

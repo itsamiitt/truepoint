@@ -1069,3 +1069,13 @@ export {
   type AccountHqBackfillPlan,
 } from "./accounts/accountBackfill.ts";
 export { countryToIso } from "./accounts/countryToIso.ts";
+
+// ── Read-through cache tier (18-scalability-performance §5) ───────────────────────────────────────────
+export {
+  type CacheScope,
+  type CacheStore,
+  type ReadThroughCache,
+  createReadThroughCache,
+  systemKey,
+  tenantKey,
+} from "./cache/readThrough.ts";
