@@ -1340,8 +1340,19 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   mounts unconditionally so its Drawer keeps its close transition — `contact: null` renders a closed drawer
   rather than nothing. `dynamic()` there would load on first render anyway (no win), and gating it on
   `selected` would trade a real UX regression for a bundle saving.
-  **Still open:** `output: "standalone"` (needs a Dockerfile change that cannot be verified here) and the
-  `@leadwolf/types` subpath-export refactor.
+  **The types barrel is handled too, without the refactor.** The item asks for subpath exports instead of the
+  75-line barrel (74 `export *` lines carrying Zod SCHEMAS — runtime values, not erased types, which is why it
+  had weight at all). Listing `@leadwolf/types` in `optimizePackageImports` gets the compiler to rewrite barrel
+  imports to their direct paths, which is what subpath exports would achieve — without rewriting several
+  hundred import sites by hand, and without a package-surface change every consumer must follow.
+  **MEASURED, by diffing `next build` route tables before and after** (the shared baseline is unchanged at
+  103 kB — the win is per-route, which is why a shared-chunk number would have hidden it):
+  - `/lists`, `/lists/[id]`: 239 kB → 229 kB First Load
+  - `/prospect`: 213 kB → 202 kB
+  - `/data-health`: 176 kB → 161 kB
+  - `/reports`: 175 kB → 163 kB
+  - `/imports*`: route chunk 862 B → 226 B
+  **Still open:** `output: "standalone"` only — it needs a Dockerfile change that cannot be verified here.
 
 ---
 

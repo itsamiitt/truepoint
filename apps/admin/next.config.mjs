@@ -16,7 +16,11 @@ const nextConfig = {
   // Tree-shake the barrel re-exports at import time. /ui is a single large barrel, so a component
   // importing one control pulled the whole surface into that route chunk; this rewrites such imports to their
   // direct paths during compilation. Build-time only — no runtime behaviour changes.
-  experimental: { optimizePackageImports: ["@leadwolf/ui"] },
+  // `@leadwolf/types` is a 75-line barrel of 74 `export *` lines carrying Zod SCHEMAS — runtime values, not
+  // erased types — so importing one schema pulled the whole surface into that route's chunk. Listing it here
+  // is what the plan's "subpath exports instead of the barrel" asks for, achieved by the compiler rewriting
+  // barrel imports to their direct paths, rather than by rewriting several hundred import sites by hand.
+  experimental: { optimizePackageImports: ["@leadwolf/ui", "@leadwolf/types"] },
 };
 
 export default nextConfig;
