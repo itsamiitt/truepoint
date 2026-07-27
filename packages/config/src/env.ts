@@ -122,6 +122,17 @@ export const appEnvSchema = z
     // the second. Turning this on safely needs the pool split this item describes — until then the knob exists
     // so an operator who knows their workload can set it, and the reasoning is here rather than lost.
     DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
+    // The Forge data plane's OWN connection (E-6.6). Optional: unset means the same database as
+    // DATABASE_URL — but still a SEPARATE POOL, which is the isolation that matters here. `withForgeTx`
+    // shared the customer request path's pool, so a Forge backlog (the parse→extract→verify DAG, which holds
+    // transactions across provider network I/O) could consume every connection and starve customer requests.
+    // A separate pool bounds that blast radius even against one database; pointing this at a different
+    // database or replica later isolates failure too, without another code change.
+    FORGE_DATABASE_URL: z.string().url().optional(),
+    // Deliberately smaller than DB_POOL_MAX: the Forge pipeline is throughput work behind a queue, so it can
+    // wait. Customer requests cannot. Sizing it low is how "isolation" stays a budget rather than a doubling
+    // of total connections against the same server.
+    FORGE_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
     REDIS_URL: z.string().url(),
 
     BLIND_INDEX_KEY: z.string().min(8),
