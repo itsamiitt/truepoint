@@ -1260,9 +1260,21 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
     it needs either a DEFAULT partition (proven to accept the row, at the cost of a scan on every future
     ATTACH) or a job that creates next month ahead of time. Without one, writes fail on a CALENDAR boundary
     rather than under load — an operational component that has to exist first.
-  **Remaining before this can be done:** the partition-maintenance job (and its deploy), plus the unresolved
-  `pg_partman`-on-Neon question above. The four FK-free tables are the tractable first slice; the two with
-  inbound FKs are a separate decision, not a mechanical follow-on.
+  **The partition-maintenance prerequisite is now BUILT and merged** — `ensure_month_partitions()`
+  (migration 0084), `partitionRepository.ensureAll`, and a daily leader-locked `partition_sweep` registered
+  at worker boot. It is deliberately inert: the repository asks the CATALOG which tables are partitioned and
+  finds none today, so a conversion migration becomes the only change needed later rather than a conversion
+  plus remembering to wire the thing that keeps it alive. Covered by `partitionMaintenance.itest.ts`
+  (idempotence, the inclusive horizon, extending without disturbing existing partitions, the half-open month
+  boundary, and that `leadwolf_app` holds no EXECUTE — creating a partition is DDL).
+  This also settles the `pg_partman` question by making it moot: the maintenance is ~40 lines of plpgsql the
+  repo owns, so nothing depends on whether the managed provider permits the extension.
+  **Remaining:** the conversions themselves. The four FK-free tables (`activities`, `email_events`,
+  `platform_audit_log`, `provider_calls`) are the tractable slice — each needs its table rebuilt with the
+  composite key, data copied, and its indexes, RLS policies, grants and triggers reattached.
+  `source_imports` and `credit_ledger` are a SEPARATE decision, not a mechanical follow-on: partitioning them
+  adds a column to four referencing tables and to every write path that sets the reference, one of which is
+  a financial ledger whose FK is a real integrity constraint.
 - [ ] **E-6.5 · OTel end-to-end** api → workers → db, on top of A-0.4's request IDs.
 - [ ] **E-6.6 · Forge isolation** — `FORGE_DATABASE_URL` + its own login role and pool (today `withForgeTx`
   shares the customer request path's `max: 10` pool, so there is no capacity or failure isolation), plus a
