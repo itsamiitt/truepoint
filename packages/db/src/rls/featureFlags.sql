@@ -33,4 +33,4 @@ ALTER TABLE tenant_feature_flags FORCE ROW LEVEL SECURITY;
 -- the app role can never insert/update/delete an override; toggles go through the audited platform path.
 DROP POLICY IF EXISTS tenant_feature_flags_read ON tenant_feature_flags;
 CREATE POLICY tenant_feature_flags_read ON tenant_feature_flags FOR SELECT
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));

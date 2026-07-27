@@ -10,8 +10,8 @@ ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tags FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tags_workspace_isolation ON tags;
 CREATE POLICY tags_workspace_isolation ON tags
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS tags_set_updated_at ON tags;
 CREATE TRIGGER tags_set_updated_at BEFORE UPDATE ON tags
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -21,7 +21,7 @@ ALTER TABLE record_tags ENABLE ROW LEVEL SECURITY;
 ALTER TABLE record_tags FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS record_tags_workspace_isolation ON record_tags;
 CREATE POLICY record_tags_workspace_isolation ON record_tags
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON tags, record_tags TO leadwolf_app;

@@ -6,8 +6,8 @@ ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE activities FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS activities_workspace_isolation ON activities;
 CREATE POLICY activities_workspace_isolation ON activities
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 -- Recency sync (03 §7, 05 §10): contacts.last_activity_at is a CACHE of the newest occurred_at — kept by
 -- trigger so it holds regardless of caller. Backfilled (older) activities never regress it.

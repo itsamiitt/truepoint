@@ -6,8 +6,8 @@ ALTER TABLE scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scores FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS scores_workspace_isolation ON scores;
 CREATE POLICY scores_workspace_isolation ON scores
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 -- Score sync (03 §10): contacts.priority_score is a CACHE of the latest composite — kept by trigger so it
 -- holds regardless of caller. The scores table itself stays append-only history.
@@ -25,14 +25,14 @@ ALTER TABLE intent_signals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE intent_signals FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS intent_signals_workspace_isolation ON intent_signals;
 CREATE POLICY intent_signals_workspace_isolation ON intent_signals
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 ALTER TABLE provider_calls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE provider_calls FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS provider_calls_workspace_isolation ON provider_calls;
 CREATE POLICY provider_calls_workspace_isolation ON provider_calls
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON scores, intent_signals, provider_calls TO leadwolf_app;

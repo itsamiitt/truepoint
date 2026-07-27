@@ -10,8 +10,8 @@ ALTER TABLE import_policy ENABLE ROW LEVEL SECURITY;
 ALTER TABLE import_policy FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS import_policy_workspace_isolation ON import_policy;
 CREATE POLICY import_policy_workspace_isolation ON import_policy
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 DROP TRIGGER IF EXISTS import_policy_set_updated_at ON import_policy;
 CREATE TRIGGER import_policy_set_updated_at BEFORE UPDATE ON import_policy

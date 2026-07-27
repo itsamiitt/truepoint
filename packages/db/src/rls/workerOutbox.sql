@@ -12,7 +12,7 @@
 ALTER TABLE worker_outbox ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS worker_outbox_workspace_isolation ON worker_outbox;
 CREATE POLICY worker_outbox_workspace_isolation ON worker_outbox
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 GRANT INSERT ON worker_outbox TO leadwolf_app;

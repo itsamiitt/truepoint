@@ -11,8 +11,8 @@ ALTER TABLE saved_searches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE saved_searches FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS saved_searches_workspace_isolation ON saved_searches;
 CREATE POLICY saved_searches_workspace_isolation ON saved_searches
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS saved_searches_set_updated_at ON saved_searches;
 CREATE TRIGGER saved_searches_set_updated_at BEFORE UPDATE ON saved_searches
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

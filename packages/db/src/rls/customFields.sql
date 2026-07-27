@@ -12,8 +12,8 @@ ALTER TABLE custom_field_definitions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE custom_field_definitions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS custom_field_definitions_workspace_isolation ON custom_field_definitions;
 CREATE POLICY custom_field_definitions_workspace_isolation ON custom_field_definitions
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS custom_field_definitions_set_updated_at ON custom_field_definitions;
 CREATE TRIGGER custom_field_definitions_set_updated_at BEFORE UPDATE ON custom_field_definitions
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

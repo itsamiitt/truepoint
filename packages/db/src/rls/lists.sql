@@ -12,8 +12,8 @@ ALTER TABLE lists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lists FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS lists_workspace_isolation ON lists;
 CREATE POLICY lists_workspace_isolation ON lists
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS lists_set_updated_at ON lists;
 CREATE TRIGGER lists_set_updated_at BEFORE UPDATE ON lists
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -23,7 +23,7 @@ ALTER TABLE list_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE list_members FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS list_members_workspace_isolation ON list_members;
 CREATE POLICY list_members_workspace_isolation ON list_members
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON lists, list_members TO leadwolf_app;

@@ -28,13 +28,13 @@ $$ LANGUAGE sql VOLATILE;
 ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS workspaces_tenant_isolation ON workspaces;
 CREATE POLICY workspaces_tenant_isolation ON workspaces
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 ALTER TABLE workspace_members ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS members_tenant_isolation ON workspace_members;
 CREATE POLICY members_tenant_isolation ON workspace_members
   USING (workspace_id IN (
-    SELECT id FROM workspaces WHERE tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+    SELECT id FROM workspaces WHERE tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
   ));
 
 -- USING + WITH CHECK on all three: the Auth Admin now WRITES these under the app role (withTenantTx), so the
@@ -44,20 +44,20 @@ CREATE POLICY members_tenant_isolation ON workspace_members
 ALTER TABLE tenant_domains ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_domains_isolation ON tenant_domains;
 CREATE POLICY tenant_domains_isolation ON tenant_domains
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
-  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid))
+  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 ALTER TABLE tenant_sso_configs ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_sso_isolation ON tenant_sso_configs;
 CREATE POLICY tenant_sso_isolation ON tenant_sso_configs
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
-  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid))
+  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 ALTER TABLE tenant_auth_policies ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_auth_policy_isolation ON tenant_auth_policies;
 CREATE POLICY tenant_auth_policy_isolation ON tenant_auth_policies
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
-  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid))
+  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 -- auth_policies (doc 11 §3-4, Phase 1 effective-policy engine): the generalized policy store. tenant_id is
 -- NULLABLE — a NULL row is a PLATFORM DEFAULT. So the read predicate admits the active tenant's rows AND the
@@ -70,11 +70,11 @@ ALTER TABLE auth_policies ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS auth_policies_isolation ON auth_policies;
 CREATE POLICY auth_policies_isolation ON auth_policies
   USING (
-    tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+    tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
     OR tenant_id IS NULL
   )
   WITH CHECK (
-    tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+    tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
   );
 
 -- auth_allowed_origins (doc 11 §2, AUTH-036): the managed callback-origin allow-list. Same nullable-tenant
@@ -86,23 +86,23 @@ ALTER TABLE auth_allowed_origins ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS auth_allowed_origins_isolation ON auth_allowed_origins;
 CREATE POLICY auth_allowed_origins_isolation ON auth_allowed_origins
   USING (
-    tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+    tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
     OR tenant_id IS NULL
   )
   WITH CHECK (
-    tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+    tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
   );
 
 -- tenant_members + invitations: tenant-scoped for the app role (read under withTenantTx).
 ALTER TABLE tenant_members ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_members_isolation ON tenant_members;
 CREATE POLICY tenant_members_isolation ON tenant_members
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS invitations_isolation ON invitations;
 CREATE POLICY invitations_isolation ON invitations
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 -- Global identity (ADR-0019): `users` is NOT tenant-RLS-scoped — one row per person, read by the auth service
 -- before any tenant is chosen. The auth service also reads the membership graph (`tenant_members` by user_id)

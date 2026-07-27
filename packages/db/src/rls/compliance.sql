@@ -7,8 +7,8 @@ ALTER TABLE consent_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE consent_records FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS consent_workspace_isolation ON consent_records;
 CREATE POLICY consent_workspace_isolation ON consent_records
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 GRANT SELECT, INSERT, UPDATE ON consent_records TO leadwolf_app;
 
 -- dsar_requests: RLS enabled with NO policy → deny-all for any policy-subject role. The blanket GRANTs in

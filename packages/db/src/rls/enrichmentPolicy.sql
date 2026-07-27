@@ -9,8 +9,8 @@ ALTER TABLE enrichment_policy ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enrichment_policy FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS enrichment_policy_workspace_isolation ON enrichment_policy;
 CREATE POLICY enrichment_policy_workspace_isolation ON enrichment_policy
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 DROP TRIGGER IF EXISTS enrichment_policy_set_updated_at ON enrichment_policy;
 CREATE TRIGGER enrichment_policy_set_updated_at BEFORE UPDATE ON enrichment_policy

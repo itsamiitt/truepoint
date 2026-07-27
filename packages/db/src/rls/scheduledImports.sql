@@ -16,8 +16,8 @@ ALTER TABLE scheduled_imports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scheduled_imports FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS scheduled_imports_workspace_isolation ON scheduled_imports;
 CREATE POLICY scheduled_imports_workspace_isolation ON scheduled_imports
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 DROP TRIGGER IF EXISTS scheduled_imports_set_updated_at ON scheduled_imports;
 CREATE TRIGGER scheduled_imports_set_updated_at BEFORE UPDATE ON scheduled_imports

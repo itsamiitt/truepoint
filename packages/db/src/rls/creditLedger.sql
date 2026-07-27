@@ -10,8 +10,8 @@
 ALTER TABLE credit_ledger ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS credit_ledger_tenant_isolation ON credit_ledger;
 CREATE POLICY credit_ledger_tenant_isolation ON credit_ledger
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
-  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid))
+  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 CREATE OR REPLACE FUNCTION credit_ledger_append_only() RETURNS trigger AS $$
 BEGIN

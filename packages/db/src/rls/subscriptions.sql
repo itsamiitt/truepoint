@@ -8,14 +8,14 @@
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS subscriptions_tenant_isolation ON subscriptions;
 CREATE POLICY subscriptions_tenant_isolation ON subscriptions
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
-  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid))
+  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 ALTER TABLE billing_cycles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS billing_cycles_tenant_isolation ON billing_cycles;
 CREATE POLICY billing_cycles_tenant_isolation ON billing_cycles
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
-  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid))
+  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 -- A granted billing_cycle is immutable (grant integrity, ADR-0041): block any UPDATE/DELETE once granted_at is
 -- set; an un-granted cycle may still transition (open → granted by the worker).

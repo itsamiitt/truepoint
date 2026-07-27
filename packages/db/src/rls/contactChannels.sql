@@ -22,8 +22,8 @@ ALTER TABLE contact_emails ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contact_emails FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS contact_emails_workspace_isolation ON contact_emails;
 CREATE POLICY contact_emails_workspace_isolation ON contact_emails
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS contact_emails_set_updated_at ON contact_emails;
 CREATE TRIGGER contact_emails_set_updated_at BEFORE UPDATE ON contact_emails
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -33,8 +33,8 @@ ALTER TABLE contact_phones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contact_phones FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS contact_phones_workspace_isolation ON contact_phones;
 CREATE POLICY contact_phones_workspace_isolation ON contact_phones
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS contact_phones_set_updated_at ON contact_phones;
 CREATE TRIGGER contact_phones_set_updated_at BEFORE UPDATE ON contact_phones
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

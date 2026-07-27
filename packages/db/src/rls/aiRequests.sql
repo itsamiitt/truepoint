@@ -9,6 +9,6 @@ ALTER TABLE ai_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_requests FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS ai_requests_workspace_isolation ON ai_requests;
 CREATE POLICY ai_requests_workspace_isolation ON ai_requests
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 GRANT SELECT, INSERT, UPDATE, DELETE ON ai_requests TO leadwolf_app;

@@ -4,6 +4,14 @@
 -- app.current_workspace_id set by withTenantTx() under the NON-BYPASSRLS leadwolf_app role;
 -- NULLIF(current_setting(..., true), '') treats unset AND ''-reset GUCs as no-scope, so an unscoped query reads nothing (fail-closed).
 -- Idempotent: safe to re-run on every migrate.
+--
+-- WRITE NEW POLICIES THE SAME WAY: the GUC lookup is wrapped in a scalar subquery —
+--   workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
+-- — not called bare. Semantics are identical; the wrap is what lets the planner hoist it into an InitPlan and
+-- evaluate it ONCE per query. Called bare it is only evaluated once per SCAN, which is fine on an index scan but
+-- re-runs the lookup + NULLIF + text→uuid cast PER ROW on a sequential scan, hash join, or aggregate — exactly
+-- the shapes the facet-count and COUNT(*) paths take. This is the documented Postgres RLS pattern; the bare form
+-- is the classic RLS performance trap. Every policy across rls/*.sql uses the wrapped form.
 
 -- Shared updated_at trigger function (referenced by accounts/contacts; also covers future tables).
 CREATE OR REPLACE FUNCTION set_updated_at() RETURNS trigger AS $$
@@ -18,8 +26,8 @@ ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE accounts FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS accounts_workspace_isolation ON accounts;
 CREATE POLICY accounts_workspace_isolation ON accounts
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS accounts_set_updated_at ON accounts;
 CREATE TRIGGER accounts_set_updated_at BEFORE UPDATE ON accounts
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -29,8 +37,8 @@ ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE contacts FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS contacts_workspace_isolation ON contacts;
 CREATE POLICY contacts_workspace_isolation ON contacts
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS contacts_set_updated_at ON contacts;
 CREATE TRIGGER contacts_set_updated_at BEFORE UPDATE ON contacts
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -40,8 +48,8 @@ ALTER TABLE source_imports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE source_imports FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS source_imports_workspace_isolation ON source_imports;
 CREATE POLICY source_imports_workspace_isolation ON source_imports
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 -- Grant the application role table privileges (RLS still constrains the rows it sees). The role is
 -- created in the migrate bootstrap; GRANTs are idempotent.

@@ -8,7 +8,7 @@ ALTER TABLE scim_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scim_tokens FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS scim_tokens_tenant_isolation ON scim_tokens;
 CREATE POLICY scim_tokens_tenant_isolation ON scim_tokens
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
-  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid))
+  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON scim_tokens TO leadwolf_app;

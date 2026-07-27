@@ -9,15 +9,15 @@ ALTER TABLE webhook_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_subscriptions FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS webhook_subscriptions_workspace_isolation ON webhook_subscriptions;
 CREATE POLICY webhook_subscriptions_workspace_isolation ON webhook_subscriptions
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 -- ── webhook_deliveries ──────────────────────────────────────────────────────────────────────────────────
 ALTER TABLE webhook_deliveries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_deliveries FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS webhook_deliveries_workspace_isolation ON webhook_deliveries;
 CREATE POLICY webhook_deliveries_workspace_isolation ON webhook_deliveries
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON webhook_subscriptions, webhook_deliveries TO leadwolf_app;

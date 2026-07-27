@@ -23,8 +23,8 @@ ALTER TABLE account_domains ENABLE ROW LEVEL SECURITY;
 ALTER TABLE account_domains FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS account_domains_workspace_isolation ON account_domains;
 CREATE POLICY account_domains_workspace_isolation ON account_domains
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS account_domains_set_updated_at ON account_domains;
 CREATE TRIGGER account_domains_set_updated_at BEFORE UPDATE ON account_domains
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -34,8 +34,8 @@ ALTER TABLE account_locations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE account_locations FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS account_locations_workspace_isolation ON account_locations;
 CREATE POLICY account_locations_workspace_isolation ON account_locations
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 DROP TRIGGER IF EXISTS account_locations_set_updated_at ON account_locations;
 CREATE TRIGGER account_locations_set_updated_at BEFORE UPDATE ON account_locations
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

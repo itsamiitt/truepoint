@@ -10,8 +10,8 @@ ALTER TABLE import_mapping_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE import_mapping_templates FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS import_mapping_templates_workspace_isolation ON import_mapping_templates;
 CREATE POLICY import_mapping_templates_workspace_isolation ON import_mapping_templates
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 DROP TRIGGER IF EXISTS import_mapping_templates_set_updated_at ON import_mapping_templates;
 CREATE TRIGGER import_mapping_templates_set_updated_at BEFORE UPDATE ON import_mapping_templates

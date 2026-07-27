@@ -37,14 +37,14 @@ ALTER TABLE retention_runs FORCE ROW LEVEL SECURITY;
 -- The app role reads ONLY its active tenant's run audit (the GUC set by withTenantTx).
 DROP POLICY IF EXISTS retention_runs_tenant_read ON retention_runs;
 CREATE POLICY retention_runs_tenant_read ON retention_runs FOR SELECT
-  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  USING (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 -- …and APPENDS new runs for its active tenant only (WITH CHECK pins the row to the GUC tenant). There is
 -- deliberately NO UPDATE and NO DELETE policy → under FORCE RLS those commands are denied for the app role,
 -- so the run audit is immutable (append-only) regardless of the blanket table grant.
 DROP POLICY IF EXISTS retention_runs_tenant_insert ON retention_runs;
 CREATE POLICY retention_runs_tenant_insert ON retention_runs FOR INSERT
-  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
+  WITH CHECK (tenant_id = (SELECT NULLIF(current_setting('app.current_tenant_id', true), '')::uuid));
 
 -- Documentary / defense-in-depth grants (the real walls are the policies above; the [4/4] blanket grant runs
 -- after this file and re-widens leadwolf_app, so these GRANTs state intent rather than restrict on their own).

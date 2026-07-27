@@ -6,7 +6,7 @@ ALTER TABLE sales_nav_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales_nav_links FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS sales_nav_links_workspace_isolation ON sales_nav_links;
 CREATE POLICY sales_nav_links_workspace_isolation ON sales_nav_links
-  USING (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid)
-  WITH CHECK (workspace_id = NULLIF(current_setting('app.current_workspace_id', true), '')::uuid);
+  USING (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (workspace_id = (SELECT NULLIF(current_setting('app.current_workspace_id', true), '')::uuid));
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON sales_nav_links TO leadwolf_app;
