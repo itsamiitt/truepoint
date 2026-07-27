@@ -75,7 +75,16 @@ export async function withErTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
  * Run `fn` under the least-privilege `leadwolf_forge` role — the TruePoint Forge data-plane path (ADR-0047).
  * NON-BYPASSRLS, owns ONLY the `forge` schema (raw_captures → parsed_records → verified_records + ER/governance);
  * it has NO grant on the tenant overlay, so the ingest→verify pipeline can never read a customer's contacts.
- * There are no GUCs — the forge tables carry no workspace_id (isolation is schema+role, the same-repo firewall).
+ * There are no GUCs to set, but NOT for the reason this comment used to give. It claimed "the forge tables
+ * carry no workspace_id", which is factually wrong: `forge.raw_captures.target_tenant_id` is NOT NULL and
+ * `target_workspace_id` exists (schema/forge.ts). Reads here are genuinely UNSCOPED — nothing filters by
+ * tenant — so the isolation is entirely SCHEMA + ROLE, not row-level: `leadwolf_forge` owns the `forge`
+ * schema and holds no grant on the public/overlay tables, and `leadwolf_app` has no USAGE on `forge`.
+ * That wall is real and is pinned by forgeSchemaIsolation.itest.ts, but it is a wall between the FORGE plane
+ * and the TENANT plane — it is not, and must not be mistaken for, isolation BETWEEN tenants inside forge.
+ * Forge is a shared, staff-operated data plane by design; every cross-tenant read through it is audited
+ * instead (ADR-0032, the /bff/* readers). Anything that ever needs per-tenant scoping inside forge has to add
+ * it explicitly — the columns are there, the enforcement is not.
  * `SET LOCAL ROLE` is transaction-local (RDS-Proxy/PgBouncer-safe). Promotion into master_* still uses withErTx.
  */
 export async function withForgeTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {

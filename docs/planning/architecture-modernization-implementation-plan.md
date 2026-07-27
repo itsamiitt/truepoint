@@ -442,13 +442,28 @@ optimization because optimizing a broken path is wasted work.
   this sweep silently skips the forge schema. Either add one (see L-1.3) or record the deliberate absence.
   **verify:** `EXPLAIN (ANALYZE)` before/after on a facet-count query; full itest sweep.
 
-- [ ] **L-1.3 · Give the `forge` schema an RLS story.** Either enable RLS on `raw_captures`/`parsed_records`
+- [x] **L-1.3 · Give the `forge` schema an RLS story.** Either enable RLS on `raw_captures`/`parsed_records`
   keyed on `target_tenant_id` with a staff bypass (and give `withForgeTx` an optional scope), **or** add an
   itest that pins the intentional absence *and* proves `leadwolf_app` lacks `USAGE ON SCHEMA forge`.
   **why:** `withForgeTx`'s justification comment ("the forge tables carry no workspace_id") is factually
   false — `forge.raw_captures.target_tenant_id` is `NOT NULL` and `target_workspace_id` exists
   (`schema/forge.ts:38-39`). Every forge read is unscoped (`readRepository.ts:287`); the only wall is app code.
   **needs:** L-1.2 (decide the sweep's scope first).
+  **took the second option: pinned the intentional absence, and corrected the false premise.** The comment was
+  the real defect — a wrong answer to "what isolates this?" invites the next reader to extend the pattern on
+  it. `withForgeTx` now states the truth: the tenant columns DO exist, reads are genuinely unscoped, and the
+  isolation is SCHEMA + ROLE (`leadwolf_forge` owns `forge` and holds no grant on the overlay; `leadwolf_app`
+  has no USAGE on `forge`) — a Postgres-enforced wall, not app discipline.
+  New `forgeSchemaIsolation.itest.ts` proves it on real Postgres, mirroring the Layer-0 grant-off pattern:
+  `has_schema_privilege(leadwolf_app, forge, USAGE)` is false; leadwolf_app is DENIED 42501 on SELECT/INSERT/
+  UPDATE/DELETE across seven forge tables (denied, not zero rows — a zero-row result would mean an RLS
+  predicate a later policy edit could widen); and the firewall is proven TWO-WAY, since leadwolf_forge is
+  denied on `contacts`, `users` and `platform_audit_log` — the direction that actually protects customer PII
+  from the ingest pipeline.
+  **Deliberately NOT claimed: isolation BETWEEN tenants inside forge.** There is none, by design — forge is a
+  shared staff-operated plane and its cross-tenant reads are governed by audit (F-0.9, ADR-0032) rather than
+  row filters. A fourth test pins that asymmetry: the tenant columns exist AND `relrowsecurity` is false, so
+  if anyone ever enables RLS there the test fails and every unscoped reader gets re-read.
 
 - [x] **L-1.4 · Migration `0080`: the missing hot-path indexes.** Hand-written per G1/G3.
   - `contacts (workspace_id, created_at DESC, id DESC) WHERE deleted_at IS NULL` — **the default sort of
