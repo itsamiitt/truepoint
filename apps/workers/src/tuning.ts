@@ -36,11 +36,22 @@ const EVENT_LOCK: Omit<WorkerTuning, "concurrency"> = {
  *         all read a stale under-budget total and collectively overshoot the daily cap. (The audit item
  *         describing this as a racy read-check-act is out of date.) Being per-workspace, it would allow
  *         parallelism ACROSS workspaces while a single workspace's spend stayed serialized — the right shape.
- *      ❌ the per-batch CREDIT LEASE has not. `packages/core/src/enrichment/policy.ts` states hard
- *         reserve-then-spend is owned by billing / the bulk pipeline (ADR-0029, 06 §4.1) and is still
- *         outstanding. Without it, concurrent jobs can each pass the daily breaker and then spend a tenant's
- *         credits past their balance — a different overshoot from the one the lock fixed.
- *    When the lease lands, note the pool interaction before picking a number: this is the one queue that
+ *      ⚠️ the "per-batch CREDIT LEASE" precondition is MIS-SCOPED, and re-checking it changes what is
+ *         actually left. Three things, all verifiable in the tree:
+ *           • THIS queue spends provider budget in MICROS, not credits — `enrichContact` never touches the
+ *             credit ledger (no lockBalance/decrement/insertLedger anywhere under core/src/enrichment).
+ *             So there is no credit balance for it to overshoot.
+ *           • The lease itself already EXISTS and is wired — `creditRepository.leaseForJob` / `releaseForJob`
+ *             (ADR-0029), used by `revealJobRepository` for bulk REVEAL. It is not missing; it belongs to a
+ *             different spend path.
+ *           • The monthly cap in `policy.ts` that the note pointed at IS a non-reserving pre-check, but
+ *             `decideAutoEnrich` has NO production caller today (barrel export + one itest), so it guards
+ *             nothing live.
+ *         The live spend guard on this queue is the daily breaker above, and that one is atomic.
+ *    So what actually blocks the raise is no longer a missing lease. It is (a) the bulk-enrichment WORKER
+ *    slice, which is what would spend against a leased ceiling and does not exist yet (confirmJob.ts says so
+ *    in as many words, and the surface is dark behind BULK_ENRICHMENT_ENABLED), and (b) measurement.
+ *    On (b), note the pool interaction before picking a number: this is the one queue that
  *    holds its transaction across provider NETWORK I/O (enrichContact step 3), so each concurrent job pins a
  *    pooled connection for seconds against `max: 10` shared with every other queue. Measure pool saturation
  *    and p99 provider latency first.
