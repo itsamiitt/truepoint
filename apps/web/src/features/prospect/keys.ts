@@ -27,6 +27,8 @@ export const prospectKeys = {
   customFields: (contactId: string) => ["prospect", "custom-fields", contactId] as const,
   /** One contact's activity timeline. */
   activities: (contactId: string) => ["prospect", "activities", contactId] as const,
+  /** One contact's already-owned reveal data (no charge — the read, not the reveal). */
+  revealedContact: (contactId: string) => ["prospect", "revealed-contact", contactId] as const,
   /** One contact's lead-score history. */
   scores: (contactId: string) => ["prospect", "scores", contactId] as const,
   /** Typeahead suggestions for one facet + term — the cache entry IS the per-term memo. */
