@@ -246,7 +246,13 @@ function textCondition(text: string | undefined): SQL | undefined {
     sql`${contacts.lastName} ILIKE ${like}`,
     sql`(coalesce(${contacts.firstName}, '') || ' ' || coalesce(${contacts.lastName}, '')) ILIKE ${like}`,
     sql`${contacts.jobTitle} ILIKE ${like}`,
-    sql`${contacts.emailDomain} ILIKE ${like}`,
+    // `::text` is load-bearing, not noise. email_domain is CITEXT, and pg_trgm's gin_trgm_ops is defined over
+    // `text` — citext is not binary-coercible to it, so the trgm index (migration 0081) has to be built on the
+    // `(email_domain::text)` EXPRESSION. An expression index is only consulted when the query's expression
+    // matches textually, so dropping this cast silently un-indexes this leg. Matching is unchanged: ILIKE is
+    // case-insensitive regardless of citext's own collation. accountSearchRepository already casts `domain`
+    // for the same reason.
+    sql`${contacts.emailDomain}::text ILIKE ${like}`,
     sql`${contacts.linkedinUrl} ILIKE ${like}`,
   );
 }

@@ -453,6 +453,32 @@ optimization because optimizing a broken path is wasted work.
   **guardrail:** the extension hand-decodes claims and ignores unknown ones (safe), but must **not** start
   trusting a role claim — `mint` deliberately drops `pa`. Re-check role on writes regardless.
   **verify:** auth unit tests; an itest asserting a revoked/changed membership stops authorizing within TTL.
+  **BLOCKED on a design decision — and the interim option as written is not permissible.** Checked against
+  `truepoint-security/references/enterprise-iam.md:112`, which is unambiguous: *"Token/session invalidation on
+  deprovisioning, **role change**, or password reset is **immediate** — a stale session must not outlive the
+  access it represents."* Both options in this item violate that as specified:
+  - **Role in the access-token claims** means a demotion or deprovisioning does not take effect until the
+    token refreshes — up to the full access-token lifetime. That is the longest staleness of any option here.
+  - **The 30–60 s memo** introduces staleness where there is currently *none*: today the role is read from the
+    database on every guarded request, so a revocation is effective on the very next one. "Within TTL" is a
+    regression against the standard, not a bound that satisfies it.
+  Either becomes permissible only with **immediate invalidation on every role/membership mutation**, which is
+  the "bust via the existing revocation path" clause — and that is the part that needs care rather than code.
+  The write surface is not a single chokepoint: `apps/api/src/features/teams/routes.ts`,
+  `apps/api/src/features/workspaces/memberRoutes.ts`, `packages/core/src/auth/members.ts`, the SCIM
+  deprovisioning path, and tenant-level membership all mutate what `getRoleForUser` returns. Missing ONE leaves
+  a demoted or deprovisioned user authorized for up to the TTL — precisely the failure the rule exists to
+  prevent, and not one a test suite can prove absent (a test can only prove the paths you thought of).
+  **Recommendation, for a human decision rather than an agent's:** wire the memo through the SHARED cache tier
+  (C-3.1) — never a per-process LRU, which cannot be invalidated across replicas — with the TTL as a backstop
+  and explicit invalidation from an audited chokepoint that every role mutation must pass through. Building
+  that chokepoint is the real work; the cache is the easy part.
+  **Worth noting the cheaper, staleness-free alternative:** the item's own measurement is that the guard costs
+  an *extra full transaction* (~5 RTTs: BEGIN + SET ROLE + set_config + SELECT + COMMIT) — not that reading a
+  role is expensive. Running the role check inside the transaction the handler already opens removes those
+  RTTs with **zero** staleness and no change to the authorization model. That is a request-scoped-transaction
+  refactor rather than a cache, and it is the option that does not trade away an immediate-revocation
+  guarantee for latency.
 
 - [x] **L-1.6 · Home summary: cache-first, then one round-trip.**
   `packages/core/src/home/buildHomeSummary.ts:51-59` runs 9 `await`s serially in one transaction (a
