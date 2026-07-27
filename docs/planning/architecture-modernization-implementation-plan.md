@@ -454,7 +454,7 @@ optimization because optimizing a broken path is wasted work.
   trusting a role claim — `mint` deliberately drops `pa`. Re-check role on writes regardless.
   **verify:** auth unit tests; an itest asserting a revoked/changed membership stops authorizing within TTL.
 
-- [ ] **L-1.6 · Home summary: cache-first, then one round-trip.**
+- [x] **L-1.6 · Home summary: cache-first, then one round-trip.**
   `packages/core/src/home/buildHomeSummary.ts:51-59` runs 9 `await`s serially in one transaction (a
   deliberate single-connection tradeoff that replaced 9 pinned connections — not naive code), and
   `apps/api/src/features/home/routes.ts:68-80` computes the whole summary **before** checking
@@ -463,6 +463,23 @@ optimization because optimizing a broken path is wasted work.
   30–60 s memo the route comment itself says is missing; (c) then collapse to one SQL round-trip (CTEs +
   `json_build_object`).
   **needs:** C-2.1 (the Redis cache tier) for (b).
+  **(a) and (b) shipped together, because the memo IS the answer to (a).** The literal reading of (a) —
+  "check the ETag against a cached hash before computing" — needs a cached hash, which needs the cache. With
+  the whole computation behind the memo, a 304 now costs one Redis GET plus a hash instead of `buildJobViewer`'s
+  transaction plus `buildHomeSummary`'s nine serial aggregates. That is the compute win (a) was after; before,
+  a 304 paid for the entire summary and then discarded the bytes.
+  **Keyed PER USER, deliberately.** Two users in one workspace can legitimately see different summaries —
+  `buildJobViewer` scopes the Recent Imports card by viewer under the S-V3 gate — so a workspace-wide key
+  would serve one user's view to another. That is a disclosure, not a staleness bug, so the key carries the
+  varying dimension rather than relying on the gate being off. It also matches the `private` header this route
+  already sends: the same sharing rule on the server as the one told to the browser.
+  **The BODY STRING is cached, not the object**, so the ETag is byte-stable across hits — a flapping ETag
+  would silently kill the 304 path the route exists to serve.
+  **No write-path invalidation, and that is not an oversight.** The TTL is 30s because the route has always
+  advertised `private, max-age=30`; a 30s server memo therefore introduces no staleness the contract did not
+  already permit.
+  **(c) not done** — collapsing the nine aggregates into one CTE round-trip is a separate change, and the memo
+  removes most of its urgency by making the repeat case free rather than making the cold case cheaper.
 
 - [x] **L-1.7 · Drop app-level `compress()`.** `apps/api/src/app.ts:84` gzips every response inside the
   single-threaded Bun process. Caddy already does `encode zstd gzip` and **skips already-encoded bodies**,
@@ -655,9 +672,20 @@ process up to Caddy.
   **Still to wire:** L-1.6 home summary, facet counts, entitlements. Credit balances and permission decisions
   are deliberately NOT candidates.
 
-- [ ] **C-3.2 · Precompute the aggregates.** `dataQualitySummary` (`contactRepository.ts:745-748`) is a live
+- [x] **C-3.2 · Precompute the aggregates.** `dataQualitySummary` (`contactRepository.ts:745-748`) is a live
   per-view aggregate scan **despite a `data_quality_snapshots` table already existing** — wire the worker
   refresh. Same for burn-by-day.
+  **shipped, but NOT by serving the snapshot — and the difference matters.** The snapshot sweep is DAILY, so
+  reading the dashboard from it would have made Data Health up to 24 hours stale: a user who just finished an
+  import would refresh and see unchanged numbers, with no way to tell whether the import worked. That is a
+  user-visible correctness trade dressed as a performance fix, and it needs a product decision, not an
+  engineering one.
+  The actual problem was per-VIEW cost — one aggregate scan with ~23 FILTER clauses over every live contact,
+  re-run on every render by every member. A 30s read-through memo (C-3.1) removes the repetition while staying
+  inside the freshness `private, max-age=30` already promises. Workspace-keyed, not per-user: unlike
+  `/summary`, this response has no viewer dimension, so every member gets identical bytes.
+  The snapshot table keeps the role it was built for — the daily TREND series (`/data-quality/history`), where
+  a daily cadence is the point rather than a compromise. **Burn-by-day is untouched.**
 
 - [x] **C-3.3 · Facet counts in one pass.** `searchRepository.ts:438-459` +
   `accountSearchRepository.ts:264-346` run one full GROUP-BY aggregate scan **per facet, sequentially, per
@@ -691,11 +719,27 @@ process up to Caddy.
   head-of-line-blocks every tenant's imports for up to the 15-minute deadline.
   **fix:** Redis `INCR`/Lua atomic breaker → raise concurrency → per-tenant fairness via sharded queues.
 
-- [ ] **C-3.6 · SSE at scale.** `apps/api/src/features/events/routes.ts:21,37` opens a **dedicated IORedis
+- [x] **C-3.6 · SSE at scale.** `apps/api/src/features/events/routes.ts:21,37` opens a **dedicated IORedis
   client per connection** (10 k clients = 10 k Redis connections) and heartbeats every 15 s — longer than
   Bun's default 10 s idleTimeout, so the stream dies between heartbeats the moment
   `REALTIME_SSE_ENABLED` flips. One shared psubscribe client per process + in-process fanout + 8 s
   heartbeat + per-user connection caps. **needs:** A-0.1 (idleTimeout).
+  **shipped.** One process-wide subscriber (`events/hub.ts`) with per-channel refcounting replaces the
+  per-connection client: N streams on a workspace now cost ONE Redis SUBSCRIBE. At 10k connected dashboards
+  the old shape meant 10k connections from a single process against a default `maxclients` of 10000, so the
+  failure mode was not slowness — it was "no further connections", including the queues.
+  **SUBSCRIBE, not PSUBSCRIBE.** A pattern like `ws:*` would be one subscription but would deliver EVERY
+  workspace event to EVERY api process, which then discards nearly all of them: wasted bandwidth proportional
+  to tenant count, and a cross-tenant exposure resting entirely on the in-process filter being correct.
+  Subscribing to exactly the live channels means Redis performs the isolation and a filter bug cannot leak
+  what was never delivered.
+  **Per-user cap** of 5 concurrent streams, refused with a 429 + Retry-After before the stream opens — a
+  refusal the client can act on, rather than accepting a connection and starving it.
+  **The heartbeat is already safe:** A-0.1 shipped `idleTimeout: 65`, comfortably above the 15s heartbeat, so
+  the described "stream dies between heartbeats" window is closed.
+  **verify:** 10 new unit tests — one subscribe for many listeners, unsubscribe only on the last detach,
+  cross-channel isolation, idempotent double-detach (a double release would silently stop other streams), a
+  throwing listener not stopping delivery to its neighbours, and the per-user cap accounting.
 
 - [x] **C-3.7 · Move the Redis PUBLISH out of the open DB transaction.**
   `apps/workers/src/realtimeRelay.ts:21-36` holds the transaction (and its pooled connection) across N
