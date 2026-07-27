@@ -1204,10 +1204,21 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   smaller because queue-backed throughput work can wait where a request cannot.
   **`closeDb` now drains both pools** — leaving the second open would keep a worker or test process alive,
   which is precisely what that function exists to prevent.
-  **Still open:** a distinct LOGIN role/credential for the Forge connection (today it is the same owner login,
-  with `leadwolf_forge` reached via SET LOCAL ROLE — so the isolation is capacity, not authentication), and
-  the runtime `statement_timeout`, whose knob landed in E-6.3 but stays off until the api/worker pool split
-  lets one value be correct for both.
+  **The LOGIN role shipped too.** `leadwolf_forge` is granted LOGIN when `DATABASE_FORGE_ROLE_PASSWORD` is
+  configured, and the Forge pool AUTHENTICATES as it — so the firewall is now enforced by the connection, not
+  by a `SET LOCAL ROLE` that has to succeed. The failure direction is what made this worth doing: had that
+  statement ever been skipped or errored, `withForgeTx` would have run as the OWNER, which CAN read customer
+  contacts. Without the password the role stays NOLOGIN and nothing changes.
+  **Two details decide whether it actually works.** The bootstrap has an ELSE branch converging an EXISTING
+  role — every deployment created it NOLOGIN, so without that the change would only reach fresh databases and
+  silently never production; it only ever grants, never revokes, since pulling LOGIN from a running deployment
+  mid-migrate would take Forge down. And `applyMigrations` falls back to `process.env` for the password: it is
+  deliberately standalone, and the itests call it with no options, so without the fallback the path would have
+  shipped untested.
+  **Verified by session_user** (`forgeSchemaIsolation.itest.ts`), because the fallback makes a broken
+  derivation indistinguishable from a working one — the owner can do everything the forge role can and more.
+  **Still open:** the runtime `statement_timeout`, whose knob landed in E-6.3 but stays off until the
+  api/worker pool split lets one value be correct for both.
 
 ---
 
