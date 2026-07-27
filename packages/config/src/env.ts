@@ -135,6 +135,16 @@ export const appEnvSchema = z
     // the second. Turning this on safely needs the pool split this item describes — until then the knob exists
     // so an operator who knows their workload can set it, and the reasoning is here rather than lost.
     DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
+    // L-1.5: TTL (ms) for the per-request workspace-role memo. 0 = OFF, which is the shipped default and
+    // today's exact behaviour — every `requireRole` request reads the role from the database, so a revocation
+    // takes effect on the very next request.
+    //
+    // Turning it on is an operator decision because it trades a small failure-mode window for the round trips.
+    // Normal operation is still immediate: a role change DELETEs the key, so the next request re-reads. The
+    // window exists only when Redis is reachable for reads but the invalidating DELETE fails — a demoted user
+    // then keeps the old role until this TTL expires. Keep it short; `enterprise-iam.md:112` requires
+    // invalidation on role change to be immediate, and this is the one path where it would not be.
+    ROLE_CACHE_TTL_MS: z.coerce.number().int().nonnegative().default(0),
     // The Forge data plane's OWN connection (E-6.6). Optional: unset means the same database as
     // DATABASE_URL — but still a SEPARATE POOL, which is the isolation that matters here. `withForgeTx`
     // shared the customer request path's pool, so a Forge backlog (the parse→extract→verify DAG, which holds

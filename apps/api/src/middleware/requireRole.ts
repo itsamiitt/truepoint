@@ -3,9 +3,9 @@
 // the workspaces repository (RLS-scoped), and rejects with a 403 Problem when no workspace is selected, the
 // caller is not an active member, or the role is not allowed. On success the role is stashed for handlers.
 
-import { workspaceRepository } from "@leadwolf/db";
 import { ForbiddenError, type WorkspaceRole } from "@leadwolf/types";
 import type { Context, MiddlewareHandler } from "hono";
+import { getRoleCached } from "../lib/roleCache.ts";
 import type { TenancyVariables } from "./tenancy.ts";
 
 export type RoleVariables = TenancyVariables & { role: WorkspaceRole };
@@ -18,7 +18,9 @@ export function requireRole(...allowed: WorkspaceRole[]): MiddlewareHandler {
     const workspaceId = c.get("workspaceId") as string | undefined;
     if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
 
-    const role = await workspaceRepository.getRoleForUser(tenantId, workspaceId, claims.sub);
+    // Reads the database directly unless ROLE_CACHE_TTL_MS is set; see lib/roleCache.ts for why that is off
+    // by default and what a membership mutation does to the cached entry.
+    const role = await getRoleCached(tenantId, workspaceId, claims.sub);
     if (!role || !allowed.includes(role)) {
       throw new ForbiddenError("insufficient_role", "Your role does not allow this action.");
     }
