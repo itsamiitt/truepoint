@@ -90,6 +90,9 @@ export function useReports() {
   );
 
   return {
+    // True when the loaded rows hit the fetch limit, i.e. these rollups describe the most recent sample
+    // rather than the workspace. Surfaced so the page can say so instead of presenting a partial as a total.
+    sampled: source?.sampled ?? false,
     balance: source?.balance ?? null,
     credit,
     funnel,
