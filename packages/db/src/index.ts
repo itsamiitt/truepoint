@@ -215,6 +215,11 @@ export {
   type OwnerReader,
 } from "./repositories/retentionScanRepository.ts";
 export {
+  PARTITION_MONTHS_AHEAD,
+  type PartitionEnsureResult,
+  partitionRepository,
+} from "./repositories/partitionRepository.ts";
+export {
   sourceImportRepository,
   type SourceImportInput,
   type ImportBatchRow,
