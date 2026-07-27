@@ -101,3 +101,42 @@ describe("anthropicExtractionPort request body", () => {
     ).toThrow(/max_tokens must exceed 1024/);
   });
 });
+
+describe("non-2xx classification (F-0.7)", () => {
+  const portWithStatus = (status: number) =>
+    anthropicExtractionPort({
+      apiKey: "k",
+      baseUrl: "https://api.anthropic.test",
+      version: "2023-06-01",
+      model: "claude-opus-5",
+      fetchJson: async () => ({ status, json: { error: { message: "boom" } } }),
+    });
+
+  const extract = (status: number) =>
+    portWithStatus(status).extract({
+      residue: "VP Engineering at Acme",
+      targetFields: ["job_title"],
+      schemaVersion: "1-0-0",
+    });
+
+  it("429 and 5xx stay RETRYABLE (ai_unavailable) — they really are transient", async () => {
+    for (const status of [429, 500, 502, 503, 504]) {
+      expect((await extract(status)).outcome).toBe("ai_unavailable");
+    }
+  });
+
+  it("other 4xx are TERMINAL, not retryable", async () => {
+    // Every status used to collapse to ai_unavailable, which the worker treats as retryable — so a
+    // permanently malformed request (a rejected thinking parameter, a bad schema, a revoked key) retried
+    // until the DLQ, and every attempt looked like a provider outage rather than our own bug.
+    for (const status of [400, 401, 403, 404, 413, 422]) {
+      expect((await extract(status)).outcome).not.toBe("ai_unavailable");
+    }
+  });
+
+  it("a terminal rejection returns no fields and does not claim a repair it never ran", async () => {
+    const outcome = await extract(400);
+    expect(outcome.fields).toEqual([]);
+    expect(outcome.usedRepair).toBe(false);
+  });
+});

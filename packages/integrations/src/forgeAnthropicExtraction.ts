@@ -24,10 +24,33 @@ export type FetchJson = (
   init: { method: string; headers: Record<string, string>; body: string },
 ) => Promise<AnthropicResponse>;
 
-/** The production transport — a real fetch to the Anthropic Messages API (Phase 4; extraction is ENABLED). */
+/** Hard ceiling on a single Anthropic call. Without one, `withDeadline`'s 60s rejection abandons the promise
+ *  but leaves the SOCKET open — the request keeps running and keeps billing, invisibly, because nothing is
+ *  waiting for it any more. An AbortSignal actually cancels it. Sits under the 60s deadline so this fires
+ *  first and the failure is attributable here rather than surfacing as a generic deadline miss. */
+const ANTHROPIC_TIMEOUT_MS = 45_000;
+
+/** The production transport — a real fetch to the Anthropic Messages API (Phase 4; extraction is ENABLED).
+ *
+ *  Captures the error BODY on a non-2xx. It used to discard it, which is exactly why F-0.2 (a rejected
+ *  thinking parameter) shipped undiagnosed: the adapter knew the API had said why and threw it away, leaving
+ *  "extraction is silently off" as the only symptom. */
 export const defaultAnthropicTransport: FetchJson = async (url, init) => {
-  const res = await fetch(url, { method: init.method, headers: init.headers, body: init.body });
+  const res = await fetch(url, {
+    method: init.method,
+    headers: init.headers,
+    body: init.body,
+    signal: AbortSignal.timeout(ANTHROPIC_TIMEOUT_MS),
+  });
   const json: unknown = await res.json().catch(() => ({}));
+  if (res.status >= 400) {
+    // stderr, not a logger dependency: this package is deliberately dependency-light, and an unparseable
+    // provider error is exactly the thing an operator needs verbatim rather than reshaped.
+    const retryAfter = res.headers.get("retry-after");
+    process.stderr.write(
+      `forge extraction: Anthropic ${res.status}${retryAfter ? ` (retry-after: ${retryAfter})` : ""} — ${JSON.stringify(json).slice(0, 500)}\n`,
+    );
+  }
   return { status: res.status, json };
 };
 
@@ -202,6 +225,26 @@ export function anthropicExtractionPort(cfg: AnthropicExtractionConfig): Extract
     model: cfg.model,
   });
 
+  /** A request DEFECT — the API rejected what we sent. Terminal, not retryable. */
+  const rejected = (usedRepair: boolean): ExtractionOutcome => ({
+    outcome: "ai_invalid_output",
+    fields: [],
+    usedRepair,
+    model: cfg.model,
+  });
+
+  /**
+   * Classify a non-2xx. Every status used to collapse to `ai_unavailable`, which the worker treats as
+   * RETRYABLE — so a permanently malformed request (a rejected thinking parameter, a bad schema, a revoked
+   * key) retried until it hit the DLQ, and every attempt looked like a provider outage rather than our bug.
+   *
+   * 429 and 5xx really are transient, so they stay `ai_unavailable` and keep the queue backoff.
+   * Other 4xx cannot succeed on retry: they are quarantined instead, which stops the pointless loop and puts
+   * the capture somewhere a human will look. The response body is logged by the transport either way.
+   */
+  const classifyError = (status: number, usedRepair: boolean): ExtractionOutcome =>
+    status === 429 || status >= 500 ? unavailable(usedRepair) : rejected(usedRepair);
+
   return {
     async extract(req: ExtractionRequest): Promise<ExtractionOutcome> {
       // Fail-closed on a missing key — never a construction throw; the key is read from config, never a client (§C).
@@ -214,7 +257,7 @@ export function anthropicExtractionPort(cfg: AnthropicExtractionConfig): Extract
       } catch {
         return unavailable(false);
       }
-      if (res.status >= 400) return unavailable(false);
+      if (res.status >= 400) return classifyError(res.status, false);
 
       let meta = readResponse(res.json);
       if (meta.stopReason === "refusal") {
@@ -237,7 +280,7 @@ export function anthropicExtractionPort(cfg: AnthropicExtractionConfig): Extract
         } catch {
           return unavailable(true);
         }
-        if (res2.status >= 400) return unavailable(true);
+        if (res2.status >= 400) return classifyError(res2.status, true);
         meta = readResponse(res2.json);
         if (meta.stopReason === "refusal") {
           return { outcome: "refused", fields: [], usedRepair, model: meta.model };
