@@ -67,18 +67,41 @@ jobs:
       #     on that package alone can pass.
       #   • bundler-only resolution failures (a malformed workspace package.json, a bad export map) that
       #     no other gate reads.
-      # Env: next build imports packages/config, whose schema fails fast on missing keys. These are
-      # throwaway CI values — the same ones the unit-test preload uses — never real credentials. The
-      # production superRefine asserts (origin agreement) only fire under NODE_ENV=production, so a
-      # development-mode build does not need the NEXT_PUBLIC_* set.
+      # Env: next build imports packages/config, whose schema fails fast on missing keys. These are throwaway CI
+      # values — never real credentials.
+      #
+      # NODE_ENV must be `production`: `next build` under NODE_ENV=development mixes the dev and prod React
+      # runtimes and crashes prerendering with "<Html> should not be imported outside of pages/_document" on
+      # /404. deploy.sh already refuses to deploy an env file containing NODE_ENV=development for exactly this
+      # reason — the build gate has to match that, or it tests a configuration nothing ever ships.
+      #
+      # Because it IS a production build, packages/config's production-only superRefine asserts apply, so the
+      # values below have to be internally consistent: AUTH_COOKIE_DOMAIN = the AUTH_ORIGIN host,
+      # NEXT_PUBLIC_AUTH_ORIGIN = AUTH_ORIGIN, and NEXT_PUBLIC_APP_ORIGIN present in APP_ORIGINS.
+      # apps/auth prerenders /.well-known/jwks.json, which calls getJwks() and therefore needs real signing-key
+      # material at BUILD time. Generated fresh per run rather than committed: a checked-in private key — even a
+      # throwaway — is the kind of thing secret scanners flag and humans later copy. Mirrors deploy/gen-keys.sh,
+      # and the base64 single-line transport is what packages/config expects (a multi-line PEM does not survive
+      # env interpolation — that is the ADR-0016 token_mint_failed outage).
+      - name: Generate a throwaway Ed25519 signing key for the build
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          openssl genpkey -algorithm ED25519 -out "$tmp/jwt.pem"
+          openssl pkey -in "$tmp/jwt.pem" -pubout -out "$tmp/jwt.pub.pem"
+          echo "JWT_PRIVATE_KEY_PEM_B64=$(base64 -w0 "$tmp/jwt.pem")" >> "$GITHUB_ENV"
+          echo "JWT_PUBLIC_KEY_PEM_B64=$(base64 -w0 "$tmp/jwt.pub.pem")" >> "$GITHUB_ENV"
+          rm -rf "$tmp"
       - name: Build (turbo — 4 Next apps + extension)
         env:
-          NODE_ENV: development
+          NODE_ENV: production
           AUTH_ORIGIN: https://auth.test
           APP_ORIGINS: https://app.test,https://admin.test,https://forge.test
           AUTH_COOKIE_DOMAIN: auth.test
           AUTH_BIND_IP: "off"
           JWT_SIGNING_KID: ci-kid
+          NEXT_PUBLIC_APP_ORIGIN: https://app.test
+          NEXT_PUBLIC_AUTH_ORIGIN: https://auth.test
           DATABASE_URL: postgres://leadwolf:leadwolf@localhost:5432/leadwolf
           REDIS_URL: redis://localhost:6379
           BLIND_INDEX_KEY: ci-blind-index-key-0123456789abcdef

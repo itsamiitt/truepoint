@@ -330,6 +330,25 @@ describe("S-CH3 gate — fail-closed tenant selection IS the batch-boundary abor
   });
 });
 
+/** Flatten an error and its `cause` chain into one searchable string.
+ *
+ *  Needed because drizzle-orm ≥0.44 wraps every driver error in a DrizzleQueryError, so a Postgres message
+ *  (a RAISE EXCEPTION, a constraint name, a SQLSTATE-bearing error) is no longer on the thrown object — it is one
+ *  or more `cause` levels down. Bounded depth so a cyclic cause cannot hang the test. */
+function causeChainText(err: unknown): string {
+  const parts: string[] = [];
+  for (let cur: unknown = err, depth = 0; cur != null && depth < 5; depth++) {
+    if (typeof cur !== "object") {
+      parts.push(String(cur));
+      break;
+    }
+    const e = cur as { message?: unknown; cause?: unknown };
+    if (typeof e.message === "string") parts.push(e.message);
+    cur = e.cause;
+  }
+  return parts.join(" | ");
+}
+
 describe("S-CH3 atomicity — the §R-P3 backfill wedge drill (injected mid-batch failure)", () => {
   test("a phone-insert bomb aborts the WHOLE batch: the failing contact's email row is absent too — never half a contact", async () => {
     await admin.unsafe(`
@@ -341,9 +360,19 @@ describe("S-CH3 atomicity — the §R-P3 backfill wedge drill (injected mid-batc
       FOR EACH ROW WHEN (NEW.workspace_id = '${wsD}') EXECUTE FUNCTION itest_phone_bomb()`);
     try {
       // Jane-D's email insert lands first in the batch tx; her phone insert then bombs ⇒ full rollback.
-      await expect(core.runChannelBackfillForWorkspace(scope(tD, wsD))).rejects.toThrow(
-        /itest injected/,
-      );
+      //
+      // The injected message is matched through the CAUSE CHAIN, not on the thrown error's own message: since
+      // drizzle-orm 0.44 every driver error is wrapped in a DrizzleQueryError whose message is the generic
+      // "Failed query: insert into contact_phones …", and the Postgres error carrying 'itest injected …' is its
+      // `cause`. Asserting on the top-level message silently stopped matching after the upgrade even though the
+      // behaviour under test — the whole batch rolling back — was unchanged.
+      const raised = await core
+        .runChannelBackfillForWorkspace(scope(tD, wsD))
+        .then(() => null)
+        .catch((e: unknown) => e);
+      expect(raised).not.toBeNull();
+      expect(causeChainText(raised)).toMatch(/itest injected/);
+      // The substance of the drill: neither child row survives — never half a contact.
       expect(await childCounts(wsD)).toEqual({ emails: 0, phones: 0 });
     } finally {
       await admin.unsafe("DROP TRIGGER itest_phone_bomb ON contact_phones");

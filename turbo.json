@@ -6,7 +6,20 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_*", "AUTH_ORIGIN", "APP_ORIGINS", "AUTH_COOKIE_DOMAIN"],
+      "passThroughEnv": [
+        "AUTH_BIND_IP",
+        "JWT_SIGNING_KID",
+        "JWT_PRIVATE_KEY_PEM_B64",
+        "JWT_PUBLIC_KEY_PEM_B64",
+        "JWT_PRIVATE_KEY_PEM",
+        "JWT_PUBLIC_KEY_PEM",
+        "DATABASE_URL",
+        "DATABASE_APP_ROLE",
+        "REDIS_URL",
+        "BLIND_INDEX_KEY"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^build"]
