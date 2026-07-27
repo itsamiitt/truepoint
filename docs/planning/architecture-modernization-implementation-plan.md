@@ -1319,7 +1319,7 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   HTTP/3 at the edge, WAF; add its ranges to `trusted_proxies` (currently `private_ranges`, correct only
   while Caddy is the edge). Also add HSTS/CSP to `apps/web`/`apps/admin`, which ship **no** security headers
   today (needed by T-2.2 anyway).
-- [ ] **E-6.3 · Read replicas + pool split.** `DB_POOL_MAX` env (today `max: 10` hardcoded), a
+- [x] **E-6.3 · Read replicas + pool split.** `DB_POOL_MAX` env (today `max: 10` hardcoded), a
   `leadwolf_app` LOGIN pool for tenant traffic vs a small owner pool for the audited platform paths (today
   the runtime pool logs in as the **DB owner**, so any `db.*` call outside `withTenantTx` silently bypasses
   RLS, and unauthenticated public catalog reads are served from the owner pool), `prepare` gated on a
@@ -1356,7 +1356,23 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   `DB_POOLED=0` or `False` keeps the safe behaviour instead of silently enabling prepared statements —
   pinned by `dbPooling.test.ts`. (`applyMigrations` keeps its own hardcoded `prepare: false`; the migrator
   needs it regardless of how the runtime is deployed.)
-  **Still open:** replica routing for list/dashboard reads — which needs a replica to route to.
+  **REPLICA ROUTING SHIPPED — and it did not need a replica to route to.** Same shape as the Forge pool
+  (E-6.6): `REPLICA_DATABASE_URL` is OPTIONAL and defaults to the primary, so an unconfigured deployment reads
+  exactly the rows it always did. What lands immediately is a separate CONNECTION BUDGET — a heavy dashboard
+  aggregate stops competing with the request path for the tenant pool. Pointing it at a real replica later
+  moves the load off the primary with no code change.
+  `withReplicaTx` runs the IDENTICAL RLS setup as `withTenantTx` (same non-BYPASSRLS app role, same
+  transaction-local GUCs): a replica is not a privilege boundary and must not become one by accident.
+  **Which reads qualify is the actual question, and the answer is not "read-only ones".** A replica is behind
+  by definition, so anything that must show a user their own write immediately — a list after a create, a
+  balance after a spend — stays on `withTenantTx`. The safe set is reads whose contract ALREADY advertises
+  staleness. `reportsRepository.summary` is routed on exactly that basis: a trailing-window dashboard rollup
+  that nobody reads expecting to see the reveal they just made, running the heavy scans that should be the
+  first thing off the request path.
+  **`closeDb` drains the fourth pool**, and `dbPooling.test.ts` re-pins the worst-case per-process budget
+  (10 + 4 + 5 + 5 = 24) so a future split is a conscious act rather than a silent multiplication. The existing
+  `reportsRepository.itest.ts` now exercises `withReplicaTx` with no replica configured, which is what proves
+  the fallback.
 - [x] **E-6.4 (partial: the two convertible tables) · Partition the append-heavy tables** — `activities`, `email_events`, `platform_audit_log`,
   `provider_calls`, `source_imports`, `credit_ledger` (zero `PARTITION BY` in the repo today). Monthly range
   partitions; the partition key is already in the hot predicates. Gives retention real detach-and-archive

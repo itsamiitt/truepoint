@@ -163,6 +163,15 @@ export const appEnvSchema = z
     // wait. Customer requests cannot. Sizing it low is how "isolation" stays a budget rather than a doubling
     // of total connections against the same server.
     FORGE_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
+    // E-6.3 replica routing. OPTIONAL and, like FORGE_DATABASE_URL, unset means the same database as
+    // DATABASE_URL — but still a SEPARATE POOL, which is the isolation that matters first: a heavy dashboard
+    // aggregate then draws from its own connection budget instead of the request path's. Pointing this at a
+    // real read replica later adds load isolation with no code change.
+    //
+    // Only reads whose contract ALREADY tolerates staleness are routed here (see withReplicaTx), because a
+    // replica is behind by definition and a read-your-writes surface routed to one is a correctness bug.
+    REPLICA_DATABASE_URL: z.string().url().optional(),
+    REPLICA_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
     // Is the runtime connection behind a TRANSACTION-pooling proxy (RDS Proxy, PgBouncer, Neon's pooled
     // endpoint)? This decides `prepare` (E-6.3).
     //
