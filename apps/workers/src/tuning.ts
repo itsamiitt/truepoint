@@ -29,7 +29,21 @@ const EVENT_LOCK: Omit<WorkerTuning, "concurrency"> = {
 
 /** Event-queue tuning, keyed by queue name. Concurrency rationale per queue:
  *  - imports 1 — whole-CSV payloads in memory; the scalable path is the chunked bulk-imports pipeline.
- *  - enrichment 1 — SPEND PATH (F3 hard gate; see header). Serial until the atomic budget breaker lands.
+ *  - enrichment 1 — SPEND PATH (F3 hard gate; see header). ONE of the two entry-gate preconditions is now
+ *    met, the other is not, so this stays serial:
+ *      ✅ the atomic budget breaker HAS landed. `providerCallRepository.lockDailyBudget` takes a per-WORKSPACE
+ *         advisory xact lock around the check-through-record window, so concurrent enrichments can no longer
+ *         all read a stale under-budget total and collectively overshoot the daily cap. (The audit item
+ *         describing this as a racy read-check-act is out of date.) Being per-workspace, it would allow
+ *         parallelism ACROSS workspaces while a single workspace's spend stayed serialized — the right shape.
+ *      ❌ the per-batch CREDIT LEASE has not. `packages/core/src/enrichment/policy.ts` states hard
+ *         reserve-then-spend is owned by billing / the bulk pipeline (ADR-0029, 06 §4.1) and is still
+ *         outstanding. Without it, concurrent jobs can each pass the daily breaker and then spend a tenant's
+ *         credits past their balance — a different overshoot from the one the lock fixed.
+ *    When the lease lands, note the pool interaction before picking a number: this is the one queue that
+ *    holds its transaction across provider NETWORK I/O (enrichContact step 3), so each concurrent job pins a
+ *    pooled connection for seconds against `max: 10` shared with every other queue. Measure pool saturation
+ *    and p99 provider latency first.
  *  - dsar 1 — privileged compliance deletes/exports; keep strictly serial.
  *  - scoring/dedup/firmographics/outreach 4 — IO-bound and idempotent; outreach's per-mailbox SEND rate is
  *    still governed by the Redis token bucket (mailboxThrottle), concurrency only parallelizes across
