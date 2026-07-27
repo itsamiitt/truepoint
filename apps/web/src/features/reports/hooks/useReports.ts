@@ -2,10 +2,17 @@
 // date-range + member filters, then derives the four computable dashboard view models via the pure rollups.
 // Presentation state only; one loading/error pair + reload. The deliverability + lead-score dashboards have no
 // backend yet (ClickHouse /reports/* is post-MVP, ADR-0010) so they render a first-class empty state.
+//
+// The FETCH is a query; the rollups stay client-side. That split is deliberate and temporary: C-3.10 is the
+// item that moves the aggregation server-side, and it is open on two product decisions (whether day buckets
+// are viewer-local or UTC, and where the member dropdown's options come from) — not on the data layer. So
+// this caches and dedupes the load without pretending the numbers past the loaded sample are right.
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { type ReportsSource, fetchReportsSource } from "../api";
+import { reportKeys } from "../keys";
 import { rollupCreditUsage, rollupDataHealth, rollupFunnel, rollupTeam } from "../rollups";
 
 /** Date-range presets for the filter row (trailing windows over the loaded sample). */
@@ -21,28 +28,24 @@ export const RANGE_OPTIONS: { value: RangeId; label: string; days: number | null
 const DAY_MS = 86_400_000;
 
 export function useReports() {
-  const [source, setSource] = useState<ReportsSource | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery<ReportsSource>({
+    queryKey: reportKeys.source(),
+    queryFn: fetchReportsSource,
+  });
+  const source = query.data ?? null;
+  const error = query.error
+    ? query.error instanceof Error
+      ? query.error.message
+      : "Failed to load reports"
+    : null;
+  const loading = query.isPending;
+  const reload = () => {
+    void query.refetch();
+  };
 
+  // The range and member filters are CLIENT state — what the user picked, applied to the loaded sample.
   const [range, setRange] = useState<RangeId>("14d");
   const [member, setMember] = useState<string>("all");
-
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setSource(await fetchReportsSource());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load reports");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
 
   // The member options come from the loaded data (owner ids on contacts + reveals); labels mirror rollups.
   const memberOptions = useMemo(() => {
