@@ -14,8 +14,9 @@ import {
   IMPORT_QUEUE_PRIORITY,
   type ImportFastJobData,
 } from "@leadwolf/types";
-import { Queue } from "bullmq";
+import type { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { tracedQueue } from "../../lib/tracedQueue.ts";
 import { assertQueueCapacity } from "./queueBackpressure.ts";
 
 /** Only the API enqueues the DRIVE variant; the worker enqueues the chunk variant onto the same queue. */
@@ -33,7 +34,7 @@ let queue: Queue<UnifiedImportJobData> | undefined;
 function bulkImportQueue(): Queue<UnifiedImportJobData> {
   if (!queue) {
     const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
-    queue = new Queue<UnifiedImportJobData>(BULK_IMPORTS_QUEUE, {
+    queue = tracedQueue<UnifiedImportJobData>(BULK_IMPORTS_QUEUE, {
       connection,
       defaultJobOptions: {
         // Retry transient/systemic failures with exponential backoff + jitter (de-correlates retries under a

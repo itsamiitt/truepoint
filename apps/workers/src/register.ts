@@ -31,7 +31,7 @@ import {
   importNotifyPayloadSchema,
   importRollupsPayloadSchema,
 } from "@leadwolf/types";
-import { Queue, type Worker } from "bullmq";
+import type { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { type WorkerDeadLetter, extractScope, makeDeadLetterHandler } from "./deadLetter.ts";
 import { log } from "./logger.ts";
@@ -232,6 +232,7 @@ import {
   REVERIFICATION_RETRY,
   SCORING_RETRY,
 } from "./retryPolicies.ts";
+import { tracedQueue } from "./tracedQueue.ts";
 import { tracedWorker } from "./tracedWorker.ts";
 import {
   SWEEP_WORKER_TUNING,
@@ -267,72 +268,72 @@ export async function redisReadinessProbe(timeoutMs = 500): Promise<boolean> {
   }
 }
 
-export const importQueue = new Queue<ImportJobData>(IMPORTS_QUEUE, { connection });
+export const importQueue = tracedQueue<ImportJobData>(IMPORTS_QUEUE, { connection });
 /** Dead-letter holding queue for import jobs that exhaust their retries (PII-free records). */
-export const importDeadLetterQueue = new Queue<ImportDeadLetter>(IMPORTS_DLQ, { connection });
-export const enrichmentQueue = new Queue<EnrichmentJobData>(ENRICHMENT_QUEUE, { connection });
-export const scoringQueue = new Queue<ScoringJobData>(SCORING_QUEUE, { connection });
-export const dsarQueue = new Queue<DsarJobData>(DSAR_QUEUE, { connection });
-export const outreachQueue = new Queue<OutreachJobData>(OUTREACH_QUEUE, { connection });
-export const dedupQueue = new Queue<DedupJobData>(DEDUP_QUEUE, { connection });
-export const firmographicsQueue = new Queue<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, {
+export const importDeadLetterQueue = tracedQueue<ImportDeadLetter>(IMPORTS_DLQ, { connection });
+export const enrichmentQueue = tracedQueue<EnrichmentJobData>(ENRICHMENT_QUEUE, { connection });
+export const scoringQueue = tracedQueue<ScoringJobData>(SCORING_QUEUE, { connection });
+export const dsarQueue = tracedQueue<DsarJobData>(DSAR_QUEUE, { connection });
+export const outreachQueue = tracedQueue<OutreachJobData>(OUTREACH_QUEUE, { connection });
+export const dedupQueue = tracedQueue<DedupJobData>(DEDUP_QUEUE, { connection });
+export const firmographicsQueue = tracedQueue<FirmographicsJobData>(FIRMOGRAPHICS_QUEUE, {
   connection,
 });
 // Master-link backfill: re-resolves overlay contacts with NULL master_* bridges through the Phase-2′ resolver,
 // per-workspace, batched + idempotent (PLAN_00 §11.5 / PLAN_07 Stage B).
-export const masterBackfillQueue = new Queue<MasterBackfillJobData>(MASTER_BACKFILL_QUEUE, {
+export const masterBackfillQueue = tracedQueue<MasterBackfillJobData>(MASTER_BACKFILL_QUEUE, {
   connection,
 });
 // The scheduled fleet sweep that DRIVES the per-workspace backfill (PLAN_07 Stage B): one repeatable daily job
 // enumerates workspaces with unresolved contacts and enqueues a per-workspace backfill for each.
-export const masterBackfillSweepQueue = new Queue<MasterBackfillSweepJobData>(
+export const masterBackfillSweepQueue = tracedQueue<MasterBackfillSweepJobData>(
   MASTER_BACKFILL_SWEEP_QUEUE,
   { connection },
 );
 // The scheduled survivorship-projection sweep (prospect-database-platform I1 / Phase 05): one repeatable daily job
 // drains projection_outbox + rebuilds each dirty cluster's SHADOW quality/freshness seams from the evidence log.
-export const projectionSweepQueue = new Queue<ProjectionSweepJobData>(PROJECTION_SWEEP_QUEUE, {
+export const projectionSweepQueue = tracedQueue<ProjectionSweepJobData>(PROJECTION_SWEEP_QUEUE, {
   connection,
 });
 // The scheduled probabilistic-ER shadow sweep (prospect-database-platform I5): scores candidate person pairs and
 // proposes match_links(review_status='pending') for human review. INERT while ER_SHADOW_ENABLED is off.
-export const erSweepQueue = new Queue<ErSweepJobData>(ER_SWEEP_QUEUE, { connection });
+export const erSweepQueue = tracedQueue<ErSweepJobData>(ER_SWEEP_QUEUE, { connection });
 // M12 P4: the leader-locked sequence scheduler (email_sequence_tick). A single repeatable job (stable
 // jobId → deduped) fires every minute; the processor takes the Redis leader lock and claims due enrollments.
-export const sequenceTickQueue = new Queue<SequenceTickJobData>(EMAIL_SEQUENCE_TICK_QUEUE, {
+export const sequenceTickQueue = tracedQueue<SequenceTickJobData>(EMAIL_SEQUENCE_TICK_QUEUE, {
   connection,
 });
 // M12 P6: the daily leader-locked retention sweep (expired idempotency keys; cold partition DROP later).
-export const retentionSweepQueue = new Queue<RetentionSweepJobData>(RETENTION_SWEEP_QUEUE, {
+export const retentionSweepQueue = tracedQueue<RetentionSweepJobData>(RETENTION_SWEEP_QUEUE, {
   connection,
 });
 // Freshness re-verification (ADR-0025): a per-workspace queue + the leader-locked daily sweep that fans out to it.
-export const reverificationQueue = new Queue<ReverificationJobData>(REVERIFICATION_QUEUE, {
+export const reverificationQueue = tracedQueue<ReverificationJobData>(REVERIFICATION_QUEUE, {
   connection,
 });
-export const reverificationSweepQueue = new Queue<ReverificationSweepJobData>(
+export const reverificationSweepQueue = tracedQueue<ReverificationSweepJobData>(
   REVERIFICATION_SWEEP_QUEUE,
   { connection },
 );
 // Data Health snapshot (10 §5): the leader-locked daily sweep that captures a per-workspace trend point.
-export const dataQualitySnapshotSweepQueue = new Queue<DataQualitySnapshotSweepJobData>(
+export const dataQualitySnapshotSweepQueue = tracedQueue<DataQualitySnapshotSweepJobData>(
   DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
   { connection },
 );
 // Retention SHADOW sweep (data-management #6, phase 2): the leader-locked daily sweep that, per ACTIVE tenant,
 // COUNTS candidate rows per data class and records a retention_runs evidence row. Deletes nothing (flag-gated).
-export const dataRetentionSweepQueue = new Queue<DataRetentionSweepJobData>(
+export const dataRetentionSweepQueue = tracedQueue<DataRetentionSweepJobData>(
   DATA_RETENTION_SWEEP_QUEUE,
   { connection },
 );
 // E-6.4: the daily partition-maintenance sweep. Registered before any table is partitioned — it finds no
 // partitioned tables and does nothing — so a conversion migration is the only change needed later.
-export const partitionSweepQueue = new Queue<PartitionSweepJobData>(PARTITION_SWEEP_QUEUE, {
+export const partitionSweepQueue = tracedQueue<PartitionSweepJobData>(PARTITION_SWEEP_QUEUE, {
   connection,
 });
 // M12 P1: the proactive OAuth token-refresh sweep (leader-locked, every 2 min) — refreshes tokens nearing
 // expiry off the send path so a send never pays the refresh latency.
-export const tokenRefreshQueue = new Queue<TokenRefreshJobData>(EMAIL_TOKEN_REFRESH_QUEUE, {
+export const tokenRefreshQueue = tracedQueue<TokenRefreshJobData>(EMAIL_TOKEN_REFRESH_QUEUE, {
   connection,
 });
 
@@ -433,20 +434,20 @@ export async function collectWorkerMetricsText(): Promise<string> {
 // is recorded as a PII-FREE record (deadLetter.ts — scope + provenance + reason, never the payload) for ops
 // triage instead of sitting invisibly in the BullMQ failed set. Sweeps get none: leader-gated, idempotent,
 // re-run on schedule.
-export const enrichmentDeadLetterQueue = new Queue<WorkerDeadLetter>(ENRICHMENT_DLQ, {
+export const enrichmentDeadLetterQueue = tracedQueue<WorkerDeadLetter>(ENRICHMENT_DLQ, {
   connection,
 });
-export const scoringDeadLetterQueue = new Queue<WorkerDeadLetter>(SCORING_DLQ, { connection });
-export const dsarDeadLetterQueue = new Queue<WorkerDeadLetter>(DSAR_DLQ, { connection });
-export const outreachDeadLetterQueue = new Queue<WorkerDeadLetter>(OUTREACH_DLQ, { connection });
-export const dedupDeadLetterQueue = new Queue<WorkerDeadLetter>(DEDUP_DLQ, { connection });
-export const firmographicsDeadLetterQueue = new Queue<WorkerDeadLetter>(FIRMOGRAPHICS_DLQ, {
+export const scoringDeadLetterQueue = tracedQueue<WorkerDeadLetter>(SCORING_DLQ, { connection });
+export const dsarDeadLetterQueue = tracedQueue<WorkerDeadLetter>(DSAR_DLQ, { connection });
+export const outreachDeadLetterQueue = tracedQueue<WorkerDeadLetter>(OUTREACH_DLQ, { connection });
+export const dedupDeadLetterQueue = tracedQueue<WorkerDeadLetter>(DEDUP_DLQ, { connection });
+export const firmographicsDeadLetterQueue = tracedQueue<WorkerDeadLetter>(FIRMOGRAPHICS_DLQ, {
   connection,
 });
-export const masterBackfillDeadLetterQueue = new Queue<WorkerDeadLetter>(MASTER_BACKFILL_DLQ, {
+export const masterBackfillDeadLetterQueue = tracedQueue<WorkerDeadLetter>(MASTER_BACKFILL_DLQ, {
   connection,
 });
-export const reverificationDeadLetterQueue = new Queue<WorkerDeadLetter>(REVERIFICATION_DLQ, {
+export const reverificationDeadLetterQueue = tracedQueue<WorkerDeadLetter>(REVERIFICATION_DLQ, {
   connection,
 });
 
@@ -958,8 +959,8 @@ export function startWorkers(): Worker[] {
   // off fail loudly (CopyKindsDisabledError → retry → DLQ; redrive is idempotent) — never silently consumed.
   // Priority bands order the WAITING set (fast=1 · copy drive=5 · copy chunk=10); within a band, FIFO.
   if (env.BULK_IMPORT_ENABLED || env.IMPORT_V2_ENABLED) {
-    const bulkImportsQueue = new Queue<UnifiedImportJobData>(BULK_IMPORTS_QUEUE, { connection });
-    const bulkImportDeadLetterQueue = new Queue<BulkImportDeadLetter>(BULK_IMPORTS_DLQ, {
+    const bulkImportsQueue = tracedQueue<UnifiedImportJobData>(BULK_IMPORTS_QUEUE, { connection });
+    const bulkImportDeadLetterQueue = tracedQueue<BulkImportDeadLetter>(BULK_IMPORTS_DLQ, {
       connection,
     });
     // S-Q7: publish these handles for /metrics depth scraping (queue depth/age + DLQ depth alerts, 09 §8).
@@ -1177,7 +1178,7 @@ export function startWorkers(): Worker[] {
     // per-workspace cap. Rides the same construction gate as the unified queue (nothing to promote while
     // both gates are off — `deferred` rows only exist once a producer gate opened). Copy drives re-publish
     // with their stable id + band; fast promotions are DB flips (transport = the deferred re-check loop).
-    const importPromotionSweepQueue = new Queue<ImportPromotionSweepJobData>(
+    const importPromotionSweepQueue = tracedQueue<ImportPromotionSweepJobData>(
       IMPORT_PROMOTION_SWEEP_QUEUE,
       { connection },
     );
@@ -1217,9 +1218,12 @@ export function startWorkers(): Worker[] {
     // SAME gate as the unified queue because it needs the queue handle for liveness + re-drive, and only the
     // gate's producers create the non-terminal rows it heals. Redis-loss re-enqueue (copy drive re-publish /
     // fast honest-terminal), stall flag, and the artifact/accounting integrity gauges.
-    const importReaperSweepQueue = new Queue<ImportReaperSweepJobData>(IMPORT_REAPER_SWEEP_QUEUE, {
-      connection,
-    });
+    const importReaperSweepQueue = tracedQueue<ImportReaperSweepJobData>(
+      IMPORT_REAPER_SWEEP_QUEUE,
+      {
+        connection,
+      },
+    );
     workers.push(
       instrument(
         tracedWorker<ImportReaperSweepJobData>(
@@ -1276,7 +1280,7 @@ export function startWorkers(): Worker[] {
     // gate (artifacts only exist once a producer gate opened) and the SAME env-selected FileStore the
     // pipeline writes through. Job hard-purge prefix deletion is core's purgeImportJobObjects seam, owned
     // by the future row-purger (retention deleter / S-S8 DSAR) — not this sweep.
-    const importArtifactSweepQueue = new Queue<ImportArtifactSweepJobData>(
+    const importArtifactSweepQueue = tracedQueue<ImportArtifactSweepJobData>(
       IMPORT_ARTIFACT_SWEEP_QUEUE,
       { connection },
     );
@@ -1311,7 +1315,7 @@ export function startWorkers(): Worker[] {
     // even with the unified queue up (the per-tenant `scheduled_imports_enabled` flag is the second half).
     // Reuses the SAME env-selected FileStore the api's schedule-create wrote the source object through.
     if (env.SCHEDULED_IMPORTS_ENABLED) {
-      const scheduledImportSweepQueue = new Queue<ScheduledImportSweepJobData>(
+      const scheduledImportSweepQueue = tracedQueue<ScheduledImportSweepJobData>(
         SCHEDULED_IMPORT_SWEEP_QUEUE,
         { connection },
       );
@@ -1365,12 +1369,15 @@ export function startWorkers(): Worker[] {
   // is still a NO-OP STUB (ZERO spend) until slice 3b adds the per-run cap + daily breaker. The confirm gate
   // (slice 1b) promotes a job to `running`, so nothing here runs until a human has accepted the ceiling.
   if (env.BULK_ENRICHMENT_ENABLED) {
-    const bulkEnrichmentQueue = new Queue<BulkEnrichmentJobData>(BULK_ENRICHMENT_QUEUE, {
+    const bulkEnrichmentQueue = tracedQueue<BulkEnrichmentJobData>(BULK_ENRICHMENT_QUEUE, {
       connection,
     });
-    const bulkEnrichmentDeadLetterQueue = new Queue<BulkEnrichmentDeadLetter>(BULK_ENRICHMENT_DLQ, {
-      connection,
-    });
+    const bulkEnrichmentDeadLetterQueue = tracedQueue<BulkEnrichmentDeadLetter>(
+      BULK_ENRICHMENT_DLQ,
+      {
+        connection,
+      },
+    );
     const bulkEnrichmentWorker = instrument(
       tracedWorker<BulkEnrichmentJobData>(
         BULK_ENRICHMENT_QUEUE,
@@ -1437,8 +1444,8 @@ export function startWorkers(): Worker[] {
     // Same Gate-B selection as the import store: the api's reveal download reads the SAME backend this
     // worker writes, so the two roots must flip together (env-selected identically; disk fallback = today).
     const revealFileStore = s3FileStoreFromEnv() ?? diskFileStore(env.BULK_IMPORT_STORAGE_DIR);
-    const bulkRevealQueue = new Queue<BulkRevealJobData>(BULK_REVEAL_QUEUE, { connection });
-    const bulkRevealDeadLetterQueue = new Queue<BulkRevealDeadLetter>(BULK_REVEAL_DLQ, {
+    const bulkRevealQueue = tracedQueue<BulkRevealJobData>(BULK_REVEAL_QUEUE, { connection });
+    const bulkRevealDeadLetterQueue = tracedQueue<BulkRevealDeadLetter>(BULK_REVEAL_DLQ, {
       connection,
     });
     const bulkRevealWorker = instrument(
@@ -1485,7 +1492,7 @@ export function startWorkers(): Worker[] {
   // — charges and deletes nothing; the customer-facing delivery channel (email / in-app, ADR-0027) is the next
   // wiring step. Leader-locked daily (a stable jobId → exactly one repeatable).
   if (env.LOW_BALANCE_NOTIFIER_ENABLED) {
-    const lowBalanceNotifierQueue = new Queue<LowBalanceNotifierSweepJobData>(
+    const lowBalanceNotifierQueue = tracedQueue<LowBalanceNotifierSweepJobData>(
       LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
       { connection },
     );
@@ -1516,7 +1523,7 @@ export function startWorkers(): Worker[] {
   // asserts SUM(credit_ledger.delta) == counter per tenant and logs drift; corrects nothing. Enable only after
   // the historical backfill. Leader-locked daily (a stable jobId → exactly one repeatable).
   if (env.BILLING_RECON_ENABLED) {
-    const billingReconQueue = new Queue<BillingReconSweepJobData>(BILLING_RECON_SWEEP_QUEUE, {
+    const billingReconQueue = tracedQueue<BillingReconSweepJobData>(BILLING_RECON_SWEEP_QUEUE, {
       connection,
     });
     workers.push(
@@ -1542,7 +1549,7 @@ export function startWorkers(): Worker[] {
   // billing_cycles (expire the perishable allotment + grant the monthly one, ledger-consistent → recon stays
   // green). Leader-locked; every 15 min so a new subscription's first grant + each renewal land promptly.
   if (env.BILLING_SUBSCRIPTIONS_ENABLED) {
-    const subscriptionGrantQueue = new Queue<SubscriptionGrantSweepJobData>(
+    const subscriptionGrantQueue = tracedQueue<SubscriptionGrantSweepJobData>(
       SUBSCRIPTION_GRANT_SWEEP_QUEUE,
       { connection },
     );
@@ -1567,7 +1574,7 @@ export function startWorkers(): Worker[] {
     // Subscription dunning SIGNAL (M11 subs, ADR-0041) — READ-ONLY: surfaces subscriptions past_due beyond the
     // grace window as an ops signal. Stripe drives the real dunning (retry → deleted → revert-to-free via the
     // webhook); the suspend policy is a flagged owner decision, so this suspends nothing. Leader-locked daily.
-    const subscriptionDunningQueue = new Queue<SubscriptionDunningSweepJobData>(
+    const subscriptionDunningQueue = tracedQueue<SubscriptionDunningSweepJobData>(
       SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
       { connection },
     );
@@ -1597,7 +1604,7 @@ export function startWorkers(): Worker[] {
   // additive: when off, nothing is built. Per connected Google mailbox it polls new replies, records them, and
   // auto-pauses the sequence on a confirmed human reply. Leader-locked; every 5 min.
   if (env.EMAIL_INBOX_ENABLED) {
-    const gmailInboxQueue = new Queue<GmailInboxPollJobData>(GMAIL_INBOX_POLL_QUEUE, {
+    const gmailInboxQueue = tracedQueue<GmailInboxPollJobData>(GMAIL_INBOX_POLL_QUEUE, {
       connection,
     });
     workers.push(
@@ -1623,9 +1630,12 @@ export function startWorkers(): Worker[] {
   // carries an opening_balance marker), so it is safe to leave scheduled; the operator enables it, watches it
   // drain, then turns it off. Leader-locked; fires every 5 min while enabled to drain the fleet promptly.
   if (env.BILLING_LEDGER_BACKFILL_ENABLED) {
-    const ledgerBackfillQueue = new Queue<LedgerBackfillSweepJobData>(LEDGER_BACKFILL_SWEEP_QUEUE, {
-      connection,
-    });
+    const ledgerBackfillQueue = tracedQueue<LedgerBackfillSweepJobData>(
+      LEDGER_BACKFILL_SWEEP_QUEUE,
+      {
+        connection,
+      },
+    );
     workers.push(
       instrument(
         tracedWorker<LedgerBackfillSweepJobData>(
@@ -1652,7 +1662,7 @@ export function startWorkers(): Worker[] {
   // scheduled — the operator enables it, watches `leadwolf_channel_backfill_remaining` drain to 0 (the
   // S-CH4 gate), re-runs after dual-write is on fleet-wide to close the write-gap tail, then turns it off.
   if (env.CHANNEL_DUAL_WRITE && env.CHANNEL_BACKFILL_ENABLED) {
-    const channelBackfillQueue = new Queue<ChannelBackfillSweepJobData>(
+    const channelBackfillQueue = tracedQueue<ChannelBackfillSweepJobData>(
       CHANNEL_BACKFILL_SWEEP_QUEUE,
       { connection },
     );
@@ -1682,7 +1692,7 @@ export function startWorkers(): Worker[] {
   // operator enables it and leaves it; `leadwolf_channel_drift_remaining` at 0 is the steady state (a nonzero
   // reading after burn-in is the S2 alert, runbook §K).
   if (env.CHANNEL_DUAL_WRITE && env.CHANNEL_RECONCILE_ENABLED) {
-    const channelReconcileQueue = new Queue<ChannelReconcileSweepJobData>(
+    const channelReconcileQueue = tracedQueue<ChannelReconcileSweepJobData>(
       CHANNEL_RECONCILE_SWEEP_QUEUE,
       { connection },
     );
@@ -1712,7 +1722,7 @@ export function startWorkers(): Worker[] {
   // scheduled — the operator enables it, watches `leadwolf_account_backfill_domain_remaining` drain to 0
   // (the S-A6/C2 gate), re-runs after dual-write is on fleet-wide to close the write-gap tail, then off.
   if (env.ACCOUNT_DOMAINS_DUAL_WRITE && env.ACCOUNT_BACKFILL_ENABLED) {
-    const accountBackfillQueue = new Queue<AccountBackfillSweepJobData>(
+    const accountBackfillQueue = tracedQueue<AccountBackfillSweepJobData>(
       ACCOUNT_BACKFILL_SWEEP_QUEUE,
       {
         connection,

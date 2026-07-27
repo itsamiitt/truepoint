@@ -1476,9 +1476,20 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   ProxyTracer that binds to whichever provider is registered when it is FIRST used and keeps that delegate. A
   module-scope tracer captured before an app called `startTelemetry()` would have emitted into the no-op
   provider forever — tracing "on", nothing recorded. The tracer is now resolved per call.
-  **Still open:** producers stamping `injectTraceContext()` onto job payloads at enqueue. Until they do, worker
-  spans are their own traces rather than continuations of the request that queued them — the helper and the
-  consumer side are both in place, so it is a per-call-site change with no design left in it.
+  **The producer half is done, so a job now continues the trace of the request that queued it.** Both apps
+  construct queues through a `tracedQueue` subclass that stamps the carrier in `add()` — 47 substitutions in
+  `register.ts` plus the four api-side queue modules. A SUBCLASS rather than ~50 edited call sites because
+  `.add()` is called from dozens of places with varying argument shapes: intercepting the one method cannot be
+  forgotten at a new call site, where the failure mode of per-site injection is a job that quietly starts its
+  own trace.
+  **Safe against every consumer schema**: each is a plain `z.object()`, which STRIPS unknown keys rather than
+  rejecting them (none are `.strict()`), and `tracedWorker` reads the carrier off the RAW job before parsing —
+  so processors see exactly the payload shape they always did. That was checked before writing the subclass,
+  not after.
+  **The two copies of `tracedQueue` are deliberate**: the apps cannot import each other, and hoisting it would
+  put a bullmq dependency into a package with no other reason to carry one. A test asserts both halves agree on
+  `TRACE_CARRIER_KEY`, because disagreement is the silent failure — producer writes one name, consumer looks
+  for another, every job starts its own trace and nothing errors.
 - [ ] **E-6.6 · Forge isolation** — `FORGE_DATABASE_URL` + its own login role and pool (today `withForgeTx`
   shares the customer request path's `max: 10` pool, so there is no capacity or failure isolation), plus a
   runtime `statement_timeout` (migrations set one; the runtime pool does not).

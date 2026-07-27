@@ -7,8 +7,9 @@
 import { env } from "@leadwolf/config";
 import type { RunImportInput } from "@leadwolf/core";
 import { IMPORTS_QUEUE } from "@leadwolf/types";
-import { type Job, Queue } from "bullmq";
+import type { Job, Queue } from "bullmq";
 import IORedis from "ioredis";
+import { tracedQueue } from "../../lib/tracedQueue.ts";
 import { assertQueueCapacity } from "./queueBackpressure.ts";
 
 /** The job payload IS a RunImportInput — rows are parsed on the API before enqueue (parse stays API-side, M1). */
@@ -20,7 +21,7 @@ let queue: Queue<ImportJobData> | undefined;
 function importQueue(): Queue<ImportJobData> {
   if (!queue) {
     const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
-    queue = new Queue<ImportJobData>(IMPORTS_QUEUE, {
+    queue = tracedQueue<ImportJobData>(IMPORTS_QUEUE, {
       connection,
       defaultJobOptions: {
         // Retry transient/systemic failures with exponential backoff + jitter (de-correlates retries under a
