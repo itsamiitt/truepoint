@@ -1363,10 +1363,26 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   window cushioned only by Caddy's 5 s dial-retry. Target: CI builds per-app standalone images → registry →
   deploy pulls → start-first rolling replace (Swarm mode on the same host is the smallest real step).
   **needs:** P-1.4, L-1.12, R-5.7.
-- [ ] **E-6.2 · CDN in front of Caddy** — immutable edge caching for `_next/static/*`, edge zstd/Brotli,
+- [ ] **E-6.2 (partial: the security headers shipped) · CDN in front of Caddy** — immutable edge caching for `_next/static/*`, edge zstd/Brotli,
   HTTP/3 at the edge, WAF; add its ranges to `trusted_proxies` (currently `private_ranges`, correct only
   while Caddy is the edge). Also add HSTS/CSP to `apps/web`/`apps/admin`, which ship **no** security headers
   today (needed by T-2.2 anyway).
+  **The headers half is DONE, and the claim was accurate — there were none anywhere**: not in any of the four
+  `next.config.mjs`, not in the Caddyfile. All four apps now send `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin` and a framing policy: `DENY` for auth/admin/forge
+  (framing a login screen is clickjacking; the staff consoles have no legitimate embedder) and `SAMEORIGIN`
+  for web (same third-party protection, without ruling out a first-party embed later).
+  **HSTS is gated on production**, which is not caution — sent from a dev server it pins `localhost` to HTTPS
+  in the developer's browser for the max-age, and every app on localhost then fails to load until the pin is
+  cleared by hand. It presents as a broken machine, not as a header. `preload` is deliberately omitted: it is
+  a submission to a browser-shipped list and is slow to reverse, so it should be a deliberate decision rather
+  than something inherited from a copied header.
+  **CSP is deliberately NOT included.** A too-strict CSP does not fail the build — it fails silently in the
+  browser, blocking scripts or styles on surfaces nobody re-tests. It wants a report-only rollout against a
+  real deployment, which is why it stays with the CDN work here.
+  `securityHeaders.test.ts` asserts all of it by EXECUTING each real `next.config.mjs`, so the test fails when
+  the config changes rather than when someone forgets to update a copy of it.
+  **Still open:** the CDN itself, and the `trusted_proxies` update that depends on it.
 - [x] **E-6.3 · Read replicas + pool split.** `DB_POOL_MAX` env (today `max: 10` hardcoded), a
   `leadwolf_app` LOGIN pool for tenant traffic vs a small owner pool for the audited platform paths (today
   the runtime pool logs in as the **DB owner**, so any `db.*` call outside `withTenantTx` silently bypasses
