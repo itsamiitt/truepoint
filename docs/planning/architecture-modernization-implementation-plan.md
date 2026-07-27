@@ -1162,9 +1162,19 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   bounds the first without killing the second — which is itself the argument for the pool split this item
   describes. The knob and the reasoning are now in place for whoever does that split; turning it on before
   then would trade an unbounded-query risk for a broken nightly sweep.
-  **Still open:** the `leadwolf_app` LOGIN pool vs a small owner pool (today the runtime pool logs in as the DB
-  OWNER, so any `db.*` call outside `withTenantTx` silently bypasses RLS), `prepare` gated on `DB_POOLED`, and
-  replica routing.
+  **The LOGIN pool shipped.** `withTenantTx` now runs on a connection AUTHENTICATED as `leadwolf_app`, derived
+  from DATABASE_URL with the app role.s credentials swapped in (falling back to the owner when no app-role
+  password is configured, so an unconfigured deployment is unchanged). The compensation it replaces was one
+  statement away from failing open: if the per-transaction `SET ROLE` were ever skipped, reordered or silently
+  errored, the queries inside still ran as the BYPASSRLS owner. Isolation is now a property of the CONNECTION.
+  **Verified by session_user, not by a green run.** The fallback makes a broken derivation look identical to a
+  working one — every other test passes either way, because the owner can do everything the app role can.
+  `tenantPoolIdentity.itest.ts` asserts `session_user = leadwolf_app` inside `withTenantTx` (current_user was
+  already app-role before this change and proves nothing), plus that `withPrivilegedTx` still authenticates as
+  the owner. CI also had to be taught to set DATABASE_APP_ROLE_PASSWORD, or the path would have shipped
+  untested — which surfaced a latent bug: the workflow declared that key TWICE and the winning value did not
+  match the password `applyMigrations` creates the role with.
+  **Still open:** `prepare` gated on `DB_POOLED`, and replica routing.
 - [ ] **E-6.4 · Partition the append-heavy tables** — `activities`, `email_events`, `platform_audit_log`,
   `provider_calls`, `source_imports`, `credit_ledger` (zero `PARTITION BY` in the repo today). Monthly range
   partitions; the partition key is already in the hot predicates. Gives retention real detach-and-archive
