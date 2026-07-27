@@ -454,7 +454,7 @@ optimization because optimizing a broken path is wasted work.
   trusting a role claim — `mint` deliberately drops `pa`. Re-check role on writes regardless.
   **verify:** auth unit tests; an itest asserting a revoked/changed membership stops authorizing within TTL.
 
-- [ ] **L-1.6 · Home summary: cache-first, then one round-trip.**
+- [x] **L-1.6 · Home summary: cache-first, then one round-trip.**
   `packages/core/src/home/buildHomeSummary.ts:51-59` runs 9 `await`s serially in one transaction (a
   deliberate single-connection tradeoff that replaced 9 pinned connections — not naive code), and
   `apps/api/src/features/home/routes.ts:68-80` computes the whole summary **before** checking
@@ -463,6 +463,23 @@ optimization because optimizing a broken path is wasted work.
   30–60 s memo the route comment itself says is missing; (c) then collapse to one SQL round-trip (CTEs +
   `json_build_object`).
   **needs:** C-2.1 (the Redis cache tier) for (b).
+  **(a) and (b) shipped together, because the memo IS the answer to (a).** The literal reading of (a) —
+  "check the ETag against a cached hash before computing" — needs a cached hash, which needs the cache. With
+  the whole computation behind the memo, a 304 now costs one Redis GET plus a hash instead of `buildJobViewer`'s
+  transaction plus `buildHomeSummary`'s nine serial aggregates. That is the compute win (a) was after; before,
+  a 304 paid for the entire summary and then discarded the bytes.
+  **Keyed PER USER, deliberately.** Two users in one workspace can legitimately see different summaries —
+  `buildJobViewer` scopes the Recent Imports card by viewer under the S-V3 gate — so a workspace-wide key
+  would serve one user's view to another. That is a disclosure, not a staleness bug, so the key carries the
+  varying dimension rather than relying on the gate being off. It also matches the `private` header this route
+  already sends: the same sharing rule on the server as the one told to the browser.
+  **The BODY STRING is cached, not the object**, so the ETag is byte-stable across hits — a flapping ETag
+  would silently kill the 304 path the route exists to serve.
+  **No write-path invalidation, and that is not an oversight.** The TTL is 30s because the route has always
+  advertised `private, max-age=30`; a 30s server memo therefore introduces no staleness the contract did not
+  already permit.
+  **(c) not done** — collapsing the nine aggregates into one CTE round-trip is a separate change, and the memo
+  removes most of its urgency by making the repeat case free rather than making the cold case cheaper.
 
 - [x] **L-1.7 · Drop app-level `compress()`.** `apps/api/src/app.ts:84` gzips every response inside the
   single-threaded Bun process. Caddy already does `encode zstd gzip` and **skips already-encoded bodies**,
@@ -655,9 +672,20 @@ process up to Caddy.
   **Still to wire:** L-1.6 home summary, facet counts, entitlements. Credit balances and permission decisions
   are deliberately NOT candidates.
 
-- [ ] **C-3.2 · Precompute the aggregates.** `dataQualitySummary` (`contactRepository.ts:745-748`) is a live
+- [x] **C-3.2 · Precompute the aggregates.** `dataQualitySummary` (`contactRepository.ts:745-748`) is a live
   per-view aggregate scan **despite a `data_quality_snapshots` table already existing** — wire the worker
   refresh. Same for burn-by-day.
+  **shipped, but NOT by serving the snapshot — and the difference matters.** The snapshot sweep is DAILY, so
+  reading the dashboard from it would have made Data Health up to 24 hours stale: a user who just finished an
+  import would refresh and see unchanged numbers, with no way to tell whether the import worked. That is a
+  user-visible correctness trade dressed as a performance fix, and it needs a product decision, not an
+  engineering one.
+  The actual problem was per-VIEW cost — one aggregate scan with ~23 FILTER clauses over every live contact,
+  re-run on every render by every member. A 30s read-through memo (C-3.1) removes the repetition while staying
+  inside the freshness `private, max-age=30` already promises. Workspace-keyed, not per-user: unlike
+  `/summary`, this response has no viewer dimension, so every member gets identical bytes.
+  The snapshot table keeps the role it was built for — the daily TREND series (`/data-quality/history`), where
+  a daily cadence is the point rather than a compromise. **Burn-by-day is untouched.**
 
 - [x] **C-3.3 · Facet counts in one pass.** `searchRepository.ts:438-459` +
   `accountSearchRepository.ts:264-346` run one full GROUP-BY aggregate scan **per facet, sequentially, per

@@ -8,15 +8,19 @@
 // the browser/client can serve-while-revalidate. The ETag is derived from the already-workspace-scoped JSON,
 // so it is implicitly tenant/workspace-scoped (different scope → different bytes → different ETag), and
 // `private` keeps this per-user PII-safe payload out of any shared/CDN cache (truepoint-platform caching,
-// truepoint-security data-protection). Note: this is a transport win, not a server compute cache — a Redis
-// per-workspace memo of the computed summary is a sensible follow-up, but that response-cache layer does not
-// exist yet (caching.md implementation status), so it is intentionally out of scope here.
+// truepoint-security data-protection).
+//
+// The server-side memo that used to be listed here as a follow-up now exists (C-3.1's read-through tier), and
+// both /summary and /data-quality sit behind it at the same 30s their Cache-Control already advertises. That
+// is what makes the ETag a COMPUTE win rather than only a transport one: before, a 304 still paid for the
+// whole summary and then threw the bytes away.
 
 import {
   buildDataQualitySummary,
   buildHomeSummary,
   recentDataQualityTrend,
   recentReverificationRuns,
+  tenantKey,
 } from "@leadwolf/core";
 import { retentionRunRepository, withTenantTx } from "@leadwolf/db";
 import {
@@ -29,6 +33,7 @@ import {
   workspaceDataQualitySchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
+import { cache } from "../../cache.ts";
 import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
@@ -53,23 +58,48 @@ function ifNoneMatch(header: string | undefined, etag: string): boolean {
   return header.split(",").some((tag) => tag.trim() === etag);
 }
 
+/** Matches the `private, max-age=30` these routes already send, so the server memo adds no staleness the
+ *  contract did not already allow — which is what lets it skip write-path invalidation. */
+const HOME_SUMMARY_TTL_SECONDS = 30;
+
 homeRoutes.get("/summary", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
 
-  // Viewer for the Recent Imports card predicate (import-redesign 10 §5 row 9), behind the S-V3 dual gate
-  // (env JOB_VISIBILITY_SCOPED + per-tenant flag; off ⇒ workspace-wide, byte-identical — T-V4).
-  const viewer = await buildJobViewer({
-    tenantId: c.get("tenantId"),
-    workspaceId,
-    userId: c.get("claims").sub,
-    role: getWorkspaceRole(c),
-  });
-  const summary = await buildHomeSummary({
-    scope: { tenantId: c.get("tenantId"), workspaceId },
-    viewer,
-  });
-  const body = JSON.stringify(homeSummarySchema.parse(summary));
+  const tenantId = c.get("tenantId");
+  const userId = c.get("claims").sub;
+
+  // The whole computation now sits behind the read-through memo the header comment above asked for. This is
+  // what turns the ETag from a transport win into a compute win: on a hit the 304 costs one Redis GET and a
+  // hash, instead of buildJobViewer's transaction plus buildHomeSummary's nine serial aggregates.
+  //
+  // KEYED PER USER, not per workspace. Two users in one workspace can legitimately see different summaries —
+  // buildJobViewer scopes the Recent Imports card by viewer under the S-V3 gate — so a workspace-wide key
+  // would serve one user's view to another. That is a disclosure, not a staleness bug, so the key carries the
+  // dimension that varies rather than relying on the gate being off. It also matches the `private` header
+  // this route already sends: same sharing rule on the server as the one told to the browser.
+  //
+  // TTL matches that header exactly. This endpoint has always served up-to-30s-old data to each user through
+  // `max-age=30`, so a 30s server memo introduces no staleness the contract did not already allow — which is
+  // why it needs no write-path invalidation.
+  const body = await cache().getOrSet(
+    tenantKey({ tenantId, workspaceId }, "home", "summary", "u", userId),
+    HOME_SUMMARY_TTL_SECONDS,
+    async () => {
+      // Viewer for the Recent Imports card predicate (import-redesign 10 §5 row 9), behind the S-V3 dual gate
+      // (env JOB_VISIBILITY_SCOPED + per-tenant flag; off ⇒ workspace-wide, byte-identical — T-V4).
+      const viewer = await buildJobViewer({
+        tenantId,
+        workspaceId,
+        userId,
+        role: getWorkspaceRole(c),
+      });
+      const summary = await buildHomeSummary({ scope: { tenantId, workspaceId }, viewer });
+      // The BODY STRING is cached, not the object: the ETag must be byte-stable across hits, and a flapping
+      // ETag would silently kill the 304 path this route exists to serve.
+      return JSON.stringify(homeSummarySchema.parse(summary));
+    },
+  );
   const etag = weakETag(body);
 
   // Per-user, short-lived: safe to reuse on revisit, never shared (PII-safe but workspace-scoped).
@@ -92,7 +122,19 @@ homeRoutes.get("/data-quality", requireRole("owner", "admin", "member", "viewer"
   const workspaceId = c.get("workspaceId");
   if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
 
-  const summary = await buildDataQualitySummary({ tenantId: c.get("tenantId"), workspaceId });
+  // Same 30s memo, and here it is the whole point: this rollup is a single aggregate scan with ~23 FILTER
+  // clauses over every live contact in the workspace, re-run on each render.
+  //
+  // Workspace-keyed rather than per-user, because unlike /summary this response has no viewer dimension —
+  // every member of the workspace gets identical bytes. The plan's alternative was to serve it from the
+  // daily `data_quality_snapshots` sweep, which would have made the dashboard up to 24h stale; a 30s memo
+  // gets the same relief from repeated scans while staying inside the freshness this route already promises.
+  const tenantId = c.get("tenantId");
+  const summary = await cache().getOrSet(
+    tenantKey({ tenantId, workspaceId }, "home", "data-quality"),
+    HOME_SUMMARY_TTL_SECONDS,
+    () => buildDataQualitySummary({ tenantId, workspaceId }),
+  );
   c.header("Cache-Control", "private, max-age=30");
   return c.json(workspaceDataQualitySchema.parse(summary));
 });
