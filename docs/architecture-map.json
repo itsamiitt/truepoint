@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1846,
-  "fileSetHash": "sha256:dd469bffbe38ec13d4e789a7d9e0c05df1729bc63576cdd5407e72b0942066e5",
+  "fileCount": 1847,
+  "fileSetHash": "sha256:66e8919e2f17208613175ac2e8996cf90bc7204830fdcce10a20b2aaf251111f",
   "features": {
     "account-search": {
       "web": [],
@@ -2254,6 +2254,9 @@
       "apps/forge/src/lib/forgeGate.ts",
       "apps/forge/src/lib/publicConfig.ts",
       "apps/forge/src/lib/staffMe.tsx"
+    ],
+    "apps/web": [
+      "apps/web/src/securityHeaders.test.ts"
     ],
     "apps/web/app": [
       "apps/web/src/app/(public)/pricing/page.tsx",

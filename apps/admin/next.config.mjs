@@ -21,6 +21,38 @@ const nextConfig = {
   // is what the plan's "subpath exports instead of the barrel" asks for, achieved by the compiler rewriting
   // barrel imports to their direct paths, rather than by rewriting several hundred import sites by hand.
   experimental: { optimizePackageImports: ["@leadwolf/ui", "@leadwolf/types"] },
+
+  // ── Security headers (E-6.2). These apps shipped NONE — no HSTS, no nosniff, no framing policy.
+  //
+  // HSTS is gated on production deliberately. Sent from a dev server it pins `localhost` to HTTPS in the
+  // developer's browser for the max-age, and every app on localhost then fails to load until the pin is
+  // manually cleared — a trap that costs an afternoon and looks like a broken machine.
+  //
+  // `preload` is deliberately NOT set: it is a submission to a browser-shipped list and is slow and awkward
+  // to reverse. That is a decision to take deliberately, not to inherit from a header someone added.
+  //
+  // No Content-Security-Policy here yet. A CSP that is too strict does not fail the build — it fails silently
+  // in the browser, blocking scripts or styles on surfaces nobody re-tests. It wants a report-only rollout
+  // against a real deployment, which is why the plan keeps it with the CDN work.
+  async headers() {
+    const securityHeaders = [
+      // Never let a browser guess a response's type; a JSON endpoint sniffed as HTML is an XSS vector.
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      // Full URL to same-origin, origin-only cross-origin, nothing over a downgrade — keeps ids and search
+      // text in paths from leaking into third-party referrers.
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "X-Frame-Options", value: "DENY" },
+      ...(process.env.NODE_ENV === "production"
+        ? [
+            {
+              key: "Strict-Transport-Security",
+              value: "max-age=63072000; includeSubDomains",
+            },
+          ]
+        : []),
+    ];
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
 };
 
 export default nextConfig;
