@@ -288,7 +288,78 @@ export const accountSearchRepository = {
     return withTenantTx(scope, async (tx) => {
       const out: { field: AccountFacetKey; value: string; displayLabel: string; count: number }[] =
         [];
-      for (const field of fields) {
+
+      // One GROUPING SETS pass for the facets that can share it, instead of a full aggregate scan each. Three
+      // things decide eligibility:
+      //   - the facet's own term filter must NOT be active, since each facet's WHERE deliberately excludes it
+      //     (identical WHERE ⇒ shareable; see the contacts twin in searchRepository);
+      //   - `technology` can never join, because it counts unnested jsonb elements through a LATERAL — a
+      //     different row cardinality than one-row-per-account;
+      //   - `employee_band` can never join either. Its expression is a CASE carrying bound parameters (the
+      //     band labels/bounds), and GROUPING SETS has to REPEAT the expression; re-rendering it re-binds
+      //     those params under new placeholder numbers, so Postgres sees a different expression than the
+      //     selected one and raises 42803. That is the same trap the `GROUP BY 1` below already documents.
+      // Everything else is a plain column, safe to repeat. Eight facets become one pass plus at most two.
+      const BATCHABLE: AccountFacetKey[] = [
+        "industry",
+        "sub_industry",
+        "funding_stage",
+        "company_stage",
+        "revenue_range",
+        "hq_country",
+      ];
+      const filtered = new Set(
+        query.filters
+          .filter((c) => c.kind === "term")
+          .map((c) => (c as { field: AccountFacetKey }).field),
+      );
+      const shared = fields.filter(
+        (f) => BATCHABLE.includes(f) && FACET_EXPR[f] && !filtered.has(f),
+      );
+      const rest = fields.filter((f) => !shared.includes(f));
+
+      if (shared.length > 0) {
+        const exprs = shared.map((f) => FACET_EXPR[f] as SQL);
+        const selectCols = sql.join(
+          exprs.map(
+            (e, i) =>
+              sql`grouping(${e}) AS ${sql.raw(`g${i}`)}, (${e})::text AS ${sql.raw(`v${i}`)}`,
+          ),
+          sql`, `,
+        );
+        // grouping() separates a real NULL from "not part of this row's set"; row_number() over the
+        // grouping-set bitmask reproduces the per-facet top-50 the per-query LIMIT gave.
+        const rows = (await tx.execute(sql`
+          SELECT * FROM (
+            SELECT ${selectCols}, count(*)::int AS n,
+                   row_number() OVER (
+                     PARTITION BY grouping(${sql.join(exprs, sql`, `)})
+                     ORDER BY count(*) DESC
+                   ) AS rn
+            FROM ${accounts}
+            WHERE ${buildWhere(query)}
+            GROUP BY GROUPING SETS (${sql.join(
+              exprs.map((e) => sql`(${e})`),
+              sql`, `,
+            )})
+          ) t WHERE t.rn <= 50
+        `)) as unknown as Array<Record<string, unknown>>;
+        for (const row of rows) {
+          const i = shared.findIndex((_f, idx) => Number(row[`g${idx}`]) === 0);
+          if (i < 0) continue;
+          const value = row[`v${i}`];
+          if (value === null || value === undefined) continue;
+          const v = String(value);
+          out.push({
+            field: shared[i] as AccountFacetKey,
+            value: v,
+            displayLabel: v,
+            count: Number(row.n),
+          });
+        }
+      }
+
+      for (const field of rest) {
         const baseWhere = buildWhere(query, field);
         if (field === "technology") {
           // Count each technology slug independently by unnesting the jsonb array (LATERAL). Raw SQL via
