@@ -579,6 +579,29 @@ optimization because optimizing a broken path is wasted work.
      security-critical code in the repo and not something to add in passing.
   The role-in-claims option stays rejected either way: it cannot be invalidated without revoking the session,
   i.e. logging the user out on every role change.
+  **Two cheaper alternatives were tried and are CLOSED** — checked against the code, so they do not get
+  re-explored:
+  - **Collapsing the round trips instead of caching.** The GUC setup is ALREADY one round trip
+    (`client.ts:272-283` sets `role` + both `app.current_*` in a single `set_config` SELECT), so what is left
+    is BEGIN + SELECT + COMMIT. Removing those means either putting `set_config` in a FROM-clause subquery
+    beside the target table — where Postgres does not guarantee it evaluates before the RLS policy on
+    `workspace_members`, giving a non-deterministic fail-closed 403 — or sending the transaction as one
+    multi-statement simple query, which cannot bind parameters and would mean concatenating the tenant,
+    workspace and user ids into SQL. The current code keeps them BOUND deliberately. Neither is acceptable
+    for a latency win.
+  - **A request-scoped memo.** Already effectively in place: `buildJobViewer` takes `role?` and both
+    enrichment call sites pass `getWorkspaceRole(c)`, so the guard's lookup is reused rather than repeated.
+    There is no duplicate role read within a request to remove.
+  **So the only viable design is the invalidated cache above**, and the one remaining decision is where the
+  seam lives. `packages/db` has NO redis dependency today (`package.json`: config, types, drizzle-orm,
+  postgres) so the clean shape is a settable invalidator in db — default no-op, real implementation injected
+  by `apps/api` at boot, the same pattern `forge-worker` uses for its `budgetStore`. One ordering detail
+  decides correctness: `updateMemberRoleInTx` / `removeMemberInTx` run inside the CALLER's transaction, so
+  invalidating there can be repopulated by a concurrent read before the commit lands — the invalidation has to
+  fire after commit, at the handful of call sites that own the transaction.
+  **Deliberately not built in the same pass as the rest of this plan.** This is the authorization path; a bug
+  in it is a window where a demoted user keeps elevated access, which is the one failure mode here that is
+  worse than the latency it fixes.
   The write surface is not a single chokepoint: `apps/api/src/features/teams/routes.ts`,
   `apps/api/src/features/workspaces/memberRoutes.ts`, `packages/core/src/auth/members.ts`, the SCIM
   deprovisioning path, and tenant-level membership all mutate what `getRoleForUser` returns. Missing ONE leaves
