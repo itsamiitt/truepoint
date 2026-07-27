@@ -36,6 +36,11 @@ env:
   # override, so that is the password the role is created with, and it is the same literal itestDb.ts already
   # hardcodes for its RLS proofs. A mismatch here fails every itest at connection time.
   DATABASE_APP_ROLE_PASSWORD: Lw_App_Role_2026!x7Qm
+  # E-6.6: grants leadwolf_forge LOGIN and makes the Forge pool AUTHENTICATE as it, so the same-repo firewall
+  # is enforced by the connection rather than by a SET LOCAL ROLE that has to succeed. Set here so the path is
+  # exercised — applyMigrations reads it from process.env when the itests call it without options, and
+  # client.ts derives the same credentials, so the two match.
+  DATABASE_FORGE_ROLE_PASSWORD: Lw_Forge_Role_2026!x7Qm
   # The itests set this themselves in beforeAll; provided here too for any unit test that touches blind-index/PII.
   BLIND_INDEX_KEY: ci-blind-index-key-0123456789abcdef
   # packages/auth botCheck.test.ts exercises the ENFORCED Turnstile path; @leadwolf/config snapshots process.env

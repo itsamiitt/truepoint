@@ -129,6 +129,13 @@ export const appEnvSchema = z
     // A separate pool bounds that blast radius even against one database; pointing this at a different
     // database or replica later isolates failure too, without another code change.
     FORGE_DATABASE_URL: z.string().url().optional(),
+    // Login password for `leadwolf_forge` (E-6.6). OPTIONAL, and its absence is meaningful: without it the
+    // role stays NOLOGIN exactly as today and `withForgeTx` keeps using the owner connection + SET LOCAL ROLE.
+    // Setting it grants the role LOGIN and makes the Forge connection AUTHENTICATE as it, so the same-repo
+    // firewall becomes a property of the connection rather than of a statement that has to succeed.
+    // Why that matters more here than it looks: if the SET LOCAL ROLE is ever skipped or errors, withForgeTx
+    // runs as the OWNER — which can read customer contacts. The firewall exists to make that impossible.
+    DATABASE_FORGE_ROLE_PASSWORD: z.string().min(8).optional(),
     // Deliberately smaller than DB_POOL_MAX: the Forge pipeline is throughput work behind a queue, so it can
     // wait. Customer requests cannot. Sizing it low is how "isolation" stays a budget rather than a doubling
     // of total connections against the same server.

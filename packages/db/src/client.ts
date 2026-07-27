@@ -58,7 +58,22 @@ const forgePoolOptions: Parameters<typeof postgres>[1] = {
 if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
   forgePoolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
 }
-const forgeClient = postgres(env.FORGE_DATABASE_URL ?? env.DATABASE_URL, forgePoolOptions);
+/** Same derivation as the app pool: swap in the forge role.s credentials when a password is configured, else
+ *  keep today.s owner connection (the role is NOLOGIN without one, so there is nothing to connect as). */
+function forgeConnectionUrl(): string {
+  const base = env.FORGE_DATABASE_URL ?? env.DATABASE_URL;
+  if (!env.DATABASE_FORGE_ROLE_PASSWORD) return base;
+  try {
+    const url = new URL(base);
+    url.username = "leadwolf_forge";
+    url.password = env.DATABASE_FORGE_ROLE_PASSWORD;
+    return url.toString();
+  } catch {
+    return base;
+  }
+}
+
+const forgeClient = postgres(forgeConnectionUrl(), forgePoolOptions);
 
 /**
  * The TENANT-TRAFFIC pool, logged in AS `leadwolf_app` (E-6.3).
