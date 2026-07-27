@@ -5,6 +5,7 @@ export * from "./importLimits.ts";
 export * from "./importReject.ts";
 export * from "./auth.ts";
 export * from "./contacts.ts";
+export * from "./reports.ts";
 export * from "./contactChannels.ts";
 export * from "./contactMerge.ts";
 export * from "./accountChildren.ts";
