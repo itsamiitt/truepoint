@@ -121,6 +121,16 @@ produces an outage.** Every work item below is written to obey them.
   **verify:** `packages/config/src/env.ts` production `superRefine` asserts pass with the new template.
 
 - [ ] **P-1.7 · Repair the drizzle snapshot chain (0029 → 0080) and CI-assert it.**
+  **NOT repaired — but the gap can no longer grow silently.** The repair itself (stitching snapshots until
+  `generate` reports no further diff) is an iterative `drizzle-kit generate` loop and remains open. What
+  shipped is the guard half: `migrationSnapshots.test.ts` pins the deficit at its current value (83 journal
+  entries vs 29 snapshots = 54), so a hand-authored migration added without a snapshot now fails a test
+  instead of widening the break unnoticed. It also asserts journal tags are present and unique (how the
+  duplicate `0053_*` pair arose) and that `idx` is strictly increasing.
+  **The ratchet is two-sided on purpose:** a second test asserts the deficit EQUALS the constant, not just
+  that it is under it. A ratchet nobody tightens stops being a ratchet — without this, stitching snapshots
+  back in would silently loosen the guard by exactly the amount repaired. When the chain is fixed, set the
+  constant to 0 and the first test becomes the equality assertion this item asks CI for.
   `needs:` P-1.3 · **files:** `packages/db/src/migrations/meta/*`, `.github/workflows/ci.yml`,
   delete `packages/db/src/migrations/_MAIN_MERGE_TODO.md` when done
   **why:** 29 snapshots vs 82 journal entries. This is the gate on any Drizzle upgrade (a newer drizzle-kit
