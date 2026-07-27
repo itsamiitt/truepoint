@@ -1,8 +1,15 @@
 "use client";
 // DataTable.tsx — the shared results/usage/log grid: typed columns, client sort, density (reads [data-density]
-// from an ancestor), optional row click + selection, sticky header. Not virtualized yet (hand-rolled; a TanStack
-// swap is a follow-up once a package manager is available) — parents should page with the Pagination primitive.
-import { type ReactNode, useMemo, useState } from "react";
+// from an ancestor), optional row click + selection, sticky header.
+//
+// STILL NOT VIRTUALIZED (C-3.9). Every accumulated row is rendered, and the "Load more" surfaces grow that
+// set 50-100 rows at a time, so this violates the truepoint-design hard rule about un-virtualized large
+// lists. The remaining fix is a windowed row renderer (/react-virtual is absent from the lockfile),
+// which is a new dependency plus changed rendering across every table that uses this — parents should keep
+// paging with the Pagination primitive until then.
+//
+// What IS fixed: the client sort no longer re-runs on every parent render (see the memo below).
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { cn } from "../cn.ts";
 
 export interface Column<T> {
@@ -40,9 +47,13 @@ export function DataTable<T>({
 }) {
   const [sort, setSort] = useState<SortState | null>(null);
 
+  // Latest-value ref so the memo can read the current columns without taking them as a dependency.
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
+
   const sorted = useMemo(() => {
     if (!sort) return rows;
-    const col = columns.find((c) => c.key === sort.key);
+    const col = columnsRef.current.find((c) => c.key === sort.key);
     if (!col?.sortValue) return rows;
     const accessor = col.sortValue;
     const factor = sort.dir === "asc" ? 1 : -1;
@@ -55,7 +66,16 @@ export function DataTable<T>({
           : String(av).localeCompare(String(bv));
       return cmp * factor;
     });
-  }, [rows, sort, columns]);
+    // Deps are [rows, sort] — NOT columns. Callers build `columns` as a fresh array literal on every render
+    // (verified: nearly every call site does `const columns: Column<T>[] = [...]` inline), so including it made
+    // this memo miss on EVERY parent render and re-sort the entire accumulated row set — which the "Load more"
+    // surfaces grow by 50-100 rows at a time. The sort only ever reads the ACTIVE column.s `sortValue`, so the
+    // array identity was never the real input.
+    //
+    // The trade, stated plainly: changing a column.s `sortValue` IMPLEMENTATION without rows or sort changing
+    // will not re-sort. `sortValue` is a pure accessor chosen at author time, so that does not happen at
+    // runtime — and if it ever needs to, the caller can change the sort key or memoize `columns` itself.
+  }, [rows, sort]);
 
   const toggleSort = (key: string) => {
     setSort((prev) => {
