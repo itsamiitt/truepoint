@@ -698,7 +698,17 @@ process up to Caddy.
   `platform_staff` lookups**. Use the single `/bff/me` (it already returns role + capabilities + email) and
   seed the overview hook from it. **needs:** T-2.3.
 
-- [ ] **T-2.6 · Cross-tab refresh election.** Every tab refreshes on its own ~14 min timer
+- [x] **T-2.6 · Cross-tab refresh election.** (shipped for `apps/web`; shared module in `@leadwolf/app-shell`.
+  The elected tab refreshes and broadcasts; losers adopt it. Failure mode is bounded to today's behaviour by
+  construction — a loser that misses the broadcast just lets its token expire and the ON-DEMAND path in
+  `fetchWithAuth` refreshes it. The election is deliberately sloppy: localStorage has no compare-and-swap, so
+  mutual exclusion is write-then-reread and a rare double refresh IS the status quo, meaning this cannot be
+  worse than not having it. Web Locks was rejected — unavailable across enough of the supported surface that
+  the fallback would be the path actually under test. A stale claim expires after `LOCK_TTL_MS` so a tab closed
+  mid-refresh cannot wedge the others into a silent logout. 10 unit tests, including that a malformed or
+  hostile same-origin broadcast cannot inject a token — it is validated, not cast. `apps/admin` and
+  `apps/forge` are NOT wired: their `authClient.ts` is a near-copy, which is the drift T-2.3 exists to remove,
+  and hand-wiring three copies would deepen it.) Every tab refreshes on its own ~14 min timer
   (`authClient.ts:46-47`) and each refresh is a full rotation (DB revoke+insert + Redis write); N tabs = N
   racing rotation chains surviving only on the 30 s reuse-grace. Add BroadcastChannel election, or make
   rotation sliding-window.
