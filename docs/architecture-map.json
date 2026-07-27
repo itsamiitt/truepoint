@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1795,
-  "fileSetHash": "sha256:81a7524ab8f1321e24bffa54fc5d24cfd3e3bf23a13f8cb755d9b027945fd467",
+  "fileCount": 1796,
+  "fileSetHash": "sha256:9144c209381ac8385c413a73a50360f4e12ed0ff61a56a8d9963fba07c2e6cf2",
   "features": {
     "account-search": {
       "web": [],
@@ -2085,6 +2085,7 @@
       "apps/extension/src/background/auth/refreshToken.ts",
       "apps/extension/src/background/auth/tokenStore.ts",
       "apps/extension/src/background/bus/index.ts",
+      "apps/extension/src/background/config/remoteConfig.test.ts",
       "apps/extension/src/background/config/remoteConfig.ts",
       "apps/extension/src/background/context.ts",
       "apps/extension/src/background/credits/store.ts",

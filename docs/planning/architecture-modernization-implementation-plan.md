@@ -194,10 +194,23 @@ optimization because optimizing a broken path is wasted work.
   its comment points at a Vite `define` that `vite.config.ts` does not have — so `bun run dev` points the SW
   at **production** and reveals spend real credits. Add the `define` per mode; make `host_permissions` follow.
 
-- [ ] **X-0.9 · Either implement signed remote config or remove the flag surface.**
+- [x] **X-0.9 · Either implement signed remote config or remove the flag surface.**
   `background/config/remoteConfig.ts:26-28` only ever reads `chrome.storage.local`; nothing fetches or
   verifies remote config, so the documented kill switch (architecture rule 6) **does not exist**. Shipping a
   store artifact with no incident control is the risk; a flag surface that looks like control but isn't is worse.
+  **took the removal option.** `killSwitch` is gone from the flag surface. Nothing remote ever wrote it —
+  `load()` reads chrome.storage.local and no fetch or signature check exists — so it was an incident control
+  that existed only as a field name, and an incident is precisely when somebody would have reached for it.
+  **The artifact is NOT shipping without incident control.** The authoritative kill already exists server-side
+  and needs no extension release to operate: `CHROME_EXTENSION_ENABLED` gates the extension token/API surface
+  outright, and the capture ingress returns 403 `capture_disabled` on the global or per-tenant flag. Both are
+  enforced where the data lands, so a stale or tampered client cannot bypass them — which a client-held kill
+  switch never could have guaranteed anyway. The file now says all of this instead of implying otherwise.
+  **Signed remote config is left unbuilt, deliberately:** it needs a first-party signed endpoint, Ed25519
+  verification in the SW, and fail-closed-to-last-known-good semantics. That is a feature with a server half,
+  not a rename of this file.
+  **verify:** 5 tests — the surface has exactly three flags, and a stale storage entry from an older build
+  cannot reintroduce `killSwitch` (load() merges key-by-key rather than spreading, precisely for that).
 
 ### 3.2 Forge (`apps/forge-api`, `apps/forge-worker`, `packages/forge-core`)
 
