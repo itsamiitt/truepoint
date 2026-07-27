@@ -216,12 +216,29 @@ describe("platform_audit_log after the partitioning conversion (0086)", () => {
     `;
     expect(row?.part).toMatch(/^platform_audit_log_\d{4}_\d{2}$/);
 
-    // Append-only holds through the partition, not just on the parent.
-    await expect(
-      sql`UPDATE platform_audit_log SET action = 'tampered' WHERE actor_user_id = ${actorId}`,
-    ).rejects.toThrow(/append-only/i);
-    await expect(
-      sql`DELETE FROM platform_audit_log WHERE actor_user_id = ${actorId}`,
-    ).rejects.toThrow(/append-only/i);
+    // Append-only holds through the partition, not just on the parent. Written as an explicit try/catch
+    // rather than expect(...).rejects: a postgres.js tagged template is a lazy PendingQuery, and handing one
+    // to `.rejects` risks leaving it unsettled on the single pooled connection — which then blocks the DROP
+    // DATABASE in teardown rather than failing.
+    const mutationError = async (run: () => Promise<unknown>): Promise<string> => {
+      try {
+        await run();
+        return "";
+      } catch (e) {
+        return e instanceof Error ? e.message : String(e);
+      }
+    };
+
+    expect(
+      await mutationError(
+        () =>
+          sql`UPDATE platform_audit_log SET action = 'tampered' WHERE actor_user_id = ${actorId}`,
+      ),
+    ).toMatch(/append-only/i);
+    expect(
+      await mutationError(
+        () => sql`DELETE FROM platform_audit_log WHERE actor_user_id = ${actorId}`,
+      ),
+    ).toMatch(/append-only/i);
   });
 });
