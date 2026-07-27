@@ -10,7 +10,23 @@ import postgres from "postgres";
 import * as schema from "./schema/index.ts";
 
 // `prepare: false` is required for transaction-pooling proxies (RDS Proxy / PgBouncer).
-const client = postgres(env.DATABASE_URL, { max: 10, prepare: false });
+//
+// Pool size and statement timeout come from config rather than being baked in (E-6.3). The size was hardcoded
+// at 10, which is a DEPLOY-shaped decision living in source: the right number depends on the host's connection
+// budget and how many replicas share it, and neither is knowable from here. Defaults preserve today's exact
+// behaviour — 10 connections, no statement timeout.
+//
+// `statement_timeout` is passed only when set, because 0 means "no limit" to Postgres and sending it
+// explicitly would be indistinguishable from the current default while looking deliberate. Why it is OFF by
+// default is a real constraint, not caution: apps/api and apps/workers share THIS pool with very different
+// statement profiles — a request-path query running 30s is pathological, while the daily data-quality sweep's
+// jsonb scans over a large tenant can legitimately run for minutes. One value cannot bound the first without
+// killing the second; that needs the per-surface pool split E-6.3/E-6.6 describe.
+const poolOptions: Parameters<typeof postgres>[1] = { max: env.DB_POOL_MAX, prepare: false };
+if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
+  poolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
+}
+const client = postgres(env.DATABASE_URL, poolOptions);
 
 export const db = drizzle(client, { schema });
 export type Db = typeof db;

@@ -1125,6 +1125,20 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   the runtime pool logs in as the **DB owner**, so any `db.*` call outside `withTenantTx` silently bypasses
   RLS, and unauthenticated public catalog reads are served from the owner pool), `prepare` gated on a
   `DB_POOLED` flag, then replica routing for list/dashboard reads.
+  **PARTIAL — the two config pieces shipped; the pool SPLIT and replica routing did not.** `DB_POOL_MAX`
+  replaces the hardcoded `max: 10`, which was a deploy-shaped decision living in source: the right number
+  depends on the host.s connection budget and how many replicas share it, neither knowable from the repo.
+  `DB_STATEMENT_TIMEOUT_MS` adds the runtime `statement_timeout` the migrations have and the runtime pool never
+  did. Both default to exactly today.s behaviour (10, and no timeout).
+  **The timeout defaults to OFF for a real reason, not caution.** apps/api and apps/workers share ONE pool with
+  opposite statement profiles: a request-path query running 30s is pathological, while the daily
+  data-quality sweep.s jsonb scans over a large tenant can legitimately run for minutes. No single value
+  bounds the first without killing the second — which is itself the argument for the pool split this item
+  describes. The knob and the reasoning are now in place for whoever does that split; turning it on before
+  then would trade an unbounded-query risk for a broken nightly sweep.
+  **Still open:** the `leadwolf_app` LOGIN pool vs a small owner pool (today the runtime pool logs in as the DB
+  OWNER, so any `db.*` call outside `withTenantTx` silently bypasses RLS), `prepare` gated on `DB_POOLED`, and
+  replica routing.
 - [ ] **E-6.4 · Partition the append-heavy tables** — `activities`, `email_events`, `platform_audit_log`,
   `provider_calls`, `source_imports`, `credit_ledger` (zero `PARTITION BY` in the repo today). Monthly range
   partitions; the partition key is already in the hot predicates. Gives retention real detach-and-archive

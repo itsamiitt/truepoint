@@ -108,6 +108,20 @@ export const appEnvSchema = z
     // CREATE ROLE passwords via its control plane. Strong defaults live in applyMigrations; override here.
     DATABASE_APP_ROLE_PASSWORD: z.string().min(8).optional(),
     DATABASE_ADMIN_ROLE_PASSWORD: z.string().min(8).optional(),
+    // Runtime pool size (E-6.3). Was hardcoded at 10, which is a deploy-shaped decision baked into source: the
+    // right number depends on the host's connection budget and how many replicas share it, and neither is
+    // knowable here. Default 10 keeps existing behaviour exactly.
+    DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+    // Runtime `statement_timeout`, in milliseconds. Migrations set one; the runtime pool never has, so a
+    // runaway query on a request path can run unbounded.
+    //
+    // DEFAULT 0 = DISABLED, i.e. exactly today's behaviour, and that default is deliberate rather than timid.
+    // apps/api and apps/workers currently share ONE pool with completely different statement profiles: a
+    // request-path query that runs for 30s is pathological, while the daily data-quality sweep's jsonb scans
+    // over a large tenant can legitimately run for minutes. Any single value that bounds the first would kill
+    // the second. Turning this on safely needs the pool split this item describes — until then the knob exists
+    // so an operator who knows their workload can set it, and the reasoning is here rather than lost.
+    DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
     REDIS_URL: z.string().url(),
 
     BLIND_INDEX_KEY: z.string().min(8),
