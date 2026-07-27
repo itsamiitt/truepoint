@@ -1329,6 +1329,19 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   payloads (694-line `RecordDetail`, template editor, drawers — today **zero** `next/dynamic` in `apps/web`;
   only `xlsx` is done right), tokens.css imported once (today twice — JS import **and** CSS `@import`),
   `@leadwolf/types` subpath exports instead of the 74-line `export *` barrel.
+  **PARTIAL — and two of the five sub-items were ALREADY DONE when checked.** `optimizePackageImports` was
+  already in web/admin/forge, and the tokens.css double-import was already fixed (globals.css `@import`s it;
+  layout.tsx documents why there is no JS import). The "today **zero** `next/dynamic` in apps/web" claim was
+  also stale — the bulk bar was already deferred.
+  **Landed now:** `optimizePackageImports` for `apps/auth`, the one app still missing it — and the one whose
+  bundle an UNAUTHENTICATED visitor downloads first; and `TemplateEditor` (~370 lines) behind `next/dynamic`,
+  which is a clean win because it is genuinely gated on `editor.open`.
+  **`RecordDetail` is deliberately NOT deferred**, despite being the 694-line example the item names. It
+  mounts unconditionally so its Drawer keeps its close transition — `contact: null` renders a closed drawer
+  rather than nothing. `dynamic()` there would load on first render anyway (no win), and gating it on
+  `selected` would trade a real UX regression for a bundle saving.
+  **Still open:** `output: "standalone"` (needs a Dockerfile change that cannot be verified here) and the
+  `@leadwolf/types` subpath-export refactor.
 
 ---
 

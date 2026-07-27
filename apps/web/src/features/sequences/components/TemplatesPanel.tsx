@@ -8,11 +8,19 @@
 
 import { Card, EmptyState, Icon, StateSwitch, StatusBadge, TpButton, TpChip } from "@leadwolf/ui";
 import { FileText } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useTemplates } from "../hooks/useTemplates";
 import styles from "../sequences.module.css";
 import { CHANNEL_LABEL, MERGE_FIELDS, SEQUENCE_STATUS_TONE, type TemplateSummary } from "../types";
-import { TemplateEditor } from "./TemplateEditor";
+
+// The editor is ~370 lines and renders ONLY once someone opens it (`editor.open` below), so it has no place
+// in the initial chunk of a panel most visits just read. `ssr: false` because it is dialog state that never
+// exists during a server render — asking for its markup up front would be work with no output. Same shape as
+// the bulk bar on the prospect surface.
+const TemplateEditor = dynamic(() => import("./TemplateEditor").then((m) => m.TemplateEditor), {
+  ssr: false,
+});
 
 function TemplateCard({
   template,
