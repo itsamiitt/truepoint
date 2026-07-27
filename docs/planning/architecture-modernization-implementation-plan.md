@@ -865,6 +865,12 @@ process up to Caddy.
   caps (10 MiB CSV fast path) and a 10 000-waiting queue shed bound today's blast radius but don't fix it.
   **guardrail:** G5 — roll out per-tenant via the existing `import_v2_enabled` / `bulk_import_enabled` DB
   flags, which are already seeded off.
+  **NOT an implementation task — the code is built; this is a ROLLOUT.** Nothing here is missing from the
+  repo: the object-store upload, the UNLOGGED staging COPY and the chunked worker all exist behind flags that
+  are seeded off per tenant. What is left is turning them on for real tenants and watching, which is exactly
+  what guardrail G5 describes and exactly what cannot be done or verified from a code change. Flipping the
+  DEFAULT in source would convert a deliberate per-tenant rollout into an all-tenant one on the next deploy —
+  the opposite of the guardrail. It stays open pending an operator running the rollout.
 
 - [ ] **C-3.5 · Atomic spend breaker, then raise concurrency.** `apps/workers/src/tuning.ts:39-44` pins
   `imports: 1` and `enrichment: 1` fleet-wide — the latter because the daily budget breaker is a racy
