@@ -1,54 +1,53 @@
-// useSequences.ts — loads the workspace's sequences for the list view with loading/error state and a
-// `reload`. `loading` is true only for the first fetch; reloads after create/step/enroll are quiet so the
-// list never flickers. Also owns the pause/resume action (PATCH status) with per-row in-flight tracking so
-// the list can disable just the row that's flipping. Presentation state only; the outreach engine lives
-// server-side (ADR-0009).
+// useSequences.ts — the workspace's sequences for the list view, plus the pause/resume action (PATCH status)
+// with per-row in-flight tracking so the list can disable just the row that is flipping. Presentation state
+// only; the outreach engine lives server-side (ADR-0009).
+//
+// `loading` is the cold load only — a refresh after create/step/enroll keeps the rows on screen, which is what
+// the hand-rolled "quiet reload" (never setting loading back to true) was arranging.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchSequences, setSequenceStatus } from "../api";
+import { sequenceKeys } from "../keys";
 import type { SequenceStatus, SequenceSummary } from "../types";
 
 export function useSequences() {
-  const [sequences, setSequences] = useState<SequenceSummary[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [pendingId, setPendingId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const key = sequenceKeys.list();
+  const query = useQuery<SequenceSummary[]>({ queryKey: key, queryFn: fetchSequences });
 
-  const reload = useCallback(async () => {
-    setError(null);
-    try {
-      setSequences(await fetchSequences());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load sequences");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const setStatusMutation = useMutation({
+    mutationFn: (vars: { id: string; status: SequenceStatus }) =>
+      setSequenceStatus(vars.id, vars.status),
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  /** Flip a sequence between active and paused; one PATCH in flight at a time, then a quiet reload. */
-  const setStatus = useCallback(
-    async (id: string, status: SequenceStatus): Promise<boolean> => {
-      setPendingId(id);
-      setActionError(null);
+  return {
+    sequences: query.data ?? [],
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load sequences"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    /** Flip a sequence between active and paused. */
+    setStatus: async (id: string, status: SequenceStatus): Promise<boolean> => {
       try {
-        await setSequenceStatus(id, status);
-        await reload();
+        await setStatusMutation.mutateAsync({ id, status });
         return true;
-      } catch (e) {
-        setActionError(e instanceof Error ? e.message : "Could not update the sequence");
+      } catch {
+        // Surfaced through actionError — a failed flip is a row-level problem, not a page error.
         return false;
-      } finally {
-        setPendingId(null);
       }
     },
-    [reload],
-  );
-
-  return { sequences, error, loading, reload, setStatus, pendingId, actionError };
+    pendingId: setStatusMutation.isPending ? (setStatusMutation.variables?.id ?? null) : null,
+    actionError: setStatusMutation.error
+      ? setStatusMutation.error instanceof Error
+        ? setStatusMutation.error.message
+        : "Could not update the sequence"
+      : null,
+  };
 }

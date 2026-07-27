@@ -1,31 +1,29 @@
-// useInbox.ts — loads the reply threads for the active filter (GET /inbox) with loading/error + reload.
-// Presentation state only; the typed fetch lives in api.ts.
+// useInbox.ts — the reply threads for the active filter (GET /inbox). Presentation state only; the typed
+// fetch lives in api.ts. Keyed by filter, so switching back to a filter already looked at is instant instead
+// of a fresh round trip.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { fetchThreads } from "../api";
+import { inboxKeys } from "../keys";
 import type { InboxFeed, InboxFilter } from "../types";
 
 export function useInbox(filter: InboxFilter) {
-  const [feed, setFeed] = useState<InboxFeed | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery<InboxFeed>({
+    queryKey: inboxKeys.threads(filter),
+    queryFn: () => fetchThreads(filter),
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setFeed(await fetchThreads(filter));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load your inbox");
-    } finally {
-      setLoading(false);
-    }
-  }, [filter]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  return { feed, error, loading, reload };
+  return {
+    feed: query.data ?? null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load your inbox"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+  };
 }

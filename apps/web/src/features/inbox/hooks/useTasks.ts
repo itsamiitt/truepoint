@@ -1,41 +1,37 @@
-// useTasks.ts — loads the task list (GET /tasks) with loading/error + reload, plus done/snooze mutators that
-// optimistically refresh. Presentation state only; typed fetches live in api.ts.
+// useTasks.ts — the task list (GET /tasks) plus the done/snooze status action. Presentation state only;
+// typed fetches live in api.ts.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchTasks, updateTask } from "../api";
+import { inboxKeys } from "../keys";
 import type { TaskFeed, TaskStatus } from "../types";
 
 export function useTasks() {
-  const [feed, setFeed] = useState<TaskFeed | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const key = inboxKeys.tasks();
+  const query = useQuery<TaskFeed>({ queryKey: key, queryFn: fetchTasks });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setFeed(await fetchTasks());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load your tasks");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  /** Set a task's status; returns whether the backend accepted it (false when not built yet). */
-  const setStatus = useCallback(
-    async (id: string, status: TaskStatus): Promise<boolean> => {
-      const { ok } = await updateTask(id, status);
-      if (ok) await reload();
-      return ok;
+  const setStatus = useMutation({
+    mutationFn: (vars: { id: string; status: TaskStatus }) => updateTask(vars.id, vars.status),
+    onSuccess: ({ ok }) => {
+      if (ok) void qc.invalidateQueries({ queryKey: key });
     },
-    [reload],
-  );
+  });
 
-  return { feed, error, loading, reload, setStatus };
+  return {
+    feed: query.data ?? null,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load your tasks"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    /** Set a task's status; returns whether the backend accepted it (false when not built yet). */
+    setStatus: async (id: string, status: TaskStatus): Promise<boolean> =>
+      (await setStatus.mutateAsync({ id, status })).ok,
+  };
 }
