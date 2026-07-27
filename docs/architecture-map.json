@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1841,
-  "fileSetHash": "sha256:a7a03b965005bc1d741267f56841d7558c7f35cecdcf111de7fda241b083be6d",
+  "fileCount": 1844,
+  "fileSetHash": "sha256:92ce27472731c3681be1eb2a3ee010bbb1d8f6dad7f07c6be887e157fe9679c4",
   "features": {
     "account-search": {
       "web": [],
@@ -2343,6 +2343,9 @@
       "apps/workers/src/register.ts",
       "apps/workers/src/retryPolicies.test.ts",
       "apps/workers/src/retryPolicies.ts",
+      "apps/workers/src/telemetry.ts",
+      "apps/workers/src/tracedWorker.test.ts",
+      "apps/workers/src/tracedWorker.ts",
       "apps/workers/src/tuning.test.ts",
       "apps/workers/src/tuning.ts",
       "apps/workers/src/withDeadline.test.ts",

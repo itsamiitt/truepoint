@@ -11,6 +11,10 @@ import {
   startWorkers,
   stopBackgroundRelays,
 } from "./register.ts";
+import { startTelemetry, stopTelemetry } from "./telemetry.ts";
+
+// Before any worker is constructed. A provider registered after the first job span would silently drop it.
+startTelemetry();
 
 const workers = startWorkers();
 let ready = true;
@@ -58,6 +62,8 @@ async function shutdown(signal: string): Promise<void> {
     await Promise.all(workers.map((w) => w.close(true))).catch(() => {});
   }
   await health.stop(true);
+  // Flush last: the spans worth having on a bad shutdown are the ones from the drain itself.
+  await stopTelemetry();
   log.info("workers: drained, exiting");
   process.exit(0);
 }

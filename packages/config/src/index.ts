@@ -21,6 +21,8 @@ export {
   type SpanAttributes,
   SpanStatusCode,
   activeTraceIds,
+  injectTraceContext,
+  withExtractedSpan,
   trace,
   withSpan,
 } from "./tracing.ts";

@@ -9,10 +9,24 @@
 // entrypoint installs an SDK, which it only does when an endpoint is configured. That is what lets the
 // instrumentation live in shared code without every process paying for telemetry it does not emit.
 
-import { type Span, SpanStatusCode, trace } from "@opentelemetry/api";
+import {
+  ROOT_CONTEXT,
+  type Span,
+  SpanStatusCode,
+  context,
+  propagation,
+  trace,
+} from "@opentelemetry/api";
 
-/** One tracer for the whole platform; the span name carries the layer, so a second tracer buys nothing. */
-const tracer = trace.getTracer("leadwolf");
+/**
+ * One tracer for the whole platform; the span name carries the layer, so a second tracer buys nothing.
+ *
+ * Resolved PER CALL rather than cached at module scope. `trace.getTracer()` hands back a ProxyTracer that
+ * binds to whichever provider is registered when it is FIRST used and keeps that delegate — so a module-level
+ * tracer captured before an app calls `startTelemetry()` would keep emitting into the no-op provider forever,
+ * silently. Resolving each time costs a map lookup and removes an ordering trap between module load and boot.
+ */
+const tracer = () => trace.getTracer("leadwolf");
 
 /** Attributes worth attaching. Deliberately NOT a free-form record: see the note on tenant ids below. */
 export interface SpanAttributes {
@@ -35,7 +49,7 @@ export async function withSpan<T>(
   attributes: SpanAttributes,
   fn: (span: Span) => Promise<T>,
 ): Promise<T> {
-  return tracer.startActiveSpan(name, async (span) => {
+  return tracer().startActiveSpan(name, async (span) => {
     for (const [key, value] of Object.entries(attributes)) {
       if (value !== undefined) span.setAttribute(key, value);
     }
@@ -52,6 +66,39 @@ export async function withSpan<T>(
       span.end();
     }
   });
+}
+
+/**
+ * Serialize the ACTIVE trace context into a plain carrier, for handing across a process boundary.
+ *
+ * This is what makes "api → workers" one trace rather than two adjacent ones: the producer stamps the
+ * carrier onto the job payload, and the consumer resumes from it. Returns an empty object when nothing is
+ * recording, so a caller can spread it unconditionally without branching on whether telemetry is on.
+ */
+export function injectTraceContext(): Record<string, string> {
+  const carrier: Record<string, string> = {};
+  propagation.inject(context.active(), carrier);
+  return carrier;
+}
+
+/**
+ * Run `fn` in a span parented to whatever trace `carrier` describes.
+ *
+ * Parented to ROOT_CONTEXT, not the ambient one, deliberately: a worker picking up a job has no meaningful
+ * ambient context — whatever span happened to be active belongs to a DIFFERENT job. Extracting into a fresh
+ * root is what stops one trace swallowing every job the worker later runs.
+ *
+ * An absent or malformed carrier yields a new root span rather than an error: an untraced producer should
+ * still produce a usable worker trace.
+ */
+export async function withExtractedSpan<T>(
+  carrier: Record<string, string> | undefined,
+  name: string,
+  attributes: SpanAttributes,
+  fn: (span: Span) => Promise<T>,
+): Promise<T> {
+  const parent = propagation.extract(ROOT_CONTEXT, carrier ?? {});
+  return context.with(parent, () => withSpan(name, attributes, fn));
 }
 
 /** The active trace/span ids, for stamping a log line so a log and its trace can be joined. Empty when no SDK
