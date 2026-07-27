@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1835,
-  "fileSetHash": "sha256:385255555bd94bb94f8e566c180f4b7e2b795b504812f6308af1a1a498e88941",
+  "fileCount": 1836,
+  "fileSetHash": "sha256:5db4e2029297e9e2a8fcefcf592fbe60560a753922976c162383fa4fe86157fe",
   "features": {
     "account-search": {
       "web": [],
@@ -1336,11 +1336,13 @@
         "apps/web/src/features/reports/index.ts",
         "apps/web/src/features/reports/keys.ts",
         "apps/web/src/features/reports/rollups.ts",
-        "apps/web/src/features/reports/sampled.test.ts",
         "apps/web/src/features/reports/types.ts"
       ],
       "admin": [],
-      "api": [],
+      "api": [
+        "apps/api/src/features/reports/index.ts",
+        "apps/api/src/features/reports/routes.ts"
+      ],
       "core": [],
       "db": [],
       "workers": [],

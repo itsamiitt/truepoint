@@ -4,6 +4,7 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
+import { type ReportsSummary, reportsSummarySchema } from "@leadwolf/types";
 import type { MaskedContact } from "@leadwolf/types";
 import type { UsageReveal } from "./types";
 
@@ -17,8 +18,6 @@ export interface ReportsSource {
   balance: number;
   reveals: UsageReveal[];
   contacts: MaskedContact[];
-  /** True when either source hit the row limit — the rollups describe a SAMPLE, not the whole workspace. */
-  sampled: boolean;
 }
 
 /** GET /credits/balance — the headline tile. */
@@ -45,32 +44,16 @@ async function fetchContacts(limit = 200): Promise<MaskedContact[]> {
   return data.contacts;
 }
 
-/** How many rows the dashboards roll up. The rollups run client-side over this SAMPLE, not over the whole
- *  workspace — see `sampled` below and C-3.10. */
-export const REPORT_SAMPLE_LIMIT = 200;
-
-/**
- * Fetch all three report inputs in parallel.
- *
- * `sampled` is true when either source came back FULL, which means the workspace has at least as many rows as
- * the limit and the rollups therefore describe the most recent `REPORT_SAMPLE_LIMIT` rather than everything.
- * It is derived rather than assumed because the alternative — presenting a partial rollup as a total — is the
- * actual defect in C-3.10: the numbers were not just imprecise, they were silently wrong above this limit and
- * labelled as totals. The real fix is server-side aggregation; until that lands the surface says what it is
- * showing instead of overstating it.
- */
+/** The balance tile's inputs. The dashboards' COUNTS now come from `fetchReportsSummary` instead, so these
+ *  rows no longer decide any number on the page — which is what retires the sample disclosure that shipped
+ *  while the rollups were still computed from them. */
 export async function fetchReportsSource(): Promise<ReportsSource> {
   const [balance, reveals, contacts] = await Promise.all([
     fetchBalance(),
-    fetchUsage(REPORT_SAMPLE_LIMIT),
-    fetchContacts(REPORT_SAMPLE_LIMIT),
+    fetchUsage(200),
+    fetchContacts(200),
   ]);
-  return {
-    balance,
-    reveals,
-    contacts,
-    sampled: reveals.length >= REPORT_SAMPLE_LIMIT || contacts.length >= REPORT_SAMPLE_LIMIT,
-  };
+  return { balance, reveals, contacts };
 }
 
 /** The deliverability report from GET /api/v1/email/analytics (M12 P5). Reply rate is the headline (D6). */
@@ -120,4 +103,22 @@ export function downloadCsv(
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * GET /reports/summary — the SERVER-aggregated counts (C-3.10).
+ *
+ * The viewer's IANA zone travels with the request because the day buckets have always followed the local day;
+ * Postgres reproduces that with `date_trunc('day', ts, $tz)`, so nothing shifts for non-UTC users. Falls back
+ * to UTC on the rare runtime that cannot resolve a zone.
+ */
+export async function fetchReportsSummary(
+  range: string,
+  member: string,
+  tz: string = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+): Promise<ReportsSummary> {
+  const params = new URLSearchParams({ range, member, tz });
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/reports/summary?${params.toString()}`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load reports"));
+  return reportsSummarySchema.parse(await res.json());
 }

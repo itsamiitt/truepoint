@@ -42,6 +42,7 @@ import { notificationsRoutes } from "./features/notifications/index.ts";
 import { outreachRoutes } from "./features/outreach/index.ts";
 import { pipelineStagesRoutes } from "./features/pipeline-stages/index.ts";
 import { publicPricingRoutes } from "./features/pricing/index.ts";
+import { reportsRoutes } from "./features/reports/index.ts";
 import { revealRoutes } from "./features/reveal/index.ts";
 import { salesNavRoutes } from "./features/sales-navigator/index.ts";
 import { savedSearchesRoutes } from "./features/saved-searches/index.ts";
@@ -158,6 +159,7 @@ app.route("/api/v1/workspaces", workspaceSecurityRoutes);
 // don't overlap workspacesRoutes' GET / nor the /security/* router (same shared-prefix pattern).
 app.route("/api/v1/workspaces", workspaceMembersRoutes);
 app.route("/api/v1/home", homeRoutes);
+app.route("/api/v1/reports", reportsRoutes);
 // Mapping-templates BEFORE the import router: imports has a `GET /:jobId` that would otherwise capture
 // `/imports/mapping-templates` as a job id. The more specific prefix must register first (Hono first-match).
 app.route("/api/v1/imports/mapping-templates", importMappingTemplatesRoutes);
