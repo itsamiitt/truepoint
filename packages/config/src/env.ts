@@ -175,6 +175,7 @@ export const appEnvSchema = z
     // role cache and the replica pool.
     OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
     OTEL_SERVICE_NAME: z.string().default("leadwolf-api"),
+    OTEL_SERVICE_NAME_WORKERS: z.string().default("leadwolf-workers"),
     REPLICA_DATABASE_URL: z.string().url().optional(),
     REPLICA_DB_POOL_MAX: z.coerce.number().int().positive().default(5),
     // Is the runtime connection behind a TRANSACTION-pooling proxy (RDS Proxy, PgBouncer, Neon's pooled

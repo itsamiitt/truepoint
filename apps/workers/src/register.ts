@@ -31,7 +31,7 @@ import {
   importNotifyPayloadSchema,
   importRollupsPayloadSchema,
 } from "@leadwolf/types";
-import { Queue, Worker } from "bullmq";
+import { Queue, type Worker } from "bullmq";
 import IORedis from "ioredis";
 import { type WorkerDeadLetter, extractScope, makeDeadLetterHandler } from "./deadLetter.ts";
 import { log } from "./logger.ts";
@@ -232,6 +232,7 @@ import {
   REVERIFICATION_RETRY,
   SCORING_RETRY,
 } from "./retryPolicies.ts";
+import { tracedWorker } from "./tracedWorker.ts";
 import {
   SWEEP_WORKER_TUNING,
   bulkImportKindDeadlineMs,
@@ -682,7 +683,7 @@ export function startWorkers(): Worker[] {
   const importOutboxEnabled = env.IMPORT_V2_ENABLED;
 
   const importsWorker = instrument(
-    new Worker<ImportJobData>(
+    tracedWorker<ImportJobData>(
       IMPORTS_QUEUE,
       withDeadline(IMPORTS_QUEUE, deadlineMs(IMPORTS_QUEUE), processImport),
       { connection, ...eventTuning(IMPORTS_QUEUE) },
@@ -752,7 +753,7 @@ export function startWorkers(): Worker[] {
     // the retry→DLQ path instead of holding the lock forever) and carries explicit concurrency + lock/stall
     // tuning (tuning.ts). The spend path (enrichment) stays serial — F3 hard gate.
     instrument(
-      new Worker<EnrichmentJobData>(
+      tracedWorker<EnrichmentJobData>(
         ENRICHMENT_QUEUE,
         withDeadline(ENRICHMENT_QUEUE, deadlineMs(ENRICHMENT_QUEUE), processEnrichment),
         { connection, ...eventTuning(ENRICHMENT_QUEUE) },
@@ -761,7 +762,7 @@ export function startWorkers(): Worker[] {
       enrichmentDeadLetterQueue,
     ),
     instrument(
-      new Worker<ScoringJobData>(
+      tracedWorker<ScoringJobData>(
         SCORING_QUEUE,
         withDeadline(SCORING_QUEUE, deadlineMs(SCORING_QUEUE), processScoring),
         { connection, ...eventTuning(SCORING_QUEUE) },
@@ -770,7 +771,7 @@ export function startWorkers(): Worker[] {
       scoringDeadLetterQueue,
     ),
     instrument(
-      new Worker<DsarJobData>(
+      tracedWorker<DsarJobData>(
         DSAR_QUEUE,
         withDeadline(DSAR_QUEUE, deadlineMs(DSAR_QUEUE), processDsar),
         { connection, ...eventTuning(DSAR_QUEUE) },
@@ -779,7 +780,7 @@ export function startWorkers(): Worker[] {
       dsarDeadLetterQueue,
     ),
     instrument(
-      new Worker<OutreachJobData>(
+      tracedWorker<OutreachJobData>(
         OUTREACH_QUEUE,
         // Concurrency 4 parallelizes across mailboxes/tenants; the per-mailbox SEND rate is still governed
         // by the Redis token bucket (mailboxThrottle), so warm-up ramps are unaffected.
@@ -799,7 +800,7 @@ export function startWorkers(): Worker[] {
       outreachDeadLetterQueue,
     ),
     instrument(
-      new Worker<DedupJobData>(
+      tracedWorker<DedupJobData>(
         DEDUP_QUEUE,
         withDeadline(DEDUP_QUEUE, deadlineMs(DEDUP_QUEUE), processDedup),
         { connection, ...eventTuning(DEDUP_QUEUE) },
@@ -808,7 +809,7 @@ export function startWorkers(): Worker[] {
       dedupDeadLetterQueue,
     ),
     instrument(
-      new Worker<FirmographicsJobData>(
+      tracedWorker<FirmographicsJobData>(
         FIRMOGRAPHICS_QUEUE,
         withDeadline(FIRMOGRAPHICS_QUEUE, deadlineMs(FIRMOGRAPHICS_QUEUE), processFirmographics),
         { connection, ...eventTuning(FIRMOGRAPHICS_QUEUE) },
@@ -818,7 +819,7 @@ export function startWorkers(): Worker[] {
     ),
     // Master-link backfill consumer: per-workspace, idempotent re-resolution of NULL master_* bridges.
     instrument(
-      new Worker<MasterBackfillJobData>(
+      tracedWorker<MasterBackfillJobData>(
         MASTER_BACKFILL_QUEUE,
         withDeadline(
           MASTER_BACKFILL_QUEUE,
@@ -835,7 +836,7 @@ export function startWorkers(): Worker[] {
     // Sweeps (Phase 1): explicitly serial — leader-locked singletons by design; no deadline (their
     // containment is the leader TTL + internal caps + the scheduled re-run).
     instrument(
-      new Worker<MasterBackfillSweepJobData>(
+      tracedWorker<MasterBackfillSweepJobData>(
         MASTER_BACKFILL_SWEEP_QUEUE,
         makeProcessMasterBackfillSweep(connection, enqueueMasterBackfill),
         { connection, ...SWEEP_WORKER_TUNING },
@@ -846,7 +847,7 @@ export function startWorkers(): Worker[] {
     // projection_outbox + writes each dirty cluster's SHADOW quality/freshness seams. No-op while the evidence
     // flag is off (empty outbox); never writes the authoritative scalar columns (that flip is CI-parity-gated).
     instrument(
-      new Worker<ProjectionSweepJobData>(
+      tracedWorker<ProjectionSweepJobData>(
         PROJECTION_SWEEP_QUEUE,
         makeProcessProjectionSweep(connection),
         { connection, ...SWEEP_WORKER_TUNING },
@@ -856,7 +857,7 @@ export function startWorkers(): Worker[] {
     // Probabilistic-ER shadow sweep (I5): proposes pending match_links for human review. Leader-locked; INERT
     // while ER_SHADOW_ENABLED is off (the processor early-returns); never auto-merges/re-points (proposals only).
     instrument(
-      new Worker<ErSweepJobData>(ER_SWEEP_QUEUE, makeProcessErSweep(connection), {
+      tracedWorker<ErSweepJobData>(ER_SWEEP_QUEUE, makeProcessErSweep(connection), {
         connection,
         ...SWEEP_WORKER_TUNING,
       }),
@@ -865,7 +866,7 @@ export function startWorkers(): Worker[] {
     // M12 P4: the sequence-tick consumer. Leader-locked; claims due enrollments and enqueues each onto the
     // outreach queue (the existing send path). Best-effort registers the single repeatable job at boot.
     instrument(
-      new Worker<SequenceTickJobData>(
+      tracedWorker<SequenceTickJobData>(
         EMAIL_SEQUENCE_TICK_QUEUE,
         makeProcessSequenceTick(connection, async (e) => {
           // A per-(enrollment, target-step) jobId dedupes a re-claim across ticks: if a still-pending send for
@@ -883,7 +884,7 @@ export function startWorkers(): Worker[] {
     ),
     // M12 P6: the retention sweep consumer (leader-locked daily).
     instrument(
-      new Worker<RetentionSweepJobData>(
+      tracedWorker<RetentionSweepJobData>(
         RETENTION_SWEEP_QUEUE,
         makeProcessRetentionSweep(connection),
         { connection, ...SWEEP_WORKER_TUNING },
@@ -892,7 +893,7 @@ export function startWorkers(): Worker[] {
     ),
     // Freshness re-verification per-workspace consumer (ADR-0025): re-grades stale revealed contacts.
     instrument(
-      new Worker<ReverificationJobData>(
+      tracedWorker<ReverificationJobData>(
         REVERIFICATION_QUEUE,
         withDeadline(REVERIFICATION_QUEUE, deadlineMs(REVERIFICATION_QUEUE), processReverification),
         { connection, ...eventTuning(REVERIFICATION_QUEUE) },
@@ -903,7 +904,7 @@ export function startWorkers(): Worker[] {
     // Freshness re-verification SWEEP consumer: leader-locked daily fan-out enqueuing a per-workspace
     // re-verification for every workspace with stale revealed contacts. enqueueReverification is injected.
     instrument(
-      new Worker<ReverificationSweepJobData>(
+      tracedWorker<ReverificationSweepJobData>(
         REVERIFICATION_SWEEP_QUEUE,
         makeProcessReverificationSweep(connection, enqueueReverification),
         { connection, ...SWEEP_WORKER_TUNING },
@@ -912,7 +913,7 @@ export function startWorkers(): Worker[] {
     ),
     // Data Health snapshot SWEEP consumer: leader-locked daily capture of a per-workspace trend point.
     instrument(
-      new Worker<DataQualitySnapshotSweepJobData>(
+      tracedWorker<DataQualitySnapshotSweepJobData>(
         DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
         makeProcessDataQualitySnapshotSweep(connection),
         { connection, ...SWEEP_WORKER_TUNING },
@@ -922,7 +923,7 @@ export function startWorkers(): Worker[] {
     // Retention SHADOW sweep consumer (data-management #6, phase 2): leader-locked daily; per ACTIVE tenant it
     // COUNTS candidate rows per data class and records a retention_runs row. Flag-gated; DELETES NOTHING.
     instrument(
-      new Worker<DataRetentionSweepJobData>(
+      tracedWorker<DataRetentionSweepJobData>(
         DATA_RETENTION_SWEEP_QUEUE,
         makeProcessDataRetentionSweep(connection),
         { connection, ...SWEEP_WORKER_TUNING },
@@ -932,7 +933,7 @@ export function startWorkers(): Worker[] {
     // E-6.4 partition maintenance consumer: leader-locked daily; creates the next months' partitions for
     // every partitioned table. Inert while none exist.
     instrument(
-      new Worker<PartitionSweepJobData>(
+      tracedWorker<PartitionSweepJobData>(
         PARTITION_SWEEP_QUEUE,
         makeProcessPartitionSweep(connection),
         { connection, ...SWEEP_WORKER_TUNING },
@@ -941,7 +942,7 @@ export function startWorkers(): Worker[] {
     ),
     // M12 P1: the proactive OAuth token-refresh consumer (leader-locked, every 2 min).
     instrument(
-      new Worker<TokenRefreshJobData>(
+      tracedWorker<TokenRefreshJobData>(
         EMAIL_TOKEN_REFRESH_QUEUE,
         makeProcessTokenRefresh(connection),
         { connection, ...SWEEP_WORKER_TUNING },
@@ -1037,7 +1038,7 @@ export function startWorkers(): Worker[] {
       },
     });
     const bulkImportsWorker = instrument(
-      new Worker<UnifiedImportJobData>(
+      tracedWorker<UnifiedImportJobData>(
         BULK_IMPORTS_QUEUE,
         // Per-KIND deadline (09 §3; S-Q1): fast 2 min · drive 15 min · chunk 10 min — chosen per job at
         // claim, each ≤ the queue-level ceiling registered in PROCESSOR_DEADLINE_MS. An unknown kind fails
@@ -1182,7 +1183,7 @@ export function startWorkers(): Worker[] {
     );
     workers.push(
       instrument(
-        new Worker<ImportPromotionSweepJobData>(
+        tracedWorker<ImportPromotionSweepJobData>(
           IMPORT_PROMOTION_SWEEP_QUEUE,
           makeProcessImportPromotionSweep(connection, async (jobId, scope) => {
             await bulkImportsQueue.add(
@@ -1221,7 +1222,7 @@ export function startWorkers(): Worker[] {
     });
     workers.push(
       instrument(
-        new Worker<ImportReaperSweepJobData>(
+        tracedWorker<ImportReaperSweepJobData>(
           IMPORT_REAPER_SWEEP_QUEUE,
           makeProcessImportReaperSweep(connection, {
             // Live-job snapshot: all ids on the unified queue this tick (bounded) — the orphan-liveness oracle.
@@ -1281,7 +1282,7 @@ export function startWorkers(): Worker[] {
     );
     workers.push(
       instrument(
-        new Worker<ImportArtifactSweepJobData>(
+        tracedWorker<ImportArtifactSweepJobData>(
           IMPORT_ARTIFACT_SWEEP_QUEUE,
           makeProcessImportArtifactSweep(connection, {
             fileStore: bulkFileStore,
@@ -1316,7 +1317,7 @@ export function startWorkers(): Worker[] {
       );
       workers.push(
         instrument(
-          new Worker<ScheduledImportSweepJobData>(
+          tracedWorker<ScheduledImportSweepJobData>(
             SCHEDULED_IMPORT_SWEEP_QUEUE,
             makeProcessScheduledImportSweep(connection, {
               fileStore: bulkFileStore,
@@ -1371,7 +1372,7 @@ export function startWorkers(): Worker[] {
       connection,
     });
     const bulkEnrichmentWorker = instrument(
-      new Worker<BulkEnrichmentJobData>(
+      tracedWorker<BulkEnrichmentJobData>(
         BULK_ENRICHMENT_QUEUE,
         makeProcessBulkEnrichment({
           // The drive phase fans out one chunk job per band onto the SAME bulk-enrichment queue. STABLE jobId
@@ -1441,7 +1442,7 @@ export function startWorkers(): Worker[] {
       connection,
     });
     const bulkRevealWorker = instrument(
-      new Worker<BulkRevealJobData>(
+      tracedWorker<BulkRevealJobData>(
         BULK_REVEAL_QUEUE,
         makeProcessBulkReveal({
           // The drive fans out one chunk job per band onto the SAME bulk-reveal queue.
@@ -1490,7 +1491,7 @@ export function startWorkers(): Worker[] {
     );
     workers.push(
       instrument(
-        new Worker<LowBalanceNotifierSweepJobData>(
+        tracedWorker<LowBalanceNotifierSweepJobData>(
           LOW_BALANCE_NOTIFIER_SWEEP_QUEUE,
           makeProcessLowBalanceNotifierSweep(connection),
           { connection },
@@ -1520,7 +1521,7 @@ export function startWorkers(): Worker[] {
     });
     workers.push(
       instrument(
-        new Worker<BillingReconSweepJobData>(
+        tracedWorker<BillingReconSweepJobData>(
           BILLING_RECON_SWEEP_QUEUE,
           makeProcessBillingReconSweep(connection),
           { connection },
@@ -1547,7 +1548,7 @@ export function startWorkers(): Worker[] {
     );
     workers.push(
       instrument(
-        new Worker<SubscriptionGrantSweepJobData>(
+        tracedWorker<SubscriptionGrantSweepJobData>(
           SUBSCRIPTION_GRANT_SWEEP_QUEUE,
           makeProcessSubscriptionGrantSweep(connection),
           { connection },
@@ -1572,7 +1573,7 @@ export function startWorkers(): Worker[] {
     );
     workers.push(
       instrument(
-        new Worker<SubscriptionDunningSweepJobData>(
+        tracedWorker<SubscriptionDunningSweepJobData>(
           SUBSCRIPTION_DUNNING_SWEEP_QUEUE,
           makeProcessSubscriptionDunningSweep(connection),
           { connection },
@@ -1601,7 +1602,7 @@ export function startWorkers(): Worker[] {
     });
     workers.push(
       instrument(
-        new Worker<GmailInboxPollJobData>(
+        tracedWorker<GmailInboxPollJobData>(
           GMAIL_INBOX_POLL_QUEUE,
           makeProcessGmailInboxPoll(connection),
           { connection },
@@ -1627,7 +1628,7 @@ export function startWorkers(): Worker[] {
     });
     workers.push(
       instrument(
-        new Worker<LedgerBackfillSweepJobData>(
+        tracedWorker<LedgerBackfillSweepJobData>(
           LEDGER_BACKFILL_SWEEP_QUEUE,
           makeProcessLedgerBackfillSweep(connection),
           { connection },
@@ -1657,7 +1658,7 @@ export function startWorkers(): Worker[] {
     );
     workers.push(
       instrument(
-        new Worker<ChannelBackfillSweepJobData>(
+        tracedWorker<ChannelBackfillSweepJobData>(
           CHANNEL_BACKFILL_SWEEP_QUEUE,
           makeProcessChannelBackfillSweep(connection, runChannelBackfillForWorkspace),
           { connection },
@@ -1687,7 +1688,7 @@ export function startWorkers(): Worker[] {
     );
     workers.push(
       instrument(
-        new Worker<ChannelReconcileSweepJobData>(
+        tracedWorker<ChannelReconcileSweepJobData>(
           CHANNEL_RECONCILE_SWEEP_QUEUE,
           makeProcessChannelReconcileSweep(connection, runChannelReconcileForWorkspace),
           { connection },
@@ -1719,7 +1720,7 @@ export function startWorkers(): Worker[] {
     );
     workers.push(
       instrument(
-        new Worker<AccountBackfillSweepJobData>(
+        tracedWorker<AccountBackfillSweepJobData>(
           ACCOUNT_BACKFILL_SWEEP_QUEUE,
           makeProcessAccountBackfillSweep(connection, runAccountBackfillForWorkspace),
           { connection },

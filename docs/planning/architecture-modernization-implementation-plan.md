@@ -1444,7 +1444,7 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   no partition key, so it would have scanned every month to delete rows already located in the oldest few.
   **Still open:** detach-and-archive of cold partitions (the retention mechanics this unlocks), and the two
   uniqueness redesigns above if `email_event` / `provider_calls` are ever to be partitioned.
-- [x] **E-6.5 (partial: the seam + api/db; workers pending) · OTel end-to-end** api → workers → db, on top of
+- [x] **E-6.5 · OTel end-to-end** api → workers → db, on top of
   A-0.4's request IDs.
   **The seam is in `@leadwolf/config` (`withSpan`), and that placement is a boundary decision**: `@leadwolf/db`
   may depend only on config and types, so a seam anywhere else could not instrument the layer whose latency
@@ -1462,8 +1462,23 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   `telemetry.test.ts` uses an in-memory exporter to assert span names, attributes, parent/child nesting, that
   an undefined attribute is omitted rather than recorded as `"undefined"`, and that a failure is recorded AND
   rethrown — a swallowing instrument would show a healthy span for work that did nothing.
-  **Still open:** worker-side spans and trace-context propagation across the BullMQ boundary, which is what
-  makes the api → workers half a single trace rather than two.
+  **The workers half is done too.** All 35 `new Worker<...>` constructions in `register.ts` went through ONE
+  uniform substitution to `tracedWorker<...>` rather than 35 bespoke edits — that file wires every queue and is
+  the most collision-prone in the repo, so a single mechanical change verified by typecheck was the only sane
+  shape. The span wraps the processor from the OUTSIDE, which puts it around `withDeadline`'s race: a job
+  killed by its deadline shows as an error on the span, where a span nested inside the race would simply never
+  end when the deadline won.
+  **Propagation** rides on the job payload under `__trace`, extracted into ROOT_CONTEXT rather than the ambient
+  one — without that, whichever span happened to be active when the worker picked up the next job would adopt
+  it and every job would collapse into one trace. `tracedWorker.test.ts` pins exactly that, plus the
+  degradations: no carrier and a malformed carrier both still produce a usable span.
+  **A real bug surfaced while wiring this**, and it would have shipped silently: `trace.getTracer()` returns a
+  ProxyTracer that binds to whichever provider is registered when it is FIRST used and keeps that delegate. A
+  module-scope tracer captured before an app called `startTelemetry()` would have emitted into the no-op
+  provider forever — tracing "on", nothing recorded. The tracer is now resolved per call.
+  **Still open:** producers stamping `injectTraceContext()` onto job payloads at enqueue. Until they do, worker
+  spans are their own traces rather than continuations of the request that queued them — the helper and the
+  consumer side are both in place, so it is a per-call-site change with no design left in it.
 - [ ] **E-6.6 · Forge isolation** — `FORGE_DATABASE_URL` + its own login role and pool (today `withForgeTx`
   shares the customer request path's `max: 10` pool, so there is no capacity or failure isolation), plus a
   runtime `statement_timeout` (migrations set one; the runtime pool does not).
