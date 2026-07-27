@@ -41,6 +41,15 @@ import type { Job, Queue } from "bullmq";
 
 /** The fields the AI extraction stage targets from an intercepted profile (09 §target fields). */
 const TARGET_FIELDS = ["full_name", "headline", "current_title", "current_company", "location"];
+/** How long a budget-exhausted capture waits before trying again. Well under the daily budget window, so a
+ *  tenant that frees budget mid-day resumes promptly, and long enough that parking is not a busy-loop. */
+const BUDGET_PARK_DELAY_MS = 30 * 60 * 1000;
+
+/** Parks before giving up and routing to the DLQ. 8 x 30min covers a working day — long enough for a daily
+ *  budget to roll or a Redis outage to be fixed, bounded so a permanently exhausted budget surfaces to a
+ *  human instead of re-enqueueing forever. */
+const MAX_BUDGET_PARKS = 8;
+
 /** Paid provider calls per TENANT per budget window (a UTC day — AI_BUDGET_WINDOW_MS). The window matters:
  *  the same number keyed per capture, as it was, is not a limit at all. */
 const AI_BUDGET_LIMIT = 1000;
@@ -128,7 +137,7 @@ export function makeParseProcessor(deps: ProcessorDeps) {
 
 /** ai-extract: parsed residue → grounded candidate fields (REAL Anthropic), then enqueue resolve. */
 export function makeExtractProcessor(deps: ProcessorDeps) {
-  return async (job: Job<{ rawCaptureId: string }>): Promise<void> => {
+  return async (job: Job<{ rawCaptureId: string; parks?: number }>): Promise<void> => {
     const ctx = await withForgeTx(async (tx) => {
       const capture = await getRawCaptureById(tx, job.data.rawCaptureId);
       if (!capture) return null;
@@ -176,6 +185,40 @@ export function makeExtractProcessor(deps: ProcessorDeps) {
       throw new Error(
         `[forge-extract] provider unavailable for ${job.data.rawCaptureId} — retrying via queue backoff`,
       );
+    }
+    // budget_exceeded is a THIRD class: transient, but on a timescale the queue's backoff cannot wait out.
+    //
+    // It used to fall into the terminal branch below and get QUARANTINED, which is the wrong answer twice
+    // over. Quarantine means "retrying cannot change the result", and this result changes by itself when the
+    // budget window rolls; and because the AI budget store fails CLOSED, a Redis outage produces this outcome
+    // for every capture — so a blip would have permanently quarantined the entire in-flight pipeline, needing
+    // a human to dig each capture back out.
+    //
+    // That branch was effectively unreachable until F-0.6 made the budget actually enforceable (the old
+    // per-capture key meant it never exhausted), so fixing the budget is what turned this latent mishandling
+    // into a live one.
+    //
+    // PARK instead, which is what the budget guard's own contract says: re-enqueue with a delay rather than
+    // throwing. Throwing would burn the queue's attempt limit within minutes against a budget measured in
+    // hours, and DLQ a capture that was never actually broken.
+    if (extraction.outcome === "budget_exceeded") {
+      const parks = (job.data.parks ?? 0) + 1;
+      if (parks > MAX_BUDGET_PARKS) {
+        // Bounded so a permanently exhausted budget cannot re-enqueue forever. Throwing here hands it to the
+        // queue's DLQ, which is visible and alertable — unlike a silent park loop or a silent quarantine.
+        throw new Error(
+          `[forge-extract] budget still exhausted for ${job.data.rawCaptureId} after ${MAX_BUDGET_PARKS} parks — routing to the DLQ for a human`,
+        );
+      }
+      await deps.queues.aiExtract.add(
+        "forge-ai-extract",
+        { rawCaptureId: job.data.rawCaptureId, parks },
+        { delay: BUDGET_PARK_DELAY_MS },
+      );
+      console.warn(
+        `[forge-extract] parked ${job.data.rawCaptureId} (budget exhausted, park ${parks}/${MAX_BUDGET_PARKS})`,
+      );
+      return;
     }
     if (extraction.outcome !== "ok" && extraction.outcome !== "repaired") {
       await withForgeTx((tx) =>

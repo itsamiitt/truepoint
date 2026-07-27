@@ -3,7 +3,15 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": true,
-    "ignore": ["**/dist", "**/.next", "**/.turbo", ".claude", ".design-sync", "**/src/migrations"]
+    "ignore": [
+      "**/dist",
+      "**/.next",
+      "**/.turbo",
+      ".claude",
+      ".design-sync",
+      "**/src/migrations",
+      "docs/architecture-map.json"
+    ]
   },
   "formatter": {
     "enabled": true,
