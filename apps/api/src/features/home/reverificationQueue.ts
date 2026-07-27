@@ -15,14 +15,15 @@ import {
   type ReverificationJobData,
   type ReverificationScope,
 } from "@leadwolf/types";
-import { Queue } from "bullmq";
+import type { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { tracedQueue } from "../../lib/tracedQueue.ts";
 
 let queue: Queue<ReverificationJobData> | undefined;
 function reverificationQueue(): Queue<ReverificationJobData> {
   if (!queue) {
     const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
-    queue = new Queue<ReverificationJobData>(REVERIFICATION_QUEUE, {
+    queue = tracedQueue<ReverificationJobData>(REVERIFICATION_QUEUE, {
       connection,
       defaultJobOptions: {
         // Idempotent (only still-stale rows are touched) → a couple of backoff retries cover a transient verifier

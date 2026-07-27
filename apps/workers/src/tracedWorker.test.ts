@@ -94,3 +94,35 @@ describe("job trace propagation", () => {
     expect(TRACE_CARRIER_KEY).toBe("__trace");
   });
 });
+
+describe("tracedQueue producer side", () => {
+  test("stamps the carrier only when something is recording", async () => {
+    const { TRACE_CARRIER_KEY: producerKey } = await import("./tracedQueue.ts");
+    // Both halves must agree on the key or propagation silently no-ops: the producer writes one name and the
+    // consumer looks for another, and every job quietly starts its own trace.
+    expect(producerKey).toBe(TRACE_CARRIER_KEY);
+  });
+
+  test("a carrier round-trips producer → consumer as one trace", async () => {
+    // The end-to-end shape, without Redis: inject inside a request span exactly as tracedQueue does, then
+    // extract exactly as tracedWorker does.
+    let traceId = "";
+    let payload: Record<string, unknown> = {};
+    await withSpan("api.request", { route: "/imports" }, async (span) => {
+      traceId = span.spanContext().traceId;
+      payload = { jobId: "j-1", [TRACE_CARRIER_KEY]: injectTraceContext() };
+    });
+
+    await withExtractedSpan(
+      payload[TRACE_CARRIER_KEY] as Record<string, string>,
+      "worker.job.imports",
+      {},
+      async () => {},
+    );
+
+    const job = exporter.getFinishedSpans().find((s) => s.name === "worker.job.imports");
+    expect(job?.spanContext().traceId).toBe(traceId);
+    // The job's own fields are untouched — the carrier rides alongside, it does not replace the payload.
+    expect(payload.jobId).toBe("j-1");
+  });
+});

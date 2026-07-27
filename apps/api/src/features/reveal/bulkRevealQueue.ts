@@ -6,8 +6,9 @@
 
 import { env } from "@leadwolf/config";
 import { BULK_REVEAL_QUEUE, type BulkRevealJobData } from "@leadwolf/types";
-import { Queue } from "bullmq";
+import type { Queue } from "bullmq";
 import IORedis from "ioredis";
+import { tracedQueue } from "../../lib/tracedQueue.ts";
 
 type BulkRevealDriveJobData = Extract<BulkRevealJobData, { kind: "drive" }>;
 
@@ -16,7 +17,7 @@ let queue: Queue<BulkRevealJobData> | undefined;
 function bulkRevealQueue(): Queue<BulkRevealJobData> {
   if (!queue) {
     const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
-    queue = new Queue<BulkRevealJobData>(BULK_REVEAL_QUEUE, {
+    queue = tracedQueue<BulkRevealJobData>(BULK_REVEAL_QUEUE, {
       connection,
       defaultJobOptions: {
         attempts: 3,

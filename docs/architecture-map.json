@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1844,
-  "fileSetHash": "sha256:92ce27472731c3681be1eb2a3ee010bbb1d8f6dad7f07c6be887e157fe9679c4",
+  "fileCount": 1846,
+  "fileSetHash": "sha256:dd469bffbe38ec13d4e789a7d9e0c05df1729bc63576cdd5407e72b0942066e5",
   "features": {
     "account-search": {
       "web": [],
@@ -2019,7 +2019,8 @@
     "apps/api/lib": [
       "apps/api/src/lib/csvDownload.ts",
       "apps/api/src/lib/roleCache.test.ts",
-      "apps/api/src/lib/roleCache.ts"
+      "apps/api/src/lib/roleCache.ts",
+      "apps/api/src/lib/tracedQueue.ts"
     ],
     "apps/api/middleware": [
       "apps/api/src/middleware/authn.ts",
@@ -2344,6 +2345,7 @@
       "apps/workers/src/retryPolicies.test.ts",
       "apps/workers/src/retryPolicies.ts",
       "apps/workers/src/telemetry.ts",
+      "apps/workers/src/tracedQueue.ts",
       "apps/workers/src/tracedWorker.test.ts",
       "apps/workers/src/tracedWorker.ts",
       "apps/workers/src/tuning.test.ts",
