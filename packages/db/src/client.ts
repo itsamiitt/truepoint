@@ -80,28 +80,50 @@ export interface TenantScope {
 }
 
 /**
- * Run `fn` inside a transaction with the RLS GUCs set LOCAL — the only sanctioned scoped-query path.
- * `SET LOCAL ROLE leadwolf_app` drops to the **non-BYPASSRLS** app role for the scope of the tx, so RLS is
- * actually enforced even when the base connection is privileged (the documented dev/superuser case). Both
- * the role and the GUCs are transaction-local (RDS-Proxy-safe). 03 §9, architecture-contract §6.
+ * Run `fn` inside a transaction with the RLS role + GUCs set LOCAL — the only sanctioned scoped-query path.
+ * Dropping to the **non-BYPASSRLS** app role for the scope of the tx is what makes RLS actually enforced even
+ * when the base connection is privileged (the documented dev/superuser case — and the case in this deployment,
+ * where the pool logs in as the owner). Role and GUCs are transaction-local (RDS-Proxy-safe), and are applied
+ * in a single round-trip. 03 §9, architecture-contract §6.
  */
 export async function withTenantTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {
-    // RLS setup, kept to TWO round-trips instead of three (perf root cause #7 — the per-read latency floor
-    // under every authenticated endpoint). `SET LOCAL ROLE` is a utility command that cannot be parameterised
-    // or merged into a SELECT, so it stays its own statement; both `set_config` calls collapse into a SINGLE
-    // parameterised SELECT (one Parse+Bind+Execute) when a workspace is present. The role + GUCs are still set
-    // LOCAL, in this transaction, BEFORE any query runs, with the same NULLIF-fail-closed semantics — so RLS
-    // isolation is byte-for-byte identical to setting them separately. Values stay BOUND (no string concat).
-    await tx.execute(sql`SET LOCAL ROLE leadwolf_app`);
+    // RLS setup in ONE round-trip (perf root cause #7 — this is the per-read latency floor under every
+    // authenticated endpoint, and the DB is remote, so each avoided round-trip is real milliseconds × every
+    // scoped query). Previously two: a `SET LOCAL ROLE` statement plus a set_config SELECT.
+    //
+    // `role` is an ordinary GUC — `SET [LOCAL] ROLE x` is defined as assigning it — so
+    // `set_config('role', 'leadwolf_app', true)` is equivalent to `SET LOCAL ROLE leadwolf_app` and can ride
+    // along in the same SELECT. (The previous comment here asserted it "cannot be parameterised or merged into
+    // a SELECT"; that is only true of the `SET` *statement* syntax, not of the underlying parameter.)
+    //
+    // Target-list evaluation order is not guaranteed by Postgres, which is safe here: these are three
+    // independent GUC assignments, none reads another, and all three are in effect once the statement returns
+    // — before `fn` issues any query. Setting `role` mid-statement cannot lock the others out either, since
+    // `app.current_*` are custom placeholder GUCs that any role may set.
+    //
+    // Everything else is unchanged: still transaction-LOCAL (is_local = true, so it reverts at COMMIT and is
+    // RDS-Proxy/PgBouncer-safe), still the non-BYPASSRLS app role so RLS is enforced even on a privileged base
+    // connection, still NULLIF-fail-closed, and tenant/workspace values stay BOUND parameters (no concat). The
+    // role name stays a literal to match the previous behaviour exactly — env.DATABASE_APP_ROLE is not consulted
+    // here today, and wiring it in is a separate change.
+    //
+    // The isolation itests are what prove the role actually took effect: masterGraphIsolation asserts
+    // leadwolf_app is denied (SQLSTATE 42501) on the master_* tables and roleModel asserts platform_staff is
+    // permission-denied — both of which the RLS-bypassing owner would pass, so they fail loudly if the role
+    // assignment ever silently stops applying.
     if (scope.workspaceId) {
       await tx.execute(
-        sql`SELECT set_config('app.current_tenant_id', ${scope.tenantId}, true),
+        sql`SELECT set_config('role', 'leadwolf_app', true),
+                   set_config('app.current_tenant_id', ${scope.tenantId}, true),
                    set_config('app.current_workspace_id', ${scope.workspaceId}, true)`,
       );
     } else {
       // No workspace scope: set only the tenant GUC (workspace GUC stays unset, exactly as before).
-      await tx.execute(sql`SELECT set_config('app.current_tenant_id', ${scope.tenantId}, true)`);
+      await tx.execute(
+        sql`SELECT set_config('role', 'leadwolf_app', true),
+                   set_config('app.current_tenant_id', ${scope.tenantId}, true)`,
+      );
     }
     return fn(tx);
   });
