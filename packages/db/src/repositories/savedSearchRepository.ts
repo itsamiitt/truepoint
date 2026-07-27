@@ -6,7 +6,7 @@
 // `filters` is the persisted contactQuery blob; it is stored/returned as JSON verbatim (never SQL).
 
 import type { ContactQuery, SavedSearchVisibility } from "@leadwolf/types";
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { savedSearches } from "../schema/savedSearches.ts";
 
@@ -72,6 +72,31 @@ export const savedSearchRepository = {
       )
       .limit(1);
     return rows[0] ? toRow(rows[0]) : null;
+  },
+
+  /** The same visibility rule as `findById`, for MANY ids in one round-trip — keyed by id so the caller can
+   *  look each one up. Exists because the dynamic-list index resolved its backing searches one at a time
+   *  inside a held transaction: N lists meant N sequential round-trips before any counting started. Ids the
+   *  caller may not see are simply absent from the map, exactly as `findById` returns null for them. */
+  async findManyByIds(
+    tx: Tx,
+    ids: string[],
+    callerUserId: string,
+  ): Promise<Map<string, SavedSearchRow>> {
+    if (ids.length === 0) return new Map();
+    const rows = await tx
+      .select()
+      .from(savedSearches)
+      .where(
+        and(
+          inArray(savedSearches.id, ids),
+          or(
+            eq(savedSearches.visibility, "workspace"),
+            eq(savedSearches.ownerUserId, callerUserId),
+          ),
+        ),
+      );
+    return new Map(rows.map((r) => [r.id as string, toRow(r)]));
   },
 
   /**

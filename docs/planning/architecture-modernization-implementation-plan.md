@@ -630,11 +630,23 @@ process up to Caddy.
   per-view aggregate scan **despite a `data_quality_snapshots` table already existing** — wire the worker
   refresh. Same for burn-by-day.
 
-- [ ] **C-3.3 · Facet counts in one pass.** `searchRepository.ts:438-459` +
+- [x] **C-3.3 · Facet counts in one pass.** `searchRepository.ts:438-459` +
   `accountSearchRepository.ts:264-346` run one full GROUP-BY aggregate scan **per facet, sequentially, per
   request** (8 facets = 8 re-executions of the whole WHERE, ILIKE legs and account join included), and
   select-all does an exact uncapped `COUNT(*)`. Move to `GROUPING SETS`, cache, and switch to estimated
   counts past a threshold.
+  **shipped, both halves.** Facets whose own term filter is not active share an identical WHERE (each facet's
+  WHERE differs only by excluding its own filter), so they collapse into one `GROUPING SETS` pass; only the
+  actively-filtered ones keep a query. `grouping(expr)` separates a real NULL from "not in this row's set",
+  which the shared WHERE makes impossible to express as the old per-facet `expr IS NOT NULL`; `row_number()`
+  over the grouping-set bitmask reproduces the per-facet top-50 that came from the per-query LIMIT.
+  **Two accounts facets cannot join the batch, and the reasons are worth keeping:** `technology` counts
+  unnested jsonb through a LATERAL (not one-row-per-account), and `employee_band` is a CASE carrying bound
+  parameters — `GROUPING SETS` must repeat the expression, and re-rendering re-binds those params under new
+  placeholder numbers so Postgres raises 42803 against the selected expression. That is the same trap the
+  existing `GROUP BY 1` comment documents. Eight scans become one plus at most two.
+  **Not done here:** the caching and the estimated-count-past-a-threshold half, which both depend on C-3.1's
+  cache tier; the uncapped select-all `COUNT(*)` is untouched.
 
 - [ ] **C-3.4 · Flip the import v2 pipeline on.** CSV/**XLSX** is parsed synchronously on the API event loop
   (blocking the single Bun loop for all concurrent users) and the **job payload carries the parsed rows**
@@ -710,12 +722,32 @@ process up to Caddy.
   these three reads, and `contactChannels.readcutover.itest.ts:220` asserts the gate-off `hasEmail`, which is
   exactly the derivation that moved from `r.emailEnc != null` to the SQL presence column.
 
-- [ ] **C-3.12 · List counts + the activity write-amplification trigger.** `member_count` counter column
+- [x] **C-3.12 · List counts + the activity write-amplification trigger.** `member_count` counter column
   instead of counting every membership row per sidebar render (`listRepository.ts:220-235`); batch the
   dynamic-list N+1 (`packages/core/src/prospect/lists.ts:187-203` — a saved-search fetch + filtered
   `COUNT(*)` per dynamic list, serially, inside one held transaction); convert
   `rls/activity.sql:14-24`'s per-row AFTER-INSERT contact UPDATE to a statement-level trigger with
   transition tables (today bulk email-event ingest = one contact UPDATE per row + hot-row lock contention).
+  **shipped, all three — but the counts one deliberately NOT as a counter column.**
+  - *Trigger:* now `FOR EACH STATEMENT` with a `NEW TABLE` transition table, aggregating `max(occurred_at)`
+    per contact first. The row-level version did N single-row `UPDATE contacts` per bulk insert and, when
+    several rows shared a contact (the normal case — opens/clicks arrive batched per contact), re-updated the
+    same row once per event, taking the lock and leaving another dead tuple each time. Semantics unchanged:
+    newest-wins, and the `<` guard still stops a backfilled older activity regressing the cache. CI proves
+    both — a new multi-row single-statement test asserting each contact lands on ITS OWN max, and the
+    pre-existing no-regression test.
+  - *Dynamic-list N+1:* `listLists` did a saved-search fetch plus a filtered `COUNT(*)` per dynamic list,
+    sequentially, inside one held transaction — N lists serialised 2N network waits while holding a pooled
+    connection. Now two round-trips total: `savedSearchRepository.findManyByIds` (same visibility rule as
+    `findById`) and `searchRepository.countContactsBatchTx` (a `UNION ALL` of the same per-query counts).
+    Postgres still evaluates one aggregate per query; what collapses is the waiting, which is what dominated.
+  - *Counts:* the item asked for a denormalised `member_count`. **Rejected in favour of a correlated
+    index-only count.** The old query was not an N+1 — it was one `LEFT JOIN list_members … GROUP BY`, which
+    reads every membership row the workspace owns on every sidebar render, so its cost tracks total
+    memberships. A correlated `count(*)` per list is served by the existing `list_id`-leading indexes
+    (`uniq_list_members_list_contact`, `idx_list_members_list_added_at`), so cost tracks the number of LISTS
+    (tens) instead. That gets the same win without a counter trigger on every membership write, a backfill, or
+    the standing risk of a drifted counter showing users a wrong number with nothing to reconcile against.
 
 ---
 

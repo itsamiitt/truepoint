@@ -422,6 +422,35 @@ export const searchRepository = {
   },
 
   /**
+   * Match totals for MANY queries in ONE round-trip, keyed by the caller's key — a UNION ALL of the same
+   * per-query counts `countContactsTx` computes individually.
+   *
+   * Postgres still evaluates one aggregate per query; what collapses is the round-trips. That is the part
+   * that hurt: the dynamic-list index counted each list separately and sequentially inside a single held
+   * transaction, so N lists serialised N network waits (and held a pooled connection for all of them) before
+   * the page could return. Latency there is dominated by the round-trip, not the scans.
+   */
+  async countContactsBatchTx(
+    tx: Tx,
+    items: ReadonlyArray<{ key: string; query: ContactQuery }>,
+    opts: SearchReadOpts = {},
+  ): Promise<Map<string, number>> {
+    if (items.length === 0) return new Map();
+    const parts = items.map(
+      (it) => sql`
+        SELECT ${it.key}::text AS k, count(*)::int AS n
+        FROM ${contacts}
+        LEFT JOIN ${accounts} ON ${ACCOUNT_JOIN_LIVE}
+        WHERE ${buildWhere(it.query, opts)}`,
+    );
+    const rows = (await tx.execute(sql.join(parts, sql` UNION ALL `))) as unknown as Array<{
+      k: string;
+      n: number;
+    }>;
+    return new Map(rows.map((r) => [r.k, Number(r.n)]));
+  },
+
+  /**
    * Resolve a query to the matching workspace-visible contact ids (the select-all-across-search → bulk-op
    * bridge): same filters/owner-scoping as searchContacts, sliced to `limit` ids in the stable search order
    * (created_at desc, id desc). The caller passes BULK_SELECTION_CAP as the limit so a runaway "select all"
