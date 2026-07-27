@@ -29,7 +29,10 @@ function browser() {
     now: () => clock,
     tabId,
   });
-  return { tab, posted, advance: (ms: number) => (clock += ms), raw: map };
+  const advance = (ms: number): void => {
+    clock += ms;
+  };
+  return { tab, posted, advance, raw: map };
 }
 
 describe("tryAcquireRefreshLock", () => {
