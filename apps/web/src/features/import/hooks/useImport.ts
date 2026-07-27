@@ -1,8 +1,15 @@
 // useImport.ts — view state for running an async import: it enqueues via api.postImport (which returns a job
 // ref, NOT the summary), then POLLS api.getImportJob until the job settles, exposing an idle → submitting →
 // processing → done/failed lifecycle. Holds no business logic (the pipeline runs server-side in
-// packages/core); the queued→settled view-model decision lives in the pure ../importJob policy. Polling
-// timers are torn down on unmount and at the start of every new run so nothing leaks or double-fires.
+// packages/core); the queued→settled view-model decision lives in the pure ../importJob policy.
+//
+// A mutation that yields a job id, plus a query keyed on that id. The monotonic run token this used to carry
+// exists because the id is only known after the POST returns — and it becomes unnecessary here: a new run is
+// a new id, so it is a new cache entry, and a superseded run's poll cannot commit over the current one no
+// matter when it resolves. Same for the manual timer teardown; RQ stops polling an unmounted query.
+//
+// Terminal is decided by the MAPPED phase, never the raw status: a "completed" job whose summary has not
+// materialized yet maps to `processing`, so polling continues rather than freezing on a null summary.
 "use client";
 
 import type {
@@ -12,7 +19,8 @@ import type {
   ImportSummary,
   SourceName,
 } from "@leadwolf/types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { getImportJob, postImport } from "../api";
 import {
   IDLE_VIEW_MODEL,
@@ -22,6 +30,7 @@ import {
   viewModelFromError,
   viewModelFromJob,
 } from "../importJob";
+import { importKeys } from "../keys";
 
 export interface RunArgs {
   file: File;
@@ -54,88 +63,53 @@ export interface UseImport {
 }
 
 export function useImport(): UseImport {
-  const [vm, setVm] = useState<ImportViewModel>(IDLE_VIEW_MODEL);
-  // The active poll timer. A ref (not state) so cleanup never depends on a re-render, and so a stale run's
-  // timer can be cancelled the instant a new run (or unmount) happens.
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Monotonic run token: every run bumps it, and only the latest run is allowed to commit state. This makes
-  // an in-flight poll/post from a superseded run a no-op even if its timer/promise already resolved.
-  const runIdRef = useRef(0);
+  // The job being followed. Client state: which run this hook is watching, not something the server holds.
+  const [jobId, setJobId] = useState<string | null>(null);
 
-  const clearTimer = useCallback(() => {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
+  const submit = useMutation({
+    mutationFn: postImport,
+    onSuccess: (ref) => setJobId(ref.jobId),
+    // A new run supersedes the previous job even if the POST fails — otherwise the old job would keep polling
+    // underneath a failed submit and report ITS outcome as this run's.
+    onMutate: () => setJobId(null),
+  });
+
+  const job = useQuery({
+    queryKey: importKeys.detail(jobId ?? ""),
+    enabled: jobId !== null,
+    queryFn: () => getImportJob(jobId as string),
+    refetchInterval: (q) =>
+      q.state.data && isTerminalPhase(viewModelFromJob(q.state.data).phase)
+        ? false
+        : POLL_INTERVAL_MS,
+    retry: MAX_CONSECUTIVE_POLL_ERRORS - 1,
+  });
+
+  const vm: ImportViewModel = (() => {
+    if (submit.isPending) return { phase: "submitting", jobId: null, summary: null, error: null };
+    if (submit.isError) {
+      return viewModelFromError(
+        submit.error instanceof Error ? submit.error.message : "Import failed.",
+      );
     }
-  }, []);
-
-  // Tear the poll loop down on unmount (and bump the run token so any in-flight async work is ignored).
-  useEffect(() => {
-    return () => {
-      runIdRef.current++;
-      clearTimer();
-    };
-  }, [clearTimer]);
-
-  const run = useCallback(
-    (args: RunArgs): void => {
-      clearTimer();
-      const runId = ++runIdRef.current;
-      const isCurrent = () => runId === runIdRef.current;
-      setVm({ phase: "submitting", jobId: null, summary: null, error: null });
-
-      // `errorStreak` counts CONSECUTIVE failed polls so a single blip doesn't kill a still-running job. No
-      // attempt ceiling — the loop follows a durable job to its terminal state (G11).
-      const poll = async (jobId: string, errorStreak: number): Promise<void> => {
-        if (!isCurrent()) return;
-        try {
-          const job = await getImportJob(jobId);
-          if (!isCurrent()) return;
-          const next = viewModelFromJob(job);
-          setVm(next);
-          // Terminal is decided by the MAPPED phase, never the raw status: a "completed" job whose summary
-          // hasn't materialized yet maps to `processing`, so we keep polling instead of freezing on a null.
-          if (isTerminalPhase(next.phase)) return;
-          timerRef.current = setTimeout(() => void poll(jobId, 0), POLL_INTERVAL_MS);
-        } catch (e) {
-          if (!isCurrent()) return;
-          if (errorStreak + 1 >= MAX_CONSECUTIVE_POLL_ERRORS) {
-            setVm(
-              viewModelFromError(
-                e instanceof Error ? e.message : "Could not check import status.",
-                jobId,
-              ),
-            );
-            return;
-          }
-          // Transient blip — keep the user in `processing` and retry on the next tick.
-          timerRef.current = setTimeout(() => void poll(jobId, errorStreak + 1), POLL_INTERVAL_MS);
-        }
-      };
-
-      void (async () => {
-        try {
-          const ref = await postImport(args);
-          if (!isCurrent()) return;
-          setVm({ phase: "processing", jobId: ref.jobId, summary: null, error: null });
-          await poll(ref.jobId, 0);
-        } catch (e) {
-          if (!isCurrent()) return;
-          setVm(viewModelFromError(e instanceof Error ? e.message : "Import failed."));
-        }
-      })();
-    },
-    [clearTimer],
-  );
-
-  const busy = vm.phase === "submitting" || vm.phase === "processing";
+    if (jobId === null) return IDLE_VIEW_MODEL;
+    if (job.isError) {
+      return viewModelFromError(
+        job.error instanceof Error ? job.error.message : "Could not check import status.",
+        jobId,
+      );
+    }
+    // Between the POST landing and the first poll answering there is no job row yet, but the run is real.
+    if (!job.data) return { phase: "processing", jobId, summary: null, error: null };
+    return viewModelFromJob(job.data);
+  })();
 
   return {
     status: vm.phase,
     jobId: vm.jobId,
     summary: vm.summary,
     error: vm.error,
-    busy,
-    run,
+    busy: vm.phase === "submitting" || vm.phase === "processing",
+    run: (args: RunArgs) => submit.mutate(args),
   };
 }
