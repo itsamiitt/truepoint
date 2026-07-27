@@ -17,6 +17,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@leadwolf/app-shell": "workspace:*",
+        "@leadwolf/auth-client": "workspace:*",
         "@leadwolf/types": "workspace:*",
         "@leadwolf/ui": "workspace:*",
         "geist": "1.3.1",
@@ -108,6 +109,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@leadwolf/app-shell": "workspace:*",
+        "@leadwolf/auth-client": "workspace:*",
         "@leadwolf/types": "workspace:*",
         "@leadwolf/ui": "workspace:*",
         "geist": "1.3.1",
@@ -164,6 +166,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@leadwolf/app-shell": "workspace:*",
+        "@leadwolf/auth-client": "workspace:*",
         "@leadwolf/types": "workspace:*",
         "@leadwolf/ui": "workspace:*",
         "@tanstack/react-query": "^5.90.0",
@@ -234,6 +237,13 @@
         "jose": "5.9.6",
         "rate-limiter-flexible": "5.0.4",
       },
+      "devDependencies": {
+        "typescript": "5.7.2",
+      },
+    },
+    "packages/auth-client": {
+      "name": "@leadwolf/auth-client",
+      "version": "0.0.0",
       "devDependencies": {
         "typescript": "5.7.2",
       },
@@ -580,6 +590,8 @@
     "@leadwolf/auth": ["@leadwolf/auth@workspace:packages/auth"],
 
     "@leadwolf/auth-app": ["@leadwolf/auth-app@workspace:apps/auth"],
+
+    "@leadwolf/auth-client": ["@leadwolf/auth-client@workspace:packages/auth-client"],
 
     "@leadwolf/config": ["@leadwolf/config@workspace:packages/config"],
 

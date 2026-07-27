@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@leadwolf/auth-client": "workspace:*",
     "@leadwolf/app-shell": "workspace:*",
     "@leadwolf/types": "workspace:*",
     "@leadwolf/ui": "workspace:*",
