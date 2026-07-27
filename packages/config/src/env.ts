@@ -112,6 +112,19 @@ export const appEnvSchema = z
     // right number depends on the host's connection budget and how many replicas share it, and neither is
     // knowable here. Default 10 keeps existing behaviour exactly.
     DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+    // The OWNER pool, sized separately and deliberately SMALL (E-6.3).
+    //
+    // Splitting tenant traffic onto its own pool without this would have quietly multiplied the connection
+    // budget: owner and app at DB_POOL_MAX each, plus the Forge pool, is up to 25 connections per process
+    // where it used to be 10. Against a default `max_connections` of 100 — tighter on managed Postgres — a
+    // few replicas of api + workers would exhaust the server, turning an isolation improvement into an
+    // outage.
+    //
+    // Small is correct rather than merely cheap: this pool serves the LOW-concurrency privileged paths —
+    // audited admin reads, the DSAR fan-out, ER promotion, platform-audit writes, and the COPY staging
+    // connection (whose import queue runs at concurrency 1). Tenant traffic, the actual hot path, has
+    // DB_POOL_MAX to itself.
+    DB_OWNER_POOL_MAX: z.coerce.number().int().positive().default(4),
     // Runtime `statement_timeout`, in milliseconds. Migrations set one; the runtime pool never has, so a
     // runaway query on a request path can run unbounded.
     //

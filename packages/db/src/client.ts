@@ -29,7 +29,13 @@ import * as schema from "./schema/index.ts";
 // killing the second; that needs the per-surface pool split E-6.3/E-6.6 describe.
 const PREPARE = !env.DB_POOLED;
 
-const poolOptions: Parameters<typeof postgres>[1] = { max: env.DB_POOL_MAX, prepare: PREPARE };
+// The OWNER pool: privileged/platform paths only, and sized SMALL (DB_OWNER_POOL_MAX, default 4). Tenant
+// traffic moved to its own pool below, so leaving this at DB_POOL_MAX would have multiplied the per-process
+// connection budget from 10 to 25 rather than redistributing it — see the config comment for the arithmetic.
+const poolOptions: Parameters<typeof postgres>[1] = {
+  max: env.DB_OWNER_POOL_MAX,
+  prepare: PREPARE,
+};
 if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
   poolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
 }

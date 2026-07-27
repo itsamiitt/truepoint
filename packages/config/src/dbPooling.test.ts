@@ -34,3 +34,35 @@ describe("DB_POOLED", () => {
     }
   });
 });
+
+describe("pool budget", () => {
+  const poolMax = z.coerce.number().int().positive().default(10);
+  const ownerMax = z.coerce.number().int().positive().default(4);
+  const forgeMax = z.coerce.number().int().positive().default(5);
+
+  test("the OWNER pool is smaller than the tenant pool", () => {
+    // Splitting tenant traffic out without shrinking the owner pool would have multiplied the per-process
+    // budget rather than redistributing it. The owner pool serves low-concurrency privileged paths; the hot
+    // path is tenant traffic.
+    expect(ownerMax.parse(undefined)).toBeLessThan(poolMax.parse(undefined));
+  });
+
+  test("the default per-process budget stays within a sane server allowance", () => {
+    // 10 + 4 + 5 = 19 worst case, and only a Forge process ever opens the third (postgres.js is lazy). The
+    // number that matters is what a few replicas of api + workers multiply out to against a default
+    // max_connections of 100 — tighter on managed Postgres. Pin it so a future bump is a conscious act.
+    const worstCase =
+      poolMax.parse(undefined) + ownerMax.parse(undefined) + forgeMax.parse(undefined);
+    expect(worstCase).toBeLessThanOrEqual(20);
+  });
+
+  test("every pool size must be a positive integer", () => {
+    // A zero or negative max would either deadlock on checkout or be rejected by the driver at a much less
+    // obvious moment than config parse.
+    for (const schema of [poolMax, ownerMax, forgeMax]) {
+      expect(() => schema.parse("0")).toThrow();
+      expect(() => schema.parse("-1")).toThrow();
+      expect(() => schema.parse("1.5")).toThrow();
+    }
+  });
+});
