@@ -316,7 +316,10 @@ export const retentionClassMeta: Record<RetentionV1Class, RetentionClassMeta> = 
         .limit(batchSize);
       const deleted = await reader
         .delete(activities)
-        .where(inArray(activities.id, expired))
+        // The cutoff is repeated here, not just in the id sub-select: `activities` is partitioned by month
+        // (0085), and a delete keyed only on `id` carries no partition-key predicate, so Postgres scans EVERY
+        // month to find rows the sub-select already located in the oldest few.
+        .where(and(lt(activities.occurredAt, cutoff), inArray(activities.id, expired)))
         .returning({ id: activities.id });
       return deleted.length;
     },

@@ -2,14 +2,26 @@
 // interaction (sends, opens, replies, calls, meetings, notes) in one append-style stream; closed enums
 // mirror packages/types activity.ts. contacts.last_activity_at is a CACHE of the newest occurred_at,
 // maintained by the trigger in rls/activity.sql.
-// NOTE: 03 §12/05 §10 target monthly range-partitioning; plain table until volume warrants.
+// PARTITIONED by month on occurred_at (E-6.4, migration 0085). Two consequences visible here: the primary key
+// is (id, occurred_at) — a partitioned table's unique constraints must include the partition key — and any
+// bulk DELETE should carry an occurred_at predicate so Postgres can prune to the relevant months instead of
+// scanning every one. Nothing depends on `id` alone being unique (no inbound foreign keys).
 
 import { sql } from "drizzle-orm";
-import { check, index, jsonb, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  check,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 import { tenants, users, workspaces } from "./auth.ts";
 import { contacts } from "./contacts.ts";
 
-const id = () => uuid("id").primaryKey().default(sql`uuid_generate_v7()`);
+const id = () => uuid("id").notNull().default(sql`uuid_generate_v7()`);
 const tenantId = () =>
   uuid("tenant_id")
     .notNull()
@@ -38,6 +50,8 @@ export const activities = pgTable(
     occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    // Composite because the table is partitioned on occurred_at (0085); see the header.
+    pk: primaryKey({ columns: [t.id, t.occurredAt] }),
     // The timeline read path: newest-first per contact within a workspace (05 §10).
     byContactRecency: index("idx_activities_ws_contact_occurred").on(
       t.workspaceId,
