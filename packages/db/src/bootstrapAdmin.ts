@@ -45,8 +45,11 @@ export async function provisionBootstrapAdmin(
     sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bootstrap_admin boolean NOT NULL DEFAULT false`,
   );
   await db.execute(sql`
+    -- Must match rls/platform.sql exactly: PARTITIONED by month with a composite key (E-6.4). If this ran
+    -- first with the old unpartitioned shape, IF NOT EXISTS would then make rls/platform.sql a silent no-op
+    -- and the table would stay unpartitioned forever on any database bootstrapped this way.
     CREATE TABLE IF NOT EXISTS platform_audit_log (
-      id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+      id uuid NOT NULL DEFAULT uuid_generate_v7(),
       actor_user_id uuid NOT NULL,
       action text NOT NULL,
       target_type text,
@@ -55,8 +58,14 @@ export async function provisionBootstrapAdmin(
       workspace_id uuid,
       ip text,
       metadata jsonb,
-      occurred_at timestamptz NOT NULL DEFAULT now()
-    )
+      occurred_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (id, occurred_at)
+    ) PARTITION BY RANGE (occurred_at)
+  `);
+  // A partitioned parent with NO partitions rejects every insert, so the catch-all goes in immediately rather
+  // than waiting for rls/platform.sql — this path can run before it.
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS platform_audit_log_default PARTITION OF platform_audit_log DEFAULT
   `);
 
   // Resolve THE bootstrap identity by its stable marker FIRST (not by email), so rotating

@@ -13,8 +13,12 @@
 -- blanket table GRANT to leadwolf_app is additionally REVOKED in the applyMigrations grants phase
 -- (defence-in-depth). UPDATE/DELETE raise for EVERY role via the append-only trigger. Idempotent.
 
+-- PARTITIONED by month on occurred_at (E-6.4). The primary key is composite because a partitioned table's
+-- unique constraints must include the partition key; nothing references this table, so that is a widening.
+-- On a FRESH database this file creates it partitioned from the start; on an EXISTING one migration 0086
+-- converts it before this file runs. Both paths converge on the same shape.
 CREATE TABLE IF NOT EXISTS platform_audit_log (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v7(),
+  id uuid NOT NULL DEFAULT uuid_generate_v7(),
   actor_user_id uuid NOT NULL,
   action text NOT NULL,
   target_type text,
@@ -23,8 +27,22 @@ CREATE TABLE IF NOT EXISTS platform_audit_log (
   workspace_id uuid,
   ip text,
   metadata jsonb,
-  occurred_at timestamptz NOT NULL DEFAULT now()
-);
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (id, occurred_at)
+) PARTITION BY RANGE (occurred_at);
+
+-- The catch-all plus the sweep's horizon. Without a partition covering "now" the FIRST audit write fails, and
+-- an audit trail that refuses writes is worse than one that is slow — withPlatformTx would start erroring.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_class WHERE relname = 'platform_audit_log_default'
+       AND relnamespace = 'public'::regnamespace
+  ) THEN
+    CREATE TABLE platform_audit_log_default PARTITION OF platform_audit_log DEFAULT;
+  END IF;
+  PERFORM ensure_month_partitions('platform_audit_log'::regclass, 3);
+END $$;
 
 -- Index the customer-visible-access-log read (list-plan/07 §5): the customer's staff-access view filters
 -- `WHERE tenant_id = $1 ... ORDER BY occurred_at DESC`. Without this, that tenant-admin read is a full scan +
