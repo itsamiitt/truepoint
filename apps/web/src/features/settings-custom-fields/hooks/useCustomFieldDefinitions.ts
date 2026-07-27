@@ -1,6 +1,9 @@
-// useCustomFieldDefinitions.ts — loads the workspace's custom-field definitions for the settings panel, with a
-// `reload` + create/update actions. A 404/501 maps to available:false (backend not built) → the panel shows
-// an honest empty/disabled state. Presentation state only; the API is authoritative.
+// useCustomFieldDefinitions.ts — the workspace's custom-field definitions for the settings panel, plus the
+// create/update actions. A 404/501 maps to available:false (backend not built) and the panel shows an honest
+// empty/disabled state. Presentation state only; the API is authoritative.
+//
+// create/update invalidate on success, which the previous version did NOT do — they returned the API result
+// and left the panel showing the pre-edit definitions until the caller happened to call reload.
 "use client";
 
 import type {
@@ -8,43 +11,43 @@ import type {
   CustomFieldEntity,
   UpdateCustomFieldRequest,
 } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type DefinitionsFeed, createDefinition, fetchDefinitions, updateDefinition } from "../api";
+import { settingsCustomFieldKeys } from "../keys";
 
 export function useCustomFieldDefinitions(entity: CustomFieldEntity) {
-  const [feed, setFeed] = useState<DefinitionsFeed | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const key = settingsCustomFieldKeys.definitions(entity);
+  const query = useQuery<DefinitionsFeed>({
+    queryKey: key,
+    queryFn: () => fetchDefinitions(entity),
+  });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setFeed(await fetchDefinitions(entity));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load custom fields");
-    } finally {
-      setLoading(false);
-    }
-  }, [entity]);
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: key });
+  };
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const create = useCallback((input: CreateCustomFieldRequest) => createDefinition(input), []);
-  const update = useCallback(
-    (id: string, patch: UpdateCustomFieldRequest) => updateDefinition(id, patch),
-    [],
-  );
+  const create = useMutation({ mutationFn: createDefinition, onSuccess: invalidate });
+  const update = useMutation({
+    mutationFn: (vars: { id: string; patch: UpdateCustomFieldRequest }) =>
+      updateDefinition(vars.id, vars.patch),
+    onSuccess: invalidate,
+  });
 
   return {
-    definitions: feed?.definitions ?? [],
-    available: feed?.available ?? false,
-    error,
-    loading,
-    reload,
-    create,
-    update,
+    definitions: query.data?.definitions ?? [],
+    // Defaults to false, not true: until the feed has loaded the panel must not offer editing it cannot do.
+    available: query.data?.available ?? false,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Could not load custom fields"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    create: (input: CreateCustomFieldRequest) => create.mutateAsync(input),
+    update: (id: string, patch: UpdateCustomFieldRequest) => update.mutateAsync({ id, patch }),
   };
 }

@@ -1,54 +1,48 @@
-// useSendingDomains.ts — presentation state for the sending-domains list + the per-row verify action (M12,
-// email-planning/13 P0). Vanilla React; per-row in-flight `verifyingId` so the verify button disables just
-// that row; quiet reload after add/verify. NOT TanStack Query (14 §3).
+// useSendingDomains.ts — the sending-domains list plus the per-row verify action (M12, email-planning/13 P0).
+// `verifyingId` disables just the row being verified, and a successful verify re-reads the list from the
+// server — whether a domain now counts as verified is the server's answer, not something to infer locally.
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchSendingDomains, verifySendingDomain } from "../api";
-import type { SendingDomainView } from "../types";
+import { settingsMailboxKeys } from "../keys";
 
 export function useSendingDomains() {
-  const [domains, setDomains] = useState<SendingDomainView[]>([]);
-  const [available, setAvailable] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [verifyingId, setVerifyingId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const qc = useQueryClient();
+  const key = settingsMailboxKeys.sendingDomains();
+  const query = useQuery({ queryKey: key, queryFn: fetchSendingDomains });
 
-  const reload = useCallback(async () => {
-    setError(null);
-    try {
-      const res = await fetchSendingDomains();
-      setDomains(res.items);
-      setAvailable(res.available);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load sending domains");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const verify = useMutation({
+    mutationFn: verifySendingDomain,
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+  });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const verify = useCallback(
-    async (id: string): Promise<boolean> => {
-      setVerifyingId(id);
-      setActionError(null);
+  return {
+    domains: query.data?.items ?? [],
+    available: query.data?.available ?? true,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : "Failed to load sending domains"
+      : null,
+    loading: query.isPending,
+    reload: () => {
+      void query.refetch();
+    },
+    verify: async (id: string): Promise<boolean> => {
       try {
-        await verifySendingDomain(id);
-        await reload();
+        await verify.mutateAsync(id);
         return true;
-      } catch (e) {
-        setActionError(e instanceof Error ? e.message : "Could not verify the domain");
+      } catch {
+        // Reported through actionError below — a failed verify is a row-level problem, not a page error.
         return false;
-      } finally {
-        setVerifyingId(null);
       }
     },
-    [reload],
-  );
-
-  return { domains, available, error, loading, reload, verify, verifyingId, actionError };
+    verifyingId: verify.isPending ? (verify.variables ?? null) : null,
+    actionError: verify.error
+      ? verify.error instanceof Error
+        ? verify.error.message
+        : "Could not verify the domain"
+      : null,
+  };
 }

@@ -8,6 +8,8 @@ export const settingsTenantKeys = {
   ssoConfig: () => ["settings-tenant", "sso-config"] as const,
   /** The organization profile + its workspaces and members. */
   organization: () => ["settings-tenant", "organization"] as const,
-  /** Verified domains and their claim tokens. */
-  identity: () => ["settings-tenant", "identity"] as const,
+  /** Claimed domains (Tenant ▸ Security ▸ Domains & SCIM). */
+  domains: () => ["settings-tenant", "domains"] as const,
+  /** SCIM tokens (masked; the plaintext is returned once at creation and never cached). */
+  scimTokens: () => ["settings-tenant", "scim-tokens"] as const,
 };

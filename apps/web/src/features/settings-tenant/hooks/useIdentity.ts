@@ -1,11 +1,15 @@
-// useIdentity.ts — loads + mutates the Tenant ▸ Security ▸ Domains & SCIM surface (domain claiming + SCIM
-// tokens) with loading/error/reload + an explicit `forbidden` flag for callers without the security_admin/
-// owner org role (the API returns 403). Mirrors useAuthPolicy. Mutations re-fetch the affected list so the
-// table reflects the server (never optimistic — the IDs/timestamps are server-assigned).
+// useIdentity.ts — the Tenant ▸ Security ▸ Domains & SCIM surface (domain claiming + SCIM tokens), with an
+// explicit `forbidden` flag for callers without the security_admin/owner org role (the API returns 403).
+// Mutations re-read the affected list from the server rather than patching — never optimistic, because the
+// IDs, verification state and timestamps are all server-assigned.
+//
+// Domains and tokens are SEPARATE queries. The previous version loaded them together but then had two bespoke
+// partial-reload helpers so a domain action would not re-fetch the tokens; as two keys that falls out for
+// free, and a slow token list no longer delays rendering the domains.
 "use client";
 
-import type { DomainView, ScimTokenCreated, ScimTokenView } from "@leadwolf/types";
-import { useCallback, useEffect, useState } from "react";
+import type { ScimTokenCreated } from "@leadwolf/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   claimDomain,
   createScimToken,
@@ -14,91 +18,57 @@ import {
   revokeScimToken,
   verifyDomain,
 } from "../identityApi";
+import { settingsTenantKeys } from "../keys";
 
 export function useIdentity() {
-  const [domains, setDomains] = useState<DomainView[]>([]);
-  const [tokens, setTokens] = useState<ScimTokenView[]>([]);
-  const [forbidden, setForbidden] = useState(false);
-  const [available, setAvailable] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const qc = useQueryClient();
+  const domainsKey = settingsTenantKeys.domains();
+  const tokensKey = settingsTenantKeys.scimTokens();
 
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setForbidden(false);
-    try {
-      const [d, t] = await Promise.all([fetchDomains(), fetchScimTokens()]);
-      setForbidden(d.forbidden || t.forbidden);
-      setAvailable(d.available && t.available);
-      setDomains(d.domains);
-      setTokens(t.tokens);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load domains & SCIM");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const domains = useQuery({ queryKey: domainsKey, queryFn: fetchDomains });
+  const tokens = useQuery({ queryKey: tokensKey, queryFn: fetchScimTokens });
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const refreshDomains = () => {
+    void qc.invalidateQueries({ queryKey: domainsKey });
+  };
+  const refreshTokens = () => {
+    void qc.invalidateQueries({ queryKey: tokensKey });
+  };
 
-  const reloadDomains = useCallback(async () => {
-    const d = await fetchDomains();
-    setDomains(d.domains);
-  }, []);
+  const claim = useMutation({ mutationFn: claimDomain, onSuccess: refreshDomains });
+  const verify = useMutation({ mutationFn: verifyDomain, onSuccess: refreshDomains });
+  // Returns the one-time plaintext so the panel can surface it once; the LIST is then re-read masked. The
+  // plaintext itself is never written to the cache.
+  const createToken = useMutation({ mutationFn: createScimToken, onSuccess: refreshTokens });
+  const revokeToken = useMutation({ mutationFn: revokeScimToken, onSuccess: refreshTokens });
 
-  const reloadTokens = useCallback(async () => {
-    const t = await fetchScimTokens();
-    setTokens(t.tokens);
-  }, []);
-
-  const claim = useCallback(
-    async (domain: string): Promise<void> => {
-      await claimDomain(domain);
-      await reloadDomains();
-    },
-    [reloadDomains],
-  );
-
-  const verify = useCallback(
-    async (id: string): Promise<void> => {
-      await verifyDomain(id);
-      await reloadDomains();
-    },
-    [reloadDomains],
-  );
-
-  // Returns the one-time plaintext so the panel can surface it once; the list is then re-fetched (masked).
-  const createToken = useCallback(
-    async (name: string): Promise<ScimTokenCreated> => {
-      const created = await createScimToken(name);
-      await reloadTokens();
-      return created;
-    },
-    [reloadTokens],
-  );
-
-  const revokeToken = useCallback(
-    async (id: string): Promise<void> => {
-      await revokeScimToken(id);
-      await reloadTokens();
-    },
-    [reloadTokens],
-  );
+  const error = domains.error ?? tokens.error;
 
   return {
-    domains,
-    tokens,
-    forbidden,
-    available,
-    error,
-    loading,
-    reload,
-    claim,
-    verify,
-    createToken,
-    revokeToken,
+    domains: domains.data?.domains ?? [],
+    tokens: tokens.data?.tokens ?? [],
+    // Either endpoint refusing means the surface is forbidden; either being unbuilt means it is unavailable.
+    forbidden: (domains.data?.forbidden ?? false) || (tokens.data?.forbidden ?? false),
+    available: (domains.data?.available ?? true) && (tokens.data?.available ?? true),
+    error: error
+      ? error instanceof Error
+        ? error.message
+        : "Failed to load domains & SCIM"
+      : null,
+    loading: domains.isPending || tokens.isPending,
+    reload: () => {
+      void domains.refetch();
+      void tokens.refetch();
+    },
+    claim: async (domain: string): Promise<void> => {
+      await claim.mutateAsync(domain);
+    },
+    verify: async (id: string): Promise<void> => {
+      await verify.mutateAsync(id);
+    },
+    createToken: (name: string): Promise<ScimTokenCreated> => createToken.mutateAsync(name),
+    revokeToken: async (id: string): Promise<void> => {
+      await revokeToken.mutateAsync(id);
+    },
   };
 }
