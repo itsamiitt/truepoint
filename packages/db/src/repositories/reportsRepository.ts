@@ -4,16 +4,22 @@
 // every number wrong above that. Counting is all that moves: labels, conversion percentages and bar maxima
 // stay client-side in the existing pure rollups.
 //
-// Every query runs inside ONE withTenantTx, so RLS supplies the tenant + workspace predicate and none of the
+// Every query runs inside ONE withReplicaTx, so RLS supplies the tenant + workspace predicate and none of the
 // SQL below carries a workspace filter of its own — the same discipline as every other repository here. One
 // transaction rather than one per aggregate, because they are rendered together: counts read across separate
 // transactions could disagree with each other if a reveal lands mid-render.
+//
+// The REPLICA pool (E-6.3), not the tenant one, and this is the read that qualifies rather than a blanket
+// "reads go to the replica". A dashboard aggregate cannot be made less correct by a replica that is seconds
+// behind: it is a trailing-window rollup, nobody reads it expecting to see the reveal they just made, and the
+// heavy scans it runs are exactly what should not be competing with the request path for connections. With
+// REPLICA_DATABASE_URL unset it is the same database, so today only the connection budget differs.
 //
 // Day bucketing takes the viewer's IANA zone through `date_trunc(field, source, timezone)` (PG16). That is
 // what makes this a faithful replacement rather than a behaviour change: the charts have always used the
 // viewer's local day, and a UTC-only aggregate would have shifted every one of them for non-UTC users.
 import { and, eq, gte, sql } from "drizzle-orm";
-import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
+import { type TenantScope, type Tx, withReplicaTx } from "../client.ts";
 import { contactReveals } from "../schema/billing.ts";
 import { contacts } from "../schema/contacts.ts";
 
@@ -48,7 +54,7 @@ function rows<T extends Record<string, unknown>>(result: unknown): T[] {
 export const reportsRepository = {
   /** Every rollup for one filter combination, in a single scoped transaction. */
   async summary(scope: TenantScope, filters: ReportsSummaryFilters): Promise<ReportsSummaryRows> {
-    return withTenantTx(scope, async (tx: Tx) => {
+    return withReplicaTx(scope, async (tx: Tx) => {
       const since = filters.since;
       const memberId = filters.memberId;
 

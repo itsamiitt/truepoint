@@ -2,6 +2,7 @@
 // are the ONLY data-access layer; callers import them from here, never the schema or client internals.
 export {
   db,
+  withReplicaTx,
   withTenantTx,
   withPrivilegedTx,
   withErTx,

@@ -122,9 +122,44 @@ if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
 }
 const appClient = postgres(appConnectionUrl(), appPoolOptions);
 
+/**
+ * The REPLICA read pool (E-6.3).
+ *
+ * `REPLICA_DATABASE_URL` is optional and defaults to the primary, so an unconfigured deployment behaves
+ * exactly as it does today — same database, same rows. What it gains immediately is a separate CONNECTION
+ * BUDGET: a heavy dashboard aggregate no longer competes with the request path for the tenant pool's
+ * connections. Pointing it at a real replica later moves the load off the primary with no code change.
+ *
+ * It authenticates as the SAME app role as the tenant pool, so RLS is enforced identically — a replica is
+ * not a privilege boundary and must not become one by accident.
+ */
+function replicaConnectionUrl(): string {
+  const base = env.REPLICA_DATABASE_URL ?? env.DATABASE_URL;
+  if (!env.DATABASE_APP_ROLE_PASSWORD) return base;
+  try {
+    const url = new URL(base);
+    url.username = env.DATABASE_APP_ROLE;
+    url.password = env.DATABASE_APP_ROLE_PASSWORD;
+    return url.toString();
+  } catch {
+    return base;
+  }
+}
+
+const replicaPoolOptions: Parameters<typeof postgres>[1] = {
+  max: env.REPLICA_DB_POOL_MAX,
+  prepare: PREPARE,
+};
+if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
+  replicaPoolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
+}
+const replicaClient = postgres(replicaConnectionUrl(), replicaPoolOptions);
+
 export const db = drizzle(client, { schema });
 /** Drizzle bound to the tenant pool (leadwolf_app when configured). Used ONLY by withTenantTx. */
 const appDb = drizzle(appClient, { schema });
+/** Drizzle bound to the replica pool. Same schema; the connection budget and, once configured, the host. */
+const replicaDb = drizzle(replicaClient, { schema });
 /** Drizzle bound to the Forge pool. Same schema; only the connection budget differs. */
 const forgeDb = drizzle(forgeClient, { schema });
 export type Db = typeof db;
@@ -148,6 +183,9 @@ export async function closeDb(): Promise<void> {
   await Promise.all([
     client.end({ timeout: 5 }),
     appClient.end({ timeout: 5 }),
+    // The replica pool drains too: leaving it open keeps a worker or test process alive, which is exactly
+    // what this function exists to prevent.
+    replicaClient.end({ timeout: 5 }),
     forgeClient.end({ timeout: 5 }),
   ]);
 }
@@ -240,6 +278,41 @@ export interface TenantScope {
  * where the pool logs in as the owner). Role and GUCs are transaction-local (RDS-Proxy-safe), and are applied
  * in a single round-trip. 03 §9, architecture-contract §6.
  */
+/**
+ * Like `withTenantTx`, but on the REPLICA pool (E-6.3) — for reads whose contract already tolerates staleness.
+ *
+ * Identical RLS setup, deliberately: same non-BYPASSRLS app role, same transaction-local GUCs, same
+ * NULLIF-fail-closed policies. A replica is not a privilege boundary and must not become one by accident.
+ *
+ * WHICH READS BELONG HERE is the whole question, and it is not "read-only ones". A replica is behind the
+ * primary by definition, so any surface that must show a user their own write immediately — a list right
+ * after a create, a balance right after a spend — belongs on `withTenantTx`. The safe set is reads that
+ * ALREADY advertise staleness: a dashboard aggregate behind a 30s cache cannot be made less correct by a
+ * replica that is seconds behind, because its own contract already permits more.
+ *
+ * With `REPLICA_DATABASE_URL` unset this is the same database as the primary, so today it changes nothing but
+ * which connection budget the query draws from.
+ */
+export async function withReplicaTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return replicaDb.transaction(async (tx) => {
+    // The same single-round-trip RLS setup as withTenantTx — see the long note there for why `role` rides
+    // along in the SELECT and why transaction-local matters under a pooling proxy.
+    if (scope.workspaceId) {
+      await tx.execute(
+        sql`SELECT set_config('role', 'leadwolf_app', true),
+                   set_config('app.current_tenant_id', ${scope.tenantId}, true),
+                   set_config('app.current_workspace_id', ${scope.workspaceId}, true)`,
+      );
+    } else {
+      await tx.execute(
+        sql`SELECT set_config('role', 'leadwolf_app', true),
+                   set_config('app.current_tenant_id', ${scope.tenantId}, true)`,
+      );
+    }
+    return fn(tx);
+  });
+}
+
 export async function withTenantTx<T>(scope: TenantScope, fn: (tx: Tx) => Promise<T>): Promise<T> {
   // The TENANT pool (leadwolf_app when configured) — see appDb. The set_config below still runs: it is what
   // pins the tenant/workspace GUCs, and setting `role` to the role we are already logged in as is a no-op

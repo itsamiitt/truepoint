@@ -39,6 +39,7 @@ describe("pool budget", () => {
   const poolMax = z.coerce.number().int().positive().default(10);
   const ownerMax = z.coerce.number().int().positive().default(4);
   const forgeMax = z.coerce.number().int().positive().default(5);
+  const replicaMax = z.coerce.number().int().positive().default(5);
 
   test("the OWNER pool is smaller than the tenant pool", () => {
     // Splitting tenant traffic out without shrinking the owner pool would have multiplied the per-process
@@ -48,21 +49,44 @@ describe("pool budget", () => {
   });
 
   test("the default per-process budget stays within a sane server allowance", () => {
-    // 10 + 4 + 5 = 19 worst case, and only a Forge process ever opens the third (postgres.js is lazy). The
-    // number that matters is what a few replicas of api + workers multiply out to against a default
-    // max_connections of 100 — tighter on managed Postgres. Pin it so a future bump is a conscious act.
+    // 10 + 4 + 5 + 5 = 24 worst case, and postgres.js is LAZY — a process opens only the pools it actually
+    // uses, so no single process reaches that. The number that matters is what a few replicas of api +
+    // workers multiply out to against a default max_connections of 100, tighter on managed Postgres. Pin it
+    // so a future pool split is a conscious act rather than a silent multiplication.
     const worstCase =
-      poolMax.parse(undefined) + ownerMax.parse(undefined) + forgeMax.parse(undefined);
-    expect(worstCase).toBeLessThanOrEqual(20);
+      poolMax.parse(undefined) +
+      ownerMax.parse(undefined) +
+      forgeMax.parse(undefined) +
+      replicaMax.parse(undefined);
+    expect(worstCase).toBeLessThanOrEqual(25);
   });
 
   test("every pool size must be a positive integer", () => {
     // A zero or negative max would either deadlock on checkout or be rejected by the driver at a much less
     // obvious moment than config parse.
-    for (const schema of [poolMax, ownerMax, forgeMax]) {
+    for (const schema of [poolMax, ownerMax, forgeMax, replicaMax]) {
       expect(() => schema.parse("0")).toThrow();
       expect(() => schema.parse("-1")).toThrow();
       expect(() => schema.parse("1.5")).toThrow();
     }
+  });
+});
+
+describe("replica pool (E-6.3)", () => {
+  const replicaUrl = z.string().url().optional();
+  const replicaMax = z.coerce.number().int().positive().default(5);
+
+  test("the URL is OPTIONAL — unset means the primary, i.e. the same rows as today", () => {
+    // This is what makes the change inert on an unconfigured deployment: same database, separate pool. The
+    // connection-budget isolation lands immediately; pointing it at a real replica later is config, not code.
+    expect(replicaUrl.parse(undefined)).toBeUndefined();
+    expect(() => replicaUrl.parse("not-a-url")).toThrow();
+  });
+
+  test("its budget is small, like Forge's, and for the same reason", () => {
+    // Dashboard aggregates are batch-shaped work that can queue; a request cannot. The tenant pool keeps the
+    // larger share.
+    expect(replicaMax.parse(undefined)).toBe(5);
+    expect(replicaMax.parse(undefined)).toBeLessThan(10);
   });
 });
