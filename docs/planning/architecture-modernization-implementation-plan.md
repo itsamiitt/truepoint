@@ -1239,6 +1239,30 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   `provider_calls`, `source_imports`, `credit_ledger` (zero `PARTITION BY` in the repo today). Monthly range
   partitions; the partition key is already in the hot predicates. Gives retention real detach-and-archive
   mechanics. **check:** whether Neon permits `pg_partman`; if not, hand-rolled monthly partitions.
+  **Feasibility PROVEN against the real Postgres 16, not assumed** —
+  `packages/db/test/partitioningFeasibility.itest.ts` asserts each property in CI rather than leaving it to a
+  reading of the docs. What it establishes:
+  - **The `activities` transition-table trigger is NOT a blocker.** `rls/activity.sql` maintains the
+    `contacts.last_activity_at` cache with an `AFTER INSERT ... REFERENCING NEW TABLE ... FOR EACH STATEMENT`
+    trigger, and transition tables were long restricted on partitioned tables — which would have made this a
+    rewrite of the write path before the table could be partitioned at all. On PG16 they are ACCEPTED. The
+    test pins that, so a downgrade to a server that restricts them fails loudly instead of at the migration.
+  - **`id` alone stops being the primary key**: "unique constraint on partitioned table must include all
+    partitioning columns". The key becomes `(id, occurred_at)`.
+  - **That composite propagates through every inbound FK.** A referencing table cannot keep
+    `uuid REFERENCES parent (id)` — it must carry BOTH columns. This is the real cost, and it is not evenly
+    distributed: `activities`, `email_events`, `platform_audit_log` and `provider_calls` have no inbound FKs,
+    so their conversion is local. `source_imports` is referenced by three tables
+    (`account_children`, `contact_channels`, `lists`) and `credit_ledger` by `subscriptions.grant_ledger_id`
+    — partitioning those two means adding a column to four tables and to every write path that sets the
+    reference, on a financial ledger whose FK is a real integrity constraint.
+  - **A row outside every partition is REJECTED** (`23514`). So partitioning cannot ship as a migration alone:
+    it needs either a DEFAULT partition (proven to accept the row, at the cost of a scan on every future
+    ATTACH) or a job that creates next month ahead of time. Without one, writes fail on a CALENDAR boundary
+    rather than under load — an operational component that has to exist first.
+  **Remaining before this can be done:** the partition-maintenance job (and its deploy), plus the unresolved
+  `pg_partman`-on-Neon question above. The four FK-free tables are the tractable first slice; the two with
+  inbound FKs are a separate decision, not a mechanical follow-on.
 - [ ] **E-6.5 · OTel end-to-end** api → workers → db, on top of A-0.4's request IDs.
 - [ ] **E-6.6 · Forge isolation** — `FORGE_DATABASE_URL` + its own login role and pool (today `withForgeTx`
   shares the customer request path's `max: 10` pool, so there is no capacity or failure isolation), plus a

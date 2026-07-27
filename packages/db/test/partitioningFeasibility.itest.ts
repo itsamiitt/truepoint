@@ -6,9 +6,10 @@
 // them wrong is the kind of thing that only surfaces the first time a migration runs against production:
 //
 //   1. `activities` carries a STATEMENT-level trigger with a transition table (REFERENCING NEW TABLE), which
-//      maintains the contacts.last_activity_at cache. Transition tables have a documented restriction on
-//      partitioned tables — if it holds, converting `activities` means rewriting that cache path, not just
-//      the table.
+//      maintains the contacts.last_activity_at cache. Transition tables were long restricted on partitioned
+//      tables, which would have made converting `activities` a rewrite of that cache path rather than a table
+//      change. On the Postgres 16 we run they are ACCEPTED — asserted below, because that answer is the
+//      difference between "convert the table" and "redesign the write path", and it is version-dependent.
 //   2. Partitioning forces the partition key into every UNIQUE/PRIMARY KEY constraint, so `id` alone stops
 //      being a primary key. Anything with an inbound foreign key therefore drags the composite key into the
 //      referencing tables too.
@@ -62,7 +63,7 @@ describe("E-6.4 · what Postgres permits for monthly range partitions", () => {
       ) PARTITION BY RANGE (occurred_at)
     `);
     expect(idOnly).not.toBeNull();
-    expect(idOnly?.message).toMatch(/unique constraint.*partition key|partition key/i);
+    expect(idOnly?.message).toMatch(/must include all partitioning columns/i);
 
     // The composite is accepted, which is the shape any conversion has to adopt.
     const composite = await attempt(`
@@ -124,7 +125,7 @@ describe("E-6.4 · what Postgres permits for monthly range partitions", () => {
     expect(anyDate).toBeNull();
   });
 
-  test("the activities cache trigger's TRANSITION TABLE is the real blocker", async () => {
+  test("a TRANSITION TABLE trigger is accepted on a partitioned table (so activities is not blocked)", async () => {
     // The exact shape rls/activity.sql installs: an AFTER INSERT ... FOR EACH STATEMENT trigger with
     // REFERENCING NEW TABLE, which is what makes the contacts.last_activity_at update one aggregate per
     // statement instead of one UPDATE per row.
@@ -155,20 +156,12 @@ describe("E-6.4 · what Postgres permits for monthly range partitions", () => {
         FOR EACH STATEMENT EXECUTE FUNCTION part_probe.probe_fn()
     `);
 
-    // Whichever way this lands, the plan should say so on evidence. If it errors, converting `activities`
-    // means rewriting the last_activity_at cache path first; if it succeeds, this restriction has been
-    // lifted in the server we actually run and the conversion is cheaper than assumed.
-    if (withTransition) {
-      expect(withTransition.message).toMatch(/transition table/i);
-    } else {
-      expect(withTransition).toBeNull();
-    }
-    // Recorded either way for the plan note; the assertion above is what fails if the answer changes.
-    console.info(
-      `[E-6.4] transition-table trigger on a partitioned table: ${
-        withTransition ? `REJECTED — ${withTransition.message}` : "ACCEPTED"
-      }`,
-    );
+    // Postgres 16 accepts this. It is asserted rather than tolerated because the whole shape of the
+    // `activities` conversion depends on it: rejected, and the contacts.last_activity_at cache would have to
+    // be rebuilt (per-row triggers, or moving the aggregate into the write path) BEFORE the table could be
+    // partitioned at all. Pinning it means a downgrade to a server that restricts transition tables fails
+    // here, loudly, instead of at the first migration against it.
+    expect(withTransition).toBeNull();
   });
 
   test("an inbound foreign key must reference the WHOLE key, not just id", async () => {
