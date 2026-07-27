@@ -154,7 +154,20 @@ export async function closeDb(): Promise<void> {
  * this caller read anything", so requiring a scope would make it untestable at boot and wrong at every other
  * time. It lives here rather than in a consuming app so raw SQL stays inside @leadwolf/db. */
 export async function pingDb(): Promise<void> {
-  await db.execute(sql`SELECT 1`);
+  // BOTH pools that serve requests, not just the owner one.
+  //
+  // This probed only `db` (the owner pool) until the tenant pool was split out, at which point it became a
+  // blind spot rather than a check: tenant traffic runs on the app pool, so a bad app credential — a password
+  // that never converged, a revoked role — would leave /ready green while 100% of customer requests failed
+  // authentication. A readiness probe that cannot see the connection serving the traffic is not a readiness
+  // probe.
+  //
+  // Run in parallel so adding the second check costs no extra latency against the caller's probe budget.
+  //
+  // The FORGE pool is deliberately excluded. It serves the Forge plane, not this process's request path, and
+  // postgres.js connects lazily — so an api process that never calls `withForgeTx` has no Forge connection to
+  // test, and failing its readiness on one would tie the customer surface to a background pipeline's health.
+  await Promise.all([db.execute(sql`SELECT 1`), appDb.execute(sql`SELECT 1`)]);
 }
 
 /**
