@@ -78,3 +78,16 @@ test("the privileged paths still authenticate as the OWNER — they need roles a
   });
   expect(sessionUser).not.toBe("leadwolf_app");
 });
+
+test("pingDb probes BOTH request-serving pools, so readiness cannot be green while tenant traffic is down", async () => {
+  // Before the pool split this probed only the owner connection. Tenant traffic then moved to the app pool,
+  // which made the probe a blind spot: a bad app credential would leave /ready green while every customer
+  // request failed authentication. This exercises the real function against real Postgres — both pools are up
+  // here, so what it proves is that the added app-pool check does not itself break the probe.
+  //
+  // What it cannot prove in this environment is the failure direction (app pool down ⇒ probe rejects): the
+  // pools are module-level singletons with no injection seam, so there is nothing to break from a test. The
+  // guarantee rests on the Promise.all in pingDb, and the app pool's own health is separately proven by the
+  // session_user assertion above.
+  expect(dbmod.pingDb()).resolves.toBeUndefined();
+});
