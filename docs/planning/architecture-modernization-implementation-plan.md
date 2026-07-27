@@ -328,7 +328,16 @@ optimization because optimizing a broken path is wasted work.
   other's, in-memory entries expire, tokens reach the metering row, quarantined outcomes are still billed, and
   the Redis adapter fails closed / sets its TTL once / cannot leave a negative counter.
 
-- [ ] **F-0.7 · Adopt `@anthropic-ai/sdk` for the extraction adapter** (or at minimum add
+- [x] **F-0.7 · Adopt `@anthropic-ai/sdk` for the extraction adapter** (took the "or at minimum" path, and
+  deliberately: adding an SDK dependency to a package kept dependency-light buys retry/backoff machinery the
+  BullMQ worker already provides. Shipped all four minimums. (1) `AbortSignal.timeout(45s)` — without it
+  `withDeadline`.s 60s rejection abandoned the promise but left the SOCKET open, so the request kept running
+  and kept BILLING with nobody waiting on it; 45s sits under the deadline so the failure is attributable here.
+  (2) The error BODY is logged — discarding it is exactly why F-0.2 shipped undiagnosed, since the adapter knew
+  why the API refused and threw it away. (3) `retry-after` surfaced in that log. (4) 4xx-vs-429/5xx branching:
+  every status used to collapse to `ai_unavailable`, which the worker treats as RETRYABLE, so a permanently
+  malformed request retried to the DLQ and every attempt looked like a provider outage rather than our bug.
+  429/5xx stay retryable; other 4xx are terminal and quarantine. 3 new tests.) **superseded:** (or at minimum add
   `AbortSignal.timeout`, 429/5xx-vs-4xx branching, `retry-after`, and error-body logging).
   **files:** `packages/integrations/src/forgeAnthropicExtraction.ts:27-31,157` · **needs:** F-0.2
   **why:** the hand-rolled `fetch` has no timeout/abort (so `withDeadline`'s 60 s rejection leaves the
@@ -749,7 +758,7 @@ process up to Caddy.
 
 ## 6. Phase 3 — Caching tier, async unblock, frontend data layer
 
-- [ ] **C-3.1 · Build the Redis read-through cache tier.** It does not exist: Redis serves only BullMQ and
+- [x] **C-3.1 · Build the Redis read-through cache tier.** It does not exist: Redis serves only BullMQ and
   rate-limiting today. Implement exactly the typed tiers already specified in
   `docs/planning/18-scalability-performance.md §5` (entitlements ≤60 s invalidate-on-write; reveal-state /
   contact summary medium invalidate-on-write via outbox; search facet counts medium, bounded staleness OK;
