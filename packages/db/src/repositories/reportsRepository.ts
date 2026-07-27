@@ -118,8 +118,13 @@ export const reportsRepository = {
       // FULL OUTER JOIN because the two sides are different populations: a member can own contacts without
       // having spent (assigned or inherited rows) and can have spent on contacts they do not own. An inner
       // join would silently drop whichever member sits on only one side — which is most of them.
-      const sinceContacts = since ? sql`AND created_at >= ${since}` : sql``;
-      const sinceReveals = since ? sql`AND revealed_at >= ${since}` : sql``;
+      // ISO string + an explicit cast, not the Date itself. Drizzle's typed builders know a column's type and
+      // serialise a Date for it; the raw `sql` path has no such context, so postgres.js receives a Date where
+      // it expects a string and throws ERR_INVALID_ARG_TYPE at bind time. Only the FILTERED queries hit it,
+      // which is why it survived until an itest exercised a date range.
+      const sinceIso = since?.toISOString() ?? null;
+      const sinceContacts = sinceIso ? sql`AND created_at >= ${sinceIso}::timestamptz` : sql``;
+      const sinceReveals = sinceIso ? sql`AND revealed_at >= ${sinceIso}::timestamptz` : sql``;
       const ownerFilter = memberId ? sql`AND owner_user_id = ${memberId}` : sql``;
       const revealerFilter = memberId ? sql`AND revealed_by_user_id = ${memberId}` : sql``;
 
