@@ -14,6 +14,7 @@ function app(over: { overview?: () => Promise<unknown> } = {}) {
     caps: { maxEnvelopeBytes: 1, maxRecordBytes: 1, endpointAllowlist: [] },
   };
   const bff: BffDeps = {
+    audit: async () => {},
     resolveStaff: (c) => {
       const userId = c.req.header("x-staff");
       return userId ? { userId, capabilities: ["data:read"] } : null;

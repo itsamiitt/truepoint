@@ -284,7 +284,14 @@ export interface CaptureListRow {
  *  consent, content-hash, capturer and tenant columns never cross this seam (staff pipeline view).
  *  raw_captures.status never advances past 'landed' today, so the display status is derived from the
  *  parse + quarantine lanes rather than passed through. */
+/** Hard ceiling on a single page, regardless of what a caller asks for. The default of 50 already bounds
+ *  today's callers, but the limit is a parameter, and this read fans out into three follow-up queries keyed by
+ *  the returned ids — so a large value multiplies. Clamping in the repository means the bound cannot be lost
+ *  by a future caller threading a user-supplied number through. */
+const MAX_CAPTURE_PAGE = 200;
+
 export async function listRecentCaptures(tx: Tx, limit = 50): Promise<CaptureListRow[]> {
+  const capped = Math.max(1, Math.min(MAX_CAPTURE_PAGE, Math.trunc(limit)));
   const captures = await tx
     .select({
       id: rawCaptures.id,
@@ -295,7 +302,7 @@ export async function listRecentCaptures(tx: Tx, limit = 50): Promise<CaptureLis
     })
     .from(rawCaptures)
     .orderBy(desc(rawCaptures.ingestedAt), desc(rawCaptures.id))
-    .limit(limit);
+    .limit(capped);
   if (captures.length === 0) return [];
   const ids = captures.map((c) => c.id);
 

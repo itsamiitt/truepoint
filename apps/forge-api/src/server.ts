@@ -27,6 +27,7 @@ import {
   listRecentCaptures,
   listReviewTasks,
   promoteVerifiedRecord,
+  recordPlatformEvent,
   userRepository,
   withForgeTx,
 } from "@leadwolf/db";
@@ -84,6 +85,17 @@ const app = createForgeApi({
   },
   bff: {
     resolveStaff,
+    // ADR-0032 trail for staff cross-tenant reads. Runs on the OWNER connection via recordPlatformEvent — it
+    // cannot join the readers' transaction, which is `leadwolf_forge` and has no grant on the public-schema
+    // audit table.
+    audit: (entry) =>
+      recordPlatformEvent({
+        actorUserId: entry.actorUserId,
+        action: entry.action,
+        targetType: "forge_console",
+        ip: entry.ip,
+        metadata: entry.metadata,
+      }),
     readers: {
       // DB-backed (Phase 3), each read under its own withForgeTx — the shape is the console's contract (13 §5):
       // the OverviewSummary the console renders (count tiles + the recent-captures feed), NOT the raw

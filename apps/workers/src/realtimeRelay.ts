@@ -21,7 +21,17 @@ export function startRealtimeRelay(publisher: Redis): void {
       await db.transaction(async (tx) => {
         const events = await eventOutboxRepository.claimBatch(tx, RELAY_BATCH);
         if (events.length === 0) return;
-        const publishedIds: string[] = [];
+        // PIPELINED, not awaited one at a time. The publishes must stay INSIDE this transaction —
+        // `claimBatch` is a bare SELECT ... FOR UPDATE SKIP LOCKED that does not change `status`, so the row
+        // lock held until COMMIT is the *only* thing stopping a second relay instance from claiming the same
+        // still-'pending' rows and publishing them twice. Moving the publish out would need a real claimed
+        // state plus a reclaim timeout, which is a schema change, not a refactor.
+        //
+        // What was actually costing us is that the loop awaited each PUBLISH in turn, so a full batch held a
+        // transaction — and one of the pool's 10 connections — across up to 200 sequential Redis round-trips.
+        // A pipeline sends all of them in one write and waits once, so the transaction is open for a single
+        // round-trip regardless of batch size, with the double-publish guarantee untouched.
+        const pipeline = publisher.pipeline();
         for (const ev of events) {
           const msg: RealtimeEvent = {
             id: ev.id,
@@ -29,10 +39,20 @@ export function startRealtimeRelay(publisher: Redis): void {
             workspaceId: ev.workspaceId,
             payload: ev.payload,
           };
-          await publisher.publish(workspaceEventChannel(ev.workspaceId), JSON.stringify(msg));
-          publishedIds.push(ev.id);
+          pipeline.publish(workspaceEventChannel(ev.workspaceId), JSON.stringify(msg));
         }
-        await eventOutboxRepository.markPublished(tx, publishedIds);
+        const results = await pipeline.exec();
+        // `exec()` resolves null if the pipeline itself was aborted, and otherwise reports per-command errors
+        // WITHOUT rejecting. Either case must throw: rolling back leaves the rows 'pending' and unlocked, so
+        // the next tick redelivers them. That is at-least-once — the same guarantee the previous code gave
+        // when a mid-loop publish threw, and consumers already dedupe on the event id.
+        if (results === null) throw new Error("realtime relay: publish pipeline aborted");
+        const failure = results.find(([err]) => err !== null)?.[0];
+        if (failure) throw failure;
+        await eventOutboxRepository.markPublished(
+          tx,
+          events.map((ev) => ev.id),
+        );
       });
     } catch (e) {
       log.error("realtime relay: drain failed", {

@@ -47,6 +47,16 @@ export const platformAuditAction = z.enum([
   // AUTH — self-service session revoke whose current session carries no tenant (tenant-less branch of the
   // session.revoked dual-sink; the tenant branch lands on audit_log).
   "session.revoked",
+  // TruePoint Forge operator console (ADR-0047) — staff CROSS-TENANT reads. The Forge data plane is shared,
+  // not tenant-scoped, so every one of these reads spans tenants by construction; the console says as much
+  // with a standing "Cross-tenant view" badge. They are reads, and they are audited for the same reason the
+  // apps/admin reads above are (admin.read_audit_log, admin.list_dsars): under ADR-0032 the auditable event is
+  // a staff member reaching across tenants, not whether the statement mutated anything.
+  "forge.read_overview",
+  "forge.read_review_tasks",
+  "forge.read_parsers",
+  "forge.read_sync_status",
+  "forge.read_captures",
 ]);
 
 export type PlatformAuditAction = z.infer<typeof platformAuditAction>;

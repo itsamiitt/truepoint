@@ -310,11 +310,35 @@ optimization because optimizing a broken path is wasted work.
   slices with `[byte[]]`: `List.AddRange` rejects a boxed `Object[]`, and a partial failure there truncated
   `promptGuard.ts` to 35 bytes before `git checkout` restored it.
 
-- [ ] **F-0.9 · Audit-log cross-tenant staff reads.** All five `/bff/*` readers run under `withForgeTx`,
+- [x] **F-0.9 · Audit-log cross-tenant staff reads.** All five `/bff/*` readers run under `withForgeTx`,
   which writes **no** `platform_audit_log` row, while the console renders a standing "Cross-tenant view"
   badge. ADR-0032 requires the audit row in the same transaction. Add keyset cursor + hard cap to
   `listRecentCaptures` (unbounded today).
   **files:** `apps/forge-api/src/server.ts:84-105,103`
+  **shipped.** All five gated reads now write a row through an injected `BffAudit` (kept a dependency so the
+  BFF stays unit-testable, matching its existing injected-readers design), with five new closed-vocabulary
+  actions — `forge.read_{overview,review_tasks,parsers,sync_status,captures}`. Auditing *reads* is the house
+  rule, not a new one: `apps/api` has always audited `admin.read_audit_log`, `admin.list_dsars`, and the
+  billing reads the same way, because under ADR-0032 the auditable event is a staff member reaching across
+  tenants, not whether the statement mutated anything. The Forge console was the outlier.
+  **why it is NOT in the same transaction, contrary to the item as written.** It cannot be. The readers run as
+  `leadwolf_forge`, which by design owns only the `forge` schema and holds no grant on public-schema tables —
+  so it cannot INSERT into `platform_audit_log` at all (verified against the role's grants in
+  `applyMigrations`). The row is therefore written first, on the owner connection, in its own transaction.
+  That keeps the property the same-transaction rule exists to provide — no read happens without its trail,
+  since a failed audit write throws before the read runs — and leaves only over-logging (a logged read whose
+  query then failed) as the residual, which is the safe direction for an audit log.
+  **the "unbounded" premise was wrong.** `listRecentCaptures` already defaulted to 50 and always applied
+  `.limit()`, so no caller could scan the table. What it lacked was a ceiling that survives a future caller
+  threading a user-supplied number through — this read fans out into three follow-up queries keyed by the
+  returned ids, so a large value multiplies. Added `MAX_CAPTURE_PAGE = 200` clamped inside the repository.
+  **keyset cursor deliberately not added.** With the page hard-capped and no caller passing a limit, a cursor
+  today would be API surface with no consumer: `/bff/captures` returns the newest page and the console has no
+  paging UI to drive it. It becomes worth building with that UI — at which point the cursor and the console
+  change land together and can actually be verified. Noted rather than silently dropped.
+  **verify:** 6 new tests — each route audits under its own action with the capability and path in metadata,
+  401 and 403 write nothing, `/bff/me` is not audited (it reads only the caller's own identity), and a failing
+  audit sink prevents the read from running at all.
 
 - [ ] **F-0.10 · Retire the orphaned second write path into `master_*`.** ADR-0047 replaced the HTTP push
   with in-process `withErTx`, but `POST /api/v1/master-sync` + `syncPrincipal` remain live — two write paths
@@ -614,9 +638,22 @@ process up to Caddy.
   `REALTIME_SSE_ENABLED` flips. One shared psubscribe client per process + in-process fanout + 8 s
   heartbeat + per-user connection caps. **needs:** A-0.1 (idleTimeout).
 
-- [ ] **C-3.7 · Move the Redis PUBLISH out of the open DB transaction.**
+- [x] **C-3.7 · Move the Redis PUBLISH out of the open DB transaction.**
   `apps/workers/src/realtimeRelay.ts:21-36` holds the transaction (and its pooled connection) across N
   network calls to Redis per batch.
+  **shipped — but NOT as written, and the difference matters.** Moving the publishes outside the transaction
+  would break the relay's core guarantee. `claimBatch` is a bare `SELECT … FOR UPDATE SKIP LOCKED` that does
+  **not** change `status`, so the row lock held until COMMIT is the only thing stopping a second relay instance
+  from claiming the same still-`pending` rows and publishing them a second time. Publishing outside the
+  transaction would need a real claimed state plus a reclaim timeout — a schema change, not a refactor, and
+  one that trades a correctness guarantee for latency.
+  The actual cost was that the loop `await`ed each PUBLISH in turn, so a full batch held the transaction — and
+  one of the pool's 10 connections — across up to 200 sequential Redis round-trips. Pipelining sends all of
+  them in one write and waits once, so the transaction stays open for a single round-trip regardless of batch
+  size, with the double-publish guarantee untouched. `exec()` needs care: it resolves `null` on an aborted
+  pipeline and reports per-command errors *without* rejecting, so both are turned into a throw — rolling back
+  leaves the rows `pending` and unlocked for the next tick, which is the same at-least-once behaviour the
+  previous code had when a mid-loop publish threw.
 
 - [ ] **C-3.8 · Finish the TanStack Query migration.** RQ v5 is installed and its provider is mounted, but
   it is used by **only** `import/` and `data-health/`; ~90% of features hand-roll `useState`+`useEffect`

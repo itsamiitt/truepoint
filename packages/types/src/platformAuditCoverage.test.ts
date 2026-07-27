@@ -63,6 +63,14 @@ const WRITTEN = new Set<string>([
   "mfa.failure",
   // AUTH — self-service session revoke by a tenant-less session (auditSessionRevoke platform branch).
   "session.revoked",
+  // F-0.9 — the Forge operator console's five cross-tenant reads (apps/forge-api dashboard-bff). The Forge
+  // data plane is shared rather than tenant-scoped, so these reads span tenants by construction; each writes
+  // its row via recordPlatformEvent BEFORE the read runs.
+  "forge.read_overview",
+  "forge.read_review_tasks",
+  "forge.read_parsers",
+  "forge.read_sync_status",
+  "forge.read_captures",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;
