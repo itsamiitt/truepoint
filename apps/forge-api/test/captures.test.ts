@@ -104,9 +104,82 @@ describe("POST /v1/captures", () => {
     expect(res.status).toBe(403);
   });
 
-  test("oversize record → 413", async () => {
-    const res = await post(baseDeps(), envelope({ records: [record({ byteSize: 999 })] }));
+  test("oversize record → 413, measured from the PAYLOAD", async () => {
+    // maxRecordBytes is 500. This used to pass `byteSize: 999` with a 2-byte payload and assert a 413 — i.e.
+    // it asserted that the server believed the client's number. It now measures, so the test has to send a
+    // genuinely oversized payload. (The inverse — a huge payload declaring a small byteSize — is the actual
+    // attack, and is covered below.)
+    const big = `"${"x".repeat(600)}"`;
+    const res = await post(baseDeps(), envelope({ records: [record({ rawPayload: big })] }));
     expect(res.status).toBe(413);
+    expect(await res.json()).toMatchObject({ error: "record_too_large" });
+  });
+
+  test("a LYING byteSize cannot smuggle an oversized record past the cap (F-0.1)", async () => {
+    // The defect: byteSize was a plain z.number() and was what the per-record 413 read, so `byteSize: 0` on a
+    // multi-megabyte payload cleared the cap outright — and then landed the whole thing inline in JSONB,
+    // because the object-store threshold read the same field.
+    const big = `"${"x".repeat(600)}"`;
+    const res = await post(
+      baseDeps(),
+      envelope({ records: [record({ rawPayload: big, byteSize: 0 })] }),
+    );
+    expect(res.status).toBe(413);
+    expect(await res.json()).toMatchObject({ error: "record_too_large" });
+  });
+
+  test("a LYING envelope size cannot smuggle an oversized batch past the cap", async () => {
+    // maxEnvelopeBytes is 1000. Three 400-byte payloads exceed it, while `size: 1` claims otherwise.
+    const chunk = `"${"y".repeat(400)}"`;
+    const res = await post(
+      baseDeps(),
+      envelope({
+        size: 1,
+        records: [
+          record({ rawPayload: chunk }),
+          record({ rawPayload: chunk }),
+          record({ rawPayload: chunk }),
+        ],
+      }),
+    );
+    expect(res.status).toBe(413);
+    expect(await res.json()).toMatchObject({ error: "envelope_too_large" });
+  });
+
+  test("the byte throttle is charged the REAL size, not the declared one", async () => {
+    // envelope.size also fed the 64MB/min byte throttle, so `size: 1` made a large batch nearly free against
+    // it. The limiter must be told what actually arrived.
+    const charged: Array<{ records: number; bytes: number }> = [];
+    const payload = `"${"z".repeat(100)}"`;
+    const deps = baseDeps({
+      rateLimit: {
+        check: async (_caller: string, records: number, bytes: number) => {
+          charged.push({ records, bytes });
+          return { allowed: true };
+        },
+      },
+    });
+    await post(deps, envelope({ size: 1, records: [record({ rawPayload: payload })] }));
+    expect(charged).toHaveLength(1);
+    expect(charged[0]?.bytes).toBe(Buffer.byteLength(payload, "utf8"));
+  });
+
+  test("an oversized Content-Length is refused before the body is parsed", async () => {
+    // A fast path only — Content-Length is client-declared, so it is advisory. The real enforcement is the
+    // derived-size check above plus Bun's maxRequestBodySize, both pinned to the same cap.
+    let landed = 0;
+    const deps = baseDeps({
+      land: async () => {
+        landed++;
+        return { batchId: "b", accepted: 1, duplicate: 0, rejected: 0 };
+      },
+    });
+    const res = await post(deps, envelope(), {
+      "x-forge-tenant": TENANT,
+      "content-length": "999999",
+    });
+    expect(res.status).toBe(413);
+    expect(landed).toBe(0);
   });
 
   test("endpoint outside the allowlist → 400", async () => {

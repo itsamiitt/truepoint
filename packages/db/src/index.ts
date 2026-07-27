@@ -11,6 +11,7 @@ export {
   recordPlatformEvent,
   type PlatformEventInput,
   closeDb,
+  pingDb,
   type Db,
   type Tx,
   type TenantScope,

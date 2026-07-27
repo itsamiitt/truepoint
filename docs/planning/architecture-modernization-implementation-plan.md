@@ -189,7 +189,7 @@ optimization because optimizing a broken path is wasted work.
 
 ### 3.2 Forge (`apps/forge-api`, `apps/forge-worker`, `packages/forge-core`)
 
-- [ ] **F-0.1 · Derive sizes server-side; never trust client-declared bytes.**
+- [x] **F-0.1 · Derive sizes server-side; never trust client-declared bytes.**
   **files:** `apps/forge-api/src/features/captures/routes.ts:57,60,70`, `packages/types/src/forge.ts:44,72`
   **defect:** `envelope.size` / `record.byteSize` are plain `z.number()` and are what the 20 MB envelope
   413, the 5 MB per-record 413, the 64 MB/min byte throttle, **and** the object-store offload threshold all
@@ -198,6 +198,17 @@ optimization because optimizing a broken path is wasted work.
   (`forge-core/src/ingest.ts:129`).
   **fix:** compute `Buffer.byteLength` per record and sum; treat client values as advisory only.
   **verify:** new unit tests for each cap with a lying `size`.
+  **shipped, in TWO places on purpose.** The route overwrites `size`/`byteSize` with measured UTF-8 lengths
+  before any of its decisions, so the caps and the byte throttle can never read a client number. `landEnvelope`
+  *also* re-derives, immediately beside the `captureHash` call that already re-derives the content hash for the
+  identical reason — that is what makes the object-store threshold and the persisted `byte_size` trustworthy
+  even for a caller that forgot to sanitise. One place would have left the other wrong.
+  **verify:** 5 new tests — a lying `byteSize: 0` on an oversized payload is 413'd rather than accepted, a
+  lying envelope `size: 1` no longer clears the envelope cap, the throttle is charged the real byte count, and
+  in `forge-core` a `byteSize: 0` multi-megabyte payload now offloads to the object store instead of landing
+  inline in JSONB (with the measured size persisted, so cost reporting is not fed a zero either). The existing
+  "oversize record → 413" test had to change: it declared `byteSize: 999` on a 2-byte payload, so it was
+  asserting that the server *believed the client* — it now sends a genuinely oversized payload.
 
 - [x] **F-0.2 · Fix the model/params mismatch that has the AI extract stage 100% dead in prod.**
   **files:** `packages/integrations/src/forgeAnthropicExtraction.ts:132`, `packages/config/src/forge.ts:55`
@@ -227,15 +238,27 @@ optimization because optimizing a broken path is wasted work.
   **fix:** reject `scope ∋ extension` in `resolveStaff`; verify staff routes against `APP_ORIGINS` only.
   **verify:** new test minting an extension-audience token and asserting 403 on `/v1/review/approve`.
 
-- [ ] **F-0.5 · Scope the tolerated `23505`.**
+- [x] **F-0.5 · Scope the tolerated `23505`.**
   **files:** `packages/db/src/applyMigrations.ts:26-33,67-70`
   **defect:** `unique_violation` is tolerated on **every statement of every migration**, so a genuine
   integrity conflict during a backfill is swallowed, the migration is marked applied, and the database is
   left half-migrated with no error.
   **fix:** honour it only for opted-in statements (`-- @tolerate-duplicate`) or seed-only files.
   **verify:** itest that a real unique conflict now aborts the run; full itest sweep unchanged otherwise.
+  **shipped — simpler than planned, and the audit is why.** No opt-in marker was added, because nothing
+  needs one: every INSERT across all 16 seed-bearing migrations is already `ON CONFLICT`-guarded (verified
+  mechanically — no migration file has more `INSERT INTO` occurrences than `ON CONFLICT` clauses), so a
+  replayed seed raises nothing at all and `23505` was pure downside. It is simply **removed** from
+  `ALREADY_EXISTS`; the remaining five codes are all DDL "object already exists", where skipping the
+  statement leaves exactly the state the statement intended — that property is what makes tolerance safe,
+  and a data error never has it. Adding a `-- @tolerate-duplicate` mechanism no caller needs would have
+  been speculative machinery; `ON CONFLICT` in the SQL is the correct idempotency expression and it is
+  visible where a reviewer reads it. The policy is now `isTolerableMigrationError()`, exported and pinned
+  by `packages/db/src/migrationTolerance.test.ts` (4 tests) so re-widening it has to be deliberate. A
+  dedicated itest was **not** added: the tolerance is a pure predicate, and the CI itest template DB is
+  built by `applyMigrations`, so all 92 itests already exercise the changed path on every run.
 
-- [ ] **F-0.6 · Bound Forge LLM spend and record it.**
+- [x] **F-0.6 · Bound Forge LLM spend and record it.**
   **files:** `packages/forge-core/src/extraction.ts:204,283-303`
   **defect:** `budgetKey = ${ctx.jobId}:${ctx.tenantId}` where `jobId` is the `rawCaptureId` — so every
   capture gets a fresh 1000-unit budget and burns 1, making `AI_BUDGET_LIMIT` decorative on a metered,
@@ -244,6 +267,31 @@ optimization because optimizing a broken path is wasted work.
   bills 2 calls against 1 reserved unit.
   **fix:** key on `tenantId` + time window in Redis (`INCR` + TTL, mirroring `forgeRateLimiter`); persist
   token counts; reserve 2 and refund 1.
+  **shipped, all four.** The key is now `aiBudgetKey(tenantId, window)` (a UTC day), so spend aggregates
+  instead of resetting per capture — the limit is reachable and therefore actually a limit. The store became a
+  port with an **async, atomic** shape: `reserve()` returns the POST-increment total, because the old
+  get-then-set is a read-modify-write that two concurrent extractions both win. `forgeAiBudgetStore`
+  (`@leadwolf/integrations`, Redis INCRBY + TTL) is injected into `ProcessorDeps` and wired in the worker's
+  composition root, so the cap holds across replicas rather than per process — the in-memory store bounded one
+  worker, so N workers billed N × the limit. Its entries now also expire, closing the leak (the old map grew
+  one permanent entry per capture). Repair is handled by reserving the worst case (2) and refunding the unused
+  unit once the outcome reports whether repair ran: reserving 1 and discovering the second call afterwards let
+  a tenant whose payloads reliably trigger repair bill double its authorised limit. `latencyMs`/`inputTokens`/
+  `outputTokens` now reach the metering row — the port returned them and `extraction_runs` has had the columns
+  all along, so the spend record was structurally present and always empty; `runRow` also moved to an options
+  object, since it had ended in three interchangeable numbers that every error path passed as `0, 0, 0` and
+  this change added three more.
+  **the one judgement call: it fails CLOSED**, diverging from `forgeRateLimiter` right beside it. That one
+  fails open with the correct reasoning for what it guards — it throttles abuse, abuse is not a security
+  boundary, and a Redis blip must not halt capture. This guards **money**, on a path an outsider triggers by
+  sending a capture, so failing open during an outage silently re-opens the exact unbounded-spend hole the
+  budget exists to close. The costs are not symmetric either: an unavailable budget returns `budget_exceeded`,
+  which PARKS an already-durably-queued job, so a false stop costs delay while a false allow costs an unbounded
+  provider bill.
+  **verify:** 12 new tests — accumulation across captures parks the tenant, one-pass costs 1 and a repaired
+  pass costs 2, a rejected reservation does not consume the budget it was denied, tenants cannot spend each
+  other's, in-memory entries expire, tokens reach the metering row, quarantined outcomes are still billed, and
+  the Redis adapter fails closed / sets its TTL once / cannot leave a negative counter.
 
 - [ ] **F-0.7 · Adopt `@anthropic-ai/sdk` for the extraction adapter** (or at minimum add
   `AbortSignal.timeout`, 429/5xx-vs-4xx branching, `retry-after`, and error-body logging).
@@ -255,13 +303,53 @@ optimization because optimizing a broken path is wasted work.
 - [x] **F-0.8 · Make the injection sanitizer readable again.** A literal NUL byte in the control-char class
   makes the file **binary** to `grep` and invisible to `git grep -I`, so a security-relevant sanitizer cannot
   be reviewed in a diff. **files:** `packages/forge-core/src/extraction.ts:70` · **fix:** write as escapes
-  (`/[ -]/g`).
+  (`/[\u0000-\u001f]/g`).
 
-- [ ] **F-0.9 · Audit-log cross-tenant staff reads.** All five `/bff/*` readers run under `withForgeTx`,
+  **A second instance was found and fixed.** A repo-wide byte scan (all 2618 tracked text files) turned up the
+  same anti-pattern in `packages/core/src/ai/promptGuard.ts:41`: `sanitizeNlQuery`'s control-char class was
+  written in literal bytes — NUL, BS, VT, FF, SO, US, **and DEL** (0x7F is why a first scan that only looked
+  below 0x20 mis-read the set and a byte-level replace failed on a wrong pattern). The class is unchanged in
+  behaviour but now written as escapes covering 0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F, so the set is
+  reviewable; before, any formatter, editor, or copy-paste could have narrowed a prompt-injection control with
+  nothing visible in the diff. Pinned by two new tests in `promptGuard.test.ts` asserting all 32 C0 codes plus
+  DEL are stripped and that printable and non-ASCII text survives. The same scan found and repaired two
+  control bytes written into the prose of **this document** — which is what had made it `grep`-binary and
+  unsearchable for its own work-item IDs. The repo is now at zero stray control/DEL bytes.
+  **Method note, because this recurs:** an escape typed into a tool call is delivered as the real control
+  byte, which is how all three instances were created. Fixing one therefore has to be done at the byte level
+  (read bytes, splice, assert the resulting length, write bytes) — and when splicing in PowerShell, cast the
+  slices with `[byte[]]`: `List.AddRange` rejects a boxed `Object[]`, and a partial failure there truncated
+  `promptGuard.ts` to 35 bytes before `git checkout` restored it.
+
+- [x] **F-0.9 · Audit-log cross-tenant staff reads.** All five `/bff/*` readers run under `withForgeTx`,
   which writes **no** `platform_audit_log` row, while the console renders a standing "Cross-tenant view"
   badge. ADR-0032 requires the audit row in the same transaction. Add keyset cursor + hard cap to
   `listRecentCaptures` (unbounded today).
   **files:** `apps/forge-api/src/server.ts:84-105,103`
+  **shipped.** All five gated reads now write a row through an injected `BffAudit` (kept a dependency so the
+  BFF stays unit-testable, matching its existing injected-readers design), with five new closed-vocabulary
+  actions — `forge.read_{overview,review_tasks,parsers,sync_status,captures}`. Auditing *reads* is the house
+  rule, not a new one: `apps/api` has always audited `admin.read_audit_log`, `admin.list_dsars`, and the
+  billing reads the same way, because under ADR-0032 the auditable event is a staff member reaching across
+  tenants, not whether the statement mutated anything. The Forge console was the outlier.
+  **why it is NOT in the same transaction, contrary to the item as written.** It cannot be. The readers run as
+  `leadwolf_forge`, which by design owns only the `forge` schema and holds no grant on public-schema tables —
+  so it cannot INSERT into `platform_audit_log` at all (verified against the role's grants in
+  `applyMigrations`). The row is therefore written first, on the owner connection, in its own transaction.
+  That keeps the property the same-transaction rule exists to provide — no read happens without its trail,
+  since a failed audit write throws before the read runs — and leaves only over-logging (a logged read whose
+  query then failed) as the residual, which is the safe direction for an audit log.
+  **the "unbounded" premise was wrong.** `listRecentCaptures` already defaulted to 50 and always applied
+  `.limit()`, so no caller could scan the table. What it lacked was a ceiling that survives a future caller
+  threading a user-supplied number through — this read fans out into three follow-up queries keyed by the
+  returned ids, so a large value multiplies. Added `MAX_CAPTURE_PAGE = 200` clamped inside the repository.
+  **keyset cursor deliberately not added.** With the page hard-capped and no caller passing a limit, a cursor
+  today would be API surface with no consumer: `/bff/captures` returns the newest page and the console has no
+  paging UI to drive it. It becomes worth building with that UI — at which point the cursor and the console
+  change land together and can actually be verified. Noted rather than silently dropped.
+  **verify:** 6 new tests — each route audits under its own action with the capability and path in metadata,
+  401 and 403 write nothing, `/bff/me` is not audited (it reads only the caller's own identity), and a failing
+  audit sink prevents the read from running at all.
 
 - [ ] **F-0.10 · Retire the orphaned second write path into `master_*`.** ADR-0047 replaced the HTTP push
   with in-process `withErTx`, but `POST /api/v1/master-sync` + `syncPrincipal` remain live — two write paths
@@ -283,9 +371,16 @@ optimization because optimizing a broken path is wasted work.
   SIGTERM/SIGINT → stop accepting → drain → `closeDb()`.
   **verify:** a 3 MB body gets `413` not an OOM; `docker compose restart api` mid-request completes it.
 
-- [ ] **A-0.2 · Gate `content-length` before parsing in forge-api capture.**
+- [x] **A-0.2 · Gate `content-length` before parsing in forge-api capture.**
   `await c.req.json()` at `captures/routes.ts:44` precedes the 413s at `:57-62`, so a single request forces a
   128 MB read plus a parse of it. **needs:** A-0.1, F-0.1.
+  **the 128 MB half was already closed** earlier in this effort: `server.ts` pins Bun's `maxRequestBodySize` to
+  `ENVELOPE_MAX_BYTES`, so an oversized body is refused at the socket and never reaches the handler — the
+  128 MB default was the actual bypass. Added the `content-length` fast path on top, which still earns its
+  keep: it returns the API's own 413 shape instead of an abrupt transport-level rejection, and it avoids
+  buffering and JSON-parsing up to a full 20 MB body that is already known to be refusable. It is explicitly
+  **advisory** — `Content-Length` is client-declared like everything else here, so the enforcement points
+  remain the socket cap and F-0.1's derived sizes.
 
 - [x] **A-0.3 · Rate-limit forge-api and gate `/metrics`.** `apps/api` applies `rateLimit` to `/api/*`;
   forge-api applies nothing globally, so every BFF read and the promotion write are unthrottled, and
@@ -385,9 +480,46 @@ optimization because optimizing a broken path is wasted work.
   deliberate perf choice — so fix the **IP resolution**, don't move the middleware. Also pipeline the two
   serial Redis hops (rate-limit consume + `isRevoked`) and consider a 5 s in-process negative cache.
 
-- [ ] **L-1.10 · Real readiness probe.** `apps/api/src/app.ts:98` `/health` is a static `{status:"ok"}`, so
+- [x] **L-1.10 · Real readiness probe.** `apps/api/src/app.ts:98` `/health` is a static `{status:"ok"}`, so
   compose marks the API healthy with a dead database. `apps/workers` already has a drain- and Redis-aware
   `/ready` — copy it.
+  **shipped.** New `apps/api/src/readiness.ts` + `/ready`, and the compose healthcheck (and deploy.sh's printed
+  endpoint) now point at it. `/health` deliberately stays pure liveness: coupling liveness to Postgres means one
+  database blip fails every replica's probe on the same interval and the orchestrator recycles the whole fleet,
+  which is strictly worse than shedding traffic. Raw SQL stayed out of the app — the statement is a new
+  `pingDb()` in `@leadwolf/db` (`apps/api` imports drizzle-orm nowhere else, and Bun's declared-deps-only
+  resolution rejected it, which was the right signal).
+  **the design point worth keeping.** Copying the workers' consecutive-failure threshold verbatim would have
+  introduced a startup lie: an orchestrator needs only ONE successful probe to mark a container healthy, and
+  compose has `web`/`admin` gated on `api: service_healthy`, so tolerating the first N failures meant an API
+  booting against a dead database would report ready and take its dependents up with it. The threshold now
+  applies only AFTER the process has served once — before that, any failure is immediately not-ready. That is
+  the difference between hysteresis and a lie: hysteresis protects a replica that has proven it can serve; it
+  must never vouch for one that hasn't. 15 tests cover it, including the two cold-start cases and that a
+  wedged dependency resolves false rather than hanging (a hanging probe is worse than a failing one — the
+  process looks fine until the orchestrator's own timeout fires).
+
+- [x] **L-1.10a · The unit suite is now green in any order (found while verifying the above).** A full
+  `bun test` at this point failed **12** tests that all passed individually — so CI's per-package sharding hid
+  them and any local full run looked broken. All three causes were process-global test state, and none were in
+  the code under test:
+  - `apps/api/src/middleware/rateLimit.test.ts` mocked `@leadwolf/auth` **wholesale**, replacing the module for
+    every other file in the run and breaking the 8 cases in `apps/auth/src/lib/clientIp.test.ts` that exist to
+    verify the real trusted-hop resolver. Rewritten to assert delegation *against the real resolver*
+    (`key === ip:${clientIpFromHeaders(sameHeaders)}`), which is both leak-free and a stronger claim — no
+    reimplementation can satisfy it by accident. A mock of a SHARED function is not a local decision.
+  - `roleGuards.test.ts` likewise returned only three repositories instead of spreading the real module, so
+    `effectivePolicyRepository` vanished for whoever ran alongside it.
+  - `effectivePolicyRoutes.test.ts` pinned `tenantId: "t1"`/`actorUserId: "u1"`, which asserted **test-file
+    ordering**: bun's module mocks are process-global *and* ESM modules are cached, so whichever file imports
+    `settingsRoutes` first (`app.authz.test.ts` imports every router) owns the `authn` mock the router closed
+    over. Now asserted by origin — present, non-empty, and impossible to have come from a body carrying only
+    `key`/`value` — which is the actual security property.
+  - `packages/auth/src/botCheck.test.ts` set `TURNSTILE_SECRET` at its own module scope, which only works if it
+    is the first file to import `@leadwolf/config` (config freezes `env` on first import). Moved to the bun
+    preload `test/setup.ts`, where it is guaranteed to precede the freeze. Turnstile is now enforced under test
+    — the safer default for any login-path test added later.
+  **result:** 1397 pass / 0 fail across 199 files, and each of these files still passes alone.
 
 - [x] **L-1.11 (partial: dead-scope gating, aborts, RQ defaults, loading/error) · Frontend: stop the wasted work on the app's busiest surface.**
   - `apps/web/src/features/prospect/components/ProspectPage.tsx:86-103` — contacts **and** accounts
@@ -524,9 +656,22 @@ process up to Caddy.
   `REALTIME_SSE_ENABLED` flips. One shared psubscribe client per process + in-process fanout + 8 s
   heartbeat + per-user connection caps. **needs:** A-0.1 (idleTimeout).
 
-- [ ] **C-3.7 · Move the Redis PUBLISH out of the open DB transaction.**
+- [x] **C-3.7 · Move the Redis PUBLISH out of the open DB transaction.**
   `apps/workers/src/realtimeRelay.ts:21-36` holds the transaction (and its pooled connection) across N
   network calls to Redis per batch.
+  **shipped — but NOT as written, and the difference matters.** Moving the publishes outside the transaction
+  would break the relay's core guarantee. `claimBatch` is a bare `SELECT … FOR UPDATE SKIP LOCKED` that does
+  **not** change `status`, so the row lock held until COMMIT is the only thing stopping a second relay instance
+  from claiming the same still-`pending` rows and publishing them a second time. Publishing outside the
+  transaction would need a real claimed state plus a reclaim timeout — a schema change, not a refactor, and
+  one that trades a correctness guarantee for latency.
+  The actual cost was that the loop `await`ed each PUBLISH in turn, so a full batch held the transaction — and
+  one of the pool's 10 connections — across up to 200 sequential Redis round-trips. Pipelining sends all of
+  them in one write and waits once, so the transaction stays open for a single round-trip regardless of batch
+  size, with the double-publish guarantee untouched. `exec()` needs care: it resolves `null` on an aborted
+  pipeline and reports per-command errors *without* rejecting, so both are turned into a throw — rolling back
+  leaves the rows `pending` and unlocked for the next tick, which is the same at-least-once behaviour the
+  previous code had when a mid-loop publish threw.
 
 - [ ] **C-3.8 · Finish the TanStack Query migration.** RQ v5 is installed and its provider is mounted, but
   it is used by **only** `import/` and `data-health/`; ~90% of features hand-roll `useState`+`useEffect`
@@ -548,10 +693,22 @@ process up to Caddy.
   past 200 rows** while being presented as totals. A naive SQL rollup endpoint suffices before ClickHouse
   (ADR-0010 puts the warehouse post-MVP).
 
-- [ ] **C-3.11 · Column projections on masked surfaces.** `contactRepository.ts:702,728,1085` use bare
+- [x] **C-3.11 · Column projections on masked surfaces.** `contactRepository.ts:702,728,1085` use bare
   `.select()`, pulling AES-GCM `email_enc`/`phone_enc` bytea + `custom_fields` + `field_provenance` jsonb —
   TOAST fetches and ciphertext into app memory — for surfaces that then **mask** it. The correct masked
   projection already exists in the same package (`searchRepository.ts:249-280`).
+  **shipped.** One `MASKED_COLUMNS` projection now serves `listByWorkspace`, `resolveByLinkedinPublicId`, and
+  `listMaskedByIds`. The mapper never actually wanted the expensive columns: `email_enc`/`phone_enc` were read
+  ONLY as `!= null`, and `custom_fields`/`field_provenance` were not read at all. So presence is computed in
+  SQL (`IS NOT NULL`, the same `hasEmailFlat`/`hasPhoneFlat` shape `searchRepository` already used) and the
+  ciphertext stays in the database — no TOAST fan-out, and no PII in application memory on surfaces whose whole
+  contract is that they return none.
+  **the type is the guard.** `MaskedContactRow` is a `Pick` of the full row plus the two booleans, so the
+  projection and its consumers drift together: remove a column and the mapper stops compiling rather than
+  silently reading `undefined`.
+  **verify:** unit suite green, but the real proof is SQL-level and comes from CI — 8 itest files exercise
+  these three reads, and `contactChannels.readcutover.itest.ts:220` asserts the gate-off `hasEmail`, which is
+  exactly the derivation that moved from `r.emailEnc != null` to the SQL presence column.
 
 - [ ] **C-3.12 · List counts + the activity write-amplification trigger.** `member_count` counter column
   instead of counting every membership row per sidebar render (`listRepository.ts:220-235`); batch the

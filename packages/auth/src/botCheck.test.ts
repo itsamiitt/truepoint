@@ -1,10 +1,14 @@
 // botCheck.test.ts — proves the Turnstile siteverify call is bounded and fails CLOSED (perf RC#11c). A hung
 // Cloudflare endpoint must not stall sign-in: the 2.5s AbortController timeout aborts the fetch and the catch
-// treats that exactly like any other failure (returns false) when a secret is configured. We set the secret
-// BEFORE importing the module under test because @leadwolf/config freezes env from process.env at import.
+// treats that exactly like any other failure (returns false) when a secret is configured.
+//
+// TURNSTILE_SECRET comes from the bun test preload (test/setup.ts), NOT from this file. It used to be assigned
+// here at module scope, which only works when this happens to be the first file in the run to import
+// @leadwolf/config — config freezes `env` from process.env on first import, so in a full-suite run the snapshot
+// was already taken, verifyTurnstile took its "unconfigured → disabled" path, and every enforced-path
+// expectation here inverted. It passed alone and failed together. Anything that must be in `env` before the
+// freeze belongs in the preload.
 import { afterEach, describe, expect, it } from "bun:test";
-
-process.env.TURNSTILE_SECRET = "test-secret";
 
 const { verifyTurnstile } = await import("./botCheck.ts");
 

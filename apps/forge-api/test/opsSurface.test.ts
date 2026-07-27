@@ -23,6 +23,7 @@ function app(opts: { rateLimit?: (key: string) => Promise<void>; metricsToken?: 
     caps: { maxEnvelopeBytes: 1, maxRecordBytes: 1, endpointAllowlist: [] },
   };
   const bff: BffDeps = {
+    audit: async () => {},
     resolveStaff: (c) => {
       const userId = c.req.header("x-staff");
       return userId ? { userId, capabilities: ["data:read"] } : null;

@@ -32,6 +32,17 @@ export async function closeDb(): Promise<void> {
   await client.end({ timeout: 5 });
 }
 
+/** Connectivity check for readiness probes: the cheapest statement that still proves the whole path — a free
+ * pool slot, a live socket, and a server that answers. Rejects (never hangs on its own) if any of those fail;
+ * bounding the wait is the caller's job, since only the caller knows its probe budget.
+ *
+ * Deliberately UNSCOPED — no tenant GUCs, no session role. This asks "is the database reachable", not "may
+ * this caller read anything", so requiring a scope would make it untestable at boot and wrong at every other
+ * time. It lives here rather than in a consuming app so raw SQL stays inside @leadwolf/db. */
+export async function pingDb(): Promise<void> {
+  await db.execute(sql`SELECT 1`);
+}
+
 /**
  * Run `fn` under the PRIVILEGED leadwolf_admin role (BYPASSRLS — 03 §9, ADR-0011): the ONE sanctioned
  * cross-workspace path, used only by the audited DSAR fan-out (08 §4) and, later, apps/admin. The role is

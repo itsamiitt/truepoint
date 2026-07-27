@@ -88,7 +88,14 @@ services:
           memory: 256M
     healthcheck:
       # Use bun (always in the image), not wget — the oven/bun base is debian-slim and has no wget/curl.
-      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))\""]
+      # Probes /ready, NOT /health: /health is liveness only (process up, not draining) and answers 200 with a
+      # dead database, which meant this healthcheck reported the API as serving when it could not serve — and
+      # web/admin gate their own startup on `api: service_healthy`. /ready adds a bounded Postgres probe.
+      # Timing note: /ready has its own 3-consecutive-failure hysteresis once the process has served (see
+      # apps/api/src/readiness.ts), so a sustained outage marks this container unhealthy after roughly
+      # 2 tolerated probes + `retries` failing ones. At boot the hysteresis does not apply — a never-ready
+      # process fails its first probe — so start_period still bounds startup honestly.
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3001/ready').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))\""]
       interval: 10s
       timeout: 5s
       retries: 6

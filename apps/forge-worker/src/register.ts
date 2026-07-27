@@ -9,6 +9,7 @@ import { ParserRegistry, registerBuiltinParsers } from "@leadwolf/forge-core";
 import {
   anthropicExtractionPort,
   defaultAnthropicTransport,
+  forgeAiBudgetStore,
   forgeObjectStore,
 } from "@leadwolf/integrations";
 import { type Job, Queue, Worker } from "bullmq";
@@ -78,6 +79,10 @@ const deps: ProcessorDeps = {
   queues: { aiExtract: queues.aiExtract, resolve: queues.resolve, verify: queues.verify },
   leader: (fn) =>
     withLeaderLock(asLockRedis(connection), "forge:maintenance", 60_000, crypto.randomUUID(), fn),
+  // Redis-backed, on the shared connection, so the per-tenant AI spend cap holds across every worker replica
+  // rather than per process. Fails CLOSED on a Redis outage — see forgeAiBudgetStore for why this is the one
+  // Forge limiter that does not fail open.
+  budgetStore: forgeAiBudgetStore(connection),
 };
 
 function makeWorker<T>(stage: string, processor: (job: Job<T>) => Promise<void>): Worker<T> {

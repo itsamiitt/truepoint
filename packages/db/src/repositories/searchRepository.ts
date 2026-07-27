@@ -454,9 +454,75 @@ export const searchRepository = {
   ): Promise<{ field: FacetKey; value: string; displayLabel: string; count: number }[]> {
     return withTenantTx(scope, async (tx) => {
       const out: { field: FacetKey; value: string; displayLabel: string; count: number }[] = [];
-      for (const field of fields) {
-        const expr = FACET_EXPR[field];
-        if (!expr) continue; // join-only facet not grouped by this adapter (documented)
+      const groupable = fields.filter((f) => FACET_EXPR[f]); // join-only facets aren't grouped here (documented)
+
+      // Each facet's WHERE excludes that facet's OWN term filter, so its options stay independently countable.
+      // That is the only reason the WHEREs differ — and `buildWhere(query, {}, f)` is identical to
+      // `buildWhere(query, {})` unless the query actually carries a term clause on `f`. So the facets with no
+      // active term filter all share one WHERE and can be counted in a SINGLE pass; only the (usually one or
+      // two) actively-filtered facets still need their own.
+      //
+      // This is what the loop cost before: eight facets meant eight sequential re-executions of the entire
+      // WHERE — ILIKE legs and the accounts join included — per request, to produce eight aggregates over the
+      // same rows. In the common case (no facet filters applied) it is now one scan instead of eight.
+      const filtered = new Set(
+        query.filters.filter((c) => c.kind === "term").map((c) => c.field as FacetKey),
+      );
+      const shared = groupable.filter((f) => !filtered.has(f));
+      const separate = groupable.filter((f) => filtered.has(f));
+
+      if (shared.length > 0) {
+        const exprs = shared.map((f) => FACET_EXPR[f] as SQL);
+        // GROUPING SETS gives one aggregate per facet in a single scan. Each result row belongs to exactly one
+        // set; `grouping(expr)` is 0 for the column that set grouped by and 1 for the others, which is how a
+        // real NULL value is told apart from "this column isn't part of this row's set" — the two are
+        // indistinguishable from the value alone, and the old per-facet `expr IS NOT NULL` guard cannot be
+        // expressed in a shared WHERE.
+        const selectCols = sql.join(
+          exprs.map(
+            (e, i) =>
+              sql`grouping(${e}) AS ${sql.raw(`g${i}`)}, (${e})::text AS ${sql.raw(`v${i}`)}`,
+          ),
+          sql`, `,
+        );
+        // row_number() partitioned by the grouping-set bitmask reproduces the per-facet "top 50" the loop got
+        // from its per-query LIMIT. Without it the app would have to receive every distinct value of every
+        // facet — unbounded for high-cardinality ones like title or company — and trim client-side.
+        const rows = (await tx.execute(sql`
+          SELECT * FROM (
+            SELECT ${selectCols}, count(*)::int AS n,
+                   row_number() OVER (
+                     PARTITION BY grouping(${sql.join(exprs, sql`, `)})
+                     ORDER BY count(*) DESC
+                   ) AS rn
+            FROM ${contacts}
+            LEFT JOIN ${accounts} ON ${ACCOUNT_JOIN_LIVE}
+            WHERE ${buildWhere(query, {})}
+            GROUP BY GROUPING SETS (${sql.join(
+              exprs.map((e) => sql`(${e})`),
+              sql`, `,
+            )})
+          ) t WHERE t.rn <= 50
+        `)) as unknown as Array<Record<string, unknown>>;
+        for (const row of rows) {
+          // Find the one facet this row grouped by, then keep it only if the value is real (the NULL bucket is
+          // what the old `expr IS NOT NULL` predicate dropped).
+          const i = shared.findIndex((_f, idx) => Number(row[`g${idx}`]) === 0);
+          if (i < 0) continue;
+          const value = row[`v${i}`];
+          if (value === null || value === undefined) continue;
+          const v = String(value);
+          out.push({
+            field: shared[i] as FacetKey,
+            value: v,
+            displayLabel: v,
+            count: Number(row.n),
+          });
+        }
+      }
+
+      for (const field of separate) {
+        const expr = FACET_EXPR[field] as SQL;
         // Facet COUNT grouping stays on the flat primary domain either way (05 §5 / doc-16 drift — grouping
         // by any-value domains changes row cardinality; the production-engine facet model is doc 12/G24's).
         const where = and(buildWhere(query, {}, field), sql`${expr} IS NOT NULL`) as SQL;

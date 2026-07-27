@@ -82,14 +82,64 @@ export function sanitizeResidue(residue: string): string {
 }
 
 // ── budget guard (mirrors budgetGuard.ts, §C) — circuit-break BEFORE spend, refund on failure ─────────
+//
+// The budget bounds MONEY on a path an outsider can trigger (a capture arrives → an Anthropic call is billed).
+// Three properties follow from that, and each one was previously missing:
+//
+//   1. The key must aggregate. It was `${jobId}:${tenantId}` with jobId = the rawCaptureId, so every capture
+//      opened a fresh counter and burnt exactly one unit of it. A 1000-unit limit that resets per capture
+//      cannot be reached, so AI_BUDGET_LIMIT bounded nothing at all. Now: tenant + time window (aiBudgetKey).
+//   2. It must be shared. A per-process Map bounds one worker, and N workers then bill N × the limit. The
+//      store is a port so the deployed path can be Redis (see forgeAiBudgetStore in @leadwolf/integrations).
+//   3. Reserve/release must be atomic. get-then-set is a read-modify-write: two concurrent extractions read
+//      the same total and both write limit+1. `reserve` returns the post-increment total instead, so the
+//      decision is made on a value only one caller can observe.
 export interface AiBudgetStore {
-  get(key: string): number;
-  set(key: string, value: number): void;
+  /** Atomically add `units` to `key`'s total and return the NEW total. Returning the post-increment value is
+   *  what makes the limit decision race-free — the caller never re-reads. */
+  reserve(key: string, units: number): Promise<number>;
+  /** Give `units` back (never below zero). Used to refund an unspent reservation. */
+  release(key: string, units: number): Promise<void>;
 }
 
-export function inMemoryBudgetStore(): AiBudgetStore {
-  const m = new Map<string, number>();
-  return { get: (k) => m.get(k) ?? 0, set: (k, v) => void m.set(k, v) };
+/** One UTC day. The limit is "paid extractions per tenant per window", so the window is the unit the number
+ *  is quoted in — change one and the other stops meaning what it says. */
+export const AI_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** The budget key: TENANT plus the current window. Deliberately not per-job — see (1) above. */
+export function aiBudgetKey(
+  tenantId: string,
+  now: number = Date.now(),
+  windowMs: number = AI_BUDGET_WINDOW_MS,
+): string {
+  return `forge:aibudget:${tenantId}:${Math.floor(now / windowMs)}`;
+}
+
+/** Process-local store. Fine for tests and a single worker; NOT the deployed path (see (2) above).
+ *  Entries expire, because the key embeds a window: without expiry the map keeps one entry per tenant per
+ *  window forever, which in a long-lived worker is an unbounded leak. (The old store leaked far faster — one
+ *  entry per capture — and never dropped any of them.) */
+export function inMemoryBudgetStore(ttlMs: number = 2 * AI_BUDGET_WINDOW_MS): AiBudgetStore {
+  const m = new Map<string, { value: number; expiresAt: number }>();
+  const sweep = (now: number) => {
+    for (const [k, entry] of m) if (entry.expiresAt <= now) m.delete(k);
+  };
+  return {
+    async reserve(key, units) {
+      const now = Date.now();
+      sweep(now);
+      const existing = m.get(key);
+      const base = existing && existing.expiresAt > now ? existing.value : 0;
+      const value = base + units;
+      m.set(key, { value, expiresAt: now + ttlMs });
+      return value;
+    },
+    async release(key, units) {
+      const entry = m.get(key);
+      if (!entry) return;
+      entry.value = Math.max(0, entry.value - units);
+    },
+  };
 }
 
 export class AiBudgetExceededError extends Error {
@@ -99,16 +149,24 @@ export class AiBudgetExceededError extends Error {
   }
 }
 
-/** Increment-then-check atomically BEFORE the paid call; roll back the over-limit unit (§C). */
-export function reserveAiBudget(store: AiBudgetStore, key: string, limit: number, units = 1): void {
-  const next = store.get(key) + units;
-  if (next > limit) throw new AiBudgetExceededError(key);
-  store.set(key, next);
+/** Reserve BEFORE the paid call. Over-limit reservations are rolled back so a rejected attempt does not
+ *  permanently consume the budget it was denied. */
+export async function reserveAiBudget(
+  store: AiBudgetStore,
+  key: string,
+  limit: number,
+  units = 1,
+): Promise<void> {
+  const total = await store.reserve(key, units);
+  if (total > limit) {
+    await store.release(key, units);
+    throw new AiBudgetExceededError(key);
+  }
 }
 
 /** Refund on failure — only successful calls consume budget (§C). */
-export function releaseAiBudget(store: AiBudgetStore, key: string, units = 1): void {
-  store.set(key, Math.max(0, store.get(key) - units));
+export async function releaseAiBudget(store: AiBudgetStore, key: string, units = 1): Promise<void> {
+  await store.release(key, units);
 }
 
 // ── grounding (must-ground-in-payload, 09 §Guardrails guard 2, [S48]) ─────────────────────────────────
@@ -173,6 +231,11 @@ export interface ExtractionRunRow {
   groundingCoverage: number;
   judgeScore: number;
   confidence: number;
+  /** Provider accounting, passed straight through to the extraction_runs columns of the same names. Optional
+   *  because the pre-flight injection refusal and a transport failure never reach the provider. */
+  latencyMs?: number;
+  inputTokens?: number;
+  outputTokens?: number;
   cachedTokens?: number;
 }
 
@@ -208,26 +271,45 @@ export interface ExtractStageResult {
 
 const QUARANTINE_OUTCOMES = new Set(["ai_invalid_output", "refused", "truncated"]);
 
+/** A single extraction can cost TWO provider calls, because the port may follow a malformed response with a
+ *  repair pass. The worst case is what gets reserved: reserving one and discovering the second after the fact
+ *  lets every repairing extraction spend a unit the budget never authorised, so a tenant whose payloads
+ *  reliably trigger repair bills double its limit. The unused unit is refunded once the outcome says whether
+ *  repair actually ran. */
+const EXTRACTION_WORST_CASE_UNITS = 2;
+
 export async function runExtraction(
   deps: ExtractStageDeps,
   ctx: ExtractStageCtx,
 ): Promise<ExtractStageResult> {
-  const budgetKey = `${ctx.jobId}:${ctx.tenantId}`;
+  const budgetKey = aiBudgetKey(ctx.tenantId);
 
   // Injection → quarantine, NO spend (§C).
   if (looksLikeInjection(ctx.residue)) {
-    await deps.meter(runRow(ctx, "prompt-guard", "refused", false, 0, 0, 0));
+    await deps.meter(runRow(ctx, { model: "prompt-guard", outcome: "refused" }));
     return { outcome: "refused", fields: [] };
   }
   const residue = sanitizeResidue(ctx.residue);
 
   // Budget reserve BEFORE the paid call; an exhausted budget PARKS the job (not a 429).
   try {
-    reserveAiBudget(deps.budgetStore, budgetKey, deps.budgetLimit);
+    await reserveAiBudget(
+      deps.budgetStore,
+      budgetKey,
+      deps.budgetLimit,
+      EXTRACTION_WORST_CASE_UNITS,
+    );
   } catch (err) {
     if (err instanceof AiBudgetExceededError) return { outcome: "budget_exceeded", fields: [] };
     throw err;
   }
+  /** Refund whatever the reservation over-booked, now that the real call count is known. */
+  const settleReservation = (usedRepair: boolean) =>
+    releaseAiBudget(
+      deps.budgetStore,
+      budgetKey,
+      EXTRACTION_WORST_CASE_UNITS - (usedRepair ? 2 : 1),
+    );
 
   let result: ExtractionOutcome;
   try {
@@ -237,20 +319,25 @@ export async function runExtraction(
       schemaVersion: ctx.schemaVersion,
     });
   } catch {
-    releaseAiBudget(deps.budgetStore, budgetKey); // refund on failure (§C)
-    await deps.meter(runRow(ctx, "unknown", "ai_unavailable", false, 0, 0, 0));
+    // Nothing billable completed — refund the whole reservation (§C).
+    await releaseAiBudget(deps.budgetStore, budgetKey, EXTRACTION_WORST_CASE_UNITS);
+    await deps.meter(runRow(ctx, { model: "unknown", outcome: "ai_unavailable" }));
     return { outcome: "ai_unavailable", fields: [] };
   }
 
   if (result.outcome === "ai_unavailable") {
-    releaseAiBudget(deps.budgetStore, budgetKey);
-    await deps.meter(runRow(ctx, result.model, "ai_unavailable", result.usedRepair, 0, 0, 0));
+    await releaseAiBudget(deps.budgetStore, budgetKey, EXTRACTION_WORST_CASE_UNITS);
+    await deps.meter(runRow(ctx, { model: result.model, outcome: "ai_unavailable", result }));
     return { outcome: "ai_unavailable", fields: [] };
   }
+  // Quarantine outcomes are BILLED: the provider answered, it just answered unusably. Only the over-booked
+  // unit comes back.
   if (QUARANTINE_OUTCOMES.has(result.outcome)) {
-    await deps.meter(runRow(ctx, result.model, result.outcome, result.usedRepair, 0, 0, 0));
+    await settleReservation(result.usedRepair);
+    await deps.meter(runRow(ctx, { model: result.model, outcome: result.outcome, result }));
     return { outcome: result.outcome, fields: [] };
   }
+  await settleReservation(result.usedRepair);
 
   // Guardrails + grounded-confidence per field.
   const fields: ExtractStageResult["fields"] = [];
@@ -278,37 +365,53 @@ export async function runExtraction(
   const n = result.fields.length || 1;
   const outcome = result.usedRepair ? "repaired" : "ok";
   await deps.meter(
-    runRow(
-      ctx,
-      result.model,
+    runRow(ctx, {
+      model: result.model,
       outcome,
-      result.usedRepair,
-      groundingHits / n,
-      judgeTotal / n,
-      confidenceTotal / n,
-    ),
+      result,
+      groundingCoverage: groundingHits / n,
+      judgeScore: judgeTotal / n,
+      confidence: confidenceTotal / n,
+    }),
   );
   return { outcome, fields };
 }
 
+/** Build the immutable metering row.
+ *
+ *  Takes an options object rather than seven positional arguments: the previous signature ended in three
+ *  interchangeable numbers that every error path passed as `0, 0, 0`, and this change adds three more. A
+ *  transposed pair there is invisible at the call site and silently corrupts the metering record.
+ *
+ *  `result` carries the provider's own accounting through. latency and token counts were previously dropped
+ *  on every path — the port returns them and the extraction_runs table has had `latency_ms`, `input_tokens`,
+ *  `output_tokens` and `cached_tokens` columns all along, so the spend record was structurally present and
+ *  always empty. Without it there is no way to answer what a tenant actually cost, which is the question a
+ *  metered pipeline exists to answer. */
 function runRow(
   ctx: ExtractStageCtx,
-  model: string,
-  outcome: string,
-  usedRepair: boolean,
-  groundingCoverage: number,
-  judgeScore: number,
-  confidence: number,
+  args: {
+    model: string;
+    outcome: string;
+    /** The provider outcome, when there was one. Absent for the pre-flight refusal and transport failures. */
+    result?: ExtractionOutcome;
+    groundingCoverage?: number;
+    judgeScore?: number;
+    confidence?: number;
+  },
 ): ExtractionRunRow {
   return {
     jobId: ctx.jobId,
     tenantId: ctx.tenantId,
-    model,
-    outcome,
-    usedRepair,
+    model: args.model,
+    outcome: args.outcome,
+    usedRepair: args.result?.usedRepair ?? false,
     extractSchemaVersion: ctx.schemaVersion,
-    groundingCoverage,
-    judgeScore,
-    confidence,
+    groundingCoverage: args.groundingCoverage ?? 0,
+    judgeScore: args.judgeScore ?? 0,
+    confidence: args.confidence ?? 0,
+    latencyMs: args.result?.latencyMs,
+    inputTokens: args.result?.inputTokens,
+    outputTokens: args.result?.outputTokens,
   };
 }
