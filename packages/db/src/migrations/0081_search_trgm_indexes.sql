@@ -21,7 +21,9 @@
 -- lands, these should be dropped rather than left to cost write throughput forever.
 --
 -- Every CREATE INDEX is CONCURRENTLY (no ACCESS EXCLUSIVE lock on a hot table), which means each must be the
--- ONLY statement in its batch and cannot run inside a transaction — hence one per `--> statement-breakpoint`.
+-- ONLY statement in its batch and cannot run inside a transaction — hence one per breakpoint marker below.
+-- (That marker string is deliberately not quoted anywhere in this file: applyMigrations splits the file on it
+-- literally, so a comment containing it would be cut in half and the remainder parsed as SQL.)
 -- IF NOT EXISTS makes the file re-runnable. A CONCURRENTLY build that fails leaves an INVALID index behind;
 -- it is not used by the planner, and re-running this migration does not fix it (IF NOT EXISTS sees the
 -- invalid index and skips) — drop it by name and re-run if that ever happens.
