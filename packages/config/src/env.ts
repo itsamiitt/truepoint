@@ -341,6 +341,10 @@ export const appEnvSchema = z
     // endpoint behind an internal-only network. A SECRET: read only here, never NEXT_PUBLIC_/client-exposed/logged.
     METRICS_TOKEN: z.string().min(16).optional(),
 
+    // RESERVED for S-4.2 (the Typesense overlay adapter). Nothing reads these yet — the SearchPort is served
+    // by the Postgres adapter (searchRepository). The container that used to run alongside them was removed:
+    // it held no data anything queried, and leaving it up implied a search capability that does not exist.
+    // Kept in the schema so landing the adapter is one commit rather than a config archaeology exercise.
     TYPESENSE_URL: z.string().url().optional(),
     TYPESENSE_API_KEY: z.string().optional(),
     SMTP_URL: z.string().optional(),

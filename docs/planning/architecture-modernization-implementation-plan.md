@@ -1229,6 +1229,20 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   **guardrail:** G5 — mint a `SEARCH_BACKEND` env master + per-tenant flag so the cutover is per-tenant and
   instantly reversible. **decision:** if S-4.2 is not being built now, **stop the orphan container** (zero
   code impact) rather than leave it burning RAM and implying a capability that doesn't exist.
+  **The container is STOPPED — this item's own decision clause, taken.** It was verified orphaned before
+  removal, three ways: `TYPESENSE_URL` / `TYPESENSE_API_KEY` appear ONLY in the env schema and are read by no
+  code; no package depends on a Typesense client; and the SearchPort is served entirely by the Postgres
+  adapter (`searchRepository`). It was nonetheless started on every deploy (`deploy.sh` → `up -d redis
+  typesense mailhog`) in both the dev and prod compose files, holding a volume nothing queried.
+  Removed from both compose files, from deploy.sh, and from the env template. The two schema entries are KEPT
+  with a comment saying nothing reads them yet, so landing the adapter is one commit rather than config
+  archaeology.
+  **The adapter itself is NOT built, deliberately.** The verifiable part here is query construction; the parts
+  that decide whether it works — the collection schema, `filter_by` semantics, and the outbox projector that
+  has to hit ADR-0024's p95 < 5s freshness SLO — cannot be exercised without a running engine. Writing it
+  blind and shipping it behind a flag would leave an adapter whose first real execution is on a tenant.
+  **What is needed to finish it:** a reachable Typesense instance to develop against. The `SEARCH_BACKEND`
+  master + per-tenant flag in the guardrail above is the right cutover shape when that exists.
 
 ---
 
