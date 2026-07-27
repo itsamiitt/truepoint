@@ -296,6 +296,19 @@ export const contacts = pgTable(
     wsPriorityIdx: index("idx_contacts_ws_priority_score")
       .on(t.workspaceId, t.priorityScore.desc())
       .where(sql`${t.deletedAt} IS NULL AND ${t.priorityScore} IS NOT NULL`),
+    // The DEFAULT search/list ordering (searchRepository: ORDER BY created_at DESC, id DESC) — the busiest read
+    // in the product, and until migration 0080 it had no usable index at all, so it was a top-N heapsort over
+    // the whole RLS-visible workspace slice on every page. `accounts` had its equivalent from the start
+    // (idx_accounts_ws_created_at); contacts was simply missed. Partial: the list paths exclude soft-deleted.
+    wsCreatedIdx: index("idx_contacts_ws_created_at")
+      .on(t.workspaceId, t.createdAt.desc(), t.id.desc())
+      .where(sql`${t.deletedAt} IS NULL`),
+    // The score sort orders (and keyset-seeks) on `coalesce(priority_score, -1)`, which the bare-column
+    // wsPriorityIdx above CANNOT serve — a plain column index does not match a coalesce() expression. This is
+    // the expression index that does; both exist because they back different queries.
+    wsPriorityCoalescedIdx: index("idx_contacts_ws_priority_score_coalesced")
+      .on(t.workspaceId, sql`(coalesce(${t.priorityScore}, -1)) DESC`, t.id.desc())
+      .where(sql`${t.deletedAt} IS NULL`),
   }),
 );
 

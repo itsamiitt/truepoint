@@ -7,6 +7,7 @@
 import { sql } from "drizzle-orm";
 import {
   check,
+  index,
   jsonb,
   pgTable,
   text,
@@ -106,6 +107,16 @@ export const listMembers = pgTable(
   (t) => ({
     // Re-adding the same contact to a list is a no-op (ON CONFLICT DO NOTHING upstream).
     uniqListContact: uniqueIndex("uniq_list_members_list_contact").on(t.listId, t.contactId),
+    // The member page's keyset ordering (ORDER BY added_at DESC, id DESC). uniqListContact above is keyed
+    // (list_id, contact_id) and cannot serve that sort. Added in migration 0080.
+    listAddedAtIdx: index("idx_list_members_list_added_at").on(
+      t.listId,
+      t.addedAt.desc(),
+      t.id.desc(),
+    ),
+    // The reverse lookup ("which lists hold this contact") and the contact FK direction, which had no index at
+    // all — so a per-contact membership read scanned, and a contact delete had to scan to check references.
+    contactIdx: index("idx_list_members_contact").on(t.contactId),
     addedViaEnum: check(
       "list_members_added_via_enum",
       sql`${t.addedVia} IN ('search','import','manual','api')`,

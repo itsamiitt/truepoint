@@ -44,6 +44,16 @@ export const activities = pgTable(
       t.contactId,
       t.occurredAt.desc(),
     ),
+    // The WORKSPACE-wide recency aggregate (countByTypeForWorkspace: WHERE occurred_at >= $since GROUP BY
+    // activity_type, with RLS supplying workspace_id) — read on every Home summary. byContactRecency above
+    // cannot serve it: contact_id sits between workspace_id and occurred_at, so the range is unusable and the
+    // aggregate read every activity row in the workspace. activity_type trails so the group-by can be satisfied
+    // from the index. Added in migration 0080.
+    byWorkspaceRecency: index("idx_activities_ws_occurred_type").on(
+      t.workspaceId,
+      t.occurredAt.desc(),
+      t.activityType,
+    ),
     typeEnum: check(
       "activities_type_enum",
       sql`${t.activityType} IN ('email_sent','email_opened','email_clicked','email_replied','call_made',
