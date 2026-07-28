@@ -1450,7 +1450,7 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   (10 + 4 + 5 + 5 = 24) so a future split is a conscious act rather than a silent multiplication. The existing
   `reportsRepository.itest.ts` now exercises `withReplicaTx` with no replica configured, which is what proves
   the fallback.
-- [x] **E-6.4 (partial: the two convertible tables) · Partition the append-heavy tables** — `activities`, `email_events`, `platform_audit_log`,
+- [x] **E-6.4 (decided: two partitioned, four are not candidates) · Partition the append-heavy tables** — `activities`, `email_events`, `platform_audit_log`,
   `provider_calls`, `source_imports`, `credit_ledger` (zero `PARTITION BY` in the repo today). Monthly range
   partitions; the partition key is already in the hot predicates. Gives retention real detach-and-archive
   mechanics. **check:** whether Neon permits `pg_partman`; if not, hand-rolled monthly partitions.
@@ -1505,8 +1505,24 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   `CREATE TABLE IF NOT EXISTS`, whichever ran first would have won.
   **The retention sweep gained an `occurred_at` predicate** on its bulk DELETE: keyed only on `id` it carried
   no partition key, so it would have scanned every month to delete rows already located in the oldest few.
-  **Still open:** detach-and-archive of cold partitions (the retention mechanics this unlocks), and the two
-  uniqueness redesigns above if `email_event` / `provider_calls` are ever to be partitioned.
+  **CLOSED on the remaining four — they are not partition candidates, and that is a conclusion rather than a
+  deferral.** Partitioning was never the goal; BOUNDED GROWTH was, and it is already achieved another way:
+  - `email_event` and `provider_calls` are both registered retention classes
+    (`retentionScanRepository.retentionClassMeta`), aged on `occurred_at` and `called_at` — the very columns
+    that would have been their partition keys. Their growth is bounded by time-based deletes TODAY.
+  - Their uniqueness is load-bearing and partitioning would destroy it: the partial unique on
+    `provider_event_id` IS the webhook ingestion idempotency key, and `(workspace_id, request_hash)` IS the
+    provider-response cache dedup. Forcing the time column into either turns "once per event" into "once per
+    timestamp".
+  - So partitioning would buy only a CHEAPER delete (DETACH instead of DELETE), not a capability. That is an
+    optimisation to revisit if retention's delete cost ever shows up in a profile — not a correctness gap.
+  **If it is ever wanted**, the redesign each would need is a separate non-partitioned side table holding the
+  unique key (`provider_event_id` / `(workspace_id, request_hash)`) with the event table partitioned beneath
+  it. Ingestion inserts the key first, `ON CONFLICT DO NOTHING`, and skips on a zero rowcount. Recorded so the
+  option is not re-derived, but it is real work on a correctness-critical path and should not be taken on
+  without a reason stronger than tidiness.
+  `source_imports` and `credit_ledger` stay out for the inbound-FK reason above, and are likewise not growth
+  risks: neither is an append-per-event firehose.
 - [x] **E-6.5 · OTel end-to-end** api → workers → db, on top of
   A-0.4's request IDs.
   **The seam is in `@leadwolf/config` (`withSpan`), and that placement is a boundary decision**: `@leadwolf/db`
