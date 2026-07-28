@@ -15,7 +15,13 @@ import {
   runChannelReconcileForWorkspace,
   stubMalwareScanner,
 } from "@leadwolf/core";
-import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
+import {
+  crmConnectionRepository,
+  db,
+  notificationRepository,
+  outboxRepository,
+  withTenantTx,
+} from "@leadwolf/db";
 import {
   clamdScanner,
   defaultCrmConnectors,
@@ -28,6 +34,7 @@ import {
   type BulkImportDeadLetter,
   type BulkImportScope,
   type BulkRevealDeadLetter,
+  CRM_PUSH_TOPIC,
   type CrmBackfillJob,
   type CrmInboundJob,
   type CrmPullJob,
@@ -37,6 +44,7 @@ import {
   IMPORT_ROLLUPS_TOPIC,
   type ImportDeadLetter,
   bulkEnrichmentJobDataSchema,
+  crmPushIntentSchema,
   importNotifyPayloadSchema,
   importRollupsPayloadSchema,
 } from "@leadwolf/types";
@@ -760,6 +768,40 @@ export function startWorkers(): Worker[] {
   // IMPORT_V2 dual gate's env half is on; gate-off ⇒ no intents + the best-effort handlers fire (byte-identical).
   const outboxPublishers: Record<string, OutboxPublisher> = {};
   const importOutboxEnabled = env.IMPORT_V2_ENABLED;
+
+  // The CRM outbound fan-out (crm-sync §2.2 gap 3, ADR-0027). publishCrmPushIntent writes ONE intent inside
+  // the write transaction; this publisher resolves the workspace's connections and enqueues one push job
+  // each. The fan-out lives HERE rather than on the write path because a single changed contact may need
+  // pushing to a Salesforce AND a HubSpot connection, and doing that lookup per write would put a
+  // per-connection query in front of every contact update.
+  //
+  // Registered only when the env gate is on — which is also the only condition under which intents are
+  // written, so an unregistered topic can never strand rows in the outbox.
+  if (env.CRM_SYNC_ENABLED) {
+    outboxPublishers[CRM_PUSH_TOPIC] = async (payload) => {
+      const intent = crmPushIntentSchema.parse(payload);
+      const connections = await withTenantTx(intent.scope, (tx) =>
+        crmConnectionRepository.listConnectedForWorkspace(tx),
+      );
+      for (const conn of connections) {
+        await crmPushQueue.add(
+          "push",
+          {
+            scope: intent.scope,
+            connectionId: conn.id,
+            provider: conn.provider as "salesforce" | "hubspot",
+            objectType: intent.tpEntityType,
+            tpEntityId: intent.tpEntityId,
+            changeSeq: intent.changeSeq,
+            idempotencyKey: `${intent.tpEntityId}:${intent.changeSeq}`,
+          },
+          // The idempotency key is IN the jobId, so an at-least-once relay re-publish collapses onto the
+          // same job rather than pushing the same change into a customer's CRM twice.
+          { jobId: `crm-push:${conn.id}:${intent.tpEntityId}:${intent.changeSeq}` },
+        );
+      }
+    };
+  }
 
   const importsWorker = instrument(
     tracedWorker<ImportJobData>(

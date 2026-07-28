@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1924,
-  "fileSetHash": "sha256:d607fa8263cdee2b5f1a649044e09d146c0771b8e7e0f68c06ffafcb5502e3b5",
+  "fileCount": 1926,
+  "fileSetHash": "sha256:5dcd33869dddea71f56b1bf223e9b5045752d1783928732ff44939be91d69370",
   "features": {
     "account-search": {
       "web": [],
@@ -471,6 +471,8 @@
         "packages/core/src/crm/planOutboundPush.test.ts",
         "packages/core/src/crm/planOutboundPush.ts",
         "packages/core/src/crm/port.ts",
+        "packages/core/src/crm/publishCrmPushIntent.test.ts",
+        "packages/core/src/crm/publishCrmPushIntent.ts",
         "packages/core/src/crm/reliability.test.ts",
         "packages/core/src/crm/reliability.ts",
         "packages/core/src/crm/runCrmErase.test.ts",

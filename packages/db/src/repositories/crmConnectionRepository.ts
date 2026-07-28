@@ -128,6 +128,21 @@ export const crmConnectionRepository = {
     return rows[0]?.id ?? null;
   },
 
+  /**
+   * The workspace's CONNECTED connections, ids + provider only — the outbound fan-out's worklist.
+   *
+   * Filters on status here rather than at the call site so a pending or errored connection can never be
+   * handed a push job: enqueueing work for a connection that cannot authenticate just manufactures
+   * dead-letter rows. RLS-scoped via the caller's tx.
+   */
+  async listConnectedForWorkspace(tx: Tx): Promise<Array<{ id: string; provider: string }>> {
+    return tx
+      .select({ id: crmConnections.id, provider: crmConnections.provider })
+      .from(crmConnections)
+      .where(eq(crmConnections.status, "connected"))
+      .orderBy(asc(crmConnections.createdAt));
+  },
+
   async getById(tx: Tx, connectionId: string): Promise<CrmConnectionRecord | null> {
     const rows = await tx
       .select(safeColumns)

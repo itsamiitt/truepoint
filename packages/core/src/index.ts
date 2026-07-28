@@ -1218,3 +1218,10 @@ export {
   type RunCrmEraseInput,
   type RunCrmEraseResult,
 } from "./crm/runCrmErase.ts";
+// The TP-side change emitter (crm-sync §2.2 gap 3, ADR-0027) — writes a transactional-outbox intent INSIDE
+// the caller's tenant tx, so "TruePoint changed" and "the CRM should hear about it" commit together. A no-op
+// while CRM_SYNC_ENABLED is off, so a deployment with no CRM pays nothing per write.
+export {
+  publishCrmPushIntent,
+  type CrmPushIntentInput,
+} from "./crm/publishCrmPushIntent.ts";

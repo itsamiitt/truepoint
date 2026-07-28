@@ -215,3 +215,28 @@ export type CrmSyncModeUpdate = z.infer<typeof crmSyncModeUpdateSchema>;
 /** PATCH /api/v1/crm/conflicts/:id — close one review-queue row. */
 export const crmConflictResolveSchema = z.object({ status: z.enum(["resolved", "ignored"]) });
 export type CrmConflictResolve = z.infer<typeof crmConflictResolveSchema>;
+
+// ── The outbound push INTENT (§2.2 gap 3, ADR-0027) ──────────────────────────────────────────────────────────
+/**
+ * Transactional-outbox topic for "a TruePoint record changed, consider pushing it".
+ *
+ * An OUTBOX topic rather than a direct enqueue, deliberately: the intent must commit ATOMICALLY with the
+ * write that caused it. A direct `queue.add` after the transaction can be lost to a crash in between —
+ * leaving TruePoint changed and the CRM stale with nothing to reconcile it — while an intent written inside
+ * the same tx either both happen or neither does.
+ *
+ * The relay is also where the fan-out belongs: one changed contact may need pushing to a Salesforce AND a
+ * HubSpot connection, and resolving that on the write path would put a per-connection query in front of
+ * every contact update.
+ */
+export const CRM_PUSH_TOPIC = "crm.push";
+
+/** The intent payload. IDs + scope only — the runner re-reads the record, so no field values travel. */
+export const crmPushIntentSchema = z.object({
+  scope: crmJobScopeSchema,
+  tpEntityType: z.enum(["contact", "account"]),
+  tpEntityId: z.string().uuid(),
+  /** Monotonic-ish per-entity change counter, used in the push job's idempotency key. */
+  changeSeq: z.number().int().nonnegative().default(0),
+});
+export type CrmPushIntent = z.infer<typeof crmPushIntentSchema>;
