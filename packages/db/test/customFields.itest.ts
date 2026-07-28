@@ -24,7 +24,6 @@ let wsA = "";
 let wsB = "";
 let ownerA = "";
 
-type DbModule = typeof import("@leadwolf/db");
 type CustomFieldRepoModule = typeof import("../src/repositories/customFieldRepository.ts");
 let customFieldRepository: CustomFieldRepoModule["customFieldRepository"];
 

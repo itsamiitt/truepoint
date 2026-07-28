@@ -23,7 +23,6 @@ let db: Db;
 let core: Core;
 let tenantA = "";
 let wsA = "";
-let ownerA = "";
 let tenantB = "";
 let wsB = "";
 
@@ -82,7 +81,7 @@ beforeAll(async () => {
   await applyMigrations(dbHandle.adminUrl);
 
   admin = postgres(dbHandle.adminUrl, { max: 2, onnotice: () => {} });
-  ({ tenantId: tenantA, workspaceId: wsA, ownerId: ownerA } = await seedWorkspace("acme"));
+  ({ tenantId: tenantA, workspaceId: wsA } = await seedWorkspace("acme"));
   ({ tenantId: tenantB, workspaceId: wsB } = await seedWorkspace("globex"));
 
   // env is set above, BEFORE these dynamic imports load @leadwolf/config / the db singleton.

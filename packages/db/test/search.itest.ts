@@ -16,12 +16,10 @@ import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 
 type Db = typeof import("@leadwolf/db");
-type Types = typeof import("@leadwolf/types");
 
 let dbHandle: ItestDb;
 let admin: ReturnType<typeof postgres>;
 let db: Db;
-let _types: Types;
 
 let tenantA = "";
 let wsA = "";
@@ -152,7 +150,8 @@ beforeAll(async () => {
   });
 
   db = await import("@leadwolf/db");
-  _types = await import("@leadwolf/types");
+  // Imported for its side effect on module resolution only — nothing here reads the namespace.
+  await import("@leadwolf/types");
 }, 180_000);
 
 afterAll(async () => {

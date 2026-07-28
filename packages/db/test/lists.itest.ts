@@ -79,7 +79,7 @@ async function caught(run: () => Promise<unknown>): Promise<{ code?: string } & 
 
 async function memberContactIds(listId: string): Promise<string[]> {
   const rows = await admin`SELECT contact_id FROM list_members WHERE list_id = ${listId}`;
-  return (rows as { contact_id: string }[]).map((r) => r.contact_id).sort();
+  return (rows as unknown as { contact_id: string }[]).map((r) => r.contact_id).sort();
 }
 
 beforeAll(async () => {
@@ -247,7 +247,7 @@ describe("prospect lists — owner scoping + workspace isolation (req #8)", () =
 
     // Phase-0 DoD: list mutations write append-only audit rows (list.create + member.add).
     const auditRows = await admin`SELECT action FROM audit_log WHERE entity_id = ${list.id}`;
-    const actions = (auditRows as { action: string }[]).map((r) => r.action);
+    const actions = (auditRows as unknown as { action: string }[]).map((r) => r.action);
     expect(actions).toContain("list.create");
     expect(actions).toContain("member.add");
   });
@@ -340,13 +340,13 @@ describe("import into list — Phase 2 (list-plan/03 §2.2)", () => {
     const rows = await admin`
       SELECT contact_id, added_via, (source_import_id IS NOT NULL) AS has_source_import
       FROM list_members WHERE list_id = ${listId} ORDER BY contact_id`;
-    return (rows as { contact_id: string; added_via: string; has_source_import: boolean }[]).map(
-      (r) => ({
-        contactId: r.contact_id,
-        addedVia: r.added_via,
-        hasSourceImport: r.has_source_import,
-      }),
-    );
+    return (
+      rows as unknown as { contact_id: string; added_via: string; has_source_import: boolean }[]
+    ).map((r) => ({
+      contactId: r.contact_id,
+      addedVia: r.added_via,
+      hasSourceImport: r.has_source_import,
+    }));
   }
 
   test("imported rows land as members with added_via='import' + a non-null source_import_id", async () => {

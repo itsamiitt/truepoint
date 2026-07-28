@@ -109,7 +109,7 @@ describe("Phase-5 staff-no-access guarantee (list-plan/07 §8, D2)", () => {
                       set_config('app.current_workspace_id', ${wsA}, true)`;
       const r =
         await tx`SELECT contact_id FROM list_members WHERE list_id = ${listA} ORDER BY contact_id`;
-      return (r as { contact_id: string }[]).map((x) => x.contact_id);
+      return (r as unknown as { contact_id: string }[]).map((x) => x.contact_id);
     });
     expect(seen.sort()).toEqual([contactA1, contactA2].sort());
   });
