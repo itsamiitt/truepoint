@@ -55,7 +55,12 @@ export interface CrmJobContext {
  */
 export async function resolveGates(
   tx: Tx,
-  ctx: CrmJobContext,
+  // Narrower than CrmJobContext ON PURPOSE: the gates must be resolvable BEFORE a run row exists, because
+  // the run's `mode` column is a snapshot of syncMode at run time and that snapshot is what later
+  // distinguishes "shadow counted this" from "enforce wrote this". Requiring a runId here would force the
+  // caller to open the run first and stamp a placeholder mode — which is exactly the quiet inaccuracy the
+  // column exists to prevent.
+  ctx: { tenantId: string; connectionId: string },
 ): Promise<{
   envEnabled: boolean;
   tenantFlagEnabled: boolean;

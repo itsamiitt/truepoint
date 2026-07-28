@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1893,
-  "fileSetHash": "sha256:3fe51c9af13578bb1cf41ad821c072407c569c090be9bb6422f1246c4d4e544b",
+  "fileCount": 1895,
+  "fileSetHash": "sha256:b9a69029261b6e76ce8fa185694f5334c8aaaff2debd622470500f49eae38e12",
   "features": {
     "account-search": {
       "web": [],
@@ -2869,6 +2869,8 @@
     "apps/web/next.config.mjs",
     "apps/workers/src/queues/bulkEnrichment.ts",
     "apps/workers/src/queues/bulkReveal.ts",
+    "apps/workers/src/queues/crmSync.test.ts",
+    "apps/workers/src/queues/crmSync.ts",
     "apps/workers/src/queues/crmSyncSweep.test.ts",
     "apps/workers/src/queues/crmSyncSweep.ts",
     "apps/workers/src/queues/dedup.ts",

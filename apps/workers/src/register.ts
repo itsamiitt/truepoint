@@ -16,13 +16,22 @@ import {
   stubMalwareScanner,
 } from "@leadwolf/core";
 import { db, notificationRepository, outboxRepository } from "@leadwolf/db";
-import { clamdScanner, defaultProviders, s3FileStoreFromEnv } from "@leadwolf/integrations";
+import {
+  clamdScanner,
+  defaultCrmConnectors,
+  defaultProviders,
+  s3FileStoreFromEnv,
+} from "@leadwolf/integrations";
 import {
   BULK_ENRICHMENT_DRIVE_TOPIC,
   type BulkEnrichmentDeadLetter,
   type BulkImportDeadLetter,
   type BulkImportScope,
   type BulkRevealDeadLetter,
+  type CrmBackfillJob,
+  type CrmInboundJob,
+  type CrmPullJob,
+  type CrmPushJob,
   IMPORT_NOTIFY_TOPIC,
   IMPORT_QUEUE_PRIORITY,
   IMPORT_ROLLUPS_TOPIC,
@@ -85,6 +94,24 @@ import {
   type ChannelReconcileSweepJobData,
   makeProcessChannelReconcileSweep,
 } from "./queues/channelReconcileSweep.ts";
+// CRM bidirectional sync (crm-sync 00 §3.2). Registered unconditionally but DARK: CRM_SYNC_ENABLED gates
+// the sweep before it takes its leader lock, and every runner re-checks the same ladder, so with the env
+// unset these consumers exist and do nothing.
+import {
+  CRM_SYNC_BACKFILL_QUEUE,
+  CRM_SYNC_INBOUND_QUEUE,
+  CRM_SYNC_PULL_QUEUE,
+  CRM_SYNC_PUSH_QUEUE,
+  makeProcessCrmBackfill,
+  makeProcessCrmInbound,
+  makeProcessCrmPull,
+  makeProcessCrmPush,
+} from "./queues/crmSync.ts";
+import {
+  CRM_SYNC_SWEEP_QUEUE,
+  type CrmSyncSweepJobData,
+  makeProcessCrmSyncSweep,
+} from "./queues/crmSyncSweep.ts";
 import {
   DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
   type DataQualitySnapshotSweepJobData,
@@ -315,6 +342,22 @@ export const reverificationSweepQueue = tracedQueue<ReverificationSweepJobData>(
   REVERIFICATION_SWEEP_QUEUE,
   { connection },
 );
+// CRM bidirectional sync (crm-sync §3.2): the leader-locked sweep + the four per-connection queues it and
+// the API fan out to. Partition key is the CONNECTION, not the workspace — the rate cap, token, budget and
+// watermark are all per-connection, and one workspace may hold a Salesforce and a HubSpot connection with
+// independent limits.
+export const crmSyncSweepQueue = tracedQueue<CrmSyncSweepJobData>(CRM_SYNC_SWEEP_QUEUE, {
+  connection,
+});
+export const crmPullQueue = tracedQueue<CrmPullJob>(CRM_SYNC_PULL_QUEUE, { connection });
+export const crmInboundQueue = tracedQueue<CrmInboundJob>(CRM_SYNC_INBOUND_QUEUE, { connection });
+export const crmPushQueue = tracedQueue<CrmPushJob>(CRM_SYNC_PUSH_QUEUE, { connection });
+export const crmBackfillQueue = tracedQueue<CrmBackfillJob>(CRM_SYNC_BACKFILL_QUEUE, {
+  connection,
+});
+/** The configured connector set. Client id/secret come from env at the composition root, never from core. */
+const crmConnectors = defaultCrmConnectors();
+const crmConnectorFor = (provider: string) => crmConnectors[provider as keyof typeof crmConnectors];
 // Data Health snapshot (10 §5): the leader-locked daily sweep that captures a per-workspace trend point.
 export const dataQualitySnapshotSweepQueue = tracedQueue<DataQualitySnapshotSweepJobData>(
   DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE,
@@ -386,6 +429,11 @@ export async function collectWorkerMetricsText(): Promise<string> {
     { name: EMAIL_SEQUENCE_TICK_QUEUE, queue: sequenceTickQueue },
     { name: RETENTION_SWEEP_QUEUE, queue: retentionSweepQueue },
     { name: REVERIFICATION_SWEEP_QUEUE, queue: reverificationSweepQueue },
+    { name: CRM_SYNC_SWEEP_QUEUE, queue: crmSyncSweepQueue },
+    { name: CRM_SYNC_PULL_QUEUE, queue: crmPullQueue },
+    { name: CRM_SYNC_INBOUND_QUEUE, queue: crmInboundQueue },
+    { name: CRM_SYNC_PUSH_QUEUE, queue: crmPushQueue },
+    { name: CRM_SYNC_BACKFILL_QUEUE, queue: crmBackfillQueue },
     { name: DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE, queue: dataQualitySnapshotSweepQueue },
     { name: DATA_RETENTION_SWEEP_QUEUE, queue: dataRetentionSweepQueue },
     { name: PARTITION_SWEEP_QUEUE, queue: partitionSweepQueue },
@@ -549,6 +597,26 @@ export async function enqueueReverification(
     REVERIFICATION_RETRY,
   );
   return String(job.id);
+}
+
+/**
+ * Register the CRM-sync ticks (crm-sync §3.2): a 60s delta tick and a 10-minute token-refresh tick.
+ *
+ * Registered unconditionally. The processor checks CRM_SYNC_ENABLED before it takes the leader lock, so a
+ * dark engine costs one no-op tick rather than a Redis round-trip per worker — and enabling the engine
+ * needs no redeploy of the schedule. Stable jobIds → exactly one repeatable each.
+ */
+export async function scheduleCrmSyncSweeps(): Promise<void> {
+  await crmSyncSweepQueue.add(
+    "sweep",
+    { kind: "delta" },
+    { repeat: { every: 60_000 }, jobId: "crm-sync-delta-tick" },
+  );
+  await crmSyncSweepQueue.add(
+    "sweep",
+    { kind: "refresh" },
+    { repeat: { every: 10 * 60_000 }, jobId: "crm-sync-refresh-tick" },
+  );
 }
 
 /** Register the daily reverification sweep (ADR-0025). Stable jobId → exactly one repeatable. */
@@ -911,6 +979,70 @@ export function startWorkers(): Worker[] {
         { connection, ...SWEEP_WORKER_TUNING },
       ),
       REVERIFICATION_SWEEP_QUEUE,
+    ),
+    // ── CRM bidirectional sync (crm-sync §3.2) ────────────────────────────────────────────────────────
+    // The leader-locked scheduler. It checks CRM_SYNC_ENABLED BEFORE taking the lock, so with the engine
+    // dark this costs nothing beyond the tick itself.
+    instrument(
+      tracedWorker<CrmSyncSweepJobData>(
+        CRM_SYNC_SWEEP_QUEUE,
+        makeProcessCrmSyncSweep(connection, {
+          enqueuePull: (conn) =>
+            crmPullQueue.add(
+              "pull",
+              {
+                scope: { tenantId: conn.tenantId, workspaceId: conn.workspaceId },
+                connectionId: conn.id,
+                provider: conn.provider as "salesforce" | "hubspot",
+                objectType: "contact",
+              },
+              // Stable jobId → BullMQ dedupes a connection already queued for this tick, so a slow pull
+              // cannot accumulate a backlog of duplicate work for the same stream.
+              { jobId: `crm-pull:${conn.id}:contact` },
+            ),
+          enqueueRefresh: (conn) =>
+            crmPullQueue.add(
+              "refresh",
+              {
+                scope: { tenantId: conn.tenantId, workspaceId: conn.workspaceId },
+                connectionId: conn.id,
+                provider: conn.provider as "salesforce" | "hubspot",
+                objectType: "contact",
+              },
+              { jobId: `crm-refresh:${conn.id}` },
+            ),
+        }),
+        { connection, ...SWEEP_WORKER_TUNING },
+      ),
+      CRM_SYNC_SWEEP_QUEUE,
+    ),
+    instrument(
+      tracedWorker<CrmPullJob>(CRM_SYNC_PULL_QUEUE, makeProcessCrmPull(crmConnectorFor), {
+        connection,
+      }),
+      CRM_SYNC_PULL_QUEUE,
+    ),
+    instrument(
+      tracedWorker<CrmInboundJob>(CRM_SYNC_INBOUND_QUEUE, makeProcessCrmInbound(crmConnectorFor), {
+        connection,
+      }),
+      CRM_SYNC_INBOUND_QUEUE,
+    ),
+    instrument(
+      tracedWorker<CrmPushJob>(CRM_SYNC_PUSH_QUEUE, makeProcessCrmPush(crmConnectorFor), {
+        connection,
+      }),
+      CRM_SYNC_PUSH_QUEUE,
+    ),
+    instrument(
+      tracedWorker<CrmBackfillJob>(
+        CRM_SYNC_BACKFILL_QUEUE,
+        // The next page is ENQUEUED, not looped, so a long backfill yields between pages rather than
+        // monopolising a worker and starving real-time jobs.
+        makeProcessCrmBackfill(crmConnectorFor, (next) => crmBackfillQueue.add("page", next)),
+        { connection },
+      ),
+      CRM_SYNC_BACKFILL_QUEUE,
     ),
     // Data Health snapshot SWEEP consumer: leader-locked daily capture of a per-workspace trend point.
     instrument(
@@ -1773,6 +1905,11 @@ export function startWorkers(): Worker[] {
   );
   void scheduleReverificationSweep().catch((e) =>
     log.error("failed to schedule the reverification sweep", {
+      error: e instanceof Error ? e.message : String(e),
+    }),
+  );
+  void scheduleCrmSyncSweeps().catch((e) =>
+    log.error("failed to schedule the crm-sync sweeps", {
       error: e instanceof Error ? e.message : String(e),
     }),
   );
