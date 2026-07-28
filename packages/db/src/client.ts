@@ -61,12 +61,29 @@ const forgePoolOptions: Parameters<typeof postgres>[1] = {
   max: env.FORGE_DB_POOL_MAX,
   prepare: PREPARE,
 };
-// The Forge pool reads its OWN timeout, never the app's (E-6.6). Sharing DB_STATEMENT_TIMEOUT_MS is what
-// kept this off: the request path wants a bound measured in seconds, while the Forge DAG legitimately holds
-// a transaction across an Anthropic call. One value cannot be right for both, and inheriting the app's would
-// mean that tightening the request path silently starts killing healthy Forge work.
-if (env.FORGE_DB_STATEMENT_TIMEOUT_MS > 0) {
-  forgePoolOptions.connection = { statement_timeout: env.FORGE_DB_STATEMENT_TIMEOUT_MS };
+/**
+ * Which statement timeout the Forge pool uses (E-6.6).
+ *
+ * A function, not an inline expression, so the DECISION is testable. With both knobs defaulting to 0 an
+ * accidental inheritance would pass every runtime test and only bite in production, so the property worth
+ * pinning is "Forge ignores the app value" — which needs to be callable with values the process did not
+ * boot with.
+ *
+ * Forge reads ONLY its own knob. The request path wants a bound measured in seconds; the Forge DAG
+ * legitimately holds a transaction across an Anthropic extraction call. One value cannot be right for both,
+ * and inheriting the app's would mean that tightening the request path silently starts killing healthy Forge
+ * work — a regression that presents as flaky provider failures rather than as the config change it was.
+ */
+export function forgeStatementTimeoutMs(forgeKnobMs: number, _appKnobMs: number): number {
+  return forgeKnobMs > 0 ? forgeKnobMs : 0;
+}
+
+const forgeTimeout = forgeStatementTimeoutMs(
+  env.FORGE_DB_STATEMENT_TIMEOUT_MS,
+  env.DB_STATEMENT_TIMEOUT_MS,
+);
+if (forgeTimeout > 0) {
+  forgePoolOptions.connection = { statement_timeout: forgeTimeout };
 }
 /** Same derivation as the app pool: swap in the forge role.s credentials when a password is configured, else
  *  keep today.s owner connection (the role is NOLOGIN without one, so there is nothing to connect as). */
