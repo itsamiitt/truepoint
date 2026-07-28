@@ -378,7 +378,9 @@ soakDescribe("S-P4 nightly soak — TP-4 (poll fingerprint probe)", () => {
   // (12 §8) — is NOT SHIPPED on the route yet (no ETag/Cache-Control writer exists in apps/api). The probe
   // above proves the fingerprint SEMANTICS the header will carry. Wire the header, then turn this into a
   // real HTTP itest against the route. 16's drift log tracks it.
+  // The empty body is required by bun's types (test.todo takes 2-3 args); the todo still reports as skipped.
   test.todo(
     "TP-4 (HTTP): ETag/304 + Cache-Control: private, max-age=2 on GET /imports/:id — route header not shipped yet",
+    () => {},
   );
 });

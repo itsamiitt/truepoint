@@ -108,3 +108,19 @@ export async function startItestDb(name: string): Promise<ItestDb> {
     },
   };
 }
+
+/**
+ * The single row a query is expected to return.
+ *
+ * The itests are full of `const [r] = await sql\`…\`` followed by `r.foo`, which asserts "this returned a row"
+ * without saying so — TypeScript flags it, and at run time a genuinely empty result fails three lines later
+ * with "Cannot read properties of undefined", naming a variable rather than the query that came back empty.
+ * This says it once, and says which query when it happens.
+ */
+export function one<T>(rows: readonly T[], what = "row"): T {
+  const [first] = rows;
+  if (first === undefined) {
+    throw new Error(`itest: expected exactly one ${what}, got ${rows.length}`);
+  }
+  return first;
+}

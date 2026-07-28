@@ -15,7 +15,9 @@ const DESCRIPTION_MAX = 500;
 
 /** Single-quoted SQL literals on a line, with '' unescaped to '. */
 function literalsOn(line: string): string[] {
-  return [...line.matchAll(/'((?:[^']|'')*)'/g)].map((m) => m[1].replaceAll("''", "'"));
+  // Group 1 always participates when the pattern matches, so `?? ""` is unreachable rather than a
+  // behaviour change — it just tells TS what the regex guarantees.
+  return [...line.matchAll(/'((?:[^']|'')*)'/g)].map((m) => (m[1] ?? "").replaceAll("''", "'"));
 }
 
 describe("feature_flags seed migrations", () => {
@@ -39,7 +41,8 @@ describe("feature_flags seed migrations", () => {
           continue;
         }
         const [key, description] = literals;
-        if (description.length > DESCRIPTION_MAX) {
+        // The length check above guarantees both are present; this states it for the compiler.
+        if (description !== undefined && description.length > DESCRIPTION_MAX) {
           violations.push(
             `${file}: flag "${key}" description is ${description.length} chars (max ${DESCRIPTION_MAX})`,
           );

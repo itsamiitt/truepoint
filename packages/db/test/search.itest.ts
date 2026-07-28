@@ -261,7 +261,9 @@ describe("Postgres searchRepository — owner-scoped faceted search (24)", () =>
     const first = await run(scopeA(), query({ limit: 2 }));
     expect(first.hits.map((h) => h.id)).toEqual([cCeo, cSwe]); // created_at desc
     expect(first.nextCursor).toBeTruthy();
-    const second = await run(scopeA(), query({ limit: 2, cursor: first.nextCursor }));
+    // `nextCursor` is `string | null` on the page shape but the assertion above has already required it to be
+    // present; the query builder takes `string | undefined`, so the null case is converted rather than cast.
+    const second = await run(scopeA(), query({ limit: 2, cursor: first.nextCursor ?? undefined }));
     expect(second.hits.map((h) => h.id)).toEqual([cVp]);
     expect(second.nextCursor).toBeNull();
   });

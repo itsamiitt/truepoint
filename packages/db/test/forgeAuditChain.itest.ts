@@ -52,9 +52,9 @@ async function chainRows() {
 /** The chain is well-formed iff it is rooted at GENESIS and every row links to its immediate predecessor. */
 function assertLinear(rows: Array<{ prev_hash: string; row_hash: string }>) {
   expect(rows.length).toBeGreaterThan(0);
-  expect(rows[0].prev_hash).toBe("GENESIS");
+  expect(rows[0]?.prev_hash).toBe("GENESIS");
   for (let i = 1; i < rows.length; i++) {
-    expect(rows[i].prev_hash).toBe(rows[i - 1].row_hash); // no fork — one row can only follow one predecessor
+    expect(rows[i]?.prev_hash).toBe(rows[i - 1]?.row_hash); // no fork — one row can only follow one predecessor
   }
 }
 
