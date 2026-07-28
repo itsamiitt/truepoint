@@ -1129,3 +1129,13 @@ export {
   type CrmMappingError,
   type CrmMappingErrorCode,
 } from "./crm/validateMapping.ts";
+// At-rest encryption for the CRM OAuth bundle (crm-sync §5.3/§7.2) — AES-256-GCM under a VERSIONED envelope
+// and its OWN key (CRM_SECRET_KEY), separate from the email and PII stores so one credential class never
+// widens into another. The ciphertext lands in crm_connections.oauth_token_enc, whose only writer is
+// crmConnectionRepository.markConnected/rotateToken and whose only reader is getEncryptedBundle.
+export {
+  encryptCrmSecret,
+  decryptCrmSecret,
+  encryptCrmTokenBundle,
+  decryptCrmTokenBundle,
+} from "./crm/crmSecretStore.ts";

@@ -645,6 +645,12 @@ export {
   type MailboxDueRow,
 } from "./repositories/mailboxRepository.ts";
 export {
+  crmConnectionRepository,
+  type CrmConnectionInsert,
+  type CrmConnectionRecord,
+  type CrmConnectionDueRow,
+} from "./repositories/crmConnectionRepository.ts";
+export {
   oauthConnectStateRepository,
   type ConnectStateInsert,
   type ConnectStateRecord,

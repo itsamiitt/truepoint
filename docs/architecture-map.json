@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1867,
-  "fileSetHash": "sha256:55c44ed4d29d07077708b1c7c83577e1cf3806bab58be4a219a444a918fcb05d",
+  "fileCount": 1871,
+  "fileSetHash": "sha256:785fbbd6565f4819578adf35c64a57376d7ed07a8b0cf2d2de1f6babb183abec",
   "features": {
     "account-search": {
       "web": [],
@@ -451,6 +451,8 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/crm/crmSecretStore.test.ts",
+        "packages/core/src/crm/crmSecretStore.ts",
         "packages/core/src/crm/defaultMappings.hubspot.ts",
         "packages/core/src/crm/defaultMappings.salesforce.ts",
         "packages/core/src/crm/defaultMappings.test.ts",
@@ -2579,6 +2581,7 @@
       "packages/db/test/contactChannels.reconcile.itest.ts",
       "packages/db/test/contactMerge.itest.ts",
       "packages/db/test/contactResolve.itest.ts",
+      "packages/db/test/crmConnectionRepository.itest.ts",
       "packages/db/test/crmIsolation.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
@@ -2876,6 +2879,7 @@
     "packages/db/src/repositories/contactExternalIdRepository.ts",
     "packages/db/src/repositories/contactMergeRepository.ts",
     "packages/db/src/repositories/creditPackRepository.ts",
+    "packages/db/src/repositories/crmConnectionRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/domainRepository.ts",
     "packages/db/src/repositories/effectivePolicyRepository.ts",

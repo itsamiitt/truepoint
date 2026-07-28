@@ -361,6 +361,15 @@ export const appEnvSchema = z
     // same dev-only posture as encryptPii); production MUST inject a dedicated key (rotated, KMS-managed).
     EMAIL_SECRET_KEY: z.string().min(16).optional(),
 
+    // CRM bidirectional sync (crm-sync 00 §5.3 / §7.2). The dedicated data key for the CRM OAuth-bundle
+    // secret store (core/crm/crmSecretStore). Deliberately NOT the email key and NOT the PII key: each
+    // credential class gets its own module and its own key, so compromising one never widens to the others
+    // and a rotation is scoped to one credential class. Server-only, never NEXT_PUBLIC_, never logged.
+    // Absent in dev/test → derived from BLIND_INDEX_KEY, the same dev-only posture as the email store.
+    // Production MUST inject a dedicated, KMS-managed key — 00 §7.2 makes a real CMK-wrapped DEK the hard
+    // prerequisite before any production CRM token is stored.
+    CRM_SECRET_KEY: z.string().min(16).optional(),
+
     // Signing secret for the inbound ESP delivery/bounce/complaint webhook (email-planning/13 P1, 04 §6).
     // Server-only; the webhook route fails CLOSED when it is absent (no secret → every event rejected), the
     // same posture as STRIPE_WEBHOOK_SECRET.
