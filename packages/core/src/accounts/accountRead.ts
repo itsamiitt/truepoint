@@ -23,7 +23,7 @@
 import { env } from "@leadwolf/config";
 import { type Tx, withTenantTx } from "@leadwolf/db";
 import { ACCOUNT_READ_FROM_CHILD_FLAG_KEY } from "@leadwolf/types";
-import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
+import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 import { isAccountDomainsDualWriteEnabled } from "./accountDualWrite.ts";
 
 /** Evaluate the S-A6 composed read gate INSIDE an existing tenant tx. Env layer off ⇒ false with zero queries.

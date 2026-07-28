@@ -11,7 +11,7 @@
 import { env } from "@leadwolf/config";
 import { type Tx, withTenantTx } from "@leadwolf/db";
 import { API_IMPORTS_FLAG_KEY } from "@leadwolf/types";
-import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
+import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 
 /** Evaluate the API-push dual gate INSIDE an existing tenant tx. Env layer off ⇒ false with zero queries; a
  *  flag-read failure propagates with the caller's tx (never catch inside an aborted tx). */

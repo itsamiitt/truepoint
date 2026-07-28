@@ -17,7 +17,7 @@
 import { env } from "@leadwolf/config";
 import { type Tx, withTenantTx } from "@leadwolf/db";
 import { ACCOUNT_DOMAINS_DUAL_WRITE_FLAG_KEY } from "@leadwolf/types";
-import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
+import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 
 /** Evaluate the S-A2 dual gate INSIDE an existing tenant tx (the account backfill's batch-boundary abort +
  *  any in-tx account writer). Env layer off ⇒ false with zero queries. A flag-read failure propagates with the

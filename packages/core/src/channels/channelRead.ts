@@ -21,7 +21,7 @@
 import { env } from "@leadwolf/config";
 import { type Tx, withTenantTx } from "@leadwolf/db";
 import { CHANNELS_READ_FLAG_KEY } from "@leadwolf/types";
-import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
+import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 import { isChannelDualWriteEnabled } from "./channelDualWrite.ts";
 
 /** Evaluate the S-CH4 composed read gate INSIDE an existing tenant tx (reveal reads, dynamic-list member

@@ -36,7 +36,6 @@
     "content",
     "crm-sync",
     "custom-fields",
-    "customFields",
     "data-health",
     "data-ops",
     "data-quality",
@@ -47,7 +46,6 @@
     "events",
     "export",
     "feature-flags",
-    "featureFlags",
     "forge",
     "home",
     "identity",
@@ -62,7 +60,6 @@
     "notifications",
     "outreach",
     "pipeline-stages",
-    "pipelineStages",
     "plans",
     "pricing",
     "projection",
@@ -74,7 +71,6 @@
     "reveal",
     "sales-navigator",
     "saved-searches",
-    "savedSearches",
     "scim",
     "scoring",
     "search",
@@ -106,7 +102,7 @@
     "workspaces"
   ],
   "fileCount": 1939,
-  "fileSetHash": "sha256:9e6002877332f0f793318aa9ecd8b9db6f4f57968a98fa8ca17ae5d525dded86",
+  "fileSetHash": "sha256:9628126195756decf994e0e437ab77c496481b0bc3ebf5df4f5e22b8e7c453d0",
   "features": {
     "account-search": {
       "web": [],
@@ -558,24 +554,15 @@
         "apps/api/src/features/custom-fields/index.ts",
         "apps/api/src/features/custom-fields/routes.ts"
       ],
-      "core": [],
+      "core": [
+        "packages/core/src/custom-fields/manageDefinitions.ts",
+        "packages/core/src/custom-fields/setValues.ts",
+        "packages/core/src/custom-fields/validateValue.test.ts",
+        "packages/core/src/custom-fields/validateValue.ts"
+      ],
       "db": [
         "packages/db/src/repositories/customFieldRepository.ts"
       ],
-      "workers": [],
-      "integrations": []
-    },
-    "customFields": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/customFields/manageDefinitions.ts",
-        "packages/core/src/customFields/setValues.ts",
-        "packages/core/src/customFields/validateValue.test.ts",
-        "packages/core/src/customFields/validateValue.ts"
-      ],
-      "db": [],
       "workers": [],
       "integrations": []
     },
@@ -883,23 +870,14 @@
         "apps/admin/src/features/feature-flags/index.ts"
       ],
       "api": [],
-      "core": [],
+      "core": [
+        "packages/core/src/feature-flags/evaluateFlag.test.ts",
+        "packages/core/src/feature-flags/evaluateFlag.ts",
+        "packages/core/src/feature-flags/flagsForTenant.ts"
+      ],
       "db": [
         "packages/db/src/repositories/featureFlagRepository.ts"
       ],
-      "workers": [],
-      "integrations": []
-    },
-    "featureFlags": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/featureFlags/evaluateFlag.test.ts",
-        "packages/core/src/featureFlags/evaluateFlag.ts",
-        "packages/core/src/featureFlags/flagsForTenant.ts"
-      ],
-      "db": [],
       "workers": [],
       "integrations": []
     },
@@ -1285,21 +1263,12 @@
         "apps/api/src/features/pipeline-stages/index.ts",
         "apps/api/src/features/pipeline-stages/routes.ts"
       ],
-      "core": [],
+      "core": [
+        "packages/core/src/pipeline-stages/manageStages.ts"
+      ],
       "db": [
         "packages/db/src/repositories/pipelineStageRepository.ts"
       ],
-      "workers": [],
-      "integrations": []
-    },
-    "pipelineStages": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/pipelineStages/manageStages.ts"
-      ],
-      "db": [],
       "workers": [],
       "integrations": []
     },
@@ -1625,21 +1594,12 @@
         "apps/api/src/features/saved-searches/index.ts",
         "apps/api/src/features/saved-searches/routes.ts"
       ],
-      "core": [],
+      "core": [
+        "packages/core/src/saved-searches/savedSearches.ts"
+      ],
       "db": [
         "packages/db/src/repositories/savedSearchRepository.ts"
       ],
-      "workers": [],
-      "integrations": []
-    },
-    "savedSearches": {
-      "web": [],
-      "admin": [],
-      "api": [],
-      "core": [
-        "packages/core/src/savedSearches/savedSearches.ts"
-      ],
-      "db": [],
       "workers": [],
       "integrations": []
     },
@@ -3106,7 +3066,6 @@
     "undeclared domain 'contacts-resolve' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'content' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'customFields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'data-ops' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'data-quality' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'email' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
@@ -3114,21 +3073,18 @@
     "undeclared domain 'er' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'events' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'feature-flags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'featureFlags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'identity' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'import-mapping-templates' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'ingest' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'ingestion' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'master-sync' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pipeline-stages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'pipelineStages' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'plans' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pricing' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'projection' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'provider-configs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'public-pricing' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'saved-searches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
-    "undeclared domain 'savedSearches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'scim' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'security' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'settings-custom-fields' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

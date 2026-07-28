@@ -11,7 +11,7 @@ import {
   aiRequestRepository as defaultAiRequestRepository,
   withTenantTx,
 } from "@leadwolf/db";
-import { isFlagEnabledForTenant as defaultIsFlagEnabled } from "../featureFlags/flagsForTenant.ts";
+import { isFlagEnabledForTenant as defaultIsFlagEnabled } from "../feature-flags/flagsForTenant.ts";
 import type { ReplyClassification } from "./detectAutoReply.ts";
 
 /** The dynamic per-tenant opt-in flag (default off). Shared so api/core/workers never drift on the key. */

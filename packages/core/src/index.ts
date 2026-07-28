@@ -759,7 +759,7 @@ export {
   type UpdateStageInput,
   type AssignStageInput,
   type AssignStageResult,
-} from "./pipelineStages/manageStages.ts";
+} from "./pipeline-stages/manageStages.ts";
 // AI intelligence layer (23, ADR-0023): the AiPort seam + NL→structured-search compilation with the
 // prompt-injection guard + per-tenant budget guard. DI-only — core OWNS the port; the Anthropic adapter
 // (packages/integrations) implements it; core never imports integrations.
@@ -807,12 +807,12 @@ export {
 } from "./webhooks/sign.ts";
 export { assertSafeWebhookUrl, isBlockedAddress } from "./webhooks/ssrfGuard.ts";
 // Platform feature flags (13 §3.5, ADR-0011): the pure evaluation rule + the DB-backed read helpers.
-export { evaluateFlag, isFlagEnabled, type FlagState } from "./featureFlags/evaluateFlag.ts";
+export { evaluateFlag, isFlagEnabled, type FlagState } from "./feature-flags/evaluateFlag.ts";
 export {
   evaluateFlagsForTenant,
   evaluateFlagForTenant,
   isFlagEnabledForTenant,
-} from "./featureFlags/flagsForTenant.ts";
+} from "./feature-flags/flagsForTenant.ts";
 // Record-customization tag layer (ADR-0028, G-REV-6): workspace-scoped tags + record assignments. Tag
 // mutations are audit-free for now (no tag.* action in the 08 §5 closed enum) — follow-up to add them.
 export {
@@ -879,7 +879,7 @@ export {
   type CreateSavedSearchInput,
   type UpdateSavedSearchInput,
   type DeleteSavedSearchInput,
-} from "./savedSearches/savedSearches.ts";
+} from "./saved-searches/savedSearches.ts";
 // Static prospect lists (24, bulk add-to-list): workspace-shared collections; owner-gated rename/delete;
 // cross-workspace-safe membership writes returning an affected count.
 export {
@@ -972,19 +972,19 @@ export {
 export {
   validateValue,
   type FieldDefinitionForValidation,
-} from "./customFields/validateValue.ts";
+} from "./custom-fields/validateValue.ts";
 export {
   createDefinition,
   updateDefinition,
   listDefinitions,
   type CreateDefinitionInput,
   type UpdateDefinitionInput,
-} from "./customFields/manageDefinitions.ts";
+} from "./custom-fields/manageDefinitions.ts";
 export {
   setCustomFieldValues,
   getCustomFieldValues,
   type SetValuesInput,
-} from "./customFields/setValues.ts";
+} from "./custom-fields/setValues.ts";
 
 // Per-data-class retention engine — per-tenant sweep (data-management backlog #6; design
 // 16-retention-engine-design.md). Per tenant: gate on the per-tenant engine flag, then per eligible v1 class COUNT

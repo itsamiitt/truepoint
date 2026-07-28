@@ -35,7 +35,7 @@ import {
   withTenantTx,
 } from "@leadwolf/db";
 import { RETENTION_ENGINE_FLAG_KEY, type RetentionPolicy } from "@leadwolf/types";
-import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
+import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 

@@ -23,7 +23,7 @@ import { type PhoneChannelValue, type Tx, withTenantTx } from "@leadwolf/db";
 import { CHANNELS_DUAL_WRITE_FLAG_KEY } from "@leadwolf/types";
 import type { CountryCode } from "libphonenumber-js";
 import { toE164 } from "../enrichment/matchKeys.ts";
-import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
+import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 import { blindIndex } from "../import/blindIndex.ts";
 import { encryptPii } from "../import/encryptPii.ts";
 import { normalizeText } from "../import/normalize.ts";

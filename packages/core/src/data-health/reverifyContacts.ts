@@ -29,7 +29,7 @@ import {
   reverifyCutoff,
 } from "@leadwolf/types";
 import { channelDualWriteEnabledForScope } from "../channels/channelDualWrite.ts";
-import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
+import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 import { decryptPii } from "../import/encryptPii.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "./emailVerifier.ts";
 import { type PhoneVerifierPort, formatOnlyPhoneVerifier } from "./phoneVerifier.ts";

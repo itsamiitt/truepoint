@@ -16,7 +16,7 @@
 import { env } from "@leadwolf/config";
 import { type Tx, withTenantTx } from "@leadwolf/db";
 import { DELTA_IMPORTS_FLAG_KEY } from "@leadwolf/types";
-import { isFlagEnabledForTenant } from "../featureFlags/flagsForTenant.ts";
+import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 
 /** Evaluate the delta dual gate INSIDE an existing tenant tx. Env layer off ⇒ false with zero queries. A
  *  flag-read failure propagates with the caller's tx (never catch inside a possibly-aborted tx). */
