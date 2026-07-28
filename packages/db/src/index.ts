@@ -651,6 +651,16 @@ export {
   type CrmConnectionDueRow,
 } from "./repositories/crmConnectionRepository.ts";
 export {
+  crmOauthStateRepository,
+  type CrmOauthStateInsert,
+  type CrmOauthStateConsumed,
+} from "./repositories/crmOauthStateRepository.ts";
+export {
+  crmFieldMappingRepository,
+  type CrmFieldMappingRow,
+  type CrmFieldMappingRecord,
+} from "./repositories/crmFieldMappingRepository.ts";
+export {
   oauthConnectStateRepository,
   type ConnectStateInsert,
   type ConnectStateRecord,

@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1871,
-  "fileSetHash": "sha256:785fbbd6565f4819578adf35c64a57376d7ed07a8b0cf2d2de1f6babb183abec",
+  "fileCount": 1876,
+  "fileSetHash": "sha256:a72ee6a06fbd4c95167f685c4fb47e672621995e190f8d82efdf963c67b60e10",
   "features": {
     "account-search": {
       "web": [],
@@ -451,6 +451,8 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/crm/connectCrm.test.ts",
+        "packages/core/src/crm/connectCrm.ts",
         "packages/core/src/crm/crmSecretStore.test.ts",
         "packages/core/src/crm/crmSecretStore.ts",
         "packages/core/src/crm/defaultMappings.hubspot.ts",
@@ -2581,6 +2583,7 @@
       "packages/db/test/contactChannels.reconcile.itest.ts",
       "packages/db/test/contactMerge.itest.ts",
       "packages/db/test/contactResolve.itest.ts",
+      "packages/db/test/crmConnect.itest.ts",
       "packages/db/test/crmConnectionRepository.itest.ts",
       "packages/db/test/crmIsolation.itest.ts",
       "packages/db/test/customFields.itest.ts",
@@ -2880,6 +2883,8 @@
     "packages/db/src/repositories/contactMergeRepository.ts",
     "packages/db/src/repositories/creditPackRepository.ts",
     "packages/db/src/repositories/crmConnectionRepository.ts",
+    "packages/db/src/repositories/crmFieldMappingRepository.ts",
+    "packages/db/src/repositories/crmOauthStateRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/domainRepository.ts",
     "packages/db/src/repositories/effectivePolicyRepository.ts",

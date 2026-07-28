@@ -1139,3 +1139,18 @@ export {
   encryptCrmTokenBundle,
   decryptCrmTokenBundle,
 } from "./crm/crmSecretStore.ts";
+// The server-side OAuth connect flow (crm-sync §5.2) — auth-code + PKCE, single-use state, a callback that
+// cannot select a tenant, an SSRF- and allow-list-validated instance URL, and a granted-scope check.
+export {
+  startCrmConnect,
+  completeCrmConnect,
+  assertSafeInstanceUrl,
+  assertScopesNotBroadened,
+  generatePkcePair,
+  CrmConnectError,
+  type CrmConnectErrorReason,
+  type StartCrmConnectInput,
+  type StartCrmConnectResult,
+  type CompleteCrmConnectInput,
+  type CompleteCrmConnectResult,
+} from "./crm/connectCrm.ts";
