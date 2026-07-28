@@ -7,7 +7,9 @@ import { describe, expect, test } from "bun:test";
 import type { CrmFieldMapping, FieldProvenanceMap } from "@leadwolf/types";
 import { type OutboundPushInput, planCrmOutboundPush } from "./planOutboundPush.ts";
 
-const mapping = (over: Partial<CrmFieldMapping> & { tpField: string; crmField: string }): CrmFieldMapping => ({
+const mapping = (
+  over: Partial<CrmFieldMapping> & { tpField: string; crmField: string },
+): CrmFieldMapping => ({
   objectType: "contact",
   direction: "outbound",
   transform: "passthrough",
@@ -60,7 +62,9 @@ describe("planCrmOutboundPush", () => {
 
   test("per-field direction is honored — an inbound-only field is never pushed", () => {
     const plan = planCrmOutboundPush(
-      base({ mappings: [mapping({ tpField: "jobTitle", crmField: "jobtitle", direction: "inbound" })] }),
+      base({
+        mappings: [mapping({ tpField: "jobTitle", crmField: "jobtitle", direction: "inbound" })],
+      }),
     );
 
     expect(plan.operation).toBe("skip");
@@ -69,7 +73,9 @@ describe("planCrmOutboundPush", () => {
 
   test("a CRM-authoritative field is never pushed (the CRM is the system of record)", () => {
     const plan = planCrmOutboundPush(
-      base({ mappings: [mapping({ tpField: "jobTitle", crmField: "jobtitle", authority: "crm" })] }),
+      base({
+        mappings: [mapping({ tpField: "jobTitle", crmField: "jobtitle", authority: "crm" })],
+      }),
     );
 
     expect(plan.reason).toBe("no_pushable_fields");
@@ -92,9 +98,14 @@ describe("planCrmOutboundPush", () => {
   });
 
   test("the confidence threshold gates low-confidence enrichment out of the CRM", () => {
-    const provenance: FieldProvenanceMap = { jobTitle: { src: "provider:zoominfo", conf: 0.4, pin: false } };
+    const provenance: FieldProvenanceMap = {
+      jobTitle: { src: "provider:zoominfo", conf: 0.4, pin: false },
+    };
     const plan = planCrmOutboundPush(
-      base({ provenance, mappings: [mapping({ tpField: "jobTitle", crmField: "jobtitle", confThreshold: 0.8 })] }),
+      base({
+        provenance,
+        mappings: [mapping({ tpField: "jobTitle", crmField: "jobtitle", confThreshold: 0.8 })],
+      }),
     );
 
     expect(plan.reason).toBe("no_pushable_fields");

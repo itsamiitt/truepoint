@@ -5,15 +5,19 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  type CrmRetryClass,
+  type RateBudgetInput,
+  type RetryAction,
   backoffDelayMs,
   classifyRetry,
-  type CrmRetryClass,
   rateBudgetDecision,
-  type RateBudgetInput,
 } from "./reliability.ts";
 
 describe("classifyRetry", () => {
-  const cases: Array<[CrmRetryClass, string]> = [
+  // The action column is typed as RetryAction, not string: widening it to string is what let this table
+  // compile while asserting against a union it never had to match. Typed this way, a renamed or dropped
+  // action breaks here rather than silently passing a stale expectation.
+  const cases: Array<[CrmRetryClass, RetryAction]> = [
     ["transient", "retry"],
     ["rate_limited", "backoff"],
     ["auth_expired", "refresh_auth"],

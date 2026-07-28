@@ -22,8 +22,25 @@ const SOBJECT: Partial<Record<CrmObjectType, string>> = {
 };
 /** §7.6 anonymize set per object: scrub identifying PII + raise Do-Not-Contact (required fields → "Redacted"). */
 const ANONYMIZE: Partial<Record<CrmObjectType, Record<string, unknown>>> = {
-  contact: { FirstName: "Redacted", LastName: "Redacted", Email: null, Phone: null, MobilePhone: null, HasOptedOutOfEmail: true, DoNotCall: true },
-  lead: { FirstName: "Redacted", LastName: "Redacted", Company: "Redacted", Email: null, Phone: null, MobilePhone: null, HasOptedOutOfEmail: true, DoNotCall: true },
+  contact: {
+    FirstName: "Redacted",
+    LastName: "Redacted",
+    Email: null,
+    Phone: null,
+    MobilePhone: null,
+    HasOptedOutOfEmail: true,
+    DoNotCall: true,
+  },
+  lead: {
+    FirstName: "Redacted",
+    LastName: "Redacted",
+    Company: "Redacted",
+    Email: null,
+    Phone: null,
+    MobilePhone: null,
+    HasOptedOutOfEmail: true,
+    DoNotCall: true,
+  },
   account: { Name: "Redacted", Phone: null, Website: null },
 };
 
@@ -41,7 +58,8 @@ interface SfRecord {
 }
 
 const loginHost = (env: CrmEnvironment): string => (env === "sandbox" ? SANDBOX_LOGIN : PROD_LOGIN);
-const apiBase = (bundle: CrmTokenBundle): string => `${bundle.instanceUrl}/services/data/${API_VERSION}`;
+const apiBase = (bundle: CrmTokenBundle): string =>
+  `${bundle.instanceUrl}/services/data/${API_VERSION}`;
 const pathFor = (object: CrmObjectType): string | undefined => SOBJECT[object];
 const anonymizeValues = (object: CrmObjectType): Record<string, unknown> => ANONYMIZE[object] ?? {};
 const hasDnc = (object: CrmObjectType): boolean => object === "contact" || object === "lead";
@@ -106,7 +124,12 @@ export function salesforceConnector(
 ): CrmConnector {
   const configured = Boolean(config.clientId && config.clientSecret);
 
-  async function tokenCall(f: CrmFetch, form: Record<string, string>, env: CrmEnvironment, carry?: string) {
+  async function tokenCall(
+    f: CrmFetch,
+    form: Record<string, string>,
+    env: CrmEnvironment,
+    carry?: string,
+  ) {
     const { status, json } = await f({
       method: "POST",
       url: `${loginHost(env)}/services/oauth2/token`,
@@ -129,10 +152,18 @@ export function salesforceConnector(
     value: (json: unknown) => T,
   ) {
     const headers = { ...jsonHeaders(req.bundle), ...req.headers };
-    const { status, headers: res, json } = await f({ method: req.method, url: req.url, headers, body: req.body });
+    const {
+      status,
+      headers: res,
+      json,
+    } = await f({ method: req.method, url: req.url, headers, body: req.body });
     const err = classifySalesforceStatus(status, res, json);
     if (err) return err;
-    return { kind: "ok" as const, value: value(json), limits: parseSalesforceLimits(status, res, json) };
+    return {
+      kind: "ok" as const,
+      value: value(json),
+      limits: parseSalesforceLimits(status, res, json),
+    };
   }
 
   return {
@@ -155,7 +186,14 @@ export function salesforceConnector(
     exchangeCode({ code, codeVerifier, redirectUri, env }, f = fetch) {
       return tokenCall(
         f,
-        { grant_type: "authorization_code", client_id: config.clientId ?? "", client_secret: config.clientSecret ?? "", redirect_uri: redirectUri, code, code_verifier: codeVerifier },
+        {
+          grant_type: "authorization_code",
+          client_id: config.clientId ?? "",
+          client_secret: config.clientSecret ?? "",
+          redirect_uri: redirectUri,
+          code,
+          code_verifier: codeVerifier,
+        },
         env,
       );
     },
@@ -163,7 +201,12 @@ export function salesforceConnector(
     refresh(bundle, f = fetch) {
       return tokenCall(
         f,
-        { grant_type: "refresh_token", client_id: config.clientId ?? "", client_secret: config.clientSecret ?? "", refresh_token: bundle.refreshToken ?? "" },
+        {
+          grant_type: "refresh_token",
+          client_id: config.clientId ?? "",
+          client_secret: config.clientSecret ?? "",
+          refresh_token: bundle.refreshToken ?? "",
+        },
         bundle.environment,
         bundle.refreshToken, // SFDC refresh does not rotate the refresh token — carry it forward
       );
@@ -179,20 +222,39 @@ export function salesforceConnector(
           typeof max === "number" && typeof remaining === "number"
             ? { used: max - remaining, max }
             : undefined;
-        return { account: bundle.instanceUrl ?? "salesforce", environment: bundle.environment, daily };
+        return {
+          account: bundle.instanceUrl ?? "salesforce",
+          environment: bundle.environment,
+          daily,
+        };
       });
     },
 
     pullPage({ bundle, object, cursor, pageSize }, f = fetch) {
       const sobject = pathFor(object);
-      if (!sobject) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
+      if (!sobject)
+        return Promise.resolve({
+          kind: "validation" as const,
+          detail: `unsupported object ${object}`,
+        });
       const soql = `SELECT Id, SystemModstamp FROM ${sobject} ORDER BY SystemModstamp ASC`;
-      const url = cursor ? `${bundle.instanceUrl}${cursor}` : `${apiBase(bundle)}/query?q=${encodeURIComponent(soql)}`;
+      const url = cursor
+        ? `${bundle.instanceUrl}${cursor}`
+        : `${apiBase(bundle)}/query?q=${encodeURIComponent(soql)}`;
       return call(
         f,
-        { method: "GET", url, bundle, headers: { "sforce-query-options": `batchSize=${pageSize}` } },
+        {
+          method: "GET",
+          url,
+          bundle,
+          headers: { "sforce-query-options": `batchSize=${pageSize}` },
+        },
         (json) => {
-          const j = (json ?? {}) as { records?: SfRecord[]; nextRecordsUrl?: string; done?: boolean };
+          const j = (json ?? {}) as {
+            records?: SfRecord[];
+            nextRecordsUrl?: string;
+            done?: boolean;
+          };
           const records = j.records ?? [];
           return {
             records: records.map(mapRecord),
@@ -205,17 +267,29 @@ export function salesforceConnector(
 
     pullDelta({ bundle, object, sinceWatermark, pageSize }, f = fetch) {
       const sobject = pathFor(object);
-      if (!sobject) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
+      if (!sobject)
+        return Promise.resolve({
+          kind: "validation" as const,
+          detail: `unsupported object ${object}`,
+        });
       // SOQL datetime literals are unquoted; sinceWatermark is our own stored SystemModstamp (system-owned).
       const soql = `SELECT Id, SystemModstamp FROM ${sobject} WHERE SystemModstamp > ${sinceWatermark} ORDER BY SystemModstamp ASC`;
       return call(
         f,
-        { method: "GET", url: `${apiBase(bundle)}/query?q=${encodeURIComponent(soql)}`, bundle, headers: { "sforce-query-options": `batchSize=${pageSize}` } },
+        {
+          method: "GET",
+          url: `${apiBase(bundle)}/query?q=${encodeURIComponent(soql)}`,
+          bundle,
+          headers: { "sforce-query-options": `batchSize=${pageSize}` },
+        },
         (json) => {
           const records = ((json ?? {}) as { records?: SfRecord[] }).records ?? [];
           return {
             records: records.map(mapRecord),
-            highWatermark: records.length > 0 ? (modstamp(records[records.length - 1]) ?? sinceWatermark) : sinceWatermark,
+            highWatermark:
+              records.length > 0
+                ? (modstamp(records[records.length - 1]) ?? sinceWatermark)
+                : sinceWatermark,
           };
         },
       );
@@ -223,27 +297,48 @@ export function salesforceConnector(
 
     fetchOne({ bundle, object, externalId }, f = fetch) {
       const sobject = pathFor(object);
-      if (!sobject) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
+      if (!sobject)
+        return Promise.resolve({
+          kind: "validation" as const,
+          detail: `unsupported object ${object}`,
+        });
       return call(
         f,
-        { method: "GET", url: `${apiBase(bundle)}/sobjects/${sobject}/${encodeURIComponent(externalId)}`, bundle },
+        {
+          method: "GET",
+          url: `${apiBase(bundle)}/sobjects/${sobject}/${encodeURIComponent(externalId)}`,
+          bundle,
+        },
         (json) => ({ record: json === null ? null : mapRecord(json as SfRecord) }),
       );
     },
 
     upsert({ bundle, object, externalIdField, records }, f = fetch) {
       const sobject = pathFor(object);
-      if (!sobject) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
+      if (!sobject)
+        return Promise.resolve({
+          kind: "validation" as const,
+          detail: `unsupported object ${object}`,
+        });
       // sObject Collections upsert by external id (≤200 rows; the runner batches). The `truepoint_id__c`
       // external-id custom field is a CONNECT-TIME PREREQ on each mapped SObject.
       const body = {
         allOrNone: false,
-        records: records.map((r) => ({ attributes: { type: sobject }, [externalIdField]: r.externalId, ...r.values })),
+        records: records.map((r) => ({
+          attributes: { type: sobject },
+          [externalIdField]: r.externalId,
+          ...r.values,
+        })),
       };
       const url = `${apiBase(bundle)}/composite/sobjects/${sobject}/${encodeURIComponent(externalIdField)}`;
       return call(f, { method: "PATCH", url, bundle, body }, (json) => {
-        const results = Array.isArray(json) ? (json as Array<{ success?: boolean; created?: boolean }>) : [];
-        const perRecord: CrmUpsertResult[] = records.map((r, i) => ({ externalId: r.externalId, outcome: outcomeFor(results[i]) }));
+        const results = Array.isArray(json)
+          ? (json as Array<{ success?: boolean; created?: boolean }>)
+          : [];
+        const perRecord: CrmUpsertResult[] = records.map((r, i) => ({
+          externalId: r.externalId,
+          outcome: outcomeFor(results[i]),
+        }));
         return { perRecord };
       });
     },
@@ -261,11 +356,19 @@ export function salesforceConnector(
 
       // delete/gdpr_delete → attempt the hard delete; SFDC has NO GDPR endpoint, so a refused delete falls
       // back to anonymize + Do-Not-Contact (§7.6). The outcome ALWAYS names which path actually ran.
-      const del = await call(f, { method: "DELETE", url, bundle }, () => ({ path: "deleted" as const }));
+      const del = await call(f, { method: "DELETE", url, bundle }, () => ({
+        path: "deleted" as const,
+      }));
       if (del.kind === "ok") return del;
-      if (del.kind === "not_found") return { kind: "ok" as const, value: { path: "deleted" as const }, limits: {} };
+      if (del.kind === "not_found")
+        return { kind: "ok" as const, value: { path: "deleted" as const }, limits: {} };
       // Retryable failures must NOT silently downgrade to anonymize — let the worker retry/refresh.
-      if (del.kind === "transient" || del.kind === "rate_limited" || del.kind === "auth_expired" || del.kind === "auth_revoked") {
+      if (
+        del.kind === "transient" ||
+        del.kind === "rate_limited" ||
+        del.kind === "auth_expired" ||
+        del.kind === "auth_revoked"
+      ) {
         return del;
       }
       // validation / permanent / conflict → the org will not let us delete → anonymize + DNC instead.

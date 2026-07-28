@@ -27,7 +27,10 @@ const AUTH_ENDPOINT = "https://app.hubspot.com/oauth/authorize";
 const TOKEN_ENDPOINT = "https://api.hubapi.com/oauth/v1/token";
 const API_BASE = "https://api.hubapi.com";
 /** HubSpot has no `lead`/`deal` mapping in phase 1 — only contacts + companies. */
-const OBJECT_PATH: Partial<Record<CrmObjectType, string>> = { contact: "contacts", account: "companies" };
+const OBJECT_PATH: Partial<Record<CrmObjectType, string>> = {
+  contact: "contacts",
+  account: "companies",
+};
 
 export interface HubspotConfig {
   clientId?: string;
@@ -70,9 +73,18 @@ function toBundle(
   carryRefresh: string | undefined,
   env: CrmEnvironment,
 ): CrmTokenBundle {
-  const body = (json ?? {}) as { access_token?: string; refresh_token?: string; expires_in?: number; message?: string };
+  const body = (json ?? {}) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    message?: string;
+  };
   if (status !== 200 || typeof body.access_token !== "string") {
-    throw new CrmOAuthError("invalid_grant", body.message ?? `HubSpot token endpoint returned ${status}`, status);
+    throw new CrmOAuthError(
+      "invalid_grant",
+      body.message ?? `HubSpot token endpoint returned ${status}`,
+      status,
+    );
   }
   return {
     accessToken: body.access_token,
@@ -85,10 +97,18 @@ function toBundle(
 }
 
 /** Build the HubSpot connector. `fetch` is the default transport; each method may override it per call. */
-export function hubspotConnector(config: HubspotConfig = {}, fetch: CrmFetch = defaultCrmFetch): CrmConnector {
+export function hubspotConnector(
+  config: HubspotConfig = {},
+  fetch: CrmFetch = defaultCrmFetch,
+): CrmConnector {
   const configured = Boolean(config.clientId && config.clientSecret);
 
-  async function tokenCall(f: CrmFetch, form: Record<string, string>, env: CrmEnvironment, carry?: string) {
+  async function tokenCall(
+    f: CrmFetch,
+    form: Record<string, string>,
+    env: CrmEnvironment,
+    carry?: string,
+  ) {
     const { status, json } = await f({
       method: "POST",
       url: TOKEN_ENDPOINT,
@@ -101,13 +121,27 @@ export function hubspotConnector(config: HubspotConfig = {}, fetch: CrmFetch = d
   /** Run a JSON data-plane call and wrap it in a CrmOutcome (ok | the classified error variant). */
   async function call<T>(
     f: CrmFetch,
-    req: { method: "GET" | "POST" | "PATCH" | "DELETE"; url: string; bundle: CrmTokenBundle; body?: unknown },
+    req: {
+      method: "GET" | "POST" | "PATCH" | "DELETE";
+      url: string;
+      bundle: CrmTokenBundle;
+      body?: unknown;
+    },
     value: (json: unknown) => T,
   ) {
-    const { status, headers, json } = await f({ method: req.method, url: req.url, headers: jsonHeaders(req.bundle), body: req.body });
+    const { status, headers, json } = await f({
+      method: req.method,
+      url: req.url,
+      headers: jsonHeaders(req.bundle),
+      body: req.body,
+    });
     const err = classifyHubspotStatus(status, headers, json);
     if (err) return err;
-    return { kind: "ok" as const, value: value(json), limits: parseHubspotLimits(status, headers, json) };
+    return {
+      kind: "ok" as const,
+      value: value(json),
+      limits: parseHubspotLimits(status, headers, json),
+    };
   }
 
   const pathFor = (object: CrmObjectType) => OBJECT_PATH[object];
@@ -129,7 +163,13 @@ export function hubspotConnector(config: HubspotConfig = {}, fetch: CrmFetch = d
     exchangeCode({ code, redirectUri, env }, f = fetch) {
       return tokenCall(
         f,
-        { grant_type: "authorization_code", client_id: config.clientId ?? "", client_secret: config.clientSecret ?? "", redirect_uri: redirectUri, code },
+        {
+          grant_type: "authorization_code",
+          client_id: config.clientId ?? "",
+          client_secret: config.clientSecret ?? "",
+          redirect_uri: redirectUri,
+          code,
+        },
         env,
       );
     },
@@ -137,28 +177,51 @@ export function hubspotConnector(config: HubspotConfig = {}, fetch: CrmFetch = d
     refresh(bundle, f = fetch) {
       return tokenCall(
         f,
-        { grant_type: "refresh_token", client_id: config.clientId ?? "", client_secret: config.clientSecret ?? "", refresh_token: bundle.refreshToken ?? "" },
+        {
+          grant_type: "refresh_token",
+          client_id: config.clientId ?? "",
+          client_secret: config.clientSecret ?? "",
+          refresh_token: bundle.refreshToken ?? "",
+        },
         bundle.environment,
         bundle.refreshToken,
       );
     },
 
     testConnection(bundle, f = fetch) {
-      return call(f, { method: "GET", url: `${API_BASE}/account-info/v3/details`, bundle }, (json) => {
-        const j = (json ?? {}) as { portalId?: number; companyName?: string };
-        return { account: String(j.companyName ?? j.portalId ?? "hubspot"), environment: bundle.environment };
-      });
+      return call(
+        f,
+        { method: "GET", url: `${API_BASE}/account-info/v3/details`, bundle },
+        (json) => {
+          const j = (json ?? {}) as { portalId?: number; companyName?: string };
+          return {
+            account: String(j.companyName ?? j.portalId ?? "hubspot"),
+            environment: bundle.environment,
+          };
+        },
+      );
     },
 
     pullPage({ bundle, object, cursor, pageSize }, f = fetch) {
       const path = pathFor(object);
-      if (!path) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
+      if (!path)
+        return Promise.resolve({
+          kind: "validation" as const,
+          detail: `unsupported object ${object}`,
+        });
       const after = cursor ? `&after=${encodeURIComponent(cursor)}` : "";
       return call(
         f,
-        { method: "GET", url: `${API_BASE}/crm/v3/objects/${path}?limit=${pageSize}&archived=false&properties=hs_lastmodifieddate${after}`, bundle },
+        {
+          method: "GET",
+          url: `${API_BASE}/crm/v3/objects/${path}?limit=${pageSize}&archived=false&properties=hs_lastmodifieddate${after}`,
+          bundle,
+        },
         (json) => {
-          const j = (json ?? {}) as { results?: HubspotRecord[]; paging?: { next?: { after?: string } } };
+          const j = (json ?? {}) as {
+            results?: HubspotRecord[];
+            paging?: { next?: { after?: string } };
+          };
           const results = j.results ?? [];
           return {
             records: results.map(mapRecord),
@@ -171,54 +234,117 @@ export function hubspotConnector(config: HubspotConfig = {}, fetch: CrmFetch = d
 
     pullDelta({ bundle, object, sinceWatermark, pageSize }, f = fetch) {
       const path = pathFor(object);
-      if (!path) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
+      if (!path)
+        return Promise.resolve({
+          kind: "validation" as const,
+          detail: `unsupported object ${object}`,
+        });
       const body = {
-        filterGroups: [{ filters: [{ propertyName: "hs_lastmodifieddate", operator: "GTE", value: sinceWatermark }] }],
+        filterGroups: [
+          {
+            filters: [
+              { propertyName: "hs_lastmodifieddate", operator: "GTE", value: sinceWatermark },
+            ],
+          },
+        ],
         sorts: [{ propertyName: "hs_lastmodifieddate", direction: "ASCENDING" }],
         properties: ["hs_lastmodifieddate"],
         limit: pageSize,
       };
-      return call(f, { method: "POST", url: `${API_BASE}/crm/v3/objects/${path}/search`, bundle, body }, (json) => {
-        const results = ((json ?? {}) as { results?: HubspotRecord[] }).results ?? [];
-        return {
-          records: results.map(mapRecord),
-          highWatermark: results.length > 0 ? (modstamp(results[results.length - 1]) ?? sinceWatermark) : sinceWatermark,
-        };
-      });
+      return call(
+        f,
+        { method: "POST", url: `${API_BASE}/crm/v3/objects/${path}/search`, bundle, body },
+        (json) => {
+          const results = ((json ?? {}) as { results?: HubspotRecord[] }).results ?? [];
+          return {
+            records: results.map(mapRecord),
+            highWatermark:
+              results.length > 0
+                ? (modstamp(results[results.length - 1]) ?? sinceWatermark)
+                : sinceWatermark,
+          };
+        },
+      );
     },
 
     fetchOne({ bundle, object, externalId }, f = fetch) {
       const path = pathFor(object);
-      if (!path) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
+      if (!path)
+        return Promise.resolve({
+          kind: "validation" as const,
+          detail: `unsupported object ${object}`,
+        });
       return call(
         f,
-        { method: "GET", url: `${API_BASE}/crm/v3/objects/${path}/${encodeURIComponent(externalId)}?archived=false&properties=hs_lastmodifieddate`, bundle },
+        {
+          method: "GET",
+          url: `${API_BASE}/crm/v3/objects/${path}/${encodeURIComponent(externalId)}?archived=false&properties=hs_lastmodifieddate`,
+          bundle,
+        },
         (json) => ({ record: json === null ? null : mapRecord(json as HubspotRecord) }),
       );
     },
 
     upsert({ bundle, object, externalIdField, records }, f = fetch) {
       const path = pathFor(object);
-      if (!path) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
+      if (!path)
+        return Promise.resolve({
+          kind: "validation" as const,
+          detail: `unsupported object ${object}`,
+        });
       // HubSpot caps a batch upsert at 100 inputs — the runner batches; the adapter sends what it is given.
-      const inputs = records.map((r) => ({ idProperty: externalIdField, id: r.externalId, properties: r.values }));
-      return call(f, { method: "POST", url: `${API_BASE}/crm/v3/objects/${path}/batch/upsert`, bundle, body: { inputs } }, (json) => {
-        const results = ((json ?? {}) as { results?: HubspotRecord[] }).results ?? [];
-        const perRecord: CrmUpsertResult[] = records.map((r, i) => ({
-          externalId: r.externalId,
-          outcome: results[i] ? "updated" : "rejected",
-        }));
-        return { perRecord };
-      });
+      const inputs = records.map((r) => ({
+        idProperty: externalIdField,
+        id: r.externalId,
+        properties: r.values,
+      }));
+      return call(
+        f,
+        {
+          method: "POST",
+          url: `${API_BASE}/crm/v3/objects/${path}/batch/upsert`,
+          bundle,
+          body: { inputs },
+        },
+        (json) => {
+          const results = ((json ?? {}) as { results?: HubspotRecord[] }).results ?? [];
+          const perRecord: CrmUpsertResult[] = records.map((r, i) => ({
+            externalId: r.externalId,
+            outcome: results[i] ? "updated" : "rejected",
+          }));
+          return { perRecord };
+        },
+      );
     },
 
     eraseOrSuppress({ bundle, object, externalId, mode }, f = fetch) {
       const path = pathFor(object);
-      if (!path) return Promise.resolve({ kind: "validation" as const, detail: `unsupported object ${object}` });
+      if (!path)
+        return Promise.resolve({
+          kind: "validation" as const,
+          detail: `unsupported object ${object}`,
+        });
       if (mode === "gdpr_delete" && path === "contacts") {
-        return call(f, { method: "POST", url: `${API_BASE}/crm/v3/objects/contacts/gdpr-delete`, bundle, body: { objectId: externalId } }, () => ({ path: "gdpr_deleted" as const }));
+        return call(
+          f,
+          {
+            method: "POST",
+            url: `${API_BASE}/crm/v3/objects/contacts/gdpr-delete`,
+            bundle,
+            body: { objectId: externalId },
+          },
+          () => ({ path: "gdpr_deleted" as const }),
+        );
       }
-      return call(f, { method: "DELETE", url: `${API_BASE}/crm/v3/objects/${path}/${encodeURIComponent(externalId)}`, bundle }, () => ({ path: "deleted" as const }));
+      return call(
+        f,
+        {
+          method: "DELETE",
+          url: `${API_BASE}/crm/v3/objects/${path}/${encodeURIComponent(externalId)}`,
+          bundle,
+        },
+        () => ({ path: "deleted" as const }),
+      );
     },
 
     verifyWebhook(raw, headers, secret) {
@@ -226,7 +352,9 @@ export function hubspotConnector(config: HubspotConfig = {}, fetch: CrmFetch = d
       // binds method + URI + timestamp) is completed at the route, where those inputs are available.
       const provided = headers["x-hubspot-signature"] ?? headers["X-HubSpot-Signature"];
       if (!provided) return false;
-      const expected = createHash("sha256").update(secret + raw, "utf8").digest("hex");
+      const expected = createHash("sha256")
+        .update(secret + raw, "utf8")
+        .digest("hex");
       const a = Buffer.from(expected);
       const b = Buffer.from(provided);
       return a.length === b.length && timingSafeEqual(a, b);
@@ -242,11 +370,21 @@ export function hubspotConnector(config: HubspotConfig = {}, fetch: CrmFetch = d
       if (!Array.isArray(events)) return [];
       const out: CrmWebhookEvent[] = [];
       for (const e of events) {
-        const ev = (e ?? {}) as { objectId?: unknown; subscriptionType?: unknown; eventId?: unknown; sourceId?: unknown };
+        const ev = (e ?? {}) as {
+          objectId?: unknown;
+          subscriptionType?: unknown;
+          eventId?: unknown;
+          sourceId?: unknown;
+        };
         const sub = typeof ev.subscriptionType === "string" ? ev.subscriptionType : "";
         const object = objectForSubscription(sub);
         if (!object || ev.objectId === undefined) continue;
-        out.push({ object, externalId: String(ev.objectId), eventId: String(ev.eventId ?? ev.objectId), sourceTag: String(ev.sourceId ?? "") });
+        out.push({
+          object,
+          externalId: String(ev.objectId),
+          eventId: String(ev.eventId ?? ev.objectId),
+          sourceTag: String(ev.sourceId ?? ""),
+        });
       }
       return out;
     },

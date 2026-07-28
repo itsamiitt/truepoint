@@ -39,7 +39,13 @@ export const crmSyncMode = z.enum(["disabled", "shadow", "enforce"]);
 export type CrmSyncMode = z.infer<typeof crmSyncMode>;
 
 /** Connection lifecycle (`crm_connections.status`). */
-export const crmConnectionStatus = z.enum(["pending", "connected", "error", "paused", "disconnected"]);
+export const crmConnectionStatus = z.enum([
+  "pending",
+  "connected",
+  "error",
+  "paused",
+  "disconnected",
+]);
 export type CrmConnectionStatus = z.infer<typeof crmConnectionStatus>;
 
 /** Per-field source-of-truth (`crm_field_mappings.authority`); unset → the §6.1 LWW tiebreak applies. */

@@ -30,7 +30,9 @@ const field = (over: Partial<InboundMergeField> & { tpField: string }): InboundM
 const base = (over: Partial<InboundMergeInput> = {}): InboundMergeInput => ({
   provider: "hubspot",
   mappings: [mapping({ tpField: "jobTitle" })],
-  incoming: [field({ tpField: "jobTitle", value: "VP Sales", obs: "2026-06-10T00:00:00Z", conf: 0.9 })],
+  incoming: [
+    field({ tpField: "jobTitle", value: "VP Sales", obs: "2026-06-10T00:00:00Z", conf: 0.9 }),
+  ],
   current: { jobTitle: "Director" },
   provenance: {},
   suppressed: false,
@@ -63,7 +65,10 @@ describe("planCrmInboundMerge", () => {
 
   test("SKIP a no-op / echo (the incoming value equals the current value, case-insensitively)", () => {
     const plan = planCrmInboundMerge(
-      base({ current: { jobTitle: "vp sales" }, incoming: [field({ tpField: "jobTitle", value: "VP Sales" })] }),
+      base({
+        current: { jobTitle: "vp sales" },
+        incoming: [field({ tpField: "jobTitle", value: "VP Sales" })],
+      }),
     );
 
     expect(plan.writableFields.size).toBe(0);
@@ -90,7 +95,10 @@ describe("planCrmInboundMerge", () => {
     expect(filled.writableFields.size).toBe(0); // current is 'Director' → TP owns it, CRM may not overwrite
 
     const gap = planCrmInboundMerge(
-      base({ current: { jobTitle: "" }, mappings: [mapping({ tpField: "jobTitle", authority: "truepoint" })] }),
+      base({
+        current: { jobTitle: "" },
+        mappings: [mapping({ tpField: "jobTitle", authority: "truepoint" })],
+      }),
     );
     expect(gap.writableFields.has("jobTitle")).toBe(true); // fill the gap
   });
@@ -102,12 +110,20 @@ describe("planCrmInboundMerge", () => {
     const mappings = [mapping({ tpField: "jobTitle", authority: undefined })];
 
     const older = planCrmInboundMerge(
-      base({ provenance, mappings, incoming: [field({ tpField: "jobTitle", value: "Old", obs: "2026-01-01T00:00:00Z" })] }),
+      base({
+        provenance,
+        mappings,
+        incoming: [field({ tpField: "jobTitle", value: "Old", obs: "2026-01-01T00:00:00Z" })],
+      }),
     );
     expect(older.writableFields.size).toBe(0); // incoming is older → keep ours
 
     const newer = planCrmInboundMerge(
-      base({ provenance, mappings, incoming: [field({ tpField: "jobTitle", value: "Newer", obs: "2026-12-01T00:00:00Z" })] }),
+      base({
+        provenance,
+        mappings,
+        incoming: [field({ tpField: "jobTitle", value: "Newer", obs: "2026-12-01T00:00:00Z" })],
+      }),
     );
     expect(newer.writableFields.has("jobTitle")).toBe(true); // incoming is newer → apply
   });
@@ -116,7 +132,11 @@ describe("planCrmInboundMerge", () => {
     const plan = planCrmInboundMerge(base({ suppressed: true }));
 
     expect(plan.writableFields.size).toBe(0);
-    expect(plan.outcomes[0].reason).toBe("suppressed");
+    // Asserts the length before the contents: `every` on an empty array passes vacuously, so the original
+    // `outcomes[0].reason` would have gone green on a plan that emitted no outcomes at all. Checking every
+    // outcome (not just the first) is also what "SKIP everything" claims.
+    expect(plan.outcomes.length).toBeGreaterThan(0);
+    expect(plan.outcomes.every((o) => o.reason === "suppressed")).toBe(true);
   });
 
   test("does not mutate the existing provenance map", () => {
