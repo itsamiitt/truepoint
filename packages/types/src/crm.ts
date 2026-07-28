@@ -122,16 +122,22 @@ const crmJobBase = {
 
 /** crm-sync-sweep: leader-locked tick (global; no per-connection scope) selecting due connections. */
 /**
- * The sweep tick kinds (§3.2/§3.3).
+ * The sweep tick kinds (§3.2 / §3.3 / §9.5).
  *
- *      — the 60s incremental poll from each stream's watermark.
- *  — the 24h CORRECTNESS BACKSTOP: a wide re-scan that does not trust the watermark. Webhooks are
- *               the latency layer and can be missed (a provider outage, a dropped delivery, a bug in our own
- *               apply); without a periodic full re-read those gaps are permanent and silent.
- *    — the token-refresh tick. Not a data sync, but it shares the leader lock and the connection
- *               enumeration, so it rides the same queue rather than duplicating both.
+ * - `delta` — the 60s incremental poll from each stream's watermark.
+ * - `reconcile` — the 24h CORRECTNESS BACKSTOP: a wide re-scan that does not trust the watermark. Webhooks
+ *   are the latency layer and can be missed (a provider outage, a dropped delivery, a bug in our own apply
+ *   path); without a periodic full re-read those gaps sit below the mark permanently and silently.
+ * - `refresh` — the token-refresh tick.
+ * - `alert` — the health evaluation.
+ *
+ * The last two are not data syncs, but they share the leader lock and the connection enumeration, so they
+ * ride the same queue rather than duplicating both. Sharing the lock also means exactly ONE worker
+ * evaluates fleet health per tick — a 20-worker fleet must not log the same incident 20 times.
  */
-export const crmSweepJobSchema = z.object({ kind: z.enum(["delta", "reconcile", "refresh"]) });
+export const crmSweepJobSchema = z.object({
+  kind: z.enum(["delta", "reconcile", "refresh", "alert"]),
+});
 export type CrmSweepJob = z.infer<typeof crmSweepJobSchema>;
 
 /** crm-sync-pull: incremental CRM→TP delta by watermark for one (connection, object). */

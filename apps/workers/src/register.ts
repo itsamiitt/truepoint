@@ -52,6 +52,7 @@ import {
 } from "@leadwolf/types";
 import type { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
+import { runCrmAlertTick } from "./crm/crmAlertTick.ts";
 import { makeCrmDeadLetterHandler } from "./crm/crmDeadLetter.ts";
 import { type WorkerDeadLetter, extractScope, makeDeadLetterHandler } from "./deadLetter.ts";
 import { log } from "./logger.ts";
@@ -637,6 +638,13 @@ export async function scheduleCrmSyncSweeps(): Promise<void> {
     { kind: "refresh" },
     { repeat: { every: 10 * 60_000 }, jobId: "crm-sync-refresh-tick" },
   );
+  // The health evaluation (§9.5). Silent when the fleet is healthy — a tick that logs "all clear" every
+  // minute trains people to filter the channel, which is how a real alert gets missed.
+  await crmSyncSweepQueue.add(
+    "sweep",
+    { kind: "alert" },
+    { repeat: { every: 60_000 }, jobId: "crm-sync-alert-tick" },
+  );
   // The 24h correctness backstop (§3.3). Webhooks are the LATENCY layer and can be missed — a provider
   // outage, a dropped delivery, a bug in our own apply path. Without a periodic wide re-read those gaps sit
   // below the watermark permanently and silently.
@@ -1096,6 +1104,7 @@ export function startWorkers(): Worker[] {
             }
           },
           listAllConnected: (limit) => crmConnectionRepository.listAllConnectedForSweep(limit),
+          runAlertTick: (limit) => runCrmAlertTick(limit),
           enqueueRefresh: (conn) =>
             crmPullQueue.add(
               "refresh",

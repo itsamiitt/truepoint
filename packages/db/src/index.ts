@@ -735,3 +735,7 @@ export {
   type CrmDeadLetterInsert,
   type CrmErrorClass,
 } from "./repositories/crmDeadLetterRepository.ts";
+export {
+  crmHealthRepository,
+  type CrmHealthRow,
+} from "./repositories/crmHealthRepository.ts";

@@ -34,7 +34,7 @@ const REFRESH_SKEW_MS = 10 * 60_000;
 
 export interface CrmSyncSweepJobData {
   /** Mirrors crmSweepJobSchema — see its doc for why reconcile exists. */
-  kind: "delta" | "reconcile" | "refresh";
+  kind: "delta" | "reconcile" | "refresh" | "alert";
 }
 
 export interface CrmConnectionRef {
@@ -62,6 +62,11 @@ export interface CrmSweepEnqueuers {
   /** Reconcile's enumeration — every connected connection, due or not. */
   listAllConnected?(limit: number): Promise<CrmConnectionRef[]>;
   /**
+   * The alert tick (§9.5). Injected as a whole rather than assembled here, because judging fleet health
+   * needs counts from three tables and that composition belongs in the root, not the scheduler.
+   */
+  runAlertTick?(limit: number): Promise<void>;
+  /**
    * L1, as an INPUT rather than an env read inside the processor — the same shape the runners use.
    *
    * `env` is parsed once at module load, so a processor that read it directly could only ever be tested in
@@ -88,6 +93,14 @@ export function makeProcessCrmSyncSweep(redis: IORedis, enqueue: CrmSweepEnqueue
       const listAll =
         enqueue.listAllConnected ?? ((n: number) => crmConnectionRepository.listDueForPoll(n));
       const listRefresh = enqueue.listDueForRefresh ?? crmConnectionRepository.listDueForRefresh;
+
+      // The ALERT tick does not fan out per-connection jobs — it evaluates and logs in place, so it
+      // returns before the enumeration below. Sharing the leader lock is the point: exactly one worker
+      // evaluates fleet health per tick, so a 20-worker fleet does not log the same incident 20 times.
+      if (kind === "alert") {
+        if (enqueue.runAlertTick) await enqueue.runAlertTick(cap);
+        return;
+      }
 
       // A RECONCILE enumerates every connected connection, not just those whose next_poll_at is due: the
       // whole point is to re-read streams the delta tick believes are up to date.

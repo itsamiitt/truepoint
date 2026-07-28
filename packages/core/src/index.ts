@@ -1239,3 +1239,16 @@ export {
   type CrmBudgetStore,
   type CrmBudgetDecision,
 } from "./crm/crmBudgetGuard.ts";
+// The PURE alert judgement for CRM sync (crm-sync §9.5). Most of its rules decide what does NOT alert —
+// an operator channel that fires on normal states gets muted, and a muted channel converts a real incident
+// into silence people have already learned to ignore.
+export {
+  evaluateCrmAlerts,
+  evaluateCrmConnection,
+  summariseCrmAlerts,
+  DEFAULT_CRM_ALERT_THRESHOLDS,
+  type CrmAlert,
+  type CrmAlertSeverity,
+  type CrmAlertThresholds,
+  type CrmConnectionSnapshot,
+} from "./crm/evaluateCrmAlerts.ts";

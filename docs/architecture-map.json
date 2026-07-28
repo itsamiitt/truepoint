@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1930,
-  "fileSetHash": "sha256:c04f21698d3254c6f9b1e8d75df9dce45efd868c7e9f4e3deba0b0e759f079d9",
+  "fileCount": 1934,
+  "fileSetHash": "sha256:5ecf1e06cceee1171c1391f473896037d5ec71aa461de3c3660c59010ddbe90c",
   "features": {
     "account-search": {
       "web": [],
@@ -468,6 +468,8 @@
         "packages/core/src/crm/defaultMappings.salesforce.ts",
         "packages/core/src/crm/defaultMappings.test.ts",
         "packages/core/src/crm/defaultMappings.ts",
+        "packages/core/src/crm/evaluateCrmAlerts.test.ts",
+        "packages/core/src/crm/evaluateCrmAlerts.ts",
         "packages/core/src/crm/planInboundMerge.test.ts",
         "packages/core/src/crm/planInboundMerge.ts",
         "packages/core/src/crm/planOutboundPush.test.ts",
@@ -2407,6 +2409,7 @@
       "apps/web/src/lib/useSessionRole.ts"
     ],
     "apps/workers": [
+      "apps/workers/src/crm/crmAlertTick.ts",
       "apps/workers/src/crm/crmDeadLetter.ts",
       "apps/workers/src/crm/crmRunnerDeps.ts",
       "apps/workers/src/deadLetter.test.ts",
@@ -2946,6 +2949,7 @@
     "packages/db/src/repositories/crmConnectionRepository.ts",
     "packages/db/src/repositories/crmDeadLetterRepository.ts",
     "packages/db/src/repositories/crmFieldMappingRepository.ts",
+    "packages/db/src/repositories/crmHealthRepository.ts",
     "packages/db/src/repositories/crmOauthStateRepository.ts",
     "packages/db/src/repositories/crmRecordLinkRepository.ts",
     "packages/db/src/repositories/crmSyncConflictRepository.ts",
