@@ -33,16 +33,27 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **1939 source files · 86 code-bearing domains · 35 shared areas · 56 domain-vocabulary warnings · 155
-> unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
-> `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
-> feature (`apps/api/src/features/master-sync`) + the **nested TruePoint Forge** (fully migrated from the
-> standalone repo): the `apps/forge` console + `apps/forge-api` (capture-ingest/BFF) + `apps/forge-worker`
-> (the parse→extract→verify→sync DAG), `@leadwolf/forge-core` + `@leadwolf/forge-capture-sdk`, the Forge repos
-> + Anthropic/S3/Redis adapters, and the isolated `forge` Postgres schema (owned by `leadwolf_forge`) — see the generated
-> [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the current set. Counts
-> reflect the merged tree including the parallel `feat/data-mgmt` work; its new domains' prose is owned by that
-> track). Design refs: [04](./planning/04-ui-ux-design.md),
+> **1939 source files · 87 code-bearing domains · 38 shared areas · 56 domain-vocabulary warnings · 4
+> unbucketed** — and those four are ALL framework-root configs (`next.config.mjs` × 3, `postcss.config.mjs`),
+> which have no domain by nature and are expected to stay here. Everything else now has a home.
+>
+> That is down from 155. The backlog was never misplaced code: it was **unregistered** code. The map keys a
+> repository off `REPO_DOMAIN`, a queue off `QUEUE_DOMAIN` and a package off an explicit leaf-package list,
+> and 151 files simply had no entry — 58 repositories, 13 queue files, and the whole of the **nested TruePoint
+> Forge** (the `apps/forge` console + `apps/forge-api` capture-ingest/BFF + `apps/forge-worker` DAG,
+> `@leadwolf/forge-core` + `@leadwolf/forge-capture-sdk`, the Forge repos under `repositories/forge/`, and the
+> isolated `forge` Postgres schema owned by `leadwolf_forge`), plus `@leadwolf/auth-client` and
+> `@leadwolf/identity`.
+>
+> `forge` is now a declared canonical domain — it has its own apps, its own package and its own Postgres
+> schema, so scattering its files across neighbouring domains would have been the dishonest option. The Forge
+> console's slices are bucketed as SHARED (like `apps/extension`) rather than minting five new domains
+> (overview/captures/parsers/review/sync-status) that would pollute the vocabulary the rest of the map
+> navigates by. The leaf-package list stays explicit rather than a catch-all, so a genuinely new package
+> shows up unassigned and gets a deliberate decision instead of silently becoming "shared".
+> See the generated [`architecture-map.json`](./architecture-map.json) `unassigned[]` / `warnings[]` for the
+> current set. Counts reflect the merged tree including the parallel `feat/data-mgmt` work; its new domains'
+> prose is owned by that track. Design refs: [04](./planning/04-ui-ux-design.md),
 > [10-roadmap.md](./planning/10-roadmap.md), [11 §6](./planning/11-information-architecture.md),
 > [16 §5](./planning/16-code-organization.md), ADR-0006/0007/0008/0009/0011/0013/0016/0018/0019/0021/0023/0028/0035/0037/0040.
 

@@ -37,6 +37,7 @@ export const CANONICAL_DOMAINS = [
   "export",
   "outreach",
   "crm-sync",
+  "forge",
   "api-public",
   "ai",
   "ai-usage",
@@ -63,6 +64,19 @@ export const CANONICAL_DOMAINS = [
 
 // Declared maps for the cases where the domain is NOT encoded in the path (extend as code grows).
 export const QUEUE_DOMAIN = {
+  // Backfill of the previously unbucketed queues. Colocated .test/.itest files place with their queue.
+  bulkEnrichment: "enrichment",
+  bulkReveal: "reveal",
+  dedup: "contacts-dedup",
+  erSweep: "er",
+  firmographics: "enrichment",
+  masterBackfill: "master-sync",
+  masterBackfillSweep: "master-sync",
+  partitionSweep: "data-ops",
+  projectionSweep: "projection",
+  retentionSweep: "retention",
+  sequenceTick: "outreach",
+  tokenRefresh: "email",
   // crm-sync's consumers. crmSync carries pull/inbound/push/backfill (one file, four processors — they share
   // the run-ledger and gate plumbing); crmSyncSweep is the leader-locked scheduler; crmErase is the DSAR path.
   crmSync: "crm-sync",
@@ -98,6 +112,62 @@ export const QUEUE_DOMAIN = {
   gmailInboxPollSweep: "outreach",
 };
 export const REPO_DOMAIN = {
+  // Backfill of every repository that was previously unbucketed. Each maps to a domain that ALREADY has code
+  // in the map — no new vocabulary was invented to make a file fit. Where no existing domain was clearly
+  // right the file is deliberately left unassigned: a confidently wrong home is worse than an honest gap,
+  // because the map is what a newcomer navigates by.
+  authAllowedOrigins: "auth",
+  authPolicy: "auth-policy",
+  effectivePolicy: "auth-policy",
+  oauthConnectState: "email",
+  webauthnCredential: "auth",
+  ssoConfig: "auth",
+  scimToken: "scim",
+  impersonation: "staff",
+  jitElevation: "staff",
+  platformStaff: "staff",
+  staff: "staff",
+  domain: "tenants",
+  accountHold: "billing",
+  creditPack: "pricing",
+  planTemplate: "plans",
+  providerConfig: "provider-configs",
+  accountSearch: "account-search",
+  contactExternalId: "contacts-resolve",
+  contactMerge: "contacts-merge",
+  customField: "custom-fields",
+  tag: "tags",
+  savedSearch: "saved-searches",
+  search: "search",
+  pipelineStage: "pipeline-stages",
+  emailAnalytics: "email",
+  emailEvent: "email",
+  emailMessage: "email",
+  emailTemplate: "email",
+  emailThread: "email",
+  mailbox: "email",
+  sendQuota: "email",
+  sendingDomain: "email",
+  enrichmentJob: "enrichment-jobs",
+  enrichmentPolicy: "enrichment",
+  revealJob: "reveal",
+  masterGraph: "master-sync",
+  er: "er",
+  evidence: "ingestion",
+  projector: "projection",
+  reports: "reports",
+  subProcessor: "compliance",
+  retentionClassPolicy: "retention",
+  validationRule: "validation",
+  featureFlag: "feature-flags",
+  announcement: "announcements",
+  supportNote: "staff",
+  webhook: "webhooks",
+  partition: "data-ops",
+  scheduler: "imports",
+  // The flat Forge sync repository. Its siblings live under repositories/forge/ and are matched by a path
+  // rule instead — this one is at the top level, so it needs an entry.
+  forgeSync: "forge",
   // CRM bidirectional sync (crm-sync). The domain was already declared in CANONICAL_DOMAINS; these are its
   // repositories. Registered here rather than renamed in code because the file names are already correct —
   // the map's rule is "one entity per repository", and each of these owns a distinct table.
@@ -291,6 +361,12 @@ export function classify(p) {
   if (/^packages\/core\/src\/[^/]+\.(c|m)?[tj]sx?$/.test(p))
     return { kind: "shared", area: "packages/core" };
 
+  // Forge data-plane repositories live in a subfolder (packages/db/src/repositories/forge/), which the flat
+  // rule below cannot match — its capture would be "forge/read" rather than an entity name. They are all one
+  // domain, so a single rule is more honest than nine registry entries keyed on a path fragment.
+  if (/^packages\/db\/src\/repositories\/forge\//.test(p))
+    return { kind: "feature", domain: "forge", bucket: "db" };
+
   // db repositories -> domain via REPO_DOMAIN; rest of db is shared.
   if ((m = p.match(/^packages\/db\/src\/repositories\/(.+?)Repository\.(c|m)?[tj]sx?$/))) {
     const entity = m[1];
@@ -325,6 +401,16 @@ export function classify(p) {
   if (/^apps\/extension\/(scripts\/|[^/]+\.(c|m)?[tj]sx?$)/.test(p))
     return { kind: "shared", area: "apps/extension" };
 
+  // TruePoint Forge (ADR-0047) — the operator console and its BFF. Treated like apps/extension: a separate
+  // surface whose slices are its own, not customer-facing domains. Minting five new domains (overview,
+  // captures, parsers, review, sync-status) to hold them would pollute the vocabulary the rest of the map
+  // navigates by.
+  if (/^apps\/forge-api\//.test(p)) return { kind: "shared", area: "apps/forge-api" };
+  if (/^apps\/forge-worker\//.test(p)) return { kind: "shared", area: "apps/forge-worker" };
+  if (/^apps\/forge\/src\/features\//.test(p))
+    return { kind: "shared", area: "apps/forge/features" };
+  if (/^apps\/forge\//.test(p)) return { kind: "shared", area: "apps/forge" };
+
   // App routing/shared/lib/middleware.
   if ((m = p.match(/^apps\/api\/src\/middleware\//)))
     return { kind: "shared", area: "apps/api/middleware" };
@@ -334,7 +420,15 @@ export function classify(p) {
     return { kind: "shared", area: `apps/${m[1]}` };
 
   // Leaf / platform packages.
-  if ((m = p.match(/^packages\/(types|config|ui|app-shell|auth|search|email|analytics|observability)\//)))
+  // Leaf/platform packages. auth-client, identity, forge-core and forge-capture-sdk belong here for the same
+  // reason the rest do: they are shared platform code consumed across domains, not a domain of their own.
+  // Listing them explicitly rather than making this a catch-all keeps the failure LOUD — a genuinely new
+  // package shows up as unassigned and gets a deliberate decision, instead of silently becoming "shared".
+  if (
+    (m = p.match(
+      /^packages\/(types|config|ui|app-shell|auth|auth-client|identity|forge-core|forge-capture-sdk|search|email|analytics|observability)\//,
+    ))
+  )
     return { kind: "shared", area: `packages/${m[1]}` };
 
   return { kind: "unassigned" };
