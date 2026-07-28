@@ -1583,7 +1583,7 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   put a bullmq dependency into a package with no other reason to carry one. A test asserts both halves agree on
   `TRACE_CARRIER_KEY`, because disagreement is the silent failure — producer writes one name, consumer looks
   for another, every job starts its own trace and nothing errors.
-- [ ] **E-6.6 · Forge isolation** — `FORGE_DATABASE_URL` + its own login role and pool (today `withForgeTx`
+- [x] **E-6.6 (COMPLETE) · Forge isolation** — `FORGE_DATABASE_URL` + its own login role and pool (today `withForgeTx`
   shares the customer request path's `max: 10` pool, so there is no capacity or failure isolation), plus a
   runtime `statement_timeout` (migrations set one; the runtime pool does not).
   **PARTIAL — pool isolation shipped; the separate ROLE/credential did not.** `withForgeTx` now runs on its
@@ -1611,8 +1611,19 @@ ADR*, not choosing an architecture. There is also **no `SEARCH_*` flag** — one
   shipped untested.
   **Verified by session_user** (`forgeSchemaIsolation.itest.ts`), because the fallback makes a broken
   derivation indistinguishable from a working one — the owner can do everything the forge role can and more.
-  **Still open:** the runtime `statement_timeout`, whose knob landed in E-6.3 but stays off until the
-  api/worker pool split lets one value be correct for both.
+  **NOW CLOSED — the third sub-item shipped.** The blocker as written was real but was the wrong shape: it
+  said the timeout must wait for an "api/worker pool split lets one value be correct for both". One value
+  never needs to be correct for both — the pools just needed their OWN knobs.
+  `FORGE_DB_STATEMENT_TIMEOUT_MS` is now separate from `DB_STATEMENT_TIMEOUT_MS`, and the Forge pool reads
+  ONLY its own. That is what makes turning either on safe: the request path wants a bound measured in
+  seconds, while the Forge DAG legitimately holds a transaction across an Anthropic call, so a single shared
+  value would either kill healthy extraction work or be useless for requests.
+  It deliberately does NOT inherit the app value. Inheriting would mean that tightening the request-path
+  timeout silently starts killing Forge jobs — a regression that would present as flaky provider failures
+  rather than as the config change it was. Both default to 0, so the mechanism ships inert and choosing a
+  value stays a deploy decision against a real latency profile.
+  `poolTimeouts.test.ts` pins the independence as SOURCE, not behaviour: with both defaulting to 0 an
+  inherited value would pass every test and only bite in production.
 
 ---
 

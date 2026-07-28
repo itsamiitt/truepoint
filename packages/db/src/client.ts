@@ -61,8 +61,12 @@ const forgePoolOptions: Parameters<typeof postgres>[1] = {
   max: env.FORGE_DB_POOL_MAX,
   prepare: PREPARE,
 };
-if (env.DB_STATEMENT_TIMEOUT_MS > 0) {
-  forgePoolOptions.connection = { statement_timeout: env.DB_STATEMENT_TIMEOUT_MS };
+// The Forge pool reads its OWN timeout, never the app's (E-6.6). Sharing DB_STATEMENT_TIMEOUT_MS is what
+// kept this off: the request path wants a bound measured in seconds, while the Forge DAG legitimately holds
+// a transaction across an Anthropic call. One value cannot be right for both, and inheriting the app's would
+// mean that tightening the request path silently starts killing healthy Forge work.
+if (env.FORGE_DB_STATEMENT_TIMEOUT_MS > 0) {
+  forgePoolOptions.connection = { statement_timeout: env.FORGE_DB_STATEMENT_TIMEOUT_MS };
 }
 /** Same derivation as the app pool: swap in the forge role.s credentials when a password is configured, else
  *  keep today.s owner connection (the role is NOLOGIN without one, so there is nothing to connect as). */

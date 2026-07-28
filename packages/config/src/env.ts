@@ -135,6 +135,15 @@ export const appEnvSchema = z
     // the second. Turning this on safely needs the pool split this item describes — until then the knob exists
     // so an operator who knows their workload can set it, and the reasoning is here rather than lost.
     DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
+    // The Forge pool's OWN statement timeout (E-6.6). SEPARATE from DB_STATEMENT_TIMEOUT_MS on purpose, and
+    // this is the whole reason the Forge timeout stayed off: one value cannot be correct for both workloads.
+    // A customer request should be cut off in seconds — a query still running is a user staring at a spinner.
+    // The Forge DAG holds a transaction across provider network I/O (extraction calls Anthropic mid-tx), so
+    // the same short bound would kill healthy work mid-flight. Applying the app's value to Forge would break
+    // Forge; applying Forge's to the request path would make the timeout useless. Hence two knobs.
+    // 0 (default) = no timeout for the Forge pool, exactly today's behaviour. It does NOT inherit the app
+    // value, deliberately: setting the request-path timeout must never silently start killing Forge jobs.
+    FORGE_DB_STATEMENT_TIMEOUT_MS: z.coerce.number().int().nonnegative().default(0),
     // L-1.5: TTL (ms) for the per-request workspace-role memo. 0 = OFF, which is the shipped default and
     // today's exact behaviour — every `requireRole` request reads the role from the database, so a revocation
     // takes effect on the very next request.
