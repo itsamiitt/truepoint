@@ -20,3 +20,27 @@ export interface StaffCrmConnection {
   nextPollAt: string | null;
   connectedAt: string | null;
 }
+
+/**
+ * One dead-lettered CRM job, as the staff console sees it.
+ *
+ * PII-free by construction: `errorDetail` is scrubbed on the write path, `crmRecordId` is an opaque provider
+ * id and `tpEntityId` is an id with no record attached. There is deliberately no field here for the record
+ * that failed — a triage console must not become a cross-tenant window onto customer data.
+ */
+export interface StaffCrmDeadLetter {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  connectionId: string;
+  queue: string;
+  direction: string | null;
+  objectType: string | null;
+  crmRecordId: string | null;
+  tpEntityId: string | null;
+  errorClass: string;
+  errorDetail: string | null;
+  attempts: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}

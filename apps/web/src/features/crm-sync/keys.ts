@@ -6,4 +6,5 @@ export const crmSyncKeys = {
   runs: (connectionId: string) => ["crm-sync", "runs", connectionId] as const,
   streams: (connectionId: string) => ["crm-sync", "streams", connectionId] as const,
   conflicts: () => ["crm-sync", "conflicts"] as const,
+  mappings: (connectionId: string) => ["crm-sync", "mappings", connectionId] as const,
 };

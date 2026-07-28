@@ -4,7 +4,7 @@
 // The starter set is seeded IN CODE at connect time rather than in the migration (00 §4.3): the defaults are
 // per-provider and per-connection, and a migration cannot know which providers a workspace will connect.
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { type Tx, db } from "../client.ts";
 import { crmFieldMappings } from "../schema/crm.ts";
 
@@ -132,6 +132,37 @@ export const crmFieldMappingRepository = {
         ),
       )
       .orderBy(asc(crmFieldMappings.tpField));
+  },
+
+  /**
+   * Update ONE mapping's policy fields. RLS-scoped; returns false when the row is not in this workspace.
+   *
+   * Only direction / authority / enabled are editable. tpField and crmField are NOT: changing which columns
+   * a mapping joins would silently re-point history — the provenance already written under the old pair
+   * would now describe a different field. Re-pointing is a delete-and-create, which is visible.
+   */
+  async updatePolicy(
+    tx: Tx,
+    mappingId: string,
+    patch: {
+      direction?: "inbound" | "outbound" | "bidirectional" | "disabled";
+      authority?: "crm" | "truepoint";
+      enabled?: boolean;
+    },
+  ): Promise<boolean> {
+    const set: Record<string, unknown> = { updatedAt: sql`now()` };
+    if (patch.direction !== undefined) set.direction = patch.direction;
+    if (patch.authority !== undefined) set.authority = patch.authority;
+    if (patch.enabled !== undefined) set.enabled = patch.enabled;
+    // Only updatedAt would mean an empty patch — refuse rather than bump the timestamp for nothing.
+    if (Object.keys(set).length === 1) return false;
+
+    const updated = await tx
+      .update(crmFieldMappings)
+      .set(set)
+      .where(eq(crmFieldMappings.id, mappingId))
+      .returning({ id: crmFieldMappings.id });
+    return updated.length === 1;
   },
 
   /** Count a connection's mappings on the OWNER connection — for the cross-tenant staff console only. */

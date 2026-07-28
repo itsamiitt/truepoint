@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1934,
-  "fileSetHash": "sha256:5ecf1e06cceee1171c1391f473896037d5ec71aa461de3c3660c59010ddbe90c",
+  "fileCount": 1938,
+  "fileSetHash": "sha256:05f23b5224f609489fdd0de4d057813e2bdd5c8d420dfb6cbf9a653eac59788e",
   "features": {
     "account-search": {
       "web": [],
@@ -499,9 +499,11 @@
         "apps/web/src/features/crm-sync/api.ts",
         "apps/web/src/features/crm-sync/components/ConflictQueue.tsx",
         "apps/web/src/features/crm-sync/components/CrmSyncPage.tsx",
+        "apps/web/src/features/crm-sync/components/MappingEditor.tsx",
         "apps/web/src/features/crm-sync/components/SyncActivity.tsx",
         "apps/web/src/features/crm-sync/hooks/useCrmConflicts.ts",
         "apps/web/src/features/crm-sync/hooks/useCrmConnections.ts",
+        "apps/web/src/features/crm-sync/hooks/useCrmMappings.ts",
         "apps/web/src/features/crm-sync/hooks/useCrmRuns.ts",
         "apps/web/src/features/crm-sync/index.ts",
         "apps/web/src/features/crm-sync/keys.ts",
@@ -510,8 +512,10 @@
       "admin": [
         "apps/admin/src/features/crm-sync/api.ts",
         "apps/admin/src/features/crm-sync/components/CrmSyncMonitorPage.tsx",
+        "apps/admin/src/features/crm-sync/components/DeadLetterQueue.tsx",
         "apps/admin/src/features/crm-sync/format.test.ts",
         "apps/admin/src/features/crm-sync/format.ts",
+        "apps/admin/src/features/crm-sync/hooks/useCrmDeadLetters.ts",
         "apps/admin/src/features/crm-sync/hooks/useCrmSyncHealth.ts",
         "apps/admin/src/features/crm-sync/index.ts",
         "apps/admin/src/features/crm-sync/types.ts"

@@ -6,6 +6,7 @@ import { API_BASE } from "@/lib/publicConfig";
 import type {
   CrmConflictView,
   CrmConnectionView,
+  CrmMappingView,
   CrmSyncRunView,
   CrmSyncStreamView,
 } from "./types";
@@ -50,4 +51,23 @@ export async function resolveCrmConflict(
     body: JSON.stringify({ status }),
   });
   if (!res.ok) throw new Error(await problemMessage(res, "Could not update that conflict"));
+}
+
+export async function fetchCrmMappings(connectionId: string): Promise<CrmMappingView[]> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/crm/connections/${connectionId}/mappings`);
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not load your field mappings"));
+  return ((await res.json()) as { mappings: CrmMappingView[] }).mappings;
+}
+
+/** Edit one mapping's POLICY. tpField/crmField are not editable — see the schema's note on re-pointing. */
+export async function updateCrmMapping(
+  id: string,
+  patch: { direction?: string; authority?: string; enabled?: boolean },
+): Promise<void> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/crm/mappings/${id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(await problemMessage(res, "Could not update that mapping"));
 }

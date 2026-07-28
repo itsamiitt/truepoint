@@ -148,8 +148,77 @@ export const crmDeadLetterRepository = {
     return rows.length;
   },
 
-  // NOTE: there is no `resolve`/`retry` here on purpose. The table is APPEND-ONLY for leadwolf_app under
-  // FORCE RLS, so a status UPDATE from this path would silently affect zero rows — a method that appears to
-  // work and does nothing. The staff replay console mutates status on the owner/withPlatformTx path, which
-  // the app-role policy wall does not gate (00 §4.8).
+  // NOTE: there is no tenant-path `resolve`/`retry`. The table is APPEND-ONLY for leadwolf_app under FORCE
+  // RLS, so a status UPDATE from a withTenantTx would silently affect zero rows — a method that appears to
+  // work and does nothing. The staff replay console mutates status through the OWNER-path methods below,
+  // which the app-role policy wall does not gate (00 §4.8).
+
+  /**
+   * FLEET-WIDE open dead letters — the staff replay console's read.
+   *
+   * Owner connection, because triaging poison jobs spans tenants by construction. The CALLER must wrap this
+   * in withPlatformTx so the cross-tenant access is audited before the read runs (ADR-0032); that is why
+   * this takes the caller's tx rather than opening its own.
+   */
+  async listOpenForStaff(tx: Tx, limit: number) {
+    return tx
+      .select({
+        id: crmSyncDeadLetter.id,
+        tenantId: crmSyncDeadLetter.tenantId,
+        workspaceId: crmSyncDeadLetter.workspaceId,
+        connectionId: crmSyncDeadLetter.connectionId,
+        queue: crmSyncDeadLetter.queue,
+        direction: crmSyncDeadLetter.direction,
+        objectType: crmSyncDeadLetter.objectType,
+        crmRecordId: crmSyncDeadLetter.crmRecordId,
+        tpEntityId: crmSyncDeadLetter.tpEntityId,
+        errorClass: crmSyncDeadLetter.errorClass,
+        errorDetail: crmSyncDeadLetter.errorDetail,
+        attempts: crmSyncDeadLetter.attempts,
+        firstSeenAt: crmSyncDeadLetter.firstSeenAt,
+        lastSeenAt: crmSyncDeadLetter.lastSeenAt,
+      })
+      .from(crmSyncDeadLetter)
+      .where(eq(crmSyncDeadLetter.status, "open"))
+      .orderBy(desc(crmSyncDeadLetter.createdAt))
+      .limit(limit);
+  },
+
+  /**
+   * Transition a dead letter on the staff path. Owner connection, wrapped in withPlatformTx by the caller.
+   *
+   * Only an `open` row moves, so two operators triaging the same queue cannot both claim a row and one
+   * silently overwrite the other's decision. Returns the row so the caller can enqueue a replay from facts
+   * it just confirmed still hold, rather than from what the UI believed a minute ago.
+   */
+  async transitionForStaff(
+    tx: Tx,
+    id: string,
+    status: "retrying" | "resolved" | "ignored",
+  ): Promise<{
+    id: string;
+    tenantId: string;
+    workspaceId: string;
+    connectionId: string;
+    queue: string;
+    objectType: string | null;
+    crmRecordId: string | null;
+    tpEntityId: string | null;
+  } | null> {
+    const rows = await tx
+      .update(crmSyncDeadLetter)
+      .set({ status })
+      .where(and(eq(crmSyncDeadLetter.id, id), eq(crmSyncDeadLetter.status, "open")))
+      .returning({
+        id: crmSyncDeadLetter.id,
+        tenantId: crmSyncDeadLetter.tenantId,
+        workspaceId: crmSyncDeadLetter.workspaceId,
+        connectionId: crmSyncDeadLetter.connectionId,
+        queue: crmSyncDeadLetter.queue,
+        objectType: crmSyncDeadLetter.objectType,
+        crmRecordId: crmSyncDeadLetter.crmRecordId,
+        tpEntityId: crmSyncDeadLetter.tpEntityId,
+      });
+    return rows[0] ?? null;
+  },
 };

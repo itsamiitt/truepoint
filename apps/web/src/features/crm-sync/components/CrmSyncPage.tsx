@@ -14,6 +14,7 @@ import { useCrmConflicts } from "../hooks/useCrmConflicts";
 import { useCrmConnections } from "../hooks/useCrmConnections";
 import { useCrmRuns } from "../hooks/useCrmRuns";
 import { ConflictQueue } from "./ConflictQueue";
+import { MappingEditor } from "./MappingEditor";
 import { SyncActivity } from "./SyncActivity";
 
 const MODE_TONE: Record<string, StatusTone> = {
@@ -85,6 +86,10 @@ export function CrmSyncPage() {
           error={runs.error}
           onRetry={runs.reload}
         />
+      </Card>
+
+      <Card>
+        <MappingEditor connectionId={activeId} />
       </Card>
 
       <Card>

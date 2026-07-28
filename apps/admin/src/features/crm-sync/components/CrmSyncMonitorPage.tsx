@@ -22,6 +22,7 @@ import {
 import { classifyConnection, fmtDateTime, needsAttention } from "../format";
 import { useCrmSyncHealth } from "../hooks/useCrmSyncHealth";
 import type { StaffCrmConnection } from "../types";
+import { DeadLetterQueue } from "./DeadLetterQueue";
 
 export function CrmSyncMonitorPage() {
   const { connections, loading, error, reload } = useCrmSyncHealth();
@@ -111,6 +112,8 @@ export function CrmSyncMonitorPage() {
       <Card>
         <DataTable columns={columns} rows={list} rowKey={(c) => c.id} />
       </Card>
+      {/* Poison jobs — exhausted retries only, so a row here always needs a human. */}
+      <DeadLetterQueue />
     </StateSwitch>
   );
 }

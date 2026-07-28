@@ -13,6 +13,7 @@ import {
   authPolicyRepository,
   creditRepository,
   crmConnectionRepository,
+  crmDeadLetterRepository,
   effectivePolicyRepository,
   featureFlagRepository,
   idempotencyRepository,
@@ -51,6 +52,7 @@ import {
   creditAdjustParamsSchema,
   creditAdjustSchema,
   creditRefundParamsSchema,
+  crmDeadLetterTriageSchema,
   decideApprovalSchema,
   economicsQuerySchema,
   featureFlagGlobalToggleSchema,
@@ -131,6 +133,40 @@ adminRoutes.get("/me", async (c) => {
 // came back. The projection is operational ONLY — status, mode, error, timestamps — never a credential and
 // nothing derived from a customer's contact data. A staff console must not become a cross-tenant window
 // onto tenant records.
+// The staff DLQ replay console (crm-sync §4.8 / §9). crm_sync_dead_letter is APPEND-ONLY for the app role,
+// so status transitions happen HERE, on the owner path, which the app-role policy wall does not gate.
+adminRoutes.get("/crm/dead-letters", async (c) => {
+  const rows = await withPlatformTx(actorOf(c), "crm.read_sync_health", (tx) =>
+    crmDeadLetterRepository.listOpenForStaff(tx, 200),
+  );
+  return c.json({ deadLetters: rows });
+});
+
+/**
+ * Triage one dead letter.
+ *
+ * `retrying` records the operator's INTENT to replay; it does not itself re-enqueue. Re-driving a poison
+ * job from a console is a decision with real consequences — it spends the customer's CRM quota and can
+ * re-attempt a write that failed for a reason nobody has diagnosed — so the replay is a separate, explicit
+ * action rather than a side effect of clicking a status.
+ */
+adminRoutes.patch("/crm/dead-letters/:id", async (c) => {
+  const parsed = crmDeadLetterTriageSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    throw new ValidationError("Body must be { status: 'retrying'|'resolved'|'ignored' }.");
+  }
+  const row = await withPlatformTx(
+    actorOf(c),
+    "crm.dead_letter.triage",
+    (tx) => crmDeadLetterRepository.transitionForStaff(tx, c.req.param("id"), parsed.data.status),
+    { targetType: "crm_sync_dead_letter", targetId: c.req.param("id") },
+  );
+  // Null means the row was already closed — another operator got there first. A 404-shaped refusal rather
+  // than a silent success, so the console does not show a decision that never happened.
+  if (!row) throw new NotFoundError("No such open dead letter.");
+  return c.json({ id: row.id, status: parsed.data.status });
+});
+
 adminRoutes.get("/crm/sync-health", async (c) => {
   const connections = await withPlatformTx(actorOf(c), "crm.read_sync_health", (tx) =>
     crmConnectionRepository.listAllForStaff(tx, 500),

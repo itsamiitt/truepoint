@@ -25,6 +25,7 @@ import {
   ValidationError,
   crmConflictResolveSchema,
   crmConnectStartSchema,
+  crmMappingUpdateSchema,
   crmSyncModeUpdateSchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
@@ -213,6 +214,26 @@ crmRoutes.get("/connections/:id/mappings", async (c) => {
     crmFieldMappingRepository.listByConnection(tx, c.req.param("id")),
   );
   return c.json({ mappings });
+});
+
+/**
+ * Edit one field mapping's policy. owner/admin only: a mapping decides which of a customer's fields TruePoint
+ * may overwrite in their CRM, and flipping one to outbound/truepoint starts writing a field that was
+ * previously read-only.
+ */
+crmRoutes.patch("/mappings/:id", requireRole("owner", "admin"), async (c) => {
+  const workspaceId = requireWorkspace(c.get("workspaceId"));
+  const parsed = crmMappingUpdateSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    throw new ValidationError("Body must set at least one of direction, authority or enabled.");
+  }
+  const ok = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, (tx) =>
+    crmFieldMappingRepository.updatePolicy(tx, c.req.param("id"), parsed.data),
+  );
+  // RLS filters a foreign mapping out of the UPDATE entirely, so false covers both "not yours" and "no such
+  // row" — deliberately indistinguishable, so an id prober learns nothing from the response.
+  if (!ok) throw new ValidationError("No such mapping in this workspace.");
+  return c.json({ id: c.req.param("id"), ...parsed.data });
 });
 
 /** The conflict review queue. Values are already PII-masked by the repository's write path (§4.7). */

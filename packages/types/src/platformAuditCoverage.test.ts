@@ -74,6 +74,8 @@ const WRITTEN = new Set<string>([
   // The staff CRM-sync monitor (GET /admin/crm/sync-health) — one audited cross-tenant read per request,
   // written by withPlatformTx BEFORE the read runs.
   "crm.read_sync_health",
+  // The staff DLQ replay console (PATCH /admin/crm/dead-letters/:id) — audited on the owner path.
+  "crm.dead_letter.triage",
 ]);
 
 // Defined in the closed enum but not yet wired: the remaining staff/admin actions land with their slices;

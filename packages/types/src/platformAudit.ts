@@ -69,6 +69,9 @@ export const platformAuditAction = z.enum([
   // not whether the statement mutated anything. This one spans tenants by construction — the whole point of
   // the monitor is fleet-wide connection health.
   "crm.read_sync_health",
+  // Triaging a poison job is a staff MUTATION on tenant-scoped data from the owner path, so it is audited
+  // for the same reason every other cross-tenant staff action is (ADR-0032).
+  "crm.dead_letter.triage",
 ]);
 
 export type PlatformAuditAction = z.infer<typeof platformAuditAction>;

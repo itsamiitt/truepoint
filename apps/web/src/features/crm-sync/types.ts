@@ -54,3 +54,16 @@ export interface CrmConflictView {
   crmValue: string | null;
   createdAt: string;
 }
+
+/** One field mapping as the editor sees it (§4.3). */
+export interface CrmMappingView {
+  id: string;
+  objectType: string;
+  tpField: string;
+  crmField: string;
+  direction: string;
+  authority: string;
+  transform: string;
+  isRequired: boolean;
+  enabled: boolean;
+}

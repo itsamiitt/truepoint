@@ -274,3 +274,27 @@ export type CrmPushIntent = z.infer<typeof crmPushIntentSchema>;
  * without the sweep silently pulling objects no mapping or write path exists for.
  */
 export const CRM_SYNC_OBJECTS = ["contact", "account"] as const;
+
+/** PATCH /api/v1/admin/crm/dead-letters/:id — the staff triage decision (§4.8). */
+export const crmDeadLetterTriageSchema = z.object({
+  status: z.enum(["retrying", "resolved", "ignored"]),
+});
+export type CrmDeadLetterTriage = z.infer<typeof crmDeadLetterTriageSchema>;
+
+/**
+ * PATCH /api/v1/crm/mappings/:id — edit one mapping's POLICY (§4.3).
+ *
+ * Deliberately narrow: tpField and crmField are not editable, because changing which columns a mapping
+ * joins would silently re-point history — provenance already written under the old pair would then describe
+ * a different field. Re-pointing is a delete-and-create, which is visible in the audit trail.
+ */
+export const crmMappingUpdateSchema = z
+  .object({
+    direction: crmSyncDirection.optional(),
+    authority: crmFieldAuthority.optional(),
+    enabled: z.boolean().optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: "Provide at least one of direction, authority or enabled.",
+  });
+export type CrmMappingUpdate = z.infer<typeof crmMappingUpdateSchema>;
