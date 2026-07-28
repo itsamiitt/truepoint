@@ -65,6 +65,12 @@ jobs:
         run: bun install --frozen-lockfile || (sleep 10 && bun install --frozen-lockfile)
       - name: Typecheck
         run: bun run typecheck
+      # The package typecheck above covers `src` only, so packages/db's 93 itest files were never checked at
+      # all — bun compiles them at run time. That is how a wrong applyMigrations signature passed typecheck,
+      # passed lint, and failed here behind "password authentication failed for user runner". This checks the
+      # 76 that are currently clean; the 17 excluded in tsconfig.typecheck.json are a shrinking ratchet.
+      - name: Typecheck packages/db itests
+        run: bun run --filter @leadwolf/db typecheck:tests
       - name: Lint (biome)
         run: bun run lint
       - name: Import boundaries (dependency-cruiser)

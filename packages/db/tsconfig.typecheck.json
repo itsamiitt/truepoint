@@ -10,7 +10,39 @@
   // Why it exists: the itests were never type-checked at all. `bun test` compiles them at run time, so a
   // wrong signature — applyMigrations takes a connection string, not an options object — passed typecheck,
   // passed lint, and failed in CI behind a misleading "password authentication failed for user runner".
+  //
+  // The exclude list is a RATCHET, in the same spirit as migrationSnapshots.test.ts's EXPECTED_DEFICIT.
+  // These 17 files carry 56 pre-existing errors; they are excluded rather than silenced so that every OTHER
+  // itest — and every NEW one — is checked from now on, which is the case that actually bit. Most are the
+  // same shape: `const [r] = await sql...` then `r.foo`, where the row is only implicitly known to exist.
+  // Fixing that means making the implication explicit, and doing it 56 times quickly is how an assertion
+  // gets weakened instead of corrected — so the list shrinks deliberately, file by file. It must never grow.
+  //
+  // A few are worth more than a mechanical fix and should not be swept in with the rest:
+  //   - masterBackfill / pipelineStages / search / customFields: unused bindings (TS6133/TS6196), i.e. dead
+  //     setup that may mark an assertion someone meant to write.
+  //   - masterGraphResolve / search: `string | null` passed where a string is required, which is a real
+  //     nullability question about the data rather than a cast.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "noEmit": true },
-  "include": ["src", "test"]
+  "include": ["src", "test"],
+  "exclude": [
+    "test/bulkImport.pipeline.itest.ts",
+    "test/contactChannels.readcutover.itest.ts",
+    "test/contactMerge.itest.ts",
+    "test/customFields.itest.ts",
+    "test/fieldProvenancePin.itest.ts",
+    "test/forgeAuditChain.itest.ts",
+    "test/forgeExtractionCandidates.itest.ts",
+    "test/forgeQuarantine.itest.ts",
+    "test/importDelta.itest.ts",
+    "test/importSoak.nightly.itest.ts",
+    "test/lists.itest.ts",
+    "test/listsStaffNoAccess.itest.ts",
+    "test/masterBackfill.itest.ts",
+    "test/masterGraphResolve.itest.ts",
+    "test/migrationSeedLengths.test.ts",
+    "test/pipelineStages.itest.ts",
+    "test/search.itest.ts"
+  ]
 }
