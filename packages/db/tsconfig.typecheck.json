@@ -11,20 +11,19 @@
   // wrong signature — applyMigrations takes a connection string, not an options object — passed typecheck,
   // passed lint, and failed in CI behind a misleading "password authentication failed for user runner".
   //
-  // The exclude list is a RATCHET, in the same spirit as migrationSnapshots.test.ts's EXPECTED_DEFICIT.
-  // These 17 files carry 56 pre-existing errors; they are excluded rather than silenced so that every OTHER
-  // itest — and every NEW one — is checked from now on, which is the case that actually bit. Most are the
-  // same shape: `const [r] = await sql...` then `r.foo`, where the row is only implicitly known to exist.
-  // Fixing that means making the implication explicit, and doing it 56 times quickly is how an assertion
-  // gets weakened instead of corrected — so the list shrinks deliberately, file by file. It must never grow.
+  // There is NO exclude list. It started as a 17-file / 56-error ratchet and is now empty: every test file in
+  // the package is checked. Keep it that way — an exclusion here is a file nobody type-checks, which is the
+  // exact condition that let the bug above through.
   //
-  // A few are worth more than a mechanical fix and should not be swept in with the rest:
-  //   - masterBackfill / pipelineStages / search / customFields: unused bindings (TS6133/TS6196), i.e. dead
-  //     setup that may mark an assertion someone meant to write.
-  //   - masterGraphResolve / search: `string | null` passed where a string is required, which is a real
-  //     nullability question about the data rather than a cast.
+  // The bulk of those 56 were one shape: `const [r] = await sql...` then `r.foo`, asserting "this returned a
+  // row" without saying so. They are fixed, not silenced — `one()` in itestDb.ts states it and fails with the
+  // expected shape, and where a test had ALREADY asserted non-emptiness on the line above, optional chaining
+  // says so to the compiler without changing what the assertion catches.
+  //
+  // One was not a type problem at all: masterBackfill captured `personsBeforeRun1` and never compared it —
+  // an assertion someone meant to write. It is written now (the no-junk-mint property), because deleting the
+  // variable would have erased the evidence that something was missing.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "noEmit": true },
-  "include": ["src", "test"],
-  "exclude": ["test/masterBackfill.itest.ts"]
+  "include": ["src", "test"]
 }
