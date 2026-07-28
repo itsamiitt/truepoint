@@ -20,7 +20,7 @@ let dbHandle: ItestDb;
 let sql: ReturnType<typeof postgres>;
 
 beforeAll(async () => {
-  dbHandle = await startItestDb();
+  dbHandle = await startItestDb("activities_partitioned");
   await applyMigrations(dbHandle.adminUrl);
   sql = postgres(dbHandle.adminUrl, { max: 1 });
 });
@@ -109,24 +109,28 @@ describe("activities after the partitioning conversion (0085)", () => {
   test("a row lands in the partition for its month, and a time-filtered read prunes to it", async () => {
     // Same fixture shape the other itests use (tenant → owner → workspace → contact).
     const slug = `part-${Date.now()}`;
-    const [{ id: tenantId }] = await sql<{ id: string }[]>`
-      INSERT INTO tenants (name, slug) VALUES (${slug}, ${slug}) RETURNING id
-    `;
-    const [{ id: ownerId }] = await sql<{ id: string }[]>`
-      INSERT INTO users (email) VALUES (${`owner@${slug}.test`}) RETURNING id
-    `;
+    const tenantId = (
+      await sql<{ id: string }[]>`
+      INSERT INTO tenants (name, slug) VALUES (${slug}, ${slug}) RETURNING id`
+    )[0]?.id as string;
+    const ownerId = (
+      await sql<{ id: string }[]>`
+      INSERT INTO users (email) VALUES (${`owner@${slug}.test`}) RETURNING id`
+    )[0]?.id as string;
     await sql`
       INSERT INTO tenant_members (tenant_id, user_id, is_tenant_owner)
       VALUES (${tenantId}, ${ownerId}, true)
     `;
-    const [{ id: workspaceId }] = await sql<{ id: string }[]>`
+    const workspaceId = (
+      await sql<{ id: string }[]>`
       INSERT INTO workspaces (tenant_id, name, slug, is_default, created_by_user_id)
-      VALUES (${tenantId}, ${slug}, ${slug}, true, ${ownerId}) RETURNING id
-    `;
-    const [{ id: contactId }] = await sql<{ id: string }[]>`
+      VALUES (${tenantId}, ${slug}, ${slug}, true, ${ownerId}) RETURNING id`
+    )[0]?.id as string;
+    const contactId = (
+      await sql<{ id: string }[]>`
       INSERT INTO contacts (tenant_id, workspace_id, first_name, last_name)
-      VALUES (${tenantId}, ${workspaceId}, 'Ada', 'L') RETURNING id
-    `;
+      VALUES (${tenantId}, ${workspaceId}, 'Ada', 'L') RETURNING id`
+    )[0]?.id as string;
 
     await sql`
       INSERT INTO activities (tenant_id, workspace_id, contact_id, activity_type, channel, occurred_at)
@@ -205,9 +209,10 @@ describe("platform_audit_log after the partitioning conversion (0086)", () => {
   });
 
   test("an audit row lands in its month and cannot then be updated or deleted", async () => {
-    const [{ id: actorId }] = await sql<{ id: string }[]>`
-      INSERT INTO users (email) VALUES (${`audit-${Date.now()}@t.test`}) RETURNING id
-    `;
+    const actorId = (
+      await sql<{ id: string }[]>`
+      INSERT INTO users (email) VALUES (${`audit-${Date.now()}@t.test`}) RETURNING id`
+    )[0]?.id as string;
     await sql`
       INSERT INTO platform_audit_log (actor_user_id, action) VALUES (${actorId}, 'test.action')
     `;

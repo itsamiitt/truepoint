@@ -3,12 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
     "migrate": "bun run src/migrate.ts",
-    "seed": "bun run src/seed.ts"
+    "seed": "bun run src/seed.ts",
+    "typecheck:tests": "tsc -p tsconfig.typecheck.json"
   },
   "dependencies": {
     "@leadwolf/config": "workspace:*",
