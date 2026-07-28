@@ -728,3 +728,10 @@ export {
   maskIfPii,
   type CrmConflictInsert,
 } from "./repositories/crmSyncConflictRepository.ts";
+export {
+  crmDeadLetterRepository,
+  classifyCrmError,
+  scrubErrorDetail,
+  type CrmDeadLetterInsert,
+  type CrmErrorClass,
+} from "./repositories/crmDeadLetterRepository.ts";

@@ -12,9 +12,12 @@
 import type { WorkerOptions } from "bullmq";
 
 /** The containment-relevant slice of BullMQ worker options register.ts spreads into each constructor. */
+//  is included for the CRM lanes (crm-sync §8): CRM APIs rate-limit per org AND per app, so a
+// jobs-per-second cap across the worker is a first-class need there, not tuning trivia — unbounded
+// parallelism against a throttling provider escalates to a ban.
 export type WorkerTuning = Pick<
   WorkerOptions,
-  "concurrency" | "lockDuration" | "stalledInterval" | "maxStalledCount"
+  "concurrency" | "lockDuration" | "stalledInterval" | "maxStalledCount" | "limiter"
 >;
 
 /** Lock/stall settings shared by every event worker: a crashed worker's job is reclaimed predictably
@@ -74,6 +77,17 @@ export const EVENT_WORKER_TUNING: Readonly<Record<string, WorkerTuning>> = {
   firmographics: { concurrency: 4, ...EVENT_LOCK },
   "master-backfill": { concurrency: 2, ...EVENT_LOCK },
   reverification: { concurrency: 2, ...EVENT_LOCK },
+  // CRM sync (crm-sync 00 §8). Modest concurrency plus an explicit LIMITER, which is the point: CRM APIs
+  // rate-limit per org and per app, and unbounded parallelism turns a throttle into a ban. The limiter caps
+  // jobs/second across the worker; the per-connection budget (a later slice) caps spend per org. Inbound and
+  // push get more parallelism than pull because they are single-record jobs; pull pages are heavier and
+  // already batched. The ERASE lane is serial and slow on purpose — it is a compliance path where a
+  // throttle-induced failure blocks a DSAR, so it trades throughput for not tripping limits.
+  crm_sync_pull: { concurrency: 2, limiter: { max: 10, duration: 1000 }, ...EVENT_LOCK },
+  crm_sync_inbound: { concurrency: 4, limiter: { max: 20, duration: 1000 }, ...EVENT_LOCK },
+  crm_sync_push: { concurrency: 4, limiter: { max: 20, duration: 1000 }, ...EVENT_LOCK },
+  crm_sync_backfill: { concurrency: 1, limiter: { max: 5, duration: 1000 }, ...EVENT_LOCK },
+  crm_sync_erase: { concurrency: 1, limiter: { max: 2, duration: 1000 }, ...EVENT_LOCK },
 };
 
 /** Sweep workers stay explicitly serial: they are leader-locked singletons by design (one repeatable job,
@@ -101,6 +115,14 @@ export const PROCESSOR_DEADLINE_MS: Readonly<Record<string, number>> = {
   firmographics: 5 * 60_000,
   "master-backfill": 5 * 60_000,
   reverification: 5 * 60_000,
+  // CRM lanes: a pull page fetches + applies up to 100 records against a third-party API; a single inbound
+  // or push job is one record plus one call. The erase lane is generous because a DSAR blocked by a
+  // premature deadline is worse than one that takes a minute.
+  crm_sync_pull: 5 * 60_000,
+  crm_sync_inbound: 60_000,
+  crm_sync_push: 60_000,
+  crm_sync_backfill: 10 * 60_000,
+  crm_sync_erase: 2 * 60_000,
 };
 
 /** Per-KIND processor deadlines on the unified `bulk-imports` queue (import-redesign 09 §3): the fast lane

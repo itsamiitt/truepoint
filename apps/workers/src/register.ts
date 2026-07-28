@@ -42,6 +42,7 @@ import {
 } from "@leadwolf/types";
 import type { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
+import { makeCrmDeadLetterHandler } from "./crm/crmDeadLetter.ts";
 import { type WorkerDeadLetter, extractScope, makeDeadLetterHandler } from "./deadLetter.ts";
 import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";
@@ -735,6 +736,10 @@ function instrument<T = unknown>(
     });
   });
   if (deadLetterQueue) worker.on("failed", makeDeadLetterHandler<T>(queue, deadLetterQueue));
+  // CRM lanes additionally route an EXHAUSTED job into the durable crm_sync_dead_letter table (crm-sync
+  // §4.8) — the PII-free record an operator replays from. Attached only for the CRM queues because the
+  // handler reads their payload shape (scope + connectionId) and writes an RLS-scoped row.
+  if (queue.startsWith("crm_sync_")) worker.on("failed", makeCrmDeadLetterHandler(queue));
   return worker;
 }
 
@@ -1045,18 +1050,21 @@ export function startWorkers(): Worker[] {
     instrument(
       tracedWorker<CrmPullJob>(CRM_SYNC_PULL_QUEUE, makeProcessCrmPull(crmConnectorFor), {
         connection,
+        ...eventTuning(CRM_SYNC_PULL_QUEUE),
       }),
       CRM_SYNC_PULL_QUEUE,
     ),
     instrument(
       tracedWorker<CrmInboundJob>(CRM_SYNC_INBOUND_QUEUE, makeProcessCrmInbound(crmConnectorFor), {
         connection,
+        ...eventTuning(CRM_SYNC_INBOUND_QUEUE),
       }),
       CRM_SYNC_INBOUND_QUEUE,
     ),
     instrument(
       tracedWorker<CrmPushJob>(CRM_SYNC_PUSH_QUEUE, makeProcessCrmPush(crmConnectorFor), {
         connection,
+        ...eventTuning(CRM_SYNC_PUSH_QUEUE),
       }),
       CRM_SYNC_PUSH_QUEUE,
     ),
@@ -1066,13 +1074,14 @@ export function startWorkers(): Worker[] {
         // The next page is ENQUEUED, not looped, so a long backfill yields between pages rather than
         // monopolising a worker and starving real-time jobs.
         makeProcessCrmBackfill(crmConnectorFor, (next) => crmBackfillQueue.add("page", next)),
-        { connection },
+        { connection, ...eventTuning(CRM_SYNC_BACKFILL_QUEUE) },
       ),
       CRM_SYNC_BACKFILL_QUEUE,
     ),
     instrument(
       tracedWorker<CrmEraseJobData>(CRM_ERASE_QUEUE, makeProcessCrmErase(crmConnectorFor), {
         connection,
+        ...eventTuning(CRM_ERASE_QUEUE),
       }),
       CRM_ERASE_QUEUE,
     ),
