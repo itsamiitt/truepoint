@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1929,
-  "fileSetHash": "sha256:1f845a711486844795d4ecc96951b89621e5bc0b7cc724f3a2345e049e332fde",
+  "fileCount": 1930,
+  "fileSetHash": "sha256:c04f21698d3254c6f9b1e8d75df9dce45efd868c7e9f4e3deba0b0e759f079d9",
   "features": {
     "account-search": {
       "web": [],
@@ -2636,6 +2636,7 @@
       "packages/db/test/contactChannels.reconcile.itest.ts",
       "packages/db/test/contactMerge.itest.ts",
       "packages/db/test/contactResolve.itest.ts",
+      "packages/db/test/crmConflictDlq.itest.ts",
       "packages/db/test/crmConnect.itest.ts",
       "packages/db/test/crmConnectionRepository.itest.ts",
       "packages/db/test/crmIsolation.itest.ts",
