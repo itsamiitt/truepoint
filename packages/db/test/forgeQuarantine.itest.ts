@@ -55,8 +55,8 @@ describe("forge quarantine persists (P-01.8)", () => {
       reason: string;
     }>;
     expect(rows.length).toBe(1);
-    expect(rows[0].route).toBe("NO_ACTIVE_VERSION");
-    expect(rows[0].reason).toContain("no active parser version");
+    expect(rows[0]?.route).toBe("NO_ACTIVE_VERSION");
+    expect(rows[0]?.reason).toContain("no active parser version");
   });
 
   test("re-quarantine converges (idempotent on raw_capture_id, route) — refreshes reason, never duplicates", async () => {

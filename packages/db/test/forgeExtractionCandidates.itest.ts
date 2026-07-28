@@ -76,11 +76,11 @@ describe("forge extraction candidates persist (P-01.2)", () => {
     }>;
     expect(rows.length).toBe(2);
     const byPath = Object.fromEntries(rows.map((r) => [r.path, r]));
-    expect(byPath.current_title.value).toBe("VP Engineering");
-    expect(byPath.current_title.confidence).toBe("0.910");
-    expect(byPath.current_title.band).toBe("auto");
-    expect(byPath.current_title.grounded).toBe(true);
-    expect(byPath.current_company.band).toBe("review");
+    expect(byPath.current_title?.value).toBe("VP Engineering");
+    expect(byPath.current_title?.confidence).toBe("0.910");
+    expect(byPath.current_title?.band).toBe("auto");
+    expect(byPath.current_title?.grounded).toBe(true);
+    expect(byPath.current_company?.band).toBe("review");
   });
 
   test("re-extraction converges (idempotent on raw_capture_id, path) — updates, never duplicates", async () => {

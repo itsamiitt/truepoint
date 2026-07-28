@@ -272,8 +272,8 @@ describe("S-CH4 §5 — reveal reads all live values primary-first (owned claim)
     expect(on).not.toBeNull();
     expect(on!.emails).toBeDefined();
     expect(on!.emails!.length).toBe(2);
-    expect(on!.emails![0].isPrimary).toBe(true);
-    expect(on!.emails![0].value).toBe("jane@acme.com"); // primary first (CH-INV-1)
+    expect(on!.emails![0]?.isPrimary).toBe(true);
+    expect(on!.emails![0]?.value).toBe("jane@acme.com"); // primary first (CH-INV-1)
     expect(on!.emails!.some((e) => e.value === SECONDARY_EMAIL && !e.isPrimary)).toBe(true);
     // Scalar `email` still means THE PRIMARY (byte-identical to the flat cache).
     expect(on!.email).toBe("jane@acme.com");
@@ -463,8 +463,8 @@ describe("S-CH4b — getRevealedContact fetches ONLY owned-channel child ciphert
     // OWNED channel: fetched + decrypted from the child (the narrowing kept the owned fetch — the regression guard).
     expect(r!.emails).toBeDefined();
     expect(r!.emails!.length).toBe(1);
-    expect(r!.emails![0].value).toBe("mail.claim@narrow.io");
-    expect(r!.emails![0].isPrimary).toBe(true);
+    expect(r!.emails![0]?.value).toBe("mail.claim@narrow.io");
+    expect(r!.emails![0]?.isPrimary).toBe(true);
     // UNOWNED channel: no phone claim ⇒ the phone child is never fetched and the arrays/scalar stay absent/null.
     expect(r!.phones).toBeUndefined();
     expect(r!.phone).toBeNull();

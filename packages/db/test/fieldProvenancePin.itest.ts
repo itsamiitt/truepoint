@@ -182,9 +182,9 @@ describe("overlay field-provenance pin (PLAN_03 §1.4 — a human correction is 
     expect(row.job_title).toBe("Corrected Title");
     const desc = row.field_provenance.jobTitle;
     expect(desc).toBeTruthy();
-    expect(desc.pin).toBe(true);
-    expect(desc.src).toBe("user_edit");
-    expect(desc.by).toBe(ownerA);
+    expect(desc?.pin).toBe(true);
+    expect(desc?.src).toBe("user_edit");
+    expect(desc?.by).toBe(ownerA);
     // The unedited scalar was untouched — its provenance is still absent (empty map start).
     expect(row.field_provenance.department).toBeUndefined();
     expect(row.department).toBe("Old Dept");
@@ -212,18 +212,18 @@ describe("overlay field-provenance pin (PLAN_03 §1.4 — a human correction is 
     //     and the user_edit pin descriptor is intact (the provider write neither wrote the value nor the desc).
     expect(row.job_title).toBe("Corrected Title");
     const titleDesc = row.field_provenance.jobTitle;
-    expect(titleDesc.pin).toBe(true);
-    expect(titleDesc.src).toBe("user_edit");
-    expect(titleDesc.by).toBe(ownerA);
+    expect(titleDesc?.pin).toBe(true);
+    expect(titleDesc?.src).toBe("user_edit");
+    expect(titleDesc?.by).toBe(ownerA);
 
     // (b) The UNPINNED field WAS overwritten by the provider, and its provenance now records the provider write
     //     (src starts with 'provider:', pin:false — a non-pinned, source-attributed overlay value).
     expect(row.department).toBe("Provider Dept");
     const deptDesc = row.field_provenance.department;
     expect(deptDesc).toBeTruthy();
-    expect(deptDesc.src?.startsWith("provider:")).toBe(true);
-    expect(deptDesc.src).toBe(`provider:${PROVIDER_NAME}`);
-    expect(deptDesc.pin).toBe(false);
+    expect(deptDesc?.src?.startsWith("provider:")).toBe(true);
+    expect(deptDesc?.src).toBe(`provider:${PROVIDER_NAME}`);
+    expect(deptDesc?.pin).toBe(false);
   });
 
   // ── TEST 3: THE PIN/EDIT PATH IS WORKSPACE-ISOLATED (RLS) ────────────────────────────────────────────────

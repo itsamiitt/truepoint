@@ -81,7 +81,7 @@ describe("co-op-safe MATCH-AGAINST resolveForImport (Phase 2′; ADR-0021, PLAN_
     );
     expect(result.masterPersonId).toBeTruthy();
     expect(result.masterCompanyId).toBeTruthy();
-    personId = result.masterPersonId;
+    personId = result.masterPersonId as string;
     companyId = result.masterCompanyId as string;
 
     // (a) master_persons — the golden person carries ONLY identity + the denormalized company pointer; every PII

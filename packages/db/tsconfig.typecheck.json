@@ -26,18 +26,5 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "noEmit": true },
   "include": ["src", "test"],
-  "exclude": [
-    "test/bulkImport.pipeline.itest.ts",
-    "test/contactChannels.readcutover.itest.ts",
-    "test/contactMerge.itest.ts",
-    "test/fieldProvenancePin.itest.ts",
-    "test/forgeAuditChain.itest.ts",
-    "test/forgeExtractionCandidates.itest.ts",
-    "test/forgeQuarantine.itest.ts",
-    "test/importSoak.nightly.itest.ts",
-    "test/masterBackfill.itest.ts",
-    "test/masterGraphResolve.itest.ts",
-    "test/migrationSeedLengths.test.ts",
-    "test/search.itest.ts"
-  ]
+  "exclude": ["test/masterBackfill.itest.ts"]
 }

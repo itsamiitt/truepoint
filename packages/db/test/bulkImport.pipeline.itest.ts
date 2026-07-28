@@ -540,10 +540,14 @@ describe("bulk import pipeline: COPY spike + drive/chunk/finalize + sync parity"
     const jobA = await db.withTenantTx(scopeA(), (tx) =>
       db.importJobRepository.getJobSystem(tx, jobIdA),
     );
-    expect(summary.created).toBe(jobA?.rowsCreated); // 2 === 2
-    expect(summary.duplicates).toBe(jobA?.rowsDuplicate); // 1 === 1
+    // Bound once rather than three `?.`s: the comparisons are against a row the test has already required,
+    // and `toBe(undefined)` would silently pass for a missing job — the opposite of what this checks.
+    expect(jobA).not.toBeNull();
+    const rowsA = jobA as NonNullable<typeof jobA>;
+    expect(summary.created).toBe(rowsA.rowsCreated); // 2 === 2
+    expect(summary.duplicates).toBe(rowsA.rowsDuplicate); // 1 === 1
     // skipped ↔ deduped: the documented divergence (1 === 1) — the in-file dup, different bucket, same effect.
-    expect(summary.skipped).toBe(jobA?.rowsDeduped);
+    expect(summary.skipped).toBe(rowsA.rowsDeduped);
 
     // THE PARITY GUARANTEE: the landed contact SET is byte-identical across the two paths — same identities
     // (email_blind_index) and same scalar facets. PII identity is compared via the blind index + email_domain
