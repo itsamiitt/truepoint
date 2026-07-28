@@ -315,6 +315,37 @@ export const crmConnectionRepository = {
   },
 
   /**
+   * FLEET-WIDE connection health for the staff monitor (crm-sync 00 §9).
+   *
+   * Takes the caller's tx because its only caller runs inside withPlatformTx — which writes the
+   * platform_audit_log row BEFORE this read, so the cross-tenant access is recorded whether or not the read
+   * returns anything. Projects operational columns ONLY: status, mode, error, timestamps. No credential, and
+   * nothing derived from a customer's contact data — a staff console must not become a cross-tenant window
+   * onto tenant records.
+   */
+  async listAllForStaff(tx: Tx, limit: number) {
+    return tx
+      .select({
+        id: crmConnections.id,
+        tenantId: crmConnections.tenantId,
+        workspaceId: crmConnections.workspaceId,
+        provider: crmConnections.provider,
+        status: crmConnections.status,
+        syncMode: crmConnections.syncMode,
+        environment: crmConnections.environment,
+        externalAccountId: crmConnections.externalAccountId,
+        lastError: crmConnections.lastError,
+        lastRefreshAt: crmConnections.lastRefreshAt,
+        tokenExpiresAt: crmConnections.tokenExpiresAt,
+        nextPollAt: crmConnections.nextPollAt,
+        connectedAt: crmConnections.connectedAt,
+      })
+      .from(crmConnections)
+      .orderBy(asc(crmConnections.createdAt))
+      .limit(limit);
+  },
+
+  /**
    * Connections whose access token expires within `withinMs` — the proactive-refresh worklist.
    *
    * Runs on the OWNER connection (a cross-tenant maintenance sweep, BYPASSRLS — the shape

@@ -64,6 +64,11 @@ export const platformAuditAction = z.enum([
   // the enforced contract today.
   "crm_integration.enable",
   "crm_budget.set",
+  // The staff CRM-sync monitor's cross-tenant read. Audited for the same reason admin.read_audit_log and the
+  // forge.read_* reads are: under ADR-0032 the auditable event is a staff member reaching ACROSS tenants,
+  // not whether the statement mutated anything. This one spans tenants by construction — the whole point of
+  // the monitor is fleet-wide connection health.
+  "crm.read_sync_health",
 ]);
 
 export type PlatformAuditAction = z.infer<typeof platformAuditAction>;

@@ -12,6 +12,7 @@ import {
   aiRequestRepository,
   authPolicyRepository,
   creditRepository,
+  crmConnectionRepository,
   effectivePolicyRepository,
   featureFlagRepository,
   idempotencyRepository,
@@ -123,6 +124,18 @@ function toApprovalView(r: ApprovalRow) {
 adminRoutes.get("/me", async (c) => {
   const role = await platformStaffRepository.getActiveRole(c.get("claims").sub);
   return c.json({ staffRole: role ?? null, capabilities: role ? capabilitiesForRole(role) : [] });
+});
+
+// CRM-sync fleet monitor (crm-sync 00 §9). ONE audited cross-tenant read per request: withPlatformTx writes
+// the platform_audit_log row BEFORE the read runs, so the staff access is recorded whether or not anything
+// came back. The projection is operational ONLY — status, mode, error, timestamps — never a credential and
+// nothing derived from a customer's contact data. A staff console must not become a cross-tenant window
+// onto tenant records.
+adminRoutes.get("/crm/sync-health", async (c) => {
+  const connections = await withPlatformTx(actorOf(c), "crm.read_sync_health", (tx) =>
+    crmConnectionRepository.listAllForStaff(tx, 500),
+  );
+  return c.json({ connections });
 });
 
 adminRoutes.get("/workspaces", async (c) => {

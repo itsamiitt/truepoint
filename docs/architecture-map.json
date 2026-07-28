@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1913,
-  "fileSetHash": "sha256:e9d2a6a7bdbb14b4993260c580ce9e9cfda0796b2270b209b1523015a81d433a",
+  "fileCount": 1921,
+  "fileSetHash": "sha256:9f46bf8f9eb5570ccb6575528970d7d0fdd3eca9ad40cea830a6514d7ebc9009",
   "features": {
     "account-search": {
       "web": [],
@@ -501,7 +501,15 @@
         "apps/web/src/features/crm-sync/keys.ts",
         "apps/web/src/features/crm-sync/types.ts"
       ],
-      "admin": [],
+      "admin": [
+        "apps/admin/src/features/crm-sync/api.ts",
+        "apps/admin/src/features/crm-sync/components/CrmSyncMonitorPage.tsx",
+        "apps/admin/src/features/crm-sync/format.test.ts",
+        "apps/admin/src/features/crm-sync/format.ts",
+        "apps/admin/src/features/crm-sync/hooks/useCrmSyncHealth.ts",
+        "apps/admin/src/features/crm-sync/index.ts",
+        "apps/admin/src/features/crm-sync/types.ts"
+      ],
       "api": [],
       "core": [],
       "db": [],
@@ -2026,6 +2034,7 @@
       "apps/admin/src/app/(shell)/billing/page.tsx",
       "apps/admin/src/app/(shell)/compliance/page.tsx",
       "apps/admin/src/app/(shell)/content/page.tsx",
+      "apps/admin/src/app/(shell)/crm-sync/page.tsx",
       "apps/admin/src/app/(shell)/data-ops/approvals/page.tsx",
       "apps/admin/src/app/(shell)/data-ops/dedup/page.tsx",
       "apps/admin/src/app/(shell)/data-ops/enrichment/page.tsx",
