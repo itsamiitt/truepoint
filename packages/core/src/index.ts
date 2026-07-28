@@ -1201,3 +1201,15 @@ export {
   type RunCrmBackfillPageInput,
   type RunCrmDeltaInput,
 } from "./crm/runCrmPull.ts";
+// The OUTBOUND erasure step of a DSAR (crm-sync §7.6) — the half that tells the customer's CRM to erase the
+// subject too. The link row is deleted ONLY after the provider confirms: it carries the crm_record_id and is
+// what the DSAR residual scan counts, so clearing it on a failure would strand the subject in the CRM while
+// the request reported `completed`. Deliberately ignores sync_mode — an erasure is an obligation, not sync.
+export {
+  runCrmErase,
+  eraseModeFor,
+  type CrmEraseDeps,
+  type CrmEraseOutcome,
+  type RunCrmEraseInput,
+  type RunCrmEraseResult,
+} from "./crm/runCrmErase.ts";

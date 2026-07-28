@@ -137,11 +137,19 @@ export const dsarFanoutRepository = {
     `)) as unknown as Array<{ n: number }>;
     // list_members is part of the dependent residual count (list-plan/08 §5.2 step 6): the job must NOT
     // report `completed` while any erased subject's list membership lingers.
+    //
+    // crm_record_links is counted here too (crm-sync 00 §7.6), and it is the one residual that lives
+    // OUTSIDE TruePoint: a surviving link means the subject still exists in the customer's CRM, so a DSAR
+    // that reported `completed` would be claiming an erasure that did not happen. Note it is deliberately
+    // NOT in purgeDependents — the outbound erase job needs the row's crm_record_id to tell the CRM WHAT to
+    // delete, and only deletes the row once the provider confirms. Purging it here would destroy the
+    // pointer and strand the subject in the CRM permanently, with the DSAR reporting success.
     const [dep] = (await tx.execute(sql`
       SELECT (SELECT count(*) FROM source_imports WHERE contact_id = ANY(${ids}::uuid[]))::int
            + (SELECT count(*) FROM contact_reveals WHERE contact_id = ANY(${ids}::uuid[]))::int
            + (SELECT count(*) FROM consent_records WHERE contact_id = ANY(${ids}::uuid[]))::int
-           + (SELECT count(*) FROM list_members WHERE contact_id = ANY(${ids}::uuid[]))::int AS n
+           + (SELECT count(*) FROM list_members WHERE contact_id = ANY(${ids}::uuid[]))::int
+           + (SELECT count(*) FROM crm_record_links WHERE contact_id = ANY(${ids}::uuid[]))::int AS n
     `)) as unknown as Array<{ n: number }>;
     return {
       liveCopies: Number(live?.n ?? 0),
