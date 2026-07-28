@@ -631,6 +631,14 @@ export async function scheduleCrmSyncSweeps(): Promise<void> {
     { kind: "refresh" },
     { repeat: { every: 10 * 60_000 }, jobId: "crm-sync-refresh-tick" },
   );
+  // The 24h correctness backstop (§3.3). Webhooks are the LATENCY layer and can be missed — a provider
+  // outage, a dropped delivery, a bug in our own apply path. Without a periodic wide re-read those gaps sit
+  // below the watermark permanently and silently.
+  await crmSyncSweepQueue.add(
+    "sweep",
+    { kind: "reconcile" },
+    { repeat: { every: 24 * 60 * 60_000 }, jobId: "crm-sync-reconcile-tick" },
+  );
 }
 
 /** Register the daily reverification sweep (ADR-0025). Stable jobId → exactly one repeatable. */
@@ -1060,7 +1068,7 @@ export function startWorkers(): Worker[] {
       tracedWorker<CrmSyncSweepJobData>(
         CRM_SYNC_SWEEP_QUEUE,
         makeProcessCrmSyncSweep(connection, {
-          enqueuePull: (conn) =>
+          enqueuePull: (conn, reconcile) =>
             crmPullQueue.add(
               "pull",
               {
@@ -1068,11 +1076,14 @@ export function startWorkers(): Worker[] {
                 connectionId: conn.id,
                 provider: conn.provider as "salesforce" | "hubspot",
                 objectType: "contact",
+                ...(reconcile ? { reconcile: true } : {}),
               },
               // Stable jobId → BullMQ dedupes a connection already queued for this tick, so a slow pull
-              // cannot accumulate a backlog of duplicate work for the same stream.
-              { jobId: `crm-pull:${conn.id}:contact` },
+              // cannot accumulate a backlog of duplicate work for the same stream. The reconcile keeps its
+              // OWN id so the daily backstop is never swallowed by an in-flight delta for the same stream.
+              { jobId: `crm-${reconcile ? "reconcile" : "pull"}:${conn.id}:contact` },
             ),
+          listAllConnected: (limit) => crmConnectionRepository.listAllConnectedForSweep(limit),
           enqueueRefresh: (conn) =>
             crmPullQueue.add(
               "refresh",

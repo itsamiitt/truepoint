@@ -53,6 +53,14 @@ export type CrmConnectorLookup = (provider: string) => CrmConnector | undefined;
 const PAGE_SIZE = 100;
 
 /**
+ * How far back a RECONCILE re-reads (§3.3). Seven days: wide enough to cover a multi-day provider outage or
+ * a bug that went unnoticed over a weekend, narrow enough that the daily backstop stays a bounded number of
+ * API calls rather than a full-table scan against a rate-limited provider. A gap older than this needs a
+ * backfill, which is a deliberate operator action.
+ */
+const RECONCILE_LOOKBACK_MS = 7 * 24 * 60 * 60_000;
+
+/**
  * Map a runner's outcome onto the run ledger's closed status enum.
  *
  * A GATED job closes as `cancelled`, not `failed`: nothing went wrong, the engine is simply off for this
@@ -187,7 +195,16 @@ export function makeProcessCrmPull(connectorFor: CrmConnectorLookup) {
         data.objectType,
         "inbound",
       );
-      const { since } = await crmSyncStateRepository.readWithOverlap(tx, state.id, crmOverlapMs());
+      // A RECONCILE ignores the stored watermark and re-reads a wide window (§3.3). The watermark is only as
+      // correct as everything that advanced it: a missed webhook, a provider outage or a bug in our own apply
+      // path leaves a gap BELOW the mark that no delta poll will ever ask for again. Re-reading is cheap —
+      // the link table and content hashes make re-application a no-op — so the backstop costs API calls only.
+      const { since: deltaSince } = await crmSyncStateRepository.readWithOverlap(
+        tx,
+        state.id,
+        crmOverlapMs(),
+      );
+      const since = data.reconcile ? new Date(Date.now() - RECONCILE_LOOKBACK_MS) : deltaSince;
 
       const gates = await resolveGates(tx, {
         tenantId: data.scope.tenantId,
@@ -200,7 +217,7 @@ export function makeProcessCrmPull(connectorFor: CrmConnectorLookup) {
         provider: data.provider,
         objectType: data.objectType,
         direction: "inbound",
-        trigger: "scheduled",
+        trigger: data.reconcile ? "replay" : "scheduled",
         mode: gates.syncMode,
         watermarkBefore: state.watermark,
       });

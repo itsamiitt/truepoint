@@ -33,8 +33,8 @@ const LEADER_TTL_MS = 5 * 60_000;
 const REFRESH_SKEW_MS = 10 * 60_000;
 
 export interface CrmSyncSweepJobData {
-  /** `delta` = the 60s poll tick; `refresh` = the token-refresh tick. */
-  kind: "delta" | "refresh";
+  /** Mirrors crmSweepJobSchema — see its doc for why reconcile exists. */
+  kind: "delta" | "reconcile" | "refresh";
 }
 
 export interface CrmConnectionRef {
@@ -45,8 +45,11 @@ export interface CrmConnectionRef {
 }
 
 export interface CrmSweepEnqueuers {
-  /** Enqueue an incremental pull for one connection. */
-  enqueuePull(conn: CrmConnectionRef): Promise<unknown>;
+  /**
+   * Enqueue a pull for one connection. `reconcile` widens it to a full re-scan that does NOT trust the
+   * watermark (§3.3) — the backstop for gaps a delta poll can never see.
+   */
+  enqueuePull(conn: CrmConnectionRef, reconcile?: boolean): Promise<unknown>;
   /** Enqueue a token refresh for one connection. */
   enqueueRefresh(conn: CrmConnectionRef): Promise<unknown>;
   /**
@@ -56,6 +59,8 @@ export interface CrmSweepEnqueuers {
    */
   listDueForPoll?(limit: number): Promise<CrmConnectionRef[]>;
   listDueForRefresh?(withinMs: number, limit: number): Promise<CrmConnectionRef[]>;
+  /** Reconcile's enumeration — every connected connection, due or not. */
+  listAllConnected?(limit: number): Promise<CrmConnectionRef[]>;
   /**
    * L1, as an INPUT rather than an env read inside the processor — the same shape the runners use.
    *
@@ -80,10 +85,18 @@ export function makeProcessCrmSyncSweep(redis: IORedis, enqueue: CrmSweepEnqueue
       const cap = env.CRM_SYNC_MAX_CONNECTIONS_PER_SWEEP;
 
       const listPoll = enqueue.listDueForPoll ?? crmConnectionRepository.listDueForPoll;
+      const listAll =
+        enqueue.listAllConnected ?? ((n: number) => crmConnectionRepository.listDueForPoll(n));
       const listRefresh = enqueue.listDueForRefresh ?? crmConnectionRepository.listDueForRefresh;
 
+      // A RECONCILE enumerates every connected connection, not just those whose next_poll_at is due: the
+      // whole point is to re-read streams the delta tick believes are up to date.
       const connections =
-        kind === "refresh" ? await listRefresh(REFRESH_SKEW_MS, cap) : await listPoll(cap);
+        kind === "refresh"
+          ? await listRefresh(REFRESH_SKEW_MS, cap)
+          : kind === "reconcile"
+            ? await listAll(cap)
+            : await listPoll(cap);
 
       if (connections.length === 0) return;
 
@@ -91,7 +104,7 @@ export function makeProcessCrmSyncSweep(redis: IORedis, enqueue: CrmSweepEnqueue
       for (const conn of connections) {
         try {
           if (kind === "refresh") await enqueue.enqueueRefresh(conn);
-          else await enqueue.enqueuePull(conn);
+          else await enqueue.enqueuePull(conn, kind === "reconcile");
           enqueued += 1;
         } catch (e) {
           // Best-effort per connection: a single bad connection must not stop the fleet's sweep.

@@ -361,6 +361,27 @@ export const crmConnectionRepository = {
   },
 
   /**
+   * EVERY connected connection — the reconcile tick's enumeration.
+   *
+   * Distinct from listDueForPoll on purpose: the reconcile backstop exists precisely to re-read streams the
+   * delta tick believes are already up to date, so filtering by next_poll_at would skip exactly the
+   * connections it is meant to check. Owner connection (cross-tenant maintenance), ids + scope only.
+   */
+  async listAllConnectedForSweep(limit: number): Promise<CrmConnectionDueRow[]> {
+    return db
+      .select({
+        id: crmConnections.id,
+        tenantId: crmConnections.tenantId,
+        workspaceId: crmConnections.workspaceId,
+        provider: crmConnections.provider,
+      })
+      .from(crmConnections)
+      .where(eq(crmConnections.status, "connected"))
+      .orderBy(asc(crmConnections.createdAt))
+      .limit(limit);
+  },
+
+  /**
    * Connections whose access token expires within `withinMs` — the proactive-refresh worklist.
    *
    * Runs on the OWNER connection (a cross-tenant maintenance sweep, BYPASSRLS — the shape

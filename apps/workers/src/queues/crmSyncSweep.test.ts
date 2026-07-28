@@ -33,7 +33,7 @@ const conns = (n: number): CrmConnectionRef[] =>
     provider: "salesforce",
   }));
 
-const job = (kind: "delta" | "refresh" = "delta") =>
+const job = (kind: "delta" | "reconcile" | "refresh" = "delta") =>
   ({ data: { kind } }) as unknown as Job<CrmSyncSweepJobData>;
 
 describe("L1 — the global kill switch", () => {
@@ -100,6 +100,45 @@ describe("leader election", () => {
     // withLeaderLock releases in a finally — without it a crashed tick would block every later tick until
     // the TTL expired.
     expect((redis as unknown as { eval: ReturnType<typeof mock> }).eval).toHaveBeenCalled();
+  });
+});
+
+describe("the reconcile backstop", () => {
+  test("reconcile enumerates ALL connected connections, not just those due", async () => {
+    // The backstop exists to re-read streams the delta tick believes are up to date, so filtering by
+    // next_poll_at would skip exactly the connections it is meant to check.
+    const listDueForPoll = mock(async () => conns(1));
+    const listAllConnected = mock(async () => conns(4));
+    const enqueuePull = mock(async () => ({}));
+
+    await makeProcessCrmSyncSweep(fakeRedis(), {
+      enabled: true,
+      enqueuePull,
+      enqueueRefresh: async () => ({}),
+      listDueForPoll,
+      listAllConnected,
+    })(job("reconcile"));
+
+    expect(listAllConnected).toHaveBeenCalled();
+    expect(listDueForPoll).not.toHaveBeenCalled();
+    expect(enqueuePull).toHaveBeenCalledTimes(4);
+  });
+
+  test("reconcile passes the flag through; a delta does not", async () => {
+    const enqueuePull = mock(async (_c: CrmConnectionRef, _r?: boolean) => ({}));
+    const deps = {
+      enabled: true,
+      enqueuePull,
+      enqueueRefresh: async () => ({}),
+      listDueForPoll: async () => conns(1),
+      listAllConnected: async () => conns(1),
+    };
+
+    await makeProcessCrmSyncSweep(fakeRedis(), deps)(job("reconcile"));
+    expect(enqueuePull.mock.calls[0]?.[1]).toBe(true);
+
+    await makeProcessCrmSyncSweep(fakeRedis(), deps)(job("delta"));
+    expect(enqueuePull.mock.calls[1]?.[1]).toBe(false);
   });
 });
 

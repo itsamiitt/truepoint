@@ -121,7 +121,17 @@ const crmJobBase = {
 };
 
 /** crm-sync-sweep: leader-locked tick (global; no per-connection scope) selecting due connections. */
-export const crmSweepJobSchema = z.object({ kind: z.enum(["delta", "reconcile"]) });
+/**
+ * The sweep tick kinds (§3.2/§3.3).
+ *
+ *      — the 60s incremental poll from each stream's watermark.
+ *  — the 24h CORRECTNESS BACKSTOP: a wide re-scan that does not trust the watermark. Webhooks are
+ *               the latency layer and can be missed (a provider outage, a dropped delivery, a bug in our own
+ *               apply); without a periodic full re-read those gaps are permanent and silent.
+ *    — the token-refresh tick. Not a data sync, but it shares the leader lock and the connection
+ *               enumeration, so it rides the same queue rather than duplicating both.
+ */
+export const crmSweepJobSchema = z.object({ kind: z.enum(["delta", "reconcile", "refresh"]) });
 export type CrmSweepJob = z.infer<typeof crmSweepJobSchema>;
 
 /** crm-sync-pull: incremental CRM→TP delta by watermark for one (connection, object). */
@@ -129,6 +139,15 @@ export const crmPullJobSchema = z.object({
   ...crmJobBase,
   objectType: crmObjectType,
   sinceWatermark: z.string().optional(),
+  /**
+   * A RECONCILE pull ignores the stored watermark and re-reads a wide window (§3.3).
+   *
+   * It exists because the watermark is only as correct as everything that advanced it: a missed webhook, a
+   * provider outage or a bug in our own apply path leaves a gap BELOW the mark that no delta poll will ever
+   * ask for again. Re-reading is cheap — the link table and content hashes make re-application a no-op — so
+   * the backstop costs API calls and nothing else.
+   */
+  reconcile: z.boolean().optional(),
 });
 export type CrmPullJob = z.infer<typeof crmPullJobSchema>;
 
