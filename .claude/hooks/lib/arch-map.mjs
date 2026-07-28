@@ -63,6 +63,11 @@ export const CANONICAL_DOMAINS = [
 
 // Declared maps for the cases where the domain is NOT encoded in the path (extend as code grows).
 export const QUEUE_DOMAIN = {
+  // crm-sync's consumers. crmSync carries pull/inbound/push/backfill (one file, four processors — they share
+  // the run-ledger and gate plumbing); crmSyncSweep is the leader-locked scheduler; crmErase is the DSAR path.
+  crmSync: "crm-sync",
+  crmSyncSweep: "crm-sync",
+  crmErase: "crm-sync",
   enrichment: "enrichment",
   scoring: "scoring",
   imports: "import",
@@ -93,6 +98,18 @@ export const QUEUE_DOMAIN = {
   gmailInboxPollSweep: "outreach",
 };
 export const REPO_DOMAIN = {
+  // CRM bidirectional sync (crm-sync). The domain was already declared in CANONICAL_DOMAINS; these are its
+  // repositories. Registered here rather than renamed in code because the file names are already correct —
+  // the map's rule is "one entity per repository", and each of these owns a distinct table.
+  crmConnection: "crm-sync",
+  crmOauthState: "crm-sync",
+  crmFieldMapping: "crm-sync",
+  crmRecordLink: "crm-sync",
+  crmSyncState: "crm-sync",
+  crmSyncRun: "crm-sync",
+  crmSyncConflict: "crm-sync",
+  crmDeadLetter: "crm-sync",
+  crmHealth: "crm-sync",
   contact: "reveal",
   account: "reveal",
   list: "lists",
@@ -152,6 +169,7 @@ export const REPO_DOMAIN = {
   dataQualitySnapshot: "data-health",
 };
 export const PROVIDER_DOMAIN = {
+  "crm-sync": "crm-sync", // the shared connector/budget-store folder (the per-vendor files live inside it)
   salesforce: "crm-sync",
   hubspot: "crm-sync",
   pipedrive: "crm-sync",

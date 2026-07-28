@@ -38,7 +38,7 @@ import {
   makePullDeps,
   makePushDeps,
   resolveGates,
-} from "../crm/crmRunnerDeps.ts";
+} from "../crm-sync/crmRunnerDeps.ts";
 import { log } from "../logger.ts";
 
 export const CRM_SYNC_PULL_QUEUE = "crm_sync_pull";

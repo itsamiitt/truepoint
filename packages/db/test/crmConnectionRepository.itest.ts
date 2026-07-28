@@ -117,7 +117,7 @@ describe("crmConnectionRepository — connect lifecycle", () => {
 
   test("markConnected stores the real envelope and it round-trips", async () => {
     const { encryptCrmTokenBundle, decryptCrmTokenBundle } = await import(
-      "../../core/src/crm/crmSecretStore.ts"
+      "../../core/src/crm-sync/crmSecretStore.ts"
     );
     const bundle = {
       accessToken: "access-abc",
@@ -155,7 +155,7 @@ describe("crmConnectionRepository — connect lifecycle", () => {
   });
 
   test("markConnected does NOT promote sync_mode — a reconnect never starts sending data", async () => {
-    const { encryptCrmSecret } = await import("../../core/src/crm/crmSecretStore.ts");
+    const { encryptCrmSecret } = await import("../../core/src/crm-sync/crmSecretStore.ts");
     const id = await newConnection(scopeA(), ownerA);
 
     // An operator has explicitly enforced this connection.
@@ -177,7 +177,7 @@ describe("crmConnectionRepository — connect lifecycle", () => {
 
 describe("crmConnectionRepository — the credential never reaches a DTO", () => {
   test("getById's projection has no oauth_token_enc KEY at all (not merely a null value)", async () => {
-    const { encryptCrmSecret } = await import("../../core/src/crm/crmSecretStore.ts");
+    const { encryptCrmSecret } = await import("../../core/src/crm-sync/crmSecretStore.ts");
     const id = await newConnection(scopeA(), ownerA);
     await dbmod.withTenantTx(scopeA(), (tx) =>
       dbmod.crmConnectionRepository.markConnected(tx, id, {
@@ -195,7 +195,7 @@ describe("crmConnectionRepository — the credential never reaches a DTO", () =>
   });
 
   test("listByWorkspace carries no credential and is workspace-scoped", async () => {
-    const { encryptCrmSecret } = await import("../../core/src/crm/crmSecretStore.ts");
+    const { encryptCrmSecret } = await import("../../core/src/crm-sync/crmSecretStore.ts");
     const idA = await newConnection(scopeA(), ownerA, "hubspot");
     await dbmod.withTenantTx(scopeA(), (tx) =>
       dbmod.crmConnectionRepository.markConnected(tx, idA, {
@@ -218,7 +218,7 @@ describe("crmConnectionRepository — the credential never reaches a DTO", () =>
   });
 
   test("a foreign workspace cannot read another's encrypted bundle", async () => {
-    const { encryptCrmSecret } = await import("../../core/src/crm/crmSecretStore.ts");
+    const { encryptCrmSecret } = await import("../../core/src/crm-sync/crmSecretStore.ts");
     const idA = await newConnection(scopeA(), ownerA);
     await dbmod.withTenantTx(scopeA(), (tx) =>
       dbmod.crmConnectionRepository.markConnected(tx, idA, {
@@ -235,7 +235,7 @@ describe("crmConnectionRepository — the credential never reaches a DTO", () =>
 describe("crmConnectionRepository — failure and rotation preserve the credential", () => {
   test("markError records the failure and leaves the credential intact", async () => {
     const { encryptCrmSecret, decryptCrmSecret } = await import(
-      "../../core/src/crm/crmSecretStore.ts"
+      "../../core/src/crm-sync/crmSecretStore.ts"
     );
     const id = await newConnection(scopeA(), ownerA);
     await dbmod.withTenantTx(scopeA(), (tx) =>
@@ -276,7 +276,7 @@ describe("crmConnectionRepository — failure and rotation preserve the credenti
 
   test("rotateToken rolls the credential without touching connect identity", async () => {
     const { encryptCrmSecret, decryptCrmSecret } = await import(
-      "../../core/src/crm/crmSecretStore.ts"
+      "../../core/src/crm-sync/crmSecretStore.ts"
     );
     const id = await newConnection(scopeA(), ownerA);
     await dbmod.withTenantTx(scopeA(), (tx) =>
@@ -310,7 +310,7 @@ describe("crmConnectionRepository — failure and rotation preserve the credenti
 
 describe("crmConnectionRepository — the cross-tenant sweep worklists", () => {
   test("listDueForRefresh returns ids + scope only, and only expiring connected rows", async () => {
-    const { encryptCrmSecret } = await import("../../core/src/crm/crmSecretStore.ts");
+    const { encryptCrmSecret } = await import("../../core/src/crm-sync/crmSecretStore.ts");
 
     const soon = await newConnection(scopeA(), ownerA);
     await dbmod.withTenantTx(scopeA(), (tx) =>
@@ -342,7 +342,7 @@ describe("crmConnectionRepository — the cross-tenant sweep worklists", () => {
   });
 
   test("listDueForPoll treats a never-polled connection as due", async () => {
-    const { encryptCrmSecret } = await import("../../core/src/crm/crmSecretStore.ts");
+    const { encryptCrmSecret } = await import("../../core/src/crm-sync/crmSecretStore.ts");
     const fresh = await newConnection(scopeA(), ownerA);
     await dbmod.withTenantTx(scopeA(), (tx) =>
       dbmod.crmConnectionRepository.markConnected(tx, fresh, {

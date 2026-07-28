@@ -52,8 +52,8 @@ import {
 } from "@leadwolf/types";
 import type { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
-import { runCrmAlertTick } from "./crm/crmAlertTick.ts";
-import { makeCrmDeadLetterHandler } from "./crm/crmDeadLetter.ts";
+import { runCrmAlertTick } from "./crm-sync/crmAlertTick.ts";
+import { makeCrmDeadLetterHandler } from "./crm-sync/crmDeadLetter.ts";
 import { type WorkerDeadLetter, extractScope, makeDeadLetterHandler } from "./deadLetter.ts";
 import { log } from "./logger.ts";
 import { createRedisMailboxThrottle } from "./mailboxThrottle.ts";

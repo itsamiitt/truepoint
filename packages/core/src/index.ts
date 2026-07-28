@@ -1100,7 +1100,7 @@ export type {
   CrmEraseMode,
   CrmErasePath,
   CrmEraseResult,
-} from "./crm/port.ts";
+} from "./crm-sync/port.ts";
 export {
   classifyRetry,
   backoffDelayMs,
@@ -1110,13 +1110,13 @@ export {
   type BackoffOpts,
   type RateBudgetInput,
   type RateBudgetDecision,
-} from "./crm/reliability.ts";
+} from "./crm-sync/reliability.ts";
 export {
   planCrmOutboundPush,
   type OutboundPushInput,
   type OutboundPushPlan,
   type CrmPushOperation,
-} from "./crm/planOutboundPush.ts";
+} from "./crm-sync/planOutboundPush.ts";
 export {
   planCrmInboundMerge,
   type InboundMergeInput,
@@ -1124,16 +1124,16 @@ export {
   type InboundMergeField,
   type InboundFieldOutcome,
   type CrmMergeDecision,
-} from "./crm/planInboundMerge.ts";
+} from "./crm-sync/planInboundMerge.ts";
 // Out-of-box per-provider field-mapping presets (crm-sync §4.3): HubSpot + Salesforce × contact/account,
 // bucketed by direction/authority per the §6.1/§6.2 merge ladder. Tunable defaults a tenant overrides later.
-export { DEFAULT_CRM_FIELD_MAPPINGS, defaultMappingsFor } from "./crm/defaultMappings.ts";
+export { DEFAULT_CRM_FIELD_MAPPINGS, defaultMappingsFor } from "./crm-sync/defaultMappings.ts";
 // The PURE field-mapping validator (crm-sync §4.3) the admin mapping editor + a startup self-check call.
 export {
   validateCrmMappings,
   type CrmMappingError,
   type CrmMappingErrorCode,
-} from "./crm/validateMapping.ts";
+} from "./crm-sync/validateMapping.ts";
 // At-rest encryption for the CRM OAuth bundle (crm-sync §5.3/§7.2) — AES-256-GCM under a VERSIONED envelope
 // and its OWN key (CRM_SECRET_KEY), separate from the email and PII stores so one credential class never
 // widens into another. The ciphertext lands in crm_connections.oauth_token_enc, whose only writer is
@@ -1143,7 +1143,7 @@ export {
   decryptCrmSecret,
   encryptCrmTokenBundle,
   decryptCrmTokenBundle,
-} from "./crm/crmSecretStore.ts";
+} from "./crm-sync/crmSecretStore.ts";
 // The server-side OAuth connect flow (crm-sync §5.2) — auth-code + PKCE, single-use state, a callback that
 // cannot select a tenant, an SSRF- and allow-list-validated instance URL, and a granted-scope check.
 export {
@@ -1158,7 +1158,7 @@ export {
   type StartCrmConnectResult,
   type CompleteCrmConnectInput,
   type CompleteCrmConnectResult,
-} from "./crm/connectCrm.ts";
+} from "./crm-sync/connectCrm.ts";
 // The TP→CRM outbound push runner (crm-sync §3.3 outbound / §6.2) — the IO shell around
 // planCrmOutboundPush: the L1/L2/L3 gate ladder, the suppression gate, the content-hash loop guard, the
 // connector call, and the run-ledger bookkeeping. Every dependency is injected (the composition root in
@@ -1170,7 +1170,7 @@ export {
   type CrmPushInput,
   type CrmPushResult,
   type CrmPushOutcomeKind,
-} from "./crm/runCrmPush.ts";
+} from "./crm-sync/runCrmPush.ts";
 // The CLOSED transform registry (crm-sync §1.3/§4.3) — crm_field_mappings.transform stores a NAME, never
 // code, so a tenant-editable table can never become an eval surface. An unknown name REFUSES rather than
 // falling through to passthrough.
@@ -1180,7 +1180,7 @@ export {
   type TransformConfig,
   type TransformDirection,
   type TransformResult,
-} from "./crm/transforms.ts";
+} from "./crm-sync/transforms.ts";
 // The CRM→TP apply runner (crm-sync §3.3 inbound / §6.1) — the gate ladder, the canonical re-fetch (a
 // webhook payload is a lossy hint, never the data), the inward-facing suppression wall that stops a sync
 // re-creating an erased subject, the merge, and the conflict staging.
@@ -1191,7 +1191,7 @@ export {
   type CrmInboundDeps,
   type CrmInboundGates,
   type CrmInboundOutcomeKind,
-} from "./crm/applyInboundEvent.ts";
+} from "./crm-sync/applyInboundEvent.ts";
 // The two bulk CRM→TP readers (crm-sync §3.3) — the resumable backfill page and the incremental delta poll.
 // Both advance progress ONLY after a page applies cleanly, and only to the PROVIDER's high-watermark: an
 // eagerly-advanced mark strands records below it that no later poll ever asks for again.
@@ -1205,7 +1205,7 @@ export {
   type CrmPullOutcomeKind,
   type RunCrmBackfillPageInput,
   type RunCrmDeltaInput,
-} from "./crm/runCrmPull.ts";
+} from "./crm-sync/runCrmPull.ts";
 // The OUTBOUND erasure step of a DSAR (crm-sync §7.6) — the half that tells the customer's CRM to erase the
 // subject too. The link row is deleted ONLY after the provider confirms: it carries the crm_record_id and is
 // what the DSAR residual scan counts, so clearing it on a failure would strand the subject in the CRM while
@@ -1217,14 +1217,14 @@ export {
   type CrmEraseOutcome,
   type RunCrmEraseInput,
   type RunCrmEraseResult,
-} from "./crm/runCrmErase.ts";
+} from "./crm-sync/runCrmErase.ts";
 // The TP-side change emitter (crm-sync §2.2 gap 3, ADR-0027) — writes a transactional-outbox intent INSIDE
 // the caller's tenant tx, so "TruePoint changed" and "the CRM should hear about it" commit together. A no-op
 // while CRM_SYNC_ENABLED is off, so a deployment with no CRM pays nothing per write.
 export {
   publishCrmPushIntent,
   type CrmPushIntentInput,
-} from "./crm/publishCrmPushIntent.ts";
+} from "./crm-sync/publishCrmPushIntent.ts";
 
 // The PROACTIVE per-connection CRM API budget (crm-sync §8.2). Two deliberate inversions of the repo's
 // defaults: the store is shared across processes (not process-local like the AI guard) and it FAILS CLOSED
@@ -1238,7 +1238,7 @@ export {
   CrmBudgetUnavailableError,
   type CrmBudgetStore,
   type CrmBudgetDecision,
-} from "./crm/crmBudgetGuard.ts";
+} from "./crm-sync/crmBudgetGuard.ts";
 // The PURE alert judgement for CRM sync (crm-sync §9.5). Most of its rules decide what does NOT alert —
 // an operator channel that fires on normal states gets muted, and a muted channel converts a real incident
 // into silence people have already learned to ignore.
@@ -1251,4 +1251,4 @@ export {
   type CrmAlertSeverity,
   type CrmAlertThresholds,
   type CrmConnectionSnapshot,
-} from "./crm/evaluateCrmAlerts.ts";
+} from "./crm-sync/evaluateCrmAlerts.ts";

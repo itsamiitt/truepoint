@@ -18,7 +18,7 @@ import postgres from "postgres";
 import { type ItestDb, one, startItestDb } from "./itestDb.ts";
 
 type DbModule = typeof import("@leadwolf/db");
-type CoreConnect = typeof import("../../core/src/crm/connectCrm.ts");
+type CoreConnect = typeof import("../../core/src/crm-sync/connectCrm.ts");
 
 let dbHandle: ItestDb;
 let admin: ReturnType<typeof postgres>;
@@ -98,7 +98,7 @@ beforeAll(async () => {
   admin = postgres(dbHandle.adminUrl, { max: 2, onnotice: () => {} });
 
   dbmod = await import("@leadwolf/db");
-  core = await import("../../core/src/crm/connectCrm.ts");
+  core = await import("../../core/src/crm-sync/connectCrm.ts");
 
   ({ tenantId: tenantA, wsId: wsA, ownerId: ownerA } = await seedTenant("acme"));
   ({ tenantId: tenantB, wsId: wsB, ownerId: ownerB } = await seedTenant("globex"));
@@ -243,7 +243,7 @@ describe("completeCrmConnect — the happy path", () => {
     expect(rec?.instanceUrl).toBe("https://acme.my.salesforce.com");
 
     // The stored bundle decrypts to the real tokens...
-    const { decryptCrmTokenBundle } = await import("../../core/src/crm/crmSecretStore.ts");
+    const { decryptCrmTokenBundle } = await import("../../core/src/crm-sync/crmSecretStore.ts");
     const held = await dbmod.withTenantTx(scopeA(), (tx) =>
       dbmod.crmConnectionRepository.getEncryptedBundle(tx, result.connectionId),
     );
@@ -272,7 +272,7 @@ describe("completeCrmConnect — the happy path", () => {
       await admin`SELECT code_verifier_enc FROM crm_oauth_states WHERE state = ${state}`,
       "handshake",
     );
-    const { decryptCrmSecret } = await import("../../core/src/crm/crmSecretStore.ts");
+    const { decryptCrmSecret } = await import("../../core/src/crm-sync/crmSecretStore.ts");
     const expected = decryptCrmSecret(stored.code_verifier_enc);
 
     await core.completeCrmConnect({

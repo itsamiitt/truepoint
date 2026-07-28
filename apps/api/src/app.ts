@@ -17,7 +17,7 @@ import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
 import { contactsDedupRoutes } from "./features/contacts-dedup/index.ts";
 import { contactsMergeRoutes } from "./features/contacts-merge/index.ts";
 import { contactsResolveRoutes } from "./features/contacts-resolve/index.ts";
-import { crmRoutes, crmWebhookRoutes } from "./features/crm/index.ts";
+import { crmRoutes, crmWebhookRoutes } from "./features/crm-sync/index.ts";
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
 import {
   emailConnectRoutes,

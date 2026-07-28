@@ -33,7 +33,7 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **1801 source files · 85 code-bearing domains · 34 shared areas · 56 domain-vocabulary warnings · 151
+> **1939 source files · 86 code-bearing domains · 35 shared areas · 56 domain-vocabulary warnings · 155
 > unbucketed** (framework-root configs + undeclared worker queues + repositories whose entity isn't in
 > `REPO_DOMAIN`, plus net-new domains not yet in the canonical list — including the net-new `master-sync`
 > feature (`apps/api/src/features/master-sync`) + the **nested TruePoint Forge** (fully migrated from the
@@ -100,7 +100,7 @@ apps/                           # deployable processes (thin transport adapters)
 
 ## FEATURE → FILES index (live)
 
-> One subsection per code-bearing domain (54). Paths are authoritative in
+> One subsection per code-bearing domain (55). Paths are authoritative in
 > [`architecture-map.json`](./architecture-map.json); the purposes are here. Web slices are
 > **destination-keyed** (prospect/sequences/settings-\*), api/core/db are **resource-keyed** (reveal/email/admin)
 > — a file has exactly one home; the [Destinations](#destinations-cross-reference) section is where the cross-links live.
@@ -338,6 +338,29 @@ apps/                           # deployable processes (thin transport adapters)
 
 #### inbox — *M9 unified replies + tasks* (web)
 - **web:** `features/inbox/` — `ThreadList` + `ThreadView` over `useInbox`, `TasksPanel` over `useTasks`; `(shell)/inbox`
+
+#### crm-sync — *bidirectional Salesforce/HubSpot sync — DARK by four gates* ([crm-sync plan](./planning/crm-sync/00-enterprise-implementation-plan.md), [runbooks](./planning/crm-sync/_runbooks/crm-sync-operations.md))
+- **core:** `crm-sync/` — `port.ts` (`CrmConnector`: OAuth + data plane + webhook verify; injectable `CrmFetch`),
+  `connectCrm.ts` (auth-code + PKCE; the callback compares the handshake's tenant against the VERIFIED session,
+  SSRF- **and** allow-list-validates the provider-returned `instanceUrl`, refuses a broadened scope grant),
+  `crmSecretStore.ts` (AES-256-GCM versioned envelope under its OWN `CRM_SECRET_KEY` — one key per credential
+  class), `transforms.ts` (CLOSED registry — a name, never code; an unknown name REFUSES rather than passing
+  the raw value through), `planInboundMerge.ts`/`planOutboundPush.ts` (pure per-field ladders),
+  `runCrmPush.ts`/`applyInboundEvent.ts`/`runCrmPull.ts`/`runCrmErase.ts` (the IO shells: gate ladder,
+  suppression walls both directions, content-hash loop guard, monotonic watermarks),
+  `crmBudgetGuard.ts` (proactive per-connection API budget — shared store, FAILS CLOSED),
+  `evaluateCrmAlerts.ts` (what does NOT alert is most of it), `publishCrmPushIntent.ts` (outbox intent)
+- **db:** `crm{Connection,OauthState,FieldMapping,RecordLink,SyncState,SyncRun,SyncConflict,DeadLetter,Health}Repository.ts`;
+  `schema/crm.ts` + `rls/crm.sql` (nine workspace-scoped tables, ENABLE+FORCE RLS; three append-only by
+  policy-absence) · migration `0087_crm_sync.sql`
+- **api:** `features/crm-sync/*` — the authed router (connect/callback/sync-mode/backfill/health reads/mapping
+  editor/conflict queue) **plus** the PUBLIC signature-verified provider webhook, mounted BEFORE it
+- **workers:** `queues/crmSync.ts` (pull·inbound·push·backfill), `queues/crmSyncSweep.ts` (leader-locked
+  delta·reconcile·refresh·alert ticks), `queues/crmErase.ts` (outbound DSAR erase); `crm-sync/` deps factory
+  + alert tick + durable dead-letter writer
+- **integrations:** `crm-sync/` — HubSpot + Salesforce adapters, the Redis budget store
+- **web:** `features/crm-sync/` — connections + sync activity + mapping editor + conflict review; `(shell)/crm-sync`
+- **admin:** `features/crm-sync/` — the cross-tenant fleet monitor + the poison-job triage console
 
 ### D. Intelligence & reporting
 

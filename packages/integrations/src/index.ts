@@ -78,20 +78,20 @@ export { redisCacheStore } from "./redisCacheStore.ts";
 // port, plus the configured-set factory (mirrors defaultProviders()). The transport is the injectable
 // CrmFetch; client id/secret are injected (never read from env here), so the adapters are unit-testable on
 // recorded fixtures. core OWNS the port; this package implements it (16 §5).
-export { hubspotConnector, defaultCrmConnectors, type HubspotConfig } from "./crm/hubspot.ts";
+export { hubspotConnector, defaultCrmConnectors, type HubspotConfig } from "./crm-sync/hubspot.ts";
 export {
   defaultCrmFetch,
   classifyHubspotStatus,
   parseHubspotLimits,
   CrmOAuthError,
   type CrmErrorOutcome,
-} from "./crm/hubspotHttp.ts";
-export { salesforceConnector, type SalesforceConfig } from "./crm/salesforce.ts";
-export { classifySalesforceStatus, parseSalesforceLimits } from "./crm/salesforceHttp.ts";
+} from "./crm-sync/hubspotHttp.ts";
+export { salesforceConnector, type SalesforceConfig } from "./crm-sync/salesforce.ts";
+export { classifySalesforceStatus, parseSalesforceLimits } from "./crm-sync/salesforceHttp.ts";
 
 // The Redis-backed CRM API budget store (crm-sync §8.2) — SHARED across processes by design: a
 // process-local counter would let N workers each grant the full budget. Injected at the composition root.
 export {
   redisCrmBudgetStore,
   type CrmBudgetRedis,
-} from "./crm/crmBudgetStore.ts";
+} from "./crm-sync/crmBudgetStore.ts";
