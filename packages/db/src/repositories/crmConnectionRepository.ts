@@ -94,6 +94,40 @@ export const crmConnectionRepository = {
     return inserted[0]!.id;
   },
 
+  /**
+   * Resolve the existing connection for a (workspace, provider, CRM account), regardless of status — the
+   * OAuth-connect UPSERT key.
+   *
+   * Without this a re-auth INSERTs a second row and collides on
+   * uniq_crm_connections_ws_provider_account, which is a partial unique index on
+   * (workspace_id, provider, external_account_id) WHERE external_account_id IS NOT NULL. The index is
+   * right — one live connection per workspace per CRM org — so the connect flow is what has to look first
+   * and update in place. Mirrors mailboxRepository.findIdByWorkspaceAddress, which exists for the same
+   * reason on the mailbox OAuth path.
+   *
+   * Note the ordering this implies for callers: the account id is only known AFTER the token exchange, so
+   * the lookup necessarily happens post-exchange rather than at the start of the flow.
+   */
+  async findIdByWorkspaceProviderAccount(
+    tx: Tx,
+    workspaceId: string,
+    provider: string,
+    externalAccountId: string,
+  ): Promise<string | null> {
+    const rows = await tx
+      .select({ id: crmConnections.id })
+      .from(crmConnections)
+      .where(
+        and(
+          eq(crmConnections.workspaceId, workspaceId),
+          eq(crmConnections.provider, provider),
+          eq(crmConnections.externalAccountId, externalAccountId),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.id ?? null;
+  },
+
   async getById(tx: Tx, connectionId: string): Promise<CrmConnectionRecord | null> {
     const rows = await tx
       .select(safeColumns)

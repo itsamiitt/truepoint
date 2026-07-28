@@ -287,7 +287,10 @@ describe("completeCrmConnect — the happy path", () => {
     expect(connector.seen.code).toBe("code-2");
   });
 
-  test("a reconnect does NOT clobber mappings the customer has tuned", async () => {
+  test("re-authorising the SAME CRM org updates in place — no duplicate, no unique violation", async () => {
+    // uniq_crm_connections_ws_provider_account permits exactly one connection per (workspace, provider,
+    // CRM org). CI caught this: the first version of completeCrmConnect always INSERTed, so every re-auth
+    // died on that index. The flow must find the existing row and update it.
     const connector = fakeConnector();
     const first = await core.completeCrmConnect({
       sessionScope: scopeA(),
@@ -297,32 +300,59 @@ describe("completeCrmConnect — the happy path", () => {
       // biome-ignore lint/suspicious/noExplicitAny: fake connector
       connector: connector as any,
     });
+    expect(first.reconnect).toBe(false);
 
-    // The customer flips one mapping to outbound.
+    const second = await core.completeCrmConnect({
+      sessionScope: scopeA(),
+      userId: ownerA,
+      state: (await start(connector)).state,
+      code: "c2",
+      // biome-ignore lint/suspicious/noExplicitAny: fake connector
+      connector: connector as any,
+    });
+    expect(second.reconnect).toBe(true);
+    expect(second.connectionId).toBe(first.connectionId); // same row, re-authorised
+
+    const rows = one<{ n: number }>(
+      await admin`
+        SELECT count(*)::int AS n FROM crm_connections
+        WHERE workspace_id = ${wsA} AND provider = 'salesforce'
+          AND external_account_id = '00D5g000004ABCD'`,
+      "count",
+    );
+    expect(rows.n).toBe(1);
+  });
+
+  test("a reconnect does NOT clobber mappings the customer has tuned, nor demote an enforcing connection", async () => {
+    const connector = fakeConnector();
+    const first = await core.completeCrmConnect({
+      sessionScope: scopeA(),
+      userId: ownerA,
+      state: (await start(connector)).state,
+      code: "c3",
+      // biome-ignore lint/suspicious/noExplicitAny: fake connector
+      connector: connector as any,
+    });
+
+    // The customer tunes a mapping, and an operator promotes the connection to enforce.
     await admin`
       UPDATE crm_field_mappings SET direction = 'outbound'
       WHERE connection_id = ${first.connectionId} AND tp_field = 'jobTitle'`;
+    await dbmod.withTenantTx(scopeA(), (tx) =>
+      dbmod.crmConnectionRepository.setSyncMode(tx, first.connectionId, "enforce"),
+    );
 
-    // Seeding the SAME connection again (the reconnect path) must be a no-op on existing rows.
-    const reseeded = await dbmod.withTenantTx(scopeA(), async (tx) => {
-      const { defaultMappingsFor } = await import("../../core/src/crm/defaultMappings.ts");
-      return dbmod.crmFieldMappingRepository.seedDefaults(
-        tx,
-        scopeA(),
-        first.connectionId,
-        defaultMappingsFor("salesforce").map((m) => ({
-          objectType: m.objectType,
-          tpField: m.tpField,
-          crmField: m.crmField,
-          direction: m.direction,
-          authority: m.authority ?? null,
-          transform: m.transform,
-          enabled: m.enabled,
-        })),
-      );
+    const again = await core.completeCrmConnect({
+      sessionScope: scopeA(),
+      userId: ownerA,
+      state: (await start(connector)).state,
+      code: "c4",
+      // biome-ignore lint/suspicious/noExplicitAny: fake connector
+      connector: connector as any,
     });
-    expect(reseeded).toBe(0);
 
+    // Nothing re-seeded, the tuned direction survives...
+    expect(again.seededMappings).toBe(0);
     const tuned = one<{ direction: string }>(
       await admin`
         SELECT direction FROM crm_field_mappings
@@ -330,6 +360,10 @@ describe("completeCrmConnect — the happy path", () => {
       "mapping",
     );
     expect(tuned.direction).toBe("outbound");
+
+    // ...and the reported mode is the REAL one. A hardcoded 'shadow' here would tell the UI that an
+    // enforcing connection had been silently demoted.
+    expect(again.syncMode).toBe("enforce");
   });
 });
 

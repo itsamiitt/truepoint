@@ -177,8 +177,12 @@ export interface CompleteCrmConnectResult {
   connectionId: string;
   provider: string;
   externalAccountId: string | null;
+  /** The connection's ACTUAL mode after the connect — 'shadow' on a first connect, unchanged on a reconnect. */
   syncMode: string;
+  /** Rows the default seed actually inserted; 0 on a reconnect, whose existing mappings are left alone. */
   seededMappings: number;
+  /** True when this re-authorised an existing (workspace, provider, CRM org) rather than creating one. */
+  reconnect: boolean;
 }
 
 /**
@@ -228,13 +232,28 @@ export async function completeCrmConnect(
   const scope = { tenantId: handshake.tenantId, workspaceId: handshake.workspaceId };
 
   return withTenantTx<CompleteCrmConnectResult>(scope, async (tx) => {
-    const connectionId = await crmConnectionRepository.insert(tx, {
-      tenantId: scope.tenantId,
-      workspaceId: scope.workspaceId,
-      ownerUserId: input.userId,
-      provider: handshake.provider,
-      environment,
-    });
+    // RECONNECT vs FIRST CONNECT. uniq_crm_connections_ws_provider_account allows exactly one connection per
+    // (workspace, provider, CRM org), so re-authorising an already-connected org must UPDATE that row rather
+    // than insert a second one — otherwise every re-auth fails on the unique index. The account id only
+    // becomes known at the exchange, which is why this lookup lives here and not at the start of the flow.
+    const existingId = bundle.externalAccountId
+      ? await crmConnectionRepository.findIdByWorkspaceProviderAccount(
+          tx,
+          scope.workspaceId,
+          handshake.provider,
+          bundle.externalAccountId,
+        )
+      : null;
+
+    const connectionId =
+      existingId ??
+      (await crmConnectionRepository.insert(tx, {
+        tenantId: scope.tenantId,
+        workspaceId: scope.workspaceId,
+        ownerUserId: input.userId,
+        provider: handshake.provider,
+        environment,
+      }));
 
     await crmConnectionRepository.markConnected(tx, connectionId, {
       oauthTokenEnc: encryptCrmTokenBundle({ ...bundle, instanceUrl: instanceUrl ?? undefined }),
@@ -273,15 +292,23 @@ export async function completeCrmConnect(
         provider: handshake.provider,
         externalAccountId: bundle.externalAccountId ?? null,
         environment,
+        reconnect: existingId !== null,
       },
     });
+
+    // Read the mode back rather than asserting it. A FIRST connect is 'shadow' (the schema default), but a
+    // RECONNECT of a connection an operator already promoted stays 'enforce' — markConnected deliberately
+    // does not touch sync_mode. Returning a hardcoded 'shadow' here would tell the caller (and the UI) that
+    // an enforcing connection had been demoted, which is exactly the kind of quiet lie that gets believed.
+    const stored = await crmConnectionRepository.getById(tx, connectionId);
 
     return {
       connectionId,
       provider: handshake.provider,
       externalAccountId: bundle.externalAccountId ?? null,
-      syncMode: "shadow", // the schema default; a connect never promotes to enforce
+      syncMode: stored?.syncMode ?? "shadow",
       seededMappings,
+      reconnect: existingId !== null,
     };
   });
 }
