@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1880,
-  "fileSetHash": "sha256:32e04024adcd14dc862ad4d9e3b057f78190b8197e56a9d1b2dc345eaad88e82",
+  "fileCount": 1882,
+  "fileSetHash": "sha256:3badd2774d2e76b1b56de42ee81241172f64abd5b34f5f09d9811cf7c495ffcb",
   "features": {
     "account-search": {
       "web": [],
@@ -466,6 +466,8 @@
         "packages/core/src/crm/port.ts",
         "packages/core/src/crm/reliability.test.ts",
         "packages/core/src/crm/reliability.ts",
+        "packages/core/src/crm/runCrmPush.test.ts",
+        "packages/core/src/crm/runCrmPush.ts",
         "packages/core/src/crm/validateMapping.test.ts",
         "packages/core/src/crm/validateMapping.ts"
       ],

@@ -1154,3 +1154,15 @@ export {
   type CompleteCrmConnectInput,
   type CompleteCrmConnectResult,
 } from "./crm/connectCrm.ts";
+// The TP→CRM outbound push runner (crm-sync §3.3 outbound / §6.2) — the IO shell around
+// planCrmOutboundPush: the L1/L2/L3 gate ladder, the suppression gate, the content-hash loop guard, the
+// connector call, and the run-ledger bookkeeping. Every dependency is injected (the composition root in
+// apps/workers supplies them), so the runner is exercised without a database or a network.
+export {
+  runCrmPush,
+  type CrmPushDeps,
+  type CrmPushGates,
+  type CrmPushInput,
+  type CrmPushResult,
+  type CrmPushOutcomeKind,
+} from "./crm/runCrmPush.ts";
