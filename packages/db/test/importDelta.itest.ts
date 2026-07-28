@@ -59,7 +59,7 @@ async function countContacts(workspaceId: string): Promise<number> {
 async function externalIds(workspaceId: string): Promise<Array<string | null>> {
   const rows = await admin`
     SELECT external_id FROM contacts WHERE workspace_id = ${workspaceId} ORDER BY created_at`;
-  return (rows as Array<{ external_id: string | null }>).map((r) => r.external_id);
+  return (rows as unknown as Array<{ external_id: string | null }>).map((r) => r.external_id);
 }
 
 beforeAll(async () => {

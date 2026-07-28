@@ -30,19 +30,14 @@
     "test/bulkImport.pipeline.itest.ts",
     "test/contactChannels.readcutover.itest.ts",
     "test/contactMerge.itest.ts",
-    "test/customFields.itest.ts",
     "test/fieldProvenancePin.itest.ts",
     "test/forgeAuditChain.itest.ts",
     "test/forgeExtractionCandidates.itest.ts",
     "test/forgeQuarantine.itest.ts",
-    "test/importDelta.itest.ts",
     "test/importSoak.nightly.itest.ts",
-    "test/lists.itest.ts",
-    "test/listsStaffNoAccess.itest.ts",
     "test/masterBackfill.itest.ts",
     "test/masterGraphResolve.itest.ts",
     "test/migrationSeedLengths.test.ts",
-    "test/pipelineStages.itest.ts",
     "test/search.itest.ts"
   ]
 }
