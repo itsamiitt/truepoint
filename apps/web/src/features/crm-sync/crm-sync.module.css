@@ -1,0 +1,38 @@
+/* crm-sync.module.css — token-driven layout for the CRM sync slice. Every value is a var(--tp-*): app code
+   never carries raw hex or hardcoded spacing (truepoint-design). */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tp-space-4);
+}
+
+.tableBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tp-space-2);
+}
+
+.subheading {
+  font-size: var(--tp-text-sm);
+  font-weight: 600;
+  color: var(--tp-text);
+  margin: 0;
+}
+
+.footnote {
+  font-size: var(--tp-text-xs);
+  color: var(--tp-text-muted);
+  margin: 0;
+}
+
+.connectionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--tp-space-3);
+  flex-wrap: wrap;
+}
+
+.actions {
+  display: flex;
+  gap: var(--tp-space-2);
+}

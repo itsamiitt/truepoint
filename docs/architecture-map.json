@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1902,
-  "fileSetHash": "sha256:c7e23402b795ac720ec75a760d8c49f126301c7ba586698312a8763b54c62066",
+  "fileCount": 1913,
+  "fileSetHash": "sha256:e9d2a6a7bdbb14b4993260c580ce9e9cfda0796b2270b209b1523015a81d433a",
   "features": {
     "account-search": {
       "web": [],
@@ -484,6 +484,26 @@
         "packages/core/src/crm/validateMapping.test.ts",
         "packages/core/src/crm/validateMapping.ts"
       ],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "crm-sync": {
+      "web": [
+        "apps/web/src/features/crm-sync/api.ts",
+        "apps/web/src/features/crm-sync/components/ConflictQueue.tsx",
+        "apps/web/src/features/crm-sync/components/CrmSyncPage.tsx",
+        "apps/web/src/features/crm-sync/components/SyncActivity.tsx",
+        "apps/web/src/features/crm-sync/hooks/useCrmConflicts.ts",
+        "apps/web/src/features/crm-sync/hooks/useCrmConnections.ts",
+        "apps/web/src/features/crm-sync/hooks/useCrmRuns.ts",
+        "apps/web/src/features/crm-sync/index.ts",
+        "apps/web/src/features/crm-sync/keys.ts",
+        "apps/web/src/features/crm-sync/types.ts"
+      ],
+      "admin": [],
+      "api": [],
+      "core": [],
       "db": [],
       "workers": [],
       "integrations": []
@@ -2303,6 +2323,7 @@
     ],
     "apps/web/app": [
       "apps/web/src/app/(public)/pricing/page.tsx",
+      "apps/web/src/app/(shell)/crm-sync/page.tsx",
       "apps/web/src/app/(shell)/data-health/page.tsx",
       "apps/web/src/app/(shell)/enrichment/jobs/page.tsx",
       "apps/web/src/app/(shell)/error.tsx",
