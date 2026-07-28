@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1882,
-  "fileSetHash": "sha256:3badd2774d2e76b1b56de42ee81241172f64abd5b34f5f09d9811cf7c495ffcb",
+  "fileCount": 1886,
+  "fileSetHash": "sha256:8f9420164d90ccaf1ae8ff8010ee2781c346905bfa2221f9ca79711cc7365fc7",
   "features": {
     "account-search": {
       "web": [],
@@ -451,6 +451,8 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/crm/applyInboundEvent.test.ts",
+        "packages/core/src/crm/applyInboundEvent.ts",
         "packages/core/src/crm/connectCrm.test.ts",
         "packages/core/src/crm/connectCrm.ts",
         "packages/core/src/crm/crmSecretStore.test.ts",
@@ -468,6 +470,8 @@
         "packages/core/src/crm/reliability.ts",
         "packages/core/src/crm/runCrmPush.test.ts",
         "packages/core/src/crm/runCrmPush.ts",
+        "packages/core/src/crm/transforms.test.ts",
+        "packages/core/src/crm/transforms.ts",
         "packages/core/src/crm/validateMapping.test.ts",
         "packages/core/src/crm/validateMapping.ts"
       ],

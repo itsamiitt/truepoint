@@ -1166,3 +1166,24 @@ export {
   type CrmPushResult,
   type CrmPushOutcomeKind,
 } from "./crm/runCrmPush.ts";
+// The CLOSED transform registry (crm-sync §1.3/§4.3) — crm_field_mappings.transform stores a NAME, never
+// code, so a tenant-editable table can never become an eval surface. An unknown name REFUSES rather than
+// falling through to passthrough.
+export {
+  applyTransform,
+  transformInbound,
+  type TransformConfig,
+  type TransformDirection,
+  type TransformResult,
+} from "./crm/transforms.ts";
+// The CRM→TP apply runner (crm-sync §3.3 inbound / §6.1) — the gate ladder, the canonical re-fetch (a
+// webhook payload is a lossy hint, never the data), the inward-facing suppression wall that stops a sync
+// re-creating an erased subject, the merge, and the conflict staging.
+export {
+  applyInboundEvent,
+  type ApplyInboundEventInput,
+  type ApplyInboundEventResult,
+  type CrmInboundDeps,
+  type CrmInboundGates,
+  type CrmInboundOutcomeKind,
+} from "./crm/applyInboundEvent.ts";
