@@ -211,6 +211,14 @@ describe("master-link backfill (runMasterBackfill; PLAN_00 §11.5, Phase-2′ re
     expect((acct as { master_company_id: string | null }).master_company_id).toBeTruthy();
 
     personsAfterRun1 = await masterPersonCount();
+
+    // The assertion `personsBeforeRun1` was captured for, and never had: NO JUNK MINT. c1 and c2 dedup onto
+    // the pre-seeded golden person (test 2) and c4 is keyless so it mints nothing (test 3), which leaves c3
+    // as the only row that can add one. A resolver that minted an anonymous identity per unresolved row would
+    // still pass every other assertion here — each contact would carry a truthy master_person_id — and only
+    // this count would notice.
+    expect(personsAfterRun1).toBeLessThanOrEqual(personsBeforeRun1 + 1);
+    expect(personsAfterRun1).toBeGreaterThanOrEqual(personsBeforeRun1);
   });
 
   // ── TEST 2: DEDUP — TWO OVERLAY COPIES, ONE GOLDEN PERSON ────────────────────────────────────────────────────
