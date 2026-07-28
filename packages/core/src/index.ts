@@ -1187,3 +1187,17 @@ export {
   type CrmInboundGates,
   type CrmInboundOutcomeKind,
 } from "./crm/applyInboundEvent.ts";
+// The two bulk CRM→TP readers (crm-sync §3.3) — the resumable backfill page and the incremental delta poll.
+// Both advance progress ONLY after a page applies cleanly, and only to the PROVIDER's high-watermark: an
+// eagerly-advanced mark strands records below it that no later poll ever asks for again.
+export {
+  runCrmBackfillPage,
+  runCrmDelta,
+  type ApplyRecord,
+  type CrmPullDeps,
+  type CrmPullGates,
+  type CrmPullResult,
+  type CrmPullOutcomeKind,
+  type RunCrmBackfillPageInput,
+  type RunCrmDeltaInput,
+} from "./crm/runCrmPull.ts";
