@@ -7,7 +7,8 @@
     "dev": "LEADWOLF_SURFACE=worker bun run --hot src/index.ts",
     "start": "LEADWOLF_SURFACE=worker bun run src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck:tests": "tsc -p tsconfig.typecheck.json"
   },
   "dependencies": {
     "@leadwolf/config": "workspace:*",
@@ -18,5 +19,7 @@
     "bullmq": "^5.0.0",
     "ioredis": "^5.4.1"
   },
-  "devDependencies": { "typescript": "5.7.2" }
+  "devDependencies": {
+    "typescript": "5.7.2"
+  }
 }
