@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1876,
-  "fileSetHash": "sha256:a72ee6a06fbd4c95167f685c4fb47e672621995e190f8d82efdf963c67b60e10",
+  "fileCount": 1880,
+  "fileSetHash": "sha256:32e04024adcd14dc862ad4d9e3b057f78190b8197e56a9d1b2dc345eaad88e82",
   "features": {
     "account-search": {
       "web": [],
@@ -2586,6 +2586,7 @@
       "packages/db/test/crmConnect.itest.ts",
       "packages/db/test/crmConnectionRepository.itest.ts",
       "packages/db/test/crmIsolation.itest.ts",
+      "packages/db/test/crmSyncPersistence.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
       "packages/db/test/effectivePolicyResolve.itest.ts",
@@ -2885,6 +2886,9 @@
     "packages/db/src/repositories/crmConnectionRepository.ts",
     "packages/db/src/repositories/crmFieldMappingRepository.ts",
     "packages/db/src/repositories/crmOauthStateRepository.ts",
+    "packages/db/src/repositories/crmRecordLinkRepository.ts",
+    "packages/db/src/repositories/crmSyncRunRepository.ts",
+    "packages/db/src/repositories/crmSyncStateRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
     "packages/db/src/repositories/domainRepository.ts",
     "packages/db/src/repositories/effectivePolicyRepository.ts",

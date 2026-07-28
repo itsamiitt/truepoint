@@ -706,3 +706,20 @@ export {
   emailAnalyticsRepository,
   type EmailMetricCounts,
 } from "./repositories/emailAnalyticsRepository.ts";
+export {
+  crmRecordLinkRepository,
+  type CrmRecordLinkUpsert,
+  type CrmRecordLinkRecord,
+} from "./repositories/crmRecordLinkRepository.ts";
+export {
+  crmSyncStateRepository,
+  type CrmSyncStateRecord,
+  type CrmFlowDirection,
+} from "./repositories/crmSyncStateRepository.ts";
+export {
+  crmSyncRunRepository,
+  crmInboundEventRepository,
+  type CrmSyncRunStart,
+  type CrmSyncRunCounts,
+  type CrmInboundEventAppend,
+} from "./repositories/crmSyncRunRepository.ts";
