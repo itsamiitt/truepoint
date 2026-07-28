@@ -73,3 +73,18 @@ export {
   type FetchJson as ForgeExtractionFetchJson,
 } from "./forgeAnthropicExtraction.ts";
 export { redisCacheStore } from "./redisCacheStore.ts";
+
+// CRM connector adapters (crm-sync §5.1): the HubSpot + Salesforce adapters implementing core's CrmConnector
+// port, plus the configured-set factory (mirrors defaultProviders()). The transport is the injectable
+// CrmFetch; client id/secret are injected (never read from env here), so the adapters are unit-testable on
+// recorded fixtures. core OWNS the port; this package implements it (16 §5).
+export { hubspotConnector, defaultCrmConnectors, type HubspotConfig } from "./crm/hubspot.ts";
+export {
+  defaultCrmFetch,
+  classifyHubspotStatus,
+  parseHubspotLimits,
+  CrmOAuthError,
+  type CrmErrorOutcome,
+} from "./crm/hubspotHttp.ts";
+export { salesforceConnector, type SalesforceConfig } from "./crm/salesforce.ts";
+export { classifySalesforceStatus, parseSalesforceLimits } from "./crm/salesforceHttp.ts";

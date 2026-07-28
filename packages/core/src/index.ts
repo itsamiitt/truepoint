@@ -1079,3 +1079,53 @@ export {
   systemKey,
   tenantKey,
 } from "./cache/readThrough.ts";
+// CRM bidirectional sync (crm-sync §5.1 / §6): core OWNS the CrmConnector port + the two PURE conflict
+// planners; the adapters in packages/integrations implement the port; core never imports integrations. The
+// planners are IO-free (no DB, no network) so they unit-test cleanly and converge on replay.
+export type {
+  CrmConnector,
+  CrmFetch,
+  CrmTokenBundle,
+  CrmOutcome,
+  CrmLimitSignal,
+  CrmAccountInfo,
+  CrmUpsertRecord,
+  CrmUpsertResult,
+  CrmWebhookEvent,
+  CrmEraseMode,
+  CrmErasePath,
+  CrmEraseResult,
+} from "./crm/port.ts";
+export {
+  classifyRetry,
+  backoffDelayMs,
+  rateBudgetDecision,
+  type CrmRetryClass,
+  type RetryAction,
+  type BackoffOpts,
+  type RateBudgetInput,
+  type RateBudgetDecision,
+} from "./crm/reliability.ts";
+export {
+  planCrmOutboundPush,
+  type OutboundPushInput,
+  type OutboundPushPlan,
+  type CrmPushOperation,
+} from "./crm/planOutboundPush.ts";
+export {
+  planCrmInboundMerge,
+  type InboundMergeInput,
+  type InboundMergePlan,
+  type InboundMergeField,
+  type InboundFieldOutcome,
+  type CrmMergeDecision,
+} from "./crm/planInboundMerge.ts";
+// Out-of-box per-provider field-mapping presets (crm-sync §4.3): HubSpot + Salesforce × contact/account,
+// bucketed by direction/authority per the §6.1/§6.2 merge ladder. Tunable defaults a tenant overrides later.
+export { DEFAULT_CRM_FIELD_MAPPINGS, defaultMappingsFor } from "./crm/defaultMappings.ts";
+// The PURE field-mapping validator (crm-sync §4.3) the admin mapping editor + a startup self-check call.
+export {
+  validateCrmMappings,
+  type CrmMappingError,
+  type CrmMappingErrorCode,
+} from "./crm/validateMapping.ts";
