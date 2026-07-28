@@ -26,6 +26,10 @@ let ownerA = "";
 let connectionA = "";
 let contact1 = "";
 let contact2 = "";
+// A THIRD contact for the Lead->Contact case. It needs one with no existing link, because
+// uniq_crm_record_links_contact allows a contact exactly one link per connection — reusing contact1 there
+// made the test fail on that index rather than exercising the conversion (CI caught it).
+let contact3 = "";
 
 const scopeA = () => ({ tenantId: tenantA, workspaceId: wsA });
 
@@ -77,6 +81,12 @@ beforeAll(async () => {
   contact2 = one<{ id: string }>(
     await admin`
       INSERT INTO contacts (tenant_id, workspace_id, first_name) VALUES (${tenantA}, ${wsA}, 'Two')
+      RETURNING id`,
+    "contact",
+  ).id;
+  contact3 = one<{ id: string }>(
+    await admin`
+      INSERT INTO contacts (tenant_id, workspace_id, first_name) VALUES (${tenantA}, ${wsA}, 'Three')
       RETURNING id`,
     "contact",
   ).id;
@@ -172,7 +182,7 @@ describe("crm_record_links — the durable idempotency wall", () => {
         workspaceId: wsA,
         connectionId: connectionA,
         tpEntityType: "contact",
-        contactId: contact1,
+        contactId: contact3, // no prior link — see the note on contact3
         crmObjectType: "Lead",
         crmRecordId: "SFDC-LEAD-1",
       }),
@@ -206,7 +216,7 @@ describe("crm_record_links — the durable idempotency wall", () => {
           workspaceId: wsA,
           connectionId: connectionA,
           tpEntityType: "contact",
-          contactId: contact1, // already linked to SFDC-CONV-1
+          contactId: contact1, // already linked to SFDC-0031 by the first test in this describe
           crmObjectType: "Contact",
           crmRecordId: "SFDC-OTHER",
         }),
