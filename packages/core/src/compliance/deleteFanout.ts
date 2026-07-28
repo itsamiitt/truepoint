@@ -4,7 +4,12 @@
 // VERIFICATION SCAN gates `completed` — idempotent and re-runnable. Runs under the privileged
 // leadwolf_admin role (the one sanctioned cross-workspace path); the request must be verified first.
 
-import { dsarFanoutRepository, dsarRequestRepository, withPrivilegedTx } from "@leadwolf/db";
+import {
+  crmRecordLinkRepository,
+  dsarFanoutRepository,
+  dsarRequestRepository,
+  withPrivilegedTx,
+} from "@leadwolf/db";
 import { NotFoundError } from "@leadwolf/types";
 import { blindIndex } from "../import/blindIndex.ts";
 import { writeAudit } from "./writeAudit.ts";
@@ -16,13 +21,39 @@ export interface DeleteFanoutResult {
   completed: boolean;
 }
 
+/**
+ * One outbound CRM erase to schedule (crm-sync 00 §7.6). Ids + provider only — never the subject's data.
+ */
+export interface CrmEraseTarget {
+  linkId: string;
+  tenantId: string;
+  workspaceId: string;
+  connectionId: string;
+  provider: string;
+  crmObjectType: string;
+  crmRecordId: string;
+  tpEntityType: string;
+}
+
+/**
+ * The seam the composition root uses to enqueue outbound CRM erases.
+ *
+ * Injected rather than imported so core stays BullMQ-free. OPTIONAL, and its absence is safe in exactly one
+ * direction: without it the erases are never scheduled, the crm_record_links rows survive, the residual scan
+ * keeps counting them and the request stays `processing`. A DSAR that cannot complete is a visible problem;
+ * one that completes while the subject is still in a customer's CRM is a false erasure claim. Failing in the
+ * loud direction is the point.
+ */
+export type EnqueueCrmErase = (targets: CrmEraseTarget[]) => Promise<void>;
+
 export async function deleteFanout(
   requestId: string,
   subjectEmail: string,
+  enqueueCrmErase?: EnqueueCrmErase,
 ): Promise<DeleteFanoutResult> {
   const subjectIndex = blindIndex(subjectEmail.trim().toLowerCase());
 
-  return withPrivilegedTx(async (tx) => {
+  return withPrivilegedTx<DeleteFanoutResult & { eraseTargets: CrmEraseTarget[] }>(async (tx) => {
     const request = await dsarRequestRepository.getById(tx, requestId);
     if (!request) throw new NotFoundError("DSAR request not found.");
     await dsarRequestRepository.setStatus(tx, requestId, "processing");
@@ -49,6 +80,15 @@ export async function deleteFanout(
       liveCopies.map((c) => c.contactId),
     );
 
+    // 2b) The OUTBOUND half (crm-sync §7.6): a subject who exists in a customer's CRM is not erased until
+    // the CRM says so. crm_record_links is deliberately NOT purged above — the row carries the record id the
+    // erase job needs, and it is what the verification scan below counts, so it survives until the provider
+    // confirms. Collected here, scheduled after the transaction commits.
+    const eraseTargets = await crmRecordLinkRepository.listEraseTargets(
+      tx,
+      liveCopies.map((c) => c.contactId),
+    );
+
     // 3) Global suppression so no source, sync, or re-enrichment ever re-monetizes the subject.
     if (liveCopies.length > 0) {
       await dsarFanoutRepository.addGlobalSuppression(tx, subjectIndex, `dsar:${requestId}`);
@@ -69,6 +109,21 @@ export async function deleteFanout(
       ...(clean ? { completedAt: new Date() } : {}),
     });
 
-    return { requestId, copiesErased: liveCopies.length, verification, completed: clean };
+    return {
+      requestId,
+      copiesErased: liveCopies.length,
+      verification,
+      completed: clean,
+      eraseTargets,
+    };
+  }).then(async (result) => {
+    // Scheduled AFTER the privileged transaction commits, so an erase job can never reference a link row
+    // that rolled back. Best-effort by design: a failed enqueue leaves the link in place, the residual scan
+    // keeps counting it, and re-running deleteFanout (it is idempotent and re-runnable) schedules it again.
+    if (enqueueCrmErase && result.eraseTargets.length > 0) {
+      await enqueueCrmErase(result.eraseTargets);
+    }
+    const { eraseTargets: _dropped, ...rest } = result;
+    return rest;
   });
 }

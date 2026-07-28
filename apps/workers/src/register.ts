@@ -94,6 +94,7 @@ import {
   type ChannelReconcileSweepJobData,
   makeProcessChannelReconcileSweep,
 } from "./queues/channelReconcileSweep.ts";
+import { CRM_ERASE_QUEUE, type CrmEraseJobData, makeProcessCrmErase } from "./queues/crmErase.ts";
 // CRM bidirectional sync (crm-sync 00 §3.2). Registered unconditionally but DARK: CRM_SYNC_ENABLED gates
 // the sweep before it takes its leader lock, and every runner re-checks the same ladder, so with the env
 // unset these consumers exist and do nothing.
@@ -123,7 +124,7 @@ import {
   makeProcessDataRetentionSweep,
 } from "./queues/dataRetentionSweep.ts";
 import { DEDUP_DLQ, DEDUP_QUEUE, type DedupJobData, processDedup } from "./queues/dedup.ts";
-import { DSAR_DLQ, DSAR_QUEUE, type DsarJobData, processDsar } from "./queues/dsar.ts";
+import { DSAR_DLQ, DSAR_QUEUE, type DsarJobData, makeProcessDsar } from "./queues/dsar.ts";
 import {
   ENRICHMENT_DLQ,
   ENRICHMENT_QUEUE,
@@ -355,6 +356,9 @@ export const crmPushQueue = tracedQueue<CrmPushJob>(CRM_SYNC_PUSH_QUEUE, { conne
 export const crmBackfillQueue = tracedQueue<CrmBackfillJob>(CRM_SYNC_BACKFILL_QUEUE, {
   connection,
 });
+// The OUTBOUND DSAR erase queue (crm-sync §7.6). One job per crm_record_links row; each is a blocking
+// residual on its DSAR, so these must retry rather than fail quietly.
+export const crmEraseQueue = tracedQueue<CrmEraseJobData>(CRM_ERASE_QUEUE, { connection });
 /** The configured connector set. Client id/secret come from env at the composition root, never from core. */
 const crmConnectors = defaultCrmConnectors();
 const crmConnectorFor = (provider: string) => crmConnectors[provider as keyof typeof crmConnectors];
@@ -434,6 +438,7 @@ export async function collectWorkerMetricsText(): Promise<string> {
     { name: CRM_SYNC_INBOUND_QUEUE, queue: crmInboundQueue },
     { name: CRM_SYNC_PUSH_QUEUE, queue: crmPushQueue },
     { name: CRM_SYNC_BACKFILL_QUEUE, queue: crmBackfillQueue },
+    { name: CRM_ERASE_QUEUE, queue: crmEraseQueue },
     { name: DATA_QUALITY_SNAPSHOT_SWEEP_QUEUE, queue: dataQualitySnapshotSweepQueue },
     { name: DATA_RETENTION_SWEEP_QUEUE, queue: dataRetentionSweepQueue },
     { name: PARTITION_SWEEP_QUEUE, queue: partitionSweepQueue },
@@ -842,7 +847,28 @@ export function startWorkers(): Worker[] {
     instrument(
       tracedWorker<DsarJobData>(
         DSAR_QUEUE,
-        withDeadline(DSAR_QUEUE, deadlineMs(DSAR_QUEUE), processDsar),
+        withDeadline(
+          DSAR_QUEUE,
+          deadlineMs(DSAR_QUEUE),
+          // The DSAR fan-out schedules the OUTBOUND CRM erases through this seam (crm-sync §7.6). Without
+          // it the crm_record_links residuals survive and the request stays `processing` — visibly stuck,
+          // rather than falsely reporting an erasure that never reached the customer's CRM.
+          makeProcessDsar(async (targets, requestId) => {
+            for (const t of targets) {
+              await crmEraseQueue.add(
+                "erase",
+                { ...t, requestId },
+                // Stable jobId: re-running an idempotent DSAR fan-out must not enqueue a second erase for
+                // the same link.
+                {
+                  jobId: `crm-erase:${t.linkId}`,
+                  attempts: 10,
+                  backoff: { type: "exponential", delay: 30_000 },
+                },
+              );
+            }
+          }),
+        ),
         { connection, ...eventTuning(DSAR_QUEUE) },
       ),
       DSAR_QUEUE,
@@ -1043,6 +1069,12 @@ export function startWorkers(): Worker[] {
         { connection },
       ),
       CRM_SYNC_BACKFILL_QUEUE,
+    ),
+    instrument(
+      tracedWorker<CrmEraseJobData>(CRM_ERASE_QUEUE, makeProcessCrmErase(crmConnectorFor), {
+        connection,
+      }),
+      CRM_ERASE_QUEUE,
     ),
     // Data Health snapshot SWEEP consumer: leader-locked daily capture of a per-workspace trend point.
     instrument(

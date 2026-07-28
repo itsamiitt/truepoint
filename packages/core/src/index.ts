@@ -264,7 +264,12 @@ export {
 } from "./auth/members.ts";
 
 export { createDsarRequest } from "./compliance/dsarIntake.ts";
-export { deleteFanout, type DeleteFanoutResult } from "./compliance/deleteFanout.ts";
+export {
+  deleteFanout,
+  type DeleteFanoutResult,
+  type CrmEraseTarget,
+  type EnqueueCrmErase,
+} from "./compliance/deleteFanout.ts";
 export { assembleAccessReport, type AccessReport } from "./compliance/assembleAccessReport.ts";
 export { recordConsent, withdrawConsent, type WithdrawResult } from "./compliance/consent.ts";
 

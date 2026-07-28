@@ -9,9 +9,9 @@
 // A redelivered webhook, a replayed backfill page and a reconcile poll that all see the same CRM record
 // converge on ONE row rather than minting duplicates.
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
-import { crmRecordLinks } from "../schema/crm.ts";
+import { crmConnections, crmRecordLinks } from "../schema/crm.ts";
 
 export interface CrmRecordLinkUpsert {
   tenantId: string;
@@ -202,5 +202,50 @@ export const crmRecordLinkRepository = {
   /** Links for a contact across every connection — the DSAR residual scan's per-subject read. */
   async listByContact(tx: Tx, contactId: string): Promise<CrmRecordLinkRecord[]> {
     return tx.select(columns).from(crmRecordLinks).where(eq(crmRecordLinks.contactId, contactId));
+  },
+
+  /**
+   * Every CRM link held by a set of erased contacts — the DSAR fan-out's outbound worklist (00 §7.6).
+   *
+   * Takes the caller's tx rather than opening its own, because the only caller is deleteFanout, which
+   * already runs under withPrivilegedTx. That is deliberate and it is the ONLY cross-workspace read here:
+   * a DSAR erases a subject wherever they appear, so the worklist necessarily spans workspaces — the same
+   * reason findCopies does. It joins crm_connections for the provider (the erase mode depends on it) and
+   * projects ids ONLY, never a credential.
+   *
+   * Note this returns links for TOMBSTONED contacts. The tombstone is a soft delete, so contact_id's
+   * ON DELETE cascade never fires for an erased subject — which is exactly why an explicit outbound erase
+   * exists at all.
+   */
+  async listEraseTargets(
+    tx: Tx,
+    contactIds: string[],
+  ): Promise<
+    Array<{
+      linkId: string;
+      tenantId: string;
+      workspaceId: string;
+      connectionId: string;
+      provider: string;
+      crmObjectType: string;
+      crmRecordId: string;
+      tpEntityType: string;
+    }>
+  > {
+    if (contactIds.length === 0) return [];
+    return tx
+      .select({
+        linkId: crmRecordLinks.id,
+        tenantId: crmRecordLinks.tenantId,
+        workspaceId: crmRecordLinks.workspaceId,
+        connectionId: crmRecordLinks.connectionId,
+        provider: crmConnections.provider,
+        crmObjectType: crmRecordLinks.crmObjectType,
+        crmRecordId: crmRecordLinks.crmRecordId,
+        tpEntityType: crmRecordLinks.tpEntityType,
+      })
+      .from(crmRecordLinks)
+      .innerJoin(crmConnections, eq(crmConnections.id, crmRecordLinks.connectionId))
+      .where(inArray(crmRecordLinks.contactId, contactIds));
   },
 };
