@@ -291,7 +291,11 @@ describe("completeCrmConnect — the happy path", () => {
     // uniq_crm_connections_ws_provider_account permits exactly one connection per (workspace, provider,
     // CRM org). CI caught this: the first version of completeCrmConnect always INSERTed, so every re-auth
     // died on that index. The flow must find the existing row and update it.
-    const connector = fakeConnector();
+    //
+    // Its OWN org id, because these tests share a database and earlier cases here have already connected
+    // the default one — asserting `reconnect === false` against a shared org made this test depend on
+    // being first in the file, which CI duly caught.
+    const connector = fakeConnector({ bundle: { externalAccountId: "ORG-RECONNECT" } });
     const first = await core.completeCrmConnect({
       sessionScope: scopeA(),
       userId: ownerA,
@@ -317,14 +321,14 @@ describe("completeCrmConnect — the happy path", () => {
       await admin`
         SELECT count(*)::int AS n FROM crm_connections
         WHERE workspace_id = ${wsA} AND provider = 'salesforce'
-          AND external_account_id = '00D5g000004ABCD'`,
+          AND external_account_id = 'ORG-RECONNECT'`,
       "count",
     );
     expect(rows.n).toBe(1);
   });
 
   test("a reconnect does NOT clobber mappings the customer has tuned, nor demote an enforcing connection", async () => {
-    const connector = fakeConnector();
+    const connector = fakeConnector({ bundle: { externalAccountId: "ORG-ENFORCE" } });
     const first = await core.completeCrmConnect({
       sessionScope: scopeA(),
       userId: ownerA,
