@@ -723,3 +723,8 @@ export {
   type CrmSyncRunCounts,
   type CrmInboundEventAppend,
 } from "./repositories/crmSyncRunRepository.ts";
+export {
+  crmSyncConflictRepository,
+  maskIfPii,
+  type CrmConflictInsert,
+} from "./repositories/crmSyncConflictRepository.ts";

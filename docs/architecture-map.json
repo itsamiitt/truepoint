@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1890,
-  "fileSetHash": "sha256:de0242d3e737da01dbecde8e2b04538218f4621790f59ebbcb650c2f30acaa07",
+  "fileCount": 1893,
+  "fileSetHash": "sha256:3fe51c9af13578bb1cf41ad821c072407c569c090be9bb6422f1246c4d4e544b",
   "features": {
     "account-search": {
       "web": [],
@@ -2366,6 +2366,7 @@
       "apps/web/src/lib/useSessionRole.ts"
     ],
     "apps/workers": [
+      "apps/workers/src/crm/crmRunnerDeps.ts",
       "apps/workers/src/deadLetter.test.ts",
       "apps/workers/src/deadLetter.ts",
       "apps/workers/src/health.test.ts",
@@ -2508,6 +2509,7 @@
       "packages/db/src/repositories/accountChildPlan.ts",
       "packages/db/src/repositories/contactChannelPlan.test.ts",
       "packages/db/src/repositories/contactChannelPlan.ts",
+      "packages/db/src/repositories/crmSyncConflictRepository.test.ts",
       "packages/db/src/repositories/forge/index.ts",
       "packages/db/src/repositories/jobVisibility.test.ts",
       "packages/db/src/repositories/jobVisibility.ts",
@@ -2897,6 +2899,7 @@
     "packages/db/src/repositories/crmFieldMappingRepository.ts",
     "packages/db/src/repositories/crmOauthStateRepository.ts",
     "packages/db/src/repositories/crmRecordLinkRepository.ts",
+    "packages/db/src/repositories/crmSyncConflictRepository.ts",
     "packages/db/src/repositories/crmSyncRunRepository.ts",
     "packages/db/src/repositories/crmSyncStateRepository.ts",
     "packages/db/src/repositories/customFieldRepository.ts",
