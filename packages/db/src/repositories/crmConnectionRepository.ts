@@ -278,6 +278,43 @@ export const crmConnectionRepository = {
   },
 
   /**
+   * Resolve a CONNECTED connection by (provider, CRM account id) across tenants — the inbound-webhook
+   * router's only lookup.
+   *
+   * Runs on the OWNER connection (BYPASSRLS) because a provider webhook arrives with no session and no
+   * tenant context: the whole point of the lookup is to DISCOVER which tenant an event belongs to. That
+   * makes it a privileged read, so two things bound it:
+   *   - It is only ever reached AFTER the payload's signature has been verified against the provider's
+   *     app secret. An unsigned or wrongly-signed body never gets here, so the account id it carries
+   *     cannot be attacker-chosen.
+   *   - It projects ids + scope ONLY — never the credential, never any row content.
+   * The caller immediately re-enters withTenantTx with the returned scope, so everything downstream is
+   * RLS-enforced again.
+   */
+  async findConnectedByProviderAccount(
+    provider: string,
+    externalAccountId: string,
+  ): Promise<{ id: string; tenantId: string; workspaceId: string; provider: string } | null> {
+    const rows = await db
+      .select({
+        id: crmConnections.id,
+        tenantId: crmConnections.tenantId,
+        workspaceId: crmConnections.workspaceId,
+        provider: crmConnections.provider,
+      })
+      .from(crmConnections)
+      .where(
+        and(
+          eq(crmConnections.provider, provider),
+          eq(crmConnections.externalAccountId, externalAccountId),
+          eq(crmConnections.status, "connected"),
+        ),
+      )
+      .limit(1);
+    return rows[0] ?? null;
+  },
+
+  /**
    * Connections whose access token expires within `withinMs` — the proactive-refresh worklist.
    *
    * Runs on the OWNER connection (a cross-tenant maintenance sweep, BYPASSRLS — the shape

@@ -432,6 +432,17 @@ export const appEnvSchema = z
     // Fan-out cap per sweep tick, so one tick cannot enqueue unbounded work. A connection still due after
     // this tick is picked up by the next one (the enumeration only returns connections that are STILL due).
     CRM_SYNC_MAX_CONNECTIONS_PER_SWEEP: z.coerce.number().int().positive().default(500),
+    // Per-provider inbound webhook signing secrets (crm-sync 00 §5.1). The public webhook route FAILS
+    // CLOSED without one — no secret configured means every event for that provider is rejected, never
+    // accepted unsigned. Server-only, never NEXT_PUBLIC_, never logged. A passing signature is the only
+    // thing that proves a request came from the provider at all, and it is what makes the account id in
+    // the body safe to use for selecting a connection.
+    CRM_HUBSPOT_WEBHOOK_SECRET: z.string().optional(),
+    CRM_SALESFORCE_WEBHOOK_SECRET: z.string().optional(),
+    // The OAuth redirect URI the connect flow hands the provider. Must exactly equal a URI registered in
+    // the provider's app config, and is compared on the callback — a mismatch is a failed exchange, not a
+    // silent fallback.
+    CRM_OAUTH_REDIRECT_URI: z.string().optional(),
     // Filesystem root for the DEV/TEST local-disk FileStore (packages/core diskFileStore). The PRODUCTION
     // FileStore (S3: presigned multipart + AV-scan-before-promote) is injected at the app composition root later —
     // no AWS SDK is added here; this dir is only the dev adapter's root. Has a sane default so dev/test boot clean.

@@ -17,6 +17,7 @@ import { contactsBulkRoutes } from "./features/contacts-bulk/index.ts";
 import { contactsDedupRoutes } from "./features/contacts-dedup/index.ts";
 import { contactsMergeRoutes } from "./features/contacts-merge/index.ts";
 import { contactsResolveRoutes } from "./features/contacts-resolve/index.ts";
+import { crmRoutes, crmWebhookRoutes } from "./features/crm/index.ts";
 import { customFieldsRoutes } from "./features/custom-fields/index.ts";
 import {
   emailConnectRoutes,
@@ -228,6 +229,11 @@ app.route("/api/v1/email", emailConnectRoutes);
 app.route("/api/v1/email", emailRoutes);
 // Pipeline stages (G-REV-7, ADR-0028): workspace stage CRUD + POST /contacts/:id/stage rollup. Mounted on
 // its OWN base so /contacts/:id/stage cannot collide with the /api/v1/contacts reveal/scoring/activity slices.
+// CRM bidirectional sync (crm-sync §3.3/§5.2). The PUBLIC, signature-verified provider webhook registers
+// BEFORE the authed router, whose `*` authn would 401 the session-less provider call. DARK until
+// CRM_SYNC_ENABLED + the per-tenant flag + a connection promoted past shadow.
+app.route("/api/v1/crm/webhooks", crmWebhookRoutes);
+app.route("/api/v1/crm", crmRoutes);
 app.route("/api/v1/pipeline-stages", pipelineStagesRoutes);
 // Public, UNAUTHENTICATED transparent pricing catalog (ADR-0012): active credit packs + plan tiers. Carries
 // no authn/tenancy (the page renders with no token/tenant/balance); only the coarse /api/* IP rate-limit

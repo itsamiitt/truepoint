@@ -194,3 +194,24 @@ export const CRM_SRC_HUBSPOT = "crm:hubspot";
 export function crmSrcFor(provider: CrmProvider): string {
   return `crm:${provider}`;
 }
+
+// ── API request DTOs (§5.2 / §9) ─────────────────────────────────────────────────────────────────────────────
+// Request schemas live here rather than inline in the route, so producer and consumer share ONE definition and
+// apps/api never grows its own validation dialect (the house rule: schemas come from @leadwolf/types).
+
+/** POST /api/v1/crm/connections — begin the OAuth connect. Scopes are NOT accepted from the client: a body
+ *  that could choose its own scope set could ask for Salesforce `full`. The route pins them in code. */
+export const crmConnectStartSchema = z.object({
+  provider: crmProvider,
+  environment: crmEnvironment.optional(),
+});
+export type CrmConnectStart = z.infer<typeof crmConnectStartSchema>;
+
+/** PATCH /api/v1/crm/connections/:id/sync-mode — flip the L3 dark-launch gate. Its own endpoint, and its own
+ *  schema, because promoting to `enforce` is the moment data starts leaving the tenant (§4.1). */
+export const crmSyncModeUpdateSchema = z.object({ sync_mode: crmSyncMode });
+export type CrmSyncModeUpdate = z.infer<typeof crmSyncModeUpdateSchema>;
+
+/** PATCH /api/v1/crm/conflicts/:id — close one review-queue row. */
+export const crmConflictResolveSchema = z.object({ status: z.enum(["resolved", "ignored"]) });
+export type CrmConflictResolve = z.infer<typeof crmConflictResolveSchema>;

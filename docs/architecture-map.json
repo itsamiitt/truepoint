@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1895,
-  "fileSetHash": "sha256:b9a69029261b6e76ce8fa185694f5334c8aaaff2debd622470500f49eae38e12",
+  "fileCount": 1899,
+  "fileSetHash": "sha256:75cdfacee393089d06e8388ec1b82264a2ffb22ee35bd4e80950dd67df337226",
   "features": {
     "account-search": {
       "web": [],
@@ -449,7 +449,12 @@
     "crm": {
       "web": [],
       "admin": [],
-      "api": [],
+      "api": [
+        "apps/api/src/features/crm/crmQueue.ts",
+        "apps/api/src/features/crm/index.ts",
+        "apps/api/src/features/crm/routes.ts",
+        "apps/api/src/features/crm/webhookRoutes.ts"
+      ],
       "core": [
         "packages/core/src/crm/applyInboundEvent.test.ts",
         "packages/core/src/crm/applyInboundEvent.ts",
