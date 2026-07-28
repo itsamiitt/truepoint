@@ -574,7 +574,21 @@ optimization because optimizing a broken path is wasted work.
     regression against the standard, not a bound that satisfies it.
   Either becomes permissible only with **immediate invalidation on every role/membership mutation**, which is
   the "bust via the existing revocation path" clause — and that is the part that needs care rather than code.
-  **UNBLOCKED as a design; not yet built.** The objection above is against a TTL-ONLY memo. A memo with
+  **RESOLVED AND BUILT** (this line supersedes the deliberation below, which is kept for its reasoning).
+  Shipped as `apps/api/src/lib/roleCache.ts` + the `packages/db/src/roleCache.ts` seam, OFF by default
+  (`ROLE_CACHE_TTL_MS=0`). It is the explicit-invalidation design, not the TTL-only memo: the two membership
+  mutations (`packages/core/src/auth/members.ts` updateMemberRole / removeMember) DELETE the key after their
+  transaction commits, so staleness is zero rather than "within TTL". A `null` role is deliberately NOT
+  cached — caching absence would lock a freshly-invited member out until the TTL expired. Reads fail OPEN
+  (falling back to the authoritative row, i.e. today's behaviour); an invalidation failure is logged LOUD,
+  because that is the one window where a stale role could authorize. Decision (1) below was resolved as
+  "the seam in db, the implementation in apps/api"; decision (2) was resolved as "cache, and leave the
+  round-trip collapse alone" — the tenancy mechanism is the most security-critical code in the repo.
+
+  *The deliberation below is the reasoning that led here. It is retained deliberately: a future reader who
+  only sees "built" cannot tell why the obvious options were rejected. Do NOT read it as open work.*
+
+  The objection above is against a TTL-ONLY memo. A memo with
   **explicit invalidation** does not have it: cache `(tenantId, workspaceId, userId) → role`, and DELETE that
   key inside the repository functions that mutate membership, so the next request re-reads from the database.
   Staleness is then zero, not "within TTL" — which is what `enterprise-iam.md:112` actually requires — and no
