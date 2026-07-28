@@ -432,6 +432,11 @@ export const appEnvSchema = z
     // Fan-out cap per sweep tick, so one tick cannot enqueue unbounded work. A connection still due after
     // this tick is picked up by the next one (the enumeration only returns connections that are STILL due).
     CRM_SYNC_MAX_CONNECTIONS_PER_SWEEP: z.coerce.number().int().positive().default(500),
+    // Per-connection CRM API calls allowed per UTC HOUR (crm-sync §8.2). 0 = UNLIMITED, which is the default
+    // on purpose: the cap is opt-in, and defaulting an unconfigured connection to zero would stop every sync
+    // in the fleet the moment it shipped. An hourly window bounds a runaway loop to ~1/24 of a daily
+    // allowance and recovers on its own without an operator clearing a counter.
+    CRM_BUDGET_CALLS_PER_HOUR: z.coerce.number().int().nonnegative().default(0),
     // Per-provider inbound webhook signing secrets (crm-sync 00 §5.1). The public webhook route FAILS
     // CLOSED without one — no secret configured means every event for that provider is rejected, never
     // accepted unsigned. Server-only, never NEXT_PUBLIC_, never logged. A passing signature is the only

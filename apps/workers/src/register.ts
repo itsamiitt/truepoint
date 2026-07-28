@@ -26,6 +26,7 @@ import {
   clamdScanner,
   defaultCrmConnectors,
   defaultProviders,
+  redisCrmBudgetStore,
   s3FileStoreFromEnv,
 } from "@leadwolf/integrations";
 import {
@@ -370,6 +371,10 @@ export const crmBackfillQueue = tracedQueue<CrmBackfillJob>(CRM_SYNC_BACKFILL_QU
 export const crmEraseQueue = tracedQueue<CrmEraseJobData>(CRM_ERASE_QUEUE, { connection });
 /** The configured connector set. Client id/secret come from env at the composition root, never from core. */
 const crmConnectors = defaultCrmConnectors();
+// The per-connection API budget store (crm-sync §8.2). Redis-backed because workers are horizontally
+// scaled: a process-local counter would let N workers each grant the full budget. Shares the existing
+// BullMQ connection rather than opening another.
+const crmBudget = redisCrmBudgetStore(connection);
 const crmConnectorFor = (provider: string) => crmConnectors[provider as keyof typeof crmConnectors];
 // Data Health snapshot (10 §5): the leader-locked daily sweep that captures a per-workspace trend point.
 export const dataQualitySnapshotSweepQueue = tracedQueue<DataQualitySnapshotSweepJobData>(
@@ -1115,10 +1120,14 @@ export function startWorkers(): Worker[] {
       CRM_SYNC_INBOUND_QUEUE,
     ),
     instrument(
-      tracedWorker<CrmPushJob>(CRM_SYNC_PUSH_QUEUE, makeProcessCrmPush(crmConnectorFor), {
-        connection,
-        ...eventTuning(CRM_SYNC_PUSH_QUEUE),
-      }),
+      tracedWorker<CrmPushJob>(
+        CRM_SYNC_PUSH_QUEUE,
+        makeProcessCrmPush(crmConnectorFor, crmBudget),
+        {
+          connection,
+          ...eventTuning(CRM_SYNC_PUSH_QUEUE),
+        },
+      ),
       CRM_SYNC_PUSH_QUEUE,
     ),
     instrument(

@@ -54,6 +54,14 @@ export interface CrmPushDeps {
   }): Promise<void>;
   /** Accumulate counters on the run ledger. */
   addCounts(counts: Record<string, number>): Promise<void>;
+  /**
+   * Reserve one API call against the connection's budget (§8.2). Optional so a caller without a budget
+   * store still works — but note the guard itself fails CLOSED, so "optional" means "no cap configured",
+   * never "cap ignored because the store was unreachable".
+   */
+  reserveBudget?(): Promise<{ allowed: boolean; reason?: string }>;
+  /** Give the reservation back when the call did not happen. */
+  releaseBudget?(): Promise<void>;
 }
 
 export interface CrmPushGates {
@@ -84,6 +92,7 @@ export type CrmPushOutcomeKind =
   | "gated" // L1/L2/L3 refused
   | "missing" // the TP entity no longer exists
   | "rate_limited" // the CRM asked us to back off; the caller re-enqueues (NOT an attempt)
+  | "budget_exhausted" // OUR OWN cap refused the call before the provider saw it
   | "failed";
 
 export interface CrmPushResult {
@@ -152,6 +161,19 @@ export async function runCrmPush(input: CrmPushInput): Promise<CrmPushResult> {
       fields: plan.fields,
       reason: "shadow_mode",
     };
+  }
+
+  // ── The PROACTIVE budget, checked before the credential is even decrypted (§8.2) ─────────────────────
+  // Reactive 429 handling is too late twice over: the provider has already counted the call against the
+  // customer's org quota, and a runaway loop can burn a day's allowance before anything reacts.
+  if (deps.reserveBudget) {
+    const budget = await deps.reserveBudget();
+    if (!budget.allowed) {
+      await deps.addCounts({ rateLimitedCt: 1 });
+      // NOT counted as a failure: the connection is healthy, we simply declined to spend more this window.
+      // The caller re-enqueues; the hourly window recovers on its own without an operator.
+      return { outcome: "budget_exhausted", reason: budget.reason ?? "budget" };
+    }
   }
 
   // ── enforce: the real call ──────────────────────────────────────────────────────────────────────────

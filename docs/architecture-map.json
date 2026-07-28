@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1926,
-  "fileSetHash": "sha256:5dcd33869dddea71f56b1bf223e9b5045752d1783928732ff44939be91d69370",
+  "fileCount": 1929,
+  "fileSetHash": "sha256:1f845a711486844795d4ecc96951b89621e5bc0b7cc724f3a2345e049e332fde",
   "features": {
     "account-search": {
       "web": [],
@@ -460,6 +460,8 @@
         "packages/core/src/crm/applyInboundEvent.ts",
         "packages/core/src/crm/connectCrm.test.ts",
         "packages/core/src/crm/connectCrm.ts",
+        "packages/core/src/crm/crmBudgetGuard.test.ts",
+        "packages/core/src/crm/crmBudgetGuard.ts",
         "packages/core/src/crm/crmSecretStore.test.ts",
         "packages/core/src/crm/crmSecretStore.ts",
         "packages/core/src/crm/defaultMappings.hubspot.ts",
@@ -2714,6 +2716,7 @@
       "packages/integrations/src/anthropic/nlSearchAdapter.ts",
       "packages/integrations/src/anthropic/replyClassifierAdapter.test.ts",
       "packages/integrations/src/anthropic/replyClassifierAdapter.ts",
+      "packages/integrations/src/crm/crmBudgetStore.ts",
       "packages/integrations/src/crm/hubspot.ts",
       "packages/integrations/src/crm/hubspotHttp.ts",
       "packages/integrations/src/crm/salesforce.ts",

@@ -216,6 +216,62 @@ describe("enforce mode", () => {
   });
 });
 
+describe("the proactive budget (§8.2)", () => {
+  test("an exhausted budget refuses BEFORE the credential is decrypted", async () => {
+    const connector = fakeConnector();
+    const loadTokenBundle = mock(async () => ({
+      accessToken: "tok",
+      expiresAt: 0,
+      scopes: [],
+      environment: "production" as const,
+    }));
+    const deps = fakeDeps({
+      loadTokenBundle,
+      reserveBudget: async () => ({ allowed: false, reason: "exceeded" }),
+    });
+
+    const r = await run({}, deps, connector);
+    expect(r.outcome).toBe("budget_exhausted");
+    expect(connector.upsert).not.toHaveBeenCalled();
+    // Reactive 429 handling is too late twice over: the provider has already counted the call against the
+    // customer's quota. Refusing first is the whole point.
+    expect(loadTokenBundle).not.toHaveBeenCalled();
+  });
+
+  test("a store outage refuses too — the guard fails CLOSED", async () => {
+    const connector = fakeConnector();
+    const deps = fakeDeps({
+      reserveBudget: async () => ({ allowed: false, reason: "unavailable" }),
+    });
+    const r = await run({}, deps, connector);
+    expect(r.outcome).toBe("budget_exhausted");
+    expect(r.reason).toBe("unavailable");
+    expect(connector.upsert).not.toHaveBeenCalled();
+  });
+
+  test("budget exhaustion is NOT a failure — the connection is healthy", async () => {
+    const deps = fakeDeps({ reserveBudget: async () => ({ allowed: false }) });
+    await run({}, deps, fakeConnector());
+    const counts = (deps as unknown as { counts: Record<string, number> }).counts;
+    expect(counts.recordsFailed).toBeUndefined();
+    expect(counts.rateLimitedCt).toBe(1);
+  });
+
+  test("an allowed budget lets the push through", async () => {
+    const connector = fakeConnector();
+    const deps = fakeDeps({ reserveBudget: async () => ({ allowed: true }) });
+    const r = await run({}, deps, connector);
+    expect(r.outcome).toBe("pushed");
+    expect(connector.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  test("no budget configured at all still pushes (opt-in cap)", async () => {
+    const connector = fakeConnector();
+    const r = await run({}, fakeDeps(), connector); // no reserveBudget in deps
+    expect(r.outcome).toBe("pushed");
+  });
+});
+
 describe("failure handling", () => {
   test("rate_limited is NOT a failure — it does not touch recordsFailed", async () => {
     const connector = fakeConnector({ kind: "rate_limited", retryAfterMs: 30_000, daily: false });

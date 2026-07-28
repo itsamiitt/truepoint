@@ -17,7 +17,7 @@
 // has round-tripped through Redis, and the schemas are the shared contract in @leadwolf/types.
 
 import { applyInboundEvent, runCrmBackfillPage, runCrmDelta, runCrmPush } from "@leadwolf/core";
-import type { CrmConnector } from "@leadwolf/core";
+import type { CrmBudgetStore, CrmConnector } from "@leadwolf/core";
 import { withTenantTx } from "@leadwolf/db";
 import { crmSyncRunRepository, crmSyncStateRepository } from "@leadwolf/db";
 import {
@@ -76,7 +76,7 @@ export function runStatusForOutcome(
 }
 
 /** crm-sync-push — one TP contact out to the CRM. */
-export function makeProcessCrmPush(connectorFor: CrmConnectorLookup) {
+export function makeProcessCrmPush(connectorFor: CrmConnectorLookup, budget?: CrmBudgetStore) {
   return async function processCrmPush(job: Job<CrmPushJob>): Promise<void> {
     const data = crmPushJobSchema.parse(job.data);
     const connector = connectorFor(data.provider);
@@ -116,7 +116,7 @@ export function makeProcessCrmPush(connectorFor: CrmConnectorLookup) {
         externalIdField: "TruePoint_Id__c",
         gates,
         connector,
-        deps: makePushDeps(tx, ctx, data.tpEntityId),
+        deps: makePushDeps(tx, ctx, data.tpEntityId, budget),
       });
 
       await crmSyncRunRepository.finish(tx, runId, runStatusForOutcome(result.outcome), {

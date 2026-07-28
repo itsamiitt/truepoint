@@ -17,6 +17,7 @@
 
 import { env } from "@leadwolf/config";
 import {
+  type CrmBudgetStore,
   type CrmInboundDeps,
   type CrmPullDeps,
   type CrmPushDeps,
@@ -25,6 +26,8 @@ import {
   decryptCrmTokenBundle,
   encryptPii,
   isFlagEnabledForTenant,
+  releaseCrmBudget,
+  reserveCrmBudget,
 } from "@leadwolf/core";
 import {
   type Tx,
@@ -126,9 +129,35 @@ async function isIdentitySuppressed(
   return (await suppressionRepository.findMatch(tx, keys)) !== null;
 }
 
-/** Deps for the outbound push of ONE contact. */
-export function makePushDeps(tx: Tx, ctx: CrmJobContext, contactId: string): CrmPushDeps {
+/**
+ * Deps for the outbound push of ONE contact.
+ *
+ * `budget` is optional, and its absence means "no cap configured" — NOT "cap ignored". The guard itself
+ * fails closed, so a configured cap whose Redis store is unreachable refuses the call rather than waving it
+ * through (crm-sync §8.2).
+ */
+export function makePushDeps(
+  tx: Tx,
+  ctx: CrmJobContext,
+  contactId: string,
+  budget?: CrmBudgetStore,
+): CrmPushDeps {
+  const capped = budget !== undefined && env.CRM_BUDGET_CALLS_PER_HOUR > 0;
   return {
+    ...(capped && budget
+      ? {
+          reserveBudget: async () => {
+            const d = await reserveCrmBudget(
+              budget,
+              ctx.connectionId,
+              env.CRM_BUDGET_CALLS_PER_HOUR,
+            );
+            return { allowed: d.allowed, ...(d.reason ? { reason: d.reason } : {}) };
+          },
+          releaseBudget: () => releaseCrmBudget(budget, ctx.connectionId),
+        }
+      : {}),
+
     async loadEntity() {
       const [values, provenance] = await Promise.all([
         contactRepository.getScalarValues(tx, contactId),

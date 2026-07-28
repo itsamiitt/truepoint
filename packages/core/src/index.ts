@@ -1225,3 +1225,17 @@ export {
   publishCrmPushIntent,
   type CrmPushIntentInput,
 } from "./crm/publishCrmPushIntent.ts";
+
+// The PROACTIVE per-connection CRM API budget (crm-sync §8.2). Two deliberate inversions of the repo's
+// defaults: the store is shared across processes (not process-local like the AI guard) and it FAILS CLOSED
+// (unlike the auth rate limiter) — an unbounded sync spends a CUSTOMER's CRM quota, and a delayed sync is
+// recoverable where a burned daily allowance is not.
+export {
+  reserveCrmBudget,
+  releaseCrmBudget,
+  crmBudgetWindow,
+  CrmBudgetExceededError,
+  CrmBudgetUnavailableError,
+  type CrmBudgetStore,
+  type CrmBudgetDecision,
+} from "./crm/crmBudgetGuard.ts";
