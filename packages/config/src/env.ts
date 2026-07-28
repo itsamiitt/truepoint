@@ -414,6 +414,24 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // L1 of the CRM-sync gate ladder (crm-sync 00 §3.3 GATES / §10.5). The GLOBAL kill switch: while off,
+    // the sweep does not even take its leader lock, every runner returns `gated`, and no CRM is contacted.
+    // L2 is the per-tenant `crm_sync_enabled` flag and L3 is the per-connection sync_mode (default
+    // 'shadow'), so enabling this alone still moves no data — all three must agree. Same explicit-"true"-only
+    // posture as BULK_IMPORT_ENABLED: "false"/"0"/""/unset can never read truthy, which matters because this
+    // is the fleet-wide rollback lever.
+    CRM_SYNC_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // How far BACK a delta poll reads from the stored watermark (crm-sync 00 §6.4). CRM modstamps are not
+    // ordered against our clock, so a record written during the previous poll can carry a timestamp just
+    // under the mark; re-reading a record is free (the link table + content hash make it a no-op) while
+    // missing one is silent data loss. Default 5 minutes.
+    CRM_SYNC_OVERLAP_MS: z.coerce.number().int().nonnegative().default(300_000),
+    // Fan-out cap per sweep tick, so one tick cannot enqueue unbounded work. A connection still due after
+    // this tick is picked up by the next one (the enumeration only returns connections that are STILL due).
+    CRM_SYNC_MAX_CONNECTIONS_PER_SWEEP: z.coerce.number().int().positive().default(500),
     // Filesystem root for the DEV/TEST local-disk FileStore (packages/core diskFileStore). The PRODUCTION
     // FileStore (S3: presigned multipart + AV-scan-before-promote) is injected at the app composition root later —
     // no AWS SDK is added here; this dir is only the dev adapter's root. Has a sane default so dev/test boot clean.
