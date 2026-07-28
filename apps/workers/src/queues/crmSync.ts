@@ -167,7 +167,7 @@ export function makeProcessCrmInbound(connectorFor: CrmConnectorLookup) {
         ownSourceTag: "truepoint",
         gates,
         connector,
-        deps: makeInboundDeps(tx, ctx),
+        deps: makeInboundDeps(tx, ctx, data.objectType === "account" ? "account" : "contact"),
       });
 
       await crmSyncRunRepository.finish(tx, runId, runStatusForOutcome(result.outcome), {
@@ -227,7 +227,11 @@ export function makeProcessCrmPull(connectorFor: CrmConnectorLookup) {
         connectionId: data.connectionId,
         runId,
       };
-      const inbound = makeInboundDeps(tx, ctx);
+      const inbound = makeInboundDeps(
+        tx,
+        ctx,
+        data.objectType === "account" ? "account" : "contact",
+      );
 
       const result = await runCrmDelta({
         provider: data.provider,
@@ -309,7 +313,11 @@ export function makeProcessCrmBackfill(
         connectionId: data.connectionId,
         runId,
       };
-      const inbound = makeInboundDeps(tx, ctx);
+      const inbound = makeInboundDeps(
+        tx,
+        ctx,
+        data.objectType === "account" ? "account" : "contact",
+      );
 
       const result = await runCrmBackfillPage({
         provider: data.provider,

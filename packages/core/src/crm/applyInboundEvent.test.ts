@@ -273,3 +273,46 @@ describe("per-field transform refusals", () => {
     ).toBeUndefined();
   });
 });
+
+describe("account object type", () => {
+  const ACCOUNT_MAPPINGS: CrmFieldMapping[] = [
+    {
+      objectType: "account",
+      tpField: "industry",
+      crmField: "Industry",
+      direction: "inbound",
+      authority: "crm",
+      transform: "passthrough",
+      enabled: true,
+    },
+  ];
+
+  test("an account record applies through the same runner", async () => {
+    // The runner is object-agnostic by design — the DEPS differ (identity by domain, no suppression, a
+    // firmographic write path), not the merge logic. Proving that here stops the two paths drifting.
+    const connector = fakeConnector({ Industry: "Software" });
+    const deps = fakeDeps({
+      loadMappings: async () => ACCOUNT_MAPPINGS,
+      loadCurrent: async () => ({ values: { industry: "Unknown" }, provenance: {} }),
+    });
+
+    const r = await run({ objectType: "account" }, deps, connector);
+    expect(r.outcome).toBe("applied");
+    expect(r.appliedFields).toContain("industry");
+  });
+
+  test("an account is never treated as suppressed", async () => {
+    // A company is not a data subject. The deps return false for accounts rather than running a check that
+    // could never match — a gate that is really a no-op is worse than no gate, because it reads as one.
+    const isSuppressed = mock(async () => false);
+    const connector = fakeConnector({ Industry: "Software" });
+    const deps = fakeDeps({
+      isSuppressed,
+      loadMappings: async () => ACCOUNT_MAPPINGS,
+      loadCurrent: async () => ({ values: {}, provenance: {} }),
+    });
+
+    const r = await run({ objectType: "account" }, deps, connector);
+    expect(r.outcome).not.toBe("suppressed");
+  });
+});

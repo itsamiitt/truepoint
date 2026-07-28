@@ -36,6 +36,7 @@ import {
   type BulkImportScope,
   type BulkRevealDeadLetter,
   CRM_PUSH_TOPIC,
+  CRM_SYNC_OBJECTS,
   type CrmBackfillJob,
   type CrmInboundJob,
   type CrmPullJob,
@@ -1073,21 +1074,27 @@ export function startWorkers(): Worker[] {
       tracedWorker<CrmSyncSweepJobData>(
         CRM_SYNC_SWEEP_QUEUE,
         makeProcessCrmSyncSweep(connection, {
-          enqueuePull: (conn, reconcile) =>
-            crmPullQueue.add(
-              "pull",
-              {
-                scope: { tenantId: conn.tenantId, workspaceId: conn.workspaceId },
-                connectionId: conn.id,
-                provider: conn.provider as "salesforce" | "hubspot",
-                objectType: "contact",
-                ...(reconcile ? { reconcile: true } : {}),
-              },
-              // Stable jobId → BullMQ dedupes a connection already queued for this tick, so a slow pull
-              // cannot accumulate a backlog of duplicate work for the same stream. The reconcile keeps its
-              // OWN id so the daily backstop is never swallowed by an in-flight delta for the same stream.
-              { jobId: `crm-${reconcile ? "reconcile" : "pull"}:${conn.id}:contact` },
-            ),
+          // One pull per (connection, OBJECT). Contacts and accounts are separate streams with their own
+          // watermarks — a single job for both would advance one mark for two different providers' clocks
+          // and strand whichever object lagged. CRM_SYNC_OBJECTS is the list; the enum reserves lead/deal
+          // for later phases (00 §1.3) and they are deliberately not swept yet.
+          enqueuePull: async (conn, reconcile) => {
+            for (const objectType of CRM_SYNC_OBJECTS) {
+              await crmPullQueue.add(
+                "pull",
+                {
+                  scope: { tenantId: conn.tenantId, workspaceId: conn.workspaceId },
+                  connectionId: conn.id,
+                  provider: conn.provider as "salesforce" | "hubspot",
+                  objectType,
+                  ...(reconcile ? { reconcile: true } : {}),
+                },
+                {
+                  jobId: `crm-${reconcile ? "reconcile" : "pull"}:${conn.id}:${objectType}`,
+                },
+              );
+            }
+          },
           listAllConnected: (limit) => crmConnectionRepository.listAllConnectedForSweep(limit),
           enqueueRefresh: (conn) =>
             crmPullQueue.add(

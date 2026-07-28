@@ -31,6 +31,7 @@ import {
 } from "@leadwolf/core";
 import {
   type Tx,
+  accountRepository,
   contactRepository,
   crmConnectionRepository,
   crmFieldMappingRepository,
@@ -40,7 +41,7 @@ import {
   crmSyncStateRepository,
   suppressionRepository,
 } from "@leadwolf/db";
-import { CRM_SYNC_FLAG_KEY, type CrmFieldMapping } from "@leadwolf/types";
+import { CRM_SYNC_FLAG_KEY, type CrmFieldMapping, type FieldProvenanceMap } from "@leadwolf/types";
 
 export interface CrmJobContext {
   tenantId: string;
@@ -209,27 +210,52 @@ export function makePushDeps(
   };
 }
 
-/** Deps for applying ONE inbound CRM record. */
-export function makeInboundDeps(tx: Tx, ctx: CrmJobContext): CrmInboundDeps {
+/**
+ * Deps for applying ONE inbound CRM record.
+ *
+ * OBJECT-TYPE AWARE. Contacts and accounts differ in three ways that matter, and each is handled explicitly
+ * rather than by pretending they are the same shape:
+ *   - IDENTITY: a contact resolves on the email blind index; an account resolves on its domain, which is the
+ *     per-workspace dedup key. There is no blind index for a domain because a domain is not PII.
+ *   - SUPPRESSION: applies to PEOPLE. A suppression row records that a data subject exercised a right; a
+ *     company is not a data subject, so an account is never "suppressed" and the check is skipped rather
+ *     than run against keys it can never match.
+ *   - WRITE PATH: contacts carry encrypted PII and go through the channel path; accounts are firmographics
+ *     only, so the scalar write is direct.
+ */
+export function makeInboundDeps(
+  tx: Tx,
+  ctx: CrmJobContext,
+  objectType: "contact" | "account" = "contact",
+): CrmInboundDeps {
+  const isAccount = objectType === "account";
   return {
     async loadMappings() {
-      const rows = await crmFieldMappingRepository.listActive(tx, ctx.connectionId, "contact");
+      const rows = await crmFieldMappingRepository.listActive(tx, ctx.connectionId, objectType);
       return rows.map(toFieldMapping);
     },
 
     loadTokenBundle: makeTokenLoader(tx, ctx),
 
     async resolveEntity({ crmRecordId, values }) {
-      // 1. The link fast-path: this CRM record already maps to a TP contact.
+      // 1. The link fast-path: this CRM record already maps to a TP entity.
       const link = await crmRecordLinkRepository.findByCrmRecord(
         tx,
         ctx.connectionId,
-        "Contact",
+        isAccount ? "Account" : "Contact",
         crmRecordId,
       );
-      if (link?.contactId) return { entityId: link.contactId, linkId: link.id };
+      const linked = isAccount ? link?.accountId : link?.contactId;
+      if (linked) return { entityId: linked, linkId: link?.id ?? null };
 
-      // 2. The dedup ladder, on the incoming identity.
+      // 2. The dedup ladder, on the incoming identity — a domain for accounts, an email for contacts.
+      if (isAccount) {
+        const domain =
+          typeof values.domain === "string" ? values.domain.trim().toLowerCase() : null;
+        if (!domain) return null;
+        const id = await accountRepository.findIdByDomain(tx, ctx.workspaceId, domain);
+        return id ? { entityId: id, linkId: null } : null;
+      }
       const email = typeof values.email === "string" ? values.email.trim().toLowerCase() : null;
       if (!email) return null;
       const hit = await contactRepository.findByDedupKeys(tx, ctx.workspaceId, {
@@ -238,14 +264,22 @@ export function makeInboundDeps(tx: Tx, ctx: CrmJobContext): CrmInboundDeps {
       return hit ? { entityId: hit.id, linkId: null } : null;
     },
 
-    isSuppressed: (values) => isIdentitySuppressed(tx, values),
+    // A company is not a data subject, so an account can never be suppressed. Skipping is correct AND
+    // honest: running the check against keys it can never match would look like a gate while being a no-op.
+    isSuppressed: (values) =>
+      isAccount ? Promise.resolve(false) : isIdentitySuppressed(tx, values),
 
     async loadCurrent(entityId) {
-      const [values, provenance] = await Promise.all([
-        contactRepository.getScalarValues(tx, entityId),
-        contactRepository.getFieldProvenance(tx, entityId),
-      ]);
-      return { values, provenance };
+      const [values, provenance] = isAccount
+        ? await Promise.all([
+            accountRepository.getScalarValues(tx, entityId),
+            accountRepository.getFieldProvenance(tx, entityId),
+          ])
+        : await Promise.all([
+            contactRepository.getScalarValues(tx, entityId),
+            contactRepository.getFieldProvenance(tx, entityId),
+          ]);
+      return { values, provenance: provenance as FieldProvenanceMap };
     },
 
     async persist({ entityId, values, provenance }) {
@@ -261,6 +295,24 @@ export function makeInboundDeps(tx: Tx, ctx: CrmJobContext): CrmInboundDeps {
         locationCity: str(values.locationCity),
         fieldProvenance: provenance,
       };
+      if (isAccount) {
+        // Firmographics only — an account carries no PII, so there is no encrypted channel path to route
+        // through. A CREATE needs a domain: it is the per-workspace dedup key, and minting a domainless
+        // account would produce a row nothing can ever match again.
+        if (entityId) {
+          await accountRepository.updateScalars(tx, entityId, values, provenance);
+          return entityId;
+        }
+        const domain =
+          typeof values.domain === "string" ? values.domain.trim().toLowerCase() : null;
+        if (!domain) throw new Error("crm: cannot create an account without a domain");
+        return accountRepository.upsertByDomain(tx, {
+          tenantId: ctx.tenantId,
+          workspaceId: ctx.workspaceId,
+          name: typeof values.name === "string" ? values.name : domain,
+          domain,
+        });
+      }
       if (entityId) {
         await contactRepository.update(tx, entityId, writable);
         return entityId;
@@ -284,7 +336,9 @@ export function makeInboundDeps(tx: Tx, ctx: CrmJobContext): CrmInboundDeps {
       // Staged for human arbitration, never auto-resolved — the live TP value stays as it was. The
       // repository masks PII values on the way in, so a review queue cannot become a second cleartext
       // store for regulated data (§4.7).
-      const link = await crmRecordLinkRepository.findByContact(tx, ctx.connectionId, entityId);
+      const link = isAccount
+        ? null // the account link lookup is by CRM record, not entity; a null recordLinkId is valid (FK is SET NULL)
+        : await crmRecordLinkRepository.findByContact(tx, ctx.connectionId, entityId);
       await crmSyncConflictRepository.recordMany(
         tx,
         conflicts.map((c) => ({
@@ -292,7 +346,7 @@ export function makeInboundDeps(tx: Tx, ctx: CrmJobContext): CrmInboundDeps {
           workspaceId: ctx.workspaceId,
           connectionId: ctx.connectionId,
           recordLinkId: link?.id ?? null,
-          objectType: "contact",
+          objectType,
           field: c.tpField,
           tpValue: c.tpValue,
           crmValue: c.crmValue,
@@ -301,13 +355,15 @@ export function makeInboundDeps(tx: Tx, ctx: CrmJobContext): CrmInboundDeps {
     },
 
     async linkRecord({ entityId, crmRecordId, modstamp }) {
+      // The link table's CHECK requires EXACTLY ONE of contact_id / account_id, so the branch is not
+      // cosmetic — setting the wrong column fails the constraint rather than mis-linking silently.
       await crmRecordLinkRepository.upsertByCrmRecord(tx, {
         tenantId: ctx.tenantId,
         workspaceId: ctx.workspaceId,
         connectionId: ctx.connectionId,
-        tpEntityType: "contact",
-        contactId: entityId,
-        crmObjectType: "Contact",
+        tpEntityType: isAccount ? "account" : "contact",
+        ...(isAccount ? { accountId: entityId } : { contactId: entityId }),
+        crmObjectType: isAccount ? "Account" : "Contact",
         crmRecordId,
         lastInboundModstamp: modstamp,
       });

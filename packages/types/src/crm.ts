@@ -259,3 +259,12 @@ export const crmPushIntentSchema = z.object({
   changeSeq: z.number().int().nonnegative().default(0),
 });
 export type CrmPushIntent = z.infer<typeof crmPushIntentSchema>;
+
+/**
+ * The object types the sweep actually syncs today (§1.3 non-goals).
+ *
+ * crmObjectType RESERVES lead and deal so the DB CHECK accepts them when those phases ship; this is the
+ * narrower list the scheduler fans out over. Keeping them separate means the enum can be forward-looking
+ * without the sweep silently pulling objects no mapping or write path exists for.
+ */
+export const CRM_SYNC_OBJECTS = ["contact", "account"] as const;

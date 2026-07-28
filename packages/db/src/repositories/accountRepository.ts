@@ -2,7 +2,7 @@
 // contact's company by its per-workspace dedup key (domain), so a contact links to one shared account row.
 // Methods take the caller's transaction (Tx) so the whole per-row import runs in one withTenantTx (03 §9).
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { accounts } from "../schema/contacts.ts";
 
@@ -152,6 +152,79 @@ export const accountRepository = {
    * workspace (RLS is the backstop). updated_at is intentionally NOT bumped — firmographics are derived
    * annotations refreshed by the rollup, not user edits.
    */
+  /**
+   * The account's CRM-syncable SCALARS (crm-sync 00 §4.3). Mirrors contactRepository.getScalarValues so the
+   * CRM merge planner takes the same shape for both object types. Non-PII firmographics only — an account
+   * carries no personal data, which is why this projection is broader than the contact one. A foreign or
+   * absent id yields {} (RLS-scoped via the caller's tx), which the runner reads as "entity gone".
+   */
+  async getScalarValues(tx: Tx, accountId: string): Promise<Record<string, unknown>> {
+    const rows = await tx
+      .select({
+        name: accounts.name,
+        domain: accounts.domain,
+        industry: accounts.industry,
+        subIndustry: accounts.subIndustry,
+        employeeCount: accounts.employeeCount,
+        revenueRange: accounts.revenueRange,
+        hqCountry: accounts.hqCountry,
+        hqCity: accounts.hqCity,
+      })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .limit(1);
+    if (!rows[0]) return {};
+    return Object.fromEntries(Object.entries(rows[0]).filter(([, v]) => v !== null));
+  },
+
+  /** The account's field-provenance map — the pin + valid-time inputs the CRM merge planner reads. */
+  async getFieldProvenance(tx: Tx, accountId: string): Promise<Record<string, unknown>> {
+    const rows = await tx
+      .select({ fieldProvenance: accounts.fieldProvenance })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .limit(1);
+    return (rows[0]?.fieldProvenance as Record<string, unknown> | null | undefined) ?? {};
+  },
+
+  /** Resolve an account by its per-workspace dedup key — the CRM inbound identity ladder's account rung. */
+  async findIdByDomain(tx: Tx, workspaceId: string, domain: string): Promise<string | null> {
+    const rows = await tx
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.workspaceId, workspaceId), eq(accounts.domain, domain)))
+      .limit(1);
+    return rows[0]?.id ?? null;
+  },
+
+  /**
+   * Write CRM-merged scalars + the updated provenance map onto an existing account.
+   *
+   * Only the keys the caller supplies are written, so a merge that decided ONE field may change cannot blank
+   * the rest — the planner's writableFields set is the authority, and anything outside it must be left
+   * exactly as it was.
+   */
+  async updateScalars(
+    tx: Tx,
+    accountId: string,
+    values: Record<string, unknown>,
+    fieldProvenance: Record<string, unknown>,
+  ): Promise<void> {
+    const set: Record<string, unknown> = { fieldProvenance };
+    for (const key of [
+      "name",
+      "industry",
+      "subIndustry",
+      "employeeCount",
+      "revenueRange",
+      "hqCountry",
+      "hqCity",
+    ]) {
+      if (values[key] !== undefined) set[key] = values[key];
+    }
+    await tx.update(accounts).set(set).where(eq(accounts.id, accountId));
+  },
+
   async updateFirmographics(
     tx: Tx,
     accountId: string,
