@@ -30,7 +30,7 @@ let bob = "";
 const scope = () => ({ tenantId, workspaceId });
 
 beforeAll(async () => {
-  dbHandle = await startItestDb();
+  dbHandle = await startItestDb("reports_repository");
   await applyMigrations(dbHandle.adminUrl);
   process.env.DATABASE_URL = dbHandle.adminUrl;
   admin = postgres(dbHandle.adminUrl, { max: 1 });

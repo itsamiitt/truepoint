@@ -1,0 +1,16 @@
+{
+  // Type-checks the package INCLUDING its out-of-src tests.
+  //
+  // Extends the BASE config rather than ./tsconfig.json on purpose: that one carries `rootDir: "src"` +
+  // `outDir` for the dist build, and a rootDir cannot contain files outside itself. Inheriting it yields
+  // hundreds of TS6059s — first for test/, then for the cross-package `../../core/src` imports the itests use
+  // deliberately (bun's per-package node_modules means a relative barrel import is the working shape there).
+  // Emit settings are irrelevant here; this config only ever runs with noEmit.
+  //
+  // Why it exists: the itests were never type-checked at all. `bun test` compiles them at run time, so a
+  // wrong signature — applyMigrations takes a connection string, not an options object — passed typecheck,
+  // passed lint, and failed in CI behind a misleading "password authentication failed for user runner".
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src", "test"]
+}

@@ -16,7 +16,7 @@ let dbHandle: ItestDb;
 let sql: ReturnType<typeof postgres>;
 
 beforeAll(async () => {
-  dbHandle = await startItestDb();
+  dbHandle = await startItestDb("partition_maintenance");
   await applyMigrations(dbHandle.adminUrl);
   sql = postgres(dbHandle.adminUrl, { max: 1 });
   await sql`DROP SCHEMA IF EXISTS pm_probe CASCADE`;

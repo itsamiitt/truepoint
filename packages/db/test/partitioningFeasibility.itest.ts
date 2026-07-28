@@ -29,7 +29,7 @@ let dbHandle: ItestDb;
 let sql: ReturnType<typeof postgres>;
 
 beforeAll(async () => {
-  dbHandle = await startItestDb();
+  dbHandle = await startItestDb("partitioning_feasibility");
   sql = postgres(dbHandle.adminUrl, { max: 1 });
   await sql`DROP SCHEMA IF EXISTS part_probe CASCADE`;
   await sql`CREATE SCHEMA part_probe`;
