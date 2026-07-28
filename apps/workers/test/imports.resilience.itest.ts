@@ -55,7 +55,10 @@ const MAPPING = {
   accountDomain: "Domain",
 };
 // One importable identity (jane has an email) + one un-importable row (no email/linkedin/sales-nav id).
-const MIXED_ROWS = [
+// Annotated rather than inferred: the second row deliberately omits Email (that IS the partial-bad case), so
+// inference widens the array to a union carrying `Email?: undefined`, which no longer matches core's
+// `RawRow = Record<string, string>`. The annotation states the intended shape; the fixture is unchanged.
+const MIXED_ROWS: Record<string, string>[] = [
   {
     Email: "jane@acme.com",
     "First Name": "Jane",

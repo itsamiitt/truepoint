@@ -69,8 +69,14 @@ jobs:
       # all — bun compiles them at run time. That is how a wrong applyMigrations signature passed typecheck,
       # passed lint, and failed here behind "password authentication failed for user runner". This checks the
       # 76 that are currently clean; the 17 excluded in tsconfig.typecheck.json are a shrinking ratchet.
-      - name: Typecheck packages/db itests
-        run: bun run --filter @leadwolf/db typecheck:tests
+      - name: Typecheck out-of-src tests (db, workers, forge-worker)
+        # These three packages keep their tests OUTSIDE src, so the per-package typecheck above — which
+        # includes only "src" — never saw them. That is how a wrong applyMigrations signature passed typecheck,
+        # passed lint, and failed here behind "password authentication failed for user runner".
+        run: |
+          bun run --filter @leadwolf/db typecheck:tests
+          bun run --filter @leadwolf/workers typecheck:tests
+          bun run --filter @leadwolf/forge-worker typecheck:tests
       - name: Lint (biome)
         run: bun run lint
       - name: Import boundaries (dependency-cruiser)
