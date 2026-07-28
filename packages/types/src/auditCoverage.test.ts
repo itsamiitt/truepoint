@@ -148,6 +148,15 @@ const PENDING = new Set<string>([
   "device.revoked",
   "code.issued",
   "oauth.link",
+  // crm-sync 01 Block C.2 — the five tenant-visible sync actions. Landed with the schema/rls train (0087) so
+  // the first writer never fails the closed DB CHECK; they move to WRITTEN as the connect flow, the sync
+  // runners, the mapping editor, and the outbound DSAR erase land. Metadata carries IDs + provider only —
+  // never pushed field values, never token material (00 §7.4).
+  "crm.connect",
+  "crm.disconnect",
+  "crm.sync",
+  "crm.mapping.update",
+  "crm.erase",
 ]);
 
 describe("audit_log.action coverage", () => {

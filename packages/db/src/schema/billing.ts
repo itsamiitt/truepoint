@@ -255,7 +255,8 @@ export const auditLog = pgTable(
         'import.committed','import.cancelled','import.retry_created','import.template_saved','import.artifact_downloaded',
         'import.av_infected','import.draft_reaped',
         'channel_added','channel_promoted','channel_deleted','channel_primary_demoted',
-        'contact.merge'
+        'contact.merge',
+        'crm.connect','crm.disconnect','crm.sync','crm.mapping.update','crm.erase'
       )`,
     ),
     // Dashboard activity feed + compliance viewer (auditRepository.listByTenant/listByWorkspace: WHERE

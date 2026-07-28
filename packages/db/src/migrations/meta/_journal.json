@@ -610,6 +610,13 @@
       "when": 1785139425018,
       "tag": "0086_partition_platform_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1785229501624,
+      "tag": "0087_crm_sync",
+      "breakpoints": true
     }
   ]
 }

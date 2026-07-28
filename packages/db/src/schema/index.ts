@@ -18,6 +18,7 @@ export * from "./activity.ts";
 export * from "./salesnav.ts";
 export * from "./outreach.ts";
 export * from "./email.ts";
+export * from "./crm.ts";
 export * from "./enrichmentJobs.ts";
 export * from "./revealJobs.ts";
 export * from "./eventOutbox.ts";

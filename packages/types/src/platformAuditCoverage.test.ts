@@ -84,6 +84,11 @@ const PENDING = new Set<string>([
   "staff.login.failure",
   "login.failure",
   "mfa.challenge",
+  // crm-sync 01 Block C.3 — staff-side enablement (super_admin, withPlatformTx). Landed with the schema/rls
+  // train (0087) so the first writer never fails a closed CHECK; the writers arrive with the connect/admin
+  // slice, at which point these move to WRITTEN.
+  "crm_integration.enable",
+  "crm_budget.set",
 ]);
 
 describe("platform_audit_log.action coverage", () => {

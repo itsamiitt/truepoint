@@ -105,8 +105,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1865,
-  "fileSetHash": "sha256:e6ced9a6d1c1989c0d7d60aca7c73dad17f841c5dcfdd326fcef02c0907b2f94",
+  "fileCount": 1867,
+  "fileSetHash": "sha256:55c44ed4d29d07077708b1c7c83577e1cf3806bab58be4a219a444a918fcb05d",
   "features": {
     "account-search": {
       "web": [],
@@ -2520,6 +2520,7 @@
       "packages/db/src/schema/compliance.ts",
       "packages/db/src/schema/contactChannels.ts",
       "packages/db/src/schema/contacts.ts",
+      "packages/db/src/schema/crm.ts",
       "packages/db/src/schema/customFields.ts",
       "packages/db/src/schema/dataQualitySnapshots.ts",
       "packages/db/src/schema/email.ts",
@@ -2578,6 +2579,7 @@
       "packages/db/test/contactChannels.reconcile.itest.ts",
       "packages/db/test/contactMerge.itest.ts",
       "packages/db/test/contactResolve.itest.ts",
+      "packages/db/test/crmIsolation.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
       "packages/db/test/effectivePolicyResolve.itest.ts",

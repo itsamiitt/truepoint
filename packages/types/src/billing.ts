@@ -271,6 +271,16 @@ export const auditAction = z.enum([
   // NOBODY until S-C4 lands the engine AND the S-C3 dual gate is ON; landed with S-C2's DDL so the first
   // writer never fails the DB CHECK.
   "contact.merge",
+  // CRM bidirectional sync (crm-sync 00 §4.11 / 01 Block C.2): every tenant-visible sync action audits
+  // in-tx — connect/disconnect of a CRM, each applied sync batch, a mapping edit, and the outbound DSAR
+  // erase. The metadata carries IDs + provider ONLY: never the pushed field values and never any token
+  // material (§7.4). Written by NOBODY until the sync engine lands; these ride the schema/rls train (0087)
+  // so the first writer can never fail the closed DB CHECK.
+  "crm.connect",
+  "crm.disconnect",
+  "crm.sync",
+  "crm.mapping.update",
+  "crm.erase",
 ]);
 export type AuditAction = z.infer<typeof auditAction>;
 
