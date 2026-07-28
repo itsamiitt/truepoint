@@ -11,15 +11,23 @@
 //   (2) FAIL-CLOSED — with NO GUC set at all, every table reads zero (the NULLIF(...,'') half of the policy).
 //       This is the half that a policy written as `current_setting(...) = workspace_id` would silently fail.
 //   (3) WRITE — WITH CHECK blocks stamping a row into another workspace, on every table.
-//   (4) APPEND-ONLY — crm_inbound_events and crm_sync_dead_letter have SELECT+INSERT policies only, so UPDATE
-//       and DELETE are denied under FORCE RLS even though the [4/4] blanket GRANT re-widens leadwolf_app.
-//       That grant is exactly why this must be asserted: the wall is policy-absence, not the grant.
-//   (5) LEDGER — crm_sync_runs additionally permits UPDATE (running -> completed) but still denies DELETE.
+//   (4) APPEND-ONLY — crm_inbound_events and crm_sync_dead_letter have SELECT+INSERT policies only, so an
+//       UPDATE or DELETE mutates NOTHING even in the row's own workspace, and even though the [4/4] blanket
+//       GRANT re-widens leadwolf_app afterwards. That grant is exactly why this must be asserted: the wall
+//       is policy-absence, not the grant.
+//   (5) LEDGER — crm_sync_runs additionally permits INSERT and UPDATE (running -> completed) but no DELETE.
 //   (6) The encrypted token bytea never crosses a workspace boundary.
 //
-// Every negative assertion uses explicit try/catch, NEVER `expect(sql`...`).rejects`: a postgres.js tagged
-// template is a lazy PendingQuery, and one left unsettled holds a connection open and hangs the DROP DATABASE
-// in teardown (this cost a 28-minute CI timeout once already).
+// TWO ASSERTION SHAPES, and picking the wrong one is the trap. A cross-workspace INSERT RAISES (a WITH CHECK
+// violation is an error), so it is asserted with explicit try/catch. An UPDATE/DELETE with no policy does
+// NOT raise — RLS applies the empty policy set as a row filter, so the statement matches zero rows and
+// returns success. Those are asserted as "RETURNING came back empty and the data is provably unchanged",
+// read on the OWNER connection. CI caught this: the first version of this file asserted that the
+// append-only UPDATE threw, and five tests failed against a policy set that was entirely correct.
+//
+// Never `expect(sql`...`).rejects` on a tagged template either: a postgres.js PendingQuery is lazy, and one
+// left unsettled holds a connection open and hangs the DROP DATABASE in teardown (that cost a 28-minute CI
+// timeout once already). Hence the explicit try/catch everywhere a raise IS expected.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
@@ -186,6 +194,20 @@ async function countAsWorkspace(
   });
 }
 
+/**
+ * Ground truth for a table's row count in a workspace, read on the OWNER connection.
+ *
+ * Deliberately not the app connection: the append-only assertions need to know what is REALLY in the table,
+ * and reading that through the same RLS wall being tested would make the test agree with itself.
+ */
+async function countRows(table: string, wsId: string): Promise<number> {
+  const rows = await admin.unsafe(
+    `SELECT count(*)::int AS n FROM ${table} WHERE workspace_id = $1`,
+    [wsId],
+  );
+  return one<{ n: number }>(rows as unknown as Array<{ n: number }>, "count").n;
+}
+
 // All nine tables are workspace-scoped. This list is the allow-list for the identifier interpolation above.
 const ALL_TABLES = [
   "crm_connections",
@@ -285,45 +307,50 @@ describe("CRM sync — WITH CHECK blocks cross-workspace writes", () => {
   });
 });
 
-describe("CRM sync — append-only tables reject UPDATE and DELETE for leadwolf_app", () => {
+describe("CRM sync — append-only tables cannot be mutated by leadwolf_app", () => {
   // These two have SELECT + INSERT policies ONLY. Under FORCE RLS the absence of an UPDATE/DELETE policy is
   // the wall — and it has to be, because applyMigrations' [4/4] blanket GRANT hands leadwolf_app full DML on
   // every table AFTER rls/crm.sql runs. A test that only checked the GRANT would prove nothing.
+  //
+  // HOW THE DENIAL MANIFESTS — this is the part worth stating, because the obvious test is wrong. An absent
+  // UPDATE/DELETE policy does NOT raise: RLS applies the (empty) set of policies as a row filter, so the
+  // statement matches ZERO rows and returns success. Only INSERT fails loudly, because a WITH CHECK
+  // violation is an error rather than a filter. So the assertion is "affected nothing and the data is
+  // unchanged", not "threw" — the same shape retention.itest.ts uses for retention_runs. Anything that
+  // treats "the UPDATE didn't throw" as "the UPDATE worked" is wrong on these tables.
   for (const table of ["crm_inbound_events", "crm_sync_dead_letter"] as const) {
-    test(`${table}: UPDATE in its OWN workspace is denied`, async () => {
-      let blocked = false;
-      try {
-        await app.begin(async (tx) => {
-          await tx`SELECT set_config('app.current_workspace_id', ${A.wsId}, true)`;
-          await tx.unsafe(`UPDATE ${table} SET tenant_id = tenant_id WHERE workspace_id = $1`, [
-            A.wsId,
-          ]);
-        });
-      } catch {
-        blocked = true;
-      }
-      expect(blocked).toBe(true);
+    test(`${table}: UPDATE in its OWN workspace affects zero rows and changes nothing`, async () => {
+      const before = await countRows(table, A.wsId);
+      expect(before).toBeGreaterThan(0); // the fixture exists, so zero-affected below is meaningful
+
+      const affected = await app.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_workspace_id', ${A.wsId}, true)`;
+        const rows = await tx.unsafe(
+          `UPDATE ${table} SET crm_record_id = 'mutated-by-app' WHERE workspace_id = $1 RETURNING id`,
+          [A.wsId],
+        );
+        return (rows as unknown as unknown[]).length;
+      });
+      expect(affected).toBe(0);
+
+      // Confirmed on the owner connection: no row took the new value.
+      const mutated = await admin.unsafe(
+        `SELECT count(*)::int AS n FROM ${table} WHERE crm_record_id = 'mutated-by-app'`,
+      );
+      expect(one<{ n: number }>(mutated as unknown as Array<{ n: number }>, "count").n).toBe(0);
     });
 
-    test(`${table}: DELETE in its OWN workspace is denied`, async () => {
-      let blocked = false;
-      try {
-        await app.begin(async (tx) => {
-          await tx`SELECT set_config('app.current_workspace_id', ${A.wsId}, true)`;
-          await tx.unsafe(`DELETE FROM ${table} WHERE workspace_id = $1`, [A.wsId]);
-        });
-      } catch {
-        blocked = true;
-      }
-      expect(blocked).toBe(true);
-      // The row is still there — the denial was real, not a silently-zero-row DELETE.
-      const rows = await admin.unsafe(
-        `SELECT count(*)::int AS n FROM ${table} WHERE workspace_id = $1`,
-        [A.wsId],
-      );
-      expect(
-        one<{ n: number }>(rows as unknown as Array<{ n: number }>, "count").n,
-      ).toBeGreaterThan(0);
+    test(`${table}: DELETE in its OWN workspace affects zero rows and removes nothing`, async () => {
+      const before = await countRows(table, A.wsId);
+      const affected = await app.begin(async (tx) => {
+        await tx`SELECT set_config('app.current_workspace_id', ${A.wsId}, true)`;
+        const rows = await tx.unsafe(`DELETE FROM ${table} WHERE workspace_id = $1 RETURNING id`, [
+          A.wsId,
+        ]);
+        return (rows as unknown as unknown[]).length;
+      });
+      expect(affected).toBe(0);
+      expect(await countRows(table, A.wsId)).toBe(before);
     });
   }
 });
@@ -356,22 +383,32 @@ describe("CRM sync — crm_sync_runs is an append + in-place-progress ledger", (
     expect(r.status).toBe("completed"); // still A's own value from the test above
   });
 
-  test("DELETE is denied (no DELETE policy — immutable ledger)", async () => {
-    let blocked = false;
-    try {
-      await app.begin(async (tx) => {
-        await tx`SELECT set_config('app.current_workspace_id', ${A.wsId}, true)`;
-        await tx`DELETE FROM crm_sync_runs WHERE id = ${A.runId}`;
-      });
-    } catch {
-      blocked = true;
-    }
-    expect(blocked).toBe(true);
+  test("DELETE affects zero rows — no DELETE policy, so the ledger is immutable", async () => {
+    const affected = await app.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_workspace_id', ${A.wsId}, true)`;
+      const rows = await tx`DELETE FROM crm_sync_runs WHERE id = ${A.runId} RETURNING id`;
+      return rows.length;
+    });
+    expect(affected).toBe(0);
     const r = one<{ n: number }>(
       await admin`SELECT count(*)::int AS n FROM crm_sync_runs WHERE id = ${A.runId}`,
       "count",
     );
     expect(r.n).toBe(1);
+  });
+
+  test("the SELECT+INSERT+UPDATE policy set still permits a legitimate INSERT", async () => {
+    const inserted = await app.begin(async (tx) => {
+      await tx`SELECT set_config('app.current_workspace_id', ${A.wsId}, true)`;
+      const rows = await tx`
+        INSERT INTO crm_sync_runs
+          (tenant_id, workspace_id, connection_id, provider, object_type, direction, trigger, mode)
+        VALUES (${A.tenantId}, ${A.wsId}, ${A.connectionId}, 'salesforce', 'contact', 'outbound',
+                'manual', 'shadow')
+        RETURNING id`;
+      return rows.length;
+    });
+    expect(inserted).toBe(1);
   });
 });
 
