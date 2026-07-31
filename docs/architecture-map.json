@@ -102,8 +102,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1947,
-  "fileSetHash": "sha256:577a8e0086e832c67fcfc322d32de93691204d580f8a7da868dac7cfc29b2a70",
+  "fileCount": 1949,
+  "fileSetHash": "sha256:604ce09fd087229981781e566bb68028bcfd30b09c05873d6d5f13234dc5789a",
   "features": {
     "account-search": {
       "web": [],
@@ -1432,7 +1432,9 @@
       "api": [],
       "core": [
         "packages/core/src/provenance/lawfulBasis.test.ts",
-        "packages/core/src/provenance/lawfulBasis.ts"
+        "packages/core/src/provenance/lawfulBasis.ts",
+        "packages/core/src/provenance/planEvents.test.ts",
+        "packages/core/src/provenance/planEvents.ts"
       ],
       "db": [],
       "workers": [],
