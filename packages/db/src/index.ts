@@ -200,6 +200,13 @@ export {
   entitlementRepository,
   type EntitlementRow,
 } from "./repositories/entitlementRepository.ts";
+// Confidence badge v0's corroboration half (S-10). Reads under withErTx, never the request's tenant tx:
+// leadwolf_app has no grant on provenance_event, and the aggregate is computed IN-QUERY so contributor_ref
+// never appears in a result column.
+export {
+  provenanceBadgeRepository,
+  type ProvenanceBadge,
+} from "./repositories/provenanceBadgeRepository.ts";
 // Survivorship projector data access (prospect-database-platform I1 / Phase 05) — drains projection_outbox + writes
 // the shadow seams (data_quality_score, prov_hwm) on the golden row; NEVER the authoritative scalar columns.
 export {

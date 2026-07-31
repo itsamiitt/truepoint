@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1959,
-  "fileSetHash": "sha256:09689f34c65b0e31ba2cf2e694440eed4b764ab65c6359abd041c7a6e46677bf",
+  "fileCount": 1960,
+  "fileSetHash": "sha256:d427dba8c88ff305e9f3de22230e54ea03fed6ac009f166bf74f086fc05774f5",
   "features": {
     "account-search": {
       "web": [],
@@ -3091,6 +3091,7 @@
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
     "packages/db/src/repositories/entitlementRepository.ts",
+    "packages/db/src/repositories/provenanceBadgeRepository.ts",
     "packages/db/src/repositories/usageEventRepository.ts"
   ],
   "warnings": [

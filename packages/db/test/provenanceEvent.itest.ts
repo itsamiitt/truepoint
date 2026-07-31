@@ -319,6 +319,49 @@ describe("provenance_event — invariant 1 structural proofs", () => {
     expect(written).toBe(0);
   });
 
+  // ── (9) BADGE v0: COUNTS LEAVE, IDENTITIES DO NOT ─────────────────────────────────────────────────────────
+  test("the badge aggregate returns counts and recency, and no contributor ref", async () => {
+    const [mp] = await admin`INSERT INTO master_persons (full_name) VALUES ('Badge Subject') RETURNING id`;
+    const subject = (mp as { id: string }).id;
+
+    // Two channels, one of them twice: three assertions, two source kinds. One source asserting twice is not
+    // two sources — that is what sourceDiversity exists to say.
+    for (const [sourceType, field, day] of [
+      ["import", "ev_badge_a", "2024-01-01"],
+      ["import", "ev_badge_b", "2024-02-01"],
+      ["forge", "ev_badge_c", "2024-03-01"],
+    ] as const) {
+      await admin`
+        INSERT INTO provenance_event
+          (entity_type, entity_id, field, action, source_type, lawful_basis, observed_at)
+        VALUES ('person', ${subject}, ${field}, 'assert', ${sourceType}, 'legitimate_interest',
+                ${`${day}T00:00:00Z`}::timestamptz)`;
+    }
+
+    const badge = await dbmod.withErTx((tx) =>
+      dbmod.provenanceBadgeRepository.badgeFor(tx, "person", subject),
+    );
+    expect(badge?.sourceCount).toBe(3);
+    expect(badge?.sourceDiversity).toBe(2);
+    expect(badge?.lastObservedAt?.toISOString()).toBe("2024-03-01T00:00:00.000Z");
+
+    // The C-02 shape assertion: whatever else the badge grows, a contributor id must never be one of its keys.
+    // Counts are fine; an identity is not, and a response-shape test is the only thing that keeps it that way.
+    for (const key of Object.keys(badge ?? {})) {
+      expect(key.toLowerCase()).not.toContain("ref");
+    }
+  });
+
+  test("an entity with no events returns null, not a zero-source badge", async () => {
+    // "We hold no evidence log for this record" is not "no source vouched for it". Most records have no events
+    // until the gate flips, so rendering 0 sources would be misleading on nearly every row.
+    const [mp] = await admin`INSERT INTO master_persons (full_name) VALUES ('No Events') RETURNING id`;
+    const badge = await dbmod.withErTx((tx) =>
+      dbmod.provenanceBadgeRepository.badgeFor(tx, "person", (mp as { id: string }).id),
+    );
+    expect(badge).toBeNull();
+  });
+
   // ── (7) PARTITIONED, AND THE SWEEP FINDS IT ───────────────────────────────────────────────────────────────
   test("provenance_event is range-partitioned and the catalog-driven sweep picks it up", async () => {
     const [rel] = await admin`
