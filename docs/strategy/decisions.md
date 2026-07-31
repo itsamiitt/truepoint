@@ -202,6 +202,39 @@ Four decisions taken (human, in-session), plus the recorded stack:
       system cluster untouched) against the repo's declared 16. Everything
       exercised behaves identically, but CI on 16 remains the authority.
 
+  D11. OVERLAY PROVENANCE EVENTS ARE NOT BUILT; PHASE 1 CLOSES AT LAYER 0
+      (2026-07-31). The last open item. Writing events for contact/account
+      changes would require granting leadwolf_app — the CUSTOMER role — INSERT on
+      provenance_event, which it is REVOKE'd from entirely today, plus the
+      table's first RLS write policy. Ruling: do not. 08's invariant 1 binds "the
+      materialized graph", and Layer 0 IS that graph; the overlay is a per-tenant
+      working copy that already carries field_provenance. So Phase 1 is complete
+      as specified without handing the customer role write access to the evidence
+      log, where a tenant-scoped injection could forge assertions.
+      The schema already supports overlay events (entity_type contact|account +
+      scope_ref, CHECK-enforced), so this is a decision deferred on its own
+      merits, not a design gap. Rejected: the grant + RLS policy (real capability,
+      real new attack surface, and a first RLS policy on a table whose isolation
+      is currently grant-off — two mechanisms to keep right instead of one), and a
+      separate non-fatal withErTx (would reverse D7 for the overlay half, letting
+      an overlay field exist with no event and making A-01 unclaimable there).
+  D12. PHASE 1 COMPLETE (2026-07-31). Every item in the approved plan is
+      implemented, tested and verified, or explicitly closed with a reason:
+      D9 (S-07 trigger — would fire on the provenance-free mint), D11 (overlay
+      events), and extension ENABLEMENT, which stays gated pending the counsel
+      review 09 rule 1 requires. Note that gate blocks turning the extension ON,
+      not building it — the side-panel badge shipped dark under that reading.
+      Gates all green on this branch: lint, typecheck 25/25 (test files now
+      included — see below), 1896 unit tests, 65 itest assertions over the new
+      work, 5/5 app builds, dependency boundaries (no db↔core cycle), import-PII,
+      lockfile, and drizzle reporting no drift.
+      THREE DORMANT GUARDS WERE WIRED UP, and they matter more than any single
+      fix here: `typecheck:tests` (defined in 3 packages, invoked by nothing — it
+      is how a bare-object jsonb parameter reached a commit), `check-lockfile`
+      (written for the exact failure of editing package.json without bun, wired
+      to nothing), and two itest beforeAll hooks missing their timeout argument.
+      Each was proven to FIRE before being trusted.
+
 Stack recorded: Bun 1.3.14 + Turbo + Biome monorepo; Postgres 16 via Drizzle +
 postgres.js with hand-written RLS; Redis 7 + BullMQ; Hono on Bun; Next.js 15 +
 React 19. Commands: build `bun run build`, test `bun test`, lint `bun run lint`,
