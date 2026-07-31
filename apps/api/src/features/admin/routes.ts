@@ -1440,6 +1440,30 @@ adminRoutes.get("/feature-flags/env-gates", (c) => {
       flagKey: null,
     },
     {
+      key: "PROVENANCE_EVENTS_ENABLED",
+      label: "Provenance event dual-write",
+      description:
+        "Master switch for the field-grain provenance_event append (08-architecture invariant 1). The paired provenance_events per-tenant flag gates OVERLAY events only — Layer-0 master graph events ride this env switch alone, since Layer 0 has no tenant to key on.",
+      enabled: env.PROVENANCE_EVENTS_ENABLED,
+      flagKey: "provenance_events",
+    },
+    {
+      key: "USAGE_EVENTS_ENABLED",
+      label: "Usage event emission",
+      description:
+        "Master switch for the usage_event outcome-metric substrate (reveal latency/hit/miss, save success, badge impressions). Dual-gated with the usage_events per-tenant flag. Does not replace credit_ledger or contact_reveals.",
+      enabled: env.USAGE_EVENTS_ENABLED,
+      flagKey: "usage_events",
+    },
+    {
+      key: "ENTITLEMENTS_ENABLED",
+      label: "Entitlement cap enforcement",
+      description:
+        "Master arm for tier-entitlement caps. While the entitlements_enforced per-tenant flag is off the middleware runs in SHADOW mode — it logs the decision it would have made and never rejects. Caps sit above the reveal-credit ledger, not in place of it.",
+      enabled: env.ENTITLEMENTS_ENABLED,
+      flagKey: "entitlements_enforced",
+    },
+    {
       key: "AUTH_POLICY_ENFORCEMENT_ENABLED",
       label: "Auth-policy login enforcement",
       description:

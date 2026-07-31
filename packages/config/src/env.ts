@@ -739,6 +739,43 @@ export const appEnvSchema = z
       .string()
       .optional()
       .transform((v) => v === "true"),
+    // Field-grain provenance dual-write (docs/strategy/08-architecture.md invariant 1 — "nothing writes to the
+    // materialized graph except through a provenance_event"; Phase 1 S-06). Global half of the gate; the
+    // per-tenant half is the `provenance_events` flag seeded off in 0088. DEFAULT-OFF: while off, every writer
+    // keeps its shipped field_provenance behavior BYTE-IDENTICALLY — zero flag reads, zero event appends.
+    // With it on, writers ALSO append provenance_event rows in the SAME transaction as the graph write.
+    // ASYMMETRIC BY DESIGN: overlay events (contact/account) need BOTH halves; Layer-0 master_* events ride
+    // this env half ALONE because Layer 0 has no tenant_id to key a flag on (rls/masterGraph.sql) — the same
+    // split INGESTION_EVIDENCE_ENABLED already uses. field_provenance stays AUTHORITATIVE while this is on;
+    // making the event stream the source of truth is a SEPARATE, CI-parity-gated step (projectorRepository's
+    // shadow-then-flip posture). Flipping off reverts writers instantly; written events stay inert and are
+    // never rolled back by a flag. Same explicit-"true"-only posture as BULK_IMPORT_ENABLED.
+    PROVENANCE_EVENTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // usage_event emission (08-architecture § Instrumentation — "emit from day one"; Phase 1 S-11). Global half;
+    // per-tenant half is the `usage_events` flag seeded off in 0088. DEFAULT-OFF: while off, no usage_event rows
+    // are written and every metered path behaves exactly as shipped. This is the OUTCOME-METRIC substrate (reveal
+    // latency/hit/miss, save success, badge impressions) and never replaces credit_ledger, contact_reveals,
+    // provider_calls, ai_requests or activities — those keep metering billing independently. The append rides
+    // INSIDE the caller's existing transaction so metering can never drift from the action it records.
+    // Same explicit-"true"-only posture as BULK_IMPORT_ENABLED.
+    USAGE_EVENTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Entitlement cap enforcement (06-roadmap Phase 1 "Free caps enforced"; S-10). Global half; per-tenant half is
+    // the `entitlements_enforced` flag seeded off in 0088. DEFAULT-OFF: while off, the requireEntitlement
+    // middleware is not mounted at all. With this on but the tenant flag off, it runs in SHADOW mode — computing
+    // and logging the decision it WOULD have made, never rejecting (the AUTH_POLICY_SHADOW_ENABLED precedent);
+    // shadow disagreement must be <1% before any tenant flag flips on. Entitlement caps sit ABOVE the
+    // reveal-credit ledger and do NOT replace it — the two are deliberately not reconciled in code
+    // (decisions.md 2026-07-31 D2). Same explicit-"true"-only posture as BULK_IMPORT_ENABLED.
+    ENTITLEMENTS_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
     // Bulk CSV enrichment v2 (prospect-database-platform I3 / audit A3/P08): the confirm-before-spend money path —
     // the POST /enrichment/jobs/:jobId/confirm gate, the apps/api producer onto BULK_ENRICHMENT_QUEUE, and the
     // apps/workers consumer. DEFAULT-OFF: while off the confirm endpoint 403s, the producer enqueues NOTHING, and
