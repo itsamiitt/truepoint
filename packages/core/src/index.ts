@@ -472,6 +472,17 @@ export {
   type BadgeAggregate,
   type ConfidenceBadgeV1,
 } from "./data-health/badgeV1.ts";
+// Job-change detection (Phase 4 decay engine; S-09/S-13/S-14). PURE, and it compares CONFIDENCES rather than
+// timestamps — 07's rule that three corroborated confirmations beat a year-old crawl is a confidence
+// comparison, so this composes the same model the badge uses instead of inventing a second one.
+export {
+  detectJobChange,
+  shouldAlert,
+  CHANGE_MARGIN,
+  type EmploymentClaim,
+  type JobChangeKind,
+  type JobChangeVerdict,
+} from "./data-health/jobChange.ts";
 
 export {
   computeScore,

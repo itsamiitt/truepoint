@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1968,
-  "fileSetHash": "sha256:4f9fe8af6eeb0bc9217469be3bd1d228d15d0aeb3cf610f1eec6c93d72898a02",
+  "fileCount": 1970,
+  "fileSetHash": "sha256:f214c3de51083987c50bbe3d5ebda48e5707c60006499de3fb0291e1cdbd1292",
   "features": {
     "account-search": {
       "web": [],
@@ -612,6 +612,8 @@
         "packages/core/src/data-health/emailPrescreen.test.ts",
         "packages/core/src/data-health/emailPrescreen.ts",
         "packages/core/src/data-health/emailVerifier.ts",
+        "packages/core/src/data-health/jobChange.test.ts",
+        "packages/core/src/data-health/jobChange.ts",
         "packages/core/src/data-health/phoneVerifier.ts",
         "packages/core/src/data-health/reacherVerifier.test.ts",
         "packages/core/src/data-health/reacherVerifier.ts",
