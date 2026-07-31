@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1939,
-  "fileSetHash": "sha256:9628126195756decf994e0e437ab77c496481b0bc3ebf5df4f5e22b8e7c453d0",
+  "fileCount": 1941,
+  "fileSetHash": "sha256:5bec69a1213586a92148f6432e055cf821a3b45bcca5ab0053971fb373e691e1",
   "features": {
     "account-search": {
       "web": [],
@@ -2736,6 +2736,7 @@
       "packages/db/src/schema/platformOps.ts",
       "packages/db/src/schema/processedSyncEvents.ts",
       "packages/db/src/schema/projectionOutbox.ts",
+      "packages/db/src/schema/provenanceEvent.ts",
       "packages/db/src/schema/retention.ts",
       "packages/db/src/schema/revealJobs.ts",
       "packages/db/src/schema/salesnav.ts",
@@ -2825,6 +2826,7 @@
       "packages/db/test/pipelineStages.itest.ts",
       "packages/db/test/platformAdminReads.itest.ts",
       "packages/db/test/platformAuditLog.itest.ts",
+      "packages/db/test/provenanceEvent.itest.ts",
       "packages/db/test/providerConfigs.itest.ts",
       "packages/db/test/reportsRepository.itest.ts",
       "packages/db/test/retention.itest.ts",

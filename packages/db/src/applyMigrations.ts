@@ -279,8 +279,12 @@ const GRANTS = `
   -- Reads happen only via masked search + the paid-reveal copy + the audited owner/withPlatformTx path. The
   -- overlay's master_*_id FK still works: referential checks run with the table-OWNER privilege, not leadwolf_app.
   -- Re-run every migrate (idempotent); a future master_* table MUST be added to this list.
+  -- provenance_event joins this list for two reasons, not one: it is Layer-0-shaped (no workspace_id, so no
+  -- writable RLS predicate — rls/provenanceEvent.sql), and it carries contributor_ref. Even though that ref is
+  -- unresolvable outside the `provenance` schema, handing the customer role the ability to READ per-record
+  -- contribution patterns would undermine C-02 by correlation alone.
   REVOKE ALL ON master_persons, master_companies, master_employment, master_emails, master_phones,
-                source_records, match_links, projection_outbox FROM leadwolf_app;
+                source_records, match_links, projection_outbox, provenance_event FROM leadwolf_app;
   -- Defense-in-depth belt: dynamically REVOKE from leadwolf_app any table named master_*. A FUTURE Layer-0
   -- master table is auto-granted by the ALTER DEFAULT PRIVILEGES above at CREATE time, so this convention-based
   -- catch-all makes it fail closed even before someone adds it to the explicit list. (Tables NOT matching
@@ -297,9 +301,13 @@ const GRANTS = `
   -- owner/withPrivilegedTx path), NO overlay grant (it must never touch contacts/accounts), and it is NOT
   -- BYPASSRLS (it has no business reading any RLS-scoped table). It needs sequence USAGE to default the v7 PKs.
   -- Idempotent; re-run every migrate. A future Layer-0 table that the resolver writes MUST be added here.
+  -- provenance_event: INSERT is the point (the resolver appends assertions alongside the graph write, in the
+  -- same transaction). SELECT serves the fold and the badge aggregate. UPDATE is granted only because the
+  -- source_record_id ON DELETE SET NULL needs it; every other mutation is refused by the append-only trigger
+  -- regardless of role, so the grant is not the control here.
   GRANT SELECT, INSERT, UPDATE ON master_persons, master_companies, master_employment, master_emails,
                                    master_phones, source_records, match_links, projection_outbox,
-                                   processed_sync_events TO leadwolf_er;
+                                   processed_sync_events, provenance_event TO leadwolf_er;
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_er;
   -- leadwolf_forge (ADR-0047) owns the forge schema data plane end-to-end (raw to parsed to verified + ER +
   -- governance). Full DML there (DELETE included — raw-layer DSAR erasure runs in-schema), but NO grant on the

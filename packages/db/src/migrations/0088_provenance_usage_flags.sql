@@ -14,8 +14,10 @@
 -- INGESTION_EVIDENCE_ENABLED, which gates the ER evidence writers with no tenant flag at all.
 
 INSERT INTO feature_flags (key, description, global_enabled, "default") VALUES ('provenance_events', 'Per-tenant rollout gate for the OVERLAY half of the provenance_event dual-write (08-architecture invariant 1; Phase 1 S-06). OFF by default (fail-closed): while off, contact/account writers keep their shipped field_provenance behavior byte-identically and append no events. Effective only when the global PROVENANCE_EVENTS_ENABLED env kill-switch is also on. Layer-0 master_* events are gated by the env half ALONE (Layer 0 has no tenant_id to key on). field_provenance stays authoritative throughout Phase 1 — the projection flip is a separate, CI-parity-gated step.', false, false) ON CONFLICT (key) DO NOTHING;
+--> statement-breakpoint
 
 INSERT INTO feature_flags (key, description, global_enabled, "default") VALUES ('usage_events', 'Per-tenant rollout gate for usage_event emission (08-architecture § Instrumentation; Phase 1 S-11). OFF by default (fail-closed): while off, no usage_event rows are written and every metered path behaves exactly as shipped. Effective only when the global USAGE_EVENTS_ENABLED env kill-switch is also on. usage_event is the OUTCOME-METRIC substrate; it never replaces credit_ledger, contact_reveals, provider_calls, ai_requests or activities, which keep metering billing independently.', false, false) ON CONFLICT (key) DO NOTHING;
+--> statement-breakpoint
 
 INSERT INTO feature_flags (key, description, global_enabled, "default") VALUES ('entitlements_enforced', 'Per-tenant gate for entitlement CAP ENFORCEMENT (06-roadmap Phase 1 "Free caps enforced"; S-10). OFF by default (fail-closed): while off, requireEntitlement runs in SHADOW mode — it computes and logs the decision it WOULD have made and never rejects a request (the AUTH_POLICY_SHADOW_ENABLED precedent). Effective enforcement = the global ENTITLEMENTS_ENABLED env kill-switch AND this flag. Entitlement caps sit ABOVE the reveal-credit ledger and do not replace it (decisions.md 2026-07-31 D2).', false, false) ON CONFLICT (key) DO NOTHING;
 
