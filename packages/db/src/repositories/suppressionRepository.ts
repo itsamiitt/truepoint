@@ -4,9 +4,10 @@
 // the match itself.
 
 import type { SuppressionMatchType, SuppressionScope } from "@leadwolf/types";
-import { type SQL, and, desc, eq, inArray, ne, or } from "drizzle-orm";
+import { type SQL, and, desc, eq, inArray, isNotNull, ne, or } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { suppressionList } from "../schema/billing.ts";
+import { contacts } from "../schema/contacts.ts";
 
 /** The identifying keys of the subject being checked; any present key can match a suppression row. */
 export interface SuppressionKeys {
@@ -47,6 +48,47 @@ export interface SuppressionListRow {
 
 export const suppressionRepository = {
   /** First matching suppression row visible to this scope, or null. Runs in the caller's transaction. */
+  /**
+   * SET-BASED suppression filter: which of these contacts are suppressed. One query, not one per contact —
+   * a per-row findMatch over a 10k-row export is 10k round-trips, which is how a correctness check gets
+   * quietly dropped for being "too slow".
+   *
+   * Matches on the SAME three rungs as findMatch, and matching all three matters: contact_id alone
+   * under-suppresses badly, because the common case is a person suppressed by EMAIL whose workspace copy has
+   * no suppression row of its own. The email blind index is read from `contacts` rather than from a caller's
+   * masked DTO precisely so that rung is available — a masked row has no blind index, and filtering on
+   * contact_id + domain only would look correct while missing most real suppressions.
+   *
+   * Scope comes from RLS, exactly as findMatch documents: the read policy exposes global + this tenant + this
+   * workspace and nothing else. This MUST therefore run inside withTenantTx. The owner/privileged path bypasses
+   * RLS and needs findMatchExplicit's explicit predicate instead — do not reuse this one there.
+   */
+  async suppressedContactIds(tx: Tx, contactIds: readonly string[]): Promise<Set<string>> {
+    if (contactIds.length === 0) return new Set();
+    // Drizzle's query builder, NOT a raw string — the ids are database-sourced today, but building SQL by
+    // concatenation is the pattern that turns a future caller passing user input into an injection. Parameter
+    // binding costs nothing here and removes the question entirely.
+    const rows = await tx
+      .selectDistinct({ id: contacts.id })
+      .from(contacts)
+      .innerJoin(
+        suppressionList,
+        or(
+          eq(suppressionList.contactId, contacts.id),
+          and(
+            isNotNull(suppressionList.emailBlindIndex),
+            eq(suppressionList.emailBlindIndex, contacts.emailBlindIndex),
+          ),
+          and(
+            isNotNull(suppressionList.domain),
+            eq(suppressionList.domain, contacts.emailDomain),
+          ),
+        ) as SQL,
+      )
+      .where(inArray(contacts.id, [...contactIds]));
+    return new Set(rows.map((r) => r.id));
+  },
+
   async findMatch(tx: Tx, keys: SuppressionKeys): Promise<SuppressionHit | null> {
     const matches: SQL[] = [];
     if (keys.contactId) matches.push(eq(suppressionList.contactId, keys.contactId));

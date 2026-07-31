@@ -402,14 +402,31 @@ export async function bulkExportCsv(
   }
   return withBulkTx(input.scope, async (tx) => {
     const ids = await resolveVisibleSelection(tx, input.scope.tenantId, input);
-    const rows = await contactRepository.listMaskedByIds(tx, ids);
+
+    // Suppression at THIS egress (08 invariant 3; 09 § Data-subject rights: "suppression service enforced at
+    // every egress"). This path was previously unchecked — the revealed export is gated because it routes
+    // through revealContact, but the MASKED export bypassed that entirely. Masked is not anonymous: it carries
+    // name, job title, company domain and location, which is personal data for a person who asked us to stop.
+    // Set-based, not per row: a per-contact match over a 10k export is 10k round-trips, and a correctness check
+    // that is too slow to run is one that eventually gets removed.
+    const suppressed = await suppressionRepository.suppressedContactIds(tx, ids);
+    const exportable = ids.filter((id) => !suppressed.has(id));
+    const rows = await contactRepository.listMaskedByIds(tx, exportable);
+
     await writeAudit(tx, {
       tenantId: input.scope.tenantId,
       workspaceId: input.scope.workspaceId,
       actorUserId: input.callerUserId,
       action: "export",
       entityType: "contact",
-      metadata: { bulk: "export_csv", affected: rows.length },
+      // The excluded count is audited, not silently dropped: an export that quietly returns fewer rows than
+      // the user selected is indistinguishable from a bug, and a compliance exclusion is exactly the thing an
+      // auditor asks to see evidence of.
+      metadata: {
+        bulk: "export_csv",
+        affected: rows.length,
+        suppressedExcluded: suppressed.size,
+      },
     });
     return { csv: toCsv(rows), affected: rows.length };
   });
