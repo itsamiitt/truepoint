@@ -17,6 +17,68 @@ const base = {
   chargeRisky: true,
 };
 
+// ── S-12: "already owned" vs "there is nothing here" ────────────────────────────────────────────────────────
+// These were the same output until missingFields/nothingToReveal existed, which is why revealing a contact with
+// no email shows the user "Already owned — no credits charged" (RevealCell.tsx, RevealDialog.tsx). Both cost
+// zero, so no billing test could ever have caught it — only a test that asks WHY it cost zero.
+describe("revealCharge — a missing field is not an owned field", () => {
+  test("email reveal on a contact with no email reports a miss, not ownership", () => {
+    const r = revealCharge({ ...base, hasEmail: false, revealType: "email" });
+    expect(r.cost).toBe(0);
+    expect(r.missingFields).toEqual(["email"]);
+    expect(r.nothingToReveal).toBe(true);
+    expect(r.newFields).toEqual([]);
+  });
+
+  test("a genuine re-reveal is owned, and misses nothing", () => {
+    const r = revealCharge({ ...base, ownedEmail: true, revealType: "email" });
+    expect(r.cost).toBe(0);
+    expect(r.alreadyOwned).toBe(true);
+    expect(r.missingFields).toEqual([]);
+    expect(r.nothingToReveal).toBe(false);
+  });
+
+  test("full_profile on a contact with neither field is entirely a miss", () => {
+    const r = revealCharge({
+      ...base,
+      hasEmail: false,
+      hasPhone: false,
+      revealType: "full_profile",
+    });
+    expect(r.missingFields.sort()).toEqual(["email", "phone"]);
+    expect(r.nothingToReveal).toBe(true);
+  });
+
+  test("a partial record is NOT nothingToReveal — it exposed something", () => {
+    // The distinction that makes the flag safe to branch on: one field missing and one revealed is a
+    // successful reveal that happens to have a gap, not an empty record.
+    const r = revealCharge({ ...base, hasPhone: false, revealType: "full_profile" });
+    expect(r.newFields).toEqual(["email"]);
+    expect(r.missingFields).toEqual(["phone"]);
+    expect(r.nothingToReveal).toBe(false);
+  });
+
+  test("owned-plus-missing is not nothingToReveal either", () => {
+    const r = revealCharge({
+      ...base,
+      hasPhone: false,
+      ownedEmail: true,
+      revealType: "full_profile",
+    });
+    expect(r.newFields).toEqual([]);
+    expect(r.alreadyOwned).toBe(true); // nothing new exposed
+    expect(r.missingFields).toEqual(["phone"]);
+    expect(r.nothingToReveal).toBe(false); // but the email WAS owned, so the record is not empty
+  });
+
+  test("a phone reveal ignores a missing email — it never asked for one", () => {
+    const r = revealCharge({ ...base, hasEmail: false, revealType: "phone" });
+    expect(r.missingFields).toEqual([]);
+    expect(r.nothingToReveal).toBe(false);
+    expect(r.newFields).toEqual(["phone"]);
+  });
+});
+
 describe("revealCharge — nothing owned yet", () => {
   test("email reveal charges the email price", () => {
     const r = revealCharge({ ...base, revealType: "email" });
