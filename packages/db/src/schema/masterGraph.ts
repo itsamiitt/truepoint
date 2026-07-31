@@ -124,6 +124,14 @@ export const masterPersons = pgTable(
     region: char("region", { length: 2 }),
     jurisdiction: char("jurisdiction", { length: 2 }),
     blockKey: varchar("block_key", { length: 255 }), // [RESERVED, UNINDEXED — PLAN_01 §2.8] ER blocking key
+    // ER merge tombstone (Phase 2, migration 0096): the survivor this person was merged into, set ONCE at
+    // merge commit and never cleared. Mirrors contacts.merged_into_contact_id. Provenance is NOT re-pointed —
+    // provenance_event is append-only, so a merge APPENDS an action='merge' event and the reader follows the
+    // hop. Evidence stays attached to the entity that made it, which is what keeps the log auditable.
+    mergedIntoPersonId: uuid("merged_into_person_id").references((): AnyPgColumn => masterPersons.id, {
+      onDelete: "set null",
+    }),
+    mergedAt: timestamp("merged_at", { withTimezone: true }),
     fieldProvenance: jsonb("field_provenance").notNull().default({}), // [C6 seam — PLAN_03 §3.2]
     provHwm: timestamp("prov_hwm", { withTimezone: true }),
     createdAt: createdAt(),
@@ -137,6 +145,17 @@ export const masterPersons = pgTable(
       "master_persons_seniority_enum",
       sql`${t.seniorityLevel} IS NULL OR ${t.seniorityLevel} IN ${SENIORITY_LEVELS}`,
     ),
+    // ER merge tombstone (Phase 2). Self-merge is a caller bug that would create a record resolving to
+    // itself forever, so the database refuses it rather than trusting the survivor/loser choice.
+    mergeNotSelf: check(
+      "master_persons_merge_not_self",
+      sql`${t.mergedIntoPersonId} IS NULL OR ${t.mergedIntoPersonId} <> ${t.id}`,
+    ),
+    // The "resolve a merged id -> survivor" hop. Partial: only tombstoned rows, so it stays tiny against a
+    // table sized for billions of live ones.
+    mergedIntoIdx: index("idx_master_persons_merged_into")
+      .on(t.mergedIntoPersonId)
+      .where(sql`${t.mergedIntoPersonId} IS NOT NULL`),
     dataQualityRange: check(
       "master_persons_data_quality_range",
       sql`${t.dataQualityScore} IS NULL OR ${t.dataQualityScore} BETWEEN 0 AND 100`,

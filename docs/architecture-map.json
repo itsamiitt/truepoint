@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1967,
-  "fileSetHash": "sha256:ce344a29722319d2d2dbdc582898681c01d27f57081b3ba290617c3d9f94d14b",
+  "fileCount": 1968,
+  "fileSetHash": "sha256:4f9fe8af6eeb0bc9217469be3bd1d228d15d0aeb3cf610f1eec6c93d72898a02",
   "features": {
     "account-search": {
       "web": [],
@@ -2824,6 +2824,7 @@
       "packages/db/test/emailIsolation.itest.ts",
       "packages/db/test/enrichmentJobStatus.itest.ts",
       "packages/db/test/enrichmentPolicy.itest.ts",
+      "packages/db/test/erMerge.itest.ts",
       "packages/db/test/featureFlags.itest.ts",
       "packages/db/test/fieldProvenancePin.itest.ts",
       "packages/db/test/forgeAuditChain.itest.ts",

@@ -12,7 +12,7 @@
 // not_compared for now, so v1 scores conservatively on linkedin + name + company + title (fewer, higher-precision
 // proposals — the right bias for a SHADOW proposer). Every read is bounded (no unbounded master-graph scan).
 
-import { type SQL, and, asc, eq, gt, ne } from "drizzle-orm";
+import { type SQL, and, asc, eq, gt, ne, sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { masterPersons, matchLinks, sourceRecords } from "../schema/masterGraph.ts";
 
@@ -139,5 +139,74 @@ export const erRepository = {
       // isDuplicateOf intentionally left NULL — a PROPOSAL for review, never a re-point/merge.
     });
     return true;
+  },
+
+  /**
+   * Commit a reviewed match: merge `loserId` into `survivorId` (06-roadmap Phase 2 "merge with provenance
+   * retention"; outcome A-04). ONE transaction — a half-merge is worse than no merge, because the loser would
+   * be tombstoned while its evidence still resolved to it.
+   *
+   * PROVENANCE IS RETAINED, NOT RE-POINTED. provenance_event is append-only (its trigger refuses UPDATE for
+   * every role), so this cannot rewrite the loser's assertions onto the survivor — and should not want to.
+   * The evidence stays attached to the entity that actually made it, and the merge is recorded as an
+   * `action='merge'` event that the reader follows as a hop. A rewritten log cannot show you what it used to
+   * say, which is exactly the question an A-04 audit asks a year later.
+   *
+   * What DOES move is the resolution pointer: source_records.resolved_person_id and match_links.cluster_id,
+   * so future lookups land on the survivor. Those are current-state caches, not history.
+   *
+   * IDEMPOTENT: an already-merged loser returns `merged: false` and touches nothing, so a replayed confirm (a
+   * double-click, a retried job) cannot merge twice or append a second merge event.
+   */
+  async confirmMerge(
+    tx: Tx,
+    input: { survivorId: string; loserId: string; lawfulBasis: string; contributorRef?: string | null },
+  ): Promise<{ merged: boolean; movedSourceRecords: number }> {
+    if (input.survivorId === input.loserId) {
+      // The DB CHECK would refuse this too; failing here names the caller's bug instead of a constraint.
+      throw new Error("confirmMerge: survivor and loser are the same person");
+    }
+
+    const [loser] = await tx
+      .select({ id: masterPersons.id, mergedInto: masterPersons.mergedIntoPersonId })
+      .from(masterPersons)
+      .where(eq(masterPersons.id, input.loserId))
+      .limit(1);
+    if (!loser || loser.mergedInto) return { merged: false, movedSourceRecords: 0 };
+
+    // 1) Re-point the CURRENT-STATE resolution caches so future lookups land on the survivor.
+    const moved = await tx
+      .update(sourceRecords)
+      .set({ resolvedPersonId: input.survivorId })
+      .where(eq(sourceRecords.resolvedPersonId, input.loserId))
+      .returning({ id: sourceRecords.id });
+    await tx
+      .update(matchLinks)
+      .set({ clusterId: input.survivorId, reviewStatus: "confirmed" })
+      .where(and(eq(matchLinks.clusterId, input.loserId), eq(matchLinks.entityType, "person")));
+
+    // 2) Tombstone the loser. Set ONCE, never cleared — there is no unmerge, and pretending otherwise would
+    //    invite a caller to try.
+    await tx
+      .update(masterPersons)
+      .set({ mergedIntoPersonId: input.survivorId, mergedAt: new Date() })
+      .where(eq(masterPersons.id, input.loserId));
+
+    // 3) Append the merge to the evidence log on BOTH sides. Two events, not one: reading the loser must show
+    //    where it went, and reading the survivor must show that it absorbed something — a single event would
+    //    make one of those two reads silently incomplete.
+    const basis = input.lawfulBasis;
+    const ref = input.contributorRef ?? null;
+    await tx.execute(sql`
+      INSERT INTO provenance_event
+        (entity_type, entity_id, field, action, source_type, method, contributor_ref, lawful_basis, payload)
+      VALUES
+        ('person', ${input.loserId}::uuid,    '*', 'merge', 'forge', 'er_confirm', ${ref}::uuid, ${basis},
+         ${JSON.stringify({ mergedInto: input.survivorId })}::jsonb),
+        ('person', ${input.survivorId}::uuid, '*', 'merge', 'forge', 'er_confirm', ${ref}::uuid, ${basis},
+         ${JSON.stringify({ absorbed: input.loserId })}::jsonb)
+    `);
+
+    return { merged: true, movedSourceRecords: moved.length };
   },
 };

@@ -1,0 +1,5 @@
+ALTER TABLE "master_persons" ADD COLUMN "merged_into_person_id" uuid;--> statement-breakpoint
+ALTER TABLE "master_persons" ADD COLUMN "merged_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "master_persons" ADD CONSTRAINT "master_persons_merged_into_person_id_master_persons_id_fk" FOREIGN KEY ("merged_into_person_id") REFERENCES "public"."master_persons"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "idx_master_persons_merged_into" ON "master_persons" USING btree ("merged_into_person_id") WHERE "master_persons"."merged_into_person_id" IS NOT NULL;--> statement-breakpoint
+ALTER TABLE "master_persons" ADD CONSTRAINT "master_persons_merge_not_self" CHECK ("master_persons"."merged_into_person_id" IS NULL OR "master_persons"."merged_into_person_id" <> "master_persons"."id");
