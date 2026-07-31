@@ -70,12 +70,16 @@ beforeAll(async () => {
     VALUES
       (${tenantId}, ${workspaceId}, ${cid(0)}, ${alice}, 'email', 3, '2026-03-10T20:00:00Z'),
       (${tenantId}, ${workspaceId}, ${cid(2)}, ${bob},   'phone', 1, '2026-03-12T06:00:00Z')`;
-});
+  // 180s, like every sibling: this hook provisions a database, runs the migration chain and seeds fixtures.
+  // Without the argument it inherits bun's 5s default and fails on setup cost rather than on an assertion.
+}, 180_000);
 
 afterAll(async () => {
+  // Optional-chained: when beforeAll times out these are undefined, and an unguarded call throws a TypeError
+  // that REPLACES the real failure — which is how a hook timeout presented as "undefined is not an object".
   await db?.closeDb?.();
-  await admin.end({ timeout: 5 });
-  await dbHandle.stop();
+  await admin?.end({ timeout: 5 });
+  await dbHandle?.stop();
 });
 
 const filters = (

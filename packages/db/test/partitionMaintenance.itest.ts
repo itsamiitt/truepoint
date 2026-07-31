@@ -66,6 +66,27 @@ const ensure = async (parent: string, monthsAhead?: number): Promise<number> => 
   return Number(rows[0]?.created ?? -1);
 };
 
+/**
+ * The message `ensure` threw, or "" if it did not — an explicit try/catch rather than expect(...).rejects.
+ *
+ * This is the lesson activitiesPartitioned.itest.ts already writes down and this file did not follow: handing
+ * a postgres.js query to `.rejects` risks leaving it unsettled on the single pooled connection (max: 1). The
+ * failure is not a wrong assertion, it is a HANG — and not only of the assertion itself. Every later query in
+ * the file queues behind the stuck connection, which is why the third failing test here was a plain SELECT
+ * that never touched `.rejects` at all, and why teardown timed out after it.
+ *
+ * The function under test is fine: `SELECT ensure_month_partitions('plainy'::regclass, 1)` raises "is not a
+ * partitioned table" instantly against a real server. Only the harness was broken.
+ */
+const ensureError = async (parent: string, monthsAhead?: number): Promise<string> => {
+  try {
+    await ensure(parent, monthsAhead);
+    return "";
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+};
+
 describe("ensure_month_partitions", () => {
   test("creates the current month plus months_ahead, inclusive", async () => {
     await makeParent("basic");
@@ -128,12 +149,12 @@ describe("ensure_month_partitions", () => {
     // Doing nothing here would let a half-finished conversion look maintained — the sweep would report
     // success every day for a table with no partitions at all.
     await sql.unsafe("CREATE TABLE pm_probe.not_partitioned (id uuid PRIMARY KEY)");
-    await expect(ensure("not_partitioned", 1)).rejects.toThrow(/not a partitioned table/i);
+    expect(await ensureError("not_partitioned", 1)).toMatch(/not a partitioned table/i);
   });
 
   test("rejects a negative horizon rather than silently creating nothing", async () => {
     await makeParent("negative");
-    await expect(ensure("negative", -1)).rejects.toThrow(/months_ahead must be >= 0/i);
+    expect(await ensureError("negative", -1)).toMatch(/months_ahead must be >= 0/i);
   });
 
   test("is not granted to the tenant-facing role — creating a table is DDL", async () => {

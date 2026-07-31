@@ -34,6 +34,23 @@ let db: Db;
 
 const scope = (tenantId: string, workspaceId: string) => ({ tenantId, workspaceId });
 
+/**
+ * The message a merge threw, or "" if it did not — an explicit try/catch rather than expect(...).rejects.
+ *
+ * Same lesson activitiesPartitioned.itest.ts already records: handing a promise that holds a pooled
+ * connection to `.rejects` risks leaving it unsettled, and the symptom is a HANG rather than a failed
+ * assertion. runContactMerge runs inside withTenantTx, so a stuck one blocks every later query in the file —
+ * which is exactly how this file presented as two mystery timeouts.
+ */
+async function mergeError(run: () => Promise<unknown>): Promise<string> {
+  try {
+    await run();
+    return "";
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
 async function seedTenantWorkspace(slug: string) {
   const [t] = await admin`INSERT INTO tenants (name, slug) VALUES (${slug}, ${slug}) RETURNING id`;
   const tenantId = (t as { id: string }).id;
@@ -285,7 +302,7 @@ describe("S-C4 — T5 idempotent replay", () => {
       userId: s.ownerId,
     };
     await core.runContactMerge(input);
-    await expect(core.runContactMerge(input)).rejects.toThrow(/merged|deleted/i);
+    expect(await mergeError(() => core.runContactMerge(input))).toMatch(/merged|deleted/i);
     // Only one merge event was recorded.
     const e = one(
       (await admin`SELECT count(*)::int AS n FROM audit_log WHERE action = 'contact.merge' AND entity_id = ${survivor}`) as unknown as Array<{
@@ -302,15 +319,17 @@ describe("S-C4 — T2 isolation (IDOR)", () => {
     const s2 = await seedTenantWorkspace("merge-ws2");
     const survivor = await insertContact(s1, { first_name: "S" });
     const foreignLoser = await insertContact(s2, { first_name: "Foreign" });
-    await expect(
-      core.runContactMerge({
-        scope: scope(s1.tenantId, s1.workspaceId),
-        survivorContactId: survivor,
-        loserContactId: foreignLoser,
-        decisions: [],
-        userId: s1.ownerId,
-      }),
-    ).rejects.toThrow(/exist in this workspace/i);
+    expect(
+      await mergeError(() =>
+        core.runContactMerge({
+          scope: scope(s1.tenantId, s1.workspaceId),
+          survivorContactId: survivor,
+          loserContactId: foreignLoser,
+          decisions: [],
+          userId: s1.ownerId,
+        }),
+      ),
+    ).toMatch(/exist in this workspace/i);
     // Foreign loser untouched.
     const f = one(
       (await admin`SELECT deleted_at, merged_into_contact_id AS mi FROM contacts WHERE id = ${foreignLoser}`) as unknown as Array<{

@@ -83,6 +83,17 @@ news/social feeds. See 04-opportunity-scores.md.
 - **Integration tests** need Postgres. Default is Testcontainers (Docker); without Docker, point
   `ITEST_DATABASE_URL` at any superuser connection and each file clones its own database from a migrated
   template. Run each `.itest.ts` in its OWN process — the db client is a module singleton.
+  In external mode also export `DATABASE_APP_ROLE=leadwolf_app` +
+  `DATABASE_APP_ROLE_PASSWORD` (the applyMigrations default), or `withTenantTx` silently falls back to the
+  OWNER connection and the role-identity proofs fail with `session_user` = `postgres`. A few files need Redis
+  (session revocation) and are unrunnable without it.
+- **Never assert a rejected DB call with `expect(...).rejects`.** A promise holding a pooled connection can be
+  left unsettled, and the symptom is a HANG — of that assertion AND of every later query in the file, since
+  the itest pools are `max: 1`. Use an explicit try/catch that returns the error. This has bitten
+  partitionMaintenance, contactMerge and tags; activitiesPartitioned documents it at the call site.
+- **Every `beforeAll` that provisions a database needs `}, 180_000)`.** Without it the hook inherits bun's 5s
+  default and fails on setup cost, then the teardown throws a TypeError on the unassigned handle that REPLACES
+  the real error. Optional-chain the teardown so the cause survives.
 - **Repositories in `packages/db/src/repositories/` are the ONLY data-access layer.** Tenancy
   seams: `withTenantTx` / `withReplicaTx` / `withPrivilegedTx` / `withErTx` / `withForgeTx` /
   `withPlatformTx`.
