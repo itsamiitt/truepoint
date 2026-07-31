@@ -21,7 +21,15 @@ export const revealResponseSchema = z.object({
   emailStatus: z.string().optional(),
   creditsCharged: z.number().int().min(0),
   balanceAfter: z.number().int().min(0),
+  /** No NEW field was exposed. NOTE: this is also true when the record simply has no such field — check
+   *  `nothingToReveal` first, or a reveal of an empty record reads as a re-reveal (S-12). */
   alreadyOwned: z.boolean(),
+  /** Field(s) the reveal type asked for that the record does not carry at all — nothing was withheld, there
+   *  is nothing there. Optional so an older client keeps parsing this response unchanged. */
+  missingFields: z.array(z.string()).optional(),
+  /** Every asked-for field is missing: the record exposed nothing AND owned nothing. Branch on this BEFORE
+   *  `alreadyOwned` — otherwise the UI says "Already owned" about a contact we hold nothing for. */
+  nothingToReveal: z.boolean().optional(),
 });
 export type RevealResponse = z.infer<typeof revealResponseSchema>;
 

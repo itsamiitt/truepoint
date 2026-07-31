@@ -68,12 +68,19 @@ export function RevealCell({
     const res = await store.reveal(contact.id, field as RevealType);
     if (res.ok && res.result) {
       onRevealed?.(contact.id);
-      toast.success(
-        res.result.alreadyOwned ? "Already owned — no credits charged" : `${label} revealed`,
-        res.result.alreadyOwned
-          ? undefined
-          : `Charged ${res.result.creditsCharged} credit${res.result.creditsCharged === 1 ? "" : "s"}.`,
-      );
+      // `nothingToReveal` FIRST: `alreadyOwned` is also true when the record simply has no such field, so
+      // checking it first told the user they already owned a contact we hold nothing for (S-12).
+      if (res.result.nothingToReveal) {
+        // success tone, not error: nothing failed — we simply hold no such field for this contact.
+        toast.success(`No ${label.toLowerCase()} on file`, "Nothing was charged.");
+      } else {
+        toast.success(
+          res.result.alreadyOwned ? "Already owned — no credits charged" : `${label} revealed`,
+          res.result.alreadyOwned
+            ? undefined
+            : `Charged ${res.result.creditsCharged} credit${res.result.creditsCharged === 1 ? "" : "s"}.`,
+        );
+      }
     } else if (res.error && res.code !== undefined) {
       toast.error(
         res.code === "insufficient_credits" ? "Not enough credits" : "Reveal failed",

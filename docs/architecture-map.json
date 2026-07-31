@@ -102,8 +102,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1952,
-  "fileSetHash": "sha256:01c7b39b120e8475d78c97ea30d5de698f0327962d370cd83fd18530fb74f958",
+  "fileCount": 1953,
+  "fileSetHash": "sha256:bdebdbd11214027c67cfa52909af96c3dd9af99e85bcd3dcb0fca32ec21c83cc",
   "features": {
     "account-search": {
       "web": [],
@@ -3073,7 +3073,8 @@
     "apps/admin/next.config.mjs",
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
-    "apps/web/next.config.mjs"
+    "apps/web/next.config.mjs",
+    "packages/db/src/repositories/usageEventRepository.ts"
   ],
   "warnings": [
     "undeclared domain 'account-search' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",

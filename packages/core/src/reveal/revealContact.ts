@@ -14,6 +14,7 @@ import {
   creditRepository,
   eventOutboxRepository,
   revealRepository,
+  usageEventRepository,
   withTenantTx,
 } from "@leadwolf/db";
 import {
@@ -124,6 +125,9 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
     creditsCharged: number,
     balanceAfter: number,
     alreadyOwned: boolean,
+    // Optional so the two early-return paths (suppressed / already-claimed) need no extra argument: neither
+    // has computed a charge yet, and neither is a miss.
+    miss?: { missingFields: string[]; nothingToReveal: boolean },
   ): RevealResponse => ({
     contactId: contact.id,
     reveal_type: input.revealType,
@@ -133,6 +137,8 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
     creditsCharged,
     balanceAfter,
     alreadyOwned,
+    missingFields: miss?.missingFields ?? [],
+    nothingToReveal: miss?.nothingToReveal ?? false,
   });
 
   try {
@@ -307,9 +313,35 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
         });
       }
 
+      // Outcome metering (08 § Instrumentation), INSIDE this tx so a reveal that commits is always counted —
+      // a metric written separately can be lost while the action survives, and the reveal-hit rate is the
+      // number Phase 1's kill criterion is judged on. A miss is recorded as its own action rather than a
+      // reveal with cost 0, because "we had nothing" is the demand signal the most-wanted feed runs on.
+      // Dark until USAGE_EVENTS_ENABLED; while off there are zero extra writes.
+      if (env.USAGE_EVENTS_ENABLED) {
+        await usageEventRepository.append(tx, {
+          tenantId: input.scope.tenantId,
+          workspaceId: input.scope.workspaceId,
+          userId: input.userId,
+          action: charge.nothingToReveal ? "reveal_miss" : "reveal",
+          subjectType: "contact",
+          // The contact exists either way, so the id is safe to record — this is not the anonymous
+          // context-fingerprint case (that is the extension's by-linkedin lookup, S-12's M1).
+          subjectId: contact.id,
+          demandedFields: charge.missingFields.length > 0 ? charge.missingFields : null,
+          entitlementKey: "reveal_month",
+          // PII-free: the reveal TYPE and what was missing, never a value.
+          metadata: { revealType: input.revealType, creditsCharged: cost },
+        });
+      }
+
       // alreadyOwned is true only when the reveal exposed NO new field (a redundant full_profile over an
-      // already-owned email+phone still records the type claim but charges 0).
-      return buildResponse(cost, balanceAfter, charge.alreadyOwned);
+      // already-owned email+phone still records the type claim but charges 0). It is ALSO true when the record
+      // carries no such field at all, which is why the response now carries the miss shape alongside it.
+      return buildResponse(cost, balanceAfter, charge.alreadyOwned, {
+        missingFields: charge.missingFields,
+        nothingToReveal: charge.nothingToReveal,
+      });
     });
   } catch (err) {
     // The suppression throw rolled the reveal tx back — record the blocked attempt in its OWN tx so the

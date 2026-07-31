@@ -51,12 +51,18 @@ export function RevealDialog({
     const res = await run(contact.id, revealType);
     if (res) {
       onRevealed(contact.id);
-      toast.success(
-        res.alreadyOwned ? "Already owned — no credits charged" : "Contact revealed",
-        res.alreadyOwned
-          ? undefined
-          : `Charged ${res.creditsCharged} credit${res.creditsCharged === 1 ? "" : "s"}.`,
-      );
+      // `nothingToReveal` is checked FIRST: `alreadyOwned` is also true when the record carries no such field,
+      // so the old order told the user they already owned a contact we hold nothing for (S-12).
+      if (res.nothingToReveal) {
+        toast.success("Nothing on file for this contact", "Nothing was charged.");
+      } else {
+        toast.success(
+          res.alreadyOwned ? "Already owned — no credits charged" : "Contact revealed",
+          res.alreadyOwned
+            ? undefined
+            : `Charged ${res.creditsCharged} credit${res.creditsCharged === 1 ? "" : "s"}.`,
+        );
+      }
     }
   }
 
@@ -152,9 +158,11 @@ export function RevealDialog({
             )}
           </dl>
           <p className={styles.revealMeta}>
-            {result.alreadyOwned
-              ? "Already owned in this workspace — no credits charged."
-              : `Charged ${result.creditsCharged} credit${result.creditsCharged === 1 ? "" : "s"}.`}{" "}
+            {result.nothingToReveal
+              ? "We hold no contact data for this record — no credits charged."
+              : result.alreadyOwned
+                ? "Already owned in this workspace — no credits charged."
+                : `Charged ${result.creditsCharged} credit${result.creditsCharged === 1 ? "" : "s"}.`}{" "}
             Balance: <strong>{result.balanceAfter.toLocaleString()}</strong> credits.
           </p>
         </>

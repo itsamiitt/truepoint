@@ -187,6 +187,13 @@ export {
   type SourceRecordInput,
   type MatchLinkInput,
 } from "./repositories/evidenceRepository.ts";
+// The outcome-metric substrate (Phase 1). Appends ride inside the caller's tenant tx — a metric written in its
+// own transaction can be lost while the action it records commits.
+export {
+  usageEventRepository,
+  type UsageAction,
+  type UsageEventInput,
+} from "./repositories/usageEventRepository.ts";
 // Survivorship projector data access (prospect-database-platform I1 / Phase 05) — drains projection_outbox + writes
 // the shadow seams (data_quality_score, prov_hwm) on the golden row; NEVER the authoritative scalar columns.
 export {
