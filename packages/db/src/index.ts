@@ -194,6 +194,12 @@ export {
   type UsageAction,
   type UsageEventInput,
 } from "./repositories/usageEventRepository.ts";
+// Read-only on the app path by construction: rls/entitlement.sql grants a SELECT policy and NO write policy
+// under FORCE RLS, so the app role cannot grant itself a cap whatever a caller asks for.
+export {
+  entitlementRepository,
+  type EntitlementRow,
+} from "./repositories/entitlementRepository.ts";
 // Survivorship projector data access (prospect-database-platform I1 / Phase 05) — drains projection_outbox + writes
 // the shadow seams (data_quality_score, prov_hwm) on the golden row; NEVER the authoritative scalar columns.
 export {

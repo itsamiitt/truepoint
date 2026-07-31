@@ -1008,6 +1008,22 @@ export {
   type BuildPhoneChannelInput,
 } from "./channels/channelDualWrite.ts";
 
+// Tier entitlements (Phase 1 S-09/S-10, 06-roadmap "Free caps enforced"): the PURE cap decision plus the dual
+// gate. A cap layer ABOVE the reveal-credit ledger, never a replacement (decision D2) — nothing here reads or
+// writes a balance. The enforce half fails to SHADOW rather than to enforce, so an unreadable flag can never
+// start refusing paid requests on its own.
+export {
+  resolveEntitlement,
+  periodFor,
+  type EntitlementGrant,
+  type EntitlementDecision,
+} from "./entitlements/resolveEntitlement.ts";
+export {
+  isEntitlementEnforced,
+  entitlementEnforcedForScope,
+  ENTITLEMENTS_ENFORCED_FLAG_KEY,
+} from "./entitlements/entitlementGate.ts";
+
 // S-CH4 read cutover (import-and-data-model-redesign 05 §5/§Implementation Steps): the COMPOSED read gate —
 // env CHANNEL_READ_FROM_CHILD AND the full S-CH2 dual-write gate AND the `channels_read` tenant flag (read
 // implies dual-write, fail-closed at every layer). Every cut-over read surface consults exactly this

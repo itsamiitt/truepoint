@@ -40,6 +40,7 @@ import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { idempotency } from "../../middleware/idempotency.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
+import { requireEntitlement } from "../../middleware/requireEntitlement.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { revealRateLimit } from "../../middleware/revealRateLimit.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
@@ -94,9 +95,14 @@ revealRoutes.get("/", async (c) => {
 // The single monetized path (09 §3.2): idempotent, suppression-gated, charged against the tenant counter.
 // Role-gated to member+ (a viewer must never spend tenant credits) and burst-throttled per caller ON TOP of the
 // coarse /api limiter — the credit-safety guards the audit flagged as missing on the money endpoint.
+// requireEntitlement runs BEFORE the throttle and the idempotency store on purpose: a request the tenant's
+// plan does not cover should not consume a rate-limit token, and must never be recorded as an idempotent
+// response — a cached refusal would keep being replayed after the tenant upgraded. Pass-through unless
+// ENTITLEMENTS_ENABLED, and shadow-only until the per-tenant flag flips.
 revealRoutes.post(
   "/:id/reveal",
   requireRole("owner", "admin", "member"),
+  requireEntitlement("reveal_month"),
   revealRateLimit,
   idempotency,
   async (c) => {

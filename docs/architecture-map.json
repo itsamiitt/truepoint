@@ -42,6 +42,7 @@
     "email",
     "enrichment",
     "enrichment-jobs",
+    "entitlements",
     "er",
     "events",
     "export",
@@ -102,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1954,
-  "fileSetHash": "sha256:2c6f619071550ab1d815d607c693446ff57611afb335e47749721c8741db4804",
+  "fileCount": 1959,
+  "fileSetHash": "sha256:09689f34c65b0e31ba2cf2e694440eed4b764ab65c6359abd041c7a6e46677bf",
   "features": {
     "account-search": {
       "web": [],
@@ -822,6 +823,19 @@
       "db": [
         "packages/db/src/repositories/enrichmentJobRepository.ts"
       ],
+      "workers": [],
+      "integrations": []
+    },
+    "entitlements": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/entitlements/entitlementGate.ts",
+        "packages/core/src/entitlements/resolveEntitlement.test.ts",
+        "packages/core/src/entitlements/resolveEntitlement.ts"
+      ],
+      "db": [],
       "workers": [],
       "integrations": []
     },
@@ -2218,6 +2232,7 @@
       "apps/api/src/middleware/rateLimit.ts",
       "apps/api/src/middleware/requestId.ts",
       "apps/api/src/middleware/requireCapability.ts",
+      "apps/api/src/middleware/requireEntitlement.ts",
       "apps/api/src/middleware/requireOrgRole.ts",
       "apps/api/src/middleware/requireRole.ts",
       "apps/api/src/middleware/requireStaffRole.ts",
@@ -3075,6 +3090,7 @@
     "apps/auth/next.config.mjs",
     "apps/auth/postcss.config.mjs",
     "apps/web/next.config.mjs",
+    "packages/db/src/repositories/entitlementRepository.ts",
     "packages/db/src/repositories/usageEventRepository.ts"
   ],
   "warnings": [
@@ -3096,6 +3112,7 @@
     "undeclared domain 'data-quality' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'email' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'enrichment-jobs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'entitlements' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'er' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'events' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'feature-flags' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
