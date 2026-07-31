@@ -189,9 +189,12 @@ describe("contributor anonymity (invariant 2) — the C-02 wall", () => {
       SELECT id FROM forge.contributor WHERE user_id = ${userId} AND channel = 'extension'`;
     const contributorId = (c as { id: string }).id;
 
+    // JSON.stringify + an explicit ::jsonb cast, matching client.ts: postgres.js does not accept a bare
+    // object as a bound parameter. It happened to work at runtime, which is exactly why only the test
+    // typecheck (tsconfig.typecheck.json — the root typecheck task does not cover test files) caught it.
     await admin`
       INSERT INTO forge.contributor_consent (contributor_id, scope, policy_version)
-      VALUES (${contributorId}, ${{ channels: ["extension"] }}, 'v1.0')`;
+      VALUES (${contributorId}, ${JSON.stringify({ channels: ["extension"] })}::jsonb, 'v1.0')`;
 
     const liveBefore = await admin`
       SELECT count(*)::int AS n FROM forge.contributor_consent

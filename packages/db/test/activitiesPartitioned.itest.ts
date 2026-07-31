@@ -19,15 +19,23 @@ import { type ItestDb, startItestDb } from "./itestDb.ts";
 let dbHandle: ItestDb;
 let sql: ReturnType<typeof postgres>;
 
+// The 180s timeout is not decoration: this hook provisions a database and runs the migration chain, which is
+// tens of seconds on a cold template and seconds even on a warm one. Without it the hook inherits bun's 5s
+// default and fails on setup cost rather than on anything it asserts — and then `sql` is never assigned, so
+// afterAll dies with "undefined is not an object" and buries the real cause. Every sibling itest passes this
+// argument; this file was the one that did not.
 beforeAll(async () => {
   dbHandle = await startItestDb("activities_partitioned");
   await applyMigrations(dbHandle.adminUrl);
   sql = postgres(dbHandle.adminUrl, { max: 1 });
-});
+}, 180_000);
 
 afterAll(async () => {
-  await sql.end({ timeout: 5 });
-  await dbHandle.stop();
+  // Optional-chained: if beforeAll failed, `sql` is undefined and an unguarded `.end()` throws a TypeError
+  // that REPLACES the real error in the output. That is how the actual cause here (a 5s hook timeout) stayed
+  // hidden behind "undefined is not an object".
+  await sql?.end({ timeout: 5 });
+  await dbHandle?.stop();
 });
 
 describe("activities after the partitioning conversion (0085)", () => {

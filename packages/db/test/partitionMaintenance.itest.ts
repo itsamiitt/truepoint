@@ -15,18 +15,23 @@ import { type ItestDb, startItestDb } from "./itestDb.ts";
 let dbHandle: ItestDb;
 let sql: ReturnType<typeof postgres>;
 
+// 180s, like every sibling itest: this hook provisions a database and runs the migration chain. Without the
+// argument it inherits bun's 5s default and fails on setup cost rather than on anything it asserts.
 beforeAll(async () => {
   dbHandle = await startItestDb("partition_maintenance");
   await applyMigrations(dbHandle.adminUrl);
   sql = postgres(dbHandle.adminUrl, { max: 1 });
   await sql`DROP SCHEMA IF EXISTS pm_probe CASCADE`;
   await sql`CREATE SCHEMA pm_probe`;
-});
+}, 180_000);
 
 afterAll(async () => {
-  await sql`DROP SCHEMA IF EXISTS pm_probe CASCADE`.catch(() => undefined);
-  await sql.end({ timeout: 5 });
-  await dbHandle.stop();
+  // Optional-chained: when beforeAll times out `sql` is undefined, and an unguarded call throws a TypeError
+  // that REPLACES the real failure in the output — which is exactly how the timeout stayed hidden here.
+  // NB: a tagged template cannot be optional-chained (`sql?.\`…\`` is a syntax error), so this is an if.
+  if (sql) await sql`DROP SCHEMA IF EXISTS pm_probe CASCADE`.catch(() => undefined);
+  await sql?.end({ timeout: 5 });
+  await dbHandle?.stop();
 });
 
 /** A fresh partitioned table with no partitions — the state a conversion leaves behind. */
