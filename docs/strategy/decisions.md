@@ -60,6 +60,28 @@ Four decisions taken (human, in-session), plus the recorded stack:
       retrofit debt) and spine-only (makes Phase 1's own kill criterion
       unmeasurable).
 
+  D5. CONTRIBUTOR IDENTITY LIVES IN THE `forge` SCHEMA (2026-07-31), not in a new
+      dedicated `provenance` schema+role. Reuses the shipped forge firewall: no
+      third least-privilege role to operate, and forge.raw_captures already
+      carries captured_by_user_id, the closest existing thing to contributor
+      identity. What this preserves and what it costs, stated so nobody has to
+      re-derive it:
+        HOLDS — the product-level C-02 promise. leadwolf_app (the customer role)
+        has no grant anywhere in the forge schema, so no request served to a user
+        can resolve a contributor by any query. Crucially leadwolf_er — the role
+        that WRITES provenance_event.contributor_ref — has no forge grant either,
+        so the path that records a ref cannot turn it back into a person. The ref
+        stays a bare uuid in `public` with no FK and no resolvable referent.
+        COSTS — blast-radius isolation. leadwolf_forge holds DML on ALL TABLES IN
+        SCHEMA forge plus ALTER DEFAULT PRIVILEGES, so every forge worker can read
+        contributor identity whether it needs to or not. A compromised or buggy
+        forge job therefore reaches further than it would have under a dedicated
+        role. Accepted trade, not an oversight. Revisiting it is a table move plus
+        a grant change, cheap because nothing in `public` references these tables.
+      contributorIsolation.itest.ts asserts BOTH halves — including the leadwolf_forge
+      read — so any future change to the posture surfaces as a failing test with a
+      reason attached rather than as silent drift.
+
 Stack recorded: Bun 1.3.14 + Turbo + Biome monorepo; Postgres 16 via Drizzle +
 postgres.js with hand-written RLS; Redis 7 + BullMQ; Hono on Bun; Next.js 15 +
 React 19. Commands: build `bun run build`, test `bun test`, lint `bun run lint`,

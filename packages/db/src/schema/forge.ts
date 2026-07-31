@@ -361,6 +361,64 @@ export const quarantine = forgeSchema.table(
   }),
 );
 
+// ── Contributor identity (08-architecture invariant 2) ────────────────────────────────────────────────
+// UNPOPULATED in Phase 1: the shape is settled now so it need not be added under load later, but no
+// contribution flow ships until Phase 3's consent UX and counsel review (09-compliance §5).
+//
+// `contributor.id` is what provenance_event.contributor_ref holds — opaque by construction. Nothing in
+// `public` has an FK here, leadwolf_app holds no grant anywhere in this schema, and leadwolf_er (the role
+// that WRITES provenance_event) holds none either, so the path that records a ref cannot resolve it back to
+// a person. That, not a code convention, is what makes C-02 structural. Homed here rather than in a
+// dedicated schema by human decision (decisions.md 2026-07-31 D5); the accepted cost is that every
+// leadwolf_forge worker can read these rows, since that role holds DML on all tables in the schema.
+export const contributor = forgeSchema.table(
+  "contributor",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    // The real identity, and the only place it exists in a contribution context. No FK into public: forge
+    // holds no reference to the overlay (the raw_captures.target_tenant_id precedent), so a tenant purge
+    // cannot reach in and cascade away audit-relevant rows.
+    userId: uuid("user_id").notNull(),
+    tenantId: uuid("tenant_id").notNull(),
+    channel: text("channel").notNull(),
+    status: text("status").notNull().default("active"),
+    // Phase 3 fraud defence (A-03). Nothing computes it in Phase 1; the default is neutral, not flattering.
+    reputation: numeric("reputation", { precision: 4, scale: 3 }).notNull().default("0.500"),
+    firstContributedAt: timestamp("first_contributed_at", { withTimezone: true }),
+    lastContributedAt: timestamp("last_contributed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    // One ref per (person, channel), NOT one per user: two channels from the same human yield two unlinkable
+    // refs in the event log, so correlating them requires reaching this table rather than reading events.
+    uniqUserChannel: uniqueIndex("uniq_forge_contributor_user_channel").on(t.userId, t.channel),
+  }),
+);
+
+// The C-05 sharing log. 09-compliance rule 5 wants consent that is explicit, granular, logged and REVOCABLE —
+// revocation stops future flow and is itself recorded, which is why revoked_at is a nullable column on a
+// retained row rather than a delete.
+export const contributorConsent = forgeSchema.table(
+  "contributor_consent",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    contributorId: uuid("contributor_id")
+      .notNull()
+      .references(() => contributor.id, { onDelete: "cascade" }),
+    scope: jsonb("scope").notNull().default({}), // per channel / per CRM object+field / exclusion lists
+    // Which published policy text the consent was given against. Without it a consent record cannot answer
+    // "what did they actually agree to" — the only question that matters in a dispute.
+    policyVersion: text("policy_version").notNull(),
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => ({
+    liveIdx: index("idx_forge_contributor_consent_live")
+      .on(t.contributorId)
+      .where(sql`${t.revokedAt} IS NULL`),
+  }),
+);
+
 export const forgeAuditLog = forgeSchema.table(
   "forge_audit_log",
   {
