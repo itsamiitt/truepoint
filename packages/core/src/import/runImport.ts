@@ -32,6 +32,8 @@ import type {
   ImportStrategy,
   ImportSummary,
   ImportTarget,
+  LawfulBasis,
+  ProvenanceEventDraft,
   RejectedRow,
   SourceName,
 } from "@leadwolf/types";
@@ -48,6 +50,8 @@ import { writeAudit } from "../compliance/writeAudit.ts";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
 import { markConflicts } from "../prospect/conflictDetect.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
+import { resolveLawfulBasis } from "../provenance/lawfulBasis.ts";
+import { planProvenanceEvents } from "../provenance/planEvents.ts";
 import { assertListInWorkspace } from "../prospect/lists.ts";
 import { type ValidationRuleSpec, runValidationRules } from "../validation/index.ts";
 import { type RawRow, mapRow } from "./columnMap.ts";
@@ -84,6 +88,14 @@ export interface RunImportInput {
    * (the client-supplied id is never trusted; list-plan D4). Absent = land in the overlay with no list linkage.
    */
   target?: ImportTarget;
+  /**
+   * The lawful basis this import's assertions are recorded under (09-compliance rule 4; decision D6). Read
+   * from `import_policy.lawful_basis` for the workspace by the caller — resolved ONCE per run rather than
+   * per row, since a per-row policy read would add a query to the hot import loop for a value that cannot
+   * change mid-run. Absent ⇒ `resolveLawfulBasis` falls back to the platform default (legitimate_interest).
+   * Consumed only when PROVENANCE_EVENTS_ENABLED is on.
+   */
+  lawfulBasis?: LawfulBasis;
 }
 
 /** The per-row landing outcome. `duplicate` = matched an existing contact and was held back under a `skip`
@@ -138,7 +150,9 @@ async function addLandedToList(
 }
 
 /** The Layer-0 golden ids a landing row resolves to. Both null when resolution was skipped or failed. */
-interface ResolvedMaster {
+/** Exported because it appears in `importProvenanceDrafts`'s signature — a non-exported type there is a
+ *  declaration-emit error (TS4023) even though `--noEmit` typechecking would not complain. */
+export interface ResolvedMaster {
   masterPersonId: string | null;
   masterCompanyId: string | null;
 }
@@ -181,11 +195,91 @@ async function resolveMasterForLanding(prepared: PreparedContact): Promise<Resol
 }
 
 /**
+ * Build the Layer-0 provenance drafts this import row asserts (08-architecture invariant 1; decision D8 —
+ * Phase 1 emits Layer-0 events only, because the overlay write path runs as leadwolf_app which holds no grant
+ * on provenance_event, and granting it would be a security decision rather than a wiring one).
+ *
+ * The person fields are the same CONTACT_PROVENANCE_FIELDS scalar subset the overlay pin protects, so one
+ * vocabulary describes both layers. The company assertion is name/domain — the only firmographics an import
+ * carries. `values` are passed so non-channel assertions record WHAT was claimed; email/phone are not among
+ * these fields, so no channel PII reaches the payload.
+ */
+export function importProvenanceDrafts(
+  input: RunImportInput,
+  resolved: ResolvedMaster,
+  prepared: PreparedContact,
+  sourceRecordId: string,
+): ProvenanceEventDraft[] {
+  // Resolved once per RUN by the caller (D6) — a per-row policy read would add a query to the hot import loop
+  // for a value that cannot change mid-run.
+  const lawfulBasis = resolveLawfulBasis({
+    sourceType: "import",
+    workspaceDefault: input.lawfulBasis,
+  });
+  const source = { src: `import:${input.sourceName}`, mth: "deterministic" };
+  const drafts: ProvenanceEventDraft[] = [];
+
+  if (resolved.masterPersonId) {
+    const personFields = Object.keys(prepared.values).filter(
+      (f) =>
+        (CONTACT_PROVENANCE_FIELDS as readonly string[]).includes(f) &&
+        (prepared.values as Record<string, unknown>)[f] != null,
+    );
+    drafts.push(
+      ...planProvenanceEvents({
+        context: {
+          entityType: "person",
+          entityId: resolved.masterPersonId,
+          sourceType: "import",
+          lawfulBasis,
+          sourceRecordId,
+        },
+        writableFields: personFields,
+        source,
+        values: prepared.values as Record<string, unknown>,
+      }),
+    );
+  }
+
+  if (resolved.masterCompanyId) {
+    const companyValues: Record<string, unknown> = {};
+    if (prepared.accountName) companyValues.name = prepared.accountName;
+    if (prepared.accountDomain) companyValues.domain = prepared.accountDomain;
+    drafts.push(
+      ...planProvenanceEvents({
+        context: {
+          entityType: "company",
+          entityId: resolved.masterCompanyId,
+          sourceType: "import",
+          lawfulBasis,
+          sourceRecordId,
+        },
+        writableFields: Object.keys(companyValues),
+        source,
+        values: companyValues,
+      }),
+    );
+  }
+  return drafts;
+}
+
+/**
  * I0 evidence dual-write (prospect-database-platform; audit P01), BEHIND INGESTION_EVIDENCE_ENABLED. Appends the
  * immutable source_records evidence row for this LANDED row + its match_links cluster membership, in their OWN
- * withErTx (the master-graph write role). NON-FATAL + idempotent (content-hash): a failure logs and never fails
- * the landing, and an identical re-ingest does not double-link. The shipped golden landing stays authoritative —
- * the survivorship projector reading this log is a SEPARATE, CI-parity-gated flip.
+ * withErTx (the master-graph write role). Idempotent on content-hash: an identical re-ingest does not double-link.
+ * The shipped golden landing stays authoritative — the survivorship projector reading this log is a SEPARATE,
+ * CI-parity-gated flip.
+ *
+ * FAILURE POSTURE CHANGES WITH THE PROVENANCE GATE (decision D7):
+ *   • gate OFF — unchanged: a failure logs and never fails the landing.
+ *   • gate ON  — a failure is FATAL to the row. An evidence transaction that fails took its provenance events
+ *     with it (same tx), and silently landing a row whose assertions were lost is precisely what makes
+ *     invariant 1 aspirational instead of true.
+ *
+ * HONEST LIMIT, so nobody reads more into this than it delivers: the master-graph MINT happens earlier, in
+ * resolveMasterForLanding's own withErTx. Events are therefore atomic with the EVIDENCE they derive from, not
+ * with the mint. Closing that gap means restructuring the resolve path — and note the mint is deliberately
+ * provenance-free anyway (masterGraphRepository's co-op-safe MATCH-AGAINST boundary writes nothing).
  */
 async function recordImportEvidence(
   input: RunImportInput,
@@ -194,6 +288,7 @@ async function recordImportEvidence(
   resolved: ResolvedMaster,
   prepared: PreparedContact,
 ): Promise<void> {
+  const emitEvents = env.PROVENANCE_EVENTS_ENABLED;
   try {
     await withErTx(async (tx) => {
       const ev = await evidenceRepository.appendSourceRecord(tx, {
@@ -234,8 +329,22 @@ async function recordImportEvidence(
           reason: "evidence_added",
         });
       }
+
+      // Field-grain assertions, in the SAME transaction as the evidence row they derive from (D7). Reached
+      // only past the `ev.created` guard above, which is exactly the idempotency contract appendProvenanceEvents
+      // documents: provenance_event is partitioned, so it has no unique index to fall back on, and appending
+      // off an already-seen payload would double every corroboration count — the signal behind confidence and
+      // the S-10 badge.
+      if (emitEvents) {
+        await evidenceRepository.appendProvenanceEvents(
+          tx,
+          importProvenanceDrafts(input, resolved, prepared, ev.id),
+        );
+      }
     });
   } catch (err) {
+    // D7: with provenance on, an evidence failure fails the row rather than being swallowed.
+    if (emitEvents) throw err;
     console.error("[import] evidence dual-write failed (non-fatal; flag-gated)", err);
   }
 }
