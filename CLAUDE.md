@@ -72,9 +72,17 @@ news/social feeds. See 04-opportunity-scores.md.
 - **Layout:** `apps/{web,admin,auth,api,workers,extension,forge,forge-api,forge-worker}` +
   `packages/{app-shell,auth,auth-client,config,core,db,forge-capture-sdk,forge-core,identity,
   integrations,search,types,ui}`.
-- **Build:** `bun run build` · **Test:** `bun test` · **Lint:** `bun run lint` ·
-  **Typecheck:** `bun run typecheck` · **Boundaries:** `bun run lint:boundaries` ·
-  **Migrate:** `bun run db:migrate`.
+- **Gates:** `bun run lint` · `bun run typecheck` (runs `typecheck` AND `typecheck:tests` — test files
+  are NOT covered by the plain task) · `bun test` · `bun run lint:boundaries` · `bun run lint:import-pii` ·
+  `bun run lint:lockfile` · `bun run db:migrate`.
+- **`bun run build` needs an environment.** `@leadwolf/config` validates at import, so a Next build with no
+  env dies with a bare `Required` list and a "Failed to collect page data" trace that names no cause. In
+  production the Dockerfile injects it via a BuildKit secret; locally, export the same placeholders
+  `test/setup.ts` uses — and note `AUTH_COOKIE_DOMAIN` must equal the `AUTH_ORIGIN` **host**, or the build
+  fails validation rather than compilation.
+- **Integration tests** need Postgres. Default is Testcontainers (Docker); without Docker, point
+  `ITEST_DATABASE_URL` at any superuser connection and each file clones its own database from a migrated
+  template. Run each `.itest.ts` in its OWN process — the db client is a module singleton.
 - **Repositories in `packages/db/src/repositories/` are the ONLY data-access layer.** Tenancy
   seams: `withTenantTx` / `withReplicaTx` / `withPrivilegedTx` / `withErTx` / `withForgeTx` /
   `withPlatformTx`.
