@@ -73,11 +73,23 @@ async function handle(
       await ctx.telemetry.event("reveal_click", { revealType: msg.revealType });
       try {
         const data = await ctx.api.reveal(msg.contactId, msg.revealType, crypto.randomUUID());
-        await ctx.telemetry.event("reveal_result", { outcome: "revealed" });
+        // Distinguish a reveal that EXPOSED something from one that found the record empty (S-12). Reported
+        // separately because "we hold nothing for this person" is the demand signal, and counting it as a
+        // successful reveal is what made reveal-hit rate unmeasurable in the first place.
+        await ctx.telemetry.event("reveal_result", {
+          outcome: data.nothingToReveal ? "nothing_to_reveal" : "revealed",
+        });
         // The reveal charged credits — update the pill from the server-authoritative post-charge balance.
         ctx.credits.applyReveal(data.balanceAfter);
         ctx.broadcast({ type: "STATE_CHANGED", state: await ctx.getState() });
-        return { ok: true, revealType: msg.revealType, email: data.email, phone: data.phone };
+        return {
+          ok: true,
+          revealType: msg.revealType,
+          email: data.email,
+          phone: data.phone,
+          verification: data.verification,
+          nothingToReveal: data.nothingToReveal,
+        };
       } catch (error) {
         const errorClass = error instanceof ApiError ? error.errorClass : "unexpected";
         await ctx.telemetry.error(errorClass, {});

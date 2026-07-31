@@ -138,7 +138,22 @@ export class ApiClient {
     contactId: string,
     revealType: RevealType,
     idempotencyKey: string,
-  ): Promise<{ email?: string; phone?: string; creditsCharged?: number; balanceAfter?: number }> {
+  ): Promise<{
+    email?: string;
+    phone?: string;
+    creditsCharged?: number;
+    balanceAfter?: number;
+    /** Confidence badge v0 (S-10) — "last verified <n> days ago · <k> sources". Optional: an older server
+     *  omits it, and `sourceCount: null` means we hold no evidence log for the record, which the panel
+     *  renders as no source clause rather than "0 sources". */
+    verification?: {
+      lastVerifiedAt: string | null;
+      sourceCount: number | null;
+      sourceDiversity: number | null;
+    };
+    /** Every asked-for field is missing — the record exposed nothing AND owned nothing (S-12). */
+    nothingToReveal?: boolean;
+  }> {
     return this.request(
       `/contacts/${encodeURIComponent(contactId)}/reveal`,
       { method: "POST", body: JSON.stringify({ reveal_type: revealType }) },

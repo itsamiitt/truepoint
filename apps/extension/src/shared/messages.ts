@@ -73,6 +73,22 @@ export interface RevealResponse {
   phone?: string;
   errorClass?: ErrorClass;
   message?: string;
+  /**
+   * Confidence badge v0 (06-roadmap Phase 1; outcome S-10): "last verified ⟨n⟩ days ago · ⟨k⟩ sources",
+   * shown in the app AND the extension. Optional so an older service worker or server simply omits it.
+   *
+   * `sourceCount: null` means we hold no evidence log for this record — NOT that no source vouched for it.
+   * The panel omits the source clause on null rather than rendering "0 sources", which would put a
+   * misleading confidence signal on every record until the provenance gate is on.
+   */
+  verification?: {
+    lastVerifiedAt: string | null;
+    sourceCount: number | null;
+    sourceDiversity: number | null;
+  };
+  /** Every asked-for field is missing: the record exposed nothing and owned nothing (S-12). Distinct from a
+   *  free re-reveal, which the panel must not describe as "nothing on file". */
+  nothingToReveal?: boolean;
 }
 
 /** Maps a request `type` to its response shape, so `bus.send()` is fully typed. */

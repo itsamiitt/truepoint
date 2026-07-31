@@ -21,6 +21,15 @@ export const en = {
   "card.noMatch": "No TruePoint match",
   "card.noMatchHint": "We couldn't find this profile.",
   "card.verified": "verified",
+  // Confidence badge v0 (S-10) + the S-12 empty-record case. Placeholders are substituted by the caller
+  // rather than interpolated here, so the catalogue stays plain strings a translator can read.
+  "card.verifiedToday": "Verified today",
+  "card.verifiedDaysAgo": "Verified {n} days ago",
+  "card.notVerified": "Not yet verified",
+  "card.sources": "{k} sources",
+  // Deliberately not "already owned": we hold nothing for this person, which is a different fact and the one
+  // the web UI used to get wrong.
+  "card.nothingOnFile": "Nothing on file for this contact",
   "card.suppressed": "Not available",
   "panel.captured": "Captured",
   "panel.reveal": "Reveal",

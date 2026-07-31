@@ -228,6 +228,12 @@ function RevealTab(): React.ReactElement {
   const [reveal, setReveal] = useState<{
     phase: "idle" | "busy" | "done" | "error";
     text?: string;
+    /** Badge v0 (S-10). Carried on the response so the panel needs no second round-trip. */
+    verification?: {
+      lastVerifiedAt: string | null;
+      sourceCount: number | null;
+      sourceDiversity: number | null;
+    };
   }>({
     phase: "idle",
   });
@@ -254,11 +260,19 @@ function RevealTab(): React.ReactElement {
     }
     setReveal({ phase: "busy" });
     const res = await send({ type: "REVEAL", contactId, revealType: "email" });
-    setReveal(
-      res.ok
-        ? { phase: "done", text: res.email ?? res.phone ?? t("card.revealed") }
-        : { phase: "error", text: revealError(res.errorClass) },
-    );
+    if (!res.ok) {
+      setReveal({ phase: "error", text: revealError(res.errorClass) });
+      return;
+    }
+    setReveal({
+      phase: "done",
+      // nothingToReveal FIRST: a record we hold no email for is not the same as a free re-reveal, and the
+      // web UI had the same bug — it told users they "already owned" a contact we had nothing for (S-12).
+      text: res.nothingToReveal
+        ? t("card.nothingOnFile")
+        : (res.email ?? res.phone ?? t("card.revealed")),
+      verification: res.verification,
+    });
   };
 
   return (
@@ -303,8 +317,48 @@ function RevealTab(): React.ReactElement {
           {reveal.text}
         </div>
       ) : null}
+
+      {/* Confidence badge v0 (S-10): "badge visible on 100% of reveals" is the acceptance criterion, and 09
+          names the same thing as a trust surface — "verified <n> days ago via <k> independent signals". */}
+      {reveal.phase === "done" && reveal.verification?.lastVerifiedAt ? (
+        <div style={{ ...muted, marginTop: 6 }}>{badgeLabel(reveal.verification)}</div>
+      ) : null}
     </div>
   );
+}
+
+/**
+ * Badge v0's text. Mirrors the web dialog exactly so the two surfaces cannot describe the same record
+ * differently — a badge that disagrees with the app is worse than no badge, because the user cannot tell
+ * which one is lying.
+ *
+ * The source clause is OMITTED when sourceCount is null, never rendered as "0 sources": null means we hold no
+ * evidence log for the record, which until the provenance gate is on is true of every record. Rendering a
+ * zero would stamp a misleading confidence signal across the whole database on the exact outcome (S-10) that
+ * exists to make trust visible.
+ */
+function badgeLabel(v: {
+  lastVerifiedAt: string | null;
+  sourceCount: number | null;
+}): string {
+  const days = ageDays(v.lastVerifiedAt);
+  const freshness =
+    days === null
+      ? t("card.notVerified")
+      : days === 0
+        ? t("card.verifiedToday")
+        : t("card.verifiedDaysAgo").replace("{n}", String(days));
+  if (v.sourceCount == null) return freshness;
+  return `${freshness} · ${t("card.sources").replace("{k}", String(v.sourceCount))}`;
+}
+
+/** Whole days since an ISO timestamp; null when absent or unparseable. Floors, never negative — the same
+ *  shape as @leadwolf/types' ageDaysSince, which the extension cannot import (it ships its own bundle). */
+function ageDays(iso: string | null): number | null {
+  if (!iso) return null;
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return null;
+  return Math.max(0, Math.floor((Date.now() - then.getTime()) / 86_400_000));
 }
 
 export function Panel(): React.ReactElement {
