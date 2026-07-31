@@ -237,10 +237,18 @@ describe("entitlement — readable by the app, never writable", () => {
   });
 
   test("the app role cannot grant itself an entitlement, raise a cap, or drop one", async () => {
-    // THE assertion in this file. All three are denied by the ABSENCE of a write policy under FORCE RLS, not
-    // by a grant — applyMigrations' blanket grant would have undone any REVOKE. If someone later adds an
-    // INSERT policy "for convenience", every cap in the product becomes advisory and this is what says so.
+    // THE assertion in this file, and the mechanism is NOT uniform — which is worth knowing, because the
+    // obvious version of this test (assert 42501 three times) FAILS, and failing for the wrong reason is how
+    // a security test gets "fixed" by weakening it.
+    //
+    // Under FORCE RLS with only a FOR SELECT policy:
+    //   INSERT raises 42501 — there is no policy to satisfy WITH CHECK, so the row is refused outright.
+    //   UPDATE and DELETE raise NOTHING. With no policy granting those commands, the rows are simply not
+    //   visible AS TARGETS, so the statement matches zero rows and reports success.
+    // Both outcomes are safe, but only one is loud. That means "no error" must never be read as "it worked",
+    // and the real proof is the STATE afterwards, which is what this asserts.
     const scope = { tenantId: tenantA, wsId: wsA };
+
     expect(
       await appCode(
         scope,
@@ -248,14 +256,19 @@ describe("entitlement — readable by the app, never writable", () => {
            VALUES ('${tenantA}', 'export_month', 999999, 'staff')`,
       ),
     ).toBe("42501");
-    expect(await appCode(scope, `UPDATE entitlement SET cap = 999999 WHERE key = 'reveal_month'`)).toBe(
-      "42501",
-    );
-    expect(await appCode(scope, `DELETE FROM entitlement WHERE key = 'reveal_month'`)).toBe("42501");
 
-    // The cap is untouched — the wall held, rather than merely erroring after the fact.
-    const [row] = await admin`SELECT cap FROM entitlement WHERE tenant_id = ${tenantA} AND key = 'reveal_month'`;
-    expect((row as { cap: number }).cap).toBe(25);
+    // Silent no-ops, not errors. Asserted explicitly so a future Postgres version that starts raising here
+    // shows up as a deliberate change rather than a surprise.
+    expect(await appCode(scope, `UPDATE entitlement SET cap = 999999 WHERE key = 'reveal_month'`)).toBe("");
+    expect(await appCode(scope, `DELETE FROM entitlement WHERE key = 'reveal_month'`)).toBe("");
+
+    // THE SECURITY PROPERTY: nothing moved. The cap is what the plan granted, the forged row never landed,
+    // and the row the app tried to delete is still there.
+    const rows = await admin`
+      SELECT key, cap FROM entitlement WHERE tenant_id = ${tenantA} ORDER BY key`;
+    const byKey = new Map(rows.map((r) => [(r as { key: string }).key, (r as { cap: number }).cap]));
+    expect(byKey.get("reveal_month")).toBe(25); // not raised to 999999, and not deleted
+    expect(byKey.has("export_month")).toBe(false); // the self-granted row never existed
   });
 
   test("cap 0 and cap NULL are different facts", async () => {
