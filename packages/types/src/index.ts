@@ -27,6 +27,9 @@ export * from "./billing.ts";
 export * from "./platformAudit.ts";
 export * from "./intel.ts";
 export * from "./dataHealth.ts";
+// FIELD-level confidence (Phase 2 decay curves). Distinct from dataHealth's RECORD-level quality score —
+// see the header of confidence.ts for why conflating them is the easy mistake.
+export * from "./confidence.ts";
 export * from "./reverification.ts";
 export * from "./workerQueues.ts";
 export * from "./enrichmentPolicy.ts";

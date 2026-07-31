@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1962,
-  "fileSetHash": "sha256:372417083eb05d1d21a554117962b246e251c8dc7a98548d0fcb6025ec4774cd",
+  "fileCount": 1964,
+  "fileSetHash": "sha256:1d9abb799490e186bfabae91683411d871bbf6384b2918056ed8f899f89f7ca0",
   "features": {
     "account-search": {
       "web": [],
@@ -2984,6 +2984,8 @@
       "packages/types/src/bulkReveal.ts",
       "packages/types/src/compliance.ts",
       "packages/types/src/complianceAdmin.ts",
+      "packages/types/src/confidence.test.ts",
+      "packages/types/src/confidence.ts",
       "packages/types/src/contactChannels.ts",
       "packages/types/src/contactMerge.ts",
       "packages/types/src/contacts.test.ts",
