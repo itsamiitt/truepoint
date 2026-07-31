@@ -33,10 +33,15 @@ let clean = "";
 
 const SUPPRESSED_INDEX = new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]);
 
-async function makeContact(firstName: string, blindIndex: Uint8Array | null, domain: string) {
+async function makeContact(
+  firstName: string,
+  blindIndex: Uint8Array | null,
+  domain: string,
+  jobTitle: string | null = null,
+) {
   const [row] = await admin`
-    INSERT INTO contacts (tenant_id, workspace_id, first_name, email_blind_index, email_domain)
-    VALUES (${tenantId}, ${wsId}, ${firstName}, ${blindIndex}, ${domain})
+    INSERT INTO contacts (tenant_id, workspace_id, first_name, email_blind_index, email_domain, job_title)
+    VALUES (${tenantId}, ${wsId}, ${firstName}, ${blindIndex}, ${domain}, ${jobTitle})
     RETURNING id`;
   return (row as { id: string }).id;
 }
@@ -61,9 +66,11 @@ beforeAll(async () => {
   wsId = (w as { id: string }).id;
 
   byContactId = await makeContact("ByContact", new Uint8Array([1, 1, 1, 1]), "one.test");
-  byEmailIndex = await makeContact("ByEmail", SUPPRESSED_INDEX, "two.test");
+  // A title held ONLY by a suppressed contact — so the typeahead assertion is real rather than vacuous. If
+  // suggest leaked, this value would come back with a count of 1 and confirm the person exists.
+  byEmailIndex = await makeContact("ByEmail", SUPPRESSED_INDEX, "two.test", "SuppressedOnlyTitle");
   byDomain = await makeContact("ByDomain", new Uint8Array([3, 3, 3, 3]), "blocked.test");
-  clean = await makeContact("Clean", new Uint8Array([4, 4, 4, 4]), "four.test");
+  clean = await makeContact("Clean", new Uint8Array([4, 4, 4, 4]), "four.test", "Visible Title");
 
   // One suppression row per rung.
   await admin`
@@ -128,6 +135,45 @@ describe("suppressedContactIds — the export egress filter", () => {
       dbmod.suppressionRepository.suppressedContactIds(tx, [noKeys, clean]),
     );
     expect(ids.size).toBe(0);
+  });
+
+  test("search, counts and typeahead all exclude suppressed subjects", async () => {
+    // Invariant 3 at the OTHER egress. Applied as a predicate inside buildWhere rather than a post-filter,
+    // because search is keyset-paginated — filtering after the page is built returns short pages and makes the
+    // cursor lie. buildWhere is also the single chokepoint for results AND facet counts, so a count that
+    // included suppressed rows while the list excluded them is structurally impossible.
+    const emptyQuery = { filters: [], text: null } as never;
+    const scope = { tenantId, workspaceId: wsId };
+
+    const page = await dbmod.searchRepository.searchContacts(scope, emptyQuery);
+    const ids = new Set(page.hits.map((h) => h.id));
+    expect(ids.has(clean)).toBe(true);
+    // All three rungs are excluded, including the email one — the rung a contact_id-only filter would miss.
+    expect(ids.has(byContactId)).toBe(false);
+    expect(ids.has(byEmailIndex)).toBe(false);
+    expect(ids.has(byDomain)).toBe(false);
+
+    // The count must agree with the list. A UI promising records that are unreachable by design is its own bug.
+    const total = await dbmod.searchRepository.countContacts(scope, emptyQuery);
+    expect(total).toBe(page.hits.length);
+
+    // Typeahead never returns a contact, only aggregated values — but a suggestion that exists ONLY because a
+    // suppressed person holds it confirms that person is in the database, and the count says how many.
+    const leaked = await dbmod.searchRepository.suggest(scope, {
+      field: "title",
+      prefix: "SuppressedOnly",
+      limit: 10,
+    } as never);
+    expect(leaked.length).toBe(0);
+
+    // …and the control still suggests, so the assertion above is the anti-join working rather than suggest
+    // being broken outright.
+    const visible = await dbmod.searchRepository.suggest(scope, {
+      field: "title",
+      prefix: "Visible",
+      limit: 10,
+    } as never);
+    expect(visible.length).toBe(1);
   });
 
   test("two suppression rows for one contact still yield one entry", async () => {
