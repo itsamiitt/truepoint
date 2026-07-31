@@ -88,6 +88,18 @@ export type ProvenanceAcceptanceState = z.infer<typeof provenanceAcceptanceState
 export const OVERLAY_ENTITY_TYPES = ["contact", "account"] as const;
 
 /**
+ * The platform default basis for B2B business-contact data (decision D6). Lives in this LEAF package, not in
+ * @leadwolf/core's resolver, because both sides of the dependency graph need it: core resolves it for the
+ * import path, and packages/db builds forge-sync drafts directly — and db cannot import core without creating
+ * a cycle. A constant duplicated either side of that boundary is a constant that will drift.
+ *
+ * Deliberately NOT 'consent': claiming consent we never collected asserts a legal fact about a person that no
+ * record supports. Legitimate interest is the honest default for this data class and is something an
+ * assessment can actually be written against.
+ */
+export const DEFAULT_LAWFUL_BASIS = "legitimate_interest" satisfies z.infer<typeof lawfulBasis>;
+
+/**
  * One assertion, as the writer supplies it. `id` and `recordedAt` are database-assigned.
  *
  * PAYLOAD RULE (09-compliance rule 3, and the reason this is enforced at the edge rather than trusted):

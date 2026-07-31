@@ -15,17 +15,16 @@
 // Note the asymmetry in step 1: consent is the only basis a subject can grant, so it is the only one that can
 // arrive with the payload — which is exactly why it must not be silently replaced by a workspace setting.
 
-import type { LawfulBasis, ProvenanceSourceType } from "@leadwolf/types";
+// DEFAULT_LAWFUL_BASIS is defined in the leaf package rather than here: packages/db builds forge-sync drafts
+// directly and cannot import core without creating a dependency cycle, so both sides read ONE constant instead
+// of keeping two that drift. Re-exported so this module stays the obvious place to look for it.
+import {
+  DEFAULT_LAWFUL_BASIS,
+  type LawfulBasis,
+  type ProvenanceSourceType,
+} from "@leadwolf/types";
 
-/**
- * The platform default for B2B business-contact data (09-compliance rule 3 scopes the product to work email,
- * work phone, role and company — no sensitive categories, ever).
- *
- * Deliberately NOT 'consent': claiming consent we never collected is the one wrong answer here, because it
- * asserts a legal fact about a person that no record supports. Legitimate interest is the honest default for
- * this data class and the one an assessment can actually be written against.
- */
-export const DEFAULT_LAWFUL_BASIS: LawfulBasis = "legitimate_interest";
+export { DEFAULT_LAWFUL_BASIS };
 
 export interface LawfulBasisInput {
   /** Which channel the assertion arrived through. */
