@@ -13,6 +13,7 @@
 // guarantees no PII (reveal stays the only de-masking path). Explicit member mutations on a dynamic list are
 // rejected — its membership is query-derived, not curated.
 
+import { env } from "@leadwolf/config";
 import {
   type ListMembersResultPage,
   type ListRow,
@@ -21,6 +22,7 @@ import {
   listRepository,
   savedSearchRepository,
   searchRepository,
+  usageEventRepository,
   withTenantTx,
 } from "@leadwolf/db";
 import {
@@ -378,6 +380,37 @@ export async function addContactsToList(input: AddToListInput): Promise<ListMemb
         metadata: { affected },
       });
     }
+
+    // Save metering (S-06 "zero retyped fields", S-07 "duplicate creation rate on save ≤1%). Both numbers are
+    // already in hand here and were simply never recorded, so the acceptance criteria could not be evaluated.
+    //
+    // duplicatesPrevented is the S-07 numerator, and it is a SUCCESS not a failure: addMembers upserts with
+    // onConflictDoNothing on (list_id, contact_id), so a re-add is a no-op rather than a second row. Recording
+    // it is what turns "we think dedupe works" into a rate someone can check.
+    //
+    // notVisible is tracked separately and deliberately NOT folded into duplicates: a contact the caller could
+    // not see was never a duplicate, it was an authorization outcome, and conflating the two would let an
+    // access-control problem hide inside a data-quality metric.
+    //
+    // Rides the caller's transaction, so a save that commits is always counted. Dark until USAGE_EVENTS_ENABLED.
+    if (env.USAGE_EVENTS_ENABLED) {
+      await usageEventRepository.append(tx, {
+        tenantId: input.scope.tenantId,
+        workspaceId: input.scope.workspaceId,
+        userId: input.callerUserId,
+        action: "save",
+        subjectType: "contact",
+        quantity: Math.max(1, affected),
+        metadata: {
+          surface: "list",
+          attempted: input.contactIds.length,
+          created: affected,
+          duplicatesPrevented: visible.length - affected,
+          notVisible: input.contactIds.length - visible.length,
+        },
+      });
+    }
+
     return { listId: input.listId, affected };
   });
 }
