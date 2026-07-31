@@ -99,7 +99,9 @@ export async function runReverification(
   const limit = opts?.batchSize ?? 500;
   const now = opts?.now ?? new Date();
   const cutoff = reverifyCutoff(now, FRESHNESS_SLA_DAYS.email);
-  let cursor: string | null = null;
+  // Composite keyset cursor (sortKey, id): the worst-first ordering leads on a NON-unique column, so an
+  // id-only cursor would skip or repeat rows wherever a bulk import stamped many contacts identically.
+  let cursor: { sortKey: Date; id: string } | null = null;
   let scanned = 0;
   let reverified = 0;
   let errored = 0;
@@ -177,7 +179,8 @@ export async function runReverification(
     });
 
     // 4) Advance the keyset cursor; a short page means we reached the end of the stale set.
-    cursor = batch[batch.length - 1]!.id;
+    const last = batch[batch.length - 1]!;
+    cursor = { sortKey: last.sortKey, id: last.id };
     if (batch.length < limit) break;
   }
 

@@ -153,6 +153,10 @@ export interface StaleRevealedRow {
   phoneEnc: Uint8Array | null;
   emailStatus: string;
   phoneStatus: string | null;
+  /** The worst-first sort key, `coalesce(last_verified_at, created_at)`. Returned because the caller needs it
+   *  to build the NEXT page's composite cursor — a keyset cursor cannot be reconstructed from the id alone
+   *  when the leading sort column is non-unique. */
+  sortKey: Date;
 }
 
 /** The full `contacts` select row. */
@@ -368,15 +372,32 @@ export const contactRepository = {
    * never set) — the freshness re-verification loop's in-use selection (22 §3/§4, ADR-0025). Returns the
    * ENCRYPTED email/phone (the worker decrypts to call the verifier; plaintext never leaves this layer) plus the
    * current statuses. RLS scopes this to ONE workspace via the caller's withTenantTx GUC (no explicit workspace
-   * predicate — isolation rides the tx, like findUnresolvedForBackfill). Ordered by id ASC and keyset-paged on
-   * `cursor` (id > cursor; null = first page) so a sweep walks the workspace in stable, bounded batches.
+   * predicate — isolation rides the tx, like findUnresolvedForBackfill).
+   *
+   * ORDERED WORST-FIRST (Phase 2 re-verify priority, 22 §4), not by id.
+   *
+   * Ordering only looks cosmetic while a sweep runs to completion, and that is the trap: the loop can stop
+   * early — a worker restart, a deadline, a rate-limited or metered verifier. Under `id ASC` whatever got done
+   * is an arbitrary UUID slice; under this ordering it is the records most likely to be WRONG, which is the
+   * whole point of a priority queue.
+   *
+   * The sort key is `coalesce(last_verified_at, created_at)`. Within one field the confidence model is
+   * prior · decay(age), so age IS the ordering — no need to compute a score in SQL and fork the model. NULLs
+   * fall back to created_at rather than sorting first or last, because a never-verified contact should be
+   * prioritised by how long we have HELD it unverified: one imported yesterday is not more suspect than one
+   * verified two years ago, but one imported three years ago and never checked certainly is.
+   *
+   * Keyset pagination therefore needs the COMPOSITE cursor (sortKey, id) — a cursor on id alone would skip or
+   * repeat rows the moment the leading column is not unique, and last_verified_at is very much not unique
+   * (a bulk import stamps thousands of rows identically).
    */
   async findStaleRevealedForReverify(
     tx: Tx,
     cutoff: Date,
-    cursor: string | null,
+    cursor: { sortKey: Date; id: string } | null,
     limit: number,
   ): Promise<StaleRevealedRow[]> {
+    const sortKey = sql`coalesce(${contacts.lastVerifiedAt}, ${contacts.createdAt})`;
     const rows = await tx
       .select({
         id: contacts.id,
@@ -384,6 +405,7 @@ export const contactRepository = {
         phoneEnc: contacts.phoneEnc,
         emailStatus: contacts.emailStatus,
         phoneStatus: contacts.phoneStatus,
+        sortKey: sql<Date>`${sortKey}`.as("sort_key"),
       })
       .from(contacts)
       .where(
@@ -391,10 +413,13 @@ export const contactRepository = {
           eq(contacts.isRevealed, true),
           isNull(contacts.deletedAt),
           or(isNull(contacts.lastVerifiedAt), lt(contacts.lastVerifiedAt, cutoff)),
-          cursor === null ? undefined : gt(contacts.id, cursor),
+          // Row-value comparison: strictly after (sortKey, id) in the same order the ORDER BY imposes.
+          cursor === null
+            ? undefined
+            : sql`(${sortKey}, ${contacts.id}) > (${cursor.sortKey.toISOString()}::timestamptz, ${cursor.id}::uuid)`,
         ),
       )
-      .orderBy(asc(contacts.id))
+      .orderBy(sql`${sortKey} ASC`, asc(contacts.id))
       .limit(limit);
     return rows.map((r) => ({
       id: r.id,
@@ -402,6 +427,7 @@ export const contactRepository = {
       phoneEnc: r.phoneEnc ?? null,
       emailStatus: r.emailStatus,
       phoneStatus: r.phoneStatus,
+      sortKey: new Date(r.sortKey),
     }));
   },
 
