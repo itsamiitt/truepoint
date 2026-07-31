@@ -398,4 +398,30 @@ export const listRepository = {
       .returning({ id: listMembers.id });
     return rows.length;
   },
+
+  /**
+   * The users who should hear that a contact changed jobs (S-13 "alerts on saved lists"): the OWNER of every
+   * live list the contact belongs to, plus whoever added them.
+   *
+   * Both, and the second one matters: a rep who researched a prospect and dropped them into a shared team
+   * list is the person who will waste the call, but the list belongs to their manager. Notifying only owners
+   * would send the alert to the person least likely to act on it.
+   *
+   * Deliberately NOT "everyone in the workspace" — a job change is only interesting to someone who has
+   * expressed interest in that contact. Broadcasting it is how an alert channel becomes noise, and S-13's
+   * value is entirely in being read.
+   *
+   * Runs inside the caller's withTenantTx; RLS scopes both tables to the workspace.
+   */
+  async savedContactWatchers(tx: Tx, contactId: string): Promise<string[]> {
+    const rows = (await tx.execute(sql`
+      SELECT DISTINCT u.user_id AS user_id
+        FROM list_members m
+        JOIN lists l ON l.id = m.list_id
+        CROSS JOIN LATERAL (VALUES (l.owner_user_id), (m.added_by_user_id)) AS u(user_id)
+       WHERE m.contact_id = ${contactId}
+         AND u.user_id IS NOT NULL
+    `)) as unknown as Array<{ user_id: string }>;
+    return rows.map((r) => r.user_id);
+  },
 };

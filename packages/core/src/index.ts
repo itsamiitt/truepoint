@@ -483,6 +483,16 @@ export {
   type JobChangeKind,
   type JobChangeVerdict,
 } from "./data-health/jobChange.ts";
+// The producer half (Phase 4): turns a verdict into an intent_signal plus alerts to the users who SAVED the
+// contact. Kept apart from the decision so the rule can be tested in isolation — a producer wired to a bad
+// rule just generates confident noise at scale.
+export {
+  recordJobChange,
+  signalWeight,
+  alertTitle,
+  type RecordJobChangeInput,
+  type RecordJobChangeResult,
+} from "./data-health/recordJobChange.ts";
 
 export {
   computeScore,

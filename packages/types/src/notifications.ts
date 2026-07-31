@@ -11,6 +11,9 @@ export const notificationType = z.enum([
   "low_credits",
   "import_complete",
   "dsar_update",
+  // A saved contact changed jobs (Phase 4, S-13). Only moves and departures produce one — a title
+  // change is not alerted, because an alert users learn to skip makes the ones that matter unread too.
+  "job_change",
   "system",
 ]);
 export type NotificationType = z.infer<typeof notificationType>;

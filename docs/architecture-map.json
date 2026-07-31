@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1970,
-  "fileSetHash": "sha256:f214c3de51083987c50bbe3d5ebda48e5707c60006499de3fb0291e1cdbd1292",
+  "fileCount": 1972,
+  "fileSetHash": "sha256:ee6d284dd48a200496597e19ebceff165328772de034faf95b64bcf09a123af8",
   "features": {
     "account-search": {
       "web": [],
@@ -617,6 +617,7 @@
         "packages/core/src/data-health/phoneVerifier.ts",
         "packages/core/src/data-health/reacherVerifier.test.ts",
         "packages/core/src/data-health/reacherVerifier.ts",
+        "packages/core/src/data-health/recordJobChange.ts",
         "packages/core/src/data-health/reverifyContacts.ts",
         "packages/core/src/data-health/twilioPhoneVerifier.test.ts",
         "packages/core/src/data-health/twilioPhoneVerifier.ts",
@@ -2850,6 +2851,7 @@
       "packages/db/test/importTemplates.itest.ts",
       "packages/db/test/intel.itest.ts",
       "packages/db/test/itestDb.ts",
+      "packages/db/test/jobChangeAlerts.itest.ts",
       "packages/db/test/jobVisibility.itest.ts",
       "packages/db/test/listMembersDsarCascade.itest.ts",
       "packages/db/test/lists.itest.ts",
