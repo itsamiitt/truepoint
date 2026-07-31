@@ -6,7 +6,17 @@
 // (mirrors enrichment_jobs.options / column_mapping). Shares the set_updated_at trigger via the RLS file.
 
 import { sql } from "drizzle-orm";
-import { bigint, boolean, jsonb, pgTable, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  check,
+  jsonb,
+  pgTable,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 import { tenants, workspaces } from "./auth.ts";
 
 // Shared column idioms (kept local per the self-contained-schema convention used across this folder).
@@ -35,11 +45,20 @@ export const enrichmentPolicy = pgTable(
     fieldAllowlist: jsonb("field_allowlist").notNull().default([]),
     // Monthly auto-enrich provider-spend cap, in micros (the provider_calls.cost_micros unit, 06 §6).
     monthlyBudgetMicros: bigint("monthly_budget_micros", { mode: "number" }).notNull().default(0),
+    // The lawful basis enrichment into this workspace is processed under (09-compliance rule 4; migration
+    // 0091). NULL = the platform default (legitimate_interest). Workspace-grained, not jurisdiction-grained —
+    // see the note on import_policy.lawfulBasis; a per-subject resolver is Phase 5 work.
+    lawfulBasis: varchar("lawful_basis", { length: 30 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     // One policy per workspace — the upsert target (unique → `uniq_` prefix, per package convention).
     uniqWorkspace: uniqueIndex("uniq_enrichment_policy_workspace").on(t.workspaceId),
+    // The same four values as consent_records and provenance_event — one vocabulary, never a second.
+    lawfulBasisEnum: check(
+      "enrichment_policy_lawful_basis_enum",
+      sql`${t.lawfulBasis} IS NULL OR ${t.lawfulBasis} IN ('legitimate_interest','consent','contract','public_record')`,
+    ),
   }),
 );

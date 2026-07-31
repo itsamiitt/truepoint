@@ -44,6 +44,12 @@ export const importPolicy = pgTable(
       .notNull()
       .default("create_and_update"),
     defaultPreservePopulated: boolean("default_preserve_populated").notNull().default(false),
+    // The lawful basis imports into this workspace are processed under (09-compliance rule 4; migration 0091).
+    // NULL = use the platform default (legitimate_interest — the conservative B2B business-contact basis).
+    // Workspace-grained, NOT jurisdiction-grained: a per-subject resolver over contacts.jurisdiction is the
+    // correct end state and belongs with the Phase 5 compliance work, so this is honest for a
+    // single-jurisdiction workspace and deliberately insufficient for a multi-jurisdiction one.
+    lawfulBasis: varchar("lawful_basis", { length: 30 }),
     updatedByUserId: uuid("updated_by_user_id").references(() => users.id), // null = never user-set
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -58,6 +64,11 @@ export const importPolicy = pgTable(
     defaultMergeModeEnum: check(
       "import_policy_default_merge_mode_enum",
       sql`${t.defaultMergeMode} IN ('create_and_update','create_only','update_only')`,
+    ),
+    // The same four values as consent_records and provenance_event — one lawful-basis vocabulary, never a second.
+    lawfulBasisEnum: check(
+      "import_policy_lawful_basis_enum",
+      sql`${t.lawfulBasis} IS NULL OR ${t.lawfulBasis} IN ('legitimate_interest','consent','contract','public_record')`,
     ),
   }),
 );

@@ -82,6 +82,39 @@ Four decisions taken (human, in-session), plus the recorded stack:
       read — so any future change to the posture surfaces as a failing test with a
       reason attached rather than as silent drift.
 
+  D6. LAWFUL BASIS: DEFAULT + PER-WORKSPACE OVERRIDE (2026-07-31). Surfaced while
+      building S-05: provenance_event.lawful_basis is NOT NULL, but NOTHING in the
+      codebase derived a basis. source_records.lawful_basis_snapshot is written
+      NULL by its only writer, and ingestion.ts's consentContext requires a basis
+      for CAPTURE sources while marking it optional for admin_upload/enrichment/crm
+      because those "carry their basis elsewhere" — an elsewhere that did not
+      exist. Resolution order, in packages/core/src/provenance/lawfulBasis.ts:
+      a basis travelling WITH the data (consentContext on a capture) beats the
+      workspace's configured basis (import_policy/enrichment_policy.lawful_basis,
+      migration 0091), which beats the platform default legitimate_interest.
+      The default is deliberately NOT 'consent': claiming consent we never
+      collected asserts a legal fact about a person that no record supports.
+      Capture channels (extension, coop) that arrive with NO declared basis are
+      recorded with acceptance_state='pending' — auditable, but they do not
+      project, which is 09 rule 4 read literally.
+      KNOWN LIMIT: resolution is per WORKSPACE, not per data-subject jurisdiction.
+      contacts.jurisdiction/region exist and a per-subject resolver is the correct
+      end state (09 § Regional gating) but belongs with Phase 5 and its counsel
+      review. Honest for a single-jurisdiction workspace, knowingly insufficient
+      for one spanning several. Rejected: hardcoding a basis per source_type (09
+      asks for config, not code forks) and holding everything pending until
+      configured (ships Phase 1 dark and proves nothing).
+  D7. A FAILED PROVENANCE APPEND FAILS THE WRITE IT DESCRIBES (2026-07-31). The
+      event appends inside the CALLER'S transaction; if it fails, the graph write
+      rolls back. This deliberately departs from the shipped precedent:
+      recordImportEvidence (runImport.ts) opens its OWN withErTx and is explicitly
+      non-fatal, "a failure logs and never fails the landing". Following that
+      verbatim would leave 08-architecture invariant 1 untrue — the graph could
+      hold fields with no event — and A-01's "every stored field carries
+      provenance" unclaimable. Cost: a bug in the event path can now block imports
+      and enrichment, which is why it ships behind PROVENANCE_EVENTS_ENABLED and
+      gets soak time before any per-tenant flag flips.
+
 Stack recorded: Bun 1.3.14 + Turbo + Biome monorepo; Postgres 16 via Drizzle +
 postgres.js with hand-written RLS; Redis 7 + BullMQ; Hono on Bun; Next.js 15 +
 React 19. Commands: build `bun run build`, test `bun test`, lint `bun run lint`,

@@ -64,6 +64,7 @@
     "pricing",
     "projection",
     "prospect",
+    "provenance",
     "provider-configs",
     "public-pricing",
     "reports",
@@ -101,8 +102,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1945,
-  "fileSetHash": "sha256:aa237ef31cc1b6b0f0a22271548f93a98b61739d695554471796af2869796dbf",
+  "fileCount": 1947,
+  "fileSetHash": "sha256:577a8e0086e832c67fcfc322d32de93691204d580f8a7da868dac7cfc29b2a70",
   "features": {
     "account-search": {
       "web": [],
@@ -1420,6 +1421,18 @@
         "packages/core/src/prospect/mergeContact.ts",
         "packages/core/src/prospect/mergePreview.ts",
         "packages/core/src/prospect/tags.ts"
+      ],
+      "db": [],
+      "workers": [],
+      "integrations": []
+    },
+    "provenance": {
+      "web": [],
+      "admin": [],
+      "api": [],
+      "core": [
+        "packages/core/src/provenance/lawfulBasis.test.ts",
+        "packages/core/src/provenance/lawfulBasis.ts"
       ],
       "db": [],
       "workers": [],
@@ -3088,6 +3101,7 @@
     "undeclared domain 'plans' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'pricing' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'projection' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
+    "undeclared domain 'provenance' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'provider-configs' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'public-pricing' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
     "undeclared domain 'saved-searches' — add to CANONICAL_DOMAINS in lib/arch-map.mjs or rename the folder",
