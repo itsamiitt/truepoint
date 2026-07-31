@@ -25,8 +25,8 @@
 //       cannot be an index (the table is partitioned, so a unique would have to include recorded_at), so the
 //       guard IS the mechanism and this is the only thing that proves it holds.
 
-import type { ProvenanceEventDraft } from "@leadwolf/types";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { ProvenanceEventDraft } from "@leadwolf/types";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
 

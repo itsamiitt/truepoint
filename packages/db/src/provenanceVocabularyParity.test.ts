@@ -13,6 +13,9 @@
 // would look correct while asserting nothing. Strip full-line comments first, exactly as migrationShape.test.ts
 // does for the same class of reason.
 
+import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   lawfulBasis,
   provenanceAcceptanceState,
@@ -20,9 +23,6 @@ import {
   provenanceEntityType,
   provenanceSourceType,
 } from "@leadwolf/types";
-import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
 const MIGRATION = join(import.meta.dir, "migrations", "0089_provenance_event.sql");
 

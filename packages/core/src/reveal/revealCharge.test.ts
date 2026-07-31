@@ -6,6 +6,12 @@ import { describe, expect, test } from "bun:test";
 import { revealCharge } from "./revealCharge.ts";
 
 const costs = { email: 1, phone: 5, full: 4 };
+
+/** The S-12 miss fields for a COMPLETE record — nothing was asked for that the contact does not carry. Spread
+ *  into the full-object assertions so they stay exhaustive (toEqual still catches an unexpected extra field)
+ *  without restating two constants a dozen times. Cases where a field IS absent spell them out instead. */
+const NO_MISS = { missingFields: [] as string[], nothingToReveal: false };
+
 const base = {
   hasEmail: true,
   hasPhone: true,
@@ -82,29 +88,29 @@ describe("revealCharge — a missing field is not an owned field", () => {
 describe("revealCharge — nothing owned yet", () => {
   test("email reveal charges the email price", () => {
     const r = revealCharge({ ...base, revealType: "email" });
-    expect(r).toEqual({ cost: 1, alreadyOwned: false, newFields: ["email"] });
+    expect(r).toEqual({ cost: 1, alreadyOwned: false, newFields: ["email"], ...NO_MISS });
   });
 
   test("phone reveal charges the phone price", () => {
     const r = revealCharge({ ...base, revealType: "phone" });
-    expect(r).toEqual({ cost: 5, alreadyOwned: false, newFields: ["phone"] });
+    expect(r).toEqual({ cost: 5, alreadyOwned: false, newFields: ["phone"], ...NO_MISS });
   });
 
   test("full_profile with both fields new charges the bundle price", () => {
     const r = revealCharge({ ...base, revealType: "full_profile" });
-    expect(r).toEqual({ cost: 4, alreadyOwned: false, newFields: ["email", "phone"] });
+    expect(r).toEqual({ cost: 4, alreadyOwned: false, newFields: ["email", "phone"], ...NO_MISS });
   });
 });
 
 describe("revealCharge — cross-type dedup (the fix)", () => {
   test("full_profile after email already owned charges ONLY the phone price", () => {
     const r = revealCharge({ ...base, revealType: "full_profile", ownedEmail: true });
-    expect(r).toEqual({ cost: 5, alreadyOwned: false, newFields: ["phone"] });
+    expect(r).toEqual({ cost: 5, alreadyOwned: false, newFields: ["phone"], ...NO_MISS });
   });
 
   test("full_profile after phone already owned charges ONLY the email price", () => {
     const r = revealCharge({ ...base, revealType: "full_profile", ownedPhone: true });
-    expect(r).toEqual({ cost: 1, alreadyOwned: false, newFields: ["email"] });
+    expect(r).toEqual({ cost: 1, alreadyOwned: false, newFields: ["email"], ...NO_MISS });
   });
 
   test("full_profile after both owned is free (alreadyOwned)", () => {
@@ -114,17 +120,17 @@ describe("revealCharge — cross-type dedup (the fix)", () => {
       ownedEmail: true,
       ownedPhone: true,
     });
-    expect(r).toEqual({ cost: 0, alreadyOwned: true, newFields: [] });
+    expect(r).toEqual({ cost: 0, alreadyOwned: true, newFields: [], ...NO_MISS });
   });
 
   test("email reveal when email already owned is free (alreadyOwned)", () => {
     const r = revealCharge({ ...base, revealType: "email", ownedEmail: true });
-    expect(r).toEqual({ cost: 0, alreadyOwned: true, newFields: [] });
+    expect(r).toEqual({ cost: 0, alreadyOwned: true, newFields: [], ...NO_MISS });
   });
 
   test("phone reveal when phone already owned (via a prior full_profile) is free", () => {
     const r = revealCharge({ ...base, revealType: "phone", ownedPhone: true });
-    expect(r).toEqual({ cost: 0, alreadyOwned: true, newFields: [] });
+    expect(r).toEqual({ cost: 0, alreadyOwned: true, newFields: [], ...NO_MISS });
   });
 });
 
@@ -136,7 +142,7 @@ describe("revealCharge — verified-result grading still applies to the new fiel
       ownedPhone: true,
       emailStatus: "invalid",
     });
-    expect(r).toEqual({ cost: 0, alreadyOwned: false, newFields: ["email"] });
+    expect(r).toEqual({ cost: 0, alreadyOwned: false, newFields: ["email"], ...NO_MISS });
   });
 
   test("full_profile, email owned, new phone unusable (null status) → 0, not alreadyOwned", () => {
@@ -146,18 +152,36 @@ describe("revealCharge — verified-result grading still applies to the new fiel
       ownedEmail: true,
       phoneStatus: null,
     });
-    expect(r).toEqual({ cost: 0, alreadyOwned: false, newFields: ["phone"] });
+    expect(r).toEqual({ cost: 0, alreadyOwned: false, newFields: ["phone"], ...NO_MISS });
   });
 });
 
 describe("revealCharge — no ciphertext to reveal", () => {
+  // These two are the ONLY cases in this file where a field is genuinely absent, so NO_MISS does not apply —
+  // they are what the S-12 fields exist to describe.
   test("email reveal on a contact with no email is free, nothing new", () => {
     const r = revealCharge({ ...base, revealType: "email", hasEmail: false });
-    expect(r).toEqual({ cost: 0, alreadyOwned: true, newFields: [] });
+    // alreadyOwned stays TRUE here, and that is the pre-existing behaviour deliberately left untouched: the
+    // S-12 change is additive, so nothing downstream shifts. missingFields/nothingToReveal are what carry the
+    // truth, which is why the UI branches on them FIRST.
+    expect(r).toEqual({
+      cost: 0,
+      alreadyOwned: true,
+      newFields: [],
+      missingFields: ["email"],
+      nothingToReveal: true,
+    });
   });
 
   test("full_profile on an email-only contact charges just the email", () => {
     const r = revealCharge({ ...base, revealType: "full_profile", hasPhone: false });
-    expect(r).toEqual({ cost: 1, alreadyOwned: false, newFields: ["email"] });
+    expect(r).toEqual({
+      cost: 1,
+      alreadyOwned: false,
+      newFields: ["email"],
+      missingFields: ["phone"],
+      // A gap is not an empty record — the email WAS revealed.
+      nothingToReveal: false,
+    });
   });
 });

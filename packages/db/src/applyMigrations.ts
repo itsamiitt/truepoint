@@ -281,8 +281,9 @@ const GRANTS = `
   -- Re-run every migrate (idempotent); a future master_* table MUST be added to this list.
   -- provenance_event joins this list for two reasons, not one: it is Layer-0-shaped (no workspace_id, so no
   -- writable RLS predicate — rls/provenanceEvent.sql), and it carries contributor_ref. Even though that ref is
-  -- unresolvable outside the `provenance` schema, handing the customer role the ability to READ per-record
+  -- unresolvable outside the forge schema, handing the customer role the ability to READ per-record
   -- contribution patterns would undermine C-02 by correlation alone.
+  -- (No backticks in this comment: it lives inside a template literal, where one would terminate the string.)
   REVOKE ALL ON master_persons, master_companies, master_employment, master_emails, master_phones,
                 source_records, match_links, projection_outbox, provenance_event FROM leadwolf_app;
   -- Defense-in-depth belt: dynamically REVOKE from leadwolf_app any table named master_*. A FUTURE Layer-0

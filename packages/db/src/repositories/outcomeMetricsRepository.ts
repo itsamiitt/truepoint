@@ -49,14 +49,15 @@ export const outcomeMetricsRepository = {
         -- p95 down and make a slow path look fast, which is the failure mode where a latency SLO passes while
         -- users wait.
         --
-        -- The FILTER is jsonb_typeof(...) = 'number', NOT `metadata ? 'serverMs'`, for two independent reasons:
-        --   1. CORRECTNESS. `::numeric` THROWS on a non-numeric value, so a key-exists filter would still feed
-        --      the cast a string and take the entire metrics query down with it. metadata is jsonb written by
-        --      several call sites and nothing constrains this key's type, so that is a live hazard, not a
-        --      hypothetical one. Admitting only JSON numbers makes the cast unfailable.
-        --   2. PORTABILITY. `?` is a parameter placeholder in several drivers. It happens to pass through this
-        --      stack, and no other query in this repo uses the operator — being the first to rely on that is
-        --      not worth it when the function form says the same thing unambiguously.
+        -- The FILTER uses jsonb_typeof(), NOT the jsonb key-exists operator, for two independent reasons.
+        --   1. CORRECTNESS. The ::numeric cast THROWS on a non-numeric value, so a key-exists filter would
+        --      still feed the cast a string and take the entire metrics query down with it. metadata is jsonb
+        --      written by several call sites and nothing constrains this key's type, so that is a live hazard.
+        --      Admitting only JSON numbers makes the cast unfailable.
+        --   2. PORTABILITY. The key-exists operator is a parameter placeholder in several drivers, and no
+        --      other query in this repo relies on it passing through.
+        -- NOTE: no backticks in this comment, deliberately. It lives inside a tagged template literal, so a
+        -- backtick here TERMINATES the SQL string — which is exactly the bug this comment once caused.
         percentile_cont(0.95) WITHIN GROUP (
           ORDER BY (metadata->>'serverMs')::numeric
         ) FILTER (WHERE jsonb_typeof(metadata->'serverMs') = 'number') AS p95_server_ms
