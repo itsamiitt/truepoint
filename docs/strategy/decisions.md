@@ -140,6 +140,43 @@ Four decisions taken (human, in-session), plus the recorded stack:
       reconciliation METRIC (master rows carrying field_provenance with zero
       events) rather than a write-time trigger.
 
+  D10. PHASE 1 BUILD COMPLETE, VERIFICATION NOT (2026-07-31). Everything in the
+      approved Phase 1 plan that could be built in this environment is built and
+      pushed to feat/data-mgmt-01-research-brief. Everything ships DARK except
+      two always-on items, and those two are deliberate: the masked-export
+      suppression gate and the suppression match indexes. A compliance filter
+      behind a feature flag is not compliance, so that fix could not ship off.
+      BUILT: provenance_event (partitioned, append-only, grant-walled) · forge.
+      contributor + consent log · lawful-basis resolution · Layer-0 provenance
+      writers at BOTH hops (import evidence, forge→master sync) · usage_event ·
+      entitlement + shadow-mode requireEntitlement · reveal + save + miss
+      metering · confidence badge v0 on reveal · outcome metrics incl. the
+      reveal-hit rate · the M1/M2/M3 reveal-miss taxonomy · the masked-export
+      suppression gate.
+      NOT BUILT, each with a stated reason rather than left silent: the S-07 GUC
+      trigger (D9 — would fire on the provenance-free mint); search-side
+      suppression (needs EXPLAIN against a now-indexed suppression_list, and the
+      roadmap puts it in Phase 5 — export was taken first because that is where
+      data physically leaves); extension end-to-end (both gates stay off pending
+      the counsel review 09 rule 1 requires); overlay provenance events (D8 —
+      needs a deliberate security decision about granting leadwolf_app INSERT).
+      VERIFICATION OWED, and this is the real risk in the branch. There is no bun
+      in the authoring environment, so `bun run lint`, `bun run typecheck` and
+      EVERY test written for this work have never executed. What WAS verified
+      locally with node: migration statement shape, the breakpoint marker never
+      appearing in prose, snapshot-ratchet arithmetic, journal tag uniqueness and
+      idx ordering, the provenance vocabulary matching its CHECK constraints in
+      0089, and a purpose-built checker confirming every named @leadwolf/* import
+      across 1825 files resolves to a real barrel export (that last one exists
+      because four non-existent APIs were caught by hand first: toast.info,
+      AppError's positional signature, isFeatureEnabled, and c.get("scope")).
+      TO CLOSE IT: run `bun run lint`, `bun run typecheck`, `bun test`, then each
+      itest in its OWN process (the db client is a module singleton) against a
+      real Postgres 16 — provenanceEvent, contributorIsolation, meteringAccess,
+      suppressionExport. Then `bun run --filter @leadwolf/db generate` and commit
+      any snapshots it emits for 0091 and 0094, dropping EXPECTED_DEFICIT in
+      migrationSnapshots.test.ts by one per snapshot committed.
+
 Stack recorded: Bun 1.3.14 + Turbo + Biome monorepo; Postgres 16 via Drizzle +
 postgres.js with hand-written RLS; Redis 7 + BullMQ; Hono on Bun; Next.js 15 +
 React 19. Commands: build `bun run build`, test `bun test`, lint `bun run lint`,
