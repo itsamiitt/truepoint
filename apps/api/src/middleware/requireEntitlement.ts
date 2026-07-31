@@ -18,7 +18,7 @@
 import { env } from "@leadwolf/config";
 import {
   type EntitlementDecision,
-  entitlementEnforcedForScope,
+  isEntitlementEnforced,
   periodFor,
   resolveEntitlement,
 } from "@leadwolf/core";
@@ -43,15 +43,16 @@ export function requireEntitlement(key: string) {
     const workspaceId = c.get("workspaceId") as string | undefined;
     if (!tenantId || !workspaceId) return next(); // unscoped route — nothing to meter against
 
-    let decision: EntitlementDecision;
+    let evaluated: { decision: EntitlementDecision; enforcing: boolean };
     try {
-      decision = await evaluate({ tenantId, workspaceId }, key);
+      evaluated = await evaluate({ tenantId, workspaceId }, key);
     } catch (err) {
       console.error("[entitlement] evaluation failed; allowing the request", { key, err });
       return next();
     }
+    const { decision, enforcing } = evaluated;
 
-    if (!(await entitlementEnforcedForScope({ tenantId, workspaceId }))) {
+    if (!enforcing) {
       if (!decision.allowed) {
         // The disagreement metric the rollout is gated on. Tenant id only — no user, no subject, no PII.
         console.info("[entitlement] shadow refusal", {
@@ -87,11 +88,19 @@ export function requireEntitlement(key: string) {
   };
 }
 
-/** One scoped tx: the live grants and the usage counted against the winning grant's period. */
+/**
+ * ONE scoped transaction for everything this middleware needs: the live grants, the usage counted against the
+ * winning grant's period, and the enforce flag.
+ *
+ * Deliberately one and not two. The first version evaluated the decision and read the enforce flag through
+ * separate helpers, each opening its own withTenantTx — two transactions per request on the reveal money
+ * endpoint, largely to decide whether to print a log line. isEntitlementEnforced is the in-transaction variant
+ * that exists precisely for this; the out-of-tx sibling was deleted rather than left exported with no caller.
+ */
 async function evaluate(
   scope: { tenantId: string; workspaceId: string },
   key: string,
-): Promise<EntitlementDecision> {
+): Promise<{ decision: EntitlementDecision; enforcing: boolean }> {
   return withTenantTx(scope, async (tx) => {
     const grants = await entitlementRepository.liveForTenant(tx, scope.tenantId);
     const used = await entitlementRepository.usedInPeriod(
@@ -100,6 +109,9 @@ async function evaluate(
       key,
       periodFor(key, grants),
     );
-    return resolveEntitlement(key, grants, used);
+    return {
+      decision: resolveEntitlement(key, grants, used),
+      enforcing: await isEntitlementEnforced(tx, scope.tenantId),
+    };
   });
 }

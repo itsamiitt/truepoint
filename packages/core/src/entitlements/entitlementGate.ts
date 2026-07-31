@@ -15,34 +15,27 @@
 // refusing paid requests is the one outcome worth engineering against.
 
 import { env } from "@leadwolf/config";
-import { type Tx, withTenantTx } from "@leadwolf/db";
+import type { Tx } from "@leadwolf/db";
 import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
 
 /** The per-tenant flag seeded (off) by migration 0088. */
 export const ENTITLEMENTS_ENFORCED_FLAG_KEY = "entitlements_enforced";
 
-/** Evaluate the enforce half INSIDE an existing tenant tx. Env layer off ⇒ false with zero queries. */
+/**
+ * Evaluate the enforce half INSIDE an existing tenant tx. Env layer off ⇒ false with zero queries.
+ *
+ * IN-TX ONLY, and there is deliberately no `...ForScope` sibling opening its own transaction. The channel gate
+ * has both because both have real callers; the only consumer here is the API middleware, which already opens
+ * one transaction for the grants and the usage count, so a second variant would exist purely to let a caller
+ * spend an extra round-trip on the reveal money endpoint. Fifteen lines to add back when something genuinely
+ * needs it — an exported function with no caller is a working path nobody exercises.
+ *
+ * Does NOT catch: a flag read that fails inside a transaction must propagate with it. Catching here would
+ * swallow the error and then keep issuing statements on an aborted transaction, which is the failure the
+ * channel gate's in-tx variant documents too. The middleware's own try/catch turns that into fail-open, and
+ * fail-open and fail-to-shadow both mean "allow the request", so the outcome is the same either way.
+ */
 export async function isEntitlementEnforced(tx: Tx, tenantId: string): Promise<boolean> {
   if (!env.ENTITLEMENTS_ENABLED) return false;
   return isFlagEnabledForTenant(tx, tenantId, ENTITLEMENTS_ENFORCED_FLAG_KEY);
-}
-
-/**
- * Evaluate the enforce half in its own scoped tx, for callers outside a transaction (the API middleware).
- * FAILS TO SHADOW on error — see the header: refusing a request because a flag could not be read would turn a
- * transient database blip into revenue-affecting downtime on the product's core action.
- */
-export async function entitlementEnforcedForScope(scope: {
-  tenantId: string;
-  workspaceId: string;
-}): Promise<boolean> {
-  if (!env.ENTITLEMENTS_ENABLED) return false;
-  try {
-    return await withTenantTx(scope, (tx) =>
-      isFlagEnabledForTenant(tx, scope.tenantId, ENTITLEMENTS_ENFORCED_FLAG_KEY),
-    );
-  } catch (err) {
-    console.error("[entitlement] enforce-flag read failed; staying in shadow", err);
-    return false;
-  }
 }

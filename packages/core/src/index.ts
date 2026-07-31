@@ -1020,7 +1020,6 @@ export {
 } from "./entitlements/resolveEntitlement.ts";
 export {
   isEntitlementEnforced,
-  entitlementEnforcedForScope,
   ENTITLEMENTS_ENFORCED_FLAG_KEY,
 } from "./entitlements/entitlementGate.ts";
 
