@@ -4,15 +4,22 @@
 // golden master_* record becomes a survivorship PROJECTION over this log (Phase 05), which is what makes lineage,
 // version-history-as-replay, and non-destructive merge/unmerge possible.
 //
+// `provenance_event` (Phase 1 S-02/S-04) is the FIELD-grain layer above the same substrate: source_records says
+// "this payload was observed", provenance_event says "and it asserted THESE fields, from this source, under this
+// lawful basis". One source_record fans out to many events. Both are appended here, in one transaction, so the
+// evidence and the assertions it justifies can never diverge.
+//
 // These writers are ADDITIVE and currently call-less: the dual-write into the ER resolve path lands as a separate
 // slice BEHIND `INGESTION_EVIDENCE_ENABLED` (default-off), and the flip to authoritative is CI-parity-gated. They
 // run under the master-graph write path (`withErTx` / owner), which has the grant on these system-owned tables;
 // `leadwolf_app` does not.
 
+import type { ProvenanceEventDraft } from "@leadwolf/types";
 import { eq } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { matchLinks, sourceRecords } from "../schema/masterGraph.ts";
 import { projectionOutbox } from "../schema/projectionOutbox.ts";
+import { provenanceEvent } from "../schema/provenanceEvent.ts";
 
 /** One observed payload to append as evidence. `contentHash` is sha256(canonical payload) — the UNIQUE idempotency
  *  key, so re-ingesting an identical payload is a no-op. `rawData` is kept verbatim; `matchKeys` are the extracted
@@ -82,6 +89,45 @@ export const evidenceRepository = {
       matchProbability: input.matchProbability != null ? String(input.matchProbability) : null,
       reviewStatus: input.reviewStatus ?? "auto",
     });
+  },
+
+  /**
+   * Append field-grain assertions to `provenance_event` (08-architecture invariant 1). Batched because one
+   * observed payload asserts many fields at once, and they must land in the SAME transaction as the graph
+   * write they justify — an event written in a separate transaction can be lost while the graph write
+   * survives, which is the one failure mode that turns the log from evidence into decoration.
+   *
+   * IDEMPOTENCY IS THE CALLER'S JOB, and it is the same rule `linkToCluster` already follows: call this ONLY
+   * when `appendSourceRecord` returned `created: true`. There is no unique index to fall back on here —
+   * `provenance_event` is partitioned by `recorded_at`, and a partitioned table's unique indexes must include
+   * the partition key, which would degrade "one event per assertion" into "one event per replay timestamp"
+   * (the trap migration 0085 records for provider_calls). So a re-ingested payload that skips the source_record
+   * insert but still appends events would silently double every corroboration count, and corroboration count
+   * IS the confidence signal and the badge (S-10). Empty input is a no-op so callers need no guard.
+   */
+  async appendProvenanceEvents(tx: Tx, drafts: readonly ProvenanceEventDraft[]): Promise<number> {
+    if (drafts.length === 0) return 0;
+    await tx.insert(provenanceEvent).values(
+      drafts.map((d) => ({
+        entityType: d.entityType,
+        entityId: d.entityId,
+        field: d.field,
+        action: d.action,
+        sourceType: d.sourceType,
+        sourceName: d.sourceName ?? null,
+        method: d.method ?? null,
+        contributorRef: d.contributorRef ?? null,
+        lawfulBasis: d.lawfulBasis,
+        payload: d.payload as Record<string, unknown>,
+        // numeric(4,3) round-trips as a string in postgres.js — mirrors matchProbability in linkToCluster.
+        confidence: d.confidence != null ? String(d.confidence) : null,
+        acceptanceState: d.acceptanceState,
+        sourceRecordId: d.sourceRecordId ?? null,
+        scopeRef: d.scopeRef ?? null,
+        observedAt: d.observedAt ?? null,
+      })),
+    );
+    return drafts.length;
   },
 
   /** Enqueue a survivorship re-projection for a golden cluster (prospect-database-platform I1 / Phase 05). The

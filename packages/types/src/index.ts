@@ -74,3 +74,4 @@ export * from "./dedupReview.ts";
 export * from "./notifications.ts";
 export * from "./aiUsage.ts";
 export * from "./crm.ts";
+export * from "./provenanceEvent.ts";

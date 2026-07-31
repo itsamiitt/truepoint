@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1942,
-  "fileSetHash": "sha256:6079ad00b12de5284fa0daca22def95e89684ba34f074ed49436e8375c17893d",
+  "fileCount": 1945,
+  "fileSetHash": "sha256:aa237ef31cc1b6b0f0a22271548f93a98b61739d695554471796af2869796dbf",
   "features": {
     "account-search": {
       "web": [],
@@ -2685,6 +2685,7 @@
       "packages/db/src/migrationSnapshots.test.ts",
       "packages/db/src/migrationTolerance.test.ts",
       "packages/db/src/poolTimeouts.test.ts",
+      "packages/db/src/provenanceVocabularyParity.test.ts",
       "packages/db/src/repositories/accountChildPlan.test.ts",
       "packages/db/src/repositories/accountChildPlan.ts",
       "packages/db/src/repositories/contactChannelPlan.test.ts",
@@ -2991,6 +2992,8 @@
       "packages/types/src/platformAuditCoverage.test.ts",
       "packages/types/src/pricing.ts",
       "packages/types/src/pricingAdmin.ts",
+      "packages/types/src/provenanceEvent.test.ts",
+      "packages/types/src/provenanceEvent.ts",
       "packages/types/src/providerConfigs.test.ts",
       "packages/types/src/providerConfigs.ts",
       "packages/types/src/realtimeEvents.ts",

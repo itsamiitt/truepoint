@@ -19,12 +19,23 @@ import { join } from "node:path";
 
 const META_DIR = join(import.meta.dir, "migrations", "meta");
 
-/** The historical gap (P-1.7): 84 journal entries, 30 snapshots. NOT a target — a ceiling that must never
- *  rise. The chain has been REBASELINED (migration 0083 carries a snapshot derived from the current schema,
- *  so `generate` diffs correctly and reports no changes), but the 54 missing HISTORICAL snapshots are not
- *  restored and point-in-time diffing before 0083 remains impossible. That is acceptable — the chain is only
- *  consumed forward — and this constant keeps the gap from widening again. */
-const EXPECTED_DEFICIT = 54;
+/** The historical gap (P-1.7): NOT a target — a ceiling that must never rise without a stated reason. The
+ *  chain has been REBASELINED (migration 0083 carries a snapshot derived from the current schema, so
+ *  `generate` diffs correctly and reports no changes), but the missing HISTORICAL snapshots are not restored
+ *  and point-in-time diffing before 0083 remains impossible. That is acceptable — the chain is only consumed
+ *  forward — and this constant keeps the gap from widening unnoticed.
+ *
+ *  54 → 57 on 2026-07-31, a deliberate widening for the Phase 1 spine (0088/0089/0090). drizzle-kit could not
+ *  have produced these snapshots even if it were run:
+ *    • 0088 is a pure feature_flags seed — INSERTs only, no DDL, so there is nothing for a snapshot to hold.
+ *    • 0089 creates provenance_event, which is PARTITIONED BY RANGE. Drizzle cannot express partitioning, so
+ *      the table object is deliberately kept OUT of schema/index.ts (the schema/forge.ts precedent) and
+ *      drizzle-kit therefore never sees it. A snapshot claiming otherwise would be actively misleading.
+ *    • 0090 creates forge.contributor + forge.contributor_consent, in the forge schema, where hand-authoring
+ *      is the standing policy and `generate` is forbidden — same as every 0073-0079 forge migration.
+ *  In other words this widening is the existing policy applied to three more files, not new debt of a new
+ *  kind. Tighten the constant if and when the P-1.7 chain repair lands. */
+const EXPECTED_DEFICIT = 57;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {
