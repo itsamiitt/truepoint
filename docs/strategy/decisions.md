@@ -115,6 +115,31 @@ Four decisions taken (human, in-session), plus the recorded stack:
       and enrichment, which is why it ships behind PROVENANCE_EVENTS_ENABLED and
       gets soak time before any per-tenant flag flips.
 
+  D8. PHASE 1 EMITS LAYER-0 PROVENANCE EVENTS ONLY (2026-07-31). The overlay
+      write path runs in withTenantTx as leadwolf_app, which is REVOKE'd from
+      provenance_event; SET LOCAL ROLE leadwolf_er inside that tx would require
+      leadwolf_app to be a MEMBER of leadwolf_er, handing the customer role the
+      whole master graph and destroying the grant-off wall. Layer-0 writes already
+      run under withErTx, which holds the grant, so D7's same-transaction append
+      works there with no new privileges. 08's invariant 1 binds "the materialized
+      graph", and Layer 0 IS that graph — the overlay is a tenant working copy.
+      Overlay events stay schema-supported but unwritten; granting leadwolf_app
+      INSERT (plus an RLS write policy) is a security decision to take
+      deliberately later, not a wiring detail to slip in now.
+  D9. THE S-07 GUC TRIGGER IS NOT BUILT, and this is a correction to the approved
+      plan rather than a deferral. The plan specified an AFTER INSERT/UPDATE
+      trigger on master_* raising unless a provenance GUC was set. Against the
+      actual architecture that guard fires on the MINT — which is deliberately
+      provenance-free (masterGraphRepository's co-op-safe MATCH-AGAINST boundary
+      writes nothing, by design), while events attach one transaction later at the
+      evidence hop. So it would warn on every legitimate mint, and a guard that
+      cries wolf on correct behaviour gets muted — worse than no guard, because it
+      looks like enforcement. Enforcement today is the three layers that DO fit:
+      the grant-off wall, the append-only trigger, and the repository chokepoint,
+      all covered by itests. If a backstop is wanted later the honest shape is a
+      reconciliation METRIC (master rows carrying field_provenance with zero
+      events) rather than a write-time trigger.
+
 Stack recorded: Bun 1.3.14 + Turbo + Biome monorepo; Postgres 16 via Drizzle +
 postgres.js with hand-written RLS; Redis 7 + BullMQ; Hono on Bun; Next.js 15 +
 React 19. Commands: build `bun run build`, test `bun test`, lint `bun run lint`,
