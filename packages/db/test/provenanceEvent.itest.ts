@@ -20,7 +20,12 @@
 //       what stops a Layer-0 event from silently carrying a tenant hint (C-02).
 //   (7) PARTITIONED, AND THE SWEEP FINDS IT — the maintenance sweep is catalog-driven, so being relkind 'p' in
 //       `public` is the whole registration. If this regresses, writes start failing on the 1st of a month.
+//   (8) THE WRITER AND D7's ATOMICITY — an event and the evidence it derives from live or die together, and
+//       the ev.created contract really does stop a re-ingest doubling the corroboration count. That contract
+//       cannot be an index (the table is partitioned, so a unique would have to include recorded_at), so the
+//       guard IS the mechanism and this is the only thing that proves it holds.
 
+import type { ProvenanceEventDraft } from "@leadwolf/types";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import postgres from "postgres";
 import { type ItestDb, startItestDb } from "./itestDb.ts";
@@ -120,6 +125,27 @@ function insertLayer0(overrides: Record<string, string | undefined> = {}): strin
   return `INSERT INTO provenance_event (${names}) VALUES (${values})`;
 }
 
+/** A valid Layer-0 draft for the repository-level tests, as the writer would build it. */
+function draft(field: string, sourceRecordId: string | null): ProvenanceEventDraft {
+  return {
+    entityType: "person",
+    entityId: masterPersonId,
+    field,
+    action: "assert",
+    sourceType: "import",
+    sourceName: "import:apollo",
+    method: "deterministic",
+    contributorRef: null,
+    lawfulBasis: "legitimate_interest",
+    payload: {},
+    confidence: null,
+    acceptanceState: "accepted",
+    sourceRecordId,
+    scopeRef: null,
+    observedAt: null,
+  };
+}
+
 describe("provenance_event — invariant 1 structural proofs", () => {
   // ── (1) THE GRANT-OFF WALL ────────────────────────────────────────────────────────────────────────────────
   test("leadwolf_app is denied (42501) ALL DML on provenance_event — read AND write", async () => {
@@ -201,6 +227,96 @@ describe("provenance_event — invariant 1 structural proofs", () => {
     expect((after as { source_record_id: string | null }).source_record_id).toBeNull();
     // Byte-identical apart from the pointer — the assertion survived its payload.
     expect((after as { rest: unknown }).rest).toEqual((before as { rest: unknown }).rest);
+  });
+
+  // ── (8) THE WRITER, AND D7's ATOMICITY GUARANTEE ──────────────────────────────────────────────────────────
+  // The whole point of decision D7: an event and the evidence it derives from live or die together. If they
+  // could diverge, the graph could hold a fact whose assertion was lost, and invariant 1 would be a goal
+  // rather than a guarantee.
+  test("appendProvenanceEvents writes under leadwolf_er, atomically with the evidence row", async () => {
+    const contentHash = new Uint8Array([1, 2, 3, 4]);
+    const written = await dbmod.withErTx(async (tx) => {
+      const ev = await dbmod.evidenceRepository.appendSourceRecord(tx, {
+        sourceName: "apollo",
+        contentHash,
+        rawData: { seed: "atomicity" },
+      });
+      expect(ev?.created).toBe(true);
+      // Deliberately synthetic field names: earlier tests in this file leave rows behind (the append-only
+      // trigger means nothing can clean up), so reusing a real field name would make these counts depend on
+      // execution order rather than on the behaviour under test.
+      return dbmod.evidenceRepository.appendProvenanceEvents(tx, [
+        draft("ev_atomic_a", ev?.id ?? null),
+        draft("ev_atomic_b", ev?.id ?? null),
+      ]);
+    });
+    expect(written).toBe(2);
+
+    const [n] = await admin`
+      SELECT count(*)::int AS n FROM provenance_event WHERE field IN ('ev_atomic_a','ev_atomic_b')`;
+    expect((n as { n: number }).n).toBe(2);
+  });
+
+  test("a failure after the append rolls the events back with the evidence", async () => {
+    const contentHash = new Uint8Array([9, 9, 9, 9]);
+    let threw = false;
+    try {
+      await dbmod.withErTx(async (tx) => {
+        const ev = await dbmod.evidenceRepository.appendSourceRecord(tx, {
+          sourceName: "apollo",
+          contentHash,
+          rawData: { seed: "rollback" },
+        });
+        await dbmod.evidenceRepository.appendProvenanceEvents(tx, [
+          draft("ev_rollback", ev?.id ?? null),
+        ]);
+        throw new Error("simulated downstream failure");
+      });
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+
+    // Neither half survived — that is the guarantee. A surviving event would mean an assertion about a payload
+    // no evidence row records; a surviving evidence row would mean a payload whose assertions were lost.
+    const [events] = await admin`
+      SELECT count(*)::int AS n FROM provenance_event WHERE field = 'ev_rollback'`;
+    const [records] = await admin`
+      SELECT count(*)::int AS n FROM source_records WHERE content_hash = ${contentHash}`;
+    expect((events as { n: number }).n).toBe(0);
+    expect((records as { n: number }).n).toBe(0);
+  });
+
+  test("the ev.created contract is what stops a re-ingest doubling the corroboration count", async () => {
+    // provenance_event is partitioned, so no unique index can enforce this — the guard IS the mechanism. This
+    // asserts the contract holds end to end: ingest the same payload twice, honouring created, and the field is
+    // asserted exactly once. Without it the count would read 2 and every confidence score downstream would be
+    // wrong, silently and permanently.
+    const contentHash = new Uint8Array([7, 7, 7, 7]);
+    const ingest = async () =>
+      dbmod.withErTx(async (tx) => {
+        const ev = await dbmod.evidenceRepository.appendSourceRecord(tx, {
+          sourceName: "apollo",
+          contentHash,
+          rawData: { seed: "idempotent" },
+        });
+        if (!ev || !ev.created) return 0; // the contract
+        return dbmod.evidenceRepository.appendProvenanceEvents(tx, [draft("ev_idempotent", ev.id)]);
+      });
+
+    expect(await ingest()).toBe(1);
+    expect(await ingest()).toBe(0); // second pass: same payload, no new assertions
+
+    const [n] = await admin`
+      SELECT count(*)::int AS n FROM provenance_event WHERE field = 'ev_idempotent'`;
+    expect((n as { n: number }).n).toBe(1);
+  });
+
+  test("an empty batch is a no-op so callers need no guard", async () => {
+    const written = await dbmod.withErTx((tx) =>
+      dbmod.evidenceRepository.appendProvenanceEvents(tx, []),
+    );
+    expect(written).toBe(0);
   });
 
   // ── (7) PARTITIONED, AND THE SWEEP FINDS IT ───────────────────────────────────────────────────────────────
