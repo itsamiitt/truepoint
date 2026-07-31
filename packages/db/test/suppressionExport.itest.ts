@@ -124,22 +124,24 @@ describe("suppressedContactIds — the export egress filter", () => {
     // contact whose blind index is also NULL. SQL NULL comparison saves us, and the IS NOT NULL guards make
     // that explicit rather than incidental — but only a test proves the whole predicate composes correctly.
     const noKeys = await makeContact("NoKeys", null, "");
-    await admin`
-      INSERT INTO suppression_list (scope, tenant_id, workspace_id, match_type, contact_id, reason)
-      VALUES ('workspace', ${tenantId}, ${wsId}, 'contact_id', ${byContactId}, 'second_row')`;
-
     const ids = await dbmod.withTenantTx({ tenantId, workspaceId: wsId }, (tx) =>
       dbmod.suppressionRepository.suppressedContactIds(tx, [noKeys, clean]),
     );
     expect(ids.size).toBe(0);
   });
 
-  test("duplicate suppression rows do not duplicate a contact in the result", async () => {
-    // selectDistinct matters: the set is used to FILTER, so a duplicated id is harmless here but a duplicated
-    // ROW would be a bug the moment anyone counts what was excluded — and the audit does count it.
+  test("two suppression rows for one contact still yield one entry", async () => {
+    // selectDistinct matters because the OR-join can match the SAME contact through more than one rung — and
+    // the export audit COUNTS what was excluded, so a duplicated row would inflate that number and make a
+    // compliance figure wrong in the direction that looks worse than reality.
+    await admin`
+      INSERT INTO suppression_list (scope, tenant_id, workspace_id, match_type, email_blind_index, reason)
+      VALUES ('workspace', ${tenantId}, ${wsId}, 'email', ${new Uint8Array([1, 1, 1, 1])}, 'second_rung')`;
+
     const ids = await dbmod.withTenantTx({ tenantId, workspaceId: wsId }, (tx) =>
       dbmod.suppressionRepository.suppressedContactIds(tx, [byContactId]),
     );
+    // byContactId now matches on BOTH contact_id and email_blind_index.
     expect(ids.size).toBe(1);
   });
 });

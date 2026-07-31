@@ -35,18 +35,31 @@ export const outcomeMetricsRepository = {
     const since =
       sinceDays === null
         ? sql`'-infinity'::timestamptz`
-        : sql`now() - make_interval(days => ${sinceDays})`;
+        // The ::int cast is load-bearing, not decoration. A bound parameter in named-argument notation gives
+        // Postgres nothing to infer from — `make_interval(days => $1)` can fail outright with "could not
+        // determine data type of parameter $1". The cast pins it.
+        : sql`now() - make_interval(days => ${sinceDays}::int)`;
 
     const rows = (await tx.execute(sql`
       SELECT
         count(*) FILTER (WHERE action = 'reveal')::int      AS hits,
         count(*) FILTER (WHERE action = 'reveal_miss')::int AS misses,
-        -- percentile_cont over the metadata key the reveal path writes. Rows without it (a miss, or an older
-        -- row from before latency was recorded) are excluded by the NULLIF/cast rather than counted as 0 —
-        -- a zero would drag the p95 down and make a slow path look fast.
+        -- percentile_cont over the metadata key the reveal path writes. Rows WITHOUT it (a miss, or a row
+        -- written before latency was recorded) are excluded rather than counted as 0 — a zero would drag the
+        -- p95 down and make a slow path look fast, which is the failure mode where a latency SLO passes while
+        -- users wait.
+        --
+        -- The FILTER is jsonb_typeof(...) = 'number', NOT `metadata ? 'serverMs'`, for two independent reasons:
+        --   1. CORRECTNESS. `::numeric` THROWS on a non-numeric value, so a key-exists filter would still feed
+        --      the cast a string and take the entire metrics query down with it. metadata is jsonb written by
+        --      several call sites and nothing constrains this key's type, so that is a live hazard, not a
+        --      hypothetical one. Admitting only JSON numbers makes the cast unfailable.
+        --   2. PORTABILITY. `?` is a parameter placeholder in several drivers. It happens to pass through this
+        --      stack, and no other query in this repo uses the operator — being the first to rely on that is
+        --      not worth it when the function form says the same thing unambiguously.
         percentile_cont(0.95) WITHIN GROUP (
           ORDER BY (metadata->>'serverMs')::numeric
-        ) FILTER (WHERE metadata ? 'serverMs')              AS p95_server_ms
+        ) FILTER (WHERE jsonb_typeof(metadata->'serverMs') = 'number') AS p95_server_ms
       FROM usage_event
       WHERE action IN ('reveal','reveal_miss')
         AND occurred_at >= ${since}
@@ -98,7 +111,7 @@ export const outcomeMetricsRepository = {
     const rows = (await tx.execute(sql`
       SELECT action, count(*)::int AS n
         FROM usage_event
-       WHERE occurred_at >= now() - make_interval(days => ${sinceDays})
+       WHERE occurred_at >= now() - make_interval(days => ${sinceDays}::int)
        GROUP BY action
     `)) as unknown as Array<{ action: string; n: number }>;
     return Object.fromEntries(rows.map((r) => [r.action, Number(r.n)]));
