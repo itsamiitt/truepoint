@@ -170,6 +170,24 @@ export const suppressionList = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
+    // The three match rungs every suppression matcher keys off (migration 0094). PARTIAL because a row
+    // populates exactly one match key (suppression_match_key_present enforces it), so indexing the NULLs would
+    // triple the size for rows that can never match on that column. Without these, enforcing suppression at
+    // search would mean an anti-join over three unindexed OR'd predicates on the busiest read in the product.
+    emailIdx: index("idx_suppression_email_blind_index")
+      .on(t.emailBlindIndex)
+      .where(sql`${t.emailBlindIndex} IS NOT NULL`),
+    domainIdx: index("idx_suppression_domain")
+      .on(t.domain)
+      .where(sql`${t.domain} IS NOT NULL`),
+    contactIdx: index("idx_suppression_contact")
+      .on(t.contactId)
+      .where(sql`${t.contactId} IS NOT NULL`),
+    // No matcher reads the phone rung yet (SuppressionKeys carries no phone), but Phase 6 IS a phone
+    // programme — indexed now so that work does not open by rediscovering this gap.
+    phoneIdx: index("idx_suppression_phone_blind_index")
+      .on(t.phoneBlindIndex)
+      .where(sql`${t.phoneBlindIndex} IS NOT NULL`),
     scopeEnum: check("suppression_scope_enum", sql`${t.scope} IN ('global','tenant','workspace')`),
     matchEnum: check(
       "suppression_match_enum",
