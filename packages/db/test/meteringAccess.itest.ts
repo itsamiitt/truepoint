@@ -147,6 +147,74 @@ describe("usage_event — workspace isolation, both directions", () => {
   });
 });
 
+describe("outcome metrics — the number the kill criterion turns on", () => {
+  test("hit rate counts misses in the denominator", async () => {
+    // THE assertion. Phase 1 stops the project if reveal-hit rate is <40%, and the obvious source for that
+    // number — contact_reveals — cannot produce it: a miss never creates a claim row, so a hit rate computed
+    // from the billing table is 100% by construction. Two hits and three misses must read 0.4, not 1.0.
+    await dbmod.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, async (tx) => {
+      for (let i = 0; i < 2; i++) {
+        await dbmod.usageEventRepository.append(tx, {
+          tenantId: tenantA,
+          workspaceId: wsA,
+          action: "reveal",
+          metadata: { serverMs: 100 + i },
+        });
+      }
+      for (let i = 0; i < 3; i++) {
+        await dbmod.usageEventRepository.append(tx, {
+          tenantId: tenantA,
+          workspaceId: wsA,
+          action: "reveal_miss",
+          subjectFingerprint: new Uint8Array([9, i]),
+        });
+      }
+    });
+
+    const m = await dbmod.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, (tx) =>
+      dbmod.outcomeMetricsRepository.revealOutcomes(tx, 30),
+    );
+    // The earlier suite in this file already appended one 'reveal', so hits is 3 of 6.
+    expect(m.hits).toBe(3);
+    expect(m.misses).toBe(3);
+    expect(m.hitRate).toBeCloseTo(0.5, 5);
+  });
+
+  test("p95 ignores rows with no recorded duration rather than counting them as zero", async () => {
+    // A miss carries no serverMs. Treating a missing value as 0 would drag the p95 down and make a slow reveal
+    // path look fast — the failure mode that lets a latency SLO pass while users wait.
+    const m = await dbmod.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, (tx) =>
+      dbmod.outcomeMetricsRepository.revealOutcomes(tx, 30),
+    );
+    expect(m.p95ServerMs).not.toBeNull();
+    expect(m.p95ServerMs as number).toBeGreaterThan(0);
+  });
+
+  test("an empty window returns null, not a zero hit rate", async () => {
+    // "No data yet" and "every attempt missed" are opposite conclusions. A kill criterion that cannot tell
+    // them apart would stop the project on an empty table.
+    const m = await dbmod.withTenantTx({ tenantId: tenantB, workspaceId: wsB }, (tx) =>
+      dbmod.outcomeMetricsRepository.revealOutcomes(tx, 30),
+    );
+    expect(m.hits).toBe(0);
+    expect(m.misses).toBe(0);
+    expect(m.hitRate).toBeNull();
+  });
+
+  test("most-wanted ranks by demand and is workspace-scoped", async () => {
+    const wanted = await dbmod.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, (tx) =>
+      dbmod.outcomeMetricsRepository.mostWanted(tx, 10),
+    );
+    expect(wanted.length).toBeGreaterThan(0);
+
+    // Workspace B ran no misses of its own, so it must see none of A's demand.
+    const other = await dbmod.withTenantTx({ tenantId: tenantB, workspaceId: wsB }, (tx) =>
+      dbmod.outcomeMetricsRepository.mostWanted(tx, 10),
+    );
+    expect(other.length).toBe(0);
+  });
+});
+
 describe("entitlement — readable by the app, never writable", () => {
   test("a tenant reads its own entitlements", async () => {
     await admin`

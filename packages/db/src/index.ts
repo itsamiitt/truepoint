@@ -207,6 +207,13 @@ export {
   provenanceBadgeRepository,
   type ProvenanceBadge,
 } from "./repositories/provenanceBadgeRepository.ts";
+// The Phase 1 outcome metrics. Read off usage_event, NOT contact_reveals: a miss never creates a claim row, so
+// a hit rate computed from the billing table would be 100% by construction — and that number is what the
+// Phase 1 kill criterion is judged on.
+export {
+  outcomeMetricsRepository,
+  type RevealOutcomeMetrics,
+} from "./repositories/outcomeMetricsRepository.ts";
 // Survivorship projector data access (prospect-database-platform I1 / Phase 05) — drains projection_outbox + writes
 // the shadow seams (data_quality_score, prov_hwm) on the golden row; NEVER the authoritative scalar columns.
 export {

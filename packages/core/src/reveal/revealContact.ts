@@ -116,6 +116,15 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
   const verifier = input.verifier ?? passThroughVerifier;
   const phoneVerifier = input.phoneVerifier ?? defaultPhoneVerifier();
 
+  // Server-side reveal duration, for the S-03 acceptance criterion ("reveal ≤3s p95"). Stamped here rather
+  // than at the route so it covers the expensive parts — the verifier's network I/O and the charging tx.
+  //
+  // HONEST ABOUT WHAT THIS MEASURES: the criterion is click-to-displayed-value, and this is server time only.
+  // It is a LOWER BOUND, and the actionable one — it excludes network and render, so a p95 that breaches here
+  // has definitely breached end-to-end, while one that passes still needs client instrumentation to confirm.
+  // Recorded as `serverMs` and not as `latencyMs` so nobody later reads it as the full number.
+  const startedAt = Date.now();
+
   // Pre-read the contact (fast scoped tx), then verify with no transaction open.
   const contact = await withTenantTx(input.scope, (tx) =>
     revealRepository.getContactForReveal(tx, input.contactId),
@@ -347,8 +356,12 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
           subjectId: contact.id,
           demandedFields: charge.missingFields.length > 0 ? charge.missingFields : null,
           entitlementKey: "reveal_month",
-          // PII-free: the reveal TYPE and what was missing, never a value.
-          metadata: { revealType: input.revealType, creditsCharged: cost },
+          // PII-free: the reveal TYPE, the cost, and server duration — never a value.
+          metadata: {
+            revealType: input.revealType,
+            creditsCharged: cost,
+            serverMs: Date.now() - startedAt,
+          },
         });
       }
 
