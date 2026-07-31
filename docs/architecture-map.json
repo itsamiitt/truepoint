@@ -102,8 +102,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1950,
-  "fileSetHash": "sha256:4f3aa8cdcab3abf91e586685beee17484f173a321945b9e992a73d2d897b621e",
+  "fileCount": 1952,
+  "fileSetHash": "sha256:01c7b39b120e8475d78c97ea30d5de698f0327962d370cd83fd18530fb74f958",
   "features": {
     "account-search": {
       "web": [],
@@ -2737,6 +2737,7 @@
       "packages/db/src/schema/email.ts",
       "packages/db/src/schema/enrichmentJobs.ts",
       "packages/db/src/schema/enrichmentPolicy.ts",
+      "packages/db/src/schema/entitlement.ts",
       "packages/db/src/schema/eventOutbox.ts",
       "packages/db/src/schema/featureFlags.ts",
       "packages/db/src/schema/forge.ts",
@@ -2763,6 +2764,7 @@
       "packages/db/src/schema/subscriptions.ts",
       "packages/db/src/schema/tags.ts",
       "packages/db/src/schema/teams.ts",
+      "packages/db/src/schema/usageEvent.ts",
       "packages/db/src/schema/validationRules.ts",
       "packages/db/src/schema/verificationJobs.ts",
       "packages/db/src/schema/webhooks.ts",

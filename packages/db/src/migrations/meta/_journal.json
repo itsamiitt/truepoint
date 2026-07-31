@@ -645,6 +645,20 @@
       "when": 1785229501628,
       "tag": "0091_policy_lawful_basis",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1785229501629,
+      "tag": "0092_usage_event",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1785229501630,
+      "tag": "0093_entitlement",
+      "breakpoints": true
     }
   ]
 }

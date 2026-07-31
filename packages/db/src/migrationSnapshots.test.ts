@@ -42,8 +42,13 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  authoring environment had no bun to run drizzle-kit in. This is genuinely owed work: run
  *  `bun run --filter @leadwolf/db generate` and, if it emits a snapshot for 0091, commit it and drop this
  *  constant back to 57. Left as-is it is one more link missing from a chain that is already the thing P-1.7
- *  exists to repair. */
-const EXPECTED_DEFICIT = 58;
+ *  exists to repair.
+ *
+ *  58 → 60 for 0092_usage_event and 0093_entitlement — back in the FIRST category, not 0091's. usage_event is
+ *  PARTITIONED BY RANGE (Drizzle cannot express it) and entitlement's migration is hand-authored; both table
+ *  objects are therefore kept OUT of schema/index.ts on purpose, so drizzle-kit never sees either and a
+ *  snapshot would describe tables `generate` does not know exist. */
+const EXPECTED_DEFICIT = 60;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {
