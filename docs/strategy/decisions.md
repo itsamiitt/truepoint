@@ -170,12 +170,37 @@ Four decisions taken (human, in-session), plus the recorded stack:
       across 1825 files resolves to a real barrel export (that last one exists
       because four non-existent APIs were caught by hand first: toast.info,
       AppError's positional signature, isFeatureEnabled, and c.get("scope")).
-      TO CLOSE IT: run `bun run lint`, `bun run typecheck`, `bun test`, then each
-      itest in its OWN process (the db client is a module singleton) against a
-      real Postgres 16 — provenanceEvent, contributorIsolation, meteringAccess,
-      suppressionExport. Then `bun run --filter @leadwolf/db generate` and commit
-      any snapshots it emits for 0091 and 0094, dropping EXPECTED_DEFICIT in
-      migrationSnapshots.test.ts by one per snapshot committed.
+      VERIFICATION NOW CLOSED (2026-07-31, later the same day). bun was installed
+      and every gate run: typecheck 22/22 packages, `bun test` 1896 pass / 0 fail
+      across 244 files, and all four itests green against a real Postgres —
+      provenanceEvent 13, meteringAccess 13, contributorIsolation 6,
+      suppressionExport 5 (37 assertions, 0 failures). Migrations 0088-0095 and
+      both new rls files apply cleanly to a fresh database.
+      RUNNING THE GATES FOUND SIX REAL DEFECTS that no static check had caught:
+      two backticks-inside-template-literal PARSE errors (one in applyMigrations'
+      GRANTS string, which would have stopped every migration, itest and deploy —
+      and the comment that caused it was the one explaining a different fix);
+      twelve typecheck errors in the pre-existing revealCharge tests from widening
+      RevealChargeResult; a flag description at 567 chars against a varchar(500)
+      column, caught by a migrationSeedLengths guard I did not know existed; and
+      an entitlement itest asserting the WRONG MECHANISM (see below).
+      CORRECTION TO THE D-SERIES: the claim that the app role is "denied"
+      INSERT/UPDATE/DELETE on `entitlement` is only half right. Under FORCE RLS
+      with a SELECT-only policy, INSERT raises 42501 but UPDATE and DELETE raise
+      NOTHING — the rows are invisible as targets, so the statement matches zero
+      rows and reports success. Both are safe; only one is loud, so "no error"
+      must never be read as "it worked". The test now asserts the STATE after the
+      attempt, which is the property that actually matters.
+      CHAIN REBASELINED: `generate` re-emitted only 0091's columns and 0094's
+      indexes (proving no other barrel drift) and now reports "No schema changes".
+      0095 carries that snapshot, hand-made idempotent so it does not rely on the
+      migrator's error-tolerance path. EXPECTED_DEFICIT stays 61 — one entry, one
+      snapshot; 0091/0094 still lack their own and the historical gap is P-1.7's.
+      KNOWN, NOT MINE: contactMerge.itest.ts has 2 timeouts. Verified pre-existing
+      by running it against the pre-session commit — same 4 pass / 2 fail.
+      ENVIRONMENT: verified on Postgres 17 (a scratch instance on port 55432, the
+      system cluster untouched) against the repo's declared 16. Everything
+      exercised behaves identically, but CI on 16 remains the authority.
 
 Stack recorded: Bun 1.3.14 + Turbo + Biome monorepo; Postgres 16 via Drizzle +
 postgres.js with hand-written RLS; Redis 7 + BullMQ; Hono on Bun; Next.js 15 +
