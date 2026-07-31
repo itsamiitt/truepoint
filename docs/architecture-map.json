@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1964,
-  "fileSetHash": "sha256:1d9abb799490e186bfabae91683411d871bbf6384b2918056ed8f899f89f7ca0",
+  "fileCount": 1966,
+  "fileSetHash": "sha256:29d9b342fd1901e7e57967f30b54aec61da432e8be6b14fdb19416072316d7db",
   "features": {
     "account-search": {
       "web": [],
@@ -601,6 +601,8 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/data-health/badgeV1.test.ts",
+        "packages/core/src/data-health/badgeV1.ts",
         "packages/core/src/data-health/chargeFor.test.ts",
         "packages/core/src/data-health/chargeFor.ts",
         "packages/core/src/data-health/dataQualityScore.test.ts",

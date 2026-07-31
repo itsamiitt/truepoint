@@ -168,6 +168,10 @@ export function RevealDialog({
                     result.verification.sourceCount === 1 ? "" : "s"
                   }`
                 : ""}
+              {/* Badge v1 (Phase 2): the confidence BAND, not the raw decimal. A number like 0.62 invites a
+                  precision the model does not have; a word is the honest resolution. Omitted entirely when
+                  null — no evidence log is not the same claim as low confidence. */}
+              {result.verification.band ? ` · ${result.verification.band} confidence` : ""}
             </p>
           )}
           <p className={styles.revealMeta}>

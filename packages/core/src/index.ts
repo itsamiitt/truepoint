@@ -463,6 +463,15 @@ export {
   type QualitySubScores,
   type FreshnessField,
 } from "./data-health/dataQualityScore.ts";
+// Confidence badge v1 (Phase 2): the PURE assembly of score + recency + corroboration from the provenance
+// aggregate. Lives here so the API, the extension bridge and the exporter cannot compute different numbers
+// from the same evidence — a badge that disagrees with itself across surfaces is worse than no badge.
+export {
+  buildConfidenceBadgeV1,
+  strongestMethod,
+  type BadgeAggregate,
+  type ConfidenceBadgeV1,
+} from "./data-health/badgeV1.ts";
 
 export {
   computeScore,

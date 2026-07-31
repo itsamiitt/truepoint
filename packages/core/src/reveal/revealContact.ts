@@ -33,6 +33,7 @@ import {
 import { isChannelDualWriteEnabled } from "../channels/channelDualWrite.ts";
 import { assertNotSuppressed } from "../compliance/assertNotSuppressed.ts";
 import { writeAudit } from "../compliance/writeAudit.ts";
+import { buildConfidenceBadgeV1 } from "../data-health/badgeV1.ts";
 import { type EmailVerifierPort, passThroughVerifier } from "../data-health/emailVerifier.ts";
 import type { PhoneVerifierPort } from "../data-health/phoneVerifier.ts";
 import { defaultPhoneVerifier } from "../data-health/twilioPhoneVerifier.ts";
@@ -407,27 +408,41 @@ async function buildVerificationBadge(contact: ContactForReveal): Promise<{
   lastVerifiedAt: string | null;
   sourceCount: number | null;
   sourceDiversity: number | null;
+  confidence: number | null;
+  band: string | null;
 }> {
+  // The overlay's own last_verified_at is the v0 freshness clause and is always available — reveal stamps it
+  // whenever it (re)sources verifiable PII. It stays the fallback so the badge never regresses to blank when
+  // the provenance log has nothing.
   const lastVerifiedAt = contact.lastVerifiedAt?.toISOString() ?? null;
+  const none = { lastVerifiedAt, sourceCount: null, sourceDiversity: null, confidence: null, band: null };
 
   // Skip the cross-connection round-trip when it cannot return anything: gate off, or no Layer-0 bridge.
-  if (!env.PROVENANCE_EVENTS_ENABLED || !contact.masterPersonId) {
-    return { lastVerifiedAt, sourceCount: null, sourceDiversity: null };
-  }
+  if (!env.PROVENANCE_EVENTS_ENABLED || !contact.masterPersonId) return none;
 
   try {
-    const badge = await withErTx((tx) =>
+    const agg = await withErTx((tx) =>
       provenanceBadgeRepository.badgeFor(tx, "person", contact.masterPersonId as string),
     );
+    // v1 (Phase 2): the SCORE, assembled by the pure builder so the API, the extension and the exporter
+    // cannot compute different numbers from the same evidence.
+    const v1 = buildConfidenceBadgeV1("email", agg);
+    if (!v1) return none;
+
     return {
-      lastVerifiedAt,
-      sourceCount: badge?.sourceCount ?? null,
-      sourceDiversity: badge?.sourceDiversity ?? null,
+      // Prefer the provenance observation over the overlay stamp: observed_at is VALID time (when the source
+      // says the fact held), which is what the decay curve is priced against. Falling back keeps a record
+      // that has evidence but no dated observation showing its overlay freshness rather than nothing.
+      lastVerifiedAt: v1.lastVerifiedAt ?? lastVerifiedAt,
+      sourceCount: v1.sourceCount,
+      sourceDiversity: agg?.sourceDiversity ?? null,
+      confidence: v1.confidence,
+      band: v1.band,
     };
   } catch (err) {
     // Never fail a paid reveal because a badge lookup failed. The reveal is the thing the user bought; the
     // badge is decoration on top of it, and a null simply omits the clause.
     console.warn("[reveal] badge lookup failed; omitting corroboration", err);
-    return { lastVerifiedAt, sourceCount: null, sourceDiversity: null };
+    return none;
   }
 }

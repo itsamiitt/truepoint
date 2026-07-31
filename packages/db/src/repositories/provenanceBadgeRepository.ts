@@ -30,6 +30,12 @@ export interface ProvenanceBadge {
   sourceDiversity: number;
   /** The most recent VALID time any source vouched for this entity (observed_at, not recorded_at). */
   lastObservedAt: Date | null;
+  /**
+   * The distinct METHODS that established these values (smtp_verify, pattern_inferred, …). Returned as a set
+   * rather than a single "best" because ranking them is a policy decision that belongs in the pure confidence
+   * model (METHOD_PRIOR), not in SQL — putting it here would fork the ordering the moment a method is added.
+   */
+  methods: string[];
 }
 
 export const provenanceBadgeRepository = {
@@ -47,10 +53,12 @@ export const provenanceBadgeRepository = {
     entityId: string,
   ): Promise<ProvenanceBadge | null> {
     const rows = (await tx.execute(sql`
-      SELECT count(DISTINCT contributor_ref)::int AS contributor_count,
-             count(*)::int                        AS source_count,
-             count(DISTINCT source_type)::int     AS source_diversity,
-             max(observed_at)                     AS last_observed_at
+      SELECT count(DISTINCT contributor_ref)::int                AS contributor_count,
+             count(*)::int                                       AS source_count,
+             count(DISTINCT source_type)::int                    AS source_diversity,
+             max(observed_at)                                    AS last_observed_at,
+             coalesce(array_agg(DISTINCT method)
+                        FILTER (WHERE method IS NOT NULL), '{}') AS methods
         FROM provenance_event
        WHERE entity_type = ${entityType}
          AND entity_id   = ${entityId}
@@ -60,6 +68,7 @@ export const provenanceBadgeRepository = {
       source_count: number;
       source_diversity: number;
       last_observed_at: string | Date | null;
+      methods: string[] | null;
     }>;
 
     const row = rows[0];
@@ -72,6 +81,7 @@ export const provenanceBadgeRepository = {
       sourceCount: Number(row.source_count),
       sourceDiversity: Number(row.source_diversity),
       lastObservedAt: row.last_observed_at ? new Date(row.last_observed_at) : null,
+      methods: row.methods ?? [],
     };
   },
 };

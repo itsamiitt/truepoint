@@ -43,6 +43,11 @@ export const revealResponseSchema = z.object({
       lastVerifiedAt: z.string().nullable(),
       sourceCount: z.number().int().nullable(),
       sourceDiversity: z.number().int().nullable(),
+      /** Badge v1 (Phase 2): field confidence ∈ [0,1] after per-field decay. Null when we hold no evidence
+       *  log for the record — the UI omits the clause rather than showing a confident-looking zero. */
+      confidence: z.number().min(0).max(1).nullable().optional(),
+      /** The word the UI renders: high | medium | low | unverified. */
+      band: z.string().nullable().optional(),
     })
     .optional(),
 });
