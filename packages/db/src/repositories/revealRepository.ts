@@ -17,6 +17,12 @@ export interface ContactForReveal {
   emailStatus: string;
   phoneEnc: Uint8Array | null;
   isRevealed: boolean;
+  /** Confidence badge v0 (S-10): "last verified <n> days ago". Already stamped by reveal/enrichment — the
+   *  badge reads it rather than deriving freshness a second way. */
+  lastVerifiedAt: Date | null;
+  /** The Layer-0 bridge, for the badge's corroboration half. Null while the contact is unresolved in-flight,
+   *  which is why the badge omits the source clause rather than rendering a zero. */
+  masterPersonId: string | null;
 }
 
 /** What the STAFF cross-tenant export needs per contact (database-management-research export; audit A1, Phase 2):
@@ -125,6 +131,8 @@ export const revealRepository = {
         emailStatus: contacts.emailStatus,
         phoneEnc: contacts.phoneEnc,
         isRevealed: contacts.isRevealed,
+        lastVerifiedAt: contacts.lastVerifiedAt,
+        masterPersonId: contacts.masterPersonId,
       })
       .from(contacts)
       .where(and(eq(contacts.id, contactId), isNull(contacts.deletedAt))) // tombstones are gone (08 §4.2)

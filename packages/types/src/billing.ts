@@ -30,6 +30,21 @@ export const revealResponseSchema = z.object({
   /** Every asked-for field is missing: the record exposed nothing AND owned nothing. Branch on this BEFORE
    *  `alreadyOwned` — otherwise the UI says "Already owned" about a contact we hold nothing for. */
   nothingToReveal: z.boolean().optional(),
+  /**
+   * Confidence badge v0 (06-roadmap Phase 1; outcome S-10): "last verified ⟨n⟩ days ago · ⟨k⟩ sources".
+   * Optional so an older client parses this response unchanged.
+   *
+   * `sourceCount` is null — and the UI omits the clause rather than rendering "0 sources" — whenever we hold
+   * no evidence log for the record. "No log yet" is not "nobody vouched for it", and until the provenance
+   * gate is on that is true of nearly every record.
+   */
+  verification: z
+    .object({
+      lastVerifiedAt: z.string().nullable(),
+      sourceCount: z.number().int().nullable(),
+      sourceDiversity: z.number().int().nullable(),
+    })
+    .optional(),
 });
 export type RevealResponse = z.infer<typeof revealResponseSchema>;
 

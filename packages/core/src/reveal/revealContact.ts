@@ -13,8 +13,10 @@ import {
   contactRepository,
   creditRepository,
   eventOutboxRepository,
+  provenanceBadgeRepository,
   revealRepository,
   usageEventRepository,
+  withErTx,
   withTenantTx,
 } from "@leadwolf/db";
 import {
@@ -121,6 +123,20 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
   if (!contact) throw new NotFoundError("Contact not found in this workspace.");
   const verified = await verifyForReveal(contact, input.revealType, verifier, phoneVerifier);
 
+  // Confidence badge v0 (S-10: "badge visible on 100% of reveals"). Computed BEFORE buildResponse rather than
+  // after: buildResponse closes over it, and a `const` declared later would be a temporal-dead-zone hazard the
+  // moment anyone adds an early return above the tx.
+  //
+  // The FRESHNESS half is free — the contact already carries last_verified_at, and reveal stamps it when it
+  // (re)sources verifiable PII, so the badge reads that rather than deriving freshness a second way.
+  //
+  // The CORROBORATION half costs a query on a DIFFERENT connection: provenance_event is denied to
+  // leadwolf_app, so it is only readable under withErTx, outside this request's tenant tx. It is skipped
+  // entirely unless the provenance gate is on AND the contact is bridged to a Layer-0 person — otherwise the
+  // log is empty by construction, and the round-trip would buy a guaranteed null on the product's
+  // latency-sensitive action (reveal ≤3s p95 is an acceptance criterion).
+  const badge = await buildVerificationBadge(contact);
+
   const buildResponse = (
     creditsCharged: number,
     balanceAfter: number,
@@ -139,6 +155,7 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
     alreadyOwned,
     missingFields: miss?.missingFields ?? [],
     nothingToReveal: miss?.nothingToReveal ?? false,
+    verification: badge,
   });
 
   try {
@@ -362,5 +379,42 @@ export async function revealContact(input: RevealInput): Promise<RevealResponse>
       );
     }
     throw err;
+  }
+}
+
+/**
+ * Confidence badge v0 for one contact (S-10). Freshness always; corroboration only when it can exist.
+ *
+ * Returns `sourceCount: null` rather than 0 whenever we hold no evidence log for the record, and the UI omits
+ * the "· ⟨k⟩ sources" clause on null. "No log yet" is not "nobody vouched for it" — and until
+ * PROVENANCE_EVENTS_ENABLED is on that is true of every record, so rendering a zero would put a misleading
+ * confidence signal on the whole database.
+ */
+async function buildVerificationBadge(contact: ContactForReveal): Promise<{
+  lastVerifiedAt: string | null;
+  sourceCount: number | null;
+  sourceDiversity: number | null;
+}> {
+  const lastVerifiedAt = contact.lastVerifiedAt?.toISOString() ?? null;
+
+  // Skip the cross-connection round-trip when it cannot return anything: gate off, or no Layer-0 bridge.
+  if (!env.PROVENANCE_EVENTS_ENABLED || !contact.masterPersonId) {
+    return { lastVerifiedAt, sourceCount: null, sourceDiversity: null };
+  }
+
+  try {
+    const badge = await withErTx((tx) =>
+      provenanceBadgeRepository.badgeFor(tx, "person", contact.masterPersonId as string),
+    );
+    return {
+      lastVerifiedAt,
+      sourceCount: badge?.sourceCount ?? null,
+      sourceDiversity: badge?.sourceDiversity ?? null,
+    };
+  } catch (err) {
+    // Never fail a paid reveal because a badge lookup failed. The reveal is the thing the user bought; the
+    // badge is decoration on top of it, and a null simply omits the clause.
+    console.warn("[reveal] badge lookup failed; omitting corroboration", err);
+    return { lastVerifiedAt, sourceCount: null, sourceDiversity: null };
   }
 }

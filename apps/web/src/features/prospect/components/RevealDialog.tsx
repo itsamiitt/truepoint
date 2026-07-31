@@ -5,7 +5,7 @@
 // suppressed (403) shows the quiet DNC notice — so the flow has no dead ends. Cost/charge/gate run server-side.
 "use client";
 
-import type { MaskedContact, RevealType } from "@leadwolf/types";
+import { type MaskedContact, type RevealType, ageDaysSince } from "@leadwolf/types";
 import { Dialog, StatusBadge, TpButton, useToast } from "@leadwolf/ui";
 import Link from "next/link";
 import { useEffect } from "react";
@@ -157,6 +157,19 @@ export function RevealDialog({
               <p className={styles.dialogNote}>No contact data was available for this reveal.</p>
             )}
           </dl>
+          {result.verification?.lastVerifiedAt && (
+            // Confidence badge v0 (S-10): "last verified <n> days ago · <k> sources". The source clause is
+            // omitted, never zeroed — a null means we hold no evidence log for this record, which is not the
+            // same claim as "no source vouched for it".
+            <p className={styles.revealMeta}>
+              {verifiedLabel(ageDaysSince(result.verification.lastVerifiedAt))}
+              {result.verification.sourceCount != null
+                ? ` · ${result.verification.sourceCount} source${
+                    result.verification.sourceCount === 1 ? "" : "s"
+                  }`
+                : ""}
+            </p>
+          )}
           <p className={styles.revealMeta}>
             {result.nothingToReveal
               ? "We hold no contact data for this record — no credits charged."
@@ -169,4 +182,12 @@ export function RevealDialog({
       )}
     </Dialog>
   );
+}
+
+/** Badge v0's freshness clause. Reuses @leadwolf/types' ageDaysSince rather than a second date helper, so the
+ *  badge and the Data Health column can never disagree about how old a record is. */
+function verifiedLabel(ageDays: number | null): string {
+  if (ageDays === null) return "Not yet verified";
+  if (ageDays === 0) return "Verified today";
+  return `Verified ${ageDays} day${ageDays === 1 ? "" : "s"} ago`;
 }
