@@ -172,7 +172,12 @@ apps/                           # deployable processes (thin transport adapters)
   `chargeFor.ts` (ADR-0013 charge-by-verified-result), `dataQualityScore.ts`
   (the 0.4·completeness + 0.3·verification + 0.3·freshness formula; cold-start rules for imports),
   `dataQualitySummary.ts` (`buildDataQualitySummary` — the per-workspace fill/verification/freshness count rollup the Data Health dashboard reads),
-  `dataQualitySnapshot.ts` (`captureDataQualitySnapshot` — persists a daily WorkspaceDataQuality trend point)
+  `dataQualitySnapshot.ts` (`captureDataQualitySnapshot` — persists a daily WorkspaceDataQuality trend point),
+  `badgeV1.ts` (confidence badge v0 over provenance aggregates; `now` injected so it stays pure),
+  `jobChange.ts` (`detectJobChange` — compares CONFIDENCES, not timestamps; a departure is held to the same
+  bar as a move) + `recordJobChange.ts` (the producer: intent_signal + alerts to users who SAVED the contact),
+  `successor.ts` (`rankSuccessors` — who now holds a departed contact's role; seniority is a DISTANCE on the
+  ladder, unknown scores neutral, and weak suggestions are dropped rather than shown)
 - **workers:** `reverification.ts` (per-workspace re-verification job), `reverificationSweep.ts` (leader-locked
   daily fan-out enqueuing a per-workspace re-verification for every workspace with stale revealed contacts),
   `dataQualitySnapshotSweep.ts` (leader-locked daily capture of a per-workspace Data Health trend point)
@@ -226,7 +231,10 @@ apps/                           # deployable processes (thin transport adapters)
 - **core:** `prospect/` — `dedup.ts` (per-workspace soft-pointer dedup: canonicalName + registrableDomain grouping),
   `accountSearch.ts` (workspace-visible account result count), `firmographics.ts` (roll intent_signals → account facets:
   technologies from tech_install slugs, fundingStage from latest funding_round), `bulkActions.ts` (batch apply to
-  workspace-visible ids + audit), `tags.ts`, `lists.ts`
+  workspace-visible ids + audit), `tags.ts`, `lists.ts`,
+  `contributionGate.ts` (`evaluateContribution` — may this row MINT a node in the SHARED graph? Gates the
+  mint only: a denied row still LINKs to what the graph already holds. An opt-OUT over the ADR-0021 identity
+  mint, not an opt-in — decisions.md D13), `backfillMaster.ts` (applies that gate per row)
 - **web:** `features/prospect/` — masked grid + `RecordDetail`/`QuickViewDrawer` slide-overs + `RevealDialog`; **bulk
   reveal** (`useBulkSelection`, `BulkActionBar`, `BulkRevealDialog`, pure `bulkReveal.ts` policy: stop on 402 / skip 403);
   **filter rail** (`FilterRail` + `FilterPanel`/`AccountFilterPanel` over `filterGroups.ts`/`accountFilterGroups.ts`, with
@@ -458,10 +466,20 @@ apps/                           # deployable processes (thin transport adapters)
 #### compliance — *M3 gate + audit; M5 DSAR/consent* ([08](./planning/08-compliance.md), ADR-0011)
 - **core:** `compliance/` — `assertNotSuppressed.ts` (unbypassable in-tx DNC gate), `writeAudit.ts` (same-tx append),
   `dsarIntake.ts`, `deleteFanout.ts` (erase-everywhere: tombstone every copy → purge dependents → GLOBAL suppression →
-  per-copy audit → verification scan), `assembleAccessReport.ts`, `consent.ts` (record + withdraw → auto global suppression)
-- **db:** `{suppression,audit,consent,dsar}Repository.ts`; `client.ts` `withPrivilegedTx`/`withPlatformTx` (the sanctioned
+  **suppress the Layer-0 golden node + append a tombstone `provenance_event`** → per-copy audit → verification scan
+  that now counts Layer 0, so a request cannot report `completed` while the shared graph still holds the subject),
+  `assembleAccessReport.ts`, `consent.ts` (record + withdraw → auto global suppression).
+  Both DSAR entrypoints take a request id ONLY and read the blind index from the row — the subject's plaintext
+  email never enters a job payload, job log or dead-letter record.
+- **db:** `{suppression,audit,consent,dsar}Repository.ts` (+ `contributionPolicyRepository.ts` — the customer's
+  contribution controls: workspace policy, domain/account/contact exclusion list, per-CRM-object opt-in);
+  `client.ts` `withPrivilegedTx`/`withPlatformTx` (the sanctioned
   cross-workspace `leadwolf_admin` paths) · **api:** `features/compliance/*` (public session-less `/compliance/dsar`) ·
   **workers:** `queues/dsar.ts` (privileged, VERIFIED only) · **web:** `features/settings-compliance/` (`SuppressionForm`/`SuppressionList`/`DsarForm`)
+- **schema/RLS:** `migrations/0097_contribution_controls.sql` + `rls/contributionControls.sql` (read/write for the
+  app role, unlike `entitlement` next door — a restriction the CUSTOMER imposes on us must be self-service, or the
+  revocation 09 rule 5 requires is not a revocation); `migrations/0099_*` adds `dsar_requests.due_at` (the ≤72h SLA
+  clock; `findOverdue` is what makes a missed SLA visible)
 
 #### webhooks — *outbound event delivery* (M10)
 - **core:** `webhooks/` — `dispatch.ts` (deliver + retry), `sign.ts` (HMAC payload signature), `ssrfGuard.ts` (block
@@ -483,7 +501,10 @@ apps/                           # deployable processes (thin transport adapters)
 #### admin — *platform-admin API surface* ([13](./planning/13-platform-admin.md), ADR-0011/0032)
 - **api:** `features/admin/` — `routes.ts` (`/workspaces`, `/users`, `/tenants`, `/tenants/:id`), `auditLog.ts` (GET
   `/audit-log`, itself audited), `impersonation.ts` (start w/ reason + end + active; time-boxed, banner-flagged),
-  `providerConfigs.ts` (toggle + monthly budget), `staff.ts` (grant/revoke staff roles)
+  `providerConfigs.ts` (toggle + monthly budget), `staff.ts` (grant/revoke staff roles),
+  `compliance.ts` (DSAR queue + transitions, retention policies, sub-processors, global suppression),
+  `dsarQueue.ts` (the `dsar` queue producer — dispatch fires on the staff transition to `processing`, never
+  from the session-less public intake, which would let anyone erase anyone by typing their address)
 - **db:** `platformAdminReads.ts` + `platformAuditReads.ts` (bounded reads); `impersonationRepository`/`platformStaffRepository`/
   `providerConfigRepository`/`staffRepository` (*unassigned*); `schema/platformOps.ts` (`impersonation_sessions`) + `platformStaff`
   in `schema/auth.ts` (deny-all to app role); `platform_audit_log` (raw table, `rls/platform.sql`, owner-insert only)
@@ -631,19 +652,15 @@ flowchart TD
 - **Framework-root files (4, in `unassigned[]`):** `apps/{admin,auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs`
   — framework-mandated app-root files that cannot live under `src/` (the generator only classifies under `src/`). A framework
   constraint, not a placement error.
-- **Undeclared worker queues (8, in `unassigned[]`):** `apps/workers/src/queues/{dedup,firmographics,masterBackfill,masterBackfill.test,masterBackfillSweep,retentionSweep,sequenceTick,tokenRefresh}.ts`
-  are real processors whose queue name isn't in `QUEUE_DOMAIN` (`lib/arch-map.mjs`). They belong to `prospect`
-  (dedup/firmographics), the master-graph backfill (`masterBackfill*` — prospect/enrichment), `compliance`
-  (retentionSweep) and `email` (sequenceTick — the sequence cron; `tokenRefresh` — the leader-locked OAuth
-  token-refresh sweep, M12 P1) respectively. Reconcile by extending `QUEUE_DOMAIN` (the spec-sanctioned way to grow the declared maps).
-- **Unmapped repositories (30, in `unassigned[]`):** repositories whose entity isn't in `REPO_DOMAIN` —
-  `accountSearch`, `authPolicy`, `customField`, `domain`, `emailAnalytics`, `emailEvent`, `emailMessage`, `emailTemplate`,
-  `emailThread`, `enrichmentJob`, `enrichmentPolicy`, `featureFlag`, `impersonation`, `importMappingTemplate`, `mailbox`,
-  `masterGraph`, `oauthConnectState`, `pipelineStage`, `platformStaff`, `providerConfig`, `savedSearch`, `scheduler`,
-  `scimToken`, `searchRepository`, `sendQuota`, `sendingDomain`, `ssoConfig`, `staff`, `tag`, `webhook`. All are real,
-  intentional repos; they bucket cleanly to the domains above (email/enrichment/prospect/custom-fields/saved-searches/
-  tags/webhooks/admin/scim/settings). Reconcile by extending `REPO_DOMAIN` as the schema grows.
-- **Domain-vocabulary warnings (31):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the new feature
+- **Unmapped repositories (4, in `unassigned[]`):** `entitlementRepository`, `outcomeMetricsRepository`,
+  `provenanceBadgeRepository`, `usageEventRepository` — the Phase-1 metering/provenance spine. Each is real and
+  intentional; none has an entity in `REPO_DOMAIN` yet because none has an obvious existing domain (they are
+  cross-cutting: entitlements sit above billing without being it, usage events meter every domain, the badge reads
+  Layer 0). Left honestly unassigned rather than filed under a confidently wrong home — the rule `REPO_DOMAIN`'s own
+  header states. Reconcile by extending `REPO_DOMAIN` once the metering surface has a settled domain name.
+  (The previously-listed 8 undeclared queues and 30 unmapped repositories are **resolved** — `QUEUE_DOMAIN` and
+  `REPO_DOMAIN` were extended; this note had gone stale against the JSON.)
+- **Domain-vocabulary warnings (54):** folder slugs not yet in `CANONICAL_DOMAINS` (`lib/arch-map.mjs`) — the new feature
   families since the canonical list was last edited: `account-search`, `admin`, `audit-log`, `contacts-bulk`,
   `custom-fields`/`customFields`, `email`, `enrichment-jobs`, `feature-flags`/`featureFlags`, `import-mapping-templates`,
   `pipeline-stages`/`pipelineStages`, `provider-configs`, `saved-searches`/`savedSearches`, `scim`, the `settings-*` family
@@ -651,10 +668,11 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the 1768-file JSON at the data-mgmt × app-shell merge
-  (delta: `packages/app-shell` becomes the 34th shared area — the rail/topbar/⌘K chrome shared by web, admin
-  and forge — and forge-api gains its RFC-9457 error middleware + test; both forge files sit in `unassigned[]`
-  with the rest of the nested Forge, which has no bucketing rules yet). When the source set changes again,
+- **Map hygiene:** this prose was last refreshed from the **1981-file** JSON (85 domains with code, 38 shared areas,
+  8 unassigned, 54 warnings) after the Phase 4/5 work — successor suggestions (`data-health`), the contribution
+  gate + `contributionPolicyRepository` (`prospect` / `compliance`, with `contributionPolicy → compliance` added to
+  `REPO_DOMAIN`), and the DSAR dispatch producer (`admin`). The `unassigned`/warning counts above were themselves
+  stale from an earlier refresh and have been corrected against the current JSON. When the source set changes again,
   re-run `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares the `fileSetHash`) and refresh
   these purposes.
 ```

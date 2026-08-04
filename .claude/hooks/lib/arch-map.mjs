@@ -205,6 +205,10 @@ export const REPO_DOMAIN = {
   // 06-family company children (account_domains/account_locations/hierarchy; Phase 4) — reveal, like accounts.
   accountChild: "reveal",
   suppression: "compliance",
+  // The customer's controls over what of their data reaches the shared graph (Phase 4 contributor controls).
+  // compliance, not crm-sync: the exclusion list is deliberately channel-agnostic, so filing it under the
+  // channel that prompted it would misdescribe what it governs.
+  contributionPolicy: "compliance",
   retentionPolicy: "compliance",
   retentionRun: "compliance",
   retentionScan: "compliance",

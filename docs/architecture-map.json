@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1972,
-  "fileSetHash": "sha256:ee6d284dd48a200496597e19ebceff165328772de034faf95b64bcf09a123af8",
+  "fileCount": 1981,
+  "fileSetHash": "sha256:a5e41a812970823ea4f723c3a60345c5fa6ecf6a6c7cd29fbef66193e96ae7e6",
   "features": {
     "account-search": {
       "web": [],
@@ -161,6 +161,7 @@
         "apps/api/src/features/admin/billing.ts",
         "apps/api/src/features/admin/compliance.ts",
         "apps/api/src/features/admin/dataRoutes.ts",
+        "apps/api/src/features/admin/dsarQueue.ts",
         "apps/api/src/features/admin/elevations.ts",
         "apps/api/src/features/admin/impersonation.ts",
         "apps/api/src/features/admin/index.ts",
@@ -380,6 +381,7 @@
       "db": [
         "packages/db/src/repositories/auditRepository.ts",
         "packages/db/src/repositories/consentRepository.ts",
+        "packages/db/src/repositories/contributionPolicyRepository.ts",
         "packages/db/src/repositories/dsarRepository.ts",
         "packages/db/src/repositories/retentionPolicyRepository.ts",
         "packages/db/src/repositories/retentionRunRepository.ts",
@@ -619,6 +621,8 @@
         "packages/core/src/data-health/reacherVerifier.ts",
         "packages/core/src/data-health/recordJobChange.ts",
         "packages/core/src/data-health/reverifyContacts.ts",
+        "packages/core/src/data-health/successor.test.ts",
+        "packages/core/src/data-health/successor.ts",
         "packages/core/src/data-health/twilioPhoneVerifier.test.ts",
         "packages/core/src/data-health/twilioPhoneVerifier.ts",
         "packages/core/src/data-health/validatePhone.ts"
@@ -1429,6 +1433,8 @@
         "packages/core/src/prospect/contactMergeGate.ts",
         "packages/core/src/prospect/contactMergePlan.test.ts",
         "packages/core/src/prospect/contactMergePlan.ts",
+        "packages/core/src/prospect/contributionGate.test.ts",
+        "packages/core/src/prospect/contributionGate.ts",
         "packages/core/src/prospect/dedup.test.ts",
         "packages/core/src/prospect/dedup.ts",
         "packages/core/src/prospect/dedupReview.ts",
@@ -2813,6 +2819,7 @@
       "packages/db/test/contactChannels.reconcile.itest.ts",
       "packages/db/test/contactMerge.itest.ts",
       "packages/db/test/contactResolve.itest.ts",
+      "packages/db/test/contributionControls.itest.ts",
       "packages/db/test/contributorIsolation.itest.ts",
       "packages/db/test/crmConflictDlq.itest.ts",
       "packages/db/test/crmConnect.itest.ts",
@@ -2821,6 +2828,7 @@
       "packages/db/test/crmSyncPersistence.itest.ts",
       "packages/db/test/customFields.itest.ts",
       "packages/db/test/dataQualitySnapshots.itest.ts",
+      "packages/db/test/dsarLayerZero.itest.ts",
       "packages/db/test/effectivePolicyResolve.itest.ts",
       "packages/db/test/emailAnalytics.itest.ts",
       "packages/db/test/emailGovernance.itest.ts",
@@ -2998,6 +3006,7 @@
       "packages/types/src/contactMerge.ts",
       "packages/types/src/contacts.test.ts",
       "packages/types/src/contacts.ts",
+      "packages/types/src/contribution.ts",
       "packages/types/src/crm.ts",
       "packages/types/src/customFields.ts",
       "packages/types/src/dataApproval.ts",
