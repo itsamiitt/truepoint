@@ -493,6 +493,18 @@ export {
   type RecordJobChangeInput,
   type RecordJobChangeResult,
 } from "./data-health/recordJobChange.ts";
+// The other half of a departure (S-14): once someone leaves, the seller's problem is who to talk to instead.
+// Pure ranking over a supplied candidate set — finding people at a company is already a query
+// (erRepository.findBlockingCandidates); which of them succeeded the role is the judgement.
+export {
+  rankSuccessors,
+  scoreSuccessor,
+  seniorityProximity,
+  SUCCESSOR_MIN_SCORE,
+  type DepartedRole,
+  type SuccessorCandidate,
+  type SuccessorSuggestion,
+} from "./data-health/successor.ts";
 
 export {
   computeScore,
