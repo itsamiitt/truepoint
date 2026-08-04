@@ -5,7 +5,6 @@
 
 import { dsarFanoutRepository, dsarRequestRepository, withPrivilegedTx } from "@leadwolf/db";
 import { NotFoundError } from "@leadwolf/types";
-import { blindIndex } from "../import/blindIndex.ts";
 import { writeAudit } from "./writeAudit.ts";
 
 export interface AccessReport {
@@ -20,15 +19,19 @@ export interface AccessReport {
   }>;
 }
 
-export async function assembleAccessReport(
-  requestId: string,
-  subjectEmail: string,
-): Promise<AccessReport> {
-  const subjectIndex = blindIndex(subjectEmail.trim().toLowerCase());
-
+/**
+ * Assemble the access report for a request.
+ *
+ * Takes ONLY the request id; the subject's blind index comes from the row intake already stored. That keeps
+ * the plaintext address out of the job payload and the job log, and removes the possibility of a caller
+ * passing an email that does not match the request — which would have reported one person's footprint under
+ * another person's request.
+ */
+export async function assembleAccessReport(requestId: string): Promise<AccessReport> {
   return withPrivilegedTx(async (tx) => {
     const request = await dsarRequestRepository.getById(tx, requestId);
     if (!request) throw new NotFoundError("DSAR request not found.");
+    const subjectIndex = request.subjectEmailBlindIndex;
     await dsarRequestRepository.setStatus(tx, requestId, "processing");
 
     const found = await dsarFanoutRepository.findCopies(tx, subjectIndex);

@@ -19,6 +19,26 @@ export interface DsarRow {
   scopeReport: unknown;
   requestedAt: Date;
   completedAt: Date | null;
+  /**
+   * The subject's HMAC dedup/DSAR key, stored at intake.
+   *
+   * Returned so the fan-out can work from the ROW rather than from a plaintext email handed in by its caller.
+   * That is what keeps the subject's address out of the job payload, the BullMQ job log and the dead-letter
+   * record — a DSAR pipeline that leaks the subject's email into Redis while erasing them from Postgres is
+   * the wrong shape however well the erasure itself works.
+   */
+  subjectEmailBlindIndex: Uint8Array;
+  /** The ≤72h SLA deadline (09 "automated SLA ≤72h"). Stamped at intake; never moved by a status change. */
+  dueAt: Date;
+}
+
+/** A breached-SLA row. Ids and timings only — the breach probe must never carry the subject. */
+export interface DsarOverdueRow {
+  id: string;
+  requestType: string;
+  status: string;
+  requestedAt: Date;
+  dueAt: Date;
 }
 
 export const dsarRequestRepository = {
@@ -37,11 +57,43 @@ export const dsarRequestRepository = {
         scopeReport: dsarRequests.scopeReport,
         requestedAt: dsarRequests.requestedAt,
         completedAt: dsarRequests.completedAt,
+        subjectEmailBlindIndex: dsarRequests.subjectEmailBlindIndex,
+        dueAt: sql<Date>`coalesce(${dsarRequests.dueAt}, ${dsarRequests.requestedAt} + interval '72 hours')`,
       })
       .from(dsarRequests)
       .where(eq(dsarRequests.id, id))
       .limit(1);
-    return rows[0] ?? null;
+    const row = rows[0];
+    if (!row) return null;
+    // dueAt comes back through a raw `sql` expression, which carries no column type for the driver to map,
+    // so it can arrive as a string. Normalised here rather than at each call site — a Date-typed field that
+    // is sometimes a string is the kind of thing that only fails once it reaches arithmetic.
+    return { ...row, dueAt: new Date(row.dueAt) };
+  },
+
+  /**
+   * Requests whose ≤72h clock has run out and that are not finished.
+   *
+   * The whole point of an SLA is that missing it is VISIBLE. A deadline column nothing queries is a comment
+   * with a type. This is the query the breach probe runs; it returns ids and timings only, never the subject.
+   */
+  async findOverdue(tx: Tx, now: Date, limit = 100): Promise<DsarOverdueRow[]> {
+    const rows = await tx.execute(
+      sql`SELECT id, request_type, status, requested_at,
+                 coalesce(due_at, requested_at + interval '72 hours') AS due_at
+            FROM dsar_requests
+           WHERE status NOT IN ('completed','rejected')
+             AND coalesce(due_at, requested_at + interval '72 hours') < ${now.toISOString()}::timestamptz
+           ORDER BY due_at ASC
+           LIMIT ${limit}`,
+    );
+    return (rows as unknown as Array<Record<string, unknown>>).map((r) => ({
+      id: r.id as string,
+      requestType: r.request_type as string,
+      status: r.status as string,
+      requestedAt: new Date(r.requested_at as string | Date),
+      dueAt: new Date(r.due_at as string | Date),
+    }));
   },
 
   async setStatus(
@@ -175,11 +227,103 @@ export const dsarFanoutRepository = {
     };
   },
 
-  /** Global-scope suppression so no source re-imports the subject and no send can reach them (08 §4.2 step 4). */
+  /** Global-scope suppression so no source re-imports the subject and no send can reach them (08 §4.2 step 4).
+   *
+   *  IDEMPOTENT. deleteFanout is re-runnable by design and now adds the suppression unconditionally rather
+   *  than only when live copies were found, so without this guard every re-run would stack another identical
+   *  global row — turning the one list that must stay readable by a human into noise. There is no unique
+   *  constraint to lean on (0094's partial indexes are for matching, not uniqueness), so the guard is explicit. */
   async addGlobalSuppression(tx: Tx, emailBlindIndex: Uint8Array, reason: string): Promise<void> {
     await tx.execute(sql`
       INSERT INTO suppression_list (scope, match_type, email_blind_index, reason)
-      VALUES ('global', 'email', ${emailBlindIndex}, ${reason})
+      SELECT 'global', 'email', ${emailBlindIndex}, ${reason}
+       WHERE NOT EXISTS (
+         SELECT 1 FROM suppression_list
+          WHERE scope = 'global' AND match_type = 'email' AND email_blind_index = ${emailBlindIndex}
+       )
+    `);
+  },
+
+  // ── LAYER 0 (Phase 5: "erasure = tombstone event + graph reprocess") ────────────────────────────────────
+  //
+  // Everything above erases the OVERLAY. The golden graph was untouched, and that is the hole: the overlay
+  // copies are per-workspace convenience, while master_persons is the shared node every future import,
+  // enrichment and reveal resolves against. Erasing only the overlay means the next import of the same
+  // person re-mints a live contact from a golden row that still exists — the subject reappears, and the
+  // global suppression row is all that stands between them and being sold again.
+  //
+  // The mechanism is SUPPRESSION, not deletion. master_persons.is_suppressed already exists and its comment
+  // already claims "set by the DSAR fan-out"; until now nothing set it. Deleting the golden row instead
+  // would be worse in two ways: it orphans every overlay bridge pointing at it, and it destroys the only
+  // record that this identity must never be re-minted — so the next crawl would recreate it clean.
+
+  /** The golden persons this subject resolves to, via the shared blind index. */
+  async findMasterPersons(tx: Tx, emailBlindIndex: Uint8Array): Promise<string[]> {
+    const rows = (await tx.execute(sql`
+      SELECT DISTINCT master_person_id FROM master_emails WHERE email_blind_index = ${emailBlindIndex}
+    `)) as unknown as Array<{ master_person_id: string }>;
+    return rows.map((r) => r.master_person_id);
+  },
+
+  /**
+   * Suppress the golden node and drop the channel facets the subject asked to be forgotten.
+   *
+   * The blind index goes too. It is a dedup key, not a contact value — but it is derived from the email, so
+   * keeping it would leave the graph able to recognise the subject on sight forever. The suppression_list row
+   * added by step 4 keeps that recognition where it belongs: in the deny list, not in the golden record.
+   *
+   * Returns the number of persons suppressed so the caller can report it and the residual scan can check it.
+   */
+  async suppressMasterPersons(tx: Tx, masterPersonIds: string[]): Promise<number> {
+    if (masterPersonIds.length === 0) return 0;
+    const ids = `{${masterPersonIds.join(",")}}`; // array literal — see purgeDependents
+    await tx.execute(sql`DELETE FROM master_emails WHERE master_person_id = ANY(${ids}::uuid[])`);
+    await tx.execute(sql`DELETE FROM master_phones WHERE master_person_id = ANY(${ids}::uuid[])`);
+    const rows = (await tx.execute(sql`
+      UPDATE master_persons
+         SET is_suppressed = true, has_email = false, has_phone = false,
+             full_name = NULL, first_name = NULL, last_name = NULL, linkedin_public_id = NULL
+       WHERE id = ANY(${ids}::uuid[])
+       RETURNING id
+    `)) as unknown as Array<{ id: string }>;
+    return rows.length;
+  },
+
+  /**
+   * Residual scan for Layer 0: any golden node still reachable by this subject's key, or reachable and not
+   * suppressed. Counted into the completion gate so a DSAR cannot report `completed` while the shared graph
+   * still holds the subject — the exact false claim the overlay-only fan-out was making.
+   */
+  async scanMasterResiduals(tx: Tx, emailBlindIndex: Uint8Array): Promise<number> {
+    const [r] = (await tx.execute(sql`
+      SELECT ((SELECT count(*) FROM master_emails WHERE email_blind_index = ${emailBlindIndex})
+            + (SELECT count(*) FROM master_persons p
+                WHERE p.is_suppressed = false
+                  AND EXISTS (SELECT 1 FROM master_emails e
+                               WHERE e.master_person_id = p.id
+                                 AND e.email_blind_index = ${emailBlindIndex})))::int AS n
+    `)) as unknown as Array<{ n: number }>;
+    return Number(r?.n ?? 0);
+  },
+
+  /**
+   * The tombstone provenance event (06-roadmap Phase 5, "erasure = tombstone event").
+   *
+   * Appended rather than deleting the subject's history, because provenance_event is append-only by trigger
+   * and because the erasure itself is a fact the record needs: a projector replaying the stream has to learn
+   * that the tail is void, and a deleted history would simply replay into a live person again. The payload
+   * carries the request id and NOTHING about the subject — a tombstone that quoted what was erased would be
+   * a copy of the thing it erases.
+   *
+   * No idempotency guard is needed and none is added: suppressMasterPersons deletes the master_emails rows
+   * that findMasterPersons resolves through, so a re-run finds no persons and never reaches here.
+   */
+  async appendTombstoneEvent(tx: Tx, masterPersonId: string, requestId: string): Promise<void> {
+    await tx.execute(sql`
+      INSERT INTO provenance_event
+        (entity_type, entity_id, field, action, source_type, lawful_basis, payload, acceptance_state)
+      VALUES ('person', ${masterPersonId}, '*', 'tombstone', 'user_edit', 'consent',
+              ${JSON.stringify({ requestId })}::jsonb, 'accepted')
     `);
   },
 };

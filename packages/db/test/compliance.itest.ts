@@ -1,8 +1,8 @@
-// compliance.itest.ts — the M5 Definition-of-Done proof on a real Postgres 16 (10/14 §3.6): Testcontainers
+﻿// compliance.itest.ts â€” the M5 Definition-of-Done proof on a real Postgres 16 (10/14 Â§3.6): Testcontainers
 // by default, or an external server via ITEST_DATABASE_URL (see itestDb.ts). Run in its OWN process:
 // `bun test ./packages/db/test/compliance.itest.ts`.
 //
-// Proves (08 §2/§3/§4, H5/H6): (1) the DSAR delete fan-out tombstones EVERY per-workspace copy across
+// Proves (08 Â§2/Â§3/Â§4, H5/H6): (1) the DSAR delete fan-out tombstones EVERY per-workspace copy across
 // tenants, purges dependents, adds global suppression, audits per copy, and completes ONLY after the
 // verification scan passes; (2) the fan-out is idempotent; (3) tombstones never surface (masked list +
 // reveal); (4) a re-imported copy of the erased subject can never be revealed (global suppression);
@@ -90,7 +90,7 @@ beforeAll(async () => {
   ({ tenantId: tenantB, workspaceId: wsB, ownerId: ownerB } = await seedWorkspace("globex"));
 
   core = await import("../../core/src/index.ts");
-  // The same humans live in BOTH workspaces (separate copies — the fan-out must find them all).
+  // The same humans live in BOTH workspaces (separate copies â€” the fan-out must find them all).
   for (const [tenantId, workspaceId] of [
     [tenantA, wsA],
     [tenantB, wsB],
@@ -119,7 +119,7 @@ beforeAll(async () => {
       recordedByUserId: ownerA,
     },
   );
-  // Add jane to a list in A so the fan-out also has a list_members dependent to sweep (list-plan/08 §5.2 —
+  // Add jane to a list in A so the fan-out also has a list_members dependent to sweep (list-plan/08 Â§5.2 â€”
   // person erasure must remove the subject's list memberships, and the verification scan must count them).
   const [list] = await admin`
     INSERT INTO lists (tenant_id, workspace_id, owner_user_id, name)
@@ -142,11 +142,16 @@ describe("M5 compliance hardening DoD", () => {
     const janeB = (await contactIdByDomain(wsB, "acme.com")) as string;
 
     const requestId = await core.createDsarRequest("delete", "jane@acme.com");
-    const result = await core.deleteFanout(requestId, "jane@acme.com");
+    const result = await core.deleteFanout(requestId);
 
     expect(result.copiesErased).toBe(2);
     expect(result.completed).toBe(true);
-    expect(result.verification).toEqual({ liveCopies: 0, piiOnTombstones: 0, dependents: 0 });
+    expect(result.verification).toEqual({
+      liveCopies: 0,
+      piiOnTombstones: 0,
+      dependents: 0,
+      masterResiduals: 0,
+    });
 
     for (const id of [janeA, janeB]) {
       const [c] = await admin`
@@ -163,7 +168,7 @@ describe("M5 compliance hardening DoD", () => {
            + (SELECT count(*) FROM contact_reveals WHERE contact_id IN (${janeA}, ${janeB}))::int
            + (SELECT count(*) FROM consent_records WHERE contact_id IN (${janeA}, ${janeB}))::int
            + (SELECT count(*) FROM list_members WHERE contact_id IN (${janeA}, ${janeB}))::int AS n`;
-    expect((deps as { n: number }).n).toBe(0); // incl. list_members — the erased subject's memberships are swept
+    expect((deps as { n: number }).n).toBe(0); // incl. list_members â€” the erased subject's memberships are swept
 
     const [sup] = await admin`
       SELECT count(*)::int AS n FROM suppression_list WHERE scope = 'global' AND reason = ${`dsar:${requestId}`}`;
@@ -180,7 +185,7 @@ describe("M5 compliance hardening DoD", () => {
 
   test("re-running the fan-out is an idempotent no-op", async () => {
     const requestId = await core.createDsarRequest("delete", "jane@acme.com");
-    const again = await core.deleteFanout(requestId, "jane@acme.com");
+    const again = await core.deleteFanout(requestId);
     expect(again.copiesErased).toBe(0);
     expect(again.completed).toBe(true);
   });
@@ -229,7 +234,7 @@ describe("M5 compliance hardening DoD", () => {
 
   test("the access report enumerates copies across workspaces with their footprints", async () => {
     const requestId = await core.createDsarRequest("access", "mark@globex.com");
-    const report = await core.assembleAccessReport(requestId, "mark@globex.com");
+    const report = await core.assembleAccessReport(requestId);
     expect(report.copies).toHaveLength(2);
     expect(new Set(report.copies.map((c) => c.workspaceId))).toEqual(new Set([wsA, wsB]));
     for (const copy of report.copies) expect(copy.sourceImports).toBeGreaterThan(0);
@@ -238,7 +243,7 @@ describe("M5 compliance hardening DoD", () => {
     expect((aud as { n: number }).n).toBe(2);
   });
 
-  test("consent withdrawal auto-adds global suppression that blocks reveals (08 §2)", async () => {
+  test("consent withdrawal auto-adds global suppression that blocks reveals (08 Â§2)", async () => {
     const lenaB = (await contactIdByDomain(wsB, "initech.com")) as string;
     const result = await core.withdrawConsent(
       { tenantId: tenantB, workspaceId: wsB },
@@ -260,7 +265,7 @@ describe("M5 compliance hardening DoD", () => {
     const app = postgres(dbHandle.appUrl, { max: 1, onnotice: () => {} });
     try {
       const [r] = await app`SELECT count(*)::int AS n FROM dsar_requests`;
-      expect((r as { n: number }).n).toBe(0); // FORCE RLS + no policy → deny-all for leadwolf_app
+      expect((r as { n: number }).n).toBe(0); // FORCE RLS + no policy â†’ deny-all for leadwolf_app
     } finally {
       await app.end();
     }

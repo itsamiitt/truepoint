@@ -1,16 +1,16 @@
-// listMembersDsarCascade.itest.ts — the Phase-5 DSAR-cascade Definition-of-Done for list membership
-// (list-plan/08 §5.2 step 3, 08 §9 test #3, 07 gap #7, ADR-0021): person erasure must provably remove the
+﻿// listMembersDsarCascade.itest.ts â€” the Phase-5 DSAR-cascade Definition-of-Done for list membership
+// (list-plan/08 Â§5.2 step 3, 08 Â§9 test #3, 07 gap #7, ADR-0021): person erasure must provably remove the
 // subject's `list_members` rows across the workspace, so no list still references an erased person. Real
 // Postgres 16 (Testcontainers by default, or ITEST_DATABASE_URL). Run in its OWN process:
 //   `bun test ./packages/db/test/listMembersDsarCascade.itest.ts`
 //
 // Proves:
-//   (1) the FK `list_members.contact_id → contacts.id` is ON DELETE CASCADE — DELETING a contact removes its
+//   (1) the FK `list_members.contact_id â†’ contacts.id` is ON DELETE CASCADE â€” DELETING a contact removes its
 //       list_members rows automatically (the schema-level guarantee Deliverable 5 asks for);
 //   (2) deleting a contact removes ONLY that contact's memberships (a co-member in the same list survives);
-//   (3) the LIVE DSAR fan-out (core.deleteFanout) — which TOMBSTONES the contact (deleted_at + nulled PII)
-//       rather than DELETEing the row, so the FK cascade does NOT fire on its own — now SWEEPS list_members
-//       explicitly (dsarRepository.purgeDependents, list-plan/08 §5.2 step 3): an erased person's memberships
+//   (3) the LIVE DSAR fan-out (core.deleteFanout) â€” which TOMBSTONES the contact (deleted_at + nulled PII)
+//       rather than DELETEing the row, so the FK cascade does NOT fire on its own â€” now SWEEPS list_members
+//       explicitly (dsarRepository.purgeDependents, list-plan/08 Â§5.2 step 3): an erased person's memberships
 //       are removed and the verification scan only completes once they are gone. This closes 07 gap #7.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -88,15 +88,15 @@ async function seedListWithMembers(name: string, contactIds: string[]): Promise<
   return listId;
 }
 
-describe("Phase-5 DSAR cascade over list membership (list-plan/08 §5.2, ADR-0021)", () => {
+describe("Phase-5 DSAR cascade over list membership (list-plan/08 Â§5.2, ADR-0021)", () => {
   test("deleting a contact CASCADE-removes its list_members rows (FK ON DELETE CASCADE)", async () => {
     const c = await seedContact("Cascade", "cascade.test");
     const listId = await seedListWithMembers("cascade list", [c]);
-    // The contact is a member in two lists — both memberships must go when the contact is deleted.
+    // The contact is a member in two lists â€” both memberships must go when the contact is deleted.
     const list2 = await seedListWithMembers("cascade list 2", [c]);
     expect(await memberCountForContact(c)).toBe(2);
 
-    // Person erasure at the schema level = DELETE the contacts row → the FK cascade removes every membership.
+    // Person erasure at the schema level = DELETE the contacts row â†’ the FK cascade removes every membership.
     await admin`DELETE FROM contacts WHERE id = ${c}`;
 
     expect(await memberCountForContact(c)).toBe(0); // every membership removed
@@ -121,7 +121,7 @@ describe("Phase-5 DSAR cascade over list membership (list-plan/08 §5.2, ADR-002
     expect(remaining[0]!.contact_id).toBe(kept); // and it is the co-member, untouched
   });
 
-  test("the live DSAR fan-out SWEEPS list_members on person erasure (07 gap #7 closed, list-plan/08 §5.2)", async () => {
+  test("the live DSAR fan-out SWEEPS list_members on person erasure (07 gap #7 closed, list-plan/08 Â§5.2)", async () => {
     // Build a real subject via the import pipeline so the fan-out can resolve it by blind index.
     await core.runImport({
       scope: { tenantId: tenantA, workspaceId: wsA },
@@ -140,18 +140,18 @@ describe("Phase-5 DSAR cascade over list membership (list-plan/08 §5.2, ADR-002
       SELECT id FROM contacts WHERE workspace_id = ${wsA} AND email_domain = 'subj.test' AND deleted_at IS NULL`;
     const contactId = (contact as { id: string }).id;
     await seedListWithMembers("dsar subject list", [contactId]);
-    // A co-member in the same list must survive — the sweep is contact-scoped, not list-scoped.
+    // A co-member in the same list must survive â€” the sweep is contact-scoped, not list-scoped.
     const coMember = await seedContact("CoMember", "comember.test");
     const sharedList = await seedListWithMembers("dsar shared list", [contactId, coMember]);
     expect(await memberCountForContact(contactId)).toBe(2);
 
     const requestId = await core.createDsarRequest("delete", "dsar@subj.test");
-    const result = await core.deleteFanout(requestId, "dsar@subj.test");
+    const result = await core.deleteFanout(requestId);
     expect(result.copiesErased).toBe(1);
-    expect(result.completed).toBe(true); // the scan counts list_members as a dependent → cannot complete dirty
+    expect(result.completed).toBe(true); // the scan counts list_members as a dependent â†’ cannot complete dirty
     expect(result.verification.dependents).toBe(0);
 
-    // The contact is tombstoned (deleted_at set, PII nulled) — and its list memberships are SWEPT, so no list
+    // The contact is tombstoned (deleted_at set, PII nulled) â€” and its list memberships are SWEPT, so no list
     // still references the erased person. The co-member is untouched.
     const [tomb] = await admin`SELECT deleted_at, first_name FROM contacts WHERE id = ${contactId}`;
     expect((tomb as { deleted_at: Date | null }).deleted_at).not.toBeNull();

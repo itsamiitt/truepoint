@@ -62,6 +62,9 @@ export interface ApprovalDecisionOutcome {
 export interface DsarTransitionOutcome {
   found: boolean;
   invalidFrom: string | null;
+  /** The request's type, so the caller can dispatch the right processing job after the tx commits. Null when
+   *  the row was not found or the transition was refused — there is nothing to dispatch either way. */
+  requestType: string | null;
 }
 
 /** Outcome of a `dedup_merge` execution (grain A overlay merge), mapped IN-tx so a refusal rolls the audit row
@@ -139,21 +142,22 @@ export const platformAdminWriteRepository = {
     // received → verifying|processing|rejected, verifying → processing|rejected, processing → rejected;
     // terminal states (completed|rejected) never transition.
     const rows = (await tx.execute(
-      sql`SELECT status FROM dsar_requests WHERE id = ${id}::uuid FOR UPDATE`,
-    )) as unknown as Array<{ status: string }>;
-    if (rows.length === 0) return { found: false, invalidFrom: null };
+      sql`SELECT status, request_type FROM dsar_requests WHERE id = ${id}::uuid FOR UPDATE`,
+    )) as unknown as Array<{ status: string; request_type: string }>;
+    if (rows.length === 0) return { found: false, invalidFrom: null, requestType: null };
     const from = rows[0]!.status;
     const legal: Record<string, readonly string[]> = {
       received: ["verifying", "processing", "rejected"],
       verifying: ["processing", "rejected"],
       processing: ["rejected"],
     };
-    if (!legal[from]?.includes(status)) return { found: true, invalidFrom: from };
+    if (!legal[from]?.includes(status))
+      return { found: true, invalidFrom: from, requestType: null };
     await tx
       .update(dsarRequests)
       .set({ status, ...(status === "processing" ? { verifiedAt: new Date() } : {}) })
       .where(eq(dsarRequests.id, id));
-    return { found: true, invalidFrom: null };
+    return { found: true, invalidFrom: null, requestType: rows[0]!.request_type };
   },
 
   /**

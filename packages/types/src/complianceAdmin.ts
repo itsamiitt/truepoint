@@ -57,6 +57,11 @@ export const dsarOversightRowSchema = z.object({
   requestedAt: z.string(), // ISO-8601
   verifiedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
+  /** The ≤72h SLA deadline (09, A-02). */
+  dueAt: z.string(),
+  /** Past the deadline and not finished. Computed server-side rather than in the console, so every surface
+   *  that reads this row agrees on what "breached" means instead of each re-deriving it from a clock. */
+  overdue: z.boolean(),
 });
 export type DsarOversightRow = z.infer<typeof dsarOversightRowSchema>;
 

@@ -4,7 +4,16 @@
 // privileged role; rls/compliance.sql denies the app role.
 
 import { sql } from "drizzle-orm";
-import { check, customType, jsonb, pgTable, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import {
+  check,
+  customType,
+  index,
+  jsonb,
+  pgTable,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 import { tenants, users, workspaces } from "./auth.ts";
 import { contacts } from "./contacts.ts";
 
@@ -55,6 +64,9 @@ export const dsarRequests = pgTable(
     requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
     verifiedAt: timestamp("verified_at", { withTimezone: true }), // requester identity verified (08 §4)
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    // The ≤72h SLA deadline (09, A-02). Nullable: rows that predate the clock keep NULL and every reader
+    // coalesces to requested_at + 72h, so a backfill cannot invent an SLA that was never promised.
+    dueAt: timestamp("due_at", { withTimezone: true }).default(sql`now() + interval '72 hours'`),
   },
   (t) => ({
     typeEnum: check("dsar_type_enum", sql`${t.requestType} IN ('access','delete','rectify')`),
@@ -62,5 +74,8 @@ export const dsarRequests = pgTable(
       "dsar_status_enum",
       sql`${t.status} IN ('received','verifying','processing','completed','rejected')`,
     ),
+    dueIdx: index("idx_dsar_requests_due")
+      .on(t.dueAt)
+      .where(sql`${t.status} NOT IN ('completed', 'rejected')`),
   }),
 );

@@ -348,6 +348,7 @@ export {
   dsarRequestRepository,
   dsarFanoutRepository,
   type DsarCreateInput,
+  type DsarOverdueRow,
   type DsarRow,
   type SubjectCopy,
 } from "./repositories/dsarRepository.ts";

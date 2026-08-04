@@ -30,6 +30,7 @@ import {
 import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
+import { enqueueDsar } from "./dsarQueue.ts";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -42,21 +43,32 @@ const actorOf = (c: Context<{ Variables: ApiVariables }>) => ({
   ip: c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
 });
 
-function toRow(r: {
-  id: string;
-  requestType: string;
-  status: string;
-  requestedAt: Date;
-  verifiedAt: Date | null;
-  completedAt: Date | null;
-}): DsarOversightRow {
+function toRow(
+  r: {
+    id: string;
+    requestType: string;
+    status: string;
+    requestedAt: Date;
+    verifiedAt: Date | null;
+    completedAt: Date | null;
+    dueAt: Date;
+  },
+  now: number,
+): DsarOversightRow {
+  const status = r.status as DsarOversightRow["status"];
+  const dueAt = new Date(r.dueAt);
   return {
     id: r.id,
     requestType: r.requestType as DsarOversightRow["requestType"],
-    status: r.status as DsarOversightRow["status"],
+    status,
     requestedAt: r.requestedAt.toISOString(),
     verifiedAt: r.verifiedAt ? r.verifiedAt.toISOString() : null,
     completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+    dueAt: dueAt.toISOString(),
+    // A finished request can never be overdue, whenever it finished. Breach is about work still owed — a
+    // completed erasure that took four days is a historical fact, not an outstanding obligation, and showing
+    // it as breached forever would bury the requests staff can still act on.
+    overdue: status !== "completed" && status !== "rejected" && dueAt.getTime() < now,
   };
 }
 
@@ -67,8 +79,11 @@ complianceRoutes.get("/dsars", async (c) => {
     limit: c.req.query("limit"),
   });
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
+  const now = Date.now();
   const dsars = await withPlatformTx(actorOf(c), "admin.list_dsars", async (tx) =>
-    (await platformComplianceReadRepository.listDsarRequests(tx, parsed.data)).map(toRow),
+    (await platformComplianceReadRepository.listDsarRequests(tx, parsed.data)).map((r) =>
+      toRow(r, now),
+    ),
   );
   return c.json({ dsars });
 });
@@ -82,7 +97,7 @@ complianceRoutes.post("/dsars/:id/status", requireCapability("compliance:manage"
   const parsed = dsarTransitionSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const { status, reason } = parsed.data;
-  await withPlatformTx(
+  const requestType = await withPlatformTx(
     actorOf(c),
     "dsar.transition",
     async (tx) => {
@@ -90,6 +105,7 @@ complianceRoutes.post("/dsars/:id/status", requireCapability("compliance:manage"
       if (!res.found) throw new NotFoundError("DSAR request not found.");
       if (res.invalidFrom)
         throw new ValidationError(`Cannot move a '${res.invalidFrom}' DSAR to '${status}'.`);
+      return res.requestType;
     },
     {
       targetType: "dsar_request",
@@ -97,7 +113,30 @@ complianceRoutes.post("/dsars/:id/status", requireCapability("compliance:manage"
       metadata: { status, ...(reason ? { reason } : {}) },
     },
   );
-  return c.json({ ok: true, id, status });
+
+  // THE DISPATCH. Everything downstream of here — the queue, the worker, the privileged fan-out — has been
+  // built for a long time and was unreachable: `enqueueDsar` had no callers, so a request could move through
+  // the whole staff workflow while the erasure never ran. The gap was invisible precisely because each piece
+  // worked and the console showed a status changing.
+  //
+  // Dispatched HERE rather than at intake because the public form is session-less: a self-dispatching intake
+  // would let anyone erase anyone by typing their address. Moving a request to `processing` is staff
+  // asserting the requester's identity is verified (the same transition stamps verified_at), which is exactly
+  // the precondition the fan-out needs.
+  //
+  // AFTER the transaction commits, so a job can never reference a transition that rolled back. A failed
+  // enqueue therefore leaves the request in `processing` with no job — deliberately the loud direction: it is
+  // visible in the overdue probe and the transition is re-runnable, whereas enqueueing inside the tx could
+  // dispatch an erasure the audit trail never recorded.
+  let queued = false;
+  if (status === "processing" && (requestType === "access" || requestType === "delete")) {
+    await enqueueDsar({ requestId: id, requestType });
+    queued = true;
+  }
+  // `rectify` reaches here and is deliberately NOT dispatched: the intake enum accepts it but no processing
+  // path exists, so a job could only fail. Reported back rather than silently skipped, so staff know the
+  // request is theirs to handle by hand.
+  return c.json({ ok: true, id, status, queued });
 });
 
 // ── Retention policies (13a Area 8, 13 §3.8) — staff-authored retention SLAs. Read = compliance:read (the

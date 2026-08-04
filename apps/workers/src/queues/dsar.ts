@@ -1,5 +1,7 @@
 // dsar.ts — the `dsar` queue processor (08 §4): runs the privileged access-report / delete-fan-out for a
-// VERIFIED request. Enqueued by the staff workflow (apps/admin later); never by an unverified intake.
+// VERIFIED request. Enqueued by the staff workflow when a request is moved to `processing` — never by the
+// unverified public intake, because a self-service form that dispatched its own erasure would let anyone
+// erase anyone by typing their address.
 
 import { assembleAccessReport, deleteFanout } from "@leadwolf/core";
 import type { CrmEraseTarget } from "@leadwolf/core";
@@ -7,13 +9,20 @@ import { DSAR_DLQ, DSAR_QUEUE } from "@leadwolf/types";
 import type { Job } from "bullmq";
 
 // Queue + DLQ names live in @leadwolf/types (workerQueues.ts — the admin probe reads them too); re-exported.
-// DLQ records stay PII-free: NEVER subjectEmail (see DsarJobData) — deadLetter.ts records scope/reason only.
 export { DSAR_DLQ, DSAR_QUEUE };
 
+/**
+ * The job payload: an id and a discriminator. Nothing else.
+ *
+ * It used to carry the subject's plaintext email, which put the address of the person being erased into the
+ * Redis job payload, the completed-job log and any dead-letter record — erasing them from Postgres while
+ * copying them into Redis. The blind index intake already stored on the row serves the fan-out just as well,
+ * so the email has no reason to travel. It also removes a whole failure mode: a payload email that did not
+ * match the request would have erased the wrong person under a real request's id.
+ */
 export interface DsarJobData {
   requestId: string;
   requestType: "access" | "delete";
-  subjectEmail: string; // supplied by the verification workflow, never persisted in the job log
 }
 
 /**
@@ -27,11 +36,10 @@ export type EnqueueCrmEraseJobs = (targets: CrmEraseTarget[], requestId: string)
 
 export function makeProcessDsar(enqueueCrmErase?: EnqueueCrmEraseJobs) {
   return async function processDsar(job: Job<DsarJobData>): Promise<unknown> {
-    const { requestId, requestType, subjectEmail } = job.data;
-    if (requestType !== "delete") return assembleAccessReport(requestId, subjectEmail);
+    const { requestId, requestType } = job.data;
+    if (requestType !== "delete") return assembleAccessReport(requestId);
     return deleteFanout(
       requestId,
-      subjectEmail,
       enqueueCrmErase ? (targets) => enqueueCrmErase(targets, requestId) : undefined,
     );
   };
