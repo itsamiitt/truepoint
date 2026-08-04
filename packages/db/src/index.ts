@@ -200,6 +200,14 @@ export {
   entitlementRepository,
   type EntitlementRow,
 } from "./repositories/entitlementRepository.ts";
+// The customer's controls over what of their data reaches the SHARED graph (Phase 4). Read/write on the app
+// path, unlike entitlement next door — a restriction the customer imposes on us must be self-service, or the
+// revocation 09 rule 5 requires is not a revocation.
+export {
+  contributionPolicyRepository,
+  defaultContributionPolicy,
+  type ResolvedContributionPolicy,
+} from "./repositories/contributionPolicyRepository.ts";
 // Confidence badge v0's corroboration half (S-10). Reads under withErTx, never the request's tenant tx:
 // leadwolf_app has no grant on provenance_event, and the aggregate is computed IN-QUERY so contributor_ref
 // never appears in a result column.

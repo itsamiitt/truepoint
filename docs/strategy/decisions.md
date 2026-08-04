@@ -235,6 +235,34 @@ Four decisions taken (human, in-session), plus the recorded stack:
       to nothing), and two itest beforeAll hooks missing their timeout argument.
       Each was proven to FIRE before being trusted.
 
+  D13. THE CONTRIBUTION CONTROLS ARE AN OPT-OUT OVER THE IDENTITY MINT, NOT AN
+      OPT-IN (2026-08-04). Phase 4's "CRM contributor controls" needed a decision
+      that rule 6 says must be surfaced rather than assumed.
+      The finding first: crm-sync has NO path to the shared graph. It writes only
+      to the per-workspace overlay and leaves master_person_id NULL. The
+      contribution happens one hop later and unlabelled — the master-backfill
+      sweep resolves ANY null-bridge contact and MINTS a golden node on a clean
+      miss, unable to tell a CRM-sourced row from an imported one. So the
+      controls had to be enforced there, and the natural shape was default-deny.
+      Default-deny is WRONG here, and ADR-0021 is why. The mint in question is
+      MATCH-AGAINST: identity and dedup keys only, email_enc NULL, no provenance,
+      no profile fields. The repo already treats that as the CONTRIBUTE-TO-off
+      state. Making it default-deny would stop the dedup spine growing for every
+      existing tenant on the day the migration ships — silently, with no customer
+      having asked — which is re-litigating ADR-0021 backwards under a Phase 4
+      control's name.
+      So: contribution_policy.contribute_enabled defaults false and stays the
+      switch for the Phase-3 co-op path that would contribute actual VALUES; it
+      is read by nothing today. What the backfill gate reads is the exclusion
+      lists (domain / account / contact) and never_share_fields, and those bind
+      ALWAYS — an exclusion list that only takes effect once some other master
+      switch is on is a trap, because the admin who saved "never share acme.com"
+      believes it is in force from that moment. A workspace with no controls set
+      behaves byte-identically to before the gate existed.
+      A denied row still LINKs to a person the graph already holds and only
+      declines to MINT a new one. Gating the link too would be a silent product
+      downgrade wearing a privacy control's name.
+
 Stack recorded: Bun 1.3.14 + Turbo + Biome monorepo; Postgres 16 via Drizzle +
 postgres.js with hand-written RLS; Redis 7 + BullMQ; Hono on Bun; Next.js 15 +
 React 19. Commands: build `bun run build`, test `bun test`, lint `bun run lint`,

@@ -33,6 +33,9 @@ export * from "./confidence.ts";
 export * from "./reverification.ts";
 export * from "./workerQueues.ts";
 export * from "./enrichmentPolicy.ts";
+// What a workspace will and will not contribute to the SHARED graph (Phase 4). Distinct from
+// enrichmentPolicy, which bounds what may flow INBOUND onto a record — opposite direction, opposite risk.
+export * from "./contribution.ts";
 export * from "./compliance.ts";
 export * from "./retention.ts";
 export * from "./featureFlags.ts";

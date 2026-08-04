@@ -51,10 +51,20 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *
  *  60 → 61 for 0094_suppression_match_indexes. This one belongs with 0091, NOT with the partitioned/forge
  *  group: it adds indexes to suppression_list, which IS in the drizzle barrel, so `generate` could and should
- *  have produced a snapshot. It did not because this environment has no bun. Owed alongside 0091 — run
- *  `bun run --filter @leadwolf/db generate`, commit whatever it emits for 0091 and 0094, and drop this
- *  constant by one for each. */
-const EXPECTED_DEFICIT = 61;
+ *  have produced a snapshot. It did not because this environment has no bun.
+ *
+ *  CORRECTION (2026-08-04), now that bun IS available and drizzle-kit has actually been run: the fix those two
+ *  paragraphs prescribe does not work. `generate` emits a snapshot only ALONGSIDE a migration it is generating;
+ *  against the current schema it reports "No schema changes, nothing to migrate" and writes nothing. It cannot
+ *  retroactively produce a snapshot for an already-committed file. So 0091's and 0094's missing links are not
+ *  repayable by running the command — they need a hand-authored snapshot or another rebaseline (which is what
+ *  0095 did for the chain HEAD). The debt is real; the stated remedy was not.
+ *
+ *  61 → 62 for 0097_contribution_controls — the FIRST category. contribution_policy, contribution_exclusion
+ *  and crm_object_contribution are hand-authored and deliberately kept out of schema/index.ts, exactly as
+ *  entitlement and usage_event are, so drizzle-kit never sees them and a snapshot would describe tables
+ *  `generate` does not know exist. Confirmed by running it: no drift reported after this migration landed. */
+const EXPECTED_DEFICIT = 62;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

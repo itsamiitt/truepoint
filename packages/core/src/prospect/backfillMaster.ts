@@ -14,6 +14,16 @@
 // because leadwolf_app has NO grant on the master_* tables. To keep the transaction count sane we resolve a
 // WHOLE batch under one withErTx, then stamp the whole batch under one withTenantTx.
 //
+// THE CONTRIBUTION GATE (Phase 4). This job is where CRM-synced rows actually reach the shared graph — crm-sync
+// itself writes only to the overlay and leaves master_person_id NULL, and this sweep then resolves any
+// null-bridge contact, minting a golden node on a clean miss. So the customer's "never share these accounts"
+// controls have to be enforced HERE or nowhere. The policy is read once per run on the overlay side and
+// evaluated per row; a denied row still LINKs to a person the graph already holds and only declines to MINT a
+// new one, so opting out costs the customer nothing except the ability to add.
+//
+// A workspace that has set NO controls behaves exactly as it did before the gate existed — the gate is an
+// opt-OUT over the identity mint, not an opt-in (decisions.md D13, and the header of contributionGate.ts).
+//
 // Idempotent + crash-safe: findUnresolvedForBackfill only returns rows whose master_person_id IS NULL, so a
 // re-run resolves only what's still unstamped; a row whose resolve/stamp fails stays NULL and is simply picked
 // up by the next pass. Keyset cursor = the last row's id, so the job resumes from any cursor after a crash
@@ -23,11 +33,14 @@
 import {
   accountRepository,
   contactRepository,
+  contributionPolicyRepository,
   masterGraphRepository,
   withErTx,
   withTenantTx,
 } from "@leadwolf/db";
+import type { NeverShareField } from "@leadwolf/types";
 import { companyDomainKey } from "../enrichment/freemailDomains.ts";
+import { evaluateContribution, mintRestrictions } from "./contributionGate.ts";
 
 export interface MasterBackfillResult {
   /** Total unresolved rows seen across every batch this run. */
@@ -38,6 +51,10 @@ export interface MasterBackfillResult {
    *  keyless row (which is left NULL with no error). The worker re-runs the job while errored > 0 so transient
    *  failures self-heal; keyless rows never increment this, so it can never loop forever. */
   errored: number;
+  /** Rows the contribution gate stopped from MINTING a new golden node (Phase 4). Counted separately from
+   *  errored and from keyless: nothing went wrong and nothing needs retrying — the customer said no. Without
+   *  its own counter a workspace that opted out looks identical to one whose data is all unresolvable. */
+  mintSuppressed: number;
 }
 
 /** One resolved row ready to be stamped under the overlay tx. */
@@ -68,6 +85,26 @@ export async function runMasterBackfill(
   let scanned = 0;
   let resolved = 0;
   let errored = 0;
+  let mintSuppressed = 0;
+
+  // The Phase 4 contribution gate, loaded ONCE for the whole run. Read on the overlay side because the policy
+  // tables are workspace-scoped and RLS-enforced in `public`, where leadwolf_er (the role the resolve runs
+  // under) has no grant at all — so the decision cannot be made where the mint happens, only carried there.
+  //
+  // Loaded once rather than per batch: this job walks one workspace, and a policy change mid-run would be
+  // applied to an arbitrary suffix of the rows. One snapshot per run means a run is entirely under one policy,
+  // and the next run picks up the change wholesale.
+  //
+  // contributeEnabled is deliberately NOT consulted: it is the Phase-3 co-op opt-in for contributing VALUES,
+  // while this mint is ADR-0021's identity-only MATCH-AGAINST path. What binds here is the exclusion lists
+  // and never-share fields, and they bind always (decisions.md D13).
+  const policy = await withTenantTx(scope, (tx) => contributionPolicyRepository.resolve(tx));
+  const gate = {
+    neverShareFields: policy.neverShareFields as NeverShareField[],
+    excludedDomains: policy.excludedDomains,
+    excludedAccountIds: policy.excludedAccountIds,
+    excludedContactIds: policy.excludedContactIds,
+  };
 
   for (;;) {
     // 1) Read one keyset-paged batch of unresolved contacts under the workspace-scoped overlay role.
@@ -91,10 +128,23 @@ export async function runMasterBackfill(
               companyDomainKey(row.accountDomain) ?? companyDomainKey(row.emailDomain),
             companyName: row.accountName ?? undefined,
           };
-          const { masterPersonId, masterCompanyId } = await masterGraphRepository.resolveForImport(
-            erTx,
-            input,
-          );
+          // Per row, not per batch: exclusions are written per account and per contact, so two rows in the
+          // same page legitimately get different answers. A denied row still LINKs — see contributionGate.
+          const verdict = evaluateContribution(gate, {
+            contactId: row.id,
+            accountId: row.accountId,
+            registrableDomain: input.registrableDomain,
+            emailDomain: row.emailDomain,
+          });
+          const resolveOpts = verdict.mayMint
+            ? mintRestrictions(verdict)
+            : { matchOnly: true as const };
+          const {
+            masterPersonId,
+            masterCompanyId,
+            mintSuppressed: suppressed,
+          } = await masterGraphRepository.resolveForImport(erTx, input, resolveOpts);
+          if (suppressed) mintSuppressed += 1;
           out.push({
             contactId: row.id,
             accountId: row.accountId,
@@ -140,5 +190,5 @@ export async function runMasterBackfill(
     if (batch.length < limit) break;
   }
 
-  return { scanned, resolved, errored };
+  return { scanned, resolved, errored, mintSuppressed };
 }

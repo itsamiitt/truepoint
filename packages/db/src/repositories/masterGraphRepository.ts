@@ -26,6 +26,14 @@
 //
 // Phone resolution is DEFERRED (the import carries no phone blind index yet) — phoneBlindIndex is accepted in the
 // input shape for forward-compat but is not read.
+//
+// ── THE CONTRIBUTION GATE (Phase 4) ──────────────────────────────────────────────────────────────────────────
+// ResolveForImportOptions lets an overlay-side caller restrict what a resolve may WRITE, never what it may
+// read. `matchOnly` LINKs normally and mints nothing; the withhold* flags drop individual facets from a mint.
+// The policy behind those flags (contribution_policy / contribution_exclusion) is workspace-scoped and lives
+// under RLS in `public`, where leadwolf_er has no grant — so the decision is made in
+// core/prospect/contributionGate.ts and carried in, exactly as match keys already are. Passing no options
+// leaves every statement below byte-identical to what it was before the gate existed.
 
 import { sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
@@ -40,17 +48,44 @@ export interface ResolveForImportInput {
   companyName?: string; // display name for a freshly minted company (falls back to the domain)
 }
 
+/**
+ * Per-call contribution restrictions, supplied by the overlay-side gate (core/prospect/contributionGate.ts).
+ *
+ * The resolver cannot decide these itself: the policy and exclusion tables are workspace-scoped and live in
+ * `public` under RLS, and this code runs as leadwolf_er, which has no grant on them. So the decision is made
+ * on the overlay side and carried in — the same split runImport already uses for match keys.
+ *
+ * `matchOnly` is the load-bearing one. It LINKs exactly as normal and MINTs nothing, so a workspace that has
+ * not opted in (or that excluded this account) still gets every benefit of what is already in the shared
+ * graph and only stops ADDING to it. Denying the link too would be a product downgrade wearing a privacy
+ * control's name.
+ */
+export interface ResolveForImportOptions {
+  matchOnly?: boolean;
+  withholdEmail?: boolean;
+  withholdCompany?: boolean;
+  withholdEmployment?: boolean;
+  withholdLinkedin?: boolean;
+}
+
 /** A LINK to / MINT of the golden pair. masterCompanyId is null for a company-less / domainless person;
  *  masterPersonId is null when the row carries NO person key (no linkedin, no email) — we do NOT mint an
  *  anonymous, un-dedupable identity (pure graph noise); the overlay stays unresolved (in-flight staging). */
 export interface ResolveForImportResult {
   masterPersonId: string | null;
   masterCompanyId: string | null;
+  /** True when a restriction stopped a mint that would otherwise have happened. Lets the caller count what the
+   *  gate actually cost rather than inferring it from a null, which is also what a keyless row returns. */
+  mintSuppressed?: boolean;
 }
 
 /** Resolve a company by its registrable domain — LINK if it exists, else co-op-safe MINT. Returns null when the
  *  input carries no domain (company-less person; the free-mail guard lives in the caller, PLAN_01 §4 F4). */
-async function resolveCompany(tx: Tx, input: ResolveForImportInput): Promise<string | null> {
+async function resolveCompany(
+  tx: Tx,
+  input: ResolveForImportInput,
+  opts?: ResolveForImportOptions,
+): Promise<string | null> {
   const domain = input.registrableDomain;
   if (!domain) return null;
 
@@ -59,6 +94,10 @@ async function resolveCompany(tx: Tx, input: ResolveForImportInput): Promise<str
     sql`SELECT id FROM master_companies WHERE primary_domain = ${domain} LIMIT 1`,
   )) as unknown as Array<{ id: string }>;
   if (existing[0]) return existing[0].id;
+
+  // A restricted caller LINKs but never mints — the lookup above already ran, so an existing company is still
+  // returned and only the creation of a NEW one is withheld.
+  if (opts?.matchOnly || opts?.withholdCompany) return null;
 
   // MINT — primary_domain + name only (the co-op-safe boundary). ON CONFLICT on the partial unique
   // (uniq_master_companies_primary_domain WHERE primary_domain IS NOT NULL) so a concurrent insert can't double up.
@@ -97,10 +136,14 @@ export const masterGraphRepository = {
    * `tx` (a withErTx transaction). LINKs an existing golden pair by a deterministic key, or co-op-safely MINTs.
    * See the file header for the exact fields a mint may and may not write — the security boundary is load-bearing.
    */
-  async resolveForImport(tx: Tx, input: ResolveForImportInput): Promise<ResolveForImportResult> {
+  async resolveForImport(
+    tx: Tx,
+    input: ResolveForImportInput,
+    opts?: ResolveForImportOptions,
+  ): Promise<ResolveForImportResult> {
     // 1) Company — LINK-or-MINT by registrable domain (null = company-less person). Resolved first so a fresh
     //    person mint can point current_company_id at it and open the bare employment edge.
-    const masterCompanyId = await resolveCompany(tx, input);
+    const masterCompanyId = await resolveCompany(tx, input, opts);
 
     // 1b) No person key at all (no linkedin_public_id AND no email_blind_index) → there is nothing to dedup on,
     //     so do NOT mint an anonymous master_persons: it could never be matched or merged by later ER, so every
@@ -114,15 +157,42 @@ export const masterGraphRepository = {
     // 2) Person — LINK if a deterministic key hits (mutate NOTHING), else MINT a co-op-safe golden node.
     const existingPersonId = await findPerson(tx, input);
     if (existingPersonId) {
-      // LINK — pure read + return; zero contribution (no field write, no edge upsert). PLAN_01 §5.3.
+      // LINK — pure read + return; zero contribution (no field write, no edge upsert). PLAN_01 §5.3. Reached
+      // by restricted callers too: the link is a read of what is already shared, not a contribution.
       return { masterPersonId: existingPersonId, masterCompanyId };
+    }
+
+    // The contribution gate, at the one statement that actually contributes. Nothing matched, so continuing
+    // would CREATE a globally visible node out of this workspace's data. A restricted caller stops here and
+    // the overlay bridge stays NULL — the same in-flight-staging state a keyless row leaves, and re-resolvable
+    // for free the day the customer opts in or an outside source mints the person independently.
+    if (opts?.matchOnly) {
+      return { masterPersonId: null, masterCompanyId, mintSuppressed: true };
+    }
+
+    // Which identity keys a RESTRICTED mint may actually write. Withholding governs what we WRITE, never what
+    // we read — findPerson above deliberately searched on the full input, because finding a person who is
+    // already in the graph is a read and costs the customer nothing.
+    const mintLinkedin = opts?.withholdLinkedin ? null : (input.linkedinPublicId ?? null);
+    const mintEmailBlindIndex = opts?.withholdEmail ? undefined : input.emailBlindIndex;
+
+    // Withholding BOTH keys would mint an anonymous row: no linkedin id, no email facet, nothing later ER
+    // could ever match or merge it on. That is precisely the permanent junk identity the keyless guard exists
+    // to prevent, arrived at by a different route — so take the same exit rather than creating graph noise in
+    // the name of privacy.
+    if (!mintLinkedin && !mintEmailBlindIndex) {
+      return { masterPersonId: null, masterCompanyId, mintSuppressed: true };
     }
 
     // MINT — identity + dedup only. NEVER full_name/first_name/last_name/job_title/department (PII VALUES, overlay
     // only). has_email/has_phone stay FALSE: the blind-index facet is a dedup key, not a contributed channel value.
+    // current_company_id is withheld alongside the employment edge: the scalar states the same fact the edge
+    // does ("this person works at X"), so honouring one and not the other would leak exactly what was refused.
+    // The company itself may still LINK — it is the person-to-company association that is withheld.
+    const mintCurrentCompanyId = opts?.withholdEmployment ? null : masterCompanyId;
     const minted = (await tx.execute(
       sql`INSERT INTO master_persons (linkedin_public_id, current_company_id, has_email, has_phone)
-          VALUES (${input.linkedinPublicId ?? null}, ${masterCompanyId}, false, false)
+          VALUES (${mintLinkedin}, ${mintCurrentCompanyId}, false, false)
           RETURNING id`,
     )) as unknown as Array<{ id: string }>;
     let masterPersonId = minted[0]!.id;
@@ -132,14 +202,14 @@ export const masterGraphRepository = {
     //    (a concurrent/earlier mint won the email), DO NOTHING then re-resolve: that other master is the canonical
     //    person for this email — prefer it and discard the empty person we just minted (acceptable edge-case TODO:
     //    the discarded empty master_persons row is harmless and swept by the deferred ER merge, PLAN_01 §4 F1/F8).
-    if (input.emailBlindIndex) {
+    if (mintEmailBlindIndex) {
       await tx.execute(
         sql`INSERT INTO master_emails (master_person_id, email_blind_index, email_domain)
-            VALUES (${masterPersonId}, ${input.emailBlindIndex}, ${input.emailDomain ?? null})
+            VALUES (${masterPersonId}, ${mintEmailBlindIndex}, ${input.emailDomain ?? null})
             ON CONFLICT (email_blind_index) DO NOTHING`,
       );
       const owner = (await tx.execute(
-        sql`SELECT master_person_id FROM master_emails WHERE email_blind_index = ${input.emailBlindIndex} LIMIT 1`,
+        sql`SELECT master_person_id FROM master_emails WHERE email_blind_index = ${mintEmailBlindIndex} LIMIT 1`,
       )) as unknown as Array<{ master_person_id: string }>;
       if (owner[0] && owner[0].master_person_id !== masterPersonId) {
         // Another master already owns this email — that is the canonical person; discard the just-minted empty one.
@@ -151,7 +221,7 @@ export const masterGraphRepository = {
     // 4) Employment edge — only on a fresh person mint when a company resolved. The BARE edge (is_current/is_primary
     //    default true), NO title/department. ON CONFLICT on the stint dedup unique (person, company, started_on) so
     //    a concurrent mint of the same pair collapses to one edge (PLAN_02 §0.1; started_on defaults to '-infinity').
-    if (masterCompanyId) {
+    if (masterCompanyId && !opts?.withholdEmployment) {
       await tx.execute(
         sql`INSERT INTO master_employment (master_person_id, master_company_id, is_current, is_primary)
             VALUES (${masterPersonId}, ${masterCompanyId}, true, true)
@@ -170,14 +240,19 @@ export const masterGraphRepository = {
    * single-row path (identity/dedup only; never revealable PII or contributed profile fields; see the file
    * header). Mints stay per-identity, the global UNIQUE constraints stay the concurrency guard; no set-based
    * mint over staging (which would breach the leadwolf_er trust boundary). Results are index-aligned to inputs.
+   *
+   * `optsFor` supplies PER-ROW contribution restrictions rather than one set for the chunk: an exclusion list
+   * is written per account and per contact, so two rows in the same import can legitimately get different
+   * answers. A chunk-wide option would force the batch path to either over- or under-apply the customer's rules.
    */
   async resolveForImportBatch(
     tx: Tx,
     inputs: ResolveForImportInput[],
+    optsFor?: (input: ResolveForImportInput, index: number) => ResolveForImportOptions | undefined,
   ): Promise<ResolveForImportResult[]> {
     const results: ResolveForImportResult[] = [];
-    for (const input of inputs) {
-      results.push(await masterGraphRepository.resolveForImport(tx, input));
+    for (const [i, input] of inputs.entries()) {
+      results.push(await masterGraphRepository.resolveForImport(tx, input, optsFor?.(input, i)));
     }
     return results;
   },

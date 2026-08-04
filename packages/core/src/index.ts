@@ -987,6 +987,17 @@ export {
   runMasterBackfill,
   type MasterBackfillResult,
 } from "./prospect/backfillMaster.ts";
+// The pure "may this row MINT a node in the shared graph?" decision the backfill applies per row (Phase 4).
+// Gates the MINT only — a denied row still LINKs to what the graph already holds, so opting out costs the
+// customer nothing except the ability to add.
+export {
+  evaluateContribution,
+  mintRestrictions,
+  type ContributionCandidate,
+  type ContributionDenyReason,
+  type ContributionGateInput,
+  type ContributionVerdict,
+} from "./prospect/contributionGate.ts";
 // Contact dedup pass (24 Phase-0.5): flags likely-duplicate contacts (name+domain key) by writing
 // duplicate_of_contact_id → the canonical, powering the duplicate search facet. Soft (pointer only), per-
 // workspace (RLS), idempotent — run by the dedup queue worker.

@@ -24,6 +24,11 @@ export interface MasterBackfillJobData {
  * staging), so THROW to make BullMQ retry the job (attempts/backoff in register.ts): the re-run re-scans from
  * the start and re-attempts the still-NULL rows. Cleanly-unresolvable KEYLESS rows do NOT count as `errored`, so
  * a job whose only leftovers are keyless succeeds and never loops.
+ *
+ * `mintSuppressed` is likewise NOT an error: the contribution gate declined on the customer's instruction, so
+ * those rows stay NULL permanently and by design. Retrying them would burn the job's attempts on a decision
+ * that cannot change until the customer changes it — and a workspace that opted out entirely would put this
+ * queue into a permanent retry loop.
  */
 export function throwIfErrored(result: MasterBackfillResult): void {
   if (result.errored > 0) {
