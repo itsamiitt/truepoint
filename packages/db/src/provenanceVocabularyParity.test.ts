@@ -36,7 +36,10 @@ function ddlOnly(): string {
 
 /** Extract the quoted members of `CONSTRAINT <name> CHECK (<col> IN ('a','b',…))`. */
 function checkMembers(constraintName: string): string[] {
-  const re = new RegExp(`CONSTRAINT\\s+${constraintName}\\s+CHECK\\s*\\([^)]*?IN\\s*\\(([^)]*)\\)`, "i");
+  const re = new RegExp(
+    `CONSTRAINT\\s+${constraintName}\\s+CHECK\\s*\\([^)]*?IN\\s*\\(([^)]*)\\)`,
+    "i",
+  );
   const m = ddlOnly().match(re);
   if (!m?.[1]) throw new Error(`CHECK constraint ${constraintName} not found in 0089`);
   return m[1]

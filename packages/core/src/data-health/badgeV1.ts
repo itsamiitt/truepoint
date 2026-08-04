@@ -10,8 +10,8 @@
 // across surfaces is worse than no badge, because the user cannot tell which one is lying.
 
 import {
-  METHOD_PRIOR,
   type ConfidenceBand,
+  METHOD_PRIOR,
   computeFieldConfidence,
   confidenceBand,
 } from "@leadwolf/types";

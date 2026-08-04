@@ -14,15 +14,7 @@
 // itself an entitlement has no cap at all, so the absence of a write policy is the actual enforcement.
 
 import { sql } from "drizzle-orm";
-import {
-  index,
-  integer,
-  pgTable,
-  primaryKey,
-  timestamp,
-  uuid,
-  varchar,
-} from "drizzle-orm/pg-core";
+import { index, integer, pgTable, primaryKey, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 import { tenants } from "./auth.ts";
 
 export const entitlement = pgTable(

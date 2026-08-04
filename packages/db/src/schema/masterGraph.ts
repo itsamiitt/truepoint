@@ -128,9 +128,12 @@ export const masterPersons = pgTable(
     // merge commit and never cleared. Mirrors contacts.merged_into_contact_id. Provenance is NOT re-pointed —
     // provenance_event is append-only, so a merge APPENDS an action='merge' event and the reader follows the
     // hop. Evidence stays attached to the entity that made it, which is what keeps the log auditable.
-    mergedIntoPersonId: uuid("merged_into_person_id").references((): AnyPgColumn => masterPersons.id, {
-      onDelete: "set null",
-    }),
+    mergedIntoPersonId: uuid("merged_into_person_id").references(
+      (): AnyPgColumn => masterPersons.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     mergedAt: timestamp("merged_at", { withTimezone: true }),
     fieldProvenance: jsonb("field_provenance").notNull().default({}), // [C6 seam — PLAN_03 §3.2]
     provHwm: timestamp("prov_hwm", { withTimezone: true }),

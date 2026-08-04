@@ -47,7 +47,11 @@ export function signalWeight(confidence: number): number {
 }
 
 /** Alert copy. Deliberately plain, and PII-free beyond the name the user already has. */
-export function alertTitle(verdict: JobChangeVerdict, label: string, company?: string | null): string {
+export function alertTitle(
+  verdict: JobChangeVerdict,
+  label: string,
+  company?: string | null,
+): string {
   if (verdict.kind === "departed") return `${label} has left their company`;
   return company ? `${label} moved to ${company}` : `${label} changed companies`;
 }

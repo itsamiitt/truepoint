@@ -57,7 +57,11 @@ describe("buildConfidenceBadgeV1", () => {
     // record, so a rendered zero would stamp a misleading signal across the whole database.
     expect(buildConfidenceBadgeV1("email", null, NOW)).toBeNull();
     expect(
-      buildConfidenceBadgeV1("email", { sourceDiversity: 0, lastObservedAt: null, methods: [] }, NOW),
+      buildConfidenceBadgeV1(
+        "email",
+        { sourceDiversity: 0, lastObservedAt: null, methods: [] },
+        NOW,
+      ),
     ).toBeNull();
   });
 

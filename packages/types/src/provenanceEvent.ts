@@ -75,12 +75,7 @@ export type ProvenanceSourceType = z.infer<typeof provenanceSourceType>;
 /** Whether the assertion counts yet. `pending` is the 09-compliance rule 4 holding pen: an event whose lawful
  *  basis could not be derived is RECORDED but does NOT project, so untaggable data never reaches the graph
  *  while still leaving an auditable trace that it arrived. */
-export const provenanceAcceptanceState = z.enum([
-  "accepted",
-  "pending",
-  "rejected",
-  "superseded",
-]);
+export const provenanceAcceptanceState = z.enum(["accepted", "pending", "rejected", "superseded"]);
 export type ProvenanceAcceptanceState = z.infer<typeof provenanceAcceptanceState>;
 
 /** The entity kinds that live in the workspace overlay and therefore MUST carry `scopeRef`. Layer-0 kinds must

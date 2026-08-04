@@ -18,11 +18,7 @@
 // DEFAULT_LAWFUL_BASIS is defined in the leaf package rather than here: packages/db builds forge-sync drafts
 // directly and cannot import core without creating a dependency cycle, so both sides read ONE constant instead
 // of keeping two that drift. Re-exported so this module stays the obvious place to look for it.
-import {
-  DEFAULT_LAWFUL_BASIS,
-  type LawfulBasis,
-  type ProvenanceSourceType,
-} from "@leadwolf/types";
+import { DEFAULT_LAWFUL_BASIS, type LawfulBasis, type ProvenanceSourceType } from "@leadwolf/types";
 
 export { DEFAULT_LAWFUL_BASIS };
 

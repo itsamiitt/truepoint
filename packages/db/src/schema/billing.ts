@@ -177,9 +177,7 @@ export const suppressionList = pgTable(
     emailIdx: index("idx_suppression_email_blind_index")
       .on(t.emailBlindIndex)
       .where(sql`${t.emailBlindIndex} IS NOT NULL`),
-    domainIdx: index("idx_suppression_domain")
-      .on(t.domain)
-      .where(sql`${t.domain} IS NOT NULL`),
+    domainIdx: index("idx_suppression_domain").on(t.domain).where(sql`${t.domain} IS NOT NULL`),
     contactIdx: index("idx_suppression_contact")
       .on(t.contactId)
       .where(sql`${t.contactId} IS NOT NULL`),

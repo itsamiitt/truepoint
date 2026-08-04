@@ -35,10 +35,10 @@ export const outcomeMetricsRepository = {
     const since =
       sinceDays === null
         ? sql`'-infinity'::timestamptz`
-        // The ::int cast is load-bearing, not decoration. A bound parameter in named-argument notation gives
-        // Postgres nothing to infer from — `make_interval(days => $1)` can fail outright with "could not
-        // determine data type of parameter $1". The cast pins it.
-        : sql`now() - make_interval(days => ${sinceDays}::int)`;
+        : // The ::int cast is load-bearing, not decoration. A bound parameter in named-argument notation gives
+          // Postgres nothing to infer from — `make_interval(days => $1)` can fail outright with "could not
+          // determine data type of parameter $1". The cast pins it.
+          sql`now() - make_interval(days => ${sinceDays}::int)`;
 
     const rows = (await tx.execute(sql`
       SELECT

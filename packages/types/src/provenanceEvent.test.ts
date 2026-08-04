@@ -93,9 +93,15 @@ describe("provenanceEventDraft", () => {
 
   // ── Ranges and vocabularies ───────────────────────────────────────────────────────────────────────────────
   test("confidence outside [0,1] is rejected", () => {
-    expect(provenanceEventDraftSchema.safeParse({ ...layer0, confidence: 1.5 }).success).toBe(false);
-    expect(provenanceEventDraftSchema.safeParse({ ...layer0, confidence: -0.1 }).success).toBe(false);
-    expect(provenanceEventDraftSchema.safeParse({ ...layer0, confidence: 0.75 }).success).toBe(true);
+    expect(provenanceEventDraftSchema.safeParse({ ...layer0, confidence: 1.5 }).success).toBe(
+      false,
+    );
+    expect(provenanceEventDraftSchema.safeParse({ ...layer0, confidence: -0.1 }).success).toBe(
+      false,
+    );
+    expect(provenanceEventDraftSchema.safeParse({ ...layer0, confidence: 0.75 }).success).toBe(
+      true,
+    );
   });
 
   test("a lawful basis outside the shared vocabulary is rejected", () => {

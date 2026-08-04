@@ -79,10 +79,7 @@ export const suppressionRepository = {
             isNotNull(suppressionList.emailBlindIndex),
             eq(suppressionList.emailBlindIndex, contacts.emailBlindIndex),
           ),
-          and(
-            isNotNull(suppressionList.domain),
-            eq(suppressionList.domain, contacts.emailDomain),
-          ),
+          and(isNotNull(suppressionList.domain), eq(suppressionList.domain, contacts.emailDomain)),
         ) as SQL,
       )
       .where(inArray(contacts.id, [...contactIds]));

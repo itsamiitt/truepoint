@@ -110,8 +110,7 @@ export function corroborationBoost(distinctSources: number): number {
  * decays — because the human was right in 2023, not necessarily today.
  */
 export function computeFieldConfidence(input: FieldConfidenceInput): number {
-  const halfLife =
-    FIELD_HALF_LIFE_DAYS[input.field as ConfidenceField] ?? DEFAULT_HALF_LIFE_DAYS;
+  const halfLife = FIELD_HALF_LIFE_DAYS[input.field as ConfidenceField] ?? DEFAULT_HALF_LIFE_DAYS;
   const prior = METHOD_PRIOR[input.method as ConfidenceMethod] ?? DEFAULT_METHOD_PRIOR;
   const decay = input.ageDays == null ? 1 : decayFactor(input.ageDays, halfLife);
   const boost = corroborationBoost(input.distinctSources ?? 1);

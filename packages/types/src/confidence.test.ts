@@ -54,7 +54,11 @@ describe("computeFieldConfidence", () => {
 
   test("method dominates at equal age — SMTP-verified beats pattern-inferred", () => {
     const verified = computeFieldConfidence({ field: "email", method: "smtp_verify", ageDays: 30 });
-    const guessed = computeFieldConfidence({ field: "email", method: "pattern_inferred", ageDays: 30 });
+    const guessed = computeFieldConfidence({
+      field: "email",
+      method: "pattern_inferred",
+      ageDays: 30,
+    });
     expect(verified).toBeGreaterThan(guessed * 2);
     // 07 requires an inferred address stay low-confidence until corroborated — this is what stops a guess
     // from reading as fact and producing the first-contact bounce S-08 exists to prevent.
@@ -65,14 +69,22 @@ describe("computeFieldConfidence", () => {
     // The whole point of per-field half-lives: people change roles constantly, countries rarely. This is the
     // S-09 signal, and a single flat SLA cannot express it.
     const title = computeFieldConfidence({ field: "jobTitle", method: "provider", ageDays: 365 });
-    const country = computeFieldConfidence({ field: "locationCountry", method: "provider", ageDays: 365 });
+    const country = computeFieldConfidence({
+      field: "locationCountry",
+      method: "provider",
+      ageDays: 365,
+    });
     expect(title).toBeLessThan(country);
     expect(FIELD_HALF_LIFE_DAYS.jobTitle).toBeLessThan(FIELD_HALF_LIFE_DAYS.locationCountry);
   });
 
   test("an unknown field falls back to the default half-life rather than never decaying", () => {
     const known = computeFieldConfidence({ field: "email", method: "provider", ageDays: 270 });
-    const unknown = computeFieldConfidence({ field: "somethingNew", method: "provider", ageDays: 270 });
+    const unknown = computeFieldConfidence({
+      field: "somethingNew",
+      method: "provider",
+      ageDays: 270,
+    });
     expect(unknown).toBeCloseTo(known, 6);
     expect(DEFAULT_HALF_LIFE_DAYS).toBe(FIELD_HALF_LIFE_DAYS.email);
   });
@@ -92,8 +104,18 @@ describe("computeFieldConfidence", () => {
 
   test("a pin floors confidence but does NOT stop it decaying", () => {
     // The human was right when they corrected it — not necessarily today.
-    const pinnedFresh = computeFieldConfidence({ field: "jobTitle", method: "crawl", ageDays: 0, pinned: true });
-    const pinnedOld = computeFieldConfidence({ field: "jobTitle", method: "crawl", ageDays: 1095, pinned: true });
+    const pinnedFresh = computeFieldConfidence({
+      field: "jobTitle",
+      method: "crawl",
+      ageDays: 0,
+      pinned: true,
+    });
+    const pinnedOld = computeFieldConfidence({
+      field: "jobTitle",
+      method: "crawl",
+      ageDays: 1095,
+      pinned: true,
+    });
     expect(pinnedFresh).toBeGreaterThan(0.85);
     expect(pinnedOld).toBeLessThan(pinnedFresh);
 

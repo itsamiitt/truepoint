@@ -160,7 +160,12 @@ export const erRepository = {
    */
   async confirmMerge(
     tx: Tx,
-    input: { survivorId: string; loserId: string; lawfulBasis: string; contributorRef?: string | null },
+    input: {
+      survivorId: string;
+      loserId: string;
+      lawfulBasis: string;
+      contributorRef?: string | null;
+    },
   ): Promise<{ merged: boolean; movedSourceRecords: number }> {
     if (input.survivorId === input.loserId) {
       // The DB CHECK would refuse this too; failing here names the caller's bug instead of a constraint.

@@ -65,7 +65,10 @@ export const CHANGE_MARGIN = 0.1;
 /** Compare titles ignoring case, punctuation and spacing — "VP, Sales" and "vp sales" are not a job change. */
 function sameTitle(a: string | null | undefined, b: string | null | undefined): boolean {
   const norm = (s: string | null | undefined) =>
-    (s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    (s ?? "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
   return norm(a) === norm(b);
 }
 
@@ -113,7 +116,13 @@ export function detectJobChange(
     return { changed: false, kind: null, confidence, priorConfidence, reason: "prior_stronger" };
   }
   if (confidence - priorConfidence < CHANGE_MARGIN) {
-    return { changed: false, kind: null, confidence, priorConfidence, reason: "insufficient_margin" };
+    return {
+      changed: false,
+      kind: null,
+      confidence,
+      priorConfidence,
+      reason: "insufficient_margin",
+    };
   }
 
   const kind: JobChangeKind = sameCompany

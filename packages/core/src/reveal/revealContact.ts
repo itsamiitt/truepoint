@@ -415,7 +415,13 @@ async function buildVerificationBadge(contact: ContactForReveal): Promise<{
   // whenever it (re)sources verifiable PII. It stays the fallback so the badge never regresses to blank when
   // the provenance log has nothing.
   const lastVerifiedAt = contact.lastVerifiedAt?.toISOString() ?? null;
-  const none = { lastVerifiedAt, sourceCount: null, sourceDiversity: null, confidence: null, band: null };
+  const none = {
+    lastVerifiedAt,
+    sourceCount: null,
+    sourceDiversity: null,
+    confidence: null,
+    band: null,
+  };
 
   // Skip the cross-connection round-trip when it cannot return anything: gate off, or no Layer-0 bridge.
   if (!env.PROVENANCE_EVENTS_ENABLED || !contact.masterPersonId) return none;

@@ -29,7 +29,10 @@ describe("detectJobChange", () => {
 
   test("title differences that are only formatting are not a job change", () => {
     // "VP, Sales" vs "vp sales" is the same job. Treating it as a change would fire alerts on punctuation.
-    const v = detectJobChange(claim({ title: "VP, Sales" }), claim({ title: "vp  sales", ageDays: 1 }));
+    const v = detectJobChange(
+      claim({ title: "VP, Sales" }),
+      claim({ title: "vp  sales", ageDays: 1 }),
+    );
     expect(v.changed).toBe(false);
     expect(v.reason).toBe("same_employment");
   });
