@@ -238,6 +238,13 @@ Supabase-specific deviations to be aware of:
 3. **Extensions** `citext` and `pg_trgm` are installed in `public` (matching the repo's
    dump); `pgcrypto` was already present in Supabase's `extensions` schema and is unused by
    name in the DDL (`gen_random_uuid()` is built-in on PG17).
-4. Supabase's platform schemas (`auth`, `storage`, `realtime`, …) coexist with the app
+4. **The Supabase Data API (PostgREST) is walled off from the app schema.** Supabase
+   grants its `anon`/`authenticated` roles default privileges on every table in `public`,
+   which would have exposed the tables TruePoint isolates by *grant revocation* rather than
+   RLS (the `master_*` graph, auth-service tables, partition children). Since TruePoint's
+   own API layer is the only access path, all `anon`/`authenticated` privileges on `public`
+   tables, sequences, and functions were revoked, and the default privileges altered so
+   future tables don't regain them. Re-grant selectively if the Data API is ever wanted.
+5. Supabase's platform schemas (`auth`, `storage`, `realtime`, …) coexist with the app
    schemas and are untouched; TruePoint's own `users`/auth tables are unrelated to Supabase
    Auth.
