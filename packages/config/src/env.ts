@@ -686,6 +686,19 @@ export const appEnvSchema = z
     // selection is the watermark).
     CHANNEL_RECONCILE_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(1000),
     CHANNEL_RECONCILE_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(10),
+    // S-13 job-change fan-out sweep (intelligence-platform 07 §4 slice 7.1). DARK by default,
+    // explicit-"true"-only (house 01 §7.3). The detection stack (detectJobChange / recordJobChange) shipped
+    // long before this gate existed and nothing called it — this is its trigger, so enabling it is what
+    // starts S-13's clock. Enable only after confirming the Redis watermark exists: an ABSENT watermark makes
+    // the first tick claim NOW and fan out nothing (deliberate — see the sweep header's alert-storm note).
+    JOB_CHANGE_SWEEP_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Batch knobs, mirroring the S-CH5 pair: contacts per keyset batch (one tx per batch) and batches per
+    // workspace per tick (bounds one tick under the leader-lock TTL; a whale drains across ticks).
+    JOB_CHANGE_SWEEP_BATCH_SIZE: z.coerce.number().int().positive().max(5000).default(500),
+    JOB_CHANGE_SWEEP_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(5),
     // Account-domain DUAL-WRITE (import-and-data-model-redesign 06 §1 / §Rollout, S-A2; 15 §M-SEQ seq 54) —
     // the global kill-switch half of the S-A2 dual gate. Effective dual-write = this AND the per-tenant
     // `account_domains_dual_write` feature flag (seeded off in 0062). While the ENV layer is off every account

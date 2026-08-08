@@ -13,6 +13,7 @@ import {
   runAccountBackfillForWorkspace,
   runChannelBackfillForWorkspace,
   runChannelReconcileForWorkspace,
+  runJobChangeSweepForWorkspace,
   stubMalwareScanner,
 } from "@leadwolf/core";
 import {
@@ -179,6 +180,11 @@ import {
   deadLetterFailedImport,
   processImport,
 } from "./queues/imports.ts";
+import {
+  JOB_CHANGE_SWEEP_QUEUE,
+  type JobChangeSweepJobData,
+  makeProcessJobChangeSweep,
+} from "./queues/jobChangeSweep.ts";
 import {
   LEDGER_BACKFILL_SWEEP_QUEUE,
   type LedgerBackfillSweepJobData,
@@ -1961,6 +1967,33 @@ export function startWorkers(): Worker[] {
       .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "channel-reconcile-sweep" })
       .catch((e) =>
         log.error("failed to schedule the channel-reconcile sweep", {
+          error: e instanceof Error ? e.message : String(e),
+        }),
+      );
+  }
+  // S-13 job-change fan-out sweep (intelligence-platform 07 §4 slice 7.1) — DARK by default behind
+  // JOB_CHANGE_SWEEP_ENABLED. The detection stack (detectJobChange + recordJobChange + the successor ranker)
+  // shipped long before this and NOTHING called it, so S-13's "time until the seller learns" was unbounded.
+  // This is that trigger and nothing more: no schema change, no new personal data, no new collection path.
+  // The sweep re-checks the same env gate before taking its leader lock, so an unset env leaves it inert.
+  if (env.JOB_CHANGE_SWEEP_ENABLED) {
+    const jobChangeQueue = tracedQueue<JobChangeSweepJobData>(JOB_CHANGE_SWEEP_QUEUE, {
+      connection,
+    });
+    workers.push(
+      instrument(
+        tracedWorker<JobChangeSweepJobData>(
+          JOB_CHANGE_SWEEP_QUEUE,
+          makeProcessJobChangeSweep(connection, runJobChangeSweepForWorkspace),
+          { connection },
+        ),
+        JOB_CHANGE_SWEEP_QUEUE,
+      ),
+    );
+    void jobChangeQueue
+      .add("sweep", {}, { repeat: { every: 15 * 60_000 }, jobId: "job-change-sweep" })
+      .catch((e) =>
+        log.error("failed to schedule the job-change sweep", {
           error: e instanceof Error ? e.message : String(e),
         }),
       );
