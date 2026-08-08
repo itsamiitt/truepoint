@@ -32,6 +32,11 @@ export interface ErCandidatePerson {
   currentCompanyId: string | null;
   jobTitle: string | null;
   seniorityLevel: string | null;
+  /** The stored ER blocking key — the join key for the name-blocked pass. NULL until the backfill runs. */
+  blockKey: string | null;
+  /** An INPUT to personBlockKey, not a scored field: the key is surname + first initial + country. Projected
+   *  here so the backfill can compute a key from the same row it is about to update. */
+  locationCountry: string | null;
 }
 
 const CANDIDATE_COLUMNS = {
@@ -43,6 +48,8 @@ const CANDIDATE_COLUMNS = {
   currentCompanyId: masterPersons.currentCompanyId,
   jobTitle: masterPersons.jobTitle,
   seniorityLevel: masterPersons.seniorityLevel,
+  blockKey: masterPersons.blockKey,
+  locationCountry: masterPersons.locationCountry,
 };
 
 const cap = (n: number): number => Math.max(1, Math.min(ER_CANDIDATE_LIMIT, Math.trunc(n)));
@@ -83,6 +90,97 @@ export const erRepository = {
       ne(masterPersons.id, seed.id),
     );
     return tx.select(CANDIDATE_COLUMNS).from(masterPersons).where(predicate).limit(cap(limit));
+  },
+
+  /**
+   * Candidate records for a seed via BLOCKING ON `block_key` — the "later refinement" the header above names,
+   * now possible because migration 0106 indexed the column (partial, WHERE block_key IS NOT NULL).
+   *
+   * This is ADDITIVE to findBlockingCandidates, not a replacement, because the two find DIFFERENT duplicates
+   * and neither subsumes the other:
+   *   • company blocking finds colleagues — the natural dedup neighbourhood, high precision;
+   *   • name blocking finds the two cases company blocking CANNOT reach by construction:
+   *       1. a person with NO current company, who today yields no candidates at all and is therefore
+   *          invisible to ER entirely;
+   *       2. the SAME person recorded at TWO companies — i.e. the job-change duplicate. That is outcomes
+   *          S-09 and S-13, the two this whole programme exists to serve, and a company-keyed block can
+   *          never surface it because the two rows disagree on exactly the key it blocks on.
+   *
+   * The key itself is computed by `personBlockKey` in @leadwolf/core (surname + first initial + country) and
+   * stored, never derived in SQL: one implementation, and an equality join the index can serve. It is a
+   * deterministic transform with no similarity function, which is what keeps candidate generation
+   * index-backed rather than quadratic.
+   */
+  async findCandidatesByBlockKey(
+    tx: Tx,
+    seed: { id: string; blockKey: string | null },
+    limit = ER_CANDIDATE_LIMIT,
+  ): Promise<ErCandidatePerson[]> {
+    if (!seed.blockKey) return []; // no key = deliberately not a probabilistic candidate this pass
+    const predicate: SQL | undefined = and(
+      eq(masterPersons.blockKey, seed.blockKey),
+      ne(masterPersons.id, seed.id),
+    );
+    return tx.select(CANDIDATE_COLUMNS).from(masterPersons).where(predicate).limit(cap(limit));
+  },
+
+  /**
+   * Count how many persons share a block key. The sweep checks this against `blockBudget` BEFORE scoring:
+   * a block of n records generates n(n-1)/2 comparisons, so a block that merely looks large is quadratically
+   * expensive, and an over-large block is usually a very common surname.
+   *
+   * Counting is bounded by the same candidate cap, so this can never itself become the expensive query it
+   * exists to prevent — it answers "at least this many", which is all an admission check needs.
+   */
+  async countBlockMembers(tx: Tx, blockKey: string, limit = ER_CANDIDATE_LIMIT): Promise<number> {
+    const rows = await tx
+      .select({ id: masterPersons.id })
+      .from(masterPersons)
+      .where(eq(masterPersons.blockKey, blockKey))
+      .limit(cap(limit));
+    return rows.length;
+  },
+
+  /**
+   * Persons whose `block_key` is still NULL — the backfill queue for the populate pass.
+   *
+   * The column has been RESERVED and unpopulated since the schema froze; 0106 indexed it, and nothing writes
+   * it yet. Until something does, `findCandidatesByBlockKey` correctly returns nothing for every seed, which
+   * is the safe failure but not a useful one.
+   */
+  async listPersonsMissingBlockKey(
+    tx: Tx,
+    afterId: string | null,
+    limit = ER_CANDIDATE_LIMIT,
+  ): Promise<ErCandidatePerson[]> {
+    const predicate = and(
+      sql`${masterPersons.blockKey} IS NULL`,
+      afterId ? gt(masterPersons.id, afterId) : undefined,
+    );
+    return tx
+      .select(CANDIDATE_COLUMNS)
+      .from(masterPersons)
+      .where(predicate)
+      .orderBy(asc(masterPersons.id))
+      .limit(cap(limit));
+  },
+
+  /**
+   * Set a person's `block_key`. The ONLY write to master_persons this repository performs, and deliberately
+   * narrow: it touches one non-PII, ER-internal column and nothing else. leadwolf_er holds UPDATE on
+   * master_persons, so this is within the role's grant.
+   *
+   * Guarded on `block_key IS NULL` so a backfill can never overwrite a key already computed by a different
+   * (possibly newer) rule — recomputing a whole graph's keys is a deliberate migration, not a side effect of
+   * a maintenance sweep. Returns whether a row was actually written.
+   */
+  async setBlockKey(tx: Tx, personId: string, blockKey: string): Promise<boolean> {
+    const updated = (await tx.execute(sql`
+      UPDATE master_persons SET block_key = ${blockKey}
+       WHERE id = ${personId} AND block_key IS NULL
+      RETURNING id
+    `)) as unknown as Array<{ id: string }>;
+    return updated.length > 0;
   },
 
   /**

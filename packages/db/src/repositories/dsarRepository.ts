@@ -279,6 +279,23 @@ export const dsarFanoutRepository = {
     const ids = `{${masterPersonIds.join(",")}}`; // array literal — see purgeDependents
     await tx.execute(sql`DELETE FROM master_emails WHERE master_person_id = ANY(${ids}::uuid[])`);
     await tx.execute(sql`DELETE FROM master_phones WHERE master_person_id = ANY(${ids}::uuid[])`);
+    // PERSON-SUBJECT SIGNALS (master_signals, migration 0103). A dated career event is personal data even
+    // though it carries no contact value — applyMigrations says so at the REVOKE, and cascade 1 §7 states the
+    // governing rule outright: "the right to erasure beats the append-only principle for personal data, full
+    // stop." Deleted here, in the SAME privileged transaction as the channels above, so a partial erasure
+    // cannot commit.
+    //
+    // SCOPED BY subject_type: master_signals is polymorphic, and a company-subject row is a fact about a
+    // COMPANY (a funding round, an acquisition) that no person may erase. Dropping the discriminator would
+    // silently delete company intelligence on every DSAR.
+    //
+    // Wired while the table is still EMPTY, which is the whole point: retrofitting erasure onto a populated
+    // append-only store is the miserable case cascade 1 §7 warns about. Index-backed by
+    // idx_master_signals_subject (subject_type, subject_id, observed_at).
+    await tx.execute(sql`
+      DELETE FROM master_signals
+       WHERE subject_type = 'person'
+         AND subject_id = ANY(${ids}::uuid[])`);
     const rows = (await tx.execute(sql`
       UPDATE master_persons
          SET is_suppressed = true, has_email = false, has_phone = false,
@@ -293,15 +310,36 @@ export const dsarFanoutRepository = {
    * Residual scan for Layer 0: any golden node still reachable by this subject's key, or reachable and not
    * suppressed. Counted into the completion gate so a DSAR cannot report `completed` while the shared graph
    * still holds the subject — the exact false claim the overlay-only fan-out was making.
+   *
+   * `masterPersonIds` are the nodes the fan-out resolved and suppressed. They are passed in rather than
+   * re-derived because suppression has already removed the blind index that found them — after the fact there
+   * is deliberately no way back from the subject's key to the node, which is the point of deleting it.
+   *
+   * A SCAN THAT DOES NOT COUNT A STORE CANNOT PROVE ANYTHING ABOUT IT. Person-subject signals were erased
+   * above but were not counted here, which meant a DSAR could report zero residuals while those rows
+   * survived — a false completion claim, which is worse than the rows, because it is the completion gate that
+   * the ≤72h A-02 SLA is measured against.
    */
-  async scanMasterResiduals(tx: Tx, emailBlindIndex: Uint8Array): Promise<number> {
+  async scanMasterResiduals(
+    tx: Tx,
+    emailBlindIndex: Uint8Array,
+    masterPersonIds: string[] = [],
+  ): Promise<number> {
+    // No resolved nodes ⇒ nothing to have missed; matching nothing is correct rather than matching everything.
+    const ids = `{${masterPersonIds.join(",")}}`;
+    const signalResidual =
+      masterPersonIds.length === 0
+        ? sql`0`
+        : sql`(SELECT count(*) FROM master_signals
+                WHERE subject_type = 'person' AND subject_id = ANY(${ids}::uuid[]))`;
     const [r] = (await tx.execute(sql`
       SELECT ((SELECT count(*) FROM master_emails WHERE email_blind_index = ${emailBlindIndex})
             + (SELECT count(*) FROM master_persons p
                 WHERE p.is_suppressed = false
                   AND EXISTS (SELECT 1 FROM master_emails e
                                WHERE e.master_person_id = p.id
-                                 AND e.email_blind_index = ${emailBlindIndex})))::int AS n
+                                 AND e.email_blind_index = ${emailBlindIndex}))
+            + ${signalResidual})::int AS n
     `)) as unknown as Array<{ n: number }>;
     return Number(r?.n ?? 0);
   },

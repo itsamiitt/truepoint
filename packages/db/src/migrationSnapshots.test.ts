@@ -63,8 +63,21 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  61 → 62 for 0097_contribution_controls — the FIRST category. contribution_policy, contribution_exclusion
  *  and crm_object_contribution are hand-authored and deliberately kept out of schema/index.ts, exactly as
  *  entitlement and usage_event are, so drizzle-kit never sees them and a snapshot would describe tables
- *  `generate` does not know exist. Confirmed by running it: no drift reported after this migration landed. */
-const EXPECTED_DEFICIT = 62;
+ *  `generate` does not know exist. Confirmed by running it: no drift reported after this migration landed.
+ *
+ *  62 → 66 for the intelligence-platform Layer 0 (0100-0107). Eight migrations, four WITH snapshots
+ *  (0100/0104/0105/0107 are drizzle-generated), four without — and all four are the FIRST category, the same
+ *  case as usage_event and provenance_event, not 0091's genuinely-owed debt:
+ *    • 0101 master_technology_adoptions and 0103 master_signals are PARTITIONED BY RANGE. Drizzle cannot
+ *      express partitioning, so both table objects are deliberately kept OUT of schema/index.ts (the
+ *      provenance_event precedent) and drizzle-kit never sees them. A snapshot would describe tables
+ *      `generate` does not know exist.
+ *    • 0102 defines two FUNCTIONS (mirror_partition_acl, ensure_month_partitions) and touches no table.
+ *      There is nothing for a snapshot to hold — the 0088 seed case.
+ *    • 0106 creates three indexes with CREATE INDEX CONCURRENTLY, which is precisely why it is hand-authored:
+ *      Drizzle emits a plain blocking CREATE INDEX for anything declared in a schema file.
+ *  This test caught the widening and forced it to be stated, which is exactly what it is for. */
+const EXPECTED_DEFICIT = 66;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

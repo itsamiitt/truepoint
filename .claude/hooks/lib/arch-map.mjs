@@ -110,6 +110,9 @@ export const QUEUE_DOMAIN = {
   subscriptionDunningSweep: "billing",
   gmailInboxPoll: "outreach",
   gmailInboxPollSweep: "outreach",
+  // The S-13 job-change fan-out sweep (intelligence-platform 07 §4 slice 7.1) — the trigger the shipped
+  // detectJobChange/recordJobChange stack never had. Freshness/decay, so data-health rather than scoring.
+  jobChangeSweep: "data-health",
 };
 export const REPO_DOMAIN = {
   // Backfill of every repository that was previously unbucketed. Each maps to a domain that ALREADY has code
@@ -152,6 +155,13 @@ export const REPO_DOMAIN = {
   enrichmentPolicy: "enrichment",
   revealJob: "reveal",
   masterGraph: "master-sync",
+  // Layer-0 technology/product catalog + the company-technology adoption edge (intelligence-platform
+  // Group A/B, migrations 0100-0101). Same domain as masterGraph: it is the same system-owned graph.
+  masterTechnology: "master-sync",
+  // Layer-0 canonical signal store (migration 0103) — same system-owned graph.
+  masterSignals: "master-sync",
+  // Layer-0 company/person completeness tables (migration 0104) — same system-owned graph.
+  masterCompanyDetail: "master-sync",
   er: "er",
   evidence: "ingestion",
   projector: "projection",
@@ -223,6 +233,14 @@ export const REPO_DOMAIN = {
   activity: "activity",
   intentSignal: "scoring",
   intent_signal: "scoring",
+  // The S-13 job-change fan-out sweep's data access (intelligence-platform 07 §4 slice 7.1). Filed under
+  // data-health, not scoring: it reads Layer-0 employment to decide whether a record has gone stale, which is
+  // the freshness question — the intent_signal it ultimately writes is the OUTPUT, not the subject.
+  jobChangeSweep: "data-health",
+  // The corroboration half of the S-10 confidence badge ("⟨k⟩ independent sources"), read under withErTx
+  // because provenance_event is REVOKE'd from leadwolf_app. Was unassigned; data-health is where its twin
+  // (the freshness half, computeContactDataQuality) already lives.
+  provenanceBadge: "data-health",
   providerCall: "enrichment",
   provider_call: "enrichment",
   // The transactional outbox (worker_outbox + event_outbox, ADR-0027): generic mechanism. Originally only the

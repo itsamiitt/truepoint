@@ -71,7 +71,11 @@ describe("re-verify priority ordering", () => {
   test("the most decayed record comes first, and a never-verified one is ranked by how long we have held it", async () => {
     const ancient = await makeContact("Ancient", "2024-01-01T00:00:00Z", "2023-01-01T00:00:00Z");
     const oldNever = await makeContact("OldNever", null, "2024-06-01T00:00:00Z");
-    const recentStale = await makeContact("RecentStale", "2026-05-01T00:00:00Z", "2026-01-01T00:00:00Z");
+    const recentStale = await makeContact(
+      "RecentStale",
+      "2026-05-01T00:00:00Z",
+      "2026-01-01T00:00:00Z",
+    );
     const newNever = await makeContact("NewNever", null, "2026-06-20T00:00:00Z");
 
     const rows = await page(null, 50);

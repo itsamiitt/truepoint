@@ -80,10 +80,7 @@ async function scopedCount(
 }
 
 /** Run a statement as leadwolf_app inside a fully-GUC'd tenant tx; return the SQLSTATE it threw (or ""). */
-async function appCode(
-  scope: { tenantId: string; wsId: string },
-  stmt: string,
-): Promise<string> {
+async function appCode(scope: { tenantId: string; wsId: string }, stmt: string): Promise<string> {
   try {
     await app.begin(async (tx) => {
       await tx`SELECT set_config('app.current_tenant_id', ${scope.tenantId}, true)`;
@@ -259,14 +256,18 @@ describe("entitlement — readable by the app, never writable", () => {
 
     // Silent no-ops, not errors. Asserted explicitly so a future Postgres version that starts raising here
     // shows up as a deliberate change rather than a surprise.
-    expect(await appCode(scope, `UPDATE entitlement SET cap = 999999 WHERE key = 'reveal_month'`)).toBe("");
+    expect(
+      await appCode(scope, `UPDATE entitlement SET cap = 999999 WHERE key = 'reveal_month'`),
+    ).toBe("");
     expect(await appCode(scope, `DELETE FROM entitlement WHERE key = 'reveal_month'`)).toBe("");
 
     // THE SECURITY PROPERTY: nothing moved. The cap is what the plan granted, the forged row never landed,
     // and the row the app tried to delete is still there.
     const rows = await admin`
       SELECT key, cap FROM entitlement WHERE tenant_id = ${tenantA} ORDER BY key`;
-    const byKey = new Map(rows.map((r) => [(r as { key: string }).key, (r as { cap: number }).cap]));
+    const byKey = new Map(
+      rows.map((r) => [(r as { key: string }).key, (r as { cap: number }).cap]),
+    );
     expect(byKey.get("reveal_month")).toBe(25); // not raised to 999999, and not deleted
     expect(byKey.has("export_month")).toBe(false); // the self-granted row never existed
   });

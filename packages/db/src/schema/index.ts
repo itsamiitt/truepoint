@@ -4,6 +4,9 @@ export * from "./contacts.ts";
 export * from "./contactChannels.ts";
 export * from "./accountChildren.ts";
 export * from "./masterGraph.ts";
+export * from "./masterTechnology.ts";
+export * from "./masterCompanyDetail.ts";
+export * from "./masterConfidencePolicy.ts";
 export * from "./processedSyncEvents.ts";
 // NOTE: ./forge.ts is intentionally NOT re-exported here — its tables live in the `forge` Postgres schema and
 // several Drizzle identifiers (matchLinks, approvalRequests, reviewTasks, parsers…) collide with the public

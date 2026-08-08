@@ -138,7 +138,15 @@ export async function deleteFanout(
       subjectIndex,
       liveCopies.map((c) => c.contactId),
     );
-    const masterResiduals = await dsarFanoutRepository.scanMasterResiduals(tx, subjectIndex);
+    // `masterPersonIds` is passed so the scan can check the stores that are reachable only BY NODE, not by
+    // the subject's key — person-subject `master_signals` rows. Suppression has already deleted the blind
+    // index that resolved those nodes, so after the fact there is deliberately no path back from the key to
+    // the node; the ids resolved in step 3 are the only handle left.
+    const masterResiduals = await dsarFanoutRepository.scanMasterResiduals(
+      tx,
+      subjectIndex,
+      masterPersonIds,
+    );
     const verification = { ...overlay, masterResiduals };
     const clean =
       verification.liveCopies === 0 &&

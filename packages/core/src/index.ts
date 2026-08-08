@@ -493,6 +493,14 @@ export {
   type RecordJobChangeInput,
   type RecordJobChangeResult,
 } from "./data-health/recordJobChange.ts";
+// The TRIGGER those two never had (intelligence-platform 07 §4 slice 7.1): the per-workspace runner behind
+// the leader-locked job-change fan-out sweep. Composes detect + record; re-decides nothing.
+export {
+  runJobChangeSweepForWorkspace,
+  type JobChangeSweepOptions,
+  type JobChangeSweepResult,
+  type JobChangeSweepScope,
+} from "./data-health/runJobChangeSweep.ts";
 // The other half of a departure (S-14): once someone leaves, the seller's problem is who to talk to instead.
 // Pure ranking over a supplied candidate set — finding people at a company is already a query
 // (erRepository.findBlockingCandidates); which of them succeeded the role is the judgement.
@@ -1019,6 +1027,37 @@ export {
   type AccountFirmographics,
   type RunFirmographicRollupResult,
 } from "./prospect/firmographics.ts";
+
+// Confidence + freshness scoring (intelligence-platform Group E; migration 0107 supplies the policy rows).
+// PURE and IO-free, like fieldProvenance.ts beside it. This is the decay curve 08-architecture records as
+// "Phase 2 — not built": without it a five-year-old assertion and one verified this morning score
+// identically, which undermines S-09, S-10 and S-13 at once. Rolls out DISPLAY-ONLY first.
+export {
+  scoreConfidence,
+  resolvePolicy,
+  decayFactor,
+  evidenceFactor,
+  daysUntilStale,
+  type ConfidencePolicy,
+  type ScoreInput,
+  type ScoreResult,
+} from "./prospect/confidence.ts";
+
+// ER CANDIDATE GENERATION (intelligence-platform 6.3; `block_key` indexed by migration 0106) — the piece
+// compareRecords.ts and fellegiSunter.ts both describe as "a later slice". PURE and IO-free; the sweep that
+// reads/writes block_key and match_links lives in apps/workers.
+// This module does NOT re-implement scoring: `scoreFellegiSunter` and `compareRecords` already exist next to
+// it. Blocking is the separate, and much more expensive, half of the problem — comparison count grows with
+// the SQUARE of record count, so a blocking rule must never use a similarity function, and a record with too
+// little to key on gets NULL rather than joining a shared bucket (the quadratic bomb wearing a block's
+// clothing).
+export {
+  foldToken,
+  personBlockKey,
+  companyBlockKey,
+  technologyBlockKey,
+  blockBudget,
+} from "./er/blocking.ts";
 
 // Record customization (custom fields — ADR-0028, gap G-REV-5): registry CRUD + typed-jsonb value set/get +
 // the pure type validator (reused by import mapping later).

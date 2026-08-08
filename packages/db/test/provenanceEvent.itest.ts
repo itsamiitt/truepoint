@@ -67,7 +67,8 @@ beforeAll(async () => {
     VALUES (${tenantId}, 'acme', 'acme', true, ${ownerId}) RETURNING id`;
   wsId = (w as { id: string }).id;
 
-  const [mp] = await admin`INSERT INTO master_persons (full_name) VALUES ('Jane Prospect') RETURNING id`;
+  const [mp] =
+    await admin`INSERT INTO master_persons (full_name) VALUES ('Jane Prospect') RETURNING id`;
   masterPersonId = (mp as { id: string }).id;
 
   // env is set above, BEFORE the db singleton loads.
@@ -164,7 +165,9 @@ describe("provenance_event — invariant 1 structural proofs", () => {
 
   // ── (3) CLOSED VOCABULARIES ───────────────────────────────────────────────────────────────────────────────
   test("every closed vocabulary rejects a value outside its enum", async () => {
-    expect(await ownerErrCode(insertLayer0({ entity_type: "'organisation'" }))).toBe(CHECK_VIOLATION);
+    expect(await ownerErrCode(insertLayer0({ entity_type: "'organisation'" }))).toBe(
+      CHECK_VIOLATION,
+    );
     expect(await ownerErrCode(insertLayer0({ action: "'upsert'" }))).toBe(CHECK_VIOLATION);
     expect(await ownerErrCode(insertLayer0({ source_type: "'scrape'" }))).toBe(CHECK_VIOLATION);
     expect(await ownerErrCode(insertLayer0({ lawful_basis: "'vibes'" }))).toBe(CHECK_VIOLATION);
@@ -175,7 +178,9 @@ describe("provenance_event — invariant 1 structural proofs", () => {
   // ── (6) LAYER/SCOPE CORRESPONDENCE (C-02) ─────────────────────────────────────────────────────────────────
   test("an overlay event must carry scope_ref and a Layer-0 event must not", async () => {
     // Layer 0 with a workspace hint — refused.
-    expect(await ownerErrCode(insertLayer0({ scope_ref: `'${wsId}'::uuid` }))).toBe(CHECK_VIOLATION);
+    expect(await ownerErrCode(insertLayer0({ scope_ref: `'${wsId}'::uuid` }))).toBe(
+      CHECK_VIOLATION,
+    );
     // Overlay with no workspace — refused.
     expect(
       await ownerErrCode(
@@ -198,7 +203,9 @@ describe("provenance_event — invariant 1 structural proofs", () => {
   test("UPDATE and DELETE raise for the owner connection, not just for leadwolf_app", async () => {
     await admin.unsafe(insertLayer0({ field: "'department'" }));
     expect(
-      await ownerErrCode("UPDATE provenance_event SET field = 'seniority' WHERE field = 'department'"),
+      await ownerErrCode(
+        "UPDATE provenance_event SET field = 'seniority' WHERE field = 'department'",
+      ),
     ).toBe(RAISED_EXCEPTION);
     expect(await ownerErrCode("DELETE FROM provenance_event WHERE field = 'department'")).toBe(
       RAISED_EXCEPTION,
@@ -321,7 +328,8 @@ describe("provenance_event — invariant 1 structural proofs", () => {
 
   // ── (9) BADGE v0: COUNTS LEAVE, IDENTITIES DO NOT ─────────────────────────────────────────────────────────
   test("the badge aggregate returns counts and recency, and no contributor ref", async () => {
-    const [mp] = await admin`INSERT INTO master_persons (full_name) VALUES ('Badge Subject') RETURNING id`;
+    const [mp] =
+      await admin`INSERT INTO master_persons (full_name) VALUES ('Badge Subject') RETURNING id`;
     const subject = (mp as { id: string }).id;
 
     // Two channels, one of them twice: three assertions, two source kinds. One source asserting twice is not
@@ -355,7 +363,8 @@ describe("provenance_event — invariant 1 structural proofs", () => {
   test("an entity with no events returns null, not a zero-source badge", async () => {
     // "We hold no evidence log for this record" is not "no source vouched for it". Most records have no events
     // until the gate flips, so rendering 0 sources would be misleading on nearly every row.
-    const [mp] = await admin`INSERT INTO master_persons (full_name) VALUES ('No Events') RETURNING id`;
+    const [mp] =
+      await admin`INSERT INTO master_persons (full_name) VALUES ('No Events') RETURNING id`;
     const badge = await dbmod.withErTx((tx) =>
       dbmod.provenanceBadgeRepository.badgeFor(tx, "person", (mp as { id: string }).id),
     );

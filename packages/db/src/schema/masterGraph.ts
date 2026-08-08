@@ -72,7 +72,11 @@ export const masterCompanies = pgTable(
     dataQualityScore: integer("data_quality_score"),
     region: char("region", { length: 2 }),
     jurisdiction: char("jurisdiction", { length: 2 }),
-    // [RESERVED, leave UNINDEXED — PLAN_01 §2.8] ER blocking key (e.g. name word-n-gram); reserved at freeze so
+    // ER blocking key. INDEXED SINCE 0106 — the index is HAND-AUTHORED there, not declared here, because
+    // CREATE INDEX CONCURRENTLY cannot run inside a transaction block and Drizzle emits a plain, blocking
+    // CREATE INDEX for anything declared in a schema file. Do not "fix" this by adding an index() entry.
+    // Originally [RESERVED, UNINDEXED — PLAN_01 §2.8], reserved at freeze precisely so the probabilistic ER
+    // tier could switch on without a destructive migration. That is what 0106 does. (e.g. name word-n-gram); reserved at freeze so
     // the deferred scale-track blocking switches on without a destructive migration. Unread at MVP.
     blockKey: varchar("block_key", { length: 255 }),
     // [C6 seam — PLAN_03 §3.2] per-field winning-descriptor map. App-edge-validated JSONB (no DB CHECK), holds no
@@ -182,9 +186,22 @@ export const masterEmployment = pgTable(
     masterPersonId: uuid("master_person_id")
       .notNull()
       .references(() => masterPersons.id, { onDelete: "cascade" }), // DSAR blast radius (PLAN_02 §4)
-    masterCompanyId: uuid("master_company_id")
-      .notNull()
-      .references(() => masterCompanies.id, { onDelete: "cascade" }),
+    // NULLABLE since migration 0105 (audit D9). It was NOT NULL, which meant an employment assertion whose
+    // employer ER had not yet resolved could not be recorded AT ALL — the row was rejected at the door and
+    // the assertion was lost. Keeping the raw name beside the resolved id lets the assertion survive until
+    // ER catches up, and lets it be re-resolved later without re-fetching the source.
+    masterCompanyId: uuid("master_company_id").references(() => masterCompanies.id, {
+      onDelete: "cascade",
+    }),
+    // The employer name EXACTLY as the source gave it. Retained even after resolution: it is the audit trail
+    // for why this stint was matched to this company, and the input to any future re-resolution.
+    companyNameRaw: varchar("company_name_raw", { length: 255 }),
+    // App-normalized form of company_name_raw, written by the SAME code path that computes
+    // master_companies.name_normalized (legal-suffix-stripped + casefolded). Deliberately a stored column
+    // rather than an expression index over a SQL normalization function: two implementations of "normalize a
+    // company name" — one in TypeScript, one in plpgsql — WILL drift, and the day they do, unresolved stints
+    // stop deduping against the same key master_companies uses. One implementation, written once, stored.
+    companyNameNormalized: citext("company_name_normalized"),
     // ── affiliation facts (as planned, 03:432) ──
     title: varchar("title", { length: 255 }),
     department: varchar("department", { length: 100 }),
@@ -223,12 +240,36 @@ export const masterEmployment = pgTable(
       "master_employment_primary_is_current",
       sql`${t.isPrimary} = false OR ${t.isCurrent} = true`, // a primary edge MUST be current
     ),
+    // Since 0105 a stint must identify its employer SOMEHOW — resolved id, raw name, or both. Without this,
+    // dropping the NOT NULL would admit a completely employerless row.
+    employerPresent: check(
+      "master_employment_employer_present",
+      sql`${t.masterCompanyId} IS NOT NULL OR ${t.companyNameRaw} IS NOT NULL`,
+    ),
     // Edge dedup identity (PLAN_02 §0.1): one edge per stint; unknown-start pairs collide via the '-infinity' sentinel.
+    //
+    // LIMITATION SINCE 0105, stated rather than glossed: master_company_id is now nullable, and Postgres
+    // treats NULLs as DISTINCT in a unique index. So this index no longer dedups UNRESOLVED stints at all —
+    // every re-ingest of the same unresolved assertion would mint another row. uniqUnresolvedStint below is
+    // the partial cover for that case.
     uniqStint: uniqueIndex("uniq_employment_stint").on(
       t.masterPersonId,
       t.masterCompanyId,
       t.startedOn,
     ),
+    // Dedup for the unresolved case, keyed on the NORMALIZED name so it collapses the same employer written
+    // three different ways. BEST-EFFORT, NOT EXACT, and callers must not assume otherwise: started_on
+    // defaults to the '-infinity' "unknown start" sentinel, so two genuinely different employers that share a
+    // normalized name and an unknown start WILL collide into one edge until ER resolves them. That is the
+    // better failure than the alternative (unbounded duplicate stints on every re-ingest), and ER merging is
+    // reversible — source_records and match_links keep the evidence to split them back apart.
+    uniqUnresolvedStint: uniqueIndex("uniq_employment_unresolved_stint")
+      .on(t.masterPersonId, t.companyNameNormalized, t.startedOn)
+      .where(sql`${t.masterCompanyId} IS NULL AND ${t.companyNameNormalized} IS NOT NULL`),
+    // The ER work queue: unresolved stints waiting for a company match.
+    unresolvedIdx: index("idx_employment_unresolved")
+      .on(t.companyNameNormalized)
+      .where(sql`${t.masterCompanyId} IS NULL`),
     // At most ONE primary edge per person — DB-enforced so concurrent writers can never both win the primary slot.
     uniqPrimary: uniqueIndex("uniq_employment_primary")
       .on(t.masterPersonId)

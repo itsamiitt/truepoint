@@ -92,6 +92,45 @@ export {
   type ResolveForImportInput,
   type ResolveForImportResult,
 } from "./repositories/masterGraphRepository.ts";
+// Layer-0 technology/product catalog (0100) + the company-technology adoption edge (0101). Same posture as
+// masterGraphRepository: system-owned tables, no RLS predicate possible, always run within withErTx.
+// The adoption edge is EPISODE-grained on purpose (detected -> removed -> re-detected is three rows, because
+// that sequence IS the displacement signal), which is why recordDetection serialises on an advisory lock
+// rather than the usual unique + ON CONFLICT.
+export {
+  masterTechnologyRepository,
+  type ResolveTechnologyInput,
+  type RecordDetectionInput,
+  type RecordDetectionResult,
+  type CompanyTechnologyRow,
+} from "./repositories/masterTechnologyRepository.ts";
+// Layer-0 canonical signal store (0103). `assertNoContactValues` is the executable form of the compliance
+// rule that a signal payload never carries contact values — it runs on every write path and THROWS, because
+// a signal store that accumulates addresses becomes a second cleartext PII store with none of
+// master_emails' encryption, blind-index dedup, or suppression wiring. `erasePersonSignals` is the DSAR
+// fan-out hook: a dated career event naming a person is personal data even with no contact value in it.
+export {
+  masterSignalsRepository,
+  assertNoContactValues,
+  findContactValues,
+  type RecordSignalInput,
+  type SignalRow,
+  type ContactValueViolation,
+} from "./repositories/masterSignalsRepository.ts";
+// Layer-0 Group-D completeness tables (0104). Two things worth knowing at the call site: the suppression
+// verdict for a company contact point is a REQUIRED parameter, not a join (leadwolf_er has no overlay grant,
+// so the check must happen caller-side and be carried in); and recordPersonIdentifier RETURNS a `conflict`
+// when an identifier is already held by another person, because that is an ER merge signal, not a duplicate
+// to swallow.
+export {
+  masterCompanyDetailRepository,
+  type SuppressionVerdict,
+  type RecordContactPointInput,
+  type UpsertLocationInput,
+  type RecordIdentifierInput,
+  type RecordIdentifierResult,
+  type RecordFundingInput,
+} from "./repositories/masterCompanyDetailRepository.ts";
 // Forge master-sync apply (docs/planning/forge/11 §3) — idempotent effectively-once apply under withErTx.
 export {
   forgeSyncRepository,
@@ -331,6 +370,12 @@ export {
   type ScoreInsert,
   type ScoreHistoryRow,
 } from "./repositories/scoreRepository.ts";
+export {
+  jobChangeSweepRepository,
+  type JobChangeCandidate,
+  type JobChangeWorkspace,
+  type ObservedEmployment,
+} from "./repositories/jobChangeSweepRepository.ts";
 export {
   intentSignalRepository,
   type FirmographicSignalRow,

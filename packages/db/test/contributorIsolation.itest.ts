@@ -79,7 +79,8 @@ beforeAll(async () => {
     VALUES (${tenantId}, 'acme', 'acme', true, ${userId}) RETURNING id`;
   wsId = (w as { id: string }).id;
 
-  const [mp] = await admin`INSERT INTO master_persons (full_name) VALUES ('Jane Prospect') RETURNING id`;
+  const [mp] =
+    await admin`INSERT INTO master_persons (full_name) VALUES ('Jane Prospect') RETURNING id`;
   masterPersonId = (mp as { id: string }).id;
 
   dbmod = await import("@leadwolf/db");
