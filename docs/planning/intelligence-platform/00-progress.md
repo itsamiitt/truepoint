@@ -1236,9 +1236,17 @@ clean, and iteration 34 confirmed the last open thread needs nothing.
 | **A human decision** | **C4/RD-7** GPL-3.0 catalog seed · **C7** product-as-technology · **C8** personal contact typing · **C9** two confidence implementations *(has a cost of delay — a self-disagreeing badge)* · **C10** delete-half of the signal enum · **C11** API keys |
 | **Both of the above** | Populators for the empty Layer-0 tables — the work that would make Phases 8's profiles and the technology/product surfaces real |
 
-**Continuing to iterate would be manufacturing work.** The loop should be stopped (`CronDelete`, session job
-`29423847`) or redirected at one of: (a) "commit and push this branch so CI runs it", (b) a specific decision
-from the table above, or (c) an unrelated task.
+**LOOP STOPPED** (cron job `29423847` cancelled, iteration 35). The 20-minute loop ran 35 times and its work
+is finished: every phase has an artifact, every scope item has an artifact, the branch is pushed and **CI is
+green**. Further firings would have produced manufactured work at a real token cost. Restart with `/loop` if
+the remaining items ever become unblocked.
+
+**To resume, the entry points are:**
+- `gh pr create` on `feat/intelligence-platform-layer0` (12 commits, CI green) — no PR was opened; that was
+  not part of what was asked for.
+- Any of C4 / C7 / C8 / C9 / C11. **C9 is the one with a cost of delay** — two field-confidence
+  implementations that will disagree, and `badgeV1.ts` states the stake itself.
+- The populators, once C4 unblocks the technology half.
 
 ---
 
