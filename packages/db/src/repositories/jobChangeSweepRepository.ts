@@ -41,7 +41,8 @@ export interface ObservedEmployment {
 export interface JobChangeCandidate {
   contactId: string;
   masterPersonId: string;
-  /** The contact's believed employer, as a Layer-0 id — contacts carries the bridge on both axes. */
+  /** The believed employer, as a Layer-0 id, read from the contact's ACCOUNT — `contacts` carries only
+   *  master_person_id; master_company_id lives on `accounts`. Null when the contact has no account. */
   masterCompanyId: string | null;
   jobTitle: string | null;
   /** Days since the contact was last verified; the prior claim's age. Null = never verified. */
@@ -72,7 +73,7 @@ export const jobChangeSweepRepository = {
              AND c.master_person_id IS NOT NULL
              AND me.is_primary
              AND me.is_current
-             AND me.updated_at > ${since}
+             AND me.updated_at > ${since}::timestamptz
            LIMIT ${limit}`,
     )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
     return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
@@ -115,7 +116,7 @@ export const jobChangeSweepRepository = {
             LEFT JOIN master_companies mc ON mc.id = me.master_company_id
            WHERE me.is_primary
              AND me.is_current
-             AND me.updated_at > ${since}
+             AND me.updated_at > ${since}::timestamptz
            ORDER BY me.master_person_id, me.updated_at DESC
            LIMIT ${limit}`,
     )) as unknown as Array<{

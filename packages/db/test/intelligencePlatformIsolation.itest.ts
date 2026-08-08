@@ -66,6 +66,25 @@ let admin: ReturnType<typeof postgres>;
 let app: ReturnType<typeof postgres>;
 let dbmod: DbModule;
 
+/** table → a real column name on it, discovered from the catalog (see updateStmt). */
+const aColumn = new Map<string, string>();
+
+/**
+ * A no-op UPDATE naming a column that ACTUALLY EXISTS on this table.
+ *
+ * The first version hardcoded `SET id = id`, and several Layer-0 tables have no `id` — master_signal_types is
+ * keyed on type_code, the link tables on composites. Postgres raised 42703 (undefined_column) while the test
+ * asserted 42501, so it FAILED — but the failure was the lucky outcome. A statement that cannot be planned
+ * never reaches the privilege check, so had the expectation been looser this assertion would have "passed"
+ * while proving nothing about whether leadwolf_app can write. Discovering the column keeps the test honest
+ * against future schema changes too.
+ */
+function updateStmt(table: string): string {
+  const col = aColumn.get(table);
+  if (!col) throw new Error(`no column discovered for ${table} — the catalog probe did not run`);
+  return `UPDATE ${table} SET ${col} = ${col}`;
+}
+
 beforeAll(async () => {
   dbHandle = await startItestDb("intelPlatformIsolation");
   process.env.DATABASE_URL = dbHandle.adminUrl;
@@ -75,6 +94,16 @@ beforeAll(async () => {
   admin = postgres(dbHandle.adminUrl, { max: 2, onnotice: () => {} });
   app = postgres(dbHandle.appUrl, { max: 2, onnotice: () => {} });
   dbmod = await import("../src/index.ts");
+
+  // One real column per Layer-0 table, for the no-op UPDATE probe. Ordinal 1 is arbitrary but always present.
+  const cols = await admin<Array<{ table_name: string; column_name: string }>>`
+    SELECT DISTINCT ON (table_name) table_name, column_name
+      FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = ANY(${LAYER0_TABLES as unknown as string[]})
+     ORDER BY table_name, ordinal_position`;
+  for (const c of cols) aColumn.set(c.table_name, c.column_name);
+  // If the probe silently found nothing, every UPDATE assertion below would throw rather than test anything.
+  expect(aColumn.size).toBe(LAYER0_TABLES.length);
 }, 180_000);
 
 afterAll(async () => {
@@ -84,8 +113,25 @@ afterAll(async () => {
   await dbHandle?.stop();
 });
 
+/**
+ * The SQLSTATE, dug out from wherever the driver left it.
+ *
+ * Raw postgres.js puts `code` on the thrown error. DRIZZLE DOES NOT — it wraps the driver error in a
+ * DrizzleQueryError ("Failed query: …") and hangs the original off `.cause`. So the first version of this
+ * helper worked for appDeniedCode (raw postgres.js) and silently failed for erDeniedCode (via withErTx),
+ * returning the wrapper's message instead of "42501".
+ *
+ * That distinction matters more than a helper usually would: the DELETE **was** refused both times. The
+ * privilege wall was doing its job and the test could not read the verdict. A test that cannot tell "denied"
+ * from "some other error" is one refactor away from passing while the wall is gone.
+ */
 function pgCode(e: unknown): string {
-  return (e as { code?: string })?.code ?? String(e);
+  for (let cur: unknown = e, depth = 0; cur && depth < 5; depth++) {
+    const code = (cur as { code?: unknown }).code;
+    if (typeof code === "string" && code.length > 0) return code;
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return String(e);
 }
 
 /** Run a statement as leadwolf_app; return the SQLSTATE it failed with, or "" if it succeeded. */
@@ -119,7 +165,7 @@ describe("intelligence-platform Layer 0 — the access-path wall", () => {
     for (const table of LAYER0_TABLES) {
       expect(await appDeniedCode(`SELECT 1 FROM ${table} LIMIT 1`)).toBe(PERMISSION_DENIED);
       expect(await appDeniedCode(`INSERT INTO ${table} DEFAULT VALUES`)).toBe(PERMISSION_DENIED);
-      expect(await appDeniedCode(`UPDATE ${table} SET id = id`)).toBe(PERMISSION_DENIED);
+      expect(await appDeniedCode(updateStmt(table))).toBe(PERMISSION_DENIED);
       expect(await appDeniedCode(`DELETE FROM ${table}`)).toBe(PERMISSION_DENIED);
     }
   });

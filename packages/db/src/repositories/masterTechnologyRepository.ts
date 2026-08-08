@@ -140,8 +140,8 @@ export async function recordDetection(
 
   const extended = (await tx.execute(sql`
     UPDATE master_technology_adoptions
-       SET last_seen_at  = GREATEST(last_seen_at, ${input.observedAt}),
-           first_seen_at = LEAST(first_seen_at, ${input.observedAt}),
+       SET last_seen_at  = GREATEST(last_seen_at, ${input.observedAt}::timestamptz),
+           first_seen_at = LEAST(first_seen_at, ${input.observedAt}::timestamptz),
            source_count  = source_count + 1,
            confidence    = COALESCE(${input.confidence ?? null}, confidence)
      WHERE master_company_id = ${input.masterCompanyId}
@@ -161,8 +161,8 @@ export async function recordDetection(
        confidence, source_name, evidence_ref, observed_at)
     VALUES
       (${input.masterCompanyId}, ${input.technologyId}, ${input.detectionMethod},
-       ${input.observedAt}, ${input.observedAt}, ${input.confidence ?? null},
-       ${input.sourceName ?? null}, ${input.evidenceRef ?? null}, ${input.observedAt})
+       ${input.observedAt}::timestamptz, ${input.observedAt}::timestamptz, ${input.confidence ?? null},
+       ${input.sourceName ?? null}, ${input.evidenceRef ?? null}, ${input.observedAt}::timestamptz)
     RETURNING id
   `)) as unknown as Array<{ id: string }>;
 
@@ -188,12 +188,12 @@ export async function closeDetection(
 ): Promise<number> {
   const closed = (await tx.execute(sql`
     UPDATE master_technology_adoptions
-       SET removed_at = ${input.removedAt}
+       SET removed_at = ${input.removedAt}::timestamptz
      WHERE master_company_id = ${input.masterCompanyId}
        AND technology_id     = ${input.technologyId}
        AND detection_method  = ${input.detectionMethod}
        AND removed_at IS NULL
-       AND ${input.removedAt} >= last_seen_at
+       AND ${input.removedAt}::timestamptz >= last_seen_at
      RETURNING id
   `)) as unknown as Array<{ id: string }>;
   return closed.length;
