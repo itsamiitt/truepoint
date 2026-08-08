@@ -110,11 +110,18 @@ beforeAll(async () => {
     VALUES (${personId}, ${oldCompanyId}, 'Head of Procurement', true, true,
             'deterministic', 3, now(), ${BEFORE_WATERMARK})`;
   // A NON-primary historical stint. Property 3: this must never trigger a fan-out on its own.
+  //
+  // started_on is EXPLICIT, and that is load-bearing. uniq_employment_stint is
+  // (master_person_id, master_company_id, started_on), and started_on defaults to '-infinity'. The first
+  // version of this fixture left both rows on the default, so the moment a test moved the primary edge to
+  // newCompanyId it collided with this row — CI: duplicate key value violates unique constraint
+  // "uniq_employment_stint". A historical stint should carry a real start date anyway.
   await admin`
     INSERT INTO master_employment
       (master_person_id, master_company_id, title, is_current, is_primary,
-       match_method, source_count, observed_at, updated_at)
+       started_on, ended_on, match_method, source_count, observed_at, updated_at)
     VALUES (${personId}, ${newCompanyId}, 'Buyer', false, false,
+            DATE '2019-01-01', DATE '2021-06-30',
             'deterministic', 3, now(), ${AFTER_WATERMARK})`;
 
   // ── Layer 1: both tenants hold this person, believing the OLD employer ──
