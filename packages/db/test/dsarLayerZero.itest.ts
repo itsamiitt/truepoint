@@ -69,6 +69,10 @@ async function seedSubject(email: string, linkedin: string): Promise<[string, st
   const personId = (mp as { id: string }).id;
   await admin`INSERT INTO master_emails (master_person_id, email_blind_index, email_domain)
               VALUES (${personId}, ${bi}, 'acme.com')`;
+  // A person-subject signal (master_signals, 0103). A dated career event is personal data even though it
+  // carries no contact value, so erasure has to reach it — and the residual scan has to be able to see it.
+  await admin`INSERT INTO master_signals (subject_type, subject_id, type_code, observed_at)
+              VALUES ('person', ${personId}, 'job_change', now())`;
   const [c] = await admin`
     INSERT INTO contacts (tenant_id, workspace_id, first_name, email_blind_index, email_domain,
                           email_enc, master_person_id)
@@ -86,6 +90,12 @@ describe("DSAR erasure reaches Layer 0", () => {
     subjectPersonId = subject[0];
     const bystander = await seedSubject(BYSTANDER, "keep-me");
     bystanderPersonId = bystander[0];
+
+    // A COMPANY-subject signal carrying the SUBJECT'S OWN id as subject_id. Contrived on purpose: it means
+    // the only thing that can protect it from the erasure is the `subject_type = 'person'` discriminator,
+    // so the guard is tested rather than merely present.
+    await admin`INSERT INTO master_signals (subject_type, subject_id, type_code, observed_at)
+                VALUES ('company', ${subjectPersonId}, 'funding_round', now())`;
 
     const requestId = await core.createDsarRequest("delete", SUBJECT);
     const result = await core.deleteFanout(requestId);
@@ -126,6 +136,33 @@ describe("DSAR erasure reaches Layer 0", () => {
     const payload = (ev as { payload: string }).payload;
     expect(payload).not.toContain("erase-me@acme.com");
     expect(payload).not.toContain("acme.com");
+  });
+
+  test("the subject's person-subject signals are erased", async () => {
+    // Before this was wired, the fan-out deleted the channel facets and left these behind — and, worse, the
+    // residual scan did not count them, so the request still reported `completed`. A false completion claim
+    // on the A-02 path is worse than the rows: the ≤72h SLA is measured against exactly that gate.
+    const [s] = await admin`
+      SELECT count(*)::int AS n FROM master_signals
+       WHERE subject_type = 'person' AND subject_id = ${subjectPersonId}`;
+    expect((s as { n: number }).n).toBe(0);
+  });
+
+  test("a COMPANY-subject signal survives — erasure is scoped by the discriminator", async () => {
+    // master_signals is polymorphic. A funding round is a fact about a COMPANY that no person may erase, and
+    // dropping `subject_type = 'person'` from the delete would silently destroy company intelligence on every
+    // DSAR. Seeded with the subject's own id as the subject_id so ONLY the discriminator can save it.
+    const [s] = await admin`
+      SELECT count(*)::int AS n FROM master_signals
+       WHERE subject_type = 'company' AND subject_id = ${subjectPersonId}`;
+    expect((s as { n: number }).n).toBe(1);
+  });
+
+  test("a bystander's signals survive", async () => {
+    const [s] = await admin`
+      SELECT count(*)::int AS n FROM master_signals
+       WHERE subject_type = 'person' AND subject_id = ${bystanderPersonId}`;
+    expect((s as { n: number }).n).toBe(1);
   });
 
   test("a bystander in the same graph is untouched", async () => {

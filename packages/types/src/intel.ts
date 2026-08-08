@@ -5,6 +5,21 @@
 import { z } from "zod";
 
 // ── Intent signals (03 §6) ─────────────────────────────────────────────────────────────────────────────
+//
+// NOT EVERY VALUE HERE IS BUILDABLE, and the enum does not say so on its own — which is the trap this
+// comment exists to close (intelligence-platform conflict C10). As of the 07 §2 audit:
+//   • job_change    — has a producer (recordJobChange), triggered by the workers' job-change sweep.
+//   • tech_install / funding_round — have CONSUMERS (firmographics.ts rolls them into account facets) but
+//     no producer anywhere in the repo. They wait on a licensed feed; see conflict C4/RD-7.
+//   • web_visit · content_engagement · keyword_search — these ARE intent data, which
+//     `docs/strategy/04-opportunity-scores.md` lists as DEFERRED NON-GOAL X-04. Do not build a producer
+//     without an explicit human decision recorded in decisions.md.
+//   • linkedin_activity · sales_nav_view — could only be populated by means CLAUDE.md hard-constraint 4
+//     forbids outright (background/bulk scraping of logged-in sites; collection beyond user-initiated
+//     extension actions). These are NOT a roadmap.
+//
+// The five un-populatable values are kept rather than removed on purpose: this is a shipped zod schema and
+// rows may already reference it, so deleting a member is a breaking change to fix a documentation problem.
 export const signalType = z.enum([
   "job_change",
   "new_hire",
