@@ -165,16 +165,25 @@ export const jobChangeSweepRepository = {
       sql`, `,
     );
     const after = opts.afterId ? sql`AND c.id > ${opts.afterId}::uuid` : sql``;
+    // The believed employer comes from the contact's ACCOUNT, not the contact. `contacts` carries only
+    // master_person_id (migration 0017); master_company_id lives on `accounts` (idx_accounts_master). Both
+    // are declared in schema/contacts.ts, which defines BOTH tables — reading that file and assuming one
+    // table carried both bridges is what produced the first version of this query, and CI caught it with
+    // `column "master_company_id" of relation "contacts" does not exist`.
+    //
+    // LEFT JOIN, not INNER: a contact with no account still has employment worth evaluating. Its prior
+    // company reads NULL, which detectJobChange treats as an unknown employer rather than as a match.
     const rows = (await tx.execute(
       sql`SELECT c.id,
                  c.master_person_id,
-                 c.master_company_id,
+                 a.master_company_id,
                  c.job_title,
                  trim(coalesce(c.first_name, '') || ' ' || coalesce(c.last_name, '')) AS label,
                  CASE WHEN c.last_verified_at IS NULL THEN NULL
                       ELSE floor(extract(epoch FROM (now() - c.last_verified_at)) / 86400)::int
                  END AS prior_age_days
             FROM contacts c
+            LEFT JOIN accounts a ON a.id = c.account_id
            WHERE c.deleted_at IS NULL
              AND c.master_person_id = ANY(ARRAY[${idParams}]::uuid[])
              ${after}

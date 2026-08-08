@@ -118,12 +118,18 @@ beforeAll(async () => {
             'deterministic', 3, now(), ${AFTER_WATERMARK})`;
 
   // ── Layer 1: both tenants hold this person, believing the OLD employer ──
+  // The believed employer hangs off the contact's ACCOUNT — `contacts` carries master_person_id, `accounts`
+  // carries master_company_id. Seeding it on the contact is what the first version of this file did, and CI
+  // rejected it outright: column "master_company_id" of relation "contacts" does not exist.
   const mkContact = async (tenantId: string, wsId: string) => {
+    const [acct] = await admin`
+      INSERT INTO accounts (tenant_id, workspace_id, name, master_company_id)
+      VALUES (${tenantId}, ${wsId}, 'Initech', ${oldCompanyId}) RETURNING id`;
     const [c] = await admin`
       INSERT INTO contacts (tenant_id, workspace_id, first_name, last_name, job_title,
-                            master_person_id, master_company_id, last_verified_at)
+                            master_person_id, account_id, last_verified_at)
       VALUES (${tenantId}, ${wsId}, 'Dana', 'Reyes', 'Head of Procurement',
-              ${personId}, ${oldCompanyId}, ${BEFORE_WATERMARK})
+              ${personId}, ${(acct as { id: string }).id}, ${BEFORE_WATERMARK})
       RETURNING id`;
     return (c as { id: string }).id;
   };
