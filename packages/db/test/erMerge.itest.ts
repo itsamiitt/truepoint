@@ -58,13 +58,18 @@ describe("erRepository.confirmMerge", () => {
     const sr = await makeSourceRecord(loser, [1, 1, 1, 1]);
 
     const res = await dbmod.withErTx((tx) =>
-      dbmod.erRepository.confirmMerge(tx, { survivorId: survivor, loserId: loser, lawfulBasis: BASIS }),
+      dbmod.erRepository.confirmMerge(tx, {
+        survivorId: survivor,
+        loserId: loser,
+        lawfulBasis: BASIS,
+      }),
     );
     expect(res.merged).toBe(true);
     expect(res.movedSourceRecords).toBe(1);
 
     // Resolution moved — a future lookup lands on the survivor.
-    const [moved] = await admin`SELECT resolved_person_id AS p FROM source_records WHERE id = ${sr}`;
+    const [moved] =
+      await admin`SELECT resolved_person_id AS p FROM source_records WHERE id = ${sr}`;
     expect((moved as { p: string }).p).toBe(survivor);
 
     // Loser tombstoned, pointing at where it went.
@@ -81,7 +86,10 @@ describe("erRepository.confirmMerge", () => {
        WHERE action = 'merge' AND entity_id IN (${survivor}, ${loser}) ORDER BY entity_id`;
     expect(events.length).toBe(2);
     const byEntity = new Map(
-      events.map((e) => [(e as { entity_id: string }).entity_id, (e as { payload: Record<string, string> }).payload]),
+      events.map((e) => [
+        (e as { entity_id: string }).entity_id,
+        (e as { payload: Record<string, string> }).payload,
+      ]),
     );
     expect(byEntity.get(loser)?.mergedInto).toBe(survivor);
     expect(byEntity.get(survivor)?.absorbed).toBe(loser);
@@ -98,7 +106,11 @@ describe("erRepository.confirmMerge", () => {
       VALUES ('person', ${loser}, 'jobTitle', 'assert', 'provider', ${BASIS})`;
 
     await dbmod.withErTx((tx) =>
-      dbmod.erRepository.confirmMerge(tx, { survivorId: survivor, loserId: loser, lawfulBasis: BASIS }),
+      dbmod.erRepository.confirmMerge(tx, {
+        survivorId: survivor,
+        loserId: loser,
+        lawfulBasis: BASIS,
+      }),
     );
 
     const [kept] = await admin`
@@ -114,10 +126,18 @@ describe("erRepository.confirmMerge", () => {
     const loser = await makePerson("Loser Three");
 
     const first = await dbmod.withErTx((tx) =>
-      dbmod.erRepository.confirmMerge(tx, { survivorId: survivor, loserId: loser, lawfulBasis: BASIS }),
+      dbmod.erRepository.confirmMerge(tx, {
+        survivorId: survivor,
+        loserId: loser,
+        lawfulBasis: BASIS,
+      }),
     );
     const second = await dbmod.withErTx((tx) =>
-      dbmod.erRepository.confirmMerge(tx, { survivorId: survivor, loserId: loser, lawfulBasis: BASIS }),
+      dbmod.erRepository.confirmMerge(tx, {
+        survivorId: survivor,
+        loserId: loser,
+        lawfulBasis: BASIS,
+      }),
     );
     expect(first.merged).toBe(true);
     expect(second.merged).toBe(false);

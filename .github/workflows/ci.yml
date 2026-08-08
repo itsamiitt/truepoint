@@ -65,10 +65,13 @@ jobs:
         run: bun install --frozen-lockfile || (sleep 10 && bun install --frozen-lockfile)
       - name: Typecheck
         run: bun run typecheck
-      # The package typecheck above covers `src` only, so packages/db's 93 itest files were never checked at
-      # all — bun compiles them at run time. That is how a wrong applyMigrations signature passed typecheck,
-      # passed lint, and failed here behind "password authentication failed for user runner". This checks the
-      # 76 that are currently clean; the 17 excluded in tsconfig.typecheck.json are a shrinking ratchet.
+      # The package typecheck above covers `src` only, so packages/db's itest files (107 of them) were never
+      # checked at all — bun compiles them at run time. That is how a wrong applyMigrations signature passed
+      # typecheck, passed lint, and failed here behind "password authentication failed for user runner".
+      # The exclusion ratchet this comment used to describe ("76 clean, 17 excluded") is CLOSED:
+      # tsconfig.typecheck.json now has no exclude list and every test file in the package is checked. Do not
+      # reintroduce one — an exclusion there is a file nobody type-checks, which is the exact condition that
+      # let the bug above through.
       - name: Typecheck out-of-src tests (db, workers, forge-worker)
         # These three packages keep their tests OUTSIDE src, so the per-package typecheck above — which
         # includes only "src" — never saw them. That is how a wrong applyMigrations signature passed typecheck,
@@ -154,8 +157,11 @@ jobs:
   itests:
     name: Integration tests — *.itest.ts on Postgres + Redis (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    # 91 itest files × (own DB + full migrations each) never fit one 30-minute job — every prior itests
-    # "cancelled" was this timeout. Four round-robin shards keep each job well under the ceiling.
+    # 114 itest files × (own DB + full migrations each) never fit one 30-minute job — every prior itests
+    # "cancelled" was this timeout. Four round-robin shards (~29 files each) keep every job under the ceiling.
+    # The shard split is `find | sort` + index mod 4, so a NEW *.itest.ts is picked up with no registry to
+    # update — but watch the per-shard count as files are added: the 40-minute ceiling is the next thing to
+    # give, and the fix is a fifth shard, not a longer timeout.
     strategy:
       fail-fast: false
       matrix:

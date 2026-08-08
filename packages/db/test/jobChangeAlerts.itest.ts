@@ -184,7 +184,13 @@ describe("job-change alerts", () => {
         scope: scope(),
         contactId,
         contactLabel: "Saved",
-        verdict: { changed: false, kind: null, confidence: 0.9, priorConfidence: 0.9, reason: "prior_stronger" },
+        verdict: {
+          changed: false,
+          kind: null,
+          confidence: 0.9,
+          priorConfidence: 0.9,
+          reason: "prior_stronger",
+        },
       }),
     );
     expect(res.signalRecorded).toBe(false);

@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 1981,
-  "fileSetHash": "sha256:a5e41a812970823ea4f723c3a60345c5fa6ecf6a6c7cd29fbef66193e96ae7e6",
+  "fileCount": 2000,
+  "fileSetHash": "sha256:e1b364974689578158f75ab58cbfff13af3c6a8aaf1052c60395cbef76fcccd3",
   "features": {
     "account-search": {
       "web": [],
@@ -621,6 +621,7 @@
         "packages/core/src/data-health/reacherVerifier.ts",
         "packages/core/src/data-health/recordJobChange.ts",
         "packages/core/src/data-health/reverifyContacts.ts",
+        "packages/core/src/data-health/runJobChangeSweep.ts",
         "packages/core/src/data-health/successor.test.ts",
         "packages/core/src/data-health/successor.ts",
         "packages/core/src/data-health/twilioPhoneVerifier.test.ts",
@@ -629,10 +630,13 @@
       ],
       "db": [
         "packages/db/src/repositories/dataQualitySnapshotRepository.ts",
+        "packages/db/src/repositories/jobChangeSweepRepository.ts",
+        "packages/db/src/repositories/provenanceBadgeRepository.ts",
         "packages/db/src/repositories/verificationJobRepository.ts"
       ],
       "workers": [
         "apps/workers/src/queues/dataQualitySnapshotSweep.ts",
+        "apps/workers/src/queues/jobChangeSweep.ts",
         "apps/workers/src/queues/reverification.ts",
         "apps/workers/src/queues/reverificationSweep.ts"
       ],
@@ -853,6 +857,8 @@
       "admin": [],
       "api": [],
       "core": [
+        "packages/core/src/er/blocking.test.ts",
+        "packages/core/src/er/blocking.ts",
         "packages/core/src/er/compareRecords.test.ts",
         "packages/core/src/er/compareRecords.ts",
         "packages/core/src/er/fellegiSunter.test.ts",
@@ -1227,7 +1233,10 @@
       ],
       "core": [],
       "db": [
-        "packages/db/src/repositories/masterGraphRepository.ts"
+        "packages/db/src/repositories/masterCompanyDetailRepository.ts",
+        "packages/db/src/repositories/masterGraphRepository.ts",
+        "packages/db/src/repositories/masterSignalsRepository.ts",
+        "packages/db/src/repositories/masterTechnologyRepository.ts"
       ],
       "workers": [
         "apps/workers/src/queues/masterBackfill.test.ts",
@@ -1428,6 +1437,8 @@
         "packages/core/src/prospect/accountSearch.ts",
         "packages/core/src/prospect/backfillMaster.ts",
         "packages/core/src/prospect/bulkActions.ts",
+        "packages/core/src/prospect/confidence.test.ts",
+        "packages/core/src/prospect/confidence.ts",
         "packages/core/src/prospect/conflictDetect.test.ts",
         "packages/core/src/prospect/conflictDetect.ts",
         "packages/core/src/prospect/contactMergeGate.ts",
@@ -2738,6 +2749,7 @@
       "packages/db/src/repositories/jobVisibility.ts",
       "packages/db/src/repositories/leaseAccounting.test.ts",
       "packages/db/src/repositories/leaseAccounting.ts",
+      "packages/db/src/repositories/masterSignalsRepository.test.ts",
       "packages/db/src/repositories/platformAdminReads.ts",
       "packages/db/src/repositories/platformAdminWrites.ts",
       "packages/db/src/repositories/platformAuditReads.ts",
@@ -2773,7 +2785,12 @@
       "packages/db/src/schema/index.ts",
       "packages/db/src/schema/intel.ts",
       "packages/db/src/schema/lists.ts",
+      "packages/db/src/schema/masterCompanyDetail.ts",
+      "packages/db/src/schema/masterConfidencePolicy.ts",
       "packages/db/src/schema/masterGraph.ts",
+      "packages/db/src/schema/masterSignals.ts",
+      "packages/db/src/schema/masterTechnology.ts",
+      "packages/db/src/schema/masterTechnologyAdoption.ts",
       "packages/db/src/schema/notifications.ts",
       "packages/db/src/schema/outreach.ts",
       "packages/db/src/schema/pipelineStages.ts",
@@ -2858,8 +2875,11 @@
       "packages/db/test/importSoak.nightly.itest.ts",
       "packages/db/test/importTemplates.itest.ts",
       "packages/db/test/intel.itest.ts",
+      "packages/db/test/intelligencePlatformIsolation.itest.ts",
+      "packages/db/test/intelligencePlatformRepositories.itest.ts",
       "packages/db/test/itestDb.ts",
       "packages/db/test/jobChangeAlerts.itest.ts",
+      "packages/db/test/jobChangeSweep.itest.ts",
       "packages/db/test/jobVisibility.itest.ts",
       "packages/db/test/listMembersDsarCascade.itest.ts",
       "packages/db/test/lists.itest.ts",
@@ -3112,7 +3132,6 @@
     "apps/web/next.config.mjs",
     "packages/db/src/repositories/entitlementRepository.ts",
     "packages/db/src/repositories/outcomeMetricsRepository.ts",
-    "packages/db/src/repositories/provenanceBadgeRepository.ts",
     "packages/db/src/repositories/usageEventRepository.ts"
   ],
   "warnings": [

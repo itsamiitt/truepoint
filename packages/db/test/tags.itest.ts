@@ -133,7 +133,9 @@ describe("tag layer (ADR-0028, G-REV-6) — CRUD, assignment, uniqueness, per-wo
     const scopeA = { tenantId: tenantA, workspaceId: wsA };
     await core.createTag({ scope: scopeA, name: "Unique", color: "accent" });
     // Same name, different case, same workspace → conflict.
-    expect(await thrownBy(() => core.createTag({ scope: scopeA, name: "unique", color: "success" }))).toMatchObject({ code: "tag_name_taken", status: 409 });
+    expect(
+      await thrownBy(() => core.createTag({ scope: scopeA, name: "unique", color: "success" })),
+    ).toMatchObject({ code: "tag_name_taken", status: 409 });
 
     // But the SAME name in a DIFFERENT workspace is allowed (per-workspace scope).
     const scopeB = { tenantId: tenantB, workspaceId: wsB };
@@ -164,12 +166,16 @@ describe("tag layer (ADR-0028, G-REV-6) — CRUD, assignment, uniqueness, per-wo
 
     // A tries to assign B's tag to A's contact → core.assignTag looks the tag up under A's scope, can't see
     // it, and throws 404. No row is written.
-    expect(await thrownBy(() => core.assignTag({
-        scope: { tenantId: tenantA, workspaceId: wsA },
-        tagId: tagB,
-        entity: "contact",
-        recordId: contactA,
-      }))).toMatchObject({ code: "not_found" });
+    expect(
+      await thrownBy(() =>
+        core.assignTag({
+          scope: { tenantId: tenantA, workspaceId: wsA },
+          tagId: tagB,
+          entity: "contact",
+          recordId: contactA,
+        }),
+      ),
+    ).toMatchObject({ code: "not_found" });
 
     const [{ n }] = (await admin`
       SELECT count(*)::int AS n FROM record_tags WHERE tag_id = ${tagB}`) as [{ n: number }];
@@ -182,13 +188,21 @@ describe("tag layer (ADR-0028, G-REV-6) — CRUD, assignment, uniqueness, per-wo
     // A contact that belongs to workspace B (and a totally unknown uuid) must both be rejected.
     const contactB = await seedContact(tenantB, wsB, "foreign.com");
 
-    expect(await thrownBy(() => core.assignTag({ scope: scopeA, tagId: tagA, entity: "contact", recordId: contactB }))).toMatchObject({ code: "not_found" });
-    expect(await thrownBy(() => core.assignTag({
-        scope: scopeA,
-        tagId: tagA,
-        entity: "contact",
-        recordId: "00000000-0000-7000-8000-000000000000",
-      }))).toMatchObject({ code: "not_found" });
+    expect(
+      await thrownBy(() =>
+        core.assignTag({ scope: scopeA, tagId: tagA, entity: "contact", recordId: contactB }),
+      ),
+    ).toMatchObject({ code: "not_found" });
+    expect(
+      await thrownBy(() =>
+        core.assignTag({
+          scope: scopeA,
+          tagId: tagA,
+          entity: "contact",
+          recordId: "00000000-0000-7000-8000-000000000000",
+        }),
+      ),
+    ).toMatchObject({ code: "not_found" });
 
     const [{ n }] = (await admin`
       SELECT count(*)::int AS n FROM record_tags WHERE tag_id = ${tagA}`) as [{ n: number }];

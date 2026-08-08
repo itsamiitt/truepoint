@@ -22,9 +22,15 @@
 > provider budgets · feature flags · audit log · system health · time-boxed audited impersonation —
 > ADR-0011/0034).
 > **The two-layer data model is the spine** ([ADR-0021](./planning/decisions/ADR-0021-global-master-graph-and-overlay.md)):
-> the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built; the global **master graph**
-> (Layer 0) + its overlay `master_*_id` FKs are designed but **not yet in code** — see the prospect↔company
-> initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/).
+> the per-workspace **overlay** (`contacts`/`accounts`, RLS-FORCED) is built, and the global **master graph**
+> (Layer 0) is now **shipped too** — `schema/masterGraph.ts` (7 tables), the field-grain partitioned
+> `provenance_event` (`schema/provenanceEvent.ts`, migration 0089), and the Layer-0 technology/product catalog
+> + adoption edge (`schema/masterTechnology.ts`, `schema/masterTechnologyAdoption.ts`, migrations 0100–0102)
+> and the canonical signal store (`schema/masterSignals.ts`, migration 0103 — distinct from the tenant-scoped
+> `intent_signals`, which it does not replace).
+> See the prospect↔company initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/)
+> and the intelligence-platform program in
+> [`docs/planning/intelligence-platform/`](./planning/intelligence-platform/).
 > **The MV3 browser extension** (`apps/extension`, `@leadwolf/extension`) is the newest surface — a thin,
 > least-privilege, compliant-capture client (Vite + CRXJS), built dark, that reuses the shipped `/api/v1`
 > ingestion/reveal seam and holds no DB/provider access. Its LinkedIn→contact seam is
@@ -33,9 +39,16 @@
 > [`docs/planning/chrome-extension/`](./planning/chrome-extension/) (00–14, incl. `14-implementation-audit` —
 > the living shipped-status record) + [ADR-0043](./planning/decisions/ADR-0043-chrome-extension-architecture.md)
 > /0044/0045. Build rules live in the three `.claude/skills/truepoint-extension-{architecture,linkedin,auth}` skills.
-> **1939 source files · 83 code-bearing domains · 38 shared areas · 52 domain-vocabulary warnings · 4
-> unbucketed** — and those four are ALL framework-root configs (`next.config.mjs` × 3, `postcss.config.mjs`),
-> which have no domain by nature and are expected to stay here. Everything else now has a home.
+> **2000 source files · 85 code-bearing domains · 38 shared areas · 54 domain-vocabulary warnings · 7
+> unbucketed.** Four of the seven are framework-root configs (`next.config.mjs` × 3, `postcss.config.mjs`),
+> which have no domain by nature and are expected to stay here. **The other three are unregistered
+> repositories** — `entitlementRepository`, `outcomeMetricsRepository`, `usageEventRepository` — which have a
+> domain but no `REPO_DOMAIN` entry in the generator. That is a registration gap, not misplaced code, and it
+> is the same class of backlog described below; fixing it is a generator edit, left as a tracked follow-up
+> rather than folded into an unrelated change. (`provenanceBadgeRepository` left this list when the
+> intelligence-platform work registered it under `data-health`, beside the freshness half of the same badge —
+> the other three are not registered here because no existing domain is clearly right for them, and the
+> generator's own rule is that a confidently wrong home is worse than an honest gap.)
 >
 > That is down from 155. The backlog was never misplaced code: it was **unregistered** code. The map keys a
 > repository off `REPO_DOMAIN`, a queue off `QUEUE_DOMAIN` and a package off an explicit leaf-package list,
@@ -177,13 +190,29 @@ apps/                           # deployable processes (thin transport adapters)
   `jobChange.ts` (`detectJobChange` — compares CONFIDENCES, not timestamps; a departure is held to the same
   bar as a move) + `recordJobChange.ts` (the producer: intent_signal + alerts to users who SAVED the contact),
   `successor.ts` (`rankSuccessors` — who now holds a departed contact's role; seniority is a DISTANCE on the
-  ladder, unknown scores neutral, and weak suggestions are dropped rather than shown)
+  ladder, unknown scores neutral, and weak suggestions are dropped rather than shown),
+  `runJobChangeSweep.ts` (the per-workspace runner behind the job-change sweep — composes detect + record and
+  re-decides nothing; the tenant-side PRIOR is priced with the default method prior and one source, so a
+  strong new claim clears the bar and a weak one cannot)
 - **workers:** `reverification.ts` (per-workspace re-verification job), `reverificationSweep.ts` (leader-locked
   daily fan-out enqueuing a per-workspace re-verification for every workspace with stale revealed contacts),
-  `dataQualitySnapshotSweep.ts` (leader-locked daily capture of a per-workspace Data Health trend point)
+  `dataQualitySnapshotSweep.ts` (leader-locked daily capture of a per-workspace Data Health trend point),
+  `jobChangeSweep.ts` (leader-locked S-13 fan-out, DARK behind `JOB_CHANGE_SWEEP_ENABLED` — owner-conn census
+  of workspaces whose Layer-0 employment moved since a Redis watermark, then per-workspace `withTenantTx`
+  batches. An ABSENT watermark starts at NOW and fans out nothing, so a Redis loss misses changes rather than
+  replaying history as an alert storm; the watermark advances only on a fully drained tick)
 - **db:** `verification_jobs` (the re-verification audit ledger — one row per completed run, workspace-scoped RLS;
   `verificationJobRepository` record/listRecent; migration 0022) — written by `runReverification` (PLAN_06);
-  `data_quality_snapshots` (the Data Health TREND store — `dataQualitySnapshotRepository`; migration 0023)
+  `data_quality_snapshots` (the Data Health TREND store — `dataQualitySnapshotRepository`; migration 0023);
+  `jobChangeSweepRepository` (no tables of its own — the sweep's data access: the owner-conn cross-tenant
+  census and Layer-0 fact read, kept apart from the RLS-enforcing tenant read because "which workspaces hold
+  this person" is a question no tenant role may ask);
+  `provenanceBadgeRepository` (`badgeFor` — the corroboration half of the S-10 badge, aggregated under
+  `withErTx`; `contributor_ref` is counted inside the SQL and never returned)
+- **tests:** `jobChangeAlerts.itest.ts` (the producer: watcher fan-out, dedup, unsaved-contact signal) +
+  `jobChangeSweep.itest.ts` (the layer above it: the watermark bounds the census, the owner-conn fact read is
+  workspace-scoped where RLS is NOT the wall, only primary+current edges count, and the runner composes end
+  to end against real columns)
 
 #### reveal — *M1 masked reads + M3 money loop + no-charge revealed reads + in-list reveal + async bulk* ([07 §3](./planning/07-billing-credits.md), ADR-0007/0013/0029)
 - **core:** `reveal/revealContact.ts` — the monetized tx: in-tx suppression gate → cross-`reveal_type` dedup
@@ -608,9 +637,12 @@ flowchart TD
   are peer deps so nothing Next-coupled leaks into `packages/ui` (which is esbuild-bundled for claude.ai/design).
 - **`packages/db`** — `drizzle.config.ts` + `drizzle.worktree.config.ts` (the worktree-scoped variant, for
   running migrations against a per-worktree database); `client.ts` (`withTenantTx`/`withPrivilegedTx`/`withPlatformTx`/`closeDb`), `applyMigrations.ts`
-  (bootstrap → drizzle → RLS sorted → grants), `bootstrapAdmin.ts`, `migrate.ts`, `seed.ts`; `schema/*.ts` (23 schema files incl.
+  (bootstrap → drizzle → RLS sorted → grants → **partition-ACL mirror, which must run last**), `bootstrapAdmin.ts`,
+  `migrate.ts`, `seed.ts`; `schema/*.ts` (schema files incl.
   the system-owned **Layer-0 master graph** `masterGraph.ts` — ADR-0021, walled off from `leadwolf_app` by the
-  `applyMigrations` grant-off, no RLS), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
+  `applyMigrations` grant-off, no RLS — plus the Layer-0 technology/product catalog `masterTechnology.ts`, whose
+  tables all take the `master_` prefix so the generator's `^master_` REVOKE loop makes them fail closed by
+  default), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
   (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility) +
   `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate).
 - **`packages/core`** — `index.ts` is the public surface; domain code bucketed per feature above. Owns all ports
