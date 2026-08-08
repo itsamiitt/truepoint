@@ -1194,6 +1194,34 @@ non-destructive is the design working, not a defect.
 
 ---
 
+## ▶ CI IS GREEN — 2026-08-08, run 31263352838, branch `feat/intelligence-platform-layer0`
+
+All five jobs pass. **Everything in this programme has now actually executed against Postgres**: eight
+migrations, six repositories, four itest files. The standing caveat repeated in every iteration since #1 is
+discharged.
+
+**It took seven fix commits, and CI found every one of the bugs. Static review had found none of them.**
+
+| # | Bug | Why only execution could find it |
+|---|---|---|
+| 1 | **0106's header comment contained the statement-breakpoint marker verbatim.** The splitter is a plain string split over the whole file and does not know what a comment is, so the comment *explaining the splitter* split the file, leaving a fragment starting with a backtick. | `syntax error at or near "\`"` at 0106 — and since applyMigrations runs before EVERY itest, all four shards failed on every file, including tests untouched by this branch. The blast radius made a one-character problem look like broken infrastructure. |
+| 2 | **`contacts.master_company_id` does not exist.** `schema/contacts.ts` defines BOTH `accounts` and `contacts`; the company bridge is on `accounts`. I read both declarations in one file and concluded "contacts carries both axes". | Four static passes read that file and never caught it. The tempting fix was a migration adding the column — which would have polluted the schema to match a misreading. |
+| 3 | Fixture collided with `uniq_employment_stint` once a test moved the primary edge, because both stints sat on the `started_on` default of `-infinity`. | Requires the constraint to actually exist and the sequence to actually run. |
+| 4 | The **P-1.7 snapshot ratchet** caught four migrations added without snapshots and failed, exactly as designed. Raised 62 → 66 with the reason stated. | A gate doing precisely its job. |
+| 5 | The isolation itest's `UPDATE <table> SET id = id` probe hit **42703 (undefined_column)** — several Layer-0 tables have no `id`. **The failure was the lucky outcome**: a statement that cannot be planned never reaches the privilege check, so a looser expectation would have "passed" while proving nothing about whether `leadwolf_app` can write. |
+| 6 | The `leadwolf_er` assertions compared against a **Drizzle wrapper string**, not a SQLSTATE — raw postgres.js puts `code` on the error, Drizzle hangs the original off `.cause`. The DELETE was refused correctly both times; the wall worked and the test could not read the verdict. |
+| 7 | **Dates passed raw into Drizzle `sql` templates.** Not a Postgres error at all — postgres.js falls through to its string serializer and throws in JS *before the query is sent*, reported as an empty `Failed query:`. Adding `::timestamptz` did not help because the failure is client-side. **`.toISOString()` is the established house pattern** — contactRepository, dsarRepository, eventOutboxRepository and importJobRepository all use it. |
+
+**The pattern in #2 and #7 is the same one §5 of `10-handover.md` records:** the answer was already in the
+directory. `contacts.ts` said which table owned the column; four neighbouring repositories showed how to pass
+a Date. Both were one grep away, and four static passes over the same files did not substitute for either.
+
+**Bugs 5 and 6 are the ones worth remembering** — both were tests that would have *passed while proving
+nothing*. A security proof that cannot distinguish "denied" from "malformed" is one refactor away from
+silently guarding nothing.
+
+---
+
 ## ▶ PROGRAMME STATUS: COMPLETE UNDER CURRENT CONSTRAINTS
 
 All ten phases have artifacts. All twelve brief scope items have artifacts. Every owed item is either done or
