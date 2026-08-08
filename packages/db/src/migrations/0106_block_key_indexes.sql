@@ -18,12 +18,20 @@
 -- invisible to it and will not be dropped — the same arrangement provenance_event's indexes already rely on.
 --
 -- ── CONCURRENTLY IS SAFE HERE, AND THAT IS NOT OBVIOUS — verify before copying this pattern ──────────────
--- This repo does NOT use Drizzle's migrator. applyMigrations.ts::applyJournalByHash splits each file on
--- `--> statement-breakpoint` and runs the statements one at a time via sql.unsafe() in AUTOCOMMIT (its own
--- docstring: "statement by statement (autocommit, hash row recorded LAST) so an interrupted run resumes
--- convergently"). No enclosing transaction means CONCURRENTLY is legal. Note migrate.ts still carries a
--- comment about "Drizzle's migrator opens a real DDL transaction" — that describes the pooler hazard, not
--- this path, and it is why this was checked rather than assumed.
+-- This repo does NOT use Drizzle's migrator. applyMigrations.ts::applyJournalByHash splits each file on the
+-- breakpoint marker (the "statement dash breakpoint" comment used between statements below) and runs the
+-- statements one at a time via sql.unsafe() in AUTOCOMMIT (its own docstring: "statement by statement
+-- (autocommit, hash row recorded LAST) so an interrupted run resumes convergently"). No enclosing
+-- transaction means CONCURRENTLY is legal. Note migrate.ts still carries a comment about "Drizzle's migrator
+-- opens a real DDL transaction" — that describes the pooler hazard, not this path, and it is why this was
+-- checked rather than assumed.
+--
+-- ⚠ DO NOT WRITE THE MARKER VERBATIM ANYWHERE IN A MIGRATION, INCLUDING IN A COMMENT.
+-- The splitter is a plain string split over the WHOLE file — it does not know what a comment is. The first
+-- version of this header quoted the marker inside backticks to explain the mechanism, which split the file
+-- at that point and left a fragment beginning with a backtick. Every itest in the repo then died on
+-- `syntax error at or near "\`"` (42601) at THIS migration, because applyMigrations runs before all of them.
+-- The comment explaining the splitting broke the splitting. Refer to the marker descriptively, never literally.
 --
 -- ── THE TRAP THIS GUARD EXISTS FOR ──────────────────────────────────────────────────────────────────────
 -- A failed CREATE INDEX CONCURRENTLY leaves an INVALID index behind (Postgres does not clean it up). On the
