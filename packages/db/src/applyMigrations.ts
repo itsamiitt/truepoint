@@ -286,6 +286,36 @@ const GRANTS = `
   -- (No backticks in this comment: it lives inside a template literal, where one would terminate the string.)
   REVOKE ALL ON master_persons, master_companies, master_employment, master_emails, master_phones,
                 source_records, match_links, projection_outbox, provenance_event FROM leadwolf_app;
+  -- Layer-0 technology/product catalog (intelligence-platform Group A/B). Same posture as the master graph:
+  -- system-owned, no workspace_id, no RLS predicate possible, so the grant-off IS the isolation. Listed
+  -- explicitly even though every one of them is named master_* and is therefore already caught by the
+  -- convention loop below — the loop is the fail-closed default for a table someone forgets, not a licence
+  -- to stop maintaining this list.
+  REVOKE ALL ON master_technologies, master_technology_categories, master_technology_aliases,
+                master_technology_vendors, master_technology_features FROM leadwolf_app;
+  -- master_technology_adoptions (0101) is the company-technology edge — same Layer-0 posture, and PARTITIONED.
+  -- This REVOKE covers reads THROUGH THE PARENT, which is how every query reaches it: Postgres checks the
+  -- privileges of the relation actually named in the query, so a parent-level revoke blocks the parent.
+  -- It does NOT propagate to the partitions themselves — partition ACLs are independent, and each monthly
+  -- partition is created by the sweep and picks up the blanket ALTER DEFAULT PRIVILEGES grant at CREATE time.
+  -- Migration 0102 closes that by making ensure_month_partitions mirror the parent's ACL onto every partition
+  -- it creates; the convention loop below is the second line of defence at each migrate.
+  REVOKE ALL ON master_technology_adoptions FROM leadwolf_app;
+  -- Canonical signal store (0103). master_signals is PARTITIONED (same parent-vs-partition caveat as above);
+  -- master_signal_types is reference data, and it is revoked for consistency rather than secrecy — the app
+  -- role has no reason to read Layer-0 vocabulary directly, and the surfaces that need it go through the
+  -- server. Note master_signals holds person-subject rows (a dated career event IS personal data even with no
+  -- contact value in the payload), which is why it is treated as Layer-0 PII-adjacent, not as public config.
+  REVOKE ALL ON master_signals, master_signal_types FROM leadwolf_app;
+  -- Layer-0 completeness tables (0104). master_person_identifiers is the one that matters most here: it holds
+  -- public profile handles keyed to a person, which is personal data, and it is a GLOBAL (id_type, id_value)
+  -- ER join key — exactly the kind of table a raw query would mine for cross-tenant person enumeration.
+  REVOKE ALL ON master_company_locations, master_company_contact_points, master_company_funding,
+                master_person_identifiers FROM leadwolf_app;
+  -- master_confidence_policy (0107) is scoring config, not tenant data. The app never needs it: it reads the
+  -- COMPUTED confidence stored in field_provenance, not the curve that produced it. Revoked so the scoring
+  -- policy cannot be read or tampered with from a tenant-scoped connection.
+  REVOKE ALL ON master_confidence_policy FROM leadwolf_app;
   -- Defense-in-depth belt: dynamically REVOKE from leadwolf_app any table named master_*. A FUTURE Layer-0
   -- master table is auto-granted by the ALTER DEFAULT PRIVILEGES above at CREATE time, so this convention-based
   -- catch-all makes it fail closed even before someone adds it to the explicit list. (Tables NOT matching
@@ -309,6 +339,23 @@ const GRANTS = `
   GRANT SELECT, INSERT, UPDATE ON master_persons, master_companies, master_employment, master_emails,
                                    master_phones, source_records, match_links, projection_outbox,
                                    processed_sync_events, provenance_event TO leadwolf_er;
+  -- Intelligence-platform Layer-0 tables (0100-0107). Same posture as the list above: SELECT/INSERT/UPDATE,
+  -- never DELETE — erasure stays on the audited owner/withPrivilegedTx path, which is why
+  -- masterSignalsRepository.erasePersonSignals is explicitly documented as NOT a withErTx call.
+  -- The two PARTITIONED tables are granted on the PARENT, which is what every query names — and routed DML
+  -- checks the PARENT's privileges, so that alone is what makes the repositories work. Their partitions pick
+  -- the same ACL up via mirror_partition_acl (0102), which runs at the very END of this block, AFTER these
+  -- grants — see the note there. Order-sensitive: mirroring before this grant would leave partitions without
+  -- it on a fresh database.
+  GRANT SELECT, INSERT, UPDATE ON master_technologies, master_technology_categories,
+                                   master_technology_aliases, master_technology_vendors,
+                                   master_technology_features, master_technology_adoptions,
+                                   master_signals, master_company_locations,
+                                   master_company_contact_points, master_company_funding,
+                                   master_person_identifiers TO leadwolf_er;
+  -- Reference/config data the resolver READS but must never rewrite: the signal vocabulary and the scoring
+  -- policy are authored by staff, not by an ingest path.
+  GRANT SELECT ON master_signal_types, master_confidence_policy TO leadwolf_er;
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO leadwolf_er;
   -- leadwolf_forge (ADR-0047) owns the forge schema data plane end-to-end (raw to parsed to verified + ER +
   -- governance). Full DML there (DELETE included — raw-layer DSAR erasure runs in-schema), but NO grant on the
@@ -322,6 +369,39 @@ const GRANTS = `
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO leadwolf_forge;
   ALTER DEFAULT PRIVILEGES IN SCHEMA forge
     GRANT USAGE, SELECT ON SEQUENCES TO leadwolf_forge;
+  -- ── PARTITION ACL MIRROR — GENUINELY LAST, AND THE POSITION IS THE POINT ────────────────────────────────
+  -- PARTITION ACLs DO NOT INHERIT. Postgres checks privileges on the relation NAMED in the query, so the
+  -- parent-level REVOKEs above block "SELECT ... FROM provenance_event" but say nothing about
+  -- "SELECT ... FROM provenance_event_2026_08". Each monthly partition is an ordinary table in public, so the
+  -- ALTER DEFAULT PRIVILEGES grant at the top of this block — and the blanket GRANT ON ALL TABLES, which runs
+  -- every migrate and re-grants everything that exists — hands the customer app role direct access to it under
+  -- a completely predictable name. mirror_partition_acl (migration 0102) sets each partition's ACL to its
+  -- parent's, which is correct for a REVOKE'd Layer-0 table AND for a tenant-scoped RLS table that legitimately
+  -- keeps the grant.
+  --
+  -- MOVED HERE from above the leadwolf_er grants, which is where it was originally written. Its own comment
+  -- said "this MUST run last" and it did not: the er GRANTs ran AFTER it, so on a FRESH database each
+  -- partition was mirrored from a parent ACL that did not yet carry the er grant. The gap was narrow — routed
+  -- DML checks privileges on the PARENT, so every repository (which always names the parent) worked, and a
+  -- second migrate run converged it — but a leadwolf_er query naming a partition DIRECTLY would have been
+  -- denied on a fresh database while the comment three lines above the grant claimed the opposite.
+  -- Anything appended to this block from now on must go ABOVE this mirror, not below it.
+  --
+  -- Guarded on the function existing so a database migrated only as far as 0101 still converges.
+  DO $$ DECLARE p record; BEGIN
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'mirror_partition_acl') THEN
+      FOR p IN
+        SELECT cn.nspname AS child_ns, ch.relname AS child_name, i.inhparent AS parent_oid
+          FROM pg_inherits i
+          JOIN pg_class ch ON ch.oid = i.inhrelid
+          JOIN pg_namespace cn ON cn.oid = ch.relnamespace
+          JOIN pg_class pa ON pa.oid = i.inhparent
+         WHERE pa.relkind = 'p' AND cn.nspname = 'public'
+      LOOP
+        PERFORM mirror_partition_acl(p.child_ns, p.child_name, p.parent_oid::regclass);
+      END LOOP;
+    END IF;
+  END $$;
 `;
 
 async function exists(path: string): Promise<boolean> {
