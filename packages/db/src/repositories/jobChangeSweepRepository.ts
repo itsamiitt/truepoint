@@ -73,7 +73,7 @@ export const jobChangeSweepRepository = {
              AND c.master_person_id IS NOT NULL
              AND me.is_primary
              AND me.is_current
-             AND me.updated_at > ${since}::timestamptz
+             AND me.updated_at > ${since.toISOString()}::timestamptz
            LIMIT ${limit}`,
     )) as unknown as Array<{ tenant_id: string; workspace_id: string }>;
     return rows.map((r) => ({ tenantId: r.tenant_id, workspaceId: r.workspace_id }));
@@ -116,7 +116,7 @@ export const jobChangeSweepRepository = {
             LEFT JOIN master_companies mc ON mc.id = me.master_company_id
            WHERE me.is_primary
              AND me.is_current
-             AND me.updated_at > ${since}::timestamptz
+             AND me.updated_at > ${since.toISOString()}::timestamptz
            ORDER BY me.master_person_id, me.updated_at DESC
            LIMIT ${limit}`,
     )) as unknown as Array<{

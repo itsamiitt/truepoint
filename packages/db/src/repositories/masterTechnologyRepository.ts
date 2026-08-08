@@ -138,10 +138,16 @@ export async function recordDetection(
                        ${input.detectionMethod}, 0))
   `);
 
+  // DATES GO IN AS ISO STRINGS WITH AN EXPLICIT CAST — never as a raw Date. Drizzle's sql template does not
+  // type a Date param, so postgres.js falls through to its string serializer and throws, in JS, before the
+  // query reaches the server: `TypeError: The "string" argument must be of type string ... Received an
+  // instance of Date`, reported by Drizzle as an EMPTY "Failed query:". Adding ::timestamptz alone does not
+  // help, because the failure is client-side. This is the house pattern — contactRepository, dsarRepository,
+  // eventOutboxRepository and importJobRepository all write `${x.toISOString()}`.
   const extended = (await tx.execute(sql`
     UPDATE master_technology_adoptions
-       SET last_seen_at  = GREATEST(last_seen_at, ${input.observedAt}::timestamptz),
-           first_seen_at = LEAST(first_seen_at, ${input.observedAt}::timestamptz),
+       SET last_seen_at  = GREATEST(last_seen_at, ${input.observedAt.toISOString()}::timestamptz),
+           first_seen_at = LEAST(first_seen_at, ${input.observedAt.toISOString()}::timestamptz),
            source_count  = source_count + 1,
            confidence    = COALESCE(${input.confidence ?? null}, confidence)
      WHERE master_company_id = ${input.masterCompanyId}
@@ -161,8 +167,8 @@ export async function recordDetection(
        confidence, source_name, evidence_ref, observed_at)
     VALUES
       (${input.masterCompanyId}, ${input.technologyId}, ${input.detectionMethod},
-       ${input.observedAt}::timestamptz, ${input.observedAt}::timestamptz, ${input.confidence ?? null},
-       ${input.sourceName ?? null}, ${input.evidenceRef ?? null}, ${input.observedAt}::timestamptz)
+       ${input.observedAt.toISOString()}::timestamptz, ${input.observedAt.toISOString()}::timestamptz, ${input.confidence ?? null},
+       ${input.sourceName ?? null}, ${input.evidenceRef ?? null}, ${input.observedAt.toISOString()}::timestamptz)
     RETURNING id
   `)) as unknown as Array<{ id: string }>;
 
@@ -188,12 +194,12 @@ export async function closeDetection(
 ): Promise<number> {
   const closed = (await tx.execute(sql`
     UPDATE master_technology_adoptions
-       SET removed_at = ${input.removedAt}::timestamptz
+       SET removed_at = ${input.removedAt.toISOString()}::timestamptz
      WHERE master_company_id = ${input.masterCompanyId}
        AND technology_id     = ${input.technologyId}
        AND detection_method  = ${input.detectionMethod}
        AND removed_at IS NULL
-       AND ${input.removedAt}::timestamptz >= last_seen_at
+       AND ${input.removedAt.toISOString()}::timestamptz >= last_seen_at
      RETURNING id
   `)) as unknown as Array<{ id: string }>;
   return closed.length;

@@ -169,7 +169,7 @@ export async function recordSignal(
        ${JSON.stringify(payload)}::jsonb, ${input.amountMinor ?? null}, ${input.currency ?? null},
        ${input.relatedCompanyId ?? null}, ${input.relatedTechnologyId ?? null},
        ${input.confidence ?? null}, ${input.sourceName ?? null}, ${input.evidenceRef ?? null},
-       ${input.evidenceUrl ?? null}, ${input.observedAt}::timestamptz)
+       ${input.evidenceUrl ?? null}, ${input.observedAt.toISOString()}::timestamptz)
     RETURNING id
   `)) as unknown as Array<{ id: string }>;
 
