@@ -11,8 +11,8 @@ import {
   suppressionRepository,
   withPlatformTx,
 } from "@leadwolf/db";
+import { blindIndex } from "@leadwolf/identity";
 import { ValidationError } from "@leadwolf/types";
-import { blindIndex } from "../import/blindIndex.ts";
 
 export interface AddGlobalSuppressionInput {
   /** Suppress an exact address (HMAC blind-indexed) … */

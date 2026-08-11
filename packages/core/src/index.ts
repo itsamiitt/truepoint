@@ -170,7 +170,7 @@ export {
   isApiImportsEnabled,
   apiImportsEnabledForScope,
 } from "./import/apiImportsGate.ts";
-export { blindIndex } from "./import/blindIndex.ts";
+export { blindIndex } from "@leadwolf/identity";
 export { encryptPii, decryptPii } from "./import/encryptPii.ts";
 // Pre-commit validation preview + rejected-rows artifact + conflict policy (30 §4, ADR-0036; G-IMP-1/5).
 export {

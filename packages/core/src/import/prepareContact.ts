@@ -4,17 +4,17 @@
 // parity guarantee (15-bulk-import-design §1). Pure: no DB, no I/O.
 
 import type { ContactWriteValues, DedupKeys } from "@leadwolf/db";
-import { blindIndex } from "./blindIndex.ts";
-import type { MappedRow } from "./columnMap.ts";
-import { encryptPii } from "./encryptPii.ts";
 import {
+  blindIndex,
   emailDomainOf,
   linkedinPublicIdOf,
   normalizeDomain,
   normalizeEmailForIndex,
   normalizeEmailForStorage,
   normalizeText,
-} from "./normalize.ts";
+} from "@leadwolf/identity";
+import type { MappedRow } from "./columnMap.ts";
+import { encryptPii } from "./encryptPii.ts";
 
 const SENIORITY = new Set(["c_suite", "vp", "director", "manager", "ic", "other"]);
 

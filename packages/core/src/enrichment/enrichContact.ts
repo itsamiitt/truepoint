@@ -14,6 +14,7 @@ import {
   sourceImportRepository,
   withTenantTx,
 } from "@leadwolf/db";
+import { blindIndex } from "@leadwolf/identity";
 import {
   CONTACT_PROVENANCE_FIELDS,
   type EnrichField,
@@ -23,7 +24,6 @@ import {
   sourceName as sourceNameEnum,
 } from "@leadwolf/types";
 import { buildPhoneChannelValue, isChannelDualWriteEnabled } from "../channels/channelDualWrite.ts";
-import { blindIndex } from "../import/blindIndex.ts";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
 import { type AutoEnrichDenyReason, enforceAutoEnrichPolicy } from "./policy.ts";

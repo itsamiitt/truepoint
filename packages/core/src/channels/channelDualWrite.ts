@@ -20,13 +20,12 @@
 
 import { env } from "@leadwolf/config";
 import { type PhoneChannelValue, type Tx, withTenantTx } from "@leadwolf/db";
+import { blindIndex, normalizeText } from "@leadwolf/identity";
 import { CHANNELS_DUAL_WRITE_FLAG_KEY } from "@leadwolf/types";
 import type { CountryCode } from "libphonenumber-js";
 import { toE164 } from "../enrichment/matchKeys.ts";
 import { isFlagEnabledForTenant } from "../feature-flags/flagsForTenant.ts";
-import { blindIndex } from "../import/blindIndex.ts";
 import { encryptPii } from "../import/encryptPii.ts";
-import { normalizeText } from "../import/normalize.ts";
 
 /** Evaluate the S-CH2 dual gate INSIDE an existing tenant tx (enrich/reveal/re-verify writers). Env layer
  *  off ⇒ false with zero queries. A flag-read failure propagates with the caller's tx (the two PK lookups

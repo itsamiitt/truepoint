@@ -5,7 +5,7 @@
 // BLIND_INDEX_KEY, so the DM1 primitives run for real — no DB.
 
 import { describe, expect, test } from "bun:test";
-import { blindIndex } from "../import/blindIndex.ts";
+import { blindIndex } from "@leadwolf/identity";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
 import { buildPhoneChannelValue, countryHintOf, phoneRawIndexForm } from "./channelDualWrite.ts";
 

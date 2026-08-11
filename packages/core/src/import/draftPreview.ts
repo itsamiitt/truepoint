@@ -20,13 +20,13 @@
 // carries (the shipped-labels drift, doc 16 S-I7 row) — both are non-PII by construction.
 
 import { type DedupKeys, type Tx, contactRepository } from "@leadwolf/db";
+import { blindIndex } from "@leadwolf/identity";
 import type {
   ColumnMapping,
   ImportPreviewColumnFeedback,
   ImportPreviewSummary,
   RejectedRow,
 } from "@leadwolf/types";
-import { blindIndex } from "./blindIndex.ts";
 import type { RawRow } from "./columnMap.ts";
 import {
   type RowIdentity,

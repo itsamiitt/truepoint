@@ -9,15 +9,15 @@
 // emailIndex via blindIndex — an HMAC keyed by env.BLIND_INDEX_KEY, so emailIndex is stable for a fixed key
 // (the requestHash "normalize before hash" discipline applied to matching), not key-independent.
 
-import { type CountryCode, parsePhoneNumberFromString } from "libphonenumber-js";
-import { getDomain } from "tldts";
-import { blindIndex } from "../import/blindIndex.ts";
 import {
+  blindIndex,
   linkedinPublicIdOf,
   normalizeEmailForIndex,
   normalizeEmailForStorage,
   normalizeText,
-} from "../import/normalize.ts";
+} from "@leadwolf/identity";
+import { type CountryCode, parsePhoneNumberFromString } from "libphonenumber-js";
+import { getDomain } from "tldts";
 
 /** The match_method any single key satisfies (mirrors the match_method enum, strongest → weakest). */
 export type MatchMethod =

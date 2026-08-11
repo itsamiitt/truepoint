@@ -5,14 +5,14 @@
 // that stays in runImport; this is the shared verdict both the preview and the import use so they never
 // disagree. Returns a structured verdict with per-field reasons (the rejected-rows artifact rows).
 
-import type { ColumnMapping, ImportRejectCode, RejectedRow } from "@leadwolf/types";
-import { type MappedRow, type RawRow, mapRow } from "./columnMap.ts";
 import {
   linkedinPublicIdOf,
   normalizeEmailForIndex,
   normalizeEmailForStorage,
   normalizeText,
-} from "./normalize.ts";
+} from "@leadwolf/identity";
+import type { ColumnMapping, ImportRejectCode, RejectedRow } from "@leadwolf/types";
+import { type MappedRow, type RawRow, mapRow } from "./columnMap.ts";
 
 /** The dedup identity key derived from a valid row — used to estimate within-file duplicates (preview §5.1). */
 export interface RowIdentity {

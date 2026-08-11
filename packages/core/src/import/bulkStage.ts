@@ -10,9 +10,9 @@
 // exactly the rows the against-existing dedup would consider the same person.
 
 import { type ImportJobRow, type StagingRow, importStagingRepository } from "@leadwolf/db";
+import { contentHash } from "@leadwolf/identity";
 import type { BulkImportScope, ColumnMapping, RejectedRow, SourceName } from "@leadwolf/types";
 import type { FileStore } from "../storage/fileStore.ts";
-import { contentHash } from "./contentHash.ts";
 import { type PreparedContact, prepareContact } from "./prepareContact.ts";
 import { streamParseCsv } from "./streamParse.ts";
 import { rejectLabel, rejectedRowsFor, validateRow } from "./validateRow.ts";

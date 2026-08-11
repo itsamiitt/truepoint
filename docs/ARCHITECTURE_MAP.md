@@ -135,8 +135,9 @@ apps/                           # deployable processes (thin transport adapters)
 - **core:** `packages/core/src/import/` — `runImport.ts` (parse→map→normalize→dedup-upsert→provenance),
   `parseFile.ts` (RFC-4180 CSV) + `parseXlsx.ts` (XLSX with ZIP-magic + formula-injection guard + 100K-row/25 MiB caps),
   `columnMap.ts`, `validateRow.ts` (pure per-row verdict, reused by preview + run), `preview.ts` (valid/rejected/duplicate
-  counts + bounded sample), `rejectedRowsCsv.ts`, `templates.ts` (save/load reusable column mappings), `normalize.ts`,
-  `blindIndex.ts` (HMAC dedup key), `encryptPii.ts` (AES-GCM, KMS-swappable), `contentHash.ts`
+  counts + bounded sample), `rejectedRowsCsv.ts`, `templates.ts` (save/load reusable column mappings),
+  `encryptPii.ts` (AES-GCM, KMS-swappable). Normalization, the HMAC blind index and the stable content hash
+  come from `@leadwolf/identity` directly — the old `core/import` re-export shims are deleted
 - **db:** `sourceImportRepository.ts` (per-import provenance + content-hash skip); `importMappingTemplateRepository.ts`;
   `importPolicyRepository.ts` (per-workspace `who_can_import` + strategy defaults, P0 of
   [import-and-data-model-redesign](./planning/import-and-data-model-redesign/README.md)); `jobVisibility.ts`

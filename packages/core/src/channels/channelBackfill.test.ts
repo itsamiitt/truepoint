@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { MissingChannelProjectionRow } from "@leadwolf/db";
-import { blindIndex } from "../import/blindIndex.ts";
+import { blindIndex } from "@leadwolf/identity";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
 import { planContactChannelBackfill } from "./channelBackfill.ts";
 

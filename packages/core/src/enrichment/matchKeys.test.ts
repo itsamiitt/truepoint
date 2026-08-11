@@ -3,8 +3,7 @@
 // name canonicalization (accents/case/punctuation), and buildMatchKeys composition + method mapping.
 
 import { describe, expect, test } from "bun:test";
-import { blindIndex } from "../import/blindIndex.ts";
-import { normalizeEmailForIndex } from "../import/normalize.ts";
+import { blindIndex, normalizeEmailForIndex } from "@leadwolf/identity";
 import {
   buildMatchKeys,
   canonicalName,

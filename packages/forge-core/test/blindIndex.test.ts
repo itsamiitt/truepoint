@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 // Cross-system identity-match guard (P-01.6): Forge's silver blind index (hex), decoded hex→bytes, MUST equal
 // the master graph's bytea for the same email — so a Forge-synced person LINKs to the existing master_persons
-// cluster instead of minting a duplicate, and DSAR/suppression keyed on that index reaches Forge data. Both
-// sides now derive from @leadwolf/identity; core/import is the master-side reference, imported by relative path
-// (test files are exempt from the dependency-cruiser boundary rules).
-import { blindIndex as coreBlindIndex } from "../../core/src/import/blindIndex.ts";
+// cluster instead of minting a duplicate, and DSAR/suppression keyed on that index reaches Forge data. The
+// master-side reference is @leadwolf/identity, imported by relative path (test files are exempt from the
+// dependency-cruiser boundary rules).
 import {
+  blindIndex as coreBlindIndex,
   normalizeEmailForIndex,
   normalizeEmailForStorage,
-} from "../../core/src/import/normalize.ts";
+} from "../../identity/src/index.ts";
 import { blindIndex, normalizeEmail } from "../src/blindIndex.ts";
 
 const masterBytes = (email: string): Uint8Array =>

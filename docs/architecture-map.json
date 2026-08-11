@@ -103,8 +103,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2000,
-  "fileSetHash": "sha256:e1b364974689578158f75ab58cbfff13af3c6a8aaf1052c60395cbef76fcccd3",
+  "fileCount": 1996,
+  "fileSetHash": "sha256:c20187d243dab94431ba9542a2071651e08a125cbd3df280e057ded968e2b800",
   "features": {
     "account-search": {
       "web": [],
@@ -1052,11 +1052,9 @@
         "packages/core/src/import/artifactLifecycle.ts",
         "packages/core/src/import/artifactWriter.test.ts",
         "packages/core/src/import/artifactWriter.ts",
-        "packages/core/src/import/blindIndex.ts",
         "packages/core/src/import/bulkProcessChunk.ts",
         "packages/core/src/import/bulkStage.ts",
         "packages/core/src/import/columnMap.ts",
-        "packages/core/src/import/contentHash.ts",
         "packages/core/src/import/dedupHelpers.test.ts",
         "packages/core/src/import/delta.test.ts",
         "packages/core/src/import/deltaImportsGate.ts",
@@ -1070,8 +1068,6 @@
         "packages/core/src/import/importProgress.test.ts",
         "packages/core/src/import/importProgress.ts",
         "packages/core/src/import/importProvenance.test.ts",
-        "packages/core/src/import/normalize.test.ts",
-        "packages/core/src/import/normalize.ts",
         "packages/core/src/import/parseFile.test.ts",
         "packages/core/src/import/parseFile.ts",
         "packages/core/src/import/parseXlsx.test.ts",

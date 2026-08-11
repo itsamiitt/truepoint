@@ -62,7 +62,7 @@ import { type ItestDb, startItestDb } from "./itestDb.ts";
 type Db = typeof import("@leadwolf/db");
 type Core = typeof import("../../core/src/index.ts");
 type PrepareMod = typeof import("../../core/src/import/prepareContact.ts");
-type ContentHashMod = typeof import("../../core/src/import/contentHash.ts");
+type ContentHashMod = typeof import("../../identity/src/index.ts");
 
 let dbHandle: ItestDb;
 let admin: ReturnType<typeof postgres>;
@@ -283,7 +283,7 @@ beforeAll(async () => {
   db = await import("@leadwolf/db");
   core = await import("../../core/src/index.ts");
   ({ prepareContact } = await import("../../core/src/import/prepareContact.ts"));
-  ({ contentHash } = await import("../../core/src/import/contentHash.ts"));
+  ({ contentHash } = await import("../../identity/src/index.ts"));
 }, 180_000);
 
 afterAll(async () => {

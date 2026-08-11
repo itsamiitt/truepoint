@@ -23,6 +23,7 @@ import {
   withErTx,
   withTenantTx,
 } from "@leadwolf/db";
+import { contentHash } from "@leadwolf/identity";
 import type {
   ColumnMapping,
   ConflictPolicy,
@@ -55,7 +56,6 @@ import { resolveLawfulBasis } from "../provenance/lawfulBasis.ts";
 import { planProvenanceEvents } from "../provenance/planEvents.ts";
 import { type ValidationRuleSpec, runValidationRules } from "../validation/index.ts";
 import { type RawRow, mapRow } from "./columnMap.ts";
-import { contentHash } from "./contentHash.ts";
 import { type PreparedContact, prepareContact } from "./prepareContact.ts";
 import { rejectLabel, rejectedRowsFor, validateRow } from "./validateRow.ts";
 

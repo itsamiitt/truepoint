@@ -44,6 +44,9 @@ describe("normalizeDomain", () => {
   test("undefined when there is no dot", () => {
     expect(normalizeDomain("localhost")).toBeUndefined();
   });
+  test("bare domain passes through lowercased", () => {
+    expect(normalizeDomain("Acme.io")).toBe("acme.io");
+  });
 });
 
 describe("linkedinPublicIdOf", () => {
@@ -58,5 +61,9 @@ describe("linkedinPublicIdOf", () => {
 describe("normalizeText", () => {
   test("collapses internal whitespace", () => {
     expect(normalizeText("  a   b  ")).toBe("a b");
+  });
+  test("empty / null → undefined", () => {
+    expect(normalizeText("   ")).toBeUndefined();
+    expect(normalizeText(null)).toBeUndefined();
   });
 });

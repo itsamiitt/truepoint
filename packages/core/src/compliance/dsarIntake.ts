@@ -4,7 +4,7 @@
 // that flips status to `verifying`/`processing`; processing itself runs deleteFanout/assembleAccessReport.
 
 import { dsarRequestRepository } from "@leadwolf/db";
-import { blindIndex } from "../import/blindIndex.ts";
+import { blindIndex } from "@leadwolf/identity";
 import { encryptPii } from "../import/encryptPii.ts";
 
 export async function createDsarRequest(
