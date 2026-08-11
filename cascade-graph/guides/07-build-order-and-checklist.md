@@ -199,3 +199,4 @@ That alone fixes the core problem in your brief. Layer schools (Steps 2/4), atte
 - Queries → [`05`](05-query-cookbook.md)
 - Populate → [`06`](06-ingestion-and-resolution.md)
 - Build → this file
+- Serve → [`api/08`](../api/08-api-conventions.md) (conventions), [`api/09`](../api/09-api-endpoints.md) (endpoint catalog; its §11 phases interleave with the steps above)

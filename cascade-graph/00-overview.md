@@ -66,6 +66,8 @@ And **"develops" vs "uses" are two relationship types over the same company→te
 | [`guides/05-query-cookbook.md`](guides/05-query-cookbook.md) | Every query from your example, written out: "what did Sage build," "who works with Alex," "what does Sage run and who made it," multi-hop traversals |
 | [`guides/06-ingestion-and-resolution.md`](guides/06-ingestion-and-resolution.md) | How a raw fact ("Alex works at Sage") becomes resolved, typed edges; entity resolution; the develops-vs-uses classification step |
 | [`guides/07-build-order-and-checklist.md`](guides/07-build-order-and-checklist.md) | The exact order an agent should build this in, with a migration path from the current schema and acceptance tests |
+| [`api/08-api-conventions.md`](api/08-api-conventions.md) | The API structure format: auth, versioning, cursors, the filter DSL, field groups, confidence/evidence knobs, errors, credits — benchmarked against Crustdata with explicit copy-vs-deviate calls |
+| [`api/09-api-endpoints.md`](api/09-api-endpoints.md) | The full endpoint catalog (23 routes): every question in the brief → its call, worked filter examples, watchers/changes for job-change & displacement signals, batch, and the API build order |
 
 ## 4. Non-negotiable principles carried from the existing docs
 
