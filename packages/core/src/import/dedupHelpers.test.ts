@@ -2,8 +2,7 @@
 // (same input → same bytes) so the unique index catches duplicates; PII encryption must round-trip; the
 // content hash must be order-independent and identical-payload-stable.
 import { describe, expect, test } from "bun:test";
-import { blindIndex } from "./blindIndex.ts";
-import { contentHash } from "./contentHash.ts";
+import { blindIndex, contentHash } from "@leadwolf/identity";
 import { decryptPii, encryptPii } from "./encryptPii.ts";
 
 describe("blindIndex", () => {
