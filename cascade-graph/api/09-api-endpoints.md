@@ -1,6 +1,6 @@
 # 09 — API Endpoint Catalog
 
-Every endpoint the graph needs — no more. Each maps to backing tables from files `02`–`04` and, where it serves one, to the cookbook query in `05` it wraps. Conventions (auth, cursors, filter DSL, field groups, errors, credits) are fixed in [`08-api-conventions.md`](08-api-conventions.md) and not repeated per endpoint.
+Every endpoint the graph needs — no more. Each maps to backing tables from files `02`–`04` and, where it serves one, to the cookbook query in `05` it wraps. Conventions (auth, cursors, filter DSL, field groups, errors, credits) are fixed in [`08-api-conventions.md`](08-api-conventions.md) and not repeated per endpoint. The machine-readable contract for everything below — full request/response schemas, validated — is [`openapi.yaml`](openapi.yaml); when this prose and the spec disagree, fix whichever is wrong and keep them in sync.
 
 Design rule carried from the brief: **endpoints exist because a consumer question exists.** The catalog is organized by question family. Anything not answering a real question (generic graph-query language, arbitrary traversal depth) is explicitly out of scope — deep multi-hop belongs to the projection layer (`06` §7), not the public API.
 

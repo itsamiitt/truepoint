@@ -68,6 +68,7 @@ And **"develops" vs "uses" are two relationship types over the same company→te
 | [`guides/07-build-order-and-checklist.md`](guides/07-build-order-and-checklist.md) | The exact order an agent should build this in, with a migration path from the current schema and acceptance tests |
 | [`api/08-api-conventions.md`](api/08-api-conventions.md) | The API structure format: auth, versioning, cursors, the filter DSL, field groups, confidence/evidence knobs, errors, credits — benchmarked against Crustdata with explicit copy-vs-deviate calls |
 | [`api/09-api-endpoints.md`](api/09-api-endpoints.md) | The full endpoint catalog (23 routes): every question in the brief → its call, worked filter examples, watchers/changes for job-change & displacement signals, batch, and the API build order |
+| [`api/openapi.yaml`](api/openapi.yaml) | The machine-readable OpenAPI 3.1 contract for all 23 routes — the file codegen and the server build from; 08/09 are its rationale |
 
 ## 4. Non-negotiable principles carried from the existing docs
 

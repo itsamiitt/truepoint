@@ -1,0 +1,1353 @@
+# CASCADE Graph API — OpenAPI 3.1 contract
+# Source of truth for the HTTP surface planned in 08-api-conventions.md + 09-api-endpoints.md.
+# Conventions: /v1 path version · Bearer auth · snake_case · cursor pagination ·
+# named filter operators · RFC 9457 errors · field groups · min_confidence / as_of knobs.
+openapi: 3.1.0
+info:
+  title: CASCADE Graph API
+  version: 1.0.0-draft
+  description: >
+    Typed-relationship graph over people, organizations (companies AND schools),
+    and technologies. Every relationship is typed, directional, bitemporal, and
+    provenanced; develops vs uses can never conflate because the relationship
+    parameter is required wherever both exist. See api/08 for conventions and
+    api/09 for the catalog rationale.
+servers:
+  - url: https://api.example.com/v1   # replace host at deploy; /v1 is part of the contract
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: organizations
+  - name: people
+  - name: technologies
+  - name: evidence
+  - name: search
+  - name: watches
+  - name: changes
+  - name: batch
+  - name: meta
+
+paths:
+  # ───────────────────────── entity reads & identify ─────────────────────────
+  /organizations/{org_id}:
+    get:
+      tags: [organizations]
+      operationId: getOrganization
+      summary: One organization (company or school) by canonical id
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: The organization, with requested field groups.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization]
+                properties:
+                  organization: { $ref: '#/components/schemas/Organization' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /organizations/identify:
+    get:
+      tags: [organizations]
+      operationId: identifyOrganizations
+      summary: Resolve a raw identifier or name to canonical organizations
+      description: >
+        Exactly one lookup key. Identifier keys (domain, wikidata_qid, linkedin_slug)
+        resolve deterministically via organization_identifiers → one match at
+        match_confidence 1.0. name resolves probabilistically via
+        organization_aliases + the ER model → ranked candidates. No match = empty
+        matches array, zero-billed.
+      parameters:
+        - { name: domain,        in: query, schema: { type: string } }
+        - { name: wikidata_qid,  in: query, schema: { type: string } }
+        - { name: linkedin_slug, in: query, schema: { type: string } }
+        - { name: name,          in: query, schema: { type: string } }
+        - { name: kind, in: query, schema: { type: string, enum: [company, school, nonprofit, government, other] } }
+      responses:
+        '200':
+          description: Match envelope.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationMatchEnvelope' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /people/{person_id}:
+    get:
+      tags: [people]
+      operationId: getPerson
+      summary: One person by canonical id
+      parameters:
+        - $ref: '#/components/parameters/PersonId'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: The person, with requested field groups.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [person]
+                properties:
+                  person: { $ref: '#/components/schemas/Person' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /people/identify:
+    post:
+      tags: [people]
+      operationId: identifyPeople
+      summary: Resolve a person from a profile URL, hashed email, or name+org
+      description: >
+        POST because lookup keys may be PII — they belong in the body, never in
+        query strings or access logs. Exactly one key per request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profile_url: { type: string }
+                email_hash:  { type: string, description: HMAC blind index of the email, not the cleartext }
+                name_org:
+                  type: object
+                  required: [name]
+                  properties:
+                    name: { type: string }
+                    org:  { type: string, description: org name, domain, or org_id }
+              minProperties: 1
+              maxProperties: 1
+      responses:
+        '200':
+          description: Match envelope.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PersonMatchEnvelope' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /technologies/{technology_id}:
+    get:
+      tags: [technologies]
+      operationId: getTechnology
+      summary: One technology catalog entry by canonical id
+      parameters:
+        - $ref: '#/components/parameters/TechnologyId'
+        - $ref: '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: The technology, with requested field groups.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [technology]
+                properties:
+                  technology: { $ref: '#/components/schemas/Technology' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /technologies/identify:
+    get:
+      tags: [technologies]
+      operationId: identifyTechnologies
+      summary: Resolve a raw technology name/alias to catalog entries
+      parameters:
+        - { name: name,  in: query, schema: { type: string }, description: '"GA4" → Google Analytics, via technology_aliases' }
+        - { name: cpe23, in: query, schema: { type: string } }
+        - { name: wikidata_qid, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Match envelope.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TechnologyMatchEnvelope' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # ───────────────────────── relationship reads ─────────────────────────
+  /organizations/{org_id}/technologies:
+    get:
+      tags: [organizations]
+      operationId: listOrganizationTechnologies
+      summary: "⭐ What this org develops OR uses — the relationship param is required"
+      description: >
+        The develops-vs-uses fix as an API. relationship is REQUIRED so portfolio
+        and stack can never merge in one response. status=closed&closed_since=…
+        turns this into the per-org displacement feed. fields=vendors rides each
+        technology's creator along ("what does Sage run and who made it").
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: relationship
+          in: query
+          required: true
+          schema: { type: string, enum: [develops, uses, resells] }
+        - $ref: '#/components/parameters/EdgeStatus'
+        - { name: closed_since, in: query, schema: { type: string, format: date }, description: only edges closed on/after this date (with status=closed) }
+        - $ref: '#/components/parameters/MinConfidence'
+        - $ref: '#/components/parameters/AsOf'
+        - $ref: '#/components/parameters/Fields'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Typed org→technology edges.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization_id, relationship, results, next_cursor]
+                properties:
+                  organization_id: { type: string }
+                  relationship: { type: string }
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/OrgTechnologyEdge' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /organizations/{org_id}/people:
+    get:
+      tags: [organizations]
+      operationId: listOrganizationPeople
+      summary: Who is / was at this org — employment or education edges
+      description: >
+        edge=employment (default) reads person_positions; edge=education reads
+        person_educations (school orgs). Alumni = education_status=completed —
+        derived from dates, never an asserted type (schema 02 §4).
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - { name: edge, in: query, schema: { type: string, enum: [employment, education], default: employment } }
+        - { name: relationship, in: query, schema: { type: string, enum: [employee, founder, board_member, advisor, contractor, intern] }, description: employment edges only }
+        - { name: current, in: query, schema: { type: boolean }, description: employment edges only }
+        - { name: function, in: query, schema: { type: string } }
+        - { name: seniority, in: query, schema: { type: string } }
+        - { name: education_status, in: query, schema: { type: string, enum: [current, completed] }, description: education edges only }
+        - $ref: '#/components/parameters/MinConfidence'
+        - $ref: '#/components/parameters/AsOf'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: People with their edge payloads.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization_id, results, next_cursor]
+                properties:
+                  organization_id: { type: string }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        person: { $ref: '#/components/schemas/Person' }
+                        position:  { $ref: '#/components/schemas/PositionEdge' }
+                        education: { $ref: '#/components/schemas/EducationEdge' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /organizations/{org_id}/related:
+    get:
+      tags: [organizations]
+      operationId: listRelatedOrganizations
+      summary: Org↔org edges (corporate structure, value chain)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: type
+          in: query
+          required: true
+          schema: { type: string, enum: [parent_of, subsidiary_of, competitor, supplies, buys_from, partner] }
+        - $ref: '#/components/parameters/MinConfidence'
+        - $ref: '#/components/parameters/AsOf'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Related organizations with edge provenance.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organization_id, type, results, next_cursor]
+                properties:
+                  organization_id: { type: string }
+                  type: { type: string }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        organization: { $ref: '#/components/schemas/Organization' }
+                        edge: { $ref: '#/components/schemas/EdgeProvenance' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /technologies/{technology_id}/organizations:
+    get:
+      tags: [technologies]
+      operationId: listTechnologyOrganizations
+      summary: Who uses / who develops this technology (the reverse traversal)
+      parameters:
+        - $ref: '#/components/parameters/TechnologyId'
+        - name: relationship
+          in: query
+          required: true
+          schema: { type: string, enum: [uses, develops, resells] }
+        - $ref: '#/components/parameters/EdgeStatus'
+        - $ref: '#/components/parameters/MinConfidence'
+        - $ref: '#/components/parameters/AsOf'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Adopters or makers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [technology_id, relationship, results, next_cursor]
+                properties:
+                  technology_id: { type: string }
+                  relationship: { type: string }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        organization: { $ref: '#/components/schemas/Organization' }
+                        edge: { $ref: '#/components/schemas/OrgTechnologyEdge' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /technologies/{technology_id}/vendors:
+    get:
+      tags: [technologies]
+      operationId: listTechnologyVendors
+      summary: The bitemporal ownership ledger (creator / current_owner / former_owner)
+      description: 'as_of answers "who owned Sage Intacct on 2016-01-01" (Intacct Inc., not Sage).'
+      parameters:
+        - $ref: '#/components/parameters/TechnologyId'
+        - $ref: '#/components/parameters/AsOf'
+      responses:
+        '200':
+          description: Ownership rows, oldest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [technology_id, results]
+                properties:
+                  technology_id: { type: string }
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/VendorRecord' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /people/{person_id}/positions:
+    get:
+      tags: [people]
+      operationId: listPersonPositions
+      summary: Employment edges for a person
+      parameters:
+        - $ref: '#/components/parameters/PersonId'
+        - { name: current, in: query, schema: { type: boolean } }
+        - $ref: '#/components/parameters/MinConfidence'
+        - $ref: '#/components/parameters/AsOf'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Positions with resolved orgs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [person_id, results, next_cursor]
+                properties:
+                  person_id: { type: string }
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/PositionEdge' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /people/{person_id}/educations:
+    get:
+      tags: [people]
+      operationId: listPersonEducations
+      summary: Education edges for a person
+      parameters:
+        - $ref: '#/components/parameters/PersonId'
+        - $ref: '#/components/parameters/MinConfidence'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Educations with resolved school orgs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [person_id, results, next_cursor]
+                properties:
+                  person_id: { type: string }
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/EducationEdge' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /people/{person_id}/colleagues:
+    get:
+      tags: [people]
+      operationId: listPersonColleagues
+      summary: Current coworkers (the one built-in 2-hop convenience)
+      parameters:
+        - $ref: '#/components/parameters/PersonId'
+        - { name: function, in: query, schema: { type: string } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: People sharing a current org with the subject.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [person_id, results, next_cursor]
+                properties:
+                  person_id: { type: string }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        person: { $ref: '#/components/schemas/Person' }
+                        shared_org_id: { type: string }
+                        title: { type: [string, 'null'] }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # ───────────────────────── evidence ─────────────────────────
+  /evidence/{edge_id}:
+    get:
+      tags: [evidence]
+      operationId: getEvidence
+      summary: The attestation trail behind any edge (id prefix routes to its table)
+      parameters:
+        - name: edge_id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^(pos|edu|rel|tv|ce)_[0-9A-HJKMNP-TV-Z]{26}$' }
+      responses:
+        '200':
+          description: Fused confidence + every independent sighting.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [edge_id, edge_kind, fused_confidence, attestations]
+                properties:
+                  edge_id: { type: string }
+                  edge_kind: { type: string, enum: [person_position, person_education, org_technology_relation, technology_vendor, company_edge] }
+                  fused_confidence: { type: number, minimum: 0, maximum: 1 }
+                  attestations:
+                    type: array
+                    items: { $ref: '#/components/schemas/Attestation' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # ───────────────────────── discovery ─────────────────────────
+  /organizations/search:
+    post:
+      tags: [search]
+      operationId: searchOrganizations
+      summary: Filter search over organizations (billed per result; 0 results = 0)
+      requestBody: { $ref: '#/components/requestBodies/SearchRequest' }
+      responses:
+        '200':
+          description: Matching organizations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, next_cursor]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/Organization' }
+                  next_cursor: { type: [string, 'null'] }
+                  total_count: { type: integer }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /people/search:
+    post:
+      tags: [search]
+      operationId: searchPeople
+      summary: Filter search over people, incl. org-hop paths (current_org.technologies.uses…)
+      requestBody: { $ref: '#/components/requestBodies/SearchRequest' }
+      responses:
+        '200':
+          description: Matching people.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, next_cursor]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/Person' }
+                  next_cursor: { type: [string, 'null'] }
+                  total_count: { type: integer }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /technologies/search:
+    post:
+      tags: [search]
+      operationId: searchTechnologies
+      summary: Filter search over the technology catalog
+      requestBody: { $ref: '#/components/requestBodies/SearchRequest' }
+      responses:
+        '200':
+          description: Matching technologies.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, next_cursor]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/Technology' }
+                  next_cursor: { type: [string, 'null'] }
+                  total_count: { type: integer }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /{entity}/search/autocomplete:
+    post:
+      tags: [search]
+      operationId: searchAutocomplete
+      summary: Valid values (+ counts) for an enum-ish filter path — free
+      parameters:
+        - name: entity
+          in: path
+          required: true
+          schema: { type: string, enum: [organizations, people, technologies] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [field]
+              properties:
+                field:  { type: string, description: a filterable dotted path }
+                prefix: { type: string }
+                limit:  { type: integer, maximum: 100, default: 25 }
+      responses:
+        '200':
+          description: Candidate values with document counts.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [field, values]
+                properties:
+                  field: { type: string }
+                  values:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        value: { type: string }
+                        count: { type: integer }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # ───────────────────────── watches & changes ─────────────────────────
+  /watches:
+    post:
+      tags: [watches]
+      operationId: createWatch
+      summary: Create an entity or discovery watcher (silent baseline, HMAC webhooks)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WatchCreate' }
+      responses:
+        '201':
+          description: Created; baseline run is silent.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Watch' }
+        default: { $ref: '#/components/responses/Problem' }
+    get:
+      tags: [watches]
+      operationId: listWatches
+      summary: List watchers
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [active, paused, expired] } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Watchers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, next_cursor]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/Watch' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /watches/{watch_id}:
+    get:
+      tags: [watches]
+      operationId: getWatch
+      summary: One watcher
+      parameters: [ { $ref: '#/components/parameters/WatchId' } ]
+      responses:
+        '200':
+          description: The watcher.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Watch' }
+        default: { $ref: '#/components/responses/Problem' }
+    patch:
+      tags: [watches]
+      operationId: updateWatch
+      summary: Update a watcher (new entities get a silent baseline)
+      parameters: [ { $ref: '#/components/parameters/WatchId' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WatchCreate' }
+      responses:
+        '200':
+          description: Updated watcher.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Watch' }
+        default: { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [watches]
+      operationId: deleteWatch
+      summary: Delete a watcher
+      parameters: [ { $ref: '#/components/parameters/WatchId' } ]
+      responses:
+        '204': { description: Deleted. }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /watches/{watch_id}/test:
+    post:
+      tags: [watches]
+      operationId: testWatch
+      summary: Fire a synthetic, signed webhook delivery
+      parameters: [ { $ref: '#/components/parameters/WatchId' } ]
+      responses:
+        '202': { description: Test delivery queued. }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /watches/{watch_id}/runs:
+    get:
+      tags: [watches]
+      operationId: listWatchRuns
+      summary: Run history (the poll fallback when a webhook was down)
+      parameters:
+        - $ref: '#/components/parameters/WatchId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Past runs with their deliveries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, next_cursor]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/WatchRun' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /changes:
+    get:
+      tags: [changes]
+      operationId: listChanges
+      summary: Pull-based delta feed of edge events (webhook alternative)
+      parameters:
+        - { name: since, in: query, required: true, schema: { type: string }, description: cursor from a prior call, or an ISO date to start from }
+        - name: types
+          in: query
+          schema:
+            type: string
+            description: comma-separated ChangeEvent types
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Ordered edge events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, next_cursor]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChangeEvent' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # ───────────────────────── batch ─────────────────────────
+  /batch/{entity}/{action}:
+    post:
+      tags: [batch]
+      operationId: submitBatch
+      summary: Async job at 10k scale; NDJSON results reuse the sync envelopes
+      parameters:
+        - { name: entity, in: path, required: true, schema: { type: string, enum: [organizations, people, technologies] } }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [enrich, identify, search] } }
+        - { name: Idempotency-Key, in: header, schema: { type: string }, description: replays return the original batch_id; 409 on reuse with a different body }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [inputs]
+              properties:
+                inputs:
+                  type: array
+                  maxItems: 10000
+                  items: { type: object, description: one sync-request input per element }
+                fields:
+                  type: array
+                  items: { type: string }
+      responses:
+        '202':
+          description: Job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatchJob' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /batch/{batch_id}:
+    get:
+      tags: [batch]
+      operationId: getBatch
+      summary: Job status + result download URLs
+      parameters:
+        - { name: batch_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The job.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatchJob' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /batch:
+    get:
+      tags: [batch]
+      operationId: listBatches
+      summary: List batch jobs
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending, running, completed, failed] } }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Jobs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, next_cursor]
+                properties:
+                  results:
+                    type: array
+                    items: { $ref: '#/components/schemas/BatchJob' }
+                  next_cursor: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  # ───────────────────────── meta ─────────────────────────
+  /usage/credits:
+    get:
+      tags: [meta]
+      operationId: getCreditsUsage
+      summary: Balance, burn by endpoint class, expiry
+      responses:
+        '200':
+          description: Usage.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance: { type: number }
+                  expires_at: { type: [string, 'null'], format: date }
+                  burn_by_class:
+                    type: object
+                    additionalProperties: { type: number }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /permissions:
+    get:
+      tags: [meta]
+      operationId: getPermissions
+      summary: Which endpoints and field groups this key may use
+      responses:
+        '200':
+          description: Entitlements.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  endpoints:    { type: array, items: { type: string } }
+                  field_groups: { type: array, items: { type: string } }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /taxonomies/technology-categories:
+    get:
+      tags: [meta]
+      operationId: getTechnologyCategories
+      summary: The technology category tree (ltree paths)
+      responses:
+        '200':
+          description: Category tree.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        category_id: { type: string }
+                        name: { type: string }
+                        path: { type: string, description: 'ltree, e.g. software.enterprise.erp' }
+                        parent_id: { type: [string, 'null'] }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /sources/{source_id}:
+    get:
+      tags: [meta]
+      operationId: getSource
+      summary: Source metadata behind an attestation
+      parameters:
+        - { name: source_id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The source.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  source_id: { type: string }
+                  name: { type: string }
+                  source_type: { type: string, enum: [licensed_provider, web_crawl, registry, manual] }
+                  license_class: { type: string }
+                  reliability: { type: [number, 'null'], minimum: 0, maximum: 1 }
+        default: { $ref: '#/components/responses/Problem' }
+
+# ═════════════════════════════ components ═════════════════════════════
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    OrgId:
+      name: org_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^org_[0-9A-HJKMNP-TV-Z]{26}$' }
+    PersonId:
+      name: person_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^pn_[0-9A-HJKMNP-TV-Z]{26}$' }
+    TechnologyId:
+      name: technology_id
+      in: path
+      required: true
+      schema: { type: string, pattern: '^tech_[0-9A-HJKMNP-TV-Z]{26}$' }
+    WatchId:
+      name: watch_id
+      in: path
+      required: true
+      schema: { type: string }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      description: Opaque; pass back verbatim. Never construct.
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+    Fields:
+      name: fields
+      in: query
+      schema: { type: string }
+      description: >
+        Comma-separated field groups (08 §6): aliases, identifiers, positions,
+        educations, technologies, vendors, related, evidence. Default = core
+        fields only. Unentitled group → 403 problem+json.
+    MinConfidence:
+      name: min_confidence
+      in: query
+      schema: { type: number, minimum: 0, maximum: 1 }
+      description: Only edges at or above this fused confidence.
+    AsOf:
+      name: as_of
+      in: query
+      schema: { type: string, format: date }
+      description: Valid-time travel — edges true on this date (open or spanning it).
+    EdgeStatus:
+      name: status
+      in: query
+      schema: { type: string, enum: [open, closed, all], default: open }
+      description: open = currently true; closed = ended facts (displacement feed with closed_since).
+
+  responses:
+    Problem:
+      description: RFC 9457 problem+json — the only error shape.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  requestBodies:
+    SearchRequest:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [filters]
+            properties:
+              filters: { $ref: '#/components/schemas/FilterNode' }
+              sorts:
+                type: array
+                items:
+                  type: object
+                  required: [field, order]
+                  properties:
+                    field: { type: string }
+                    order: { type: string, enum: [asc, desc] }
+              limit:  { type: integer, minimum: 1, maximum: 100, default: 25 }
+              cursor: { type: string }
+              fields:
+                type: array
+                items: { type: string }
+          examples:
+            google_tool_users:
+              summary: Marketing people at companies using a Google-built product (09 §5.1)
+              value:
+                filters:
+                  op: and
+                  conditions:
+                    - { field: positions.current.function, type: eq, value: marketing }
+                    - { field: current_org.technologies.uses.developed_by_org_id, type: eq, value: "org_01GOOGLE…" }
+                limit: 25
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:   { type: string, format: uri }
+        title:  { type: string }
+        status: { type: integer }
+        code:   { type: string, description: stable machine code — clients branch on this }
+        detail: { type: string }
+
+    EdgeProvenance:
+      type: object
+      description: The shared provenance block every relationship object carries (schema 04 §1).
+      required: [confidence, valid_from, valid_to]
+      properties:
+        confidence: { type: number, minimum: 0, maximum: 1, description: fused belief (dedupe→dampen→combine) }
+        valid_from: { type: string, format: date-time }
+        valid_to:   { type: [string, 'null'], format: date-time, description: null = still true; set = fact ended }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/Attestation' }
+          description: present only with fields=evidence
+
+    Attestation:
+      type: object
+      required: [source_class, confidence, seen_at]
+      properties:
+        source_id:     { type: string }
+        source_class:  { type: string, enum: [licensed_provider, web_public, registry, self_declared] }
+        confidence:    { type: number, minimum: 0, maximum: 1, description: this sighting's strength }
+        raw_assertion: { type: [string, 'null'], description: what the source literally said }
+        seen_at:       { type: string, format: date-time }
+
+    Organization:
+      type: object
+      required: [org_id, org_kind, legal_name]
+      properties:
+        org_id:         { type: string }
+        org_kind:       { type: string, enum: [company, school, nonprofit, government, other] }
+        legal_name:     { type: string }
+        display_name:   { type: [string, 'null'] }
+        primary_domain: { type: [string, 'null'] }
+        country_code:   { type: [string, 'null'] }
+        employee_range: { type: [string, 'null'] }
+        founded_year:   { type: [integer, 'null'] }
+        institution_type: { type: [string, 'null'], description: school orgs only }
+        confidence:     { type: number }
+        last_updated_at: { type: string, format: date-time }
+        aliases:
+          type: array
+          items:
+            type: object
+            properties:
+              alias: { type: string }
+              alias_kind: { type: string, enum: [legal, trade, former_name, acronym, localized] }
+          description: fields=aliases
+        identifiers:
+          type: array
+          items:
+            type: object
+            properties:
+              id_type:  { type: string, enum: [domain, linkedin_slug, wikidata_qid, lei, crunchbase_uuid, duns] }
+              id_value: { type: string }
+          description: fields=identifiers
+
+    Person:
+      type: object
+      required: [person_id, full_name]
+      properties:
+        person_id:    { type: string }
+        full_name:    { type: string }
+        headline:     { type: [string, 'null'] }
+        location_text: { type: [string, 'null'] }
+        country_code: { type: [string, 'null'] }
+        current_org:  { $ref: '#/components/schemas/OrgRef' }
+        current_title: { type: [string, 'null'] }
+        current_function: { type: [string, 'null'] }
+        current_seniority: { type: [string, 'null'] }
+        confidence:   { type: number }
+        positions:
+          type: array
+          items: { $ref: '#/components/schemas/PositionEdge' }
+          description: fields=positions
+        educations:
+          type: array
+          items: { $ref: '#/components/schemas/EducationEdge' }
+          description: fields=educations
+
+    Technology:
+      type: object
+      required: [technology_id, canonical_name, tech_kind]
+      properties:
+        technology_id:  { type: string }
+        canonical_name: { type: string }
+        slug:           { type: string }
+        tech_kind:      { type: string, enum: [product, platform, service, library] }
+        category_path:  { type: [string, 'null'], description: 'ltree, e.g. software.enterprise.erp' }
+        is_saas:        { type: [boolean, 'null'] }
+        is_open_source: { type: [boolean, 'null'] }
+        cpe23:          { type: [string, 'null'] }
+        wikidata_qid:   { type: [string, 'null'] }
+        confidence:     { type: number }
+        aliases:
+          type: array
+          items: { type: string }
+          description: fields=aliases
+        vendors:
+          type: array
+          items: { $ref: '#/components/schemas/VendorRecord' }
+          description: fields=vendors
+
+    OrgRef:
+      type: object
+      description: Compact org reference embedded in edges.
+      required: [org_id]
+      properties:
+        org_id:       { type: string }
+        display_name: { type: [string, 'null'] }
+        org_kind:     { type: [string, 'null'] }
+        primary_domain: { type: [string, 'null'] }
+
+    TechnologyRef:
+      type: object
+      required: [technology_id]
+      properties:
+        technology_id:  { type: string }
+        canonical_name: { type: [string, 'null'] }
+        tech_kind:      { type: [string, 'null'] }
+        category_path:  { type: [string, 'null'] }
+
+    PositionEdge:
+      allOf:
+        - $ref: '#/components/schemas/EdgeProvenance'
+        - type: object
+          required: [position_id, relationship]
+          properties:
+            position_id:  { type: string }
+            organization: { $ref: '#/components/schemas/OrgRef' }
+            company_name_raw: { type: string, description: as-seen; survives re-resolution }
+            relationship: { type: string, enum: [employee, founder, board_member, advisor, contractor, intern] }
+            title:        { type: [string, 'null'] }
+            job_function: { type: [string, 'null'] }
+            seniority:    { type: [string, 'null'] }
+            started_on:   { type: [string, 'null'], format: date }
+            ended_on:     { type: [string, 'null'], format: date }
+            is_current:   { type: boolean }
+
+    EducationEdge:
+      allOf:
+        - $ref: '#/components/schemas/EdgeProvenance'
+        - type: object
+          required: [education_id, relationship]
+          properties:
+            education_id: { type: string }
+            organization: { $ref: '#/components/schemas/OrgRef' }
+            school_name:  { type: string, description: as-seen; survives re-resolution }
+            relationship: { type: string, enum: [student] }
+            degree:       { type: [string, 'null'] }
+            fields_of_study: { type: array, items: { type: string } }
+            started_year: { type: [integer, 'null'] }
+            ended_year:   { type: [integer, 'null'] }
+            completed:    { type: boolean, description: derived — ended_year passed (alumnus) }
+
+    OrgTechnologyEdge:
+      allOf:
+        - $ref: '#/components/schemas/EdgeProvenance'
+        - type: object
+          required: [rel_id, relationship]
+          properties:
+            rel_id:       { type: string }
+            technology:   { $ref: '#/components/schemas/TechnologyRef' }
+            organization: { $ref: '#/components/schemas/OrgRef' }
+            relationship: { type: string, enum: [develops, uses, resells] }
+            first_seen_at: { type: [string, 'null'], format: date-time, description: uses rows }
+            last_seen_at:  { type: [string, 'null'], format: date-time, description: uses rows }
+            detection_method: { type: [string, 'null'], enum: [webappanalyzer, job_posting, dns, self_declared, null] }
+            detected_on_domain: { type: [string, 'null'], description: where the fingerprint fired }
+            is_primary_product: { type: [boolean, 'null'], description: develops rows }
+            launched_on:  { type: [string, 'null'], format: date }
+            creator:      { $ref: '#/components/schemas/OrgRef' }
+
+    VendorRecord:
+      allOf:
+        - $ref: '#/components/schemas/EdgeProvenance'
+        - type: object
+          required: [link_id, relationship]
+          properties:
+            link_id:      { type: string }
+            organization: { $ref: '#/components/schemas/OrgRef' }
+            relationship: { type: string, enum: [creator, current_owner, former_owner] }
+
+    OrganizationMatchEnvelope:
+      type: object
+      required: [matched_on, match_type, matches]
+      properties:
+        matched_on: { type: string }
+        match_type: { type: string, enum: [domain, wikidata_qid, linkedin_slug, name] }
+        matches:
+          type: array
+          items:
+            type: object
+            required: [match_confidence, organization]
+            properties:
+              match_confidence: { type: number, minimum: 0, maximum: 1 }
+              organization: { $ref: '#/components/schemas/Organization' }
+
+    PersonMatchEnvelope:
+      type: object
+      required: [matched_on, match_type, matches]
+      properties:
+        matched_on: { type: string }
+        match_type: { type: string, enum: [profile_url, email_hash, name_org] }
+        matches:
+          type: array
+          items:
+            type: object
+            required: [match_confidence, person]
+            properties:
+              match_confidence: { type: number, minimum: 0, maximum: 1 }
+              person: { $ref: '#/components/schemas/Person' }
+
+    TechnologyMatchEnvelope:
+      type: object
+      required: [matched_on, match_type, matches]
+      properties:
+        matched_on: { type: string }
+        match_type: { type: string, enum: [name, cpe23, wikidata_qid] }
+        matches:
+          type: array
+          items:
+            type: object
+            required: [match_confidence, technology]
+            properties:
+              match_confidence: { type: number, minimum: 0, maximum: 1 }
+              technology: { $ref: '#/components/schemas/Technology' }
+
+    FilterNode:
+      oneOf:
+        - $ref: '#/components/schemas/FilterCondition'
+        - $ref: '#/components/schemas/FilterGroup'
+
+    FilterCondition:
+      type: object
+      required: [field, type]
+      properties:
+        field: { type: string, description: dotted path mirroring the response document }
+        type:
+          type: string
+          enum: [eq, neq, gt, gte, lt, lte, between, in, not_in, is_null, is_not_null,
+                 contains_word, phrase, has_all, geo_distance]
+        value: {}
+
+    FilterGroup:
+      type: object
+      required: [op, conditions]
+      properties:
+        op: { type: string, enum: [and, or] }
+        conditions:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/FilterNode' }
+
+    TrackNode:
+      description: Watcher track conditions — the filter DSL plus diff operators.
+      oneOf:
+        - type: object
+          required: [field, type]
+          properties:
+            field: { type: string }
+            type:  { type: string, enum: [added, removed, changed] }
+        - type: object
+          required: [op, conditions]
+          properties:
+            op: { type: string, enum: [and, or] }
+            conditions:
+              type: array
+              items: { $ref: '#/components/schemas/TrackNode' }
+
+    WatchCreate:
+      type: object
+      required: [kind, track, notifications]
+      properties:
+        kind: { type: string, enum: [entity, discovery] }
+        entities:
+          type: object
+          description: entity watchers — up to 10k ids total
+          properties:
+            org_ids:        { type: array, items: { type: string } }
+            person_ids:     { type: array, items: { type: string } }
+            technology_ids: { type: array, items: { type: string } }
+        query:
+          description: discovery watchers — a saved SearchRequest whose NEW matches are delivered
+          type: object
+        track: { $ref: '#/components/schemas/TrackNode' }
+        config:
+          type: object
+          properties:
+            every_hours: { type: integer, minimum: 1, default: 24 }
+            max_results_per_run: { type: integer, default: 100 }
+            expires_at: { type: [string, 'null'], format: date }
+        fields:
+          type: array
+          items: { type: string }
+        notifications:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [type]
+            properties:
+              type: { type: string, enum: [webhook] }
+              url:  { type: string, format: uri }
+
+    Watch:
+      allOf:
+        - $ref: '#/components/schemas/WatchCreate'
+        - type: object
+          required: [watch_id, status, created_at]
+          properties:
+            watch_id:   { type: string }
+            status:     { type: string, enum: [active, paused, expired] }
+            created_at: { type: string, format: date-time }
+            last_run_at: { type: [string, 'null'], format: date-time }
+
+    WatchRun:
+      type: object
+      required: [run_id, started_at, delivered, total_count, truncated]
+      properties:
+        run_id:      { type: string }
+        started_at:  { type: string, format: date-time }
+        delivered:   { type: integer }
+        total_count: { type: integer }
+        truncated:   { type: boolean }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/ChangeEvent' }
+
+    ChangeEvent:
+      type: object
+      required: [event_id, type, occurred_at, edge_id]
+      properties:
+        event_id:    { type: string }
+        type:
+          type: string
+          enum: [position_opened, position_closed, education_added, uses_opened, uses_closed,
+                 develops_opened, develops_closed, vendor_changed]
+        occurred_at: { type: string, format: date-time, description: valid-time of the change }
+        recorded_at: { type: string, format: date-time, description: when the graph learned it }
+        edge_id:     { type: string }
+        subject:
+          type: object
+          description: the person/org/tech the event is about (compact refs)
+          properties:
+            person:       { $ref: '#/components/schemas/OrgRef' }
+            organization: { $ref: '#/components/schemas/OrgRef' }
+            technology:   { $ref: '#/components/schemas/TechnologyRef' }
+        change:
+          type: object
+          description: typed diff — from/to for changed, new_elements for added
+          properties:
+            from: {}
+            to: {}
+            new_elements: { type: array, items: {} }
+
+    BatchJob:
+      type: object
+      required: [batch_id, status, entity, action]
+      properties:
+        batch_id:   { type: string }
+        status:     { type: string, enum: [pending, running, completed, failed] }
+        entity:     { type: string }
+        action:     { type: string }
+        identifier_count: { type: integer }
+        status_url: { type: string }
+        created_at: { type: string, format: date-time }
+        completed_at: { type: [string, 'null'], format: date-time }
+        result_files:
+          type: array
+          description: NDJSON download URLs; each line = the sync response envelope
+          items:
+            type: object
+            properties:
+              url: { type: string, format: uri }
+              expires_at: { type: string, format: date-time }
