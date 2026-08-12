@@ -27,6 +27,7 @@ import {
   accountRepository,
   contactRepository,
   masterEducationRepository,
+  masterEmploymentReadRepository,
   masterTechnologyRepository,
   provenanceBadgeRepository,
   withErTx,
@@ -38,6 +39,7 @@ import {
   ValidationError,
   accountTechnologiesResponse,
   contactEducationResponse,
+  contactEmploymentResponse,
   contactProvenanceResponse,
 } from "@leadwolf/types";
 import { Hono } from "hono";
@@ -283,4 +285,53 @@ contactIntelligenceRoutes.get("/:contactId/provenance", async (c) => {
   }
 
   return c.json(contactProvenanceResponse.parse({ resolved: true, fields }));
+});
+
+/**
+ * GET /contacts/:contactId/employment — the career history we hold for this person.
+ *
+ * Same two-transaction shape as its siblings. Public professional facts only: employer, title, dates. No
+ * contact values, no contributor reference, no Layer-0 ids.
+ *
+ * HONESTY NOTE for whoever renders this: today the import path mints a BARE edge (company + is_current +
+ * is_primary), so `title` and both dates are usually null. Design for a company list, not a timeline of
+ * blank rows — see plan 33 §A2.
+ */
+contactIntelligenceRoutes.get("/:contactId/employment", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view employment history.");
+  }
+
+  const contact = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, async (tx: Tx) =>
+    contactRepository.getMasterPersonBridge(tx, c.req.param("contactId")),
+  );
+  if (!contact) throw new NotFoundError("Contact not found.");
+
+  if (!contact.masterPersonId) {
+    return c.json(contactEmploymentResponse.parse({ resolved: false, employment: [] }));
+  }
+
+  const stints = await withErTx(async (tx: Tx) =>
+    masterEmploymentReadRepository.listPersonEmployment(tx, contact.masterPersonId as string),
+  );
+
+  return c.json(
+    contactEmploymentResponse.parse({
+      resolved: true,
+      employment: stints.map((s) => ({
+        company_name: s.companyName,
+        org_kind: s.orgKind,
+        title: s.title,
+        department: s.department,
+        seniority_level: s.seniorityLevel,
+        started_on: s.startedOn,
+        ended_on: s.endedOn,
+        is_current: s.isCurrent,
+        is_primary: s.isPrimary,
+        confidence: s.confidence === null ? null : Number(s.confidence),
+        source_count: s.sourceCount,
+      })),
+    }),
+  );
 });

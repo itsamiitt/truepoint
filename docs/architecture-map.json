@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2010,
-  "fileSetHash": "sha256:2c8ecbff991043e8709e952f45787fb6ec8350f487a3f42467b2ff51b8f35cfc",
+  "fileCount": 2013,
+  "fileSetHash": "sha256:0d43c51ee68c9b986eb40fd27d33fb424cfdb9d266732b8fd7ccf2fab6e050d8",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1244,6 +1244,7 @@
       "db": [
         "packages/db/src/repositories/masterCompanyDetailRepository.ts",
         "packages/db/src/repositories/masterEducationRepository.ts",
+        "packages/db/src/repositories/masterEmploymentReadRepository.ts",
         "packages/db/src/repositories/masterGraphRepository.ts",
         "packages/db/src/repositories/masterSignalsRepository.ts",
         "packages/db/src/repositories/masterTechnologyRepository.ts"
@@ -1390,6 +1391,7 @@
         "apps/web/src/features/prospect/components/BulkRevealJobDialog.tsx",
         "apps/web/src/features/prospect/components/CopyButton.tsx",
         "apps/web/src/features/prospect/components/EducationSection.tsx",
+        "apps/web/src/features/prospect/components/EmploymentSection.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
         "apps/web/src/features/prospect/components/FilterPanel.tsx",
         "apps/web/src/features/prospect/components/FilterRail.tsx",
@@ -1421,6 +1423,7 @@
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
         "apps/web/src/features/prospect/hooks/useContactEducation.ts",
+        "apps/web/src/features/prospect/hooks/useContactEmployment.ts",
         "apps/web/src/features/prospect/hooks/useContactProvenance.ts",
         "apps/web/src/features/prospect/hooks/useCreditBalance.ts",
         "apps/web/src/features/prospect/hooks/useCustomFields.ts",

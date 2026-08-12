@@ -105,6 +105,33 @@ export const contactEducationResponse = z.object({
 });
 export type ContactEducationResponse = z.infer<typeof contactEducationResponse>;
 
+// ── Employment (the other person→organization edge, plan 33 · A2) ─────────────────────────────────────────
+// NOTE ON SHAPE vs REALITY: the import path mints a BARE edge — company, is_current, is_primary — with no
+// title and no dates. The contract models the rich stint because enrichment will fill it, but a client must
+// treat title/dates as usually-absent and render a company list rather than a timeline of blanks.
+export const employmentStint = z.object({
+  company_name: z.string().nullable(),
+  org_kind: orgKind.nullable(),
+  title: z.string().nullable(),
+  department: z.string().nullable(),
+  seniority_level: z.string().nullable(),
+  /** The '-infinity' "start unknown" sentinel is normalized away server-side; this is a real date or null. */
+  started_on: z.string().nullable(),
+  ended_on: z.string().nullable(),
+  is_current: z.boolean(),
+  /** The ONE edge that drives the person's headline employer. */
+  is_primary: z.boolean(),
+  confidence: z.number().min(0).max(1).nullable(),
+  source_count: z.number().int().nonnegative(),
+});
+export type EmploymentStintDto = z.infer<typeof employmentStint>;
+
+export const contactEmploymentResponse = z.object({
+  resolved: z.boolean(),
+  employment: z.array(employmentStint),
+});
+export type ContactEmploymentResponse = z.infer<typeof contactEmploymentResponse>;
+
 // ── Provenance / confidence (plan 33 · A1) ────────────────────────────────────────────────────────────────
 // The evidence behind a field, readable WITHOUT spending a credit. Until now the confidence model surfaced
 // only inside RevealDialog, so a customer saw it at the moment they paid and never again.

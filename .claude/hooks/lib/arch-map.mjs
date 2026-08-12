@@ -170,6 +170,9 @@ export const REPO_DOMAIN = {
   // master_employment: schools are master_companies rows with org_kind='school', so "works at" and
   // "studied at" traverse one catalog.
   masterEducation: "master-sync",
+  // READ side of the Layer-0 employment edge (plan 33 · A2) — same system-owned graph, split from
+  // masterGraphRepository because that module owns the ingest-critical write path.
+  masterEmploymentRead: "master-sync",
   er: "er",
   evidence: "ingestion",
   projector: "projection",

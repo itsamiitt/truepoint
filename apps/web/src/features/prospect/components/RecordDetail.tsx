@@ -48,6 +48,7 @@ import {
 import { AddToListDialog } from "./AddToListDialog";
 import { CopyButton } from "./CopyButton";
 import { EducationSection } from "./EducationSection";
+import { EmploymentSection } from "./EmploymentSection";
 import { ProvenanceSection } from "./ProvenanceSection";
 import { RecomputeScoreButton } from "./RecomputeScoreButton";
 import { RevealDialog } from "./RevealDialog";
@@ -676,6 +677,15 @@ export function RecordDetail({
             {/* The confidence model, readable WITHOUT spending a credit (plan 33 · A1). Until now it
                 surfaced only inside RevealDialog — at the moment of payment and never after. */}
             <ProvenanceSection contactId={contact.id} />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Employment</h3>
+            </div>
+            {/* Career history from the graph. NOT a timeline — the import mints a bare edge with no
+                title or dates, so this is a company list that grows into detail (plan 33 §A2). */}
+            <EmploymentSection contactId={contact.id} />
           </section>
 
           <section className={styles.section}>

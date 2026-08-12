@@ -11,6 +11,7 @@ import { API_BASE } from "@/lib/publicConfig";
 import type {
   AccountTechnologiesResponse,
   ContactEducationResponse,
+  ContactEmploymentResponse,
   ContactProvenanceResponse,
   OrgTechnologyRelationship,
 } from "@leadwolf/types";
@@ -52,4 +53,13 @@ export async function fetchContactProvenance(
   const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/provenance`);
   if (!res.ok) throw await toApiError(res, "Could not load provenance");
   return (await res.json()) as ContactProvenanceResponse;
+}
+
+/** Career history from the graph. Title/dates are usually absent today — render a list, not a timeline. */
+export async function fetchContactEmployment(
+  contactId: string,
+): Promise<ContactEmploymentResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/employment`);
+  if (!res.ok) throw await toApiError(res, "Could not load employment");
+  return (await res.json()) as ContactEmploymentResponse;
 }
