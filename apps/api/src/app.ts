@@ -64,7 +64,7 @@ import {
   workspacesRoutes,
 } from "./features/workspaces/index.ts";
 import { isDraining } from "./lifecycle.ts";
-import { onError } from "./middleware/error.ts";
+import { notFound, onError } from "./middleware/error.ts";
 import { rateLimit } from "./middleware/rateLimit.ts";
 import { requestId } from "./middleware/requestId.ts";
 import { createReadinessGate, dbReadinessProbe } from "./readiness.ts";
@@ -81,6 +81,10 @@ export const app = new Hono();
 // (deploy/Caddyfile, mirroring the forge.truepoint.in block) removes the preflight surface entirely.
 const CORS_PREFLIGHT_MAX_AGE = 7200;
 
+// Unmatched routes get the SAME problem+json envelope as everything else. Without this, Hono's plain-text
+// default made the one response a client is most likely to hit by accident — a typo'd path, a stale SDK —
+// the one response that broke the contract every other error honours (audit 32 · C4).
+app.notFound(notFound);
 app.onError(onError);
 // Correlation id FIRST, so every response carries one — including 500s rendered by onError above (which logs
 // the id alongside the stack) and the long-lived SSE stream registered below.
