@@ -15,7 +15,6 @@ import {
   updateList,
 } from "@leadwolf/core";
 import {
-  ForbiddenError,
   ValidationError,
   createDynamicListSchema,
   createListSchema,
@@ -26,18 +25,12 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const listsRoutes = new Hono<{ Variables: TenancyVariables }>();
 
 listsRoutes.use("*", authn);
 listsRoutes.use("*", tenancy);
-
-function requireWorkspace(c: { get: (k: "workspaceId") => string | undefined }): string {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to use lists.");
-  return workspaceId;
-}
 
 /** List every list in the active workspace (workspace-shared), with live member counts. */
 listsRoutes.get("/", async (c) => {

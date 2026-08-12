@@ -6,7 +6,6 @@
 import { assignTag, createTag, deleteTag, unassignTag, updateTag } from "@leadwolf/core";
 import { tagRepository } from "@leadwolf/db";
 import {
-  ForbiddenError,
   ValidationError,
   assignTagSchema,
   createTagSchema,
@@ -16,7 +15,7 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const tagsRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -24,12 +23,6 @@ tagsRoutes.use("*", authn);
 tagsRoutes.use("*", tenancy);
 
 /** Resolve the verified workspace or 403 — tags are workspace-scoped, so a workspace must be selected. */
-function requireWorkspace(c: { get: (k: "workspaceId") => string | undefined }): string {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to manage tags.");
-  return workspaceId;
-}
-
 // ── Tag definitions ──────────────────────────────────────────────────────────────────────────────────────
 tagsRoutes.get("/", async (c) => {
   const workspaceId = requireWorkspace(c);
