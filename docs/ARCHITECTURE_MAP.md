@@ -28,6 +28,14 @@
 > + adoption edge (`schema/masterTechnology.ts`, `schema/masterTechnologyAdoption.ts`, migrations 0100–0102)
 > and the canonical signal store (`schema/masterSignals.ts`, migration 0103 — distinct from the tenant-scoped
 > `intent_signals`, which it does not replace).
+> **Migration 0108 re-plans the graph around one idea: an institution is an institution.** `master_companies`
+> gained `org_kind`, so a school is an organization rather than a separate subsystem, and `master_education`
+> (`schema/masterEducation.ts`) is the person→organization edge that had nowhere to live — the sibling of
+> `master_employment` over the same catalog, kept a separate table because the payloads genuinely differ
+> (degree/fields/years vs title/seniority). Alumnus is **derived** from `ended_on`, never a stored flag. The
+> same migration dropped the dead `master_companies.technographics` blob (no reader, no writer), leaving
+> `master_technology_adoptions` as the single technographics store. `account-intelligence` is the first
+> customer-facing read surface over any of it.
 > See the prospect↔company initiative in [`docs/planning/prospect-company-data/`](./planning/prospect-company-data/)
 > and the intelligence-platform program in
 > [`docs/planning/intelligence-platform/`](./planning/intelligence-platform/).
@@ -124,7 +132,9 @@ apps/                           # deployable processes (thin transport adapters)
 
 ## FEATURE → FILES index (live)
 
-> One subsection per code-bearing domain (55). Paths are authoritative in
+> The JSON currently buckets **86** code-bearing domains; this prose curates **37** subsections over them,
+> grouping the small/adjacent ones under the section they serve. The JSON is the complete enumeration — if a
+> domain is not written up here, look it up there rather than assuming it does not exist. Paths are authoritative in
 > [`architecture-map.json`](./architecture-map.json); the purposes are here. Web slices are
 > **destination-keyed** (prospect/sequences/settings-\*), api/core/db are **resource-keyed** (reveal/email/admin)
 > — a file has exactly one home; the [Destinations](#destinations-cross-reference) section is where the cross-links live.
@@ -434,6 +444,17 @@ apps/                           # deployable processes (thin transport adapters)
 - **web:** `features/home/` — KPI tiles + cards (recent reveals, hot leads, **data health** + freshness trend, burn sparkline, imports, enrichment, sequence
   snapshot, activity feed) + `QuickActionsRow`/`TasksCard`/`RepliesCard`; `(shell)/home`
 
+#### account-intelligence — *the customer READ surface over the Layer-0 graph* (mig 0108)
+- **api:** `features/account-intelligence/` — `routes.ts` (GET `/accounts/:accountId/technologies?relationship=develops|uses`,
+  `?fields=vendors` expands each technology's creator). **Two transactions, in order:** `withTenantTx` resolves the account
+  inside the caller's workspace (RLS decides visibility, and yields `master_company_id` — the only bridge into Layer 0), then
+  `withErTx` reads Layer 0 for that one resolved id. The client never supplies a master id, which is what keeps the shared
+  graph un-addressable. `relationship` is **required**: "what does this company build" (`master_technology_vendors`) and
+  "what does it run" (`master_technology_adoptions`) are different facts from different tables, so the ambiguous question
+  is a 400, never a merged list. An account ER has not yet bridged returns `resolved:false` rather than a bare empty list
+- Opposite direction from `master-sync` across the same wall: that domain is the Forge→Layer-0 **write** ingress, this is
+  the tenant-facing **read**. Reads only — no credit spend, no personal data (technology/vendor rows describe organizations)
+
 #### reports — *client rollups + XLSX export* (web)
 - **web:** `features/reports/` — `rollups.ts` over `/credits/*` + `/contacts`; sections (CreditUsage, Funnel, DataHealth,
   Deliverability, Intent, LeadScore, TeamActivity); `charts/` (Bar/Line/Distribution/Funnel); `export/` (dependency-free
@@ -685,8 +706,11 @@ flowchart TD
 - **Framework-root files (4, in `unassigned[]`):** `apps/{admin,auth,web}/next.config.mjs` + `apps/auth/postcss.config.mjs`
   — framework-mandated app-root files that cannot live under `src/` (the generator only classifies under `src/`). A framework
   constraint, not a placement error.
-- **Unmapped repositories (4, in `unassigned[]`):** `entitlementRepository`, `outcomeMetricsRepository`,
-  `provenanceBadgeRepository`, `usageEventRepository` — the Phase-1 metering/provenance spine. Each is real and
+- **Unmapped repositories (3, in `unassigned[]`):** `entitlementRepository`, `outcomeMetricsRepository`,
+  `usageEventRepository` — the Phase-1 metering spine. (`provenanceBadgeRepository` was listed here and is no
+  longer unassigned; `masterEducationRepository` never joined the list — 0108 added it to `REPO_DOMAIN` under
+  `master-sync` in the same change, per the rule that a Layer-0 repository belongs to the one system-owned graph.)
+  Each is real and
   intentional; none has an entity in `REPO_DOMAIN` yet because none has an obvious existing domain (they are
   cross-cutting: entitlements sit above billing without being it, usage events meter every domain, the badge reads
   Layer 0). Left honestly unassigned rather than filed under a confidently wrong home — the rule `REPO_DOMAIN`'s own
@@ -701,11 +725,13 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **1981-file** JSON (85 domains with code, 38 shared areas,
-  8 unassigned, 54 warnings) after the Phase 4/5 work — successor suggestions (`data-health`), the contribution
-  gate + `contributionPolicyRepository` (`prospect` / `compliance`, with `contributionPolicy → compliance` added to
-  `REPO_DOMAIN`), and the DSAR dispatch producer (`admin`). The `unassigned`/warning counts above were themselves
-  stale from an earlier refresh and have been corrected against the current JSON. When the source set changes again,
-  re-run `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares the `fileSetHash`) and refresh
-  these purposes.
+- **Map hygiene:** this prose was last refreshed from the **2000-file** JSON (86 domains with code, 38 shared areas,
+  **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
+  edge, the dropped `technographics` blob, and the `account-intelligence` read surface. Both signals that refresh
+  raised were **fixed rather than flagged**: `masterEducation → master-sync` was added to `REPO_DOMAIN` (following
+  the existing rule that every Layer-0 repository belongs to the one system-owned graph), and `account-intelligence`
+  was added to `CANONICAL_DOMAINS` — so unassigned went 8→7 and warnings 55→54. The prose subsection count was also
+  corrected: it had claimed 55 while the file held 37 and the JSON 86.
+  When the source set changes again, re-run `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares
+  the `fileSetHash`) and refresh these purposes.
 ```

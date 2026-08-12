@@ -53,6 +53,10 @@ export const CANONICAL_DOMAINS = [
   "templates",
   "notifications",
   "data-health",
+  // The customer-facing READ surface over the Layer-0 graph (0108): typed traversals on a tenant-visible
+  // account — "what does this company build" vs "what does it run". Distinct from `master-sync`, which is
+  // the Forge→Layer-0 WRITE ingress; these are opposite directions across the same wall.
+  "account-intelligence",
   "storage",
   "retention",
   "imports",
@@ -162,6 +166,10 @@ export const REPO_DOMAIN = {
   masterSignals: "master-sync",
   // Layer-0 company/person completeness tables (migration 0104) — same system-owned graph.
   masterCompanyDetail: "master-sync",
+  // Layer-0 person↔organization EDUCATION edge (migration 0108) — same system-owned graph. The sibling of
+  // master_employment: schools are master_companies rows with org_kind='school', so "works at" and
+  // "studied at" traverse one catalog.
+  masterEducation: "master-sync",
   er: "er",
   evidence: "ingestion",
   projector: "projection",
