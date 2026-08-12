@@ -85,8 +85,15 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  a table `generate` does not know exists. The same migration also touches master_companies (adds org_kind,
  *  drops the dead technographics blob) — that part IS visible to drizzle, but a snapshot cannot be emitted
  *  for half a migration, and the chain HEAD stays at 0107 until the next rebaseline.
- *  This test caught the widening again and forced it to be stated. */
-const EXPECTED_DEFICIT = 67;
+ *  This test caught the widening again and forced it to be stated.
+ *
+ *  67 → 68 for 0109_fk_access_path_indexes — the FIRST category again, and the same case as 0106. Every
+ *  statement in it is CREATE INDEX CONCURRENTLY, which cannot run inside a transaction block; Drizzle emits
+ *  a plain blocking CREATE INDEX for anything declared in a schema file, so these indexes are deliberately
+ *  hand-authored and invisible to `generate`. It also adds one FK constraint, which drizzle-kit COULD see —
+ *  but a snapshot cannot be emitted for half a migration, and the chain HEAD stays at 0107 until the next
+ *  rebaseline. */
+const EXPECTED_DEFICIT = 68;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {
