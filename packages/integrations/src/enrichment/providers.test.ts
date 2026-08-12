@@ -1,11 +1,23 @@
 // providers.test.ts — provider CONTRACT tests on recorded fixtures (14 §3.5: no live spend in CI): each
 // adapter maps its vendor payload shape onto the port contract, reports miss-without-key, and surfaces
-// rate-limit/error statuses the waterfall + breaker react to.
+// rate-limit/error statuses the waterfall + breaker react to. The 0109 additions also prove the hardened
+// transport (host pin, https-only, size cap, throw→zero-cost-error) and the GET/query adapter shape.
 
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { EnrichRequest } from "@leadwolf/core";
-import { type FetchJson, vendorProvider } from "./httpProvider.ts";
-import { apolloProvider } from "./providers.ts";
+import {
+  type FetchJson,
+  ProviderTransportError,
+  defaultFetchJson,
+  vendorProvider,
+} from "./httpProvider.ts";
+import {
+  apolloProvider,
+  coresignalExtract,
+  coresignalProvider,
+  pdlExtract,
+  pdlProvider,
+} from "./providers.ts";
 
 const REQUEST: EnrichRequest = {
   workspaceId: "11111111-1111-1111-1111-111111111111",
@@ -79,5 +91,212 @@ describe("enrichment provider contract (recorded fixtures)", () => {
     expect(result.status).toBe("miss");
     expect(result.costMicros).toBe(0);
     expect(called).toBe(false);
+  });
+
+  test("429 surfaces the vendor's Retry-After as retryAfterMs (deferral input)", async () => {
+    const fetch429: FetchJson = () =>
+      Promise.resolve({ status: 429, json: {}, headers: { "retry-after": "17" } });
+    const result = await keyedVendor(fetch429).enrich(REQUEST);
+    expect(result.status).toBe("rate_limited");
+    expect(result.retryAfterMs).toBe(17_000);
+    expect(result.costMicros).toBe(0);
+  });
+
+  test("a throwing transport becomes a zero-cost error — an adapter never throws", async () => {
+    const boom: FetchJson = () => Promise.reject(new Error("socket hang up"));
+    const result = await keyedVendor(boom).enrich(REQUEST);
+    expect(result.status).toBe("error");
+    expect(result.costMicros).toBe(0);
+  });
+});
+
+describe("hardened default transport (0109 security mandate)", () => {
+  test("a non-allowlisted host is refused before any network I/O", async () => {
+    const err = await defaultFetchJson("https://attacker.internal/metadata", {
+      method: "GET",
+      headers: {},
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProviderTransportError);
+    expect((err as Error).message).toContain("not allowlisted");
+  });
+
+  test("plain http is refused even for an allowlisted host", async () => {
+    const err = await defaultFetchJson("http://api.apollo.io/v1/people/match", {
+      method: "POST",
+      headers: {},
+      body: {},
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProviderTransportError);
+    expect((err as Error).message).toContain("https");
+  });
+});
+
+describe("hardened transport against a stubbed global fetch", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  test("an oversized response body is refused before JSON.parse", async () => {
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response("x".repeat(2_000_000), { status: 200 }),
+      )) as unknown as typeof fetch;
+    const err = await defaultFetchJson("https://api.apollo.io/v1/people/match", {
+      method: "POST",
+      headers: {},
+      body: {},
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProviderTransportError);
+    expect((err as Error).message).toContain("exceeds");
+  });
+
+  test("response headers come back lowercased (Retry-After reachable)", async () => {
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response("{}", { status: 429, headers: { "Retry-After": "3" } }),
+      )) as unknown as typeof fetch;
+    const out = await defaultFetchJson("https://api.apollo.io/v1/people/match", {
+      method: "POST",
+      headers: {},
+      body: {},
+    });
+    expect(out.status).toBe(429);
+    expect(out.headers?.["retry-after"]).toBe("3");
+  });
+});
+
+// ── PDL + Coresignal (waterfall v2 second wave) ─────────────────────────────────────────────────────────
+
+// Recorded PDL-shaped cassette (v5 person enrich, trimmed to the fields the adapter reads).
+const PDL_HIT = {
+  status: 200,
+  likelihood: 9,
+  data: {
+    work_email: "jane@acme.com",
+    mobile_phone: "+14155550100",
+    job_title: "vp of engineering",
+    job_title_levels: ["vp"],
+    job_title_role: "engineering",
+  },
+};
+
+// Recorded Coresignal-shaped cassette (v2 employee multi-source enrich; top-level, no `data` wrapper).
+const CORESIGNAL_HIT = {
+  id: 12345,
+  primary_professional_email: "jane@acme.com",
+  job_title: "VP Engineering",
+  management_level: "vp",
+  department: "engineering",
+};
+
+function pdlFixture(status: number, json: unknown): { provider: string; fetch: FetchJson } {
+  return { provider: "pdl", fetch: () => Promise.resolve({ status, json }) };
+}
+
+describe("PDL adapter contract (recorded fixtures)", () => {
+  test("maps the v5 person payload onto port fields", async () => {
+    // Simulate a configured key by constructing through vendorProvider with the same spec the real
+    // adapter uses — via pdlProvider we can't inject a key, so assert the keyless short-circuit and
+    // exercise mapping through a keyed clone below.
+    const keyless = await pdlProvider(pdlFixture(200, PDL_HIT).fetch).enrich({
+      ...REQUEST,
+      fields: ["email", "phone", "jobTitle", "seniorityLevel", "department"],
+    });
+    expect(keyless.status).toBe("miss"); // PDL_API_KEY unset in tests
+    expect(keyless.costMicros).toBe(0);
+  });
+
+  test("GET adapters build a query string and never send a body", async () => {
+    let seenUrl = "";
+    let seenInit: { method: string; body?: unknown } | null = null;
+    const spy: FetchJson = (url, init) => {
+      seenUrl = url;
+      seenInit = init;
+      return Promise.resolve({ status: 200, json: PDL_HIT });
+    };
+    const provider = vendorProvider(
+      {
+        name: "pdl",
+        trust: 0.75,
+        costMicrosPerCall: 40_000,
+        url: "https://recorded.fixture/v5/person/enrich",
+        method: "GET",
+        apiKey: "test-key",
+        headers: (key) => ({ "x-api-key": key }),
+        query: (req) => ({
+          email: req.subject.email,
+          name: req.subject.fullName,
+          company: req.subject.companyName ?? req.subject.companyDomain,
+          profile: req.subject.linkedinUrl, // undefined — must be dropped
+        }),
+        extract: () => ({ email: "jane@acme.com" }),
+      },
+      spy,
+    );
+    const result = await provider.enrich(REQUEST);
+    expect(result.status).toBe("hit");
+    expect(seenUrl).toBe(
+      "https://recorded.fixture/v5/person/enrich?name=Jane+Doe&company=acme.com",
+    );
+    expect(seenInit).not.toBeNull();
+    expect(seenInit!.method).toBe("GET");
+    expect(seenInit!.body).toBeUndefined();
+  });
+
+  test("the SHIPPED pdlExtract pins the v5 field paths against the recorded cassette", () => {
+    const out = pdlExtract(PDL_HIT, ["email", "phone", "jobTitle", "seniorityLevel", "department"]);
+    expect(out).toEqual({
+      email: "jane@acme.com",
+      phone: "+14155550100",
+      jobTitle: "vp of engineering",
+      seniorityLevel: "vp",
+      department: "engineering",
+    });
+  });
+
+  test("pdlExtract degrades to {} on a no-match / malformed payload", () => {
+    expect(pdlExtract({ status: 404, error: { type: "not_found" } }, ["email"])).toEqual({});
+    expect(pdlExtract(null, ["email"])).toEqual({});
+    expect(pdlExtract({ data: { work_email: 42 } }, ["email"])).toEqual({}); // non-string never leaks
+  });
+});
+
+describe("Coresignal adapter contract (recorded fixtures)", () => {
+  test("declares email+profile capabilities but NOT phone (honest capability set)", () => {
+    const provider = coresignalProvider();
+    expect(provider.capabilities).toContain("contact.email");
+    expect(provider.capabilities).toContain("contact.profile");
+    expect(provider.capabilities).not.toContain("contact.phone");
+  });
+
+  test("keyless short-circuit: miss, zero cost, no call", async () => {
+    let called = false;
+    const spy: FetchJson = () => {
+      called = true;
+      return Promise.resolve({ status: 200, json: CORESIGNAL_HIT });
+    };
+    const result = await coresignalProvider(spy).enrich(REQUEST);
+    expect(result.status).toBe("miss");
+    expect(called).toBe(false);
+  });
+
+  test("the SHIPPED coresignalExtract pins the top-level field paths", () => {
+    const out = coresignalExtract(CORESIGNAL_HIT, [
+      "email",
+      "jobTitle",
+      "seniorityLevel",
+      "department",
+    ]);
+    expect(out).toEqual({
+      email: "jane@acme.com",
+      jobTitle: "VP Engineering",
+      seniorityLevel: "vp",
+      department: "engineering",
+    });
+  });
+
+  test("coresignalExtract never yields phone even if asked (no capability, no mapping)", () => {
+    expect(coresignalExtract({ ...CORESIGNAL_HIT, phone: "+15550100" }, ["phone"])).toEqual({});
   });
 });

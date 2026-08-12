@@ -16,25 +16,28 @@ import {
   isFlagEnabledForTenant,
   listEnrichmentJobs,
 } from "@leadwolf/core";
-import { withTenantTx } from "@leadwolf/db";
+import { revealRepository, withTenantTx } from "@leadwolf/db";
 import { defaultProviders } from "@leadwolf/integrations";
 import {
   AppError,
   BULK_ENRICHMENT_FLAG_KEY,
   type EnrichmentJobDetailResponse,
   type EnrichmentJobListResponse,
+  type EnrichmentTriggerAck,
   ForbiddenError,
   NotFoundError,
   ValidationError,
   enrichmentJobDetailResponseSchema,
   enrichmentJobListResponseSchema,
   enrichmentRequestSchema,
+  enrichmentTriggerAckSchema,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
 import { tenancy } from "../../middleware/tenancy.ts";
+import { enqueueEnrichmentJob } from "./enrichmentQueue.ts";
 
 export const enrichmentRoutes = new Hono<{ Variables: RoleVariables }>();
 
@@ -149,14 +152,39 @@ enrichmentRoutes.post("/:entity/:id", requireRole("owner", "admin", "member"), a
   }
 
   const parsed = enrichmentRequestSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) throw new ValidationError("Body must be { fields: EnrichField[] }.");
+  if (!parsed.success)
+    throw new ValidationError("Body must be { fields: EnrichField[], providerOrder? }.");
+
+  const scope = { tenantId: c.get("tenantId"), workspaceId };
+  const contactId = c.req.param("id");
+
+  // Async-first (waterfall v2, ENRICHMENT_ASYNC_ENABLED): validate + existence-check + enqueue + 202 —
+  // the provider I/O runs on the worker, never on this request thread (the data-skill mandate). Flag
+  // off ⇒ the shipped inline path below, byte-identical.
+  if (env.ENRICHMENT_ASYNC_ENABLED) {
+    const contact = await withTenantTx(scope, (tx) =>
+      revealRepository.getContactForReveal(tx, contactId),
+    );
+    if (!contact) throw new NotFoundError("Contact not found in this workspace.");
+    const jobId = await enqueueEnrichmentJob({
+      tenantId: scope.tenantId,
+      workspaceId,
+      contactId,
+      fields: parsed.data.fields,
+      requestedByUserId: c.get("claims").sub,
+      providerOrder: parsed.data.providerOrder,
+    });
+    const ack: EnrichmentTriggerAck = { queued: true, jobId };
+    return c.json(enrichmentTriggerAckSchema.parse(ack), 202);
+  }
 
   const result = await enrichContact({
-    scope: { tenantId: c.get("tenantId"), workspaceId },
-    contactId: c.req.param("id"),
+    scope,
+    contactId,
     fields: parsed.data.fields,
     providers: defaultProviders(),
     requestedByUserId: c.get("claims").sub,
+    providerOrder: parsed.data.providerOrder,
   });
   return c.json(result, 200);
 });

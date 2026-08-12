@@ -3,7 +3,7 @@
 // reads provider_calls ACROSS all tenants (the owner bypasses RLS), bounded to the current month and grouped
 // in SQL (no per-tenant N+1). No secrets are touched — this only manages enable / budget / rate.
 
-import type { ProviderCallStatusCounts } from "@leadwolf/types";
+import type { ProviderCallStatusCounts, ProviderWaterfallStats } from "@leadwolf/types";
 import { sql as dsql, gte } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { providerCalls, providerConfigs } from "../schema/intel.ts";
@@ -28,6 +28,17 @@ export const providerConfigRepository = {
         monthlyBudgetCents: providerConfigs.monthlyBudgetCents,
       })
       .from(providerConfigs);
+  },
+
+  /**
+   * The configs the WATERFALL reads on a tenant tx (waterfall v2 / D8): global platform config, app role
+   * may SELECT (rls/providerConfigs.sql — read-true policy, no write policy). A provider with no row is
+   * implicitly enabled (default-true column semantics); rows with enabled=false are excluded from every
+   * run; rate/budget feed the ProviderGate.
+   */
+  async listEnabled(tx: Tx): Promise<ProviderConfigRow[]> {
+    const rows = await providerConfigRepository.list(tx);
+    return rows.filter((r) => r.enabled);
   },
 
   /** Upsert a provider's enabled flag (label seeds the row on first write). */
@@ -86,6 +97,64 @@ export const providerConfigRepository = {
    * response_payload (no PII, no secrets). Same BYPASSRLS caveat applies: on a non-superuser owner it sees
    * no rows, so every provider reads back as "unknown" (never a fabricated green).
    */
+  /**
+   * Cross-tenant waterfall telemetry per provider since `since` (0109, P6): attempts / hits /
+   * verified-valid / latency avg+p95 / total cost — the read-only substrate for 06 §4's expectedHitRate
+   * learning. Verification rows (`verify:%` names) are EXCLUDED — they meter the verifier, not a vendor.
+   * Selects aggregates only, never response_payload. Same BYPASSRLS caveat as the reads above: on a
+   * non-superuser owner it sees no rows and every provider reads back null stats (never fabricated zeros).
+   */
+  async waterfallStatsByProvider(
+    tx: Tx,
+    since: Date,
+    windowDays: number,
+  ): Promise<Record<string, ProviderWaterfallStats>> {
+    const rows = (await tx.execute(dsql`
+      SELECT provider_name,
+             count(*)::int                                                        AS attempts,
+             (count(*) FILTER (WHERE status = 'hit'))::int                        AS hits,
+             (count(*) FILTER (
+                WHERE status = 'hit'
+                  AND verification -> 'email' ->> 'status' = 'valid'))::int       AS verified_valid,
+             avg(latency_ms)::float8                                              AS avg_latency_ms,
+             (percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms))::float8   AS p95_latency_ms,
+             coalesce(sum(cost_micros), 0)::bigint                                AS total_cost_micros
+      FROM provider_calls
+      WHERE called_at >= ${since}
+        AND provider_name NOT LIKE 'verify:%'
+      GROUP BY provider_name
+    `)) as unknown as Array<{
+      provider_name: string;
+      attempts: number;
+      hits: number;
+      verified_valid: number;
+      avg_latency_ms: number | null;
+      p95_latency_ms: number | null;
+      total_cost_micros: string | number;
+    }>;
+    const out: Record<string, ProviderWaterfallStats> = {};
+    for (const r of rows) {
+      const attempts = Number(r.attempts);
+      const hits = Number(r.hits);
+      const verifiedValid = Number(r.verified_valid);
+      const totalCostMicros = Number(r.total_cost_micros);
+      out[r.provider_name.toLowerCase()] = {
+        windowDays,
+        attempts,
+        hits,
+        hitRate: attempts > 0 ? hits / attempts : null,
+        verifiedValid,
+        verifiedValidRate: hits > 0 ? verifiedValid / hits : null,
+        avgLatencyMs: r.avg_latency_ms == null ? null : Number(r.avg_latency_ms),
+        p95LatencyMs: r.p95_latency_ms == null ? null : Number(r.p95_latency_ms),
+        totalCostMicros,
+        costPerVerifiedValidMicros:
+          verifiedValid > 0 ? Math.round(totalCostMicros / verifiedValid) : null,
+      };
+    }
+    return out;
+  },
+
   async recentHealthByProvider(
     tx: Tx,
     since: Date,

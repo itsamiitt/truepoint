@@ -62,7 +62,10 @@ settingsRoutes.get("/auto-enrich", async (c) => {
   return c.json(response, 200);
 });
 
-settingsRoutes.patch("/auto-enrich", async (c) => {
+// Spend-shaping config (budget cap, provider priority, verification knobs) — owner/admin only, like the
+// import policy below. (0109 hardening: the PATCH was previously un-gated beyond membership, which let
+// any workspace role rewrite the monthly budget.) GET stays member-visible for the settings display.
+settingsRoutes.patch("/auto-enrich", requireRole("owner", "admin"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError(
@@ -76,8 +79,11 @@ settingsRoutes.patch("/auto-enrich", async (c) => {
   if (!parsed.success)
     throw new ValidationError("Invalid auto-enrich policy.", { issues: parsed.error.issues });
 
-  // Atomic merge-persist in the repository (arrays replace; absent fields keep the current value).
-  await enrichmentPolicyRepository.applyPartial(scope, { tenantId, workspaceId }, parsed.data);
+  // Atomic merge-persist in the repository (arrays replace; absent fields keep the current value) —
+  // the enrichment.policy_updated audit row commits in the SAME tx (0109).
+  await enrichmentPolicyRepository.applyPartial(scope, { tenantId, workspaceId }, parsed.data, {
+    userId: c.get("claims").sub,
+  });
   const response = await loadPolicyResponse(scope);
   return c.json(response, 200);
 });

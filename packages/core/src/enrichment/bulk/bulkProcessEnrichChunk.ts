@@ -19,7 +19,7 @@ import {
   ProviderBudgetExceededError,
   enrichField,
 } from "@leadwolf/types";
-import { type EnrichContactResult, enrichContact } from "../enrichContact.ts";
+import { type EnrichContactResult, type EnrichDeps, enrichContact } from "../enrichContact.ts";
 import type { EnrichmentProvider } from "../providerPort.ts";
 
 /** Fields a re-verify refreshes when the job does not specify its own — the full enrichable set. */
@@ -31,6 +31,8 @@ export interface BulkProcessEnrichChunkInput {
   chunkId: string;
   /** The vendor adapters, injected by the worker (defaultProviders) so core never imports packages/integrations. */
   providers: EnrichmentProvider[];
+  /** Waterfall-v2 infrastructure (Redis breaker/gate), injected by the worker beside `providers`. */
+  enrichDeps?: EnrichDeps;
 }
 
 export interface BulkProcessEnrichChunkResult {
@@ -140,7 +142,10 @@ export async function bulkProcessEnrichChunk(
     let result: EnrichContactResult;
     try {
       // Reuse the shipped single-contact path UNCHANGED (manual mode — no trigger). Cache/fresh → 0 cost.
-      result = await enrichContact({ scope, contactId, fields: options.fields, providers });
+      result = await enrichContact(
+        { scope, contactId, fields: options.fields, providers },
+        input.enrichDeps,
+      );
     } catch (err) {
       if (err instanceof ProviderBudgetExceededError) {
         // DAILY breaker tripped inside enrichContact — stop the run. This contact was NOT charged.

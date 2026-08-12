@@ -4,7 +4,7 @@
 // allowlist reuses the existing `enrichField` value set (intel.ts) — never a second enrichment vocabulary.
 
 import { z } from "zod";
-import { enrichField } from "./intel.ts";
+import { enrichField, enrichProviderId } from "./intel.ts";
 
 // ── Triggers (when auto-enrich is allowed to fire) ───────────────────────────────────────────────────────
 /**
@@ -15,6 +15,53 @@ import { enrichField } from "./intel.ts";
  */
 export const enrichTrigger = z.enum(["on_import", "on_reveal", "on_stale"]);
 export type EnrichTrigger = z.infer<typeof enrichTrigger>;
+
+// ── Provider priority + verification (waterfall v2; 06 §4 "ordering is configurable, not hardcoded") ────
+/**
+ * The workspace's saved provider preferences, stored in `enrichment_policy.provider_prefs`. Per-FIELD
+ * ordering (an email order and a phone order — different vendors are strong at different fields) plus a
+ * `disabled` set subtracted from every run. `version` is a literal so conditional/ICP or telemetry-driven
+ * rule shapes can ship later as `version: 2` without a migration. An empty/missing object means "engine
+ * defaults" (trust ÷ cost ordering, nothing disabled) — configuring nothing changes nothing.
+ */
+export const providerPrioritySchema = z.object({
+  version: z.literal(1),
+  email: z.array(enrichProviderId).max(20),
+  phone: z.array(enrichProviderId).max(20),
+  disabled: z.array(enrichProviderId).max(50),
+});
+export type ProviderPriority = z.infer<typeof providerPrioritySchema>;
+
+/** Catch-all verdict policy: accept as-is, keep cascading to the next provider, or accept-but-flag. */
+export const acceptCatchAll = z.enum(["accept", "continue", "flag"]);
+export type AcceptCatchAll = z.infer<typeof acceptCatchAll>;
+
+/**
+ * Verify-before-accept knobs (waterfall v2, S-08): a provider's email candidate is verified before the
+ * field is accepted; `invalid` always cascades to the next provider. `flag` (the default) accepts a
+ * catch_all but persists `email_status='catch_all'` so the badge/reveal pricing see it. Verification is
+ * a no-op until a verifier backend (REACHER_BACKEND_URL) is configured — the pass-through verifier
+ * returns the current status unchanged. Phone verification is opt-in (metered, jurisdiction-sensitive).
+ */
+export const verificationPolicySchema = z.object({
+  verifyEmailBeforeAccept: z.boolean(),
+  acceptCatchAll,
+  verifyPhone: z.boolean(),
+});
+export type VerificationPolicy = z.infer<typeof verificationPolicySchema>;
+
+export const DEFAULT_PROVIDER_PRIORITY: ProviderPriority = {
+  version: 1,
+  email: [],
+  phone: [],
+  disabled: [],
+};
+
+export const DEFAULT_VERIFICATION_POLICY: VerificationPolicy = {
+  verifyEmailBeforeAccept: true,
+  acceptCatchAll: "flag",
+  verifyPhone: false,
+};
 
 // ── The policy (the full, resolved shape the API returns and the guard reads) ────────────────────────────
 /**
@@ -29,6 +76,8 @@ export const enrichmentPolicySchema = z.object({
   triggers: z.array(enrichTrigger),
   fieldAllowlist: z.array(enrichField),
   monthlyBudgetMicros: z.number().int().nonnegative(),
+  providerPriority: providerPrioritySchema,
+  verification: verificationPolicySchema,
 });
 export type EnrichmentPolicy = z.infer<typeof enrichmentPolicySchema>;
 
@@ -43,6 +92,8 @@ export const updateEnrichmentPolicySchema = z
     triggers: z.array(enrichTrigger),
     fieldAllowlist: z.array(enrichField),
     monthlyBudgetMicros: z.number().int().nonnegative(),
+    providerPriority: providerPrioritySchema,
+    verification: verificationPolicySchema,
   })
   .partial();
 export type UpdateEnrichmentPolicy = z.infer<typeof updateEnrichmentPolicySchema>;
@@ -67,4 +118,6 @@ export const DEFAULT_ENRICHMENT_POLICY: EnrichmentPolicy = {
   triggers: [],
   fieldAllowlist: [],
   monthlyBudgetMicros: 0,
+  providerPriority: DEFAULT_PROVIDER_PRIORITY,
+  verification: DEFAULT_VERIFICATION_POLICY,
 };

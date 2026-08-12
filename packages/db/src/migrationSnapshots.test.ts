@@ -85,8 +85,16 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *  a table `generate` does not know exists. The same migration also touches master_companies (adds org_kind,
  *  drops the dead technographics blob) — that part IS visible to drizzle, but a snapshot cannot be emitted
  *  for half a migration, and the chain HEAD stays at 0107 until the next rebaseline.
- *  This test caught the widening again and forced it to be stated. */
-const EXPECTED_DEFICIT = 67;
+ *  This test caught the widening again and forced it to be stated.
+ *
+ *  67 → 68 for 0109_enrichment_waterfall_v2 — 0091's category, stated as such. Every table it touches
+ *  (provider_calls, source_imports, enrichment_policy, audit_log) IS in the drizzle barrel, but the
+ *  migration is hand-authored on purpose: two CHECK-constraint widenings (source_imports_source_name_enum,
+ *  audit_log_action_enum) and a unique-index REPLACEMENT (the (ws,hash)→(ws,hash,provider) ledger fix)
+ *  are drop+recreate shapes drizzle-kit does not emit as written. Per the 2026-08-04 correction above, a
+ *  retroactive snapshot cannot be generated for an already-committed file; the chain HEAD stays at 0107
+ *  and the next rebaseline absorbs this link like 0091/0094. */
+const EXPECTED_DEFICIT = 68;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

@@ -92,16 +92,27 @@ export const providerCalls = pgTable(
     tenantId: tenantId(),
     workspaceId: workspaceId(),
     providerName: varchar("provider_name", { length: 50 }).notNull(),
-    requestHash: bytea("request_hash").notNull(), // sha256(provider + normalized request) — the cache key
+    requestHash: bytea("request_hash").notNull(), // sha256(PROVIDER-INDEPENDENT normalized request) — requestHash.ts
     status: varchar("status", { length: 20 }).notNull(), // hit|miss|rate_limited|error
     costMicros: bigint("cost_micros", { mode: "number" }).notNull().default(0),
     cacheHit: boolean("cache_hit").notNull().default(false),
     responsePayload: jsonb("response_payload"), // verbatim payload for cache replays (TTL pruned later)
+    filledFields: jsonb("filled_fields"), // EnrichField[] this call filled (waterfall v2 per-field cache; null = legacy row, treat as covering the whole request)
+    latencyMs: integer("latency_ms"), // provider round-trip, telemetry input (06 §4 expectedHitRate learning)
+    verification: jsonb("verification"), // {email?: {status, verifier}} — verify-before-accept verdicts (v2)
     calledAt: timestamp("called_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    // One persisted answer per (workspace, request) — concurrent duplicates collapse onto it.
-    uniqWsHash: uniqueIndex("uniq_provider_calls_ws_hash").on(t.workspaceId, t.requestHash),
+    // One persisted answer per (workspace, request, provider). The hash is provider-independent
+    // (requestHash.ts), and enrichContact records EVERY waterfall attempt under the same hash — a
+    // (workspace, hash)-only unique with onConflictDoNothing silently dropped every attempt after the
+    // first (the pre-0109 defect: a miss-then-hit run lost the hit's cost AND its cache row, so the
+    // same request re-paid the missing provider forever). Concurrent duplicates still collapse per triple.
+    uniqWsHashProvider: uniqueIndex("uniq_provider_calls_ws_hash_provider").on(
+      t.workspaceId,
+      t.requestHash,
+      t.providerName,
+    ),
     // Dashboard "recent provider calls" / enrichment-cost feed (providerCallRepository: WHERE workspace_id ...
     // ORDER BY called_at DESC): composite with workspace_id so the recency read stays index-backed under the
     // RLS workspace predicate instead of a seq-scan + sort on this high-volume ledger (perf RC#9).

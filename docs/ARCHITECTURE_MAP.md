@@ -170,17 +170,29 @@ apps/                           # deployable processes (thin transport adapters)
   server will decide the path), `ImportsLanding` (`/imports` scaffold; `/import` → redirect `/imports/new`),
   `ContactsTable`, `importJob.ts` (poll→UI state), `rejectedRowsCsv.ts`; root `providers.tsx` (TanStack Query seam)
 
-#### enrichment — *M4 provider waterfall + bulk match-first* ([06](./planning/06-enrichment-engine.md), ADR-0037/0038)
-- **core:** `enrichment/` — `providerPort.ts` (the 06 §3 contract; core OWNS the port), `waterfall.ts` (trust÷cost
-  ordering + per-provider breaker), `enrichContact.ts` (cache-first → budget breaker → waterfall → overlay upsert + cost row),
-  `requestHash.ts`, `policy.ts` (auto-enrich guard: trigger + field-allowlist + budget), `jobStatus.ts` (read-only job DTOs)
+#### enrichment — *M4 provider waterfall + bulk match-first + waterfall v2* ([06](./planning/06-enrichment-engine.md), ADR-0037/0038, 0109)
+- **core:** `enrichment/` — `providerPort.ts` (the 06 §3 contract; core OWNS the port), `waterfall.ts` (legacy trust÷cost
+  ordering + per-process breaker; still the bulk residual path), `enrichContact.ts` (dual-gated: legacy single-tx body OR
+  the v2 branch), `requestHash.ts`, `policy.ts` (auto-enrich guard: trigger + field-allowlist + budget), `jobStatus.ts`
+- **core (waterfall v2, 0109 — dark behind `WATERFALL_V2_ENABLED` + tenant flag):** `fieldWaterfall.ts` (PER-FIELD cascade,
+  one memoized call per provider, capability filter, verify-before-accept w/ catch-all policy), `enrichContactV2.ts`
+  (tx-split orchestration + `resolveProviderOrder`: per-run override → workspace prefs → default), `breakerStore.ts` +
+  `providerGate.ts` (injectable ports; in-memory/pass-through defaults), `enrichmentEvidence.ts` (Layer-0 source_records +
+  provenance events per winning provider, own withErTx, flag-gated), `sourceImports.ts` (one row per winning provider)
 - **core (bulk, ADR-0037):** `enrichment/bulk/` — `matchPort.ts` (the `MatchPort` seam; injects a CandidateFinder, never
   imports db), `overlayMatcher.ts` (real Layer-1 matcher: deterministic ladder → fuzzy_name_company → review/unmatched),
   `masterGraphMatcher.ts` (Layer-0 **stub** until the Citus/OpenSearch/Spark candidate index lands), `estimate.ts`
   (pre-flight cost forecast: sample → extrapolate charged rows × hit rate, a range never a guarantee)
-- **integrations:** `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit VendorSpecs over one HTTP shape; injectable fetch)
-- **db:** `providerCallRepository.ts` (cache + cost ledger); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
-  (*both unassigned — entity not in `REPO_DOMAIN`*) · **api:** `features/enrichment/*` · **workers:** `queues/enrichment.ts`
+- **integrations:** `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit **+ PDL/Coresignal (dark until DPA'd
+  keys)** VendorSpecs over one HARDENED HTTP shape: https+host-allowlist, timeout, size cap, Retry-After; injectable fetch) +
+  `redisBreakerStore.ts`/`redisProviderGate.ts` (fleet-shared breaker + per-provider rate/budget gate enforcing
+  `provider_configs`)
+- **db:** `providerCallRepository.ts` (cache + cost ledger; 0109 unique `(ws,hash,provider)` + per-field `filled_fields` —
+  the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
+  (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
+  **api:** `features/enrichment/*` (+ 202 producer behind `ENRICHMENT_ASYNC_ENABLED`) · **workers:** `queues/enrichment.ts`
+  (factory w/ Redis deps + throttle deferral) · **web:** `settings-enrichment/ProviderPriorityPanel` (arrow-reorder per-field
+  priority + verification knobs) · **admin:** provider stats block (30d hit/verified-valid/latency/cost per provider)
 
 #### enrichment-jobs — *bulk enrichment job UI* (web; ADR-0039)
 - **web:** `features/enrichment-jobs/` — `EnrichmentJobsPage` + `JobDetailDrawer` over `useEnrichmentJobs`/`useEnrichmentJobDetail`;

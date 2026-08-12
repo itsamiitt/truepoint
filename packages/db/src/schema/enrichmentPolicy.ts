@@ -49,6 +49,12 @@ export const enrichmentPolicy = pgTable(
     // 0091). NULL = the platform default (legitimate_interest). Workspace-grained, not jurisdiction-grained —
     // see the note on import_policy.lawfulBasis; a per-subject resolver is Phase 5 work.
     lawfulBasis: varchar("lawful_basis", { length: 30 }),
+    // Waterfall v2 (0109): the workspace's provider preferences — {version:1, email:[], phone:[],
+    // disabled:[]} plus the verification knobs ({verifyEmailBeforeAccept, acceptCatchAll, verifyPhone}).
+    // Validated by providerPrioritySchema / verificationPolicySchema in @leadwolf/types at the API edge
+    // (same jsonb-free-form-here posture as triggers/fieldAllowlist). Default {} = engine defaults
+    // (trust ÷ cost ordering, verify-on, catch_all flagged) — fail-safe, no behavior change until set.
+    providerPrefs: jsonb("provider_prefs").notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

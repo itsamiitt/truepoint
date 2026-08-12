@@ -132,6 +132,26 @@ flowchart TB
    `expectedHitRate` is learned over time from `provider_calls` (per provider × field).
 3. **Sequential waterfall** — call provider; `hit` → stop; otherwise next. (A "parallel-cheap" mode is
    allowed for low-cost providers when latency matters.)
+
+> **As built — waterfall v2 (0109), behind `WATERFALL_V2_ENABLED` + the `enrichment_waterfall_v2` tenant
+> flag.** The flow above is now PER FIELD (`core/enrichment/fieldWaterfall.ts`): each field cascades down
+> its own resolved order — per-run `providerOrder` override → the workspace's saved
+> `enrichment_policy.provider_prefs` (email order ≠ phone order, plus a disabled set; the
+> Settings ▸ Enrichment-providers panel edits it) → this default score — with providers called at most
+> once per request (memoized union call) and capability-filtered. A found email is VERIFIED before the
+> field is accepted (invalid ⇒ cascade continues; catch-all per the `acceptCatchAll` knob); verification
+> spend lands as `verify:email:<provider>` ledger rows. The step-2 learning substrate ships read-only:
+> `providerConfigRepository.waterfallStatsByProvider` (30d per-provider hit/verified-valid/latency/cost —
+> the staff console shows it); wiring it INTO the ordering is the deferred `version: 2` priority mode.
+> The engine runs tx-split (read tx → provider I/O outside any tx → write tx), the ledger unique is
+> `(workspace, request_hash, provider)` with per-attempt `filled_fields` (the pre-0109 unique dropped
+> every attempt after the first — cost undercount + permanent cache miss), breakers/rate-limits are
+> Redis-shared (`redisBreakerStore`/`redisProviderGate` enforcing `provider_configs`
+> rate_limit_per_min + monthly_budget_cents, previously stored-but-unread), and
+> `POST /enrichment/:entity/:id` 202-enqueues behind `ENRICHMENT_ASYNC_ENABLED`. Layer-0 provenance
+> events emit per winning provider behind `INGESTION_EVIDENCE_ENABLED`/`PROVENANCE_EVENTS_ENABLED`
+> (`core/enrichment/enrichmentEvidence.ts`). PDL + Coresignal adapters exist DARK — no production key
+> until the DPA + sub-processor listing + ToS review are recorded (08-compliance §10).
 4. **Persist** — every response is **matched** into the **master graph** (raw payload + extracted match keys,
    for global ER, §9) to resolve `master_*_id`, and writes a per-import `source_imports` row in the overlay +
    `provider_calls` (cost/latency/cache_hit). The provider evidence is persisted as a field-contributing

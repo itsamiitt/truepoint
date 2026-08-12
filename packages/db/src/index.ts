@@ -394,6 +394,8 @@ export {
   providerCallRepository,
   type ProviderCallRecord,
   type CachedCall,
+  type CachedFieldHit,
+  type CachedFieldsResult,
   type EnrichActivityRow,
 } from "./repositories/providerCallRepository.ts";
 export { consentRepository, type ConsentInsert } from "./repositories/consentRepository.ts";

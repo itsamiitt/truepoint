@@ -31,6 +31,8 @@ export interface ProviderResult {
   rawPayload: unknown; // stored verbatim → source_imports.raw_data
   costMicros: number;
   status: "hit" | "miss" | "rate_limited" | "error";
+  /** On rate_limited: the vendor's Retry-After, when it sent one — feeds the deferral delay (v2). */
+  retryAfterMs?: number;
 }
 
 export interface EnrichmentProvider {

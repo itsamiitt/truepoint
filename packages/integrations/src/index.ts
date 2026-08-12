@@ -4,14 +4,24 @@ export {
   apolloProvider,
   zoominfoProvider,
   clearbitProvider,
+  pdlProvider,
+  coresignalProvider,
+  pdlExtract,
+  coresignalExtract,
   defaultProviders,
 } from "./enrichment/providers.ts";
 export {
   vendorProvider,
   defaultFetchJson,
+  ALLOWED_PROVIDER_HOSTS,
+  ProviderTransportError,
   type FetchJson,
   type VendorSpec,
 } from "./enrichment/httpProvider.ts";
+// Waterfall v2 (0109): the Redis-shared circuit breaker + per-provider rate/budget gate implementing
+// core's BreakerStore/ProviderGate ports (wired at the worker composition root beside crmBudget).
+export { redisBreakerStore, type BreakerRedis } from "./enrichment/redisBreakerStore.ts";
+export { redisProviderGate, type GateRedis } from "./enrichment/redisProviderGate.ts";
 
 // AI adapters (23, ADR-0023): the Anthropic Claude adapter fulfilling core's AiPort for NL→structured
 // search. Injected at the app/composition layer; core declares the port and never imports this.

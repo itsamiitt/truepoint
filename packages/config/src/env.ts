@@ -271,9 +271,39 @@ export const appEnvSchema = z
     REVEAL_RATE_PER_MIN: z.coerce.number().int().positive().default(60),
 
     // Enrichment provider keys (06 §3). Absent → that adapter reports `miss` and the waterfall skips it.
+    // COMPLIANCE GATE (08-compliance §10, 21 §4/§5): a provider's key is not set in production until its
+    // DPA is executed, it is on the sub-processor list, and its ToS review is recorded — the absent-key→miss
+    // behavior IS the enforcement mechanism for PDL/Coresignal landing dark.
     APOLLO_API_KEY: z.string().optional(),
     ZOOMINFO_API_KEY: z.string().optional(),
     CLEARBIT_API_KEY: z.string().optional(),
+    PDL_API_KEY: z.string().optional(),
+    CORESIGNAL_API_KEY: z.string().optional(),
+
+    // Waterfall v2 master switch (0109; explicit-"true"-only — the fleet-wide kill/rollback lever). Off ⇒
+    // enrichContact runs the legacy path byte-identically. Under it sits the per-tenant canary flag
+    // `enrichment_waterfall_v2` (fail-closed) and then the workspace policy itself (L1/L2/L3 gate ladder).
+    WATERFALL_V2_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+    // Routes POST /enrichment/:entity/:id through the `enrichment` queue with a 202 ack instead of running
+    // providers on the request thread (data-skill mandate: enrichment never runs inside a request). Same
+    // explicit-"true"-only posture; off ⇒ inline behavior unchanged.
+    ENRICHMENT_ASYNC_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === "true"),
+
+    // Outbound-transport bounds for provider calls (security skill: timeouts + size limits on every
+    // outbound request). Timeout aborts the fetch (a hung vendor must not hold the worker to its deadline);
+    // the byte cap bounds an oversized/hostile response body before JSON.parse.
+    ENRICH_PROVIDER_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+    ENRICH_PROVIDER_MAX_RESPONSE_BYTES: z.coerce.number().int().positive().default(1_000_000),
+    // Per-verification unit cost in micro-dollars folded into the daily budget as `verify:email:*` ledger
+    // rows (waterfall v2 verify-before-accept). Default 0 — a self-hosted Reacher is infra cost, not
+    // per-call spend; set when a metered hosted verifier is used.
+    REACHER_COST_MICROS: z.coerce.number().int().nonnegative().default(0),
 
     // Global daily enrichment cost budget in micro-dollars (06 §6); exhaustion trips the budget breaker.
     ENRICH_DAILY_BUDGET_MICROS: z.coerce.number().int().positive().default(50_000_000),
