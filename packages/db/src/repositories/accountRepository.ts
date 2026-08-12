@@ -252,4 +252,31 @@ export const accountRepository = {
       .set({ masterCompanyId })
       .where(sql`${accounts.id} = ${accountId} AND ${accounts.masterCompanyId} IS NULL`);
   },
+
+  /**
+   * Resolve one account to its Layer-0 bridge, for the account-intelligence traversal.
+   *
+   * This is step 1 of the two-transaction pattern in apps/api account-intelligence: it runs inside
+   * withTenantTx, so RLS decides whether the caller may see this account at all. A row from another
+   * workspace is invisible here, which is what makes the subsequent privileged Layer-0 read safe — the
+   * master_company_id handed to withErTx is one the caller has already proven access to.
+   *
+   * Returns null for both "no such account" and "not yours"; the caller maps both to 404 so ids cannot be
+   * enumerated.
+   */
+  async getByIdForIntelligence(
+    tx: Tx,
+    accountId: string,
+  ): Promise<{ id: string; name: string; masterCompanyId: string | null } | null> {
+    const rows = await tx
+      .select({
+        id: accounts.id,
+        name: accounts.name,
+        masterCompanyId: accounts.masterCompanyId,
+      })
+      .from(accounts)
+      .where(sql`${accounts.id} = ${accountId} AND ${accounts.deletedAt} IS NULL`)
+      .limit(1);
+    return rows[0] ?? null;
+  },
 };

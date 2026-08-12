@@ -5,6 +5,7 @@ import { renderAuthMetrics } from "@leadwolf/auth";
 import { appOrigins, env } from "@leadwolf/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { accountIntelligenceRoutes } from "./features/account-intelligence/index.ts";
 import { accountSearchRoutes } from "./features/account-search/index.ts";
 import { activityRoutes } from "./features/activity/index.ts";
 import { adminRoutes } from "./features/admin/index.ts";
@@ -195,6 +196,10 @@ app.route("/api/v1/contacts", activityRoutes); // /:id/activities — no path ov
 app.route("/api/v1/search", searchRoutes); // 24/ADR-0035: filtered search, typeahead, facet counts
 // 24/ADR-0035 company-level (accounts) search — own base; no prefix overlap with /api/v1/search (distinct path).
 app.route("/api/v1/account-search", accountSearchRoutes); // search/facets/count (POST) + suggest (GET)
+// The first API surface over Layer 0. Mounted on /accounts (the tenant-visible resource) rather than on any
+// master_* id: the client addresses its own account and the server resolves the bridge, so the shared graph
+// is never addressable directly. `relationship` is required — develops and uses are disjoint answers.
+app.route("/api/v1/accounts", accountIntelligenceRoutes);
 app.route("/api/v1/saved-searches", savedSearchesRoutes); // 24 §8: persist + re-apply filter sets
 app.route("/api/v1/lists", listsRoutes); // 24: static prospect lists (bulk add-to-list)
 // Unified ingestion entry (prospect-database-platform Phase 03 / I2) — one idempotent envelope for every source.

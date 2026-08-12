@@ -104,6 +104,14 @@ export {
   type RecordDetectionResult,
   type CompanyTechnologyRow,
 } from "./repositories/masterTechnologyRepository.ts";
+// Layer-0 EDUCATION edge (0108). The sibling of master_employment over the same organization substrate —
+// schools are master_companies rows with org_kind='school', so "works at" and "studied at" traverse one
+// catalog and differ only by edge. Alumnus is a date predicate here, never a stored flag.
+export {
+  masterEducationRepository,
+  type RecordEducationInput,
+  type EducationRow,
+} from "./repositories/masterEducationRepository.ts";
 // Layer-0 canonical signal store (0103). `assertNoContactValues` is the executable form of the compliance
 // rule that a signal payload never carries contact values — it runs on every write path and THROWS, because
 // a signal store that accumulates addresses becomes a second cleartext PII store with none of

@@ -76,8 +76,17 @@ const META_DIR = join(import.meta.dir, "migrations", "meta");
  *      There is nothing for a snapshot to hold — the 0088 seed case.
  *    • 0106 creates three indexes with CREATE INDEX CONCURRENTLY, which is precisely why it is hand-authored:
  *      Drizzle emits a plain blocking CREATE INDEX for anything declared in a schema file.
- *  This test caught the widening and forced it to be stated, which is exactly what it is for. */
-const EXPECTED_DEFICIT = 66;
+ *  This test caught the widening and forced it to be stated, which is exactly what it is for.
+ *
+ *  66 → 67 for 0108_org_kind_and_education — the FIRST category again, not owed debt. The migration adds
+ *  master_education, whose table object is deliberately kept OUT of schema/index.ts (the
+ *  masterTechnologyAdoption/provenanceEvent precedent) because its two PARTIAL UNIQUE indexes and its CITEXT
+ *  column are expressed in hand-authored SQL; drizzle-kit never sees the module, so a snapshot would describe
+ *  a table `generate` does not know exists. The same migration also touches master_companies (adds org_kind,
+ *  drops the dead technographics blob) — that part IS visible to drizzle, but a snapshot cannot be emitted
+ *  for half a migration, and the chain HEAD stays at 0107 until the next rebaseline.
+ *  This test caught the widening again and forced it to be stated. */
+const EXPECTED_DEFICIT = 67;
 
 function journalEntryCount(): number {
   const journal = JSON.parse(readFileSync(join(META_DIR, "_journal.json"), "utf8")) as {

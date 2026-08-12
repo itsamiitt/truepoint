@@ -290,10 +290,142 @@ export async function listTechnologyAdopters(
   }));
 }
 
+/**
+ * The DEVELOPS side of the split: what does this company BUILD.
+ *
+ * `listCompanyTechnologies` above answers "what does it RUN" from master_technology_adoptions. This answers
+ * the other question entirely, from master_technology_vendors — and the two must never be served by one
+ * function, because "Sage develops Sage Intacct" and "Sage uses WordPress" are different facts and a caller
+ * that conflates them ships a wrong answer to a customer.
+ *
+ * creator ∪ current_owner, open rows only: a technology the company sold off is no longer in its portfolio,
+ * but the immutable `creator` row keeps the lineage (that is what former_owner is for).
+ */
+export async function listCompanyProducts(
+  tx: Tx,
+  masterCompanyId: string,
+  limit = 200,
+): Promise<
+  Array<{
+    technologyId: string;
+    slug: string;
+    canonicalName: string;
+    relationship: string;
+    startedOn: string | null;
+    confidence: string | null;
+  }>
+> {
+  const rows = (await tx.execute(sql`
+    SELECT DISTINCT ON (v.technology_id)
+           v.technology_id, t.slug, t.canonical_name, v.relationship, v.started_on, v.confidence
+      FROM master_technology_vendors v
+      JOIN master_technologies t ON t.id = v.technology_id
+     WHERE v.master_company_id = ${masterCompanyId}
+       AND v.relationship IN ('creator','current_owner')
+       AND v.ended_on IS NULL
+     ORDER BY v.technology_id,
+              -- current_owner outranks creator when both exist: it is the live portfolio claim.
+              CASE v.relationship WHEN 'current_owner' THEN 0 ELSE 1 END
+     LIMIT ${limit}
+  `)) as unknown as Array<{
+    technology_id: string;
+    slug: string;
+    canonical_name: string;
+    relationship: string;
+    started_on: string | null;
+    confidence: string | null;
+  }>;
+
+  return rows.map((r) => ({
+    technologyId: r.technology_id,
+    slug: r.slug,
+    canonicalName: r.canonical_name,
+    relationship: r.relationship,
+    startedOn: r.started_on,
+    confidence: r.confidence,
+  }));
+}
+
+/**
+ * The ownership ledger for one technology — "who made this, and who owns it now".
+ *
+ * This is what turns "what does Sage run" into "…and Google built two of those tools". Bitemporal by
+ * construction: the creator row is immutable and ownership transfers append, so an as-of read reconstructs
+ * who owned a product before an acquisition.
+ */
+export async function listTechnologyVendors(
+  tx: Tx,
+  technologyId: string,
+): Promise<
+  Array<{
+    masterCompanyId: string;
+    companyName: string;
+    relationship: string;
+    startedOn: string | null;
+    endedOn: string | null;
+    confidence: string | null;
+  }>
+> {
+  const rows = (await tx.execute(sql`
+    SELECT v.master_company_id, c.name AS company_name, v.relationship,
+           v.started_on, v.ended_on, v.confidence
+      FROM master_technology_vendors v
+      JOIN master_companies c ON c.id = v.master_company_id
+     WHERE v.technology_id = ${technologyId}
+     ORDER BY v.started_on
+  `)) as unknown as Array<{
+    master_company_id: string;
+    company_name: string;
+    relationship: string;
+    started_on: string | null;
+    ended_on: string | null;
+    confidence: string | null;
+  }>;
+
+  return rows.map((r) => ({
+    masterCompanyId: r.master_company_id,
+    companyName: r.company_name,
+    relationship: r.relationship,
+    startedOn: r.started_on,
+    endedOn: r.ended_on,
+    confidence: r.confidence,
+  }));
+}
+
+/** Batch form of listTechnologyVendors, creator-only — the "who built the tools you run" expansion. */
+export async function listCreatorsForTechnologies(
+  tx: Tx,
+  technologyIds: string[],
+): Promise<Map<string, { masterCompanyId: string; companyName: string }>> {
+  if (technologyIds.length === 0) return new Map();
+  const rows = (await tx.execute(sql`
+    SELECT v.technology_id, v.master_company_id, c.name AS company_name
+      FROM master_technology_vendors v
+      JOIN master_companies c ON c.id = v.master_company_id
+     WHERE v.relationship = 'creator'
+       AND v.ended_on IS NULL
+       AND v.technology_id = ANY(${technologyIds})
+  `)) as unknown as Array<{
+    technology_id: string;
+    master_company_id: string;
+    company_name: string;
+  }>;
+
+  return new Map(
+    rows.map((r) => [
+      r.technology_id,
+      { masterCompanyId: r.master_company_id, companyName: r.company_name },
+    ]),
+  );
+}
+
 export const masterTechnologyRepository = {
   resolveTechnology,
   recordDetection,
   closeDetection,
   listCompanyTechnologies,
   listTechnologyAdopters,
+  listCompanyProducts,
+  listTechnologyVendors,
+  listCreatorsForTechnologies,
 };

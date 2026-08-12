@@ -750,6 +750,13 @@
       "when": 1786160559272,
       "tag": "0107_slow_silhouette",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1786246959272,
+      "tag": "0108_org_kind_and_education",
+      "breakpoints": true
     }
   ]
 }

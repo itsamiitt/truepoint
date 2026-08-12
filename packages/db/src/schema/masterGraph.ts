@@ -54,6 +54,11 @@ export const masterCompanies = pgTable(
   "master_companies",
   {
     id: id(),
+    // WHAT KIND OF INSTITUTION this node is (0108). A school is an organization, not a separate subsystem:
+    // "works at" and "studied at" are the same SHAPE of fact, so they share this table and differ by edge
+    // type (master_employment vs master_education). A professor at a university is therefore an ordinary
+    // master_employment row pointing at an org_kind='school' node — no third subsystem.
+    orgKind: varchar("org_kind", { length: 20 }).notNull().default("company"),
     primaryDomain: citext("primary_domain"), // registrable domain (PSL); strongest company key (UNIQUE, nullable)
     altDomains: citext("alt_domains").array().notNull().default(sql`'{}'`), // redirects, acquired brands, country TLDs
     name: varchar("name", { length: 255 }).notNull(),
@@ -66,7 +71,9 @@ export const masterCompanies = pgTable(
     employeeCount: integer("employee_count"), // raw value
     employeeBand: varchar("employee_band", { length: 20 }), // band ('11-50','51-200',…) = the search facet
     revenueRange: varchar("revenue_range", { length: 50 }),
-    technographics: jsonb("technographics").notNull().default({}), // detected tech stack (BuiltWith/HG Insights)
+    // NOTE: `technographics` jsonb was DROPPED in 0108. It never had a writer or a reader; the real store is
+    // master_technology_adoptions (0101), which has per-detection grain, method, and displacement. Do not
+    // re-add a blob here — the query "which companies run X" is what the edge table exists to answer.
     hqCountry: varchar("hq_country", { length: 100 }),
     hqCity: varchar("hq_city", { length: 100 }),
     dataQualityScore: integer("data_quality_score"),
@@ -96,6 +103,12 @@ export const masterCompanies = pgTable(
     dataQualityRange: check(
       "master_companies_data_quality_range",
       sql`${t.dataQualityScore} IS NULL OR ${t.dataQualityScore} BETWEEN 0 AND 100`,
+    ),
+    // 0108. The index that pairs with this (idx_master_companies_org_kind, partial on <> 'company') is
+    // hand-authored in the migration, not declared here — same reason as block_key in 0106.
+    orgKindEnum: check(
+      "master_companies_org_kind_enum",
+      sql`${t.orgKind} IN ('company','school','nonprofit','government','other')`,
     ),
   }),
 );
