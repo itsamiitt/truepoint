@@ -25,7 +25,8 @@ import type IORedis from "ioredis";
 import { withLeaderLock } from "../leaderLock.ts";
 import { log } from "../logger.ts";
 
-export const CRM_SYNC_SWEEP_QUEUE = "crm_sync_sweep";
+// Re-exported from the shared contract rather than redeclared — see the note in crmSync.ts.
+export { CRM_SYNC_SWEEP_QUEUE } from "@leadwolf/types";
 const LEADER_KEY = "leader:crm_sync_sweep";
 const LEADER_TTL_MS = 5 * 60_000;
 

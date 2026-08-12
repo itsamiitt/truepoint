@@ -8,18 +8,28 @@
 import { z } from "zod";
 
 // ── Queue names (the §3.2 topology; shared producer/consumer, like BULK_ENRICHMENT_QUEUE) ────────────────────
+//
+// ⚠ THESE ARE UNDERSCORE-SEPARATED, AND THE SEPARATOR IS LOad-BEARING. apps/workers/src/register.ts routes an
+// exhausted job into the durable crm_sync_dead_letter table with `queue.startsWith("crm_sync_")` — rename
+// these to hyphens and every CRM dead-letter silently stops being recorded.
+//
+// They were hyphenated here until the audit found that apps/workers had redefined them LOCALLY with
+// underscores: the API enqueued to `crm-sync-*` and the consumers listened on `crm_sync_*`, so nothing
+// consumed what the API produced. This file exists precisely so producer and consumer cannot drift, so the
+// fix is that the workers now IMPORT these rather than declaring their own — see crmSync.ts / crmSyncSweep.ts,
+// and crmQueueParity.test.ts, which fails if a second definition ever reappears.
 /** Leader-locked scheduler → fans out pull/reconcile jobs (repeatable 60s delta + 24h reconcile). */
-export const CRM_SYNC_SWEEP_QUEUE = "crm-sync-sweep";
+export const CRM_SYNC_SWEEP_QUEUE = "crm_sync_sweep";
 /** Initial bulk load on connect, discriminated `drive`→`page` (one-shot per connection). */
-export const CRM_SYNC_BACKFILL_QUEUE = "crm-sync-backfill";
+export const CRM_SYNC_BACKFILL_QUEUE = "crm_sync_backfill";
 /** Incremental CRM→TruePoint delta by watermark (enqueued from the sweep). */
-export const CRM_SYNC_PULL_QUEUE = "crm-sync-pull";
+export const CRM_SYNC_PULL_QUEUE = "crm_sync_pull";
 /** Webhook/CDC hint → re-fetch canonical → apply (enqueued from the public inbound route). */
-export const CRM_SYNC_INBOUND_QUEUE = "crm-sync-inbound";
+export const CRM_SYNC_INBOUND_QUEUE = "crm_sync_inbound";
 /** TruePoint→CRM outbound upsert (metered, rate-budgeted), from the change event-emitter fan-out. */
-export const CRM_SYNC_PUSH_QUEUE = "crm-sync-push";
+export const CRM_SYNC_PUSH_QUEUE = "crm_sync_push";
 /** PII-free dead-letter for all CRM queues (the `queue` discriminator names the origin). */
-export const CRM_SYNC_DLQ = "crm-sync-dlq";
+export const CRM_SYNC_DLQ = "crm_sync_dlq";
 
 // ── Closed enums (mirror the §4.11 CHECK enums; the DB rejects unknown values) ───────────────────────────────
 /** The CRM vendors phase-1 ships adapters for. Salesforce is the deferred fast-follow; HubSpot is first. */
