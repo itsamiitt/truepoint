@@ -9,6 +9,8 @@ export {
   withForgeTx,
   withPlatformTx,
   withPlatformReadTx,
+  withSystemTx,
+  SYSTEM_ACTOR_ID,
   recordPlatformEvent,
   type PlatformEventInput,
   closeDb,
