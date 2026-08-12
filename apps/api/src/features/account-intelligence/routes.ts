@@ -24,11 +24,19 @@
 import {
   type Tx,
   accountRepository,
+  contactRepository,
+  masterEducationRepository,
   masterTechnologyRepository,
   withErTx,
   withTenantTx,
 } from "@leadwolf/db";
-import { ForbiddenError, NotFoundError, ValidationError } from "@leadwolf/types";
+import {
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  accountTechnologiesResponse,
+  contactEducationResponse,
+} from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
@@ -83,7 +91,9 @@ accountIntelligenceRoutes.get("/:accountId/technologies", async (c) => {
   // state, not an error — say so explicitly rather than returning a bare empty list that reads as
   // "this company builds nothing".
   if (!masterCompanyId) {
-    return c.json({ relationship, resolved: false, technologies: [] });
+    return c.json(
+      accountTechnologiesResponse.parse({ relationship, resolved: false, technologies: [] }),
+    );
   }
 
   const withVendors = (c.req.query("fields") ?? "")
@@ -131,5 +141,68 @@ accountIntelligenceRoutes.get("/:accountId/technologies", async (c) => {
     });
   });
 
-  return c.json({ relationship, resolved: true, technologies: payload });
+  // Egress-validated against the shared contract: adding a column to a Layer-0 table must never silently
+  // start shipping it to customers.
+  return c.json(
+    accountTechnologiesResponse.parse({ relationship, resolved: true, technologies: payload }),
+  );
+});
+
+/**
+ * GET /contacts/:contactId/education — where did this person study.
+ *
+ * Same two-transaction shape as the technologies route, over the person bridge instead of the company one.
+ *
+ * COMPLIANCE: this is the one route in this file that touches PERSONAL data. It ships institution, degree,
+ * fields of study and dates — public professional facts, the same class as employment history, and the same
+ * class the contact record already exposes. It ships NO contact values (master_education holds none), no
+ * contributor reference, and no Layer-0 ids the caller could use to address the shared graph directly. DSAR
+ * erasure reaches these rows through the existing master_persons cascade (ON DELETE CASCADE on
+ * master_person_id), so nothing new is orphaned by an erasure.
+ */
+export const contactIntelligenceRoutes = new Hono<{ Variables: TenancyVariables }>();
+
+contactIntelligenceRoutes.use("*", authn);
+contactIntelligenceRoutes.use("*", tenancy);
+contactIntelligenceRoutes.use("*", requireRole("owner", "admin", "member", "viewer"));
+
+contactIntelligenceRoutes.get("/:contactId/education", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view contact education.");
+  }
+
+  const contact = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, async (tx: Tx) =>
+    contactRepository.getMasterPersonBridge(tx, c.req.param("contactId")),
+  );
+  if (!contact) throw new NotFoundError("Contact not found.");
+
+  if (!contact.masterPersonId) {
+    return c.json(contactEducationResponse.parse({ resolved: false, education: [] }));
+  }
+
+  const rows = await withErTx(async (tx: Tx) =>
+    masterEducationRepository.listPersonEducation(tx, contact.masterPersonId as string),
+  );
+
+  const today = new Date().toISOString().slice(0, 10);
+  return c.json(
+    contactEducationResponse.parse({
+      resolved: true,
+      education: rows.map((r) => ({
+        id: r.id,
+        school_name: r.schoolName,
+        resolved: r.masterCompanyId !== null,
+        org_kind: r.orgKind,
+        degree: r.degree,
+        fields_of_study: r.fieldsOfStudy ?? [],
+        started_on: r.startedOn === "-infinity" ? null : r.startedOn,
+        ended_on: r.endedOn,
+        // DERIVED here, exactly as the schema intends — there is no stored alumnus flag to read.
+        completed: r.endedOn !== null && r.endedOn <= today,
+        confidence: r.confidence === null ? null : Number(r.confidence),
+        source_count: r.sourceCount,
+      })),
+    }),
+  );
 });

@@ -26,6 +26,9 @@ export * from "./scheduledImports.ts";
 export * from "./billing.ts";
 export * from "./platformAudit.ts";
 export * from "./intel.ts";
+// The customer read surface over the Layer-0 graph (0108). `relationship` is a required discriminant on both
+// the request and the response — develops and uses are different facts and no shape merges them.
+export * from "./accountIntelligence.ts";
 export * from "./dataHealth.ts";
 // FIELD-level confidence (Phase 2 decay curves). Distinct from dataHealth's RECORD-level quality score —
 // see the header of confidence.ts for why conflating them is the easy mistake.

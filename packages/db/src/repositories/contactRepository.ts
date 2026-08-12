@@ -1215,4 +1215,27 @@ export const contactRepository = {
     };
     return tx ? run(tx) : withTenantTx(scope, run);
   },
+
+  /**
+   * Resolve one contact to its Layer-0 person bridge, for the account-intelligence traversal (0108).
+   *
+   * Step 1 of the two-transaction pattern: this runs inside withTenantTx, so RLS decides whether the caller
+   * may see this contact at all. A contact in another workspace is invisible here — which is what makes the
+   * subsequent privileged withErTx read safe, because the master_person_id handed across is one the caller
+   * has already proven access to. Returns null for both "no such contact" and "not yours"; the route maps
+   * both to 404 so ids cannot be enumerated.
+   *
+   * Deliberately returns NO PII — just the bridge. The reveal path is where contact values live.
+   */
+  async getMasterPersonBridge(
+    tx: Tx,
+    contactId: string,
+  ): Promise<{ id: string; masterPersonId: string | null } | null> {
+    const rows = await tx
+      .select({ id: contacts.id, masterPersonId: contacts.masterPersonId })
+      .from(contacts)
+      .where(and(eq(contacts.id, contactId), isNull(contacts.deletedAt)))
+      .limit(1);
+    return rows[0] ?? null;
+  },
 };
