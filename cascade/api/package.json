@@ -1,0 +1,17 @@
+{
+  "name": "@cascade/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "bun run --hot src/server.ts",
+    "start": "bun run src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@cascade/db": "workspace:*",
+    "hono": "^4.6.13"
+  }
+}

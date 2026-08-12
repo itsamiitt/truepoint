@@ -225,3 +225,27 @@ jobs:
             echo "::endgroup::"
           done
           exit "${status}"
+
+  # cascade/ is a SEPARATE project (its own workspace root, its own Postgres schema, no imports from
+  # apps/* or packages/*), so the root `bun install` does not install its dependencies and the root
+  # `bun test` does not discover its suites. It gets its own job rather than being wired into the
+  # monorepo's — that separation is deliberate (see cascade/README.md).
+  # No services needed: @electric-sql/pglite runs a real Postgres engine in-process.
+  cascade:
+    name: CASCADE — typecheck · tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: cascade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - name: Install (frozen lockfile)
+        run: bun install --frozen-lockfile || (sleep 10 && bun install --frozen-lockfile)
+      - name: Typecheck every package
+        run: bun run --filter '*' typecheck
+      - name: Acceptance + API contract tests
+        run: bun test

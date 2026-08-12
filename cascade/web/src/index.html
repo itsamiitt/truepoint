@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CASCADE Explorer</title>
+<style>
+  :root {
+    --ink: #16181d; --ink-2: #4a5058; --ink-3: #838a94;
+    --surface: #ffffff; --surface-2: #f6f7f9; --line: #e4e7ec;
+    --builds: #1f6f4a; --builds-bg: #eaf5ef;
+    --runs: #2b5fa8; --runs-bg: #eaf1fb;
+    --high: #1f6f4a; --med: #9a6b1f; --low: #a13c3c;
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #eef1f5; --ink-2: #aab2bd; --ink-3: #79818c;
+      --surface: #14161a; --surface-2: #1b1e24; --line: #2b2f37;
+      --builds: #6ed3a2; --builds-bg: #17281f;
+      --runs: #8ab6f0; --runs-bg: #172233;
+      --high: #6ed3a2; --med: #dbb268; --low: #e08585;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface); color: var(--ink);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header { border-bottom: 1px solid var(--line); padding: 20px 24px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+  #org-sub { color: var(--ink-3); font-size: 13px; }
+  .controls { margin-left: auto; display: flex; gap: 12px; align-items: center; position: relative; }
+  input {
+    font: inherit; padding: 7px 11px; border: 1px solid var(--line);
+    border-radius: var(--radius); background: var(--surface-2); color: var(--ink); min-width: 220px;
+  }
+  label { font-size: 12px; color: var(--ink-3); display: flex; flex-direction: column; gap: 4px; }
+  #results { position: absolute; top: 100%; left: 0; right: 0; margin-top: 6px; z-index: 20; }
+  .result {
+    display: flex; justify-content: space-between; width: 100%; gap: 12px; font: inherit; text-align: left;
+    padding: 9px 12px; background: var(--surface); border: 1px solid var(--line); color: var(--ink); cursor: pointer;
+  }
+  .result:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+  .result:last-child { border-radius: 0 0 var(--radius) var(--radius); }
+  .result:hover { background: var(--surface-2); }
+  .match { color: var(--ink-3); font-size: 12px; }
+  #panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; padding: 24px; align-items: start; }
+  .panel { border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; background: var(--surface); }
+  .panel h2 { margin: 0 0 2px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .count { font-size: 12px; font-weight: 500; color: var(--ink-3); }
+  .hint { margin: 0 0 12px; font-size: 12px; color: var(--ink-3); }
+  .panel.develops { border-top: 3px solid var(--builds); }
+  .panel.develops h2 { color: var(--builds); }
+  .panel.uses { border-top: 3px solid var(--runs); }
+  .panel.uses h2 { color: var(--runs); }
+  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .card { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; background: var(--surface-2); }
+  .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .name { font-weight: 550; }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+  .flagship { color: var(--builds); font-weight: 600; }
+  .creator { font-size: 12px; color: var(--ink-2); margin-top: 6px; }
+  .band { font: inherit; font-size: 11px; padding: 2px 7px; border-radius: 999px; border: 1px solid currentColor; background: none; cursor: pointer; }
+  .band-high { color: var(--high); } .band-med { color: var(--med); } .band-low { color: var(--low); }
+  .empty, .loading { color: var(--ink-3); font-size: 13px; }
+  .error { color: var(--low); font-size: 13px; padding: 0 24px; }
+  dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); max-width: 480px; padding: 0; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dialog-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .dialog-head h3 { margin: 0; font-size: 15px; }
+  #evidence-body { padding: 16px; }
+  .fused { margin: 0 0 12px; font-size: 13px; color: var(--ink-2); }
+  .attestations li { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+  .att-head { display: flex; justify-content: space-between; font-size: 12px; }
+  .src { text-transform: capitalize; color: var(--ink-2); }
+  .att-conf { color: var(--ink-3); }
+  blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid var(--line); font-size: 13px; color: var(--ink); }
+  .seen { font-size: 11px; color: var(--ink-3); }
+  button#evidence-close { font: inherit; background: none; border: none; color: var(--ink-3); cursor: pointer; font-size: 18px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1 id="org-title">CASCADE Explorer</h1>
+    <div id="org-sub">loading…</div>
+  </div>
+  <div class="controls">
+    <label>Search organizations
+      <input id="search" type="search" placeholder="Sage, SPPU, Google…" autocomplete="off" />
+    </label>
+    <label>As of
+      <input id="as-of" type="date" />
+    </label>
+    <div id="results"></div>
+  </div>
+</header>
+
+<main id="panels"></main>
+
+<dialog id="evidence">
+  <div class="dialog-head">
+    <h3>How do we know this?</h3>
+    <button id="evidence-close" aria-label="Close">×</button>
+  </div>
+  <div id="evidence-body"></div>
+</dialog>
+
+<script type="module">
+  import { mount } from "./app.js";
+  mount(window.__SEED_ORG__);
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "@cascade/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/serve.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cascade/db": "workspace:*"
+  }
+}
