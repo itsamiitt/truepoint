@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2000,
-  "fileSetHash": "sha256:c63fde449dba1901c647ca2293c1afbbabef76347af3eb2395955c4342e2d0c7",
+  "fileCount": 2004,
+  "fileSetHash": "sha256:815e41e43c7f766eedae200a31356344efa77d5024ee1e86f87518edeaacdde8",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1372,6 +1372,7 @@
       "web": [
         "apps/web/src/features/prospect/accountFilterGroups.test.ts",
         "apps/web/src/features/prospect/accountFilterGroups.ts",
+        "apps/web/src/features/prospect/accountIntelligenceApi.ts",
         "apps/web/src/features/prospect/accountSearchApi.ts",
         "apps/web/src/features/prospect/api.ts",
         "apps/web/src/features/prospect/bulkActionsApi.ts",
@@ -1380,6 +1381,7 @@
         "apps/web/src/features/prospect/bulkReveal.ts",
         "apps/web/src/features/prospect/components/AccountDetailDrawer.tsx",
         "apps/web/src/features/prospect/components/AccountFilterPanel.tsx",
+        "apps/web/src/features/prospect/components/AccountTechnologySections.tsx",
         "apps/web/src/features/prospect/components/AccountsTable.tsx",
         "apps/web/src/features/prospect/components/AddToListDialog.tsx",
         "apps/web/src/features/prospect/components/AiSearchBox.tsx",
@@ -1412,6 +1414,7 @@
         "apps/web/src/features/prospect/filterGroups.ts",
         "apps/web/src/features/prospect/hooks/useAccountFacetCounts.ts",
         "apps/web/src/features/prospect/hooks/useAccountSearch.ts",
+        "apps/web/src/features/prospect/hooks/useAccountTechnologies.ts",
         "apps/web/src/features/prospect/hooks/useActivities.ts",
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
@@ -3014,6 +3017,7 @@
     "packages/types": [
       "packages/types/src/accountChildren.ts",
       "packages/types/src/accountHold.ts",
+      "packages/types/src/accountIntelligence.ts",
       "packages/types/src/accountsSearch.ts",
       "packages/types/src/activity.ts",
       "packages/types/src/aiSearch.ts",

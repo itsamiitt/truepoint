@@ -445,6 +445,17 @@ apps/                           # deployable processes (thin transport adapters)
   snapshot, activity feed) + `QuickActionsRow`/`TasksCard`/`RepliesCard`; `(shell)/home`
 
 #### account-intelligence — *the customer READ surface over the Layer-0 graph* (mig 0108)
+- **types:** `accountIntelligence.ts` — the contract both sides derive from. The develops/uses split is a
+  **discriminated union on `relationship`** with genuinely different arms (ownership/started_on vs
+  detection_method/first_seen/last_seen/source_count), so code that conflates the two facts cannot typecheck;
+  both responses are egress-validated with `.parse()`. `master_company_id` is deliberately absent from the
+  education row — nothing renders it, and a stable Layer-0 id handed to every tenant is a cross-tenant
+  correlation key for no gain (a `resolved` boolean carries what the UI needs)
+- **web:** the UI lives in `features.prospect.web` (destination-keyed — see
+  [Destinations](#destinations-cross-reference)): `accountIntelligenceApi.ts`, `hooks/useAccountTechnologies.ts`
+  (one cache entry PER relationship, so develops and uses can never overwrite each other), and
+  `components/AccountTechnologySections.tsx` — two drawer sections, "Builds" and "Runs", never one merged list.
+  An unbridged account renders nothing rather than "builds nothing", a claim the data cannot support
 - **api:** `features/account-intelligence/` — `routes.ts` (GET `/accounts/:accountId/technologies?relationship=develops|uses`,
   `?fields=vendors` expands each technology's creator). **Two transactions, in order:** `withTenantTx` resolves the account
   inside the caller's workspace (RLS decides visibility, and yields `master_company_id` — the only bridge into Layer 0), then
@@ -586,11 +597,15 @@ The `(shell)/settings/*` routes mount a two-column `SettingsScopeLayout` (scope 
 
 > From [11 §6](./planning/11-information-architecture.md) + the implemented `navConfig`. The index never cross-lists a file;
 > this is where a destination's surfaced resource-domains are noted (the reveal domain's API is `features.reveal.api`; its UI lives under Prospect).
+> `account-intelligence` is the newest instance of that split and a clean illustration of it: the API is
+> `features.account-intelligence.api`, while its UI — `accountIntelligenceApi.ts`, `useAccountTechnologies.ts`,
+> `AccountTechnologySections.tsx` — lives in `features.prospect.web`, because the drawer it renders into is a
+> Prospect surface. One file, one home; the cross-link lives here rather than in the index.
 
 | Destination | Surfaces domains | Route |
 |---|---|---|
 | **Home** | home, notifications | `(shell)/home` |
-| **Prospect** | reveal, import, search, account-search, ai, lists, tags, pipeline-stages, custom-fields, saved-searches, enrichment, scoring, contacts-bulk | `(shell)/prospect` |
+| **Prospect** | reveal, import, search, account-search, ai, lists, tags, pipeline-stages, custom-fields, saved-searches, enrichment, scoring, contacts-bulk, **account-intelligence** | `(shell)/prospect` |
 | **Sequences** | outreach, email, templates | `(shell)/sequences` |
 | **Inbox** | inbox | `(shell)/inbox` |
 | **Reports** | reports, data-health | `(shell)/reports` |
@@ -725,9 +740,11 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2000-file** JSON (86 domains with code, 38 shared areas,
+- **Map hygiene:** this prose was last refreshed from the **2004-file** JSON (86 domains with code, 38 shared areas,
   **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
-  edge, the dropped `technographics` blob, and the `account-intelligence` read surface. Both signals that refresh
+  edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
+  `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`). The web files bucketed to
+  `features.prospect.web` and added no new unassigned entries or warnings. Both signals that refresh
   raised were **fixed rather than flagged**: `masterEducation → master-sync` was added to `REPO_DOMAIN` (following
   the existing rule that every Layer-0 repository belongs to the one system-owned graph), and `account-intelligence`
   was added to `CANONICAL_DOMAINS` — so unassigned went 8→7 and warnings 55→54. The prose subsection count was also
