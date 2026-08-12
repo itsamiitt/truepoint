@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2018,
-  "fileSetHash": "sha256:39146590afa02f9776d155c8ebf7addf8d66d9375347e8fceaaa9b6e552ded3f",
+  "fileCount": 2020,
+  "fileSetHash": "sha256:7ef72bc16801c223179379ef48f416169c6f41b111b7146ff3d925937d3636e9",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2794,6 +2794,8 @@
       "packages/db/src/schema/compliance.ts",
       "packages/db/src/schema/contactChannels.ts",
       "packages/db/src/schema/contacts.ts",
+      "packages/db/src/schema/contributionControls.test.ts",
+      "packages/db/src/schema/contributionControls.ts",
       "packages/db/src/schema/crm.ts",
       "packages/db/src/schema/customFields.ts",
       "packages/db/src/schema/dataQualitySnapshots.ts",
