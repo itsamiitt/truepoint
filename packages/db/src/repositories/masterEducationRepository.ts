@@ -7,6 +7,22 @@
 //
 // ALUMNUS IS A DATE PREDICATE, NOT A COLUMN. `listAlumni` filters on ended_on rather than reading a stored
 // flag, because a stored flag is invalidated by the passage of time alone. See the table header.
+//
+// ⚠ CONTRACT FOR THE FUTURE PRODUCER (CLAUDE.md rule 5 — read before wiring an ingestion path to this file).
+// `recordEducation` writes the EDGE only. It does not append provenance, exactly as masterGraphRepository
+// does not: the caller owns the transaction and therefore owns the full write-set. A path that ingests
+// education MUST, in the SAME withErTx:
+//   1. append the source payload via evidenceRepository.appendSourceRecord (content_hash = idempotency), and
+//   2. append field-grain assertions via evidenceRepository.appendProvenanceEvents for the fields it claims
+//      (school, degree, fields_of_study, dates), carrying the lawful basis for the source,
+// then call recordEducation. An edge written without those two is a fact with no traceable basis, which is
+// the one thing this schema exists to prevent — and A-01 is not satisfiable retroactively.
+//
+// STATUS: no producer exists yet. Education is not carried by any connector, provider adapter, or forge
+// parser today (verified by grep across packages/types ingestion, forge-core and the enrichment adapters),
+// so this repository is currently read-only in practice: the API/UI render what a future ingest writes.
+// Extending the EXTENSION to capture it is not a free choice — hard-constraint 4 and the compliance
+// checklist govern what may be captured, and that is a human decision, not an implementation detail.
 
 import { sql } from "drizzle-orm";
 import type { Tx } from "../client.ts";
