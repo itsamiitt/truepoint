@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2004,
-  "fileSetHash": "sha256:815e41e43c7f766eedae200a31356344efa77d5024ee1e86f87518edeaacdde8",
+  "fileCount": 2006,
+  "fileSetHash": "sha256:9e440c4c54e9e1dab27b588e23a3595ed2edf0e4be3cf0bf9afdcbc18eb03e76",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1389,6 +1389,7 @@
         "apps/web/src/features/prospect/components/BulkRevealDialog.tsx",
         "apps/web/src/features/prospect/components/BulkRevealJobDialog.tsx",
         "apps/web/src/features/prospect/components/CopyButton.tsx",
+        "apps/web/src/features/prospect/components/EducationSection.tsx",
         "apps/web/src/features/prospect/components/FacetTypeahead.tsx",
         "apps/web/src/features/prospect/components/FilterPanel.tsx",
         "apps/web/src/features/prospect/components/FilterRail.tsx",
@@ -1418,6 +1419,7 @@
         "apps/web/src/features/prospect/hooks/useActivities.ts",
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
+        "apps/web/src/features/prospect/hooks/useContactEducation.ts",
         "apps/web/src/features/prospect/hooks/useCreditBalance.ts",
         "apps/web/src/features/prospect/hooks/useCustomFields.ts",
         "apps/web/src/features/prospect/hooks/useFacetCounts.ts",

@@ -452,10 +452,13 @@ apps/                           # deployable processes (thin transport adapters)
   education row — nothing renders it, and a stable Layer-0 id handed to every tenant is a cross-tenant
   correlation key for no gain (a `resolved` boolean carries what the UI needs)
 - **web:** the UI lives in `features.prospect.web` (destination-keyed — see
-  [Destinations](#destinations-cross-reference)): `accountIntelligenceApi.ts`, `hooks/useAccountTechnologies.ts`
-  (one cache entry PER relationship, so develops and uses can never overwrite each other), and
-  `components/AccountTechnologySections.tsx` — two drawer sections, "Builds" and "Runs", never one merged list.
-  An unbridged account renders nothing rather than "builds nothing", a claim the data cannot support
+  [Destinations](#destinations-cross-reference)): `accountIntelligenceApi.ts` (both reads), and per surface —
+  `hooks/useAccountTechnologies.ts` + `components/AccountTechnologySections.tsx` for the ACCOUNT drawer (one
+  cache entry PER relationship, so develops and uses can never overwrite each other; two sections, "Builds"
+  and "Runs", never one merged list), and `hooks/useContactEducation.ts` +
+  `components/EducationSection.tsx` for the CONTACT drawer. Unmatched records render an explicit
+  "not matched to the graph yet" rather than an empty list — "we hold nothing" and "we have not identified
+  this record" are different facts and the UI never asserts the first when only the second is true
 - **api:** `features/account-intelligence/` — `routes.ts` (GET `/accounts/:accountId/technologies?relationship=develops|uses`,
   `?fields=vendors` expands each technology's creator). **Two transactions, in order:** `withTenantTx` resolves the account
   inside the caller's workspace (RLS decides visibility, and yields `master_company_id` — the only bridge into Layer 0), then
@@ -740,7 +743,7 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2004-file** JSON (86 domains with code, 38 shared areas,
+- **Map hygiene:** this prose was last refreshed from the **2006-file** JSON (86 domains with code, 38 shared areas,
   **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`). The web files bucketed to

@@ -8,7 +8,11 @@
 
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
-import type { AccountTechnologiesResponse, OrgTechnologyRelationship } from "@leadwolf/types";
+import type {
+  AccountTechnologiesResponse,
+  ContactEducationResponse,
+  OrgTechnologyRelationship,
+} from "@leadwolf/types";
 import { toApiError } from "./api";
 
 export async function fetchAccountTechnologies(
@@ -24,4 +28,15 @@ export async function fetchAccountTechnologies(
   );
   if (!res.ok) throw await toApiError(res, "Could not load company technology");
   return (await res.json()) as AccountTechnologiesResponse;
+}
+
+/**
+ * Where this person studied — the other half of the person→organization graph (employment is already on the
+ * contact record). Carries no contact values; `completed` arrives DERIVED from the end date, so the client
+ * never re-implements the alumnus rule.
+ */
+export async function fetchContactEducation(contactId: string): Promise<ContactEducationResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/education`);
+  if (!res.ok) throw await toApiError(res, "Could not load education");
+  return (await res.json()) as ContactEducationResponse;
 }

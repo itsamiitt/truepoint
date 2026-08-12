@@ -35,6 +35,8 @@ export const prospectKeys = {
    *  are DIFFERENT ANSWERS from different tables — sharing one cache entry would let one overwrite the other. */
   accountTechnologies: (accountId: string, relationship: "develops" | "uses") =>
     ["prospect", "account-technologies", accountId, relationship] as const,
+  /** One contact's Layer-0 education edges (`GET /contacts/:id/education`). */
+  contactEducation: (contactId: string) => ["prospect", "contact-education", contactId] as const,
   /** Typeahead suggestions for one facet + term — the cache entry IS the per-term memo. */
   typeahead: (field: string, term: string) => ["prospect", "typeahead", field, term] as const,
   /** One async bulk-reveal job's status/progress. */

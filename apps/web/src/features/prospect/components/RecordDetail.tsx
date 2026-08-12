@@ -47,6 +47,7 @@ import {
 } from "../types";
 import { AddToListDialog } from "./AddToListDialog";
 import { CopyButton } from "./CopyButton";
+import { EducationSection } from "./EducationSection";
 import { RecomputeScoreButton } from "./RecomputeScoreButton";
 import { RevealDialog } from "./RevealDialog";
 import { StageSelector } from "./StageSelector";
@@ -665,6 +666,15 @@ export function RecordDetail({
               <h3 className={styles.sectionTitle}>Custom fields</h3>
             </div>
             <CustomFieldsSection contactId={contact.id} />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Education</h3>
+            </div>
+            {/* The other person→organization edge (0108). Employment already appears above under Identity;
+                this is the same substrate, different payload. */}
+            <EducationSection contactId={contact.id} />
           </section>
 
           <section className={styles.section}>

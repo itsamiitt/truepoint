@@ -247,6 +247,81 @@ describe("develops vs uses — disjoint over the same company", () => {
   });
 });
 
+// The account-intelligence routes are safe ONLY because step 1 of their two-transaction pattern runs under
+// RLS: the bridge lookup must be invisible for a record in another workspace, which is what turns a
+// cross-tenant probe into a 404 before any privileged Layer-0 read happens. That property lives in these two
+// repository methods, so it is proven here rather than through an HTTP harness.
+describe("account-intelligence — the bridge lookup is the tenancy boundary", () => {
+  let tenantA = "";
+  let wsA = "";
+  let tenantB = "";
+  let wsB = "";
+  let accountA = "";
+  let accountB = "";
+  let contactA = "";
+
+  beforeAll(async () => {
+    const seed = async (slug: string) => {
+      const [t] =
+        await admin`INSERT INTO tenants (name, slug) VALUES (${slug}, ${slug}) RETURNING id`;
+      const tenantId = (t as { id: string }).id;
+      const [u] =
+        await admin`INSERT INTO users (email) VALUES (${`owner@${slug}.test`}) RETURNING id`;
+      const [w] = await admin`
+        INSERT INTO workspaces (tenant_id, name, slug, is_default, created_by_user_id)
+        VALUES (${tenantId}, ${slug}, ${slug}, true, ${(u as { id: string }).id}) RETURNING id`;
+      return { tenantId, wsId: (w as { id: string }).id };
+    };
+    ({ tenantId: tenantA, wsId: wsA } = await seed("acme-ai"));
+    ({ tenantId: tenantB, wsId: wsB } = await seed("globex-ai"));
+
+    // Both workspaces hold an account bridged to the SAME Layer-0 company — the shared graph is shared, and
+    // that is precisely why the overlay check has to be the gate.
+    const [a] = await admin`
+      INSERT INTO accounts (tenant_id, workspace_id, name, master_company_id)
+      VALUES (${tenantA}, ${wsA}, 'Sage (A)', ${orgSage}) RETURNING id`;
+    accountA = (a as { id: string }).id;
+    const [b] = await admin`
+      INSERT INTO accounts (tenant_id, workspace_id, name, master_company_id)
+      VALUES (${tenantB}, ${wsB}, 'Sage (B)', ${orgSage}) RETURNING id`;
+    accountB = (b as { id: string }).id;
+
+    const [c] = await admin`
+      INSERT INTO contacts (tenant_id, workspace_id, master_person_id)
+      VALUES (${tenantA}, ${wsA}, ${personAlex}) RETURNING id`;
+    contactA = (c as { id: string }).id;
+  }, 120_000);
+
+  test("resolves its OWN account to the Layer-0 bridge", async () => {
+    const row = await dbmod.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, (tx) =>
+      dbmod.accountRepository.getByIdForIntelligence(tx, accountA),
+    );
+    expect(row?.masterCompanyId).toBe(orgSage);
+  });
+
+  test("another workspace's account is INVISIBLE — the route 404s before touching Layer 0", async () => {
+    const row = await dbmod.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, (tx) =>
+      dbmod.accountRepository.getByIdForIntelligence(tx, accountB),
+    );
+    // Not "an account with a null bridge" — nothing at all. Missing and not-yours are indistinguishable.
+    expect(row).toBeNull();
+  });
+
+  test("the contact bridge behaves the same way, and leaks no PII", async () => {
+    const mine = await dbmod.withTenantTx({ tenantId: tenantA, workspaceId: wsA }, (tx) =>
+      dbmod.contactRepository.getMasterPersonBridge(tx, contactA),
+    );
+    expect(mine?.masterPersonId).toBe(personAlex);
+    // The bridge lookup returns the id pair and nothing else — no email, no name, no ciphertext.
+    expect(Object.keys(mine ?? {}).sort()).toEqual(["id", "masterPersonId"]);
+
+    const theirs = await dbmod.withTenantTx({ tenantId: tenantB, workspaceId: wsB }, (tx) =>
+      dbmod.contactRepository.getMasterPersonBridge(tx, contactA),
+    );
+    expect(theirs).toBeNull();
+  });
+});
+
 describe("0108 — the dead blob is gone, the wall still stands", () => {
   test("master_companies.technographics no longer exists", async () => {
     const cols = await admin`
