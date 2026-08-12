@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2013,
-  "fileSetHash": "sha256:0d43c51ee68c9b986eb40fd27d33fb424cfdb9d266732b8fd7ccf2fab6e050d8",
+  "fileCount": 2014,
+  "fileSetHash": "sha256:3c4e2906ca56f812325c9d8fd0c0ffe1a05d331864f60227f4309a837a3bdce1",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1382,6 +1382,7 @@
         "apps/web/src/features/prospect/bulkReveal.ts",
         "apps/web/src/features/prospect/components/AccountDetailDrawer.tsx",
         "apps/web/src/features/prospect/components/AccountFilterPanel.tsx",
+        "apps/web/src/features/prospect/components/AccountGraphSections.tsx",
         "apps/web/src/features/prospect/components/AccountTechnologySections.tsx",
         "apps/web/src/features/prospect/components/AccountsTable.tsx",
         "apps/web/src/features/prospect/components/AddToListDialog.tsx",

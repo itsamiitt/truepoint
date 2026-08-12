@@ -37,6 +37,8 @@ import {
   ForbiddenError,
   NotFoundError,
   ValidationError,
+  accountAlumniResponse,
+  accountDisplacementResponse,
   accountTechnologiesResponse,
   contactEducationResponse,
   contactEmploymentResponse,
@@ -179,6 +181,122 @@ accountIntelligenceRoutes.get("/:accountId/technologies", async (c) => {
  * erasure reaches these rows through the existing master_persons cascade (ON DELETE CASCADE on
  * master_person_id), so nothing new is orphaned by an erasure.
  */
+/**
+ * GET /accounts/:accountId/displacement — what this organization recently STOPPED running.
+ *
+ * The sales trigger, read from CLOSED adoption episodes rather than inferred from an absence: an absence is
+ * indistinguishable from "we never detected it", and firing a displacement play on that distinction is how
+ * you email someone about migrating off a product they never had.
+ *
+ * ⚠ EMPTY TODAY: nothing populates master_technology_adoptions, so removed_at is never set. The surface is
+ * correct-when-data-arrives; it is not currently useful, and it says so rather than implying "nothing dropped".
+ */
+accountIntelligenceRoutes.get("/:accountId/displacement", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view displacement.");
+  }
+
+  const rawDays = Number(c.req.query("within_days") ?? 180);
+  if (!Number.isInteger(rawDays) || rawDays < 1 || rawDays > 730) {
+    throw new ValidationError("'within_days' must be an integer between 1 and 730.", {
+      code: "within_days_invalid",
+    });
+  }
+
+  const { masterCompanyId } = await resolveBridge(
+    { tenantId: c.get("tenantId"), workspaceId },
+    c.req.param("accountId"),
+  );
+  if (!masterCompanyId) {
+    return c.json(
+      accountDisplacementResponse.parse({ resolved: false, within_days: rawDays, removed: [] }),
+    );
+  }
+
+  const rows = await withErTx(async (tx: Tx) =>
+    masterTechnologyRepository.listRecentlyRemovedTechnologies(tx, masterCompanyId, rawDays),
+  );
+
+  return c.json(
+    accountDisplacementResponse.parse({
+      resolved: true,
+      within_days: rawDays,
+      removed: rows.map((r) => ({
+        technology_id: r.technologyId,
+        slug: r.slug,
+        canonical_name: r.canonicalName,
+        detection_method: r.detectionMethod,
+        first_seen_at: r.firstSeenAt,
+        last_seen_at: r.lastSeenAt,
+        removed_at: r.removedAt,
+      })),
+    }),
+  );
+});
+
+/**
+ * GET /accounts/:accountId/alumni — which of MY contacts studied at this institution.
+ *
+ * NOT "everyone in the graph who studied there". That answer spans every tenant, and returning it would hand
+ * the caller the population of a dataset they have not earned. This runs the graph traversal, then maps the
+ * result back through the overlay under RLS — so a caller sees only their own contacts, which is both the
+ * useful question and the only askable one.
+ *
+ * Three transactions, and the order is the security argument: resolve the account (tenant, RLS) → traverse
+ * Layer 0 (er) → map people back to contacts (tenant, RLS). Layer-0 person ids never leave the server.
+ */
+accountIntelligenceRoutes.get("/:accountId/alumni", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view alumni.");
+  }
+  const scope = { tenantId: c.get("tenantId"), workspaceId };
+
+  const { masterCompanyId } = await resolveBridge(scope, c.req.param("accountId"));
+  if (!masterCompanyId) {
+    return c.json(accountAlumniResponse.parse({ resolved: false, is_school: false, alumni: [] }));
+  }
+
+  const { kind, graduates } = await withErTx(async (tx: Tx) => ({
+    kind: await accountRepository.orgKindForMasterCompany(tx, masterCompanyId),
+    graduates: await masterEducationRepository.listAlumni(tx, masterCompanyId, {
+      status: "completed",
+    }),
+  }));
+
+  // Not a school → there is nothing coherent to show. Say so rather than returning an empty alumni list,
+  // which would read as "this university has no alumni".
+  if (kind !== "school" || graduates.length === 0) {
+    return c.json(
+      accountAlumniResponse.parse({ resolved: true, is_school: kind === "school", alumni: [] }),
+    );
+  }
+
+  const byPerson = new Map(graduates.map((g) => [g.masterPersonId, g]));
+  const mine = await withTenantTx(scope, async (tx: Tx) =>
+    contactRepository.findByMasterPersonIds(tx, [...byPerson.keys()]),
+  );
+
+  return c.json(
+    accountAlumniResponse.parse({
+      resolved: true,
+      is_school: true,
+      alumni: mine.map((contact) => {
+        const edu = contact.masterPersonId ? byPerson.get(contact.masterPersonId) : undefined;
+        return {
+          contact_id: contact.id,
+          first_name: contact.firstName,
+          last_name: contact.lastName,
+          job_title: contact.jobTitle,
+          degree: edu?.degree ?? null,
+          ended_on: edu?.endedOn ?? null,
+        };
+      }),
+    }),
+  );
+});
+
 export const contactIntelligenceRoutes = new Hono<{ Variables: TenancyVariables }>();
 
 contactIntelligenceRoutes.use("*", authn);

@@ -105,6 +105,50 @@ export const contactEducationResponse = z.object({
 });
 export type ContactEducationResponse = z.infer<typeof contactEducationResponse>;
 
+// ── Displacement: what an organization recently STOPPED running (plan 33 · Track C) ───────────────────────
+// The sales trigger. Sourced from closed adoption episodes (`removed_at`), never inferred from an absence —
+// an absence is indistinguishable from "we never detected it in the first place".
+export const removedTechnology = z.object({
+  technology_id: z.string().uuid(),
+  slug: z.string(),
+  canonical_name: z.string(),
+  detection_method: z.string(),
+  first_seen_at: z.coerce.date(),
+  /** The last time it WAS detected — with removed_at, this brackets how long they ran it. */
+  last_seen_at: z.coerce.date(),
+  removed_at: z.coerce.date(),
+});
+export type RemovedTechnologyDto = z.infer<typeof removedTechnology>;
+
+export const accountDisplacementResponse = z.object({
+  resolved: z.boolean(),
+  within_days: z.number().int().positive(),
+  removed: z.array(removedTechnology),
+});
+export type AccountDisplacementResponse = z.infer<typeof accountDisplacementResponse>;
+
+// ── Alumni: the caller's OWN contacts who studied at an institution (plan 33 · Track C) ───────────────────
+// Deliberately NOT "everyone in the graph who studied there". That answer spans every tenant and would leak
+// the population of a dataset the caller has not earned; this is the reverse bridge, mapped back through the
+// overlay under RLS, which is both the useful question and the only askable one.
+export const alumniContact = z.object({
+  contact_id: z.string().uuid(),
+  first_name: z.string().nullable(),
+  last_name: z.string().nullable(),
+  job_title: z.string().nullable(),
+  degree: z.string().nullable(),
+  ended_on: z.string().nullable(),
+});
+export type AlumniContactDto = z.infer<typeof alumniContact>;
+
+export const accountAlumniResponse = z.object({
+  resolved: z.boolean(),
+  /** True when the bridged institution is actually a school — the caller can hide the surface otherwise. */
+  is_school: z.boolean(),
+  alumni: z.array(alumniContact),
+});
+export type AccountAlumniResponse = z.infer<typeof accountAlumniResponse>;
+
 // ── Employment (the other person→organization edge, plan 33 · A2) ─────────────────────────────────────────
 // NOTE ON SHAPE vs REALITY: the import path mints a BARE edge — company, is_current, is_primary — with no
 // title and no dates. The contract models the rich stint because enrichment will fill it, but a client must

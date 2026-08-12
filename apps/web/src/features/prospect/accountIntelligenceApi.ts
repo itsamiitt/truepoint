@@ -9,6 +9,8 @@
 import { fetchWithAuth } from "@/lib/authClient";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
+  AccountAlumniResponse,
+  AccountDisplacementResponse,
   AccountTechnologiesResponse,
   ContactEducationResponse,
   ContactEmploymentResponse,
@@ -62,4 +64,20 @@ export async function fetchContactEmployment(
   const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/employment`);
   if (!res.ok) throw await toApiError(res, "Could not load employment");
   return (await res.json()) as ContactEmploymentResponse;
+}
+
+/** What this organization recently stopped running — the displacement trigger. Empty until a feed lands. */
+export async function fetchAccountDisplacement(
+  accountId: string,
+): Promise<AccountDisplacementResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/accounts/${accountId}/displacement`);
+  if (!res.ok) throw await toApiError(res, "Could not load displacement");
+  return (await res.json()) as AccountDisplacementResponse;
+}
+
+/** Which of MY contacts studied here — the reverse bridge, never the graph-wide population. */
+export async function fetchAccountAlumni(accountId: string): Promise<AccountAlumniResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/accounts/${accountId}/alumni`);
+  if (!res.ok) throw await toApiError(res, "Could not load alumni");
+  return (await res.json()) as AccountAlumniResponse;
 }

@@ -11,6 +11,7 @@ import { Users } from "lucide-react";
 import { useAccountTechnologies } from "../hooks/useAccountTechnologies";
 import { isNotableOrgKind, orgKindCopy } from "../orgKindCopy";
 import styles from "../prospect.module.css";
+import { AccountAlumniSection, AccountDisplacementSection } from "./AccountGraphSections";
 import { AccountTechnologySection } from "./AccountTechnologySections";
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -123,6 +124,11 @@ export function AccountDetailDrawer({
               bridged this account to the shared graph. */}
           <AccountTechnologySection accountId={account.id} relationship="develops" />
           <AccountTechnologySection accountId={account.id} relationship="uses" />
+          {/* Conditional siblings: each renders NOTHING unless it has something to report — a permanent
+              empty "Recently dropped" panel on every account is noise, and "0 alumni" on a company is a
+              nonsense answer rather than an empty one. */}
+          <AccountDisplacementSection accountId={account.id} />
+          <AccountAlumniSection accountId={account.id} />
 
           {account.technologies.length > 0 ? (
             <section className={styles.section}>
