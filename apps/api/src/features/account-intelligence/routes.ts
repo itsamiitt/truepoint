@@ -21,12 +21,14 @@
 // ORGANIZATIONS, not people; the response carries no contact values, no person ids, and no contributor
 // reference. The education route below is the one that touches personal data — see its own note.
 
+import { buildConfidenceBadgeV1 } from "@leadwolf/core";
 import {
   type Tx,
   accountRepository,
   contactRepository,
   masterEducationRepository,
   masterTechnologyRepository,
+  provenanceBadgeRepository,
   withErTx,
   withTenantTx,
 } from "@leadwolf/db";
@@ -36,6 +38,7 @@ import {
   ValidationError,
   accountTechnologiesResponse,
   contactEducationResponse,
+  contactProvenanceResponse,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
@@ -205,4 +208,65 @@ contactIntelligenceRoutes.get("/:contactId/education", async (c) => {
       })),
     }),
   );
+});
+
+/**
+ * GET /contacts/:contactId/provenance — why we believe what we hold about this person.
+ *
+ * The confidence model shipped long before this endpoint, but it surfaced ONLY inside RevealDialog, so a
+ * customer saw the evidence at the instant they spent a credit and never again. This is the same badge,
+ * readable for free on a record they already own — the S-10 "confidence visible at a glance" outcome.
+ *
+ * COMPLIANCE (C-02): the aggregate is computed by provenanceBadgeRepository, which counts contributors with
+ * `count(DISTINCT contributor_ref)` INSIDE the query — the identity never appears in a result column, so no
+ * caller can leak it by forgetting to strip a field. This route carries that forward: counts, a recency, a
+ * band and a method. No source names, no contributor reference, no raw event log.
+ *
+ * A null badge and a zero badge are different answers. `badgeFor` returns null when the entity has no events
+ * at all, and the response then omits the field rather than claiming "0 sources" — most records hold no
+ * events yet, and a zero would read as a verdict on the data instead of an absence of log.
+ */
+contactIntelligenceRoutes.get("/:contactId/provenance", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view record provenance.");
+  }
+
+  const contact = await withTenantTx({ tenantId: c.get("tenantId"), workspaceId }, async (tx: Tx) =>
+    contactRepository.getMasterPersonBridge(tx, c.req.param("contactId")),
+  );
+  if (!contact) throw new NotFoundError("Contact not found.");
+
+  if (!contact.masterPersonId) {
+    return c.json(contactProvenanceResponse.parse({ resolved: false, fields: [] }));
+  }
+
+  const aggregate = await withErTx(async (tx: Tx) =>
+    provenanceBadgeRepository.badgeFor(tx, "person", contact.masterPersonId as string),
+  );
+
+  // The pure builder is the ONLY place a score is assembled, so the API, the reveal dialog and any exporter
+  // cannot compute different numbers from the same evidence.
+  const fields: Array<{
+    field: string;
+    band: string;
+    last_verified_at: string | null;
+    age_days: number | null;
+    source_count: number;
+    strongest_method: string | null;
+  }> = [];
+  for (const field of ["email", "phone"] as const) {
+    const badge = buildConfidenceBadgeV1(field, aggregate);
+    if (!badge) continue; // no evidence for this field — omit it, never render a zero
+    fields.push({
+      field,
+      band: badge.band,
+      last_verified_at: badge.lastVerifiedAt,
+      age_days: badge.ageDays,
+      source_count: badge.sourceCount,
+      strongest_method: badge.strongestMethod,
+    });
+  }
+
+  return c.json(contactProvenanceResponse.parse({ resolved: true, fields }));
 });

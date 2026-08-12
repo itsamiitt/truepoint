@@ -11,6 +11,7 @@ import { API_BASE } from "@/lib/publicConfig";
 import type {
   AccountTechnologiesResponse,
   ContactEducationResponse,
+  ContactProvenanceResponse,
   OrgTechnologyRelationship,
 } from "@leadwolf/types";
 import { toApiError } from "./api";
@@ -39,4 +40,16 @@ export async function fetchContactEducation(contactId: string): Promise<ContactE
   const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/education`);
   if (!res.ok) throw await toApiError(res, "Could not load education");
   return (await res.json()) as ContactEducationResponse;
+}
+
+/**
+ * Why we believe what we hold — bands, recency and corroboration counts, free on a record you already own.
+ * Fetched on demand (drawer/popover open), never per grid row: this is one request per record, not per cell.
+ */
+export async function fetchContactProvenance(
+  contactId: string,
+): Promise<ContactProvenanceResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/provenance`);
+  if (!res.ok) throw await toApiError(res, "Could not load provenance");
+  return (await res.json()) as ContactProvenanceResponse;
 }

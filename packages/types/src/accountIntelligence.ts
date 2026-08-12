@@ -98,3 +98,40 @@ export const contactEducationResponse = z.object({
   education: z.array(educationRow),
 });
 export type ContactEducationResponse = z.infer<typeof contactEducationResponse>;
+
+// ── Provenance / confidence (plan 33 · A1) ────────────────────────────────────────────────────────────────
+// The evidence behind a field, readable WITHOUT spending a credit. Until now the confidence model surfaced
+// only inside RevealDialog, so a customer saw it at the moment they paid and never again.
+//
+// WHAT DELIBERATELY IS NOT HERE: contributor identity, source names, and the raw per-event log. The badge
+// carries COUNTS, a recency, a band and the strongest method — the C-02 invariant that public surfaces show
+// corroboration without exposing who corroborated. The repository enforces that in SQL; this schema is the
+// second wall.
+export const confidenceBandValue = z.enum(["high", "medium", "low", "unverified"]);
+export type ConfidenceBandValue = z.infer<typeof confidenceBandValue>;
+
+export const fieldProvenance = z.object({
+  /** The field this evidence is about — 'email', 'phone', … */
+  field: z.string(),
+  /** The word the UI shows. A band, never the raw decimal — a false-precision number invites arguments. */
+  band: confidenceBandValue,
+  /** ISO of the most recent VALID-time observation (when a source vouched), not when we recorded it. */
+  last_verified_at: z.string().nullable(),
+  age_days: z.number().int().nonnegative().nullable(),
+  /** Independent corroborating CHANNELS. One source asserting ten times is not ten sources. */
+  source_count: z.number().int().nonnegative(),
+  /** What the score was priced off, so "why is this low" is answerable without a support escalation. */
+  strongest_method: z.string().nullable(),
+});
+export type FieldProvenanceDto = z.infer<typeof fieldProvenance>;
+
+export const contactProvenanceResponse = z.object({
+  /** false = no Layer-0 person bridge yet, so there is no evidence log to read — NOT "no evidence exists". */
+  resolved: z.boolean(),
+  /**
+   * Empty when the record has no accepted assertions yet. Render nothing rather than a zero: most records
+   * have no events until the provenance log fills, and "0 sources" reads as a verdict when it is an absence.
+   */
+  fields: z.array(fieldProvenance),
+});
+export type ContactProvenanceResponse = z.infer<typeof contactProvenanceResponse>;

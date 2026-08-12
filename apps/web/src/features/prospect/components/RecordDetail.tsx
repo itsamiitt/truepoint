@@ -48,6 +48,7 @@ import {
 import { AddToListDialog } from "./AddToListDialog";
 import { CopyButton } from "./CopyButton";
 import { EducationSection } from "./EducationSection";
+import { ProvenanceSection } from "./ProvenanceSection";
 import { RecomputeScoreButton } from "./RecomputeScoreButton";
 import { RevealDialog } from "./RevealDialog";
 import { StageSelector } from "./StageSelector";
@@ -666,6 +667,15 @@ export function RecordDetail({
               <h3 className={styles.sectionTitle}>Custom fields</h3>
             </div>
             <CustomFieldsSection contactId={contact.id} />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Why we believe this</h3>
+            </div>
+            {/* The confidence model, readable WITHOUT spending a credit (plan 33 · A1). Until now it
+                surfaced only inside RevealDialog — at the moment of payment and never after. */}
+            <ProvenanceSection contactId={contact.id} />
           </section>
 
           <section className={styles.section}>

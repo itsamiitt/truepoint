@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2006,
-  "fileSetHash": "sha256:9e440c4c54e9e1dab27b588e23a3595ed2edf0e4be3cf0bf9afdcbc18eb03e76",
+  "fileCount": 2008,
+  "fileSetHash": "sha256:00c18f93009e066ba0d75d5dfbd168aa667730de5e0d0f0b4c8181b8ec2dd148",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1396,6 +1396,7 @@
         "apps/web/src/features/prospect/components/ParsedFilterPreview.tsx",
         "apps/web/src/features/prospect/components/ProspectPage.tsx",
         "apps/web/src/features/prospect/components/ProspectToolbar.tsx",
+        "apps/web/src/features/prospect/components/ProvenanceSection.tsx",
         "apps/web/src/features/prospect/components/QuickViewDrawer.tsx",
         "apps/web/src/features/prospect/components/RecentSearches.tsx",
         "apps/web/src/features/prospect/components/RecomputeScoreButton.tsx",
@@ -1420,6 +1421,7 @@
         "apps/web/src/features/prospect/hooks/useBulkReveal.ts",
         "apps/web/src/features/prospect/hooks/useBulkSelection.ts",
         "apps/web/src/features/prospect/hooks/useContactEducation.ts",
+        "apps/web/src/features/prospect/hooks/useContactProvenance.ts",
         "apps/web/src/features/prospect/hooks/useCreditBalance.ts",
         "apps/web/src/features/prospect/hooks/useCustomFields.ts",
         "apps/web/src/features/prospect/hooks/useFacetCounts.ts",
