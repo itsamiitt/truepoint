@@ -766,4 +766,12 @@ flowchart TD
   corrected: it had claimed 55 while the file held 37 and the JSON 86.
   When the source set changes again, re-run `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares
   the `fileSetHash`) and refresh these purposes.
+
+  2026-08-12 refresh (waterfall v2, 0109): the new enrichment files all bucketed into their existing domains —
+  `core/enrichment/{fieldWaterfall,enrichContactV2,breakerStore,providerGate,enrichmentEvidence,sourceImports}`
+  → the core enrichment domain, `integrations/enrichment/{redisBreakerStore,redisProviderGate}` → integrations,
+  the api 202 producer + web ProviderPriorityPanel → their feature buckets — so unassigned held at 7 and
+  warnings at 54 (the 7 are the four framework-root next/postcss configs plus the three pre-0109
+  entitlement/outcomeMetrics/usageEvent repositories; unchanged by this refresh). The enrichment section's
+  one-line purposes above were updated for the v2 split (legacy waterfall vs the flag-gated per-field engine).
 ```
