@@ -95,16 +95,25 @@ accountIntelligenceRoutes.get("/:accountId/technologies", async (c) => {
   // "this company builds nothing".
   if (!masterCompanyId) {
     return c.json(
-      accountTechnologiesResponse.parse({ relationship, resolved: false, technologies: [] }),
+      accountTechnologiesResponse.parse({
+        relationship,
+        resolved: false,
+        org_kind: null,
+        technologies: [],
+      }),
     );
   }
 
+  let orgKind: string | null = null;
   const withVendors = (c.req.query("fields") ?? "")
     .split(",")
     .map((f) => f.trim())
     .includes("vendors");
 
   const payload = await withErTx(async (tx: Tx) => {
+    // Read the institution kind in the SAME Layer-0 transaction — one round trip, and it cannot disagree
+    // with the rows returned beside it.
+    orgKind = await accountRepository.orgKindForMasterCompany(tx, masterCompanyId);
     if (relationship === "develops") {
       const products = await masterTechnologyRepository.listCompanyProducts(tx, masterCompanyId);
       return products.map((p) => ({
@@ -147,7 +156,12 @@ accountIntelligenceRoutes.get("/:accountId/technologies", async (c) => {
   // Egress-validated against the shared contract: adding a column to a Layer-0 table must never silently
   // start shipping it to customers.
   return c.json(
-    accountTechnologiesResponse.parse({ relationship, resolved: true, technologies: payload }),
+    accountTechnologiesResponse.parse({
+      relationship,
+      resolved: true,
+      org_kind: orgKind,
+      technologies: payload,
+    }),
   );
 });
 

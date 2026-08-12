@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2008,
-  "fileSetHash": "sha256:00c18f93009e066ba0d75d5dfbd168aa667730de5e0d0f0b4c8181b8ec2dd148",
+  "fileCount": 2010,
+  "fileSetHash": "sha256:2c8ecbff991043e8709e952f45787fb6ec8350f487a3f42467b2ff51b8f35cfc",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1439,6 +1439,8 @@
         "apps/web/src/features/prospect/hooks/useTypeahead.ts",
         "apps/web/src/features/prospect/index.ts",
         "apps/web/src/features/prospect/keys.ts",
+        "apps/web/src/features/prospect/orgKindCopy.test.ts",
+        "apps/web/src/features/prospect/orgKindCopy.ts",
         "apps/web/src/features/prospect/savedSearchApi.ts",
         "apps/web/src/features/prospect/searchAbort.test.ts",
         "apps/web/src/features/prospect/searchApi.ts",

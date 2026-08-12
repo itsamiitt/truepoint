@@ -62,11 +62,17 @@ export type UsesRow = z.infer<typeof usesRow>;
 export const accountTechnologyRow = z.discriminatedUnion("relationship", [developsRow, usesRow]);
 export type AccountTechnologyRow = z.infer<typeof accountTechnologyRow>;
 
+/** What kind of institution an account resolved to (0108). The UI stops saying "company" for a university. */
+export const orgKind = z.enum(["company", "school", "nonprofit", "government", "other"]);
+export type OrgKind = z.infer<typeof orgKind>;
+
 export const accountTechnologiesResponse = z.object({
   relationship: orgTechnologyRelationship,
   /** false = this account has no Layer-0 bridge yet (ER has not matched it). Distinct from "bridged, but
    *  nothing found" — an empty list under `resolved:false` must never render as "builds nothing". */
   resolved: z.boolean(),
+  /** Null until the bridge resolves. Lets the drawer adapt its labels to what the institution actually is. */
+  org_kind: orgKind.nullable(),
   technologies: z.array(accountTechnologyRow),
 });
 export type AccountTechnologiesResponse = z.infer<typeof accountTechnologiesResponse>;

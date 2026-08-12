@@ -25,6 +25,8 @@ export function useAccountTechnologies(
     /** false = this account has no Layer-0 bridge yet. Distinct from "bridged, found nothing" — the UI must
      *  say "not matched yet" rather than "builds nothing", which would be a claim we cannot support. */
     resolved: query.data?.resolved ?? false,
+    /** What the bridged institution actually IS — so the drawer stops calling a university a company. */
+    orgKind: query.data?.org_kind ?? null,
     loading: query.isPending && accountId !== null,
     error: query.error
       ? query.error instanceof Error

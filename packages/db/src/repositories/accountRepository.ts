@@ -279,4 +279,21 @@ export const accountRepository = {
       .limit(1);
     return rows[0] ?? null;
   },
+
+  /**
+   * What KIND of institution this account resolved to (0108's `org_kind`).
+   *
+   * Runs under withErTx, not the tenant tx: org_kind lives on master_companies, which leadwolf_app holds no
+   * grant on. The caller passes a master id it has ALREADY proven access to via getByIdForIntelligence —
+   * this never takes an id from a client.
+   *
+   * Exists because the UI otherwise calls every organization a "company". The first time a university lands
+   * in someone's workspace, "Firmographics" and a building glyph are simply wrong.
+   */
+  async orgKindForMasterCompany(tx: Tx, masterCompanyId: string): Promise<string | null> {
+    const rows = (await tx.execute(
+      sql`SELECT org_kind FROM master_companies WHERE id = ${masterCompanyId} LIMIT 1`,
+    )) as unknown as Array<{ org_kind: string }>;
+    return rows[0]?.org_kind ?? null;
+  },
 };
