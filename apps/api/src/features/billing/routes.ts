@@ -36,6 +36,7 @@ import {
 import { Hono } from "hono";
 import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import { authn } from "../../middleware/authn.ts";
+import { idempotency } from "../../middleware/idempotency.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 import { getStripePort } from "./stripePortProvider.ts";
@@ -126,7 +127,12 @@ creditsRoutes.get("/me", requireRole("owner", "admin", "member", "viewer"), asyn
 // AND a secret key; absent → 501 { available:false } so the web hub's existing "coming soon" degrade shows.
 // The credits are granted ONLY by the existing payment_intent.succeeded webhook (metadata stamped here) —
 // idempotent, never client-side. Workspace-admin gated (owner|admin).
-creditsRoutes.post("/checkout", requireRole("owner", "admin"), async (c) => {
+//
+// `idempotency` added by audit 32 · C5. A double-submitted checkout previously opened TWO Stripe
+// Checkout Sessions, and a customer who paid both was charged twice for one intent. The grant itself is
+// webhook-driven and already idempotent, so the money could not be double-GRANTED — but the charge is
+// what the customer sees. Replay now returns the original session instead of minting a second one.
+creditsRoutes.post("/checkout", requireRole("owner", "admin"), idempotency, async (c) => {
   if (!env.BILLING_CHECKOUT_ENABLED || !env.STRIPE_SECRET_KEY) {
     return c.json({ available: false }, 501);
   }
@@ -176,7 +182,9 @@ creditsRoutes.post("/checkout", requireRole("owner", "admin"), async (c) => {
 // 501 { available:false } → the hub's "coming soon" degrade. The subscription is created + reconciled by the
 // customer.subscription.* webhook (the metadata stamped here carries tenant_id + plan_template_key); credits
 // are granted by the monthly-grant worker, never here. Workspace-admin gated (owner|admin).
-creditsRoutes.post("/subscribe", requireRole("owner", "admin"), async (c) => {
+// `idempotency` added by audit 32 · C5 — same reasoning as /checkout: a retried subscribe must not open a
+// second subscription for one intent.
+creditsRoutes.post("/subscribe", requireRole("owner", "admin"), idempotency, async (c) => {
   if (!env.BILLING_SUBSCRIPTIONS_ENABLED || !env.STRIPE_SECRET_KEY) {
     return c.json({ available: false }, 501);
   }

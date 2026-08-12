@@ -150,7 +150,11 @@ adminRoutes.get("/crm/dead-letters", async (c) => {
  * re-attempt a write that failed for a reason nobody has diagnosed — so the replay is a separate, explicit
  * action rather than a side effect of clicking a status.
  */
-adminRoutes.patch("/crm/dead-letters/:id", async (c) => {
+// requireCapability("data:manage") — added by audit 32 · C3. This is a CROSS-TENANT WRITE that sat behind
+// only the `pa` claim, while every other admin write in this file carries a capability. Any platform staffer,
+// including read-only roles, could triage another tenant's poison jobs. "data:manage" is the exact fit: its
+// own definition is "perform data-ops mutations — cross-tenant, audited".
+adminRoutes.patch("/crm/dead-letters/:id", requireCapability("data:manage"), async (c) => {
   const parsed = crmDeadLetterTriageSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     throw new ValidationError("Body must be { status: 'retrying'|'resolved'|'ignored' }.");
