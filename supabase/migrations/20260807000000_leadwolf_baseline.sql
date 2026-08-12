@@ -1,3 +1,20 @@
+-- ⚠ SNAPSHOT — NOT THE SOURCE OF TRUTH, AND CURRENTLY BEHIND main.
+--
+-- This file is a CONSOLIDATED DUMP of the schema as it stood at journal migration 0099. It is a
+-- convenience for standing up a fresh Supabase project in one shot; it is NOT the schema of record.
+-- The source of truth is packages/db/src/{schema,migrations,rls}, applied by applyMigrations.ts.
+--
+-- KNOWN DRIFT as of migration 0108 (do not apply this file and assume you are current):
+--   • master_companies.technographics is declared BELOW but 0108 DROPS it (it was dead — no reader,
+--     no writer; master_technology_adoptions is the real technographics store).
+--   • master_companies.org_kind is MISSING (0108 adds it — a school is an organization).
+--   • master_education is MISSING entirely (0108 creates it — the person→organization education edge).
+--
+-- To get a current database: apply this baseline, then run the journal migrations from 0100 onward
+-- (applyMigrations.ts is idempotent and will do exactly that), or skip this file and let
+-- applyMigrations.ts build from the numbered migrations alone. Regenerate this snapshot from a live
+-- migrated database before trusting it again.
+
 DO $$ BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'leadwolf_app') THEN
     CREATE ROLE leadwolf_app NOLOGIN;

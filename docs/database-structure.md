@@ -11,7 +11,11 @@ and `packages/db/src/rls/*.sql` (hand-written RLS policies, triggers, and grants
 `packages/db/src/applyMigrations.ts` applies everything in four idempotent phases:
 **bootstrap** (extensions, roles, `uuid_generate_v7()`) → **journal migrations** →
 **RLS files** → **grants**. A consolidated snapshot of the result lives at
-`supabase/migrations/20260807000000_leadwolf_baseline.sql`.
+`supabase/migrations/20260807000000_leadwolf_baseline.sql` — but treat that file as a convenience
+dump, not the schema of record. **It was captured at migration 0099 and is behind this repo:** it
+still declares `master_companies.technographics` (dropped in 0108) and lacks `org_kind` and the
+`master_education` table (both added in 0108). Apply the numbered migrations on top, or skip the
+baseline entirely and let `applyMigrations.ts` build from them.
 
 ## Schemas
 
