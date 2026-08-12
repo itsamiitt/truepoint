@@ -290,6 +290,40 @@ export const accountRepository = {
    * Exists because the UI otherwise calls every organization a "company". The first time a university lands
    * in someone's workspace, "Firmographics" and a building glyph are simply wrong.
    */
+  /**
+   * The REVERSE bridge for companies: given Layer-0 company ids, which of THIS workspace's accounts are they?
+   *
+   * The company-side twin of contactRepository.findByMasterPersonIds, and it exists for the same reason: a
+   * graph-wide adopter list spans every tenant, so it is mapped back through the overlay under RLS before it
+   * is shown. `excludeAccountId` drops the account the caller is already looking at, which would otherwise
+   * always appear as its own peer.
+   */
+  async findByMasterCompanyIds(
+    tx: Tx,
+    masterCompanyIds: readonly string[],
+    opts: { excludeAccountId?: string; limit?: number } = {},
+  ): Promise<Array<{ id: string; name: string; domain: string | null; masterCompanyId: string }>> {
+    if (masterCompanyIds.length === 0) return [];
+    const rows = await tx
+      .select({
+        id: accounts.id,
+        name: accounts.name,
+        domain: accounts.domain,
+        masterCompanyId: accounts.masterCompanyId,
+      })
+      .from(accounts)
+      .where(
+        sql`${accounts.masterCompanyId} = ANY(${[...masterCompanyIds]})
+            AND ${accounts.deletedAt} IS NULL
+            ${opts.excludeAccountId ? sql`AND ${accounts.id} <> ${opts.excludeAccountId}` : sql``}`,
+      )
+      .limit(Math.min(opts.limit ?? 50, 200));
+    return rows.filter(
+      (r): r is { id: string; name: string; domain: string | null; masterCompanyId: string } =>
+        r.masterCompanyId !== null,
+    );
+  },
+
   async orgKindForMasterCompany(tx: Tx, masterCompanyId: string): Promise<string | null> {
     const rows = (await tx.execute(
       sql`SELECT org_kind FROM master_companies WHERE id = ${masterCompanyId} LIMIT 1`,

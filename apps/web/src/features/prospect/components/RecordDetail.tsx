@@ -52,6 +52,7 @@ import { EmploymentSection } from "./EmploymentSection";
 import { ProvenanceSection } from "./ProvenanceSection";
 import { RecomputeScoreButton } from "./RecomputeScoreButton";
 import { RevealDialog } from "./RevealDialog";
+import { SignalsSection } from "./SignalsSection";
 import { StageSelector } from "./StageSelector";
 import { TagPicker } from "./TagPicker";
 
@@ -677,6 +678,15 @@ export function RecordDetail({
             {/* The confidence model, readable WITHOUT spending a credit (plan 33 · A1). Until now it
                 surfaced only inside RevealDialog — at the moment of payment and never after. */}
             <ProvenanceSection contactId={contact.id} />
+          </section>
+
+          <section className={styles.section}>
+            <div className={styles.sectionHead}>
+              <h3 className={styles.sectionTitle}>Signals</h3>
+            </div>
+            {/* Tenant-private (intent_signals) — no Layer-0 crossing, and the one graph surface with real
+                data today: the S-13 sweep writes job_change rows. */}
+            <SignalsSection contactId={contact.id} />
           </section>
 
           <section className={styles.section}>

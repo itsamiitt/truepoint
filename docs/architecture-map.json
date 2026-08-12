@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2014,
-  "fileSetHash": "sha256:3c4e2906ca56f812325c9d8fd0c0ffe1a05d331864f60227f4309a837a3bdce1",
+  "fileCount": 2015,
+  "fileSetHash": "sha256:26a14d51b16899c15978d3d0f42d9ca8c0f49b21087393189aa51d1aa4d81325",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1408,6 +1408,7 @@
         "apps/web/src/features/prospect/components/RevealDialog.tsx",
         "apps/web/src/features/prospect/components/RowActions.tsx",
         "apps/web/src/features/prospect/components/SaveSearchPanel.tsx",
+        "apps/web/src/features/prospect/components/SignalsSection.tsx",
         "apps/web/src/features/prospect/components/StageManagementPanel.tsx",
         "apps/web/src/features/prospect/components/StageSelector.tsx",
         "apps/web/src/features/prospect/components/TagChip.tsx",

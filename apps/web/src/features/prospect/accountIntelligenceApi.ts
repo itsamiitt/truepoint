@@ -15,6 +15,7 @@ import type {
   ContactEducationResponse,
   ContactEmploymentResponse,
   ContactProvenanceResponse,
+  ContactSignalsResponse,
   OrgTechnologyRelationship,
 } from "@leadwolf/types";
 import { toApiError } from "./api";
@@ -80,4 +81,11 @@ export async function fetchAccountAlumni(accountId: string): Promise<AccountAlum
   const res = await fetchWithAuth(`${API_BASE}/api/v1/accounts/${accountId}/alumni`);
   if (!res.ok) throw await toApiError(res, "Could not load alumni");
   return (await res.json()) as AccountAlumniResponse;
+}
+
+/** Observed signals on a contact. Tenant-private (intent_signals) — the one graph surface with real data. */
+export async function fetchContactSignals(contactId: string): Promise<ContactSignalsResponse> {
+  const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${contactId}/signals`);
+  if (!res.ok) throw await toApiError(res, "Could not load signals");
+  return (await res.json()) as ContactSignalsResponse;
 }

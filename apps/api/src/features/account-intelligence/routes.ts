@@ -26,6 +26,7 @@ import {
   type Tx,
   accountRepository,
   contactRepository,
+  intentSignalRepository,
   masterEducationRepository,
   masterEmploymentReadRepository,
   masterTechnologyRepository,
@@ -43,6 +44,8 @@ import {
   contactEducationResponse,
   contactEmploymentResponse,
   contactProvenanceResponse,
+  contactSignalsResponse,
+  technologyPeersResponse,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
@@ -297,6 +300,55 @@ accountIntelligenceRoutes.get("/:accountId/alumni", async (c) => {
   );
 });
 
+/**
+ * GET /accounts/:accountId/technologies/:technologyId/peers — who ELSE in my workspace runs this.
+ *
+ * The reverse traversal, deliberately scoped rather than global. Account search already filters by
+ * technology off accounts.technologies (the inferred rollup); a second, Layer-0-backed global filter would
+ * give the product two controls with the same name and different data — the confusion this model exists to
+ * remove — and would pre-empt a cutover decision that belongs to the owner (plan 33 §6). Scoping the answer
+ * to one technology reached from one open account keeps it useful and creates nothing to reconcile.
+ *
+ * Three transactions again, same order and same reason: resolve the account (tenant, RLS) → traverse the
+ * shared graph (er) → map adopters back to the caller's own accounts (tenant, RLS). Layer-0 company ids
+ * never leave the server, and the caller learns nothing about tenants other than their own.
+ */
+accountIntelligenceRoutes.get("/:accountId/technologies/:technologyId/peers", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view peer adopters.");
+  }
+  const scope = { tenantId: c.get("tenantId"), workspaceId };
+  const accountId = c.req.param("accountId");
+  const technologyId = c.req.param("technologyId");
+
+  // The account must be visible first — otherwise this is a graph read keyed on a client-supplied id.
+  await resolveBridge(scope, accountId);
+
+  const adopters = await withErTx(async (tx: Tx) =>
+    masterTechnologyRepository.listTechnologyAdopters(tx, technologyId),
+  );
+  const seenAt = new Map(adopters.map((a) => [a.masterCompanyId, a.lastSeenAt]));
+
+  const mine = await withTenantTx(scope, async (tx: Tx) =>
+    accountRepository.findByMasterCompanyIds(tx, [...seenAt.keys()], {
+      excludeAccountId: accountId,
+    }),
+  );
+
+  return c.json(
+    technologyPeersResponse.parse({
+      technology_id: technologyId,
+      peers: mine.map((a) => ({
+        account_id: a.id,
+        name: a.name,
+        domain: a.domain,
+        last_seen_at: seenAt.get(a.masterCompanyId) as Date,
+      })),
+    }),
+  );
+});
+
 export const contactIntelligenceRoutes = new Hono<{ Variables: TenancyVariables }>();
 
 contactIntelligenceRoutes.use("*", authn);
@@ -449,6 +501,48 @@ contactIntelligenceRoutes.get("/:contactId/employment", async (c) => {
         is_primary: s.isPrimary,
         confidence: s.confidence === null ? null : Number(s.confidence),
         source_count: s.sourceCount,
+      })),
+    }),
+  );
+});
+
+/**
+ * GET /contacts/:contactId/signals — what we have observed about this contact.
+ *
+ * The ONE endpoint in this file that never touches Layer 0: intent_signals is tenant-private and
+ * workspace-scoped, so a single withTenantTx under RLS is the whole security story. No er transaction, no
+ * bridge, no wall to cross.
+ *
+ * It is also the only signal surface with real data today — recordJobChange (the S-13 job-change sweep)
+ * writes job_change rows. The other eight enum values have no producer, which is precisely why this returns
+ * the rows that exist rather than a bucket per type: listing nine categories would advertise coverage the
+ * product cannot deliver.
+ */
+contactIntelligenceRoutes.get("/:contactId/signals", async (c) => {
+  const workspaceId = c.get("workspaceId");
+  if (!workspaceId) {
+    throw new ForbiddenError("no_workspace", "Select a workspace to view signals.");
+  }
+
+  const signals = await withTenantTx(
+    { tenantId: c.get("tenantId"), workspaceId },
+    async (tx: Tx) => {
+      // Prove the contact is visible in THIS workspace before reading anything about it. RLS already scopes
+      // intent_signals, but a bare signal read on an unknown id would answer "no signals" for a contact in
+      // another tenant — indistinguishable from a real empty, and a weak enumeration oracle.
+      const contact = await contactRepository.getMasterPersonBridge(tx, c.req.param("contactId"));
+      if (!contact) return null;
+      return intentSignalRepository.recentForContact(tx, contact.id);
+    },
+  );
+  if (signals === null) throw new NotFoundError("Contact not found.");
+
+  return c.json(
+    contactSignalsResponse.parse({
+      signals: signals.map((s) => ({
+        signal_type: s.signalType,
+        weight: s.weight,
+        detected_at: s.detectedAt,
       })),
     }),
   );

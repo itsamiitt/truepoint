@@ -44,6 +44,8 @@ export const prospectKeys = {
   contactEducation: (contactId: string) => ["prospect", "contact-education", contactId] as const,
   /** One contact's Layer-0 employment stints (`GET /contacts/:id/employment`). */
   contactEmployment: (contactId: string) => ["prospect", "contact-employment", contactId] as const,
+  /** One contact's observed signals (`GET /contacts/:id/signals`). */
+  contactSignals: (contactId: string) => ["prospect", "contact-signals", contactId] as const,
   /** One contact's field provenance / confidence badges (`GET /contacts/:id/provenance`). */
   contactProvenance: (contactId: string) => ["prospect", "contact-provenance", contactId] as const,
   /** Typeahead suggestions for one facet + term — the cache entry IS the per-term memo. */
