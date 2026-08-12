@@ -31,6 +31,10 @@ export const prospectKeys = {
   revealedContact: (contactId: string) => ["prospect", "revealed-contact", contactId] as const,
   /** One contact's lead-score history. */
   scores: (contactId: string) => ["prospect", "scores", contactId] as const,
+  /** One account's Layer-0 technology traversal. `relationship` is part of the key because develops and uses
+   *  are DIFFERENT ANSWERS from different tables — sharing one cache entry would let one overwrite the other. */
+  accountTechnologies: (accountId: string, relationship: "develops" | "uses") =>
+    ["prospect", "account-technologies", accountId, relationship] as const,
   /** Typeahead suggestions for one facet + term — the cache entry IS the per-term memo. */
   typeahead: (field: string, term: string) => ["prospect", "typeahead", field, term] as const,
   /** One async bulk-reveal job's status/progress. */

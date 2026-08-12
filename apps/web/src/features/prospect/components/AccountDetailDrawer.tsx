@@ -9,6 +9,7 @@ import type { MaskedAccount } from "@leadwolf/types";
 import { Avatar, Drawer, StatusBadge, TpButton, TpChip } from "@leadwolf/ui";
 import { Users } from "lucide-react";
 import styles from "../prospect.module.css";
+import { AccountTechnologySection } from "./AccountTechnologySections";
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
@@ -107,10 +108,21 @@ export function AccountDetailDrawer({
             </div>
           </section>
 
+          {/* The Layer-0 traversal (0108): two sections, never one merged list — "what they build" and
+              "what they run" are different facts from different tables. Each fetches independently, so a
+              slow or empty answer on one side never blanks the other. Both render nothing until ER has
+              bridged this account to the shared graph. */}
+          <AccountTechnologySection accountId={account.id} relationship="develops" />
+          <AccountTechnologySection accountId={account.id} relationship="uses" />
+
           {account.technologies.length > 0 ? (
             <section className={styles.section}>
               <div className={styles.sectionHead}>
-                <h3 className={styles.sectionTitle}>Technographics</h3>
+                {/* Deliberately NOT called "Technographics" any more. This list is the workspace's own
+                    signal rollup (intent_signals → accounts.technologies), which is inference, not
+                    detection — the detected stack is the "Runs" section above, and giving both the same
+                    name is what made them look interchangeable. */}
+                <h3 className={styles.sectionTitle}>Signals from your workspace</h3>
               </div>
               <div className={styles.chipWrap}>
                 {account.technologies.map((t) => (
