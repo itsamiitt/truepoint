@@ -24,6 +24,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const customFieldsRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -80,7 +81,7 @@ customFieldsRoutes.get("/", async (c) => {
 });
 
 /** POST /custom-fields — create a definition. 422 on a duplicate key or bad shape. */
-customFieldsRoutes.post("/", async (c) => {
+customFieldsRoutes.post("/", requireRole("owner", "admin"), async (c) => {
   const workspaceId = requireWorkspace(c.get("workspaceId"));
   const parsed = createCustomFieldSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success)
@@ -101,7 +102,7 @@ customFieldsRoutes.post("/", async (c) => {
 });
 
 /** PATCH /custom-fields/:id — edit a definition's editorial surface (label/options/required/ordering/archived). */
-customFieldsRoutes.patch("/:id", async (c) => {
+customFieldsRoutes.patch("/:id", requireRole("owner", "admin"), async (c) => {
   const workspaceId = requireWorkspace(c.get("workspaceId"));
   const parsed = updateCustomFieldSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success)
@@ -139,18 +140,22 @@ customFieldsRoutes.get("/values/:entity/:recordId", async (c) => {
 });
 
 /** PATCH /custom-fields/values/:entity/:recordId — set values (shallow-merged, validated by type). */
-customFieldsRoutes.patch("/values/:entity/:recordId", async (c) => {
-  const workspaceId = requireWorkspace(c.get("workspaceId"));
-  const parsedEntity = customFieldEntity.safeParse(c.req.param("entity"));
-  if (!parsedEntity.success)
-    throw new ValidationError("Path 'entity' must be 'contact' or 'account'.");
-  const parsed = setCustomFieldValuesSchema.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) throw new ValidationError("Body must be { values: { key: value, … } }.");
-  const values = await setCustomFieldValues({
-    scope: { tenantId: c.get("tenantId"), workspaceId },
-    entity: parsedEntity.data,
-    recordId: c.req.param("recordId"),
-    values: parsed.data.values,
-  });
-  return c.json({ values }, 200);
-});
+customFieldsRoutes.patch(
+  "/values/:entity/:recordId",
+  requireRole("owner", "admin", "member"),
+  async (c) => {
+    const workspaceId = requireWorkspace(c.get("workspaceId"));
+    const parsedEntity = customFieldEntity.safeParse(c.req.param("entity"));
+    if (!parsedEntity.success)
+      throw new ValidationError("Path 'entity' must be 'contact' or 'account'.");
+    const parsed = setCustomFieldValuesSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) throw new ValidationError("Body must be { values: { key: value, … } }.");
+    const values = await setCustomFieldValues({
+      scope: { tenantId: c.get("tenantId"), workspaceId },
+      entity: parsedEntity.data,
+      recordId: c.req.param("recordId"),
+      values: parsed.data.values,
+    });
+    return c.json({ values }, 200);
+  },
+);

@@ -24,6 +24,7 @@ import {
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
+import { requireRole } from "../../middleware/requireRole.ts";
 import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
 
 export const templateRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -56,7 +57,7 @@ templateRoutes.get("/", async (c) => {
   return c.json(result);
 });
 
-templateRoutes.post("/", async (c) => {
+templateRoutes.post("/", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before creating a template.");
@@ -122,7 +123,7 @@ templateRoutes.post("/:id/preview", async (c) => {
 });
 
 // Restore version N by appending a NEW version cloning it (owner-only, D8; versions stay immutable).
-templateRoutes.post("/:id/restore", async (c) => {
+templateRoutes.post("/:id/restore", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before restoring a version.");
@@ -138,7 +139,7 @@ templateRoutes.post("/:id/restore", async (c) => {
   return c.json(result);
 });
 
-templateRoutes.patch("/:id", async (c) => {
+templateRoutes.patch("/:id", requireRole("owner", "admin", "member"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError("no_workspace", "Select a workspace before editing a template.");

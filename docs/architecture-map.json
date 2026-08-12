@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2017,
-  "fileSetHash": "sha256:6d454ededcbe85fe1216e919da6e91559f8af20d158fcda1cfca54041eb7c98c",
+  "fileCount": 2018,
+  "fileSetHash": "sha256:39146590afa02f9776d155c8ebf7addf8d66d9375347e8fceaaa9b6e552ded3f",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2247,6 +2247,7 @@
     ],
     "apps/api": [
       "apps/api/src/app.authz.test.ts",
+      "apps/api/src/app.authz.workspaceWrites.test.ts",
       "apps/api/src/app.ts",
       "apps/api/src/cache.ts",
       "apps/api/src/instrumentation.ts",

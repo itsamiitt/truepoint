@@ -62,7 +62,7 @@ settingsRoutes.get("/auto-enrich", async (c) => {
   return c.json(response, 200);
 });
 
-settingsRoutes.patch("/auto-enrich", async (c) => {
+settingsRoutes.patch("/auto-enrich", requireRole("owner", "admin"), async (c) => {
   const workspaceId = c.get("workspaceId");
   if (!workspaceId)
     throw new ForbiddenError(
