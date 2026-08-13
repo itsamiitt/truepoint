@@ -43,10 +43,15 @@ const rule = (method: string, path: string): RouteRule => ({
 const EXTENSION_ALLOW_LIST: readonly RouteRule[] = [
   rule("POST", "/api/v1/ingest"),
   rule("POST", "/api/v1/contacts/:id/reveal"),
-  rule("GET", "/api/v1/contacts/:id"),
-  // The LinkedIn→contact seam (background/api/client.ts resolveByLinkedIn). TWO segments after
-  // /contacts, so the `/contacts/:id` rule above CANNOT match it (`:id` → `[^/]+`, one segment) —
-  // it needs its own rule or the hover card's lookup 403s the moment EXTENSION_SCOPE_ENFORCE flips.
+  // NO `GET /api/v1/contacts/:id` rule, deliberately (audit 32 · C9). No such endpoint exists — the only
+  // bare `GET /:id` in apps/api belongs to import-mapping-templates — and the extension never asks for one:
+  // background/api/client.ts calls exactly the reveal POST above and the by-linkedin GET below. A grant for a
+  // route that does not exist is not harmless: whoever builds contact-detail later would inherit extension
+  // access without the review this list exists to force. Re-add it AS PART OF building that endpoint.
+  //
+  // The LinkedIn→contact seam (background/api/client.ts resolveByLinkedIn). TWO segments after /contacts, so
+  // a one-segment `:id` rule could never have matched it (`:id` → `[^/]+`) — it needs its own rule or the
+  // hover card's lookup 403s the moment EXTENSION_SCOPE_ENFORCE flips.
   rule("GET", "/api/v1/contacts/by-linkedin/:publicId"),
   rule("GET", "/api/v1/credits/balance"),
   rule("GET", "/api/v1/credits/reveal-costs"),

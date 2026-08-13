@@ -24,19 +24,23 @@ describe("extensionRouteAllowed", () => {
   it("allows exactly the routes the extension calls", () => {
     expect(extensionRouteAllowed("POST", "/api/v1/ingest")).toBe(true);
     expect(extensionRouteAllowed("POST", "/api/v1/contacts/abc-123/reveal")).toBe(true);
-    expect(extensionRouteAllowed("GET", "/api/v1/contacts/abc-123")).toBe(true);
     expect(extensionRouteAllowed("GET", "/api/v1/credits/balance")).toBe(true);
     expect(extensionRouteAllowed("GET", "/api/v1/credits/reveal-costs")).toBe(true);
     expect(extensionRouteAllowed("GET", "/api/v1/me")).toBe(true);
     expect(extensionRouteAllowed("GET", "/api/v1/orgs")).toBe(true);
-    // The LinkedIn→contact seam: TWO segments after /contacts, so the `/contacts/:id` rule cannot match it.
+    // The LinkedIn→contact seam. It needs its own rule: two segments after /contacts, so even back when a
+    // one-segment `/contacts/:id` rule existed it could never have covered this (`:id` → `[^/]+`).
     expect(extensionRouteAllowed("GET", "/api/v1/contacts/by-linkedin/satyanadella")).toBe(true);
     // The SW-held SSE consumer (dark behind the realtimeSse flag, but must not need an authz change to enable).
     expect(extensionRouteAllowed("GET", "/api/v1/events/stream")).toBe(true);
   });
 
   it("is method-aware (an allowed path with the wrong verb is denied)", () => {
-    expect(extensionRouteAllowed("DELETE", "/api/v1/contacts/abc-123")).toBe(false);
+    // Uses by-linkedin because it is a path the list DOES grant (for GET) — asserting the wrong verb on a
+    // path that is denied for every verb would pass without testing method-awareness at all.
+    expect(extensionRouteAllowed("DELETE", "/api/v1/contacts/by-linkedin/satyanadella")).toBe(
+      false,
+    );
     expect(extensionRouteAllowed("POST", "/api/v1/me")).toBe(false);
     expect(extensionRouteAllowed("GET", "/api/v1/ingest")).toBe(false);
   });
@@ -47,6 +51,10 @@ describe("extensionRouteAllowed", () => {
       ["GET", "/api/v1/admin/tenants"],
       ["POST", "/api/v1/billing/checkout"],
       ["GET", "/api/v1/contacts"], // list is NOT on the allow-list (only a single captured contact)
+      // Contact-detail: no such endpoint exists, and the extension never asks for one (audit 32 · C9). The
+      // grant was removed rather than left as a placeholder so building it later cannot silently inherit
+      // extension access — see the note in the allow-list itself.
+      ["GET", "/api/v1/contacts/abc-123"],
       ["POST", "/api/v1/contacts/abc/reveal/../../admin"], // no prefix/traversal escalation
     ] as const) {
       expect(extensionRouteAllowed(m, p)).toBe(false);
