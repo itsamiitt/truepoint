@@ -10,6 +10,27 @@
 // The sibling suite (app.authz.test.ts) covers the T-2cc02c62 fix for outreach/enrichment/activity/
 // compliance/billing. This one covers the routers that fix explicitly did NOT claim.
 //
+// COVERAGE NOTE — THIS SUITE IS ENUMERATED, AND THE FULL SURFACE WAS SWEPT SEPARATELY (13 Aug 2026).
+// The list below is the routers C2 found ungated. It does not prove a THIRTIETH ungated write cannot appear,
+// because it only asserts about routes someone remembered to add. So the whole surface was scanned once:
+// 176 mutating routes (POST/PUT/PATCH/DELETE) across apps/api/src/features.
+//
+// 145 carry an authz middleware inline or router-wide. Of the remaining 31, every one is authorized by a
+// mechanism a middleware scan cannot see, and each was read to confirm it:
+//   • in-handler authz — import-mapping-templates DELETE runs buildJobViewer and enforces creator-OR-elevated,
+//     a finer rule than requireRole can express;
+//   • signature verification — the Stripe, CRM and email-delivery webhooks (verifyEmailWebhookSignature);
+//   • a router-wide non-role guard — SCIM's `scimUserRoutes.use("*", scimAuth)` (bearer token, not a role);
+//   • self-scoping — notifications write only `userId = claims.sub`;
+//   • POST-as-query — /search, /facets, /count take a body and mutate nothing;
+//   • deliberately public — the session-less DSAR intake, throttled by the global limiter.
+// ZERO genuine gaps. C2's fix is complete and nothing has regressed since.
+//
+// No automated guard was added for this. A scanner needs the whole authz vocabulary — middleware, in-handler
+// checks, signature verifiers, token guards — and mine over-reported 31 before 9 before 0 across three
+// iterations. A brittle guard that cries wolf gets disabled, and then it protects nothing; the sweep is
+// recorded here instead so the next person can repeat it rather than trust it.
+//
 // Same harness as the sibling: authn is stubbed to inject claims and @leadwolf/db is stubbed so the role
 // lookup is deterministic. Handlers never execute — the guard rejects first — so the repo stubs exist only
 // to satisfy the route modules' imports.
