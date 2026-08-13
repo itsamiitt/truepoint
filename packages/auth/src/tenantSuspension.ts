@@ -13,6 +13,10 @@
 // always, refuse only when someone deliberately arms it. Reading the shadow marker for a week tells an operator
 // the blast radius BEFORE anyone is locked out, which is the whole point.
 //
+// TO ARM THIS, follow docs/planning/19-observability-reliability.md §3.1 — it carries the SQL for "how many
+// tenants would this eject, and for what reason", the metric series to read and which app serves it (apps/auth
+// /metrics, not the API's), and the rollback. Do not flip the flag without step 1.
+//
 // Kept pure — no env read, no DB, no I/O — so the caller injects the mode and this stays unit-testable.
 // The env flag is read at the call site (see switchOrg.ts).
 

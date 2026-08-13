@@ -746,7 +746,11 @@ reason. That is a customer-visible action with no undo, which CLAUDE.md rule 3 a
 
 **Options, in the order this codebase's own precedents suggest:**
 
-1. **Shadow first** — add the check to the auth/tenancy path behind a flag, default OFF, logging what it *would*
+1. ~~**Shadow first**~~ — **DONE and shipped disarmed.** All four tenant-selection paths consult the gate; it
+   logs and counts, and refuses nothing until armed. **The arming procedure is written up as a runbook:
+   [19 §3.1](./19-observability-reliability.md) — the SQL that says how many tenants would be ejected and why,
+   the exact metric series and which app serves it, the flag values, and the rollback.** Original text: add the
+   check to the auth/tenancy path behind a flag, default OFF, logging what it *would*
    refuse. This is exactly the pattern `requireEntitlement` uses for its rollout and `retention_class_policies`
    encodes as `disabled|shadow|enforce`. It makes the blast radius measurable before anyone is locked out.
 2. **Enforce at token mint only** (`login`/`refresh`/`switchOrg`), not per-request. Cheaper and self-limiting:

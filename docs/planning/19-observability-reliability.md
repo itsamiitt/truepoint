@@ -47,6 +47,63 @@ by customer. PII never enters logs/traces (encrypted fields stay masked, `03 §2
     unthrottled marker would bury its own signal. A page must therefore key on PRESENCE, never on volume.
   - Lines carry the guard name and error reason only — never a key, IP, identifier or tenant.
 
+### 3.1 Runbook — arming tenant-suspension enforcement (audit 32 §9E)
+
+The gate ships **disarmed**. `tenants.status = 'suspended'` is written by staff break-glass and by the dunning
+ladder, and until this is armed neither stops anything. Arming it ejects every currently-suspended tenant on
+deploy, with no undo — so the whole procedure is: find out who that is first.
+
+**Step 1 — how many tenants would be ejected, and why.** Run against a replica:
+
+```sql
+SELECT status, suspension_reason, count(*) AS tenants
+  FROM tenants
+ WHERE status <> 'active'
+ GROUP BY status, suspension_reason
+ ORDER BY tenants DESC;
+```
+
+If that returns **no rows, arming is free** — nothing is suspended, so enforcement changes nothing today and
+starts protecting from the next suspension onward. That is the common case and it is worth checking before
+anything else.
+
+If it returns rows, read them: `suspension_reason = 'dunning'` is the billing ladder and those tenants are
+*meant* to lose access; `'staff'` or NULL is a human decision that may be stale, and each wants an owner's
+confirmation before it becomes an eviction.
+
+**Step 2 — how much traffic is actually hitting it.** The gate counts every session that touched a non-active
+tenant. Scrape **apps/auth `/metrics`** — *not* the API's, which renders the same registry but increments none
+of this series:
+
+```
+auth_tenant_suspension_total{mode="shadow",path="login"}
+auth_tenant_suspension_total{mode="shadow",path="refresh"}
+auth_tenant_suspension_total{mode="shadow",path="switch_org"}
+auth_tenant_suspension_total{mode="shadow",path="switch_workspace"}
+```
+
+`mode="shadow"` counts sessions that PROCEEDED and would have been refused. A non-zero `login` count means real
+users are actively working inside a suspended tenant right now; a count confined to `refresh` means sessions
+that predate the suspension are being kept alive. The two imply different comms.
+
+The matching log line names the tenants, which the metric deliberately does not:
+
+```
+[tenant-suspension] mode=shadow tenant=<id> status=suspended — ALLOWED (would refuse once armed)
+```
+
+**Step 3 — arm it.** Set `TENANT_SUSPENSION_ENFORCED=enforce` (the literal `true` also works, for the flag's
+original contract). No deploy of application code is needed — it is read per request.
+
+**Rollback** is the same switch: set it to `shadow` and refusals stop immediately. `disabled` additionally skips
+the status read on `refresh`/`switchWorkspace`, which is the escape hatch if that lookup ever shows up in a
+latency budget — at the cost of going blind.
+
+**What arming does NOT change:** user suspension, which has always been enforced (`login`, `refresh`,
+`switchOrg`, `switchWorkspace` all reject a non-active USER). This is only the tenant-level control.
+
+---
+
 ## 4. Reliability primitives
 
 - **Multi-AZ** across 3 AZs for ALB/ECS/Aurora/ElastiCache/Typesense/OpenSearch/ClickHouse ([01 §3](./01-tech-stack.md)).
