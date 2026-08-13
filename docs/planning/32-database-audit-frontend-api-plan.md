@@ -745,6 +745,44 @@ reason. That is a customer-visible action with no undo, which CLAUDE.md rule 3 a
 Before any of them: **count the currently-suspended tenants and read their `suspension_reason`.** If that set is
 empty, options 2 and 3 are free and this is a five-line fix.
 
+## 9F. `email_message` cleartext — one clear defect, one legal question (verified)
+
+The register carried this as "9.5-P0: `email_message` plaintext unreachable by blind-index DSAR erasure,
+blocked on compliance". Verified rather than carried forward on the audit's word — and it is two separate
+things that were being discussed as one.
+
+**Verified facts.** `email_message` stores `body_enc` as KMS-envelope **ciphertext**, while `snippet`
+(varchar 280), `from_addr` (citext) and `to_addrs` (text[]) are **cleartext**. The table is LIVE, not dark:
+`dispatchOutreachSend` writes outbound rows and `gmailInboxPollSweep` → `recordInboundReply` writes inbound
+ones. And `email_message` appears **nowhere** in the DSAR fan-out — `purgeDependents` covers `source_imports`,
+`contact_reveals`, `consent_records`, `list_members`; `deleteFanout` tombstones `contacts` and clears
+`master_emails` / `master_phones` / `master_signals`. Nothing touches email rows.
+
+**1. The clear defect: `snippet` contradicts `body_enc`.** `snippet` is Gmail's own preview *of the message
+body* (`gmailInbound.ts` passes `msg.snippet` straight through). So the system encrypts the body — deciding
+message content is sensitive enough to warrant KMS envelope encryption — and then stores the first 280
+characters of that same content in the clear, in the same row. Whatever the right answer is, those two
+decisions cannot both be right. This needs no legal input to recognise; it is an internal inconsistency.
+
+**2. The legal question, which is NOT a bug to fix blindly.** After a completed erasure, a subject's address
+still sits in `from_addr` / `to_addrs`. That may well be correct: these rows are the **tenant's own
+correspondence**, and a business's record of having emailed someone is not obviously erasable on that person's
+request — communications records commonly survive erasure under a legitimate-interest or record-keeping basis.
+The problem is not the answer, it is that **the system answers by omission**. Nobody decided that email records
+are out of erasure scope; the fan-out simply never included them, and the blind-index design means it could not
+have reached them anyway.
+
+**What to do, in order:**
+
+1. **Fix the snippet inconsistency** — either stop storing it, encrypt it with the body, or write down why a
+   280-character excerpt is materially less sensitive than the body it comes from. Cheap, no legal input needed.
+2. **Decide the erasure scope explicitly** and record it in `09-compliance.md`: are `email_message` rows in or
+   out of DSAR erasure? Either answer is defensible; the current implicit "out" is not, because it was never
+   chosen.
+3. **If in scope**, the reach problem is real: erasure resolves subjects by `email_blind_index`, and these
+   columns have no blind index, so they are unreachable by the existing mechanism. That is a schema change, and
+   it should not be designed before step 2 answers whether it is needed.
+
 ## 10. Implementation order
 
 Slices are sized to ship independently to main (pre-prod convention), each with its gates
