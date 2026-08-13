@@ -1,5 +1,5 @@
 // RetentionPolicies.tsx — the retention-SLA authoring section on the Compliance page (13a Area 8, 13 §3.8):
-// how long each entity (optionally a field) is retained — the input to the retention sweep. A table with
+// how long each entity (optionally a field) is retained. A table with
 // create / edit and enable / retire, all going to the audited, compliance:manage-gated api. The create/edit/
 // toggle controls hide without the capability (the api still enforces it). Renders via the State Kit.
 "use client";
@@ -192,6 +192,17 @@ export function RetentionPolicies() {
         {canManage ? <TpButton onClick={openNew}>New policy</TpButton> : null}
       </div>
 
+      {/* audit 32 §9C — these rows are a RECORDED COMMITMENT, not an enforcement rule: nothing reads this
+          table outside this console. Saying so on screen is the point. A compliance officer who writes
+          "contacts.email — 400 days", sees it saved and marked Active, and reasonably concludes personal data
+          is being deleted on that schedule is the failure this line exists to prevent — and a code comment
+          cannot reach them. Whether to wire it into the sweep is a human decision (§9C options). */}
+      <p className="app-muted" style={{ fontSize: 12, marginTop: 4, maxWidth: "68ch" }}>
+        Recorded commitments, for audit and reference. Saving a policy here does{" "}
+        <strong>not</strong> delete anything — the engine that actually deletes reads its own
+        per-class schedule on the Retention page.
+      </p>
+
       <StateSwitch
         loading={loading}
         error={error}
@@ -276,10 +287,10 @@ export function RetentionPolicies() {
       <Dialog
         open={!!enableTarget}
         onClose={() => setEnableTarget(null)}
-        title="Enable this retention policy?"
+        title="Mark this retention policy active?"
         description={
           enableTarget
-            ? `Enabling the "${enableTarget.entity}${enableTarget.field ? `.${enableTarget.field}` : ""}" policy ARMS the retention sweep — rows older than ${enableTarget.retentionDays} days become eligible for deletion. This is audited.`
+            ? `Records a commitment to retain "${enableTarget.entity}${enableTarget.field ? `.${enableTarget.field}` : ""}" for ${enableTarget.retentionDays} days. This does NOT start or arm any deletion — the retention engine reads its own per-class schedule. The change is audited.`
             : undefined
         }
         footer={

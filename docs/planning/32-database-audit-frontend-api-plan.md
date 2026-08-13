@@ -625,10 +625,14 @@ entity/field model would first need a defined mapping onto the engine's data cla
 enforcing an SLA someone authored under the assumption it was advisory is the more dangerous of the two
 failure modes. The alternatives, in increasing cost:
 
-1. **Correct the comment only** — state plainly that this is an advisory register with no execution path.
-   Cheapest, removes the false belief in the code, leaves the product gap.
-2. **Say so in the UI** — label the panel advisory, so the officer authoring the SLA sees what it does.
-   Removes the false belief where it actually matters.
+1. ~~**Correct the comment only**~~ — **DONE.** `platformOps.ts` no longer claims to be "the input to the
+   retention sweep".
+2. ~~**Say so in the UI**~~ — **DONE**, and it was worse than "unlabelled". The confirm dialog stated that
+   activating a policy *"ARMS the retention sweep — rows older than N days become eligible for deletion"*,
+   which is false: nothing arms, nothing deletes. An officer was being told the opposite of the truth at the
+   exact moment of the decision. The dialog now says it records a retention commitment and starts no deletion,
+   the section carries a one-line note pointing at where deletion actually lives, and the confirm title reads
+   "Mark … active" rather than "Enable". Copy only — no behaviour changed, so this needed no product call.
 3. **Wire it into the sweep** — a real feature: map entity/field to data class, decide the mode it enters
    at (`shadow` first, per the engine's own contract), and re-run the compliance checklist.
 
