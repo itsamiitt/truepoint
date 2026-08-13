@@ -708,6 +708,13 @@ flowchart TD
   default), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
   (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility) +
   `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate)
+  + `rlsCoverage.test.ts` (static, DB-free: compares the tenant-scoped tables declared in `schema/*.ts` against
+  the `CREATE POLICY` statements in `rls/*.sql`. The isolation itests prove the policies that EXIST work; this
+  proves the SET is complete — add a table with a `tenant_id` and forget its policy and every isolation itest
+  still passes, because they assert about the tables they name. Current: 85 tenant-scoped, 82 policied, 3
+  documented exceptions — `account_holds`/`support_notes` (platform-owned, REVOKE'd instead) and `user_sessions`
+  (audit 32 §9.3-1, a known gap kept countable rather than silently tolerated). **A new tenant table needs a
+  policy in `rls/` or an entry there with its reason.**)
   + `repositories/arrayParamBinding.test.ts` (static, DB-free: renders repository SQL through `PgDialect` offline and
   asserts array binds are ONE parameter. Drizzle's `sql` template SPREADS a bare JS array into one bind per element,
   so `ANY(${ids})` becomes the row constructor `ANY(($1,$2))` and Postgres fails at runtime with 22P02 — invisible to

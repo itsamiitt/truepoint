@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2031,
-  "fileSetHash": "sha256:5a79d082278629662b1ff94a14699266a879c5877171f8a747778aede3761b28",
+  "fileCount": 2032,
+  "fileSetHash": "sha256:5b62c8bfb6cd6360a237426dc403c02368ee104145cebc93fe54f23dfce26f9a",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2761,6 +2761,7 @@
       "packages/db/src/repositories/platformTrustReads.ts",
       "packages/db/src/repositories/subscriptionResetMath.test.ts",
       "packages/db/src/repositories/subscriptionResetMath.ts",
+      "packages/db/src/rlsCoverage.test.ts",
       "packages/db/src/roleCache.test.ts",
       "packages/db/src/roleCache.ts",
       "packages/db/src/schema/accountChildren.ts",
