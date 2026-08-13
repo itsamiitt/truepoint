@@ -650,10 +650,28 @@ policy-driven one is built, tested, exported — and called by nothing.
 | **Half-lives** | **hardcoded** `FIELD_HALF_LIFE_DAYS` — changing one means shipping code | **from `master_confidence_policy`** (0107), per `(field, source_type)` with `'*'` wildcards — staff-tunable, no deploy |
 | **Decay math** | identical `2^(-age/halfLife)` | identical |
 
-**They disagree materially.** Same fact — an email, three independent sources, 180 days old — computed both
-ways: 0.5315 (types) vs 0.6217 / 0.6650 / 0.7048 (core, at source weights 0.5 / 0.6 / 0.8). A gap of **0.09 to
-0.17**, which is enough to move a record across a badge band. Switching engines silently re-scores the entire
-graph in front of customers, so this is a product decision, not a refactor.
+**They disagree materially, and NOT in one direction.** Computed both ways against the REAL seeded policy rows
+from migration 0107 (not invented parameters), by `packages/core/src/prospect/confidenceDivergence.test.ts`:
+
+| source | method | age (d) | sources | live | dormant | delta |
+|---|---|---:|---:|---:|---:|---:|
+| provider | provider | 180 | 1 | 0.4725 | 0.6761 | **+0.2036** |
+| provider | provider | 180 | 3 | 0.5315 | 0.7927 | **+0.2612** |
+| provider | provider | 180 | 5 | 0.5449 | 0.7953 | **+0.2504** |
+| reveal | user_confirm | 30 | 1 | 0.8333 | 0.8974 | +0.0641 |
+| crawl | crawl | 365 | 1 | 0.2351 | 0.1349 | **−0.1002** |
+| crawl | crawl | 365 | 3 | 0.2645 | 0.2229 | −0.0416 |
+
+**This is the finding that should drive the decision.** Switching engines is not "everything scores a bit
+higher" — it is a REDISTRIBUTION. Provider-sourced records gain 0.20–0.26 (enough to cross two badge bands),
+while passively-crawled records LOSE up to 0.10. Arguably that is the more honest model — a licensed provider
+corroborated three ways deserves more belief than a crawl, and the live engine's 1.25× cap cannot express
+that — but it means a visible subset of records would get *less* confident on the day of the switch, and those
+are exactly the records a customer is most likely to have complained about already.
+
+The divergence is driven by CORROBORATION, not decay: the decay arithmetic is identical in both files, and the
+gap widens as source count rises (Noisy-OR compounds; a capped multiplier cannot). Both engines agree on the
+one property that matters most — a fact with no observation date is not scored as false.
 
 **Two consequences while it stands.** `master_confidence_policy` is staff-tunable configuration that tunes
 nothing — the third such surface this audit has found, after `retention_policies` (§9C) and the dark
