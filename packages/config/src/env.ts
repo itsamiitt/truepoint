@@ -336,6 +336,13 @@ export const appEnvSchema = z
     // Only the literal "true" arms it.
     BREACHED_PASSWORD_CHECK_AT_LOGIN: z.string().optional(),
 
+    // Tenant-suspension enforcement (audit 32 §9E). tenants.status can be set to 'suspended' by staff
+    // break-glass and by the dunning ladder, and until now NOTHING read it — a suspended tenant kept full API
+    // access. Enforcing it is correct but ejects every currently-suspended tenant on deploy, so this follows
+    // the BREACHED_PASSWORD_CHECK_AT_LOGIN posture above: OBSERVE FIRST. Unset/absent = shadow, which logs
+    // what it WOULD refuse and refuses nothing. Only the literal "true" arms enforcement.
+    TENANT_SUSPENSION_ENFORCED: z.string().optional(),
+
     // WebAuthn / passkeys (AUTH-024). OFF BY DEFAULT — the ceremony routes 404 unless WEBAUTHN_ENABLED="true".
     // WEBAUTHN_RP_ID is the Relying Party ID: the REGISTRABLE DOMAIN (e.g. "truepoint.in"), NOT a full origin —
     // so a passkey registered on auth.* works across app.*/api.* in the subdomain estate. Ceremonies verify the

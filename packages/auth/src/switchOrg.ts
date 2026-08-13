@@ -10,6 +10,11 @@ import { env } from "@leadwolf/config";
 import { tenantMemberRepository, userRepository, workspaceRepository } from "@leadwolf/db";
 import { ForbiddenError, InvalidTokenError } from "@leadwolf/types";
 import { findActiveSessionOrDetectReuse, rotateSession } from "./session.ts";
+import {
+  suspensionEnforced,
+  tenantSuspensionDecision,
+  tenantSuspensionLog,
+} from "./tenantSuspension.ts";
 import { mintAccessToken } from "./token.ts";
 
 export interface SwitchOrgResult {
@@ -33,8 +38,22 @@ export async function switchOrg(args: {
   // GUC for every downstream query, so an unauthorized tenant here would be a cross-tenant breach — this
   // membership check IS the boundary for the org switch (mirrors switchWorkspace's workspace check).
   const orgs = await tenantMemberRepository.listForUser(user.id);
-  if (!orgs.some((o) => o.tenantId === args.targetTenantId)) {
+  const target = orgs.find((o) => o.tenantId === args.targetTenantId);
+  if (!target) {
     throw new ForbiddenError("tenant_forbidden");
+  }
+
+  // A SUSPENDED tenant must not receive a fresh `tid` (audit 32 §9E). Observe-first: the decision is computed
+  // and logged on every switch into a non-active tenant, but only refuses once TENANT_SUSPENSION_ENFORCED is
+  // armed — enforcing on deploy would eject every currently-suspended tenant with no undo. The shadow line is
+  // what lets an operator size that set before flipping it.
+  const decision = tenantSuspensionDecision(
+    target.tenantStatus,
+    suspensionEnforced(env.TENANT_SUSPENSION_ENFORCED),
+  );
+  if (decision.suspended) {
+    console.warn(tenantSuspensionLog(target.tenantId, target.tenantStatus, decision.refuse));
+    if (decision.refuse) throw new ForbiddenError("tenant_suspended");
   }
 
   // Land on the target org's remembered / default / first workspace. May be undefined when the user belongs to

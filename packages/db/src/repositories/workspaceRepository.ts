@@ -247,6 +247,10 @@ export interface TenantMembership {
   tenantId: string;
   tenantName: string;
   isTenantOwner: boolean;
+  /** The TENANT's status (active|suspended|…), not the membership's — those are different things and both
+   *  matter. Surfaced so the auth layer can act on a suspended tenant (audit 32 §9E); this read itself stays
+   *  behaviour-neutral and still returns suspended tenants. The decision belongs above the repository. */
+  tenantStatus: string;
 }
 
 /** A tenant member projected for the SCIM /Users surface: the global identity joined to its tenant membership.
@@ -271,6 +275,7 @@ export const tenantMemberRepository = {
         tenantId: tenants.id,
         tenantName: tenants.name,
         isTenantOwner: tenantMembers.isTenantOwner,
+        tenantStatus: tenants.status,
       })
       .from(tenantMembers)
       .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
@@ -282,6 +287,7 @@ export const tenantMemberRepository = {
       tenantId: r.tenantId,
       tenantName: r.tenantName,
       isTenantOwner: r.isTenantOwner,
+      tenantStatus: r.tenantStatus,
     }));
   },
 

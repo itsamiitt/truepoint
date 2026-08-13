@@ -96,6 +96,14 @@ export {
 // The fail-open guard marker (audit 32 · C11). Exported because apps/api's entitlement gate is one of the
 // guards that opens, and all of them must emit the same shape for one alert expression to catch them.
 export { type OpenGuard, guardDegradedLog, makeDegradedThrottle } from "./guardDegradedLog.ts";
+// Tenant-suspension decision (audit 32 §9E). Exported so the other tenant-selection paths (refresh,
+// switchWorkspace, and finalizeLogin's org pick) can adopt the same decision rather than re-deriving it.
+export {
+  type SuspensionDecision,
+  suspensionEnforced,
+  tenantSuspensionDecision,
+  tenantSuspensionLog,
+} from "./tenantSuspension.ts";
 export {
   createEmailVerification,
   verifyEmailCode,
