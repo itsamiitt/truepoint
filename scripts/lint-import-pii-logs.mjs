@@ -18,6 +18,16 @@ const ROOTS = [
   "packages/core/src/import",
   "apps/api/src/features/import",
   "apps/workers/src/queues",
+  // The INGEST path, added because it is the same risk class as import and was not covered: the API route
+  // takes `records[]` straight off the wire and the core connectors (chromeExtension, adminUpload) shape
+  // captured observations. Both carry exactly the payloads 13 §3.5 says must never reach a log stream.
+  //
+  // Both are clean TODAY — neither has a single log or console call — so this costs nothing now. That is the
+  // point of adding it now rather than later: the tripwire exists to make a REGRESSION fail CI, and a surface
+  // with no logging yet is the cheapest possible moment to cover it. Covering it after someone writes the
+  // first `logger.info({ records })` is covering it too late.
+  "apps/api/src/features/ingest",
+  "packages/core/src/ingestion",
 ];
 
 // A log/console/logger call opener — we then scan its single-line argument list.
@@ -35,6 +45,17 @@ const FORBIDDEN = [
   { re: /file\s*\.\s*name|\bfileName\b|\bfilename\b/i, why: "filename-as-typed" },
   { re: /\.body\b/, why: "request/response body" },
   { re: /\b(?:email|phone)\s*[:=]/i, why: "a channel value (email/phone)" },
+  // INGEST's equivalents of `.rows` / `rawData`. Added together with the ingest roots above, because
+  // adding the roots ALONE was worse than useless: the files were scanned, no pattern matched their
+  // vocabulary, and the gate reported "clean" over an uncovered surface. Verified by planting
+  // `logger.info({ records: ... })` in the ingest route -- it passed before these three, and fails after.
+  //
+  // Same count caveat the `.rows` / `rows:` pair already carries: `records: observations.length` is a
+  // COUNT and gets flagged too. That trade is deliberate and pre-existing -- a false positive costs one
+  // review comment; a missed raw-record log costs a PII disclosure.
+  { re: /\.records\b/, why: "captured records array (.records)" },
+  { re: /\brecords\s*:/, why: "records: value in a log object" },
+  { re: /\bobservations\b/, why: "parsed observations (ingest's row equivalent)" },
 ];
 
 /** Extract the argument text of a call starting at `openParenIdx` (index of the `(`), balancing parens on the
