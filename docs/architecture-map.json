@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2030,
-  "fileSetHash": "sha256:76e321573684851e3014e17417d822e1e68d21b56711e727432ff910c699398b",
+  "fileCount": 2031,
+  "fileSetHash": "sha256:5a79d082278629662b1ff94a14699266a879c5877171f8a747778aede3761b28",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1072,6 +1072,7 @@
         "packages/core/src/import/parseFile.ts",
         "packages/core/src/import/parseXlsx.test.ts",
         "packages/core/src/import/parseXlsx.ts",
+        "packages/core/src/import/piiLogTripwire.test.ts",
         "packages/core/src/import/prepareContact.ts",
         "packages/core/src/import/preview.test.ts",
         "packages/core/src/import/preview.ts",
