@@ -9,6 +9,7 @@
 
 import { providerConfigRepository, withPlatformTx } from "@leadwolf/db";
 import {
+  KNOWN_ENRICH_PROVIDERS,
   NotFoundError,
   type ProviderConfigView,
   ValidationError,
@@ -20,14 +21,12 @@ import { type Context, Hono } from "hono";
 import type { ApiVariables } from "../../middleware/authn.ts";
 import { requireCapability } from "../../middleware/requireCapability.ts";
 
-// The fixed set of enrichment providers the platform supports (13 §3.6). Admins toggle / budget these; they
-// cannot add providers from the console, so this list — not user input — is the source of valid provider ids.
-const KNOWN_PROVIDERS: ReadonlyArray<{ provider: string; label: string }> = [
-  { provider: "apollo", label: "Apollo" },
-  { provider: "zoominfo", label: "ZoomInfo" },
-  { provider: "clearbit", label: "Clearbit" },
-];
-const LABEL = new Map(KNOWN_PROVIDERS.map((p) => [p.provider, p.label]));
+// The fixed set of enrichment providers the platform supports (13 §3.6) — the SHARED constant from
+// @leadwolf/types (single source with the workspace priority validation + settings UI; 0111). Admins
+// toggle / budget these; they cannot add providers from the console, so this list — never user input —
+// is the source of valid provider ids.
+const KNOWN_PROVIDERS = KNOWN_ENRICH_PROVIDERS;
+const LABEL = new Map<string, string>(KNOWN_PROVIDERS.map((p) => [p.provider, p.label]));
 
 export const providerConfigRoutes = new Hono<{ Variables: ApiVariables }>();
 
@@ -51,13 +50,24 @@ function startOfHealthWindowUtc(): Date {
   return new Date(Date.now() - 24 * 60 * 60 * 1000);
 }
 
+/** The waterfall-telemetry window (0111, P6): 30 days of provider_calls history. */
+const STATS_WINDOW_DAYS = 30;
+function startOfStatsWindowUtc(): Date {
+  return new Date(Date.now() - STATS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+}
+
 /** List the supported providers merged with their stored config + live month-to-date spend (masked). */
 providerConfigRoutes.get("/", async (c) => {
   const providers = await withPlatformTx(actorOf(c), "admin.list_provider_configs", async (tx) => {
-    const [configs, mtd, healthCounts] = await Promise.all([
+    const [configs, mtd, healthCounts, stats] = await Promise.all([
       providerConfigRepository.list(tx),
       providerConfigRepository.monthToDateCentsByProvider(tx, startOfMonthUtc()),
       providerConfigRepository.recentHealthByProvider(tx, startOfHealthWindowUtc()),
+      providerConfigRepository.waterfallStatsByProvider(
+        tx,
+        startOfStatsWindowUtc(),
+        STATS_WINDOW_DAYS,
+      ),
     ]);
     const byProvider = new Map(configs.map((r) => [r.provider, r]));
     return KNOWN_PROVIDERS.map(({ provider, label }): ProviderConfigView => {
@@ -73,6 +83,8 @@ providerConfigRoutes.get("/", async (c) => {
         health: deriveProviderHealth(
           healthCounts[provider] ?? { hit: 0, miss: 0, rateLimited: 0, error: 0 },
         ),
+        // 30d waterfall telemetry (0111, P6) — read-only; null until the window holds rows.
+        stats: stats[provider] ?? null,
       };
     });
   });

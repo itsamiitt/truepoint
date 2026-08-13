@@ -277,6 +277,7 @@ export {
   enrichContact,
   type EnrichContactInput,
   type EnrichContactResult,
+  type EnrichDeps,
 } from "./enrichment/enrichContact.ts";
 export type {
   EnrichmentProvider,
@@ -302,6 +303,34 @@ export {
   resetBreakers,
   type BulkWaterfallOptions,
 } from "./enrichment/waterfall.ts";
+// Waterfall v2 (0111): the per-field cascade + its injectable infrastructure ports. Redis-backed
+// implementations live in @leadwolf/integrations (redisBreakerStore / redisProviderGate); the defaults
+// here keep tests and the flag-retired inline path dependency-free.
+export {
+  runFieldWaterfalls,
+  type FieldWaterfallOutcome,
+  type FieldWin,
+  type ProviderAttempt,
+  type RunFieldWaterfallsInput,
+  type VerificationKnobs,
+} from "./enrichment/fieldWaterfall.ts";
+export { inMemoryBreakerStore, type BreakerStore } from "./enrichment/breakerStore.ts";
+export {
+  passThroughGate,
+  type GateDecision,
+  type ProviderGate,
+  type ProviderLimits,
+} from "./enrichment/providerGate.ts";
+export {
+  resolveProviderOrder,
+  runEnrichmentV2,
+  waterfallV2EnabledForScope,
+  type EnrichV2Deps,
+  type EnrichmentV2Result,
+  type EnrichmentV2Run,
+} from "./enrichment/enrichContactV2.ts";
+export { recordEnrichmentEvidence } from "./enrichment/enrichmentEvidence.ts";
+export { appendSourceImports } from "./enrichment/sourceImports.ts";
 export {
   registrableDomain,
   toE164,

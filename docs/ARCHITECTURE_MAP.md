@@ -177,17 +177,29 @@ apps/                           # deployable processes (thin transport adapters)
   server will decide the path), `ImportsLanding` (`/imports` scaffold; `/import` → redirect `/imports/new`),
   `ContactsTable`, `importJob.ts` (poll→UI state), `rejectedRowsCsv.ts`; root `providers.tsx` (TanStack Query seam)
 
-#### enrichment — *M4 provider waterfall + bulk match-first* ([06](./planning/06-enrichment-engine.md), ADR-0037/0038)
-- **core:** `enrichment/` — `providerPort.ts` (the 06 §3 contract; core OWNS the port), `waterfall.ts` (trust÷cost
-  ordering + per-provider breaker), `enrichContact.ts` (cache-first → budget breaker → waterfall → overlay upsert + cost row),
-  `requestHash.ts`, `policy.ts` (auto-enrich guard: trigger + field-allowlist + budget), `jobStatus.ts` (read-only job DTOs)
+#### enrichment — *M4 provider waterfall + bulk match-first + waterfall v2* ([06](./planning/06-enrichment-engine.md), ADR-0037/0038, 0111)
+- **core:** `enrichment/` — `providerPort.ts` (the 06 §3 contract; core OWNS the port), `waterfall.ts` (legacy trust÷cost
+  ordering + per-process breaker; still the bulk residual path), `enrichContact.ts` (dual-gated: legacy single-tx body OR
+  the v2 branch), `requestHash.ts`, `policy.ts` (auto-enrich guard: trigger + field-allowlist + budget), `jobStatus.ts`
+- **core (waterfall v2, 0111 — dark behind `WATERFALL_V2_ENABLED` + tenant flag):** `fieldWaterfall.ts` (PER-FIELD cascade,
+  one memoized call per provider, capability filter, verify-before-accept w/ catch-all policy), `enrichContactV2.ts`
+  (tx-split orchestration + `resolveProviderOrder`: per-run override → workspace prefs → default), `breakerStore.ts` +
+  `providerGate.ts` (injectable ports; in-memory/pass-through defaults), `enrichmentEvidence.ts` (Layer-0 source_records +
+  provenance events per winning provider, own withErTx, flag-gated), `sourceImports.ts` (one row per winning provider)
 - **core (bulk, ADR-0037):** `enrichment/bulk/` — `matchPort.ts` (the `MatchPort` seam; injects a CandidateFinder, never
   imports db), `overlayMatcher.ts` (real Layer-1 matcher: deterministic ladder → fuzzy_name_company → review/unmatched),
   `masterGraphMatcher.ts` (Layer-0 **stub** until the Citus/OpenSearch/Spark candidate index lands), `estimate.ts`
   (pre-flight cost forecast: sample → extrapolate charged rows × hit rate, a range never a guarantee)
-- **integrations:** `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit VendorSpecs over one HTTP shape; injectable fetch)
-- **db:** `providerCallRepository.ts` (cache + cost ledger); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
-  (*both unassigned — entity not in `REPO_DOMAIN`*) · **api:** `features/enrichment/*` · **workers:** `queues/enrichment.ts`
+- **integrations:** `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit **+ PDL/Coresignal (dark until DPA'd
+  keys)** VendorSpecs over one HARDENED HTTP shape: https+host-allowlist, timeout, size cap, Retry-After; injectable fetch) +
+  `redisBreakerStore.ts`/`redisProviderGate.ts` (fleet-shared breaker + per-provider rate/budget gate enforcing
+  `provider_configs`)
+- **db:** `providerCallRepository.ts` (cache + cost ledger; 0111 unique `(ws,hash,provider)` + per-field `filled_fields` —
+  the old unique silently dropped multi-attempt rows); `enrichmentJobRepository.ts`, `enrichmentPolicyRepository.ts`
+  (+`provider_prefs` jsonb + same-tx audit) (*both unassigned — entity not in `REPO_DOMAIN`*) ·
+  **api:** `features/enrichment/*` (+ 202 producer behind `ENRICHMENT_ASYNC_ENABLED`) · **workers:** `queues/enrichment.ts`
+  (factory w/ Redis deps + throttle deferral) · **web:** `settings-enrichment/ProviderPriorityPanel` (arrow-reorder per-field
+  priority + verification knobs) · **admin:** provider stats block (30d hit/verified-valid/latency/cost per provider)
 
 #### enrichment-jobs — *bulk enrichment job UI* (web; ADR-0039)
 - **web:** `features/enrichment-jobs/` — `EnrichmentJobsPage` + `JobDetailDrawer` over `useEnrichmentJobs`/`useEnrichmentJobDetail`;
@@ -821,7 +833,7 @@ flowchart TD
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
   (provenance, employment, org-kind, signals, displacement, alumni, peer adopters) and audit 32's Waves 1/3
-  (the CRM queue-name fix, the RFC-9457 404, 29 role-gated writes, migration 0109's FK indexes, `withSystemTx`,
+  (the CRM queue-name fix, the RFC-9457 404, 29 role-gated writes, migration 0111's FK indexes, `withSystemTx`,
   the retired `requireStaffRole`, and the configuration-list safety cap). The web files bucketed to
   `features.prospect.web` and added no new unassigned entries or warnings.
   **Added since that refresh** (+4 files, no new unassigned entries or warnings): `apps/web/src/lib/problemMessage.ts`
@@ -867,4 +879,12 @@ flowchart TD
   corrected: it had claimed 55 while the file held 37 and the JSON 86.
   When the source set changes again, re-run `node .claude/hooks/gen-architecture-map.mjs` (the Stop hook compares
   the `fileSetHash`) and refresh these purposes.
+
+  2026-08-12 refresh (waterfall v2, 0111): the new enrichment files all bucketed into their existing domains —
+  `core/enrichment/{fieldWaterfall,enrichContactV2,breakerStore,providerGate,enrichmentEvidence,sourceImports}`
+  → the core enrichment domain, `integrations/enrichment/{redisBreakerStore,redisProviderGate}` → integrations,
+  the api 202 producer + web ProviderPriorityPanel → their feature buckets. The enrichment section's
+  one-line purposes above were updated for the v2 split (legacy waterfall vs the flag-gated per-field
+  engine). Post-merge with main's concurrent hook fixes (edf64d2d…27578b28) the regenerated map reads
+  unassigned 2 / warnings 51 — main's REPO_DOMAIN/config-placement fixes absorbed the earlier seven.
 ```

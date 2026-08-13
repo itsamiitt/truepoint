@@ -267,7 +267,7 @@ export const auditLog = pgTable(
         'password.reset.request','password.reset.complete','sso.initiated','sso.callback',
         'token.issued','token.refresh','token.revoke','device.trusted','device.revoked','session.revoked',
         'code.issued','code.exchanged','signup','oauth.link',
-        'import.policy_updated',
+        'import.policy_updated','enrichment.policy_updated',
         'import.committed','import.cancelled','import.retry_created','import.template_saved','import.artifact_downloaded',
         'import.av_infected','import.draft_reaped',
         'channel_added','channel_promoted','channel_deleted','channel_primary_demoted',

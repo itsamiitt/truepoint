@@ -6,7 +6,12 @@ import { fetchWithAuth } from "@/lib/authClient";
 import { isUnavailable } from "@/lib/maybeList";
 import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
-import type { EnrichField, EnrichTrigger } from "@leadwolf/types";
+import type {
+  EnrichField,
+  EnrichTrigger,
+  ProviderPriority,
+  VerificationPolicy,
+} from "@leadwolf/types";
 import type { AutoEnrichPolicy } from "./types";
 
 /** Current workspace's auto-enrich policy + month-to-date spend. null when the route isn't built yet. */
@@ -17,12 +22,15 @@ export async function fetchAutoEnrichPolicy(): Promise<AutoEnrichPolicy | null> 
   return (await res.json()) as AutoEnrichPolicy;
 }
 
-/** The editable subset of the policy (everything except the read-only month-to-date spend). */
+/** The editable subset of the policy (everything except the read-only month-to-date spend). Sparse —
+ *  the server PATCH merges; absent fields keep their stored value (arrays replace whole). */
 export interface AutoEnrichPolicyPatch {
-  enabled: boolean;
-  triggers: EnrichTrigger[];
-  fieldAllowlist: EnrichField[];
-  monthlyBudgetMicros: number;
+  enabled?: boolean;
+  triggers?: EnrichTrigger[];
+  fieldAllowlist?: EnrichField[];
+  monthlyBudgetMicros?: number;
+  providerPriority?: ProviderPriority;
+  verification?: VerificationPolicy;
 }
 
 /** Save the policy. Returns the resolved policy, or null when the route isn't built yet (404/501). */

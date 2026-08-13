@@ -11,12 +11,19 @@
 
 import {
   DEFAULT_ENRICHMENT_POLICY,
+  DEFAULT_PROVIDER_PRIORITY,
+  DEFAULT_VERIFICATION_POLICY,
   type EnrichField,
   type EnrichTrigger,
   type EnrichmentPolicy,
+  type ProviderPriority,
+  type VerificationPolicy,
+  providerPrioritySchema,
+  verificationPolicySchema,
 } from "@leadwolf/types";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { enrichmentPolicy } from "../schema/enrichmentPolicy.ts";
+import { auditRepository } from "./auditRepository.ts";
 import { providerCallRepository } from "./providerCallRepository.ts";
 
 /** The stored policy as read back (the jsonb arrays narrowed to their closed sets for the caller). */
@@ -25,10 +32,16 @@ export interface EnrichmentPolicyRecord {
   triggers: EnrichTrigger[];
   fieldAllowlist: EnrichField[];
   monthlyBudgetMicros: number;
+  providerPriority: ProviderPriority;
+  verification: VerificationPolicy;
+  /** The workspace's configured lawful basis (0091) — the resolveLawfulBasis workspaceDefault input. */
+  lawfulBasis: string | null;
   updatedAt: Date;
 }
 
-/** The writable policy columns. `tenantId`/`workspaceId` scope the row; the rest is the policy itself. */
+/** The writable policy columns. `tenantId`/`workspaceId` scope the row; the rest is the policy itself.
+ *  The v2 pref shapes are optional — an omitting caller (pre-0111 call sites, tests) writes engine
+ *  defaults, which is exactly the do-nothing posture an unconfigured workspace has. */
 export interface EnrichmentPolicyUpsert {
   tenantId: string;
   workspaceId: string;
@@ -36,6 +49,27 @@ export interface EnrichmentPolicyUpsert {
   triggers: EnrichTrigger[];
   fieldAllowlist: EnrichField[];
   monthlyBudgetMicros: number;
+  providerPriority?: ProviderPriority;
+  verification?: VerificationPolicy;
+}
+
+/**
+ * Narrow the stored provider_prefs jsonb back to the typed shapes, defaulting on any miss. safeParse (not
+ * a cast like triggers/fieldAllowlist) because this jsonb nests two shapes with defaults — a row written
+ * before 0111 (`{}`), or by a future `version: 2` writer, must degrade to engine defaults rather than
+ * leak an unvalidated object into the waterfall's ordering input.
+ */
+function parsePrefs(raw: unknown): {
+  providerPriority: ProviderPriority;
+  verification: VerificationPolicy;
+} {
+  const prefs = (raw ?? {}) as Record<string, unknown>;
+  const priority = providerPrioritySchema.safeParse(prefs.providerPriority);
+  const verification = verificationPolicySchema.safeParse(prefs.verification);
+  return {
+    providerPriority: priority.success ? priority.data : DEFAULT_PROVIDER_PRIORITY,
+    verification: verification.success ? verification.data : DEFAULT_VERIFICATION_POLICY,
+  };
 }
 
 /** A sparse policy patch — present fields replace, absent fields keep the current value (arrays replace whole). */
@@ -53,6 +87,8 @@ function toPolicy(record: EnrichmentPolicyRecord): EnrichmentPolicy {
     triggers: record.triggers,
     fieldAllowlist: record.fieldAllowlist,
     monthlyBudgetMicros: record.monthlyBudgetMicros,
+    providerPriority: record.providerPriority,
+    verification: record.verification,
   };
 }
 
@@ -64,6 +100,8 @@ async function readRow(tx: Tx): Promise<EnrichmentPolicyRecord | null> {
       triggers: enrichmentPolicy.triggers,
       fieldAllowlist: enrichmentPolicy.fieldAllowlist,
       monthlyBudgetMicros: enrichmentPolicy.monthlyBudgetMicros,
+      providerPrefs: enrichmentPolicy.providerPrefs,
+      lawfulBasis: enrichmentPolicy.lawfulBasis,
       updatedAt: enrichmentPolicy.updatedAt,
     })
     .from(enrichmentPolicy)
@@ -75,12 +113,18 @@ async function readRow(tx: Tx): Promise<EnrichmentPolicyRecord | null> {
     triggers: (row.triggers as EnrichTrigger[]) ?? [],
     fieldAllowlist: (row.fieldAllowlist as EnrichField[]) ?? [],
     monthlyBudgetMicros: Number(row.monthlyBudgetMicros),
+    ...parsePrefs(row.providerPrefs),
+    lawfulBasis: row.lawfulBasis,
     updatedAt: row.updatedAt,
   };
 }
 
 /** Insert-or-replace the policy within an open tx (ON CONFLICT on the workspace_id unique index → update). */
 async function writeRow(tx: Tx, values: EnrichmentPolicyUpsert): Promise<EnrichmentPolicyRecord> {
+  const providerPrefs = {
+    providerPriority: values.providerPriority ?? DEFAULT_PROVIDER_PRIORITY,
+    verification: values.verification ?? DEFAULT_VERIFICATION_POLICY,
+  };
   const rows = await tx
     .insert(enrichmentPolicy)
     .values({
@@ -90,6 +134,7 @@ async function writeRow(tx: Tx, values: EnrichmentPolicyUpsert): Promise<Enrichm
       triggers: values.triggers,
       fieldAllowlist: values.fieldAllowlist,
       monthlyBudgetMicros: values.monthlyBudgetMicros,
+      providerPrefs,
     })
     .onConflictDoUpdate({
       target: enrichmentPolicy.workspaceId,
@@ -98,6 +143,7 @@ async function writeRow(tx: Tx, values: EnrichmentPolicyUpsert): Promise<Enrichm
         triggers: values.triggers,
         fieldAllowlist: values.fieldAllowlist,
         monthlyBudgetMicros: values.monthlyBudgetMicros,
+        providerPrefs,
       },
     })
     .returning({
@@ -105,6 +151,8 @@ async function writeRow(tx: Tx, values: EnrichmentPolicyUpsert): Promise<Enrichm
       triggers: enrichmentPolicy.triggers,
       fieldAllowlist: enrichmentPolicy.fieldAllowlist,
       monthlyBudgetMicros: enrichmentPolicy.monthlyBudgetMicros,
+      providerPrefs: enrichmentPolicy.providerPrefs,
+      lawfulBasis: enrichmentPolicy.lawfulBasis,
       updatedAt: enrichmentPolicy.updatedAt,
     });
   const row = rows[0]!;
@@ -113,6 +161,8 @@ async function writeRow(tx: Tx, values: EnrichmentPolicyUpsert): Promise<Enrichm
     triggers: (row.triggers as EnrichTrigger[]) ?? [],
     fieldAllowlist: (row.fieldAllowlist as EnrichField[]) ?? [],
     monthlyBudgetMicros: Number(row.monthlyBudgetMicros),
+    ...parsePrefs(row.providerPrefs),
+    lawfulBasis: row.lawfulBasis,
     updatedAt: row.updatedAt,
   };
 }
@@ -157,18 +207,34 @@ export const enrichmentPolicyRepository = {
     scope: TenantScope,
     ids: { tenantId: string; workspaceId: string },
     patch: EnrichmentPolicyPatch,
+    actor?: { userId: string | null },
   ): Promise<EnrichmentPolicyRecord> {
     return withTenantTx(scope, async (tx) => {
       const current = await readRow(tx);
       const base = current ? toPolicy(current) : DEFAULT_ENRICHMENT_POLICY;
-      return writeRow(tx, {
+      const written = await writeRow(tx, {
         tenantId: ids.tenantId,
         workspaceId: ids.workspaceId,
         enabled: patch.enabled ?? base.enabled,
         triggers: patch.triggers ?? base.triggers,
         fieldAllowlist: patch.fieldAllowlist ?? base.fieldAllowlist,
         monthlyBudgetMicros: patch.monthlyBudgetMicros ?? base.monthlyBudgetMicros,
+        providerPriority: patch.providerPriority ?? base.providerPriority,
+        verification: patch.verification ?? base.verification,
       });
+      // A policy change without its audit trail cannot commit (the import-policy PUT precedent). Metadata
+      // records WHICH knobs changed, never values — the row itself is the value store.
+      if (actor) {
+        await auditRepository.insert(tx, {
+          tenantId: ids.tenantId,
+          workspaceId: ids.workspaceId,
+          actorUserId: actor.userId,
+          action: "enrichment.policy_updated",
+          entityType: "enrichment_policy",
+          metadata: { changedKeys: Object.keys(patch) },
+        });
+      }
+      return written;
     });
   },
 

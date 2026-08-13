@@ -9,6 +9,7 @@
 
 import {
   type EnqueueEnrichChunk,
+  type EnrichDeps,
   type EnrichmentProvider,
   bulkProcessEnrichChunk,
   runBulkEnrich,
@@ -31,6 +32,8 @@ export interface BulkEnrichmentProcessDeps {
   enqueueChunk: EnqueueEnrichChunk;
   /** The vendor adapters (defaultProviders) the chunk phase feeds to enrichContact — mirrors processEnrichment. */
   providers: EnrichmentProvider[];
+  /** Waterfall-v2 infrastructure (Redis-shared breaker/gate) — same instances the single-enrich worker uses. */
+  enrichDeps?: EnrichDeps;
 }
 
 /** A non-PII summary of what a single bulk-enrich job step did (per-queue observability; never the rows). */
@@ -96,6 +99,7 @@ export function makeProcessBulkEnrichment(deps: BulkEnrichmentProcessDeps) {
       jobId: data.jobId,
       chunkId: data.chunkId,
       providers: deps.providers,
+      enrichDeps: deps.enrichDeps,
     });
     return {
       kind: "chunk",

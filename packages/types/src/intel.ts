@@ -65,9 +65,68 @@ export type EnrichCapability = z.infer<typeof enrichCapability>;
 export const enrichField = z.enum(["email", "phone", "jobTitle", "seniorityLevel", "department"]);
 export type EnrichField = z.infer<typeof enrichField>;
 
+/**
+ * The provider ids a workspace may order/disable and the API validates `providerOrder` against — the
+ * single source shared by api validation, the platform-admin allowlist, and the web settings panel
+ * (waterfall v2, 06 §4: "the ordering is configurable, not hardcoded"). Ids match EnrichmentProvider.name
+ * and provider_configs.provider exactly. Adding a vendor = one entry here + an adapter + a sourceName
+ * member (contacts.ts) + the source_imports CHECK — grep 0111 for the checklist.
+ */
+export const KNOWN_ENRICH_PROVIDERS = [
+  { provider: "apollo", label: "Apollo" },
+  { provider: "zoominfo", label: "ZoomInfo" },
+  { provider: "clearbit", label: "Clearbit" },
+  { provider: "pdl", label: "People Data Labs" },
+  { provider: "coresignal", label: "Coresignal" },
+] as const;
+export const knownEnrichProviderIds = KNOWN_ENRICH_PROVIDERS.map((p) => p.provider) as [
+  string,
+  ...string[],
+];
+/** A provider id from the known set — the validation for stored prefs and per-run overrides. */
+export const enrichProviderId = z.enum(
+  knownEnrichProviderIds as ["apollo", "zoominfo", "clearbit", "pdl", "coresignal"],
+);
+export type EnrichProviderId = z.infer<typeof enrichProviderId>;
+
 export const enrichmentRequestSchema = z.object({
   fields: z.array(enrichField).min(1),
+  /**
+   * Per-RUN provider-order override (waterfall v2): tried before the workspace's saved
+   * provider_prefs and the engine default. Validated against the known set; never persisted.
+   */
+  providerOrder: z.array(enrichProviderId).max(20).optional(),
 });
+
+/** 202 body when ENRICHMENT_ASYNC_ENABLED routes the enrich POST through the queue (waterfall v2). */
+export const enrichmentTriggerAckSchema = z.object({
+  queued: z.literal(true),
+  jobId: z.string().min(1),
+});
+export type EnrichmentTriggerAck = z.infer<typeof enrichmentTriggerAckSchema>;
+
+/** Per-tenant half of the waterfall-v2 DUAL GATE (0111). Effective v2 = the global WATERFALL_V2_ENABLED
+ *  env kill-switch AND this flag (fail-closed via evaluateFlag: unknown flag = off). The shared key lives
+ *  here so api/workers can never drift (the CHANNELS_DUAL_WRITE_FLAG_KEY precedent). */
+export const ENRICHMENT_WATERFALL_V2_FLAG_KEY = "enrichment_waterfall_v2";
+
+/**
+ * The `enrichment` queue's job payload — the producer/consumer contract shared by the api's 202 producer
+ * (ENRICHMENT_ASYNC_ENABLED) and the worker's processor (the ReverificationJobData precedent: the moment
+ * a second app produces onto a queue, its payload contract moves to the leaf package). PII-free: ids +
+ * field names only.
+ */
+export const enrichmentJobDataSchema = z.object({
+  tenantId: z.string().uuid(),
+  workspaceId: z.string().uuid(),
+  contactId: z.string().uuid(),
+  fields: z.array(enrichField).min(1),
+  requestedByUserId: z.string().nullable().optional(),
+  providerOrder: z.array(enrichProviderId).max(20).optional(),
+  /** All-throttled deferral count (worker-internal) — bounds the re-enqueue loop; capped, never user-set. */
+  deferrals: z.number().int().nonnegative().max(10).optional(),
+});
+export type EnrichmentJobData = z.infer<typeof enrichmentJobDataSchema>;
 
 // ── Data quality & freshness (22, ADR-0025) ────────────────────────────────────────────────────────────
 // freshness_status derives from age / re-verify-SLA (22 §3): <0.5 fresh, <1.0 aging, <1.5 stale, else expired.

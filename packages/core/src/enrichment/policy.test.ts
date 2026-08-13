@@ -4,7 +4,11 @@
 // DB-backed enforceAutoEnrichPolicy is exercised by the db itest (RLS + spend); here we test the logic only.
 
 import { describe, expect, test } from "bun:test";
-import type { EnrichmentPolicy } from "@leadwolf/types";
+import {
+  DEFAULT_PROVIDER_PRIORITY,
+  DEFAULT_VERIFICATION_POLICY,
+  type EnrichmentPolicy,
+} from "@leadwolf/types";
 import { decideAutoEnrich } from "./policy.ts";
 
 const ENABLED: EnrichmentPolicy = {
@@ -12,6 +16,8 @@ const ENABLED: EnrichmentPolicy = {
   triggers: ["on_import", "on_reveal"],
   fieldAllowlist: ["email", "phone"],
   monthlyBudgetMicros: 1_000_000,
+  providerPriority: DEFAULT_PROVIDER_PRIORITY,
+  verification: DEFAULT_VERIFICATION_POLICY,
 };
 
 describe("decideAutoEnrich", () => {

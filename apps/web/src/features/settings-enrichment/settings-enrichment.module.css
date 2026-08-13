@@ -21,3 +21,44 @@
   font-size: 13px;
   color: var(--tp-ink-4);
 }
+
+/* Provider priority (0111): ordered per-field lists with arrow-button reorder. */
+.providerList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: 420px;
+}
+.providerRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--tp-line);
+  border-radius: 8px;
+  background: var(--tp-surface);
+}
+.providerPosition {
+  font-family: var(--tp-font-mono, monospace);
+  font-size: 12px;
+  color: var(--tp-ink-4);
+  min-width: 16px;
+  text-align: right;
+}
+.providerName {
+  flex: 1;
+  font-size: 14px;
+}
+.providerNameDisabled {
+  flex: 1;
+  font-size: 14px;
+  color: var(--tp-ink-4);
+  text-decoration: line-through;
+}
+.providerRowActions {
+  display: flex;
+  gap: 2px;
+}

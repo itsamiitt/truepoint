@@ -27,7 +27,9 @@ import {
   clamdScanner,
   defaultCrmConnectors,
   defaultProviders,
+  redisBreakerStore,
   redisCrmBudgetStore,
+  redisProviderGate,
   s3FileStoreFromEnv,
 } from "@leadwolf/integrations";
 import {
@@ -142,7 +144,7 @@ import {
   ENRICHMENT_DLQ,
   ENRICHMENT_QUEUE,
   type EnrichmentJobData,
-  processEnrichment,
+  makeProcessEnrichment,
 } from "./queues/enrichment.ts";
 import { ER_SWEEP_QUEUE, type ErSweepJobData, makeProcessErSweep } from "./queues/erSweep.ts";
 import {
@@ -383,6 +385,12 @@ const crmConnectors = defaultCrmConnectors();
 // scaled: a process-local counter would let N workers each grant the full budget. Shares the existing
 // BullMQ connection rather than opening another.
 const crmBudget = redisCrmBudgetStore(connection);
+// Waterfall v2 (0111): the Redis-SHARED enrichment circuit breaker + per-provider rate/budget gate —
+// same reasoning as crmBudget above (horizontally-scaled workers make a process-local breaker let N
+// workers each burn the full error budget). Shares the existing BullMQ connection. Inert while
+// WATERFALL_V2_ENABLED is off (the legacy path never touches them).
+const enrichBreaker = redisBreakerStore(connection);
+const enrichGate = redisProviderGate(connection);
 const crmConnectorFor = (provider: string) => crmConnectors[provider as keyof typeof crmConnectors];
 // Data Health snapshot (10 §5): the leader-locked daily sweep that captures a per-workspace trend point.
 export const dataQualitySnapshotSweepQueue = tracedQueue<DataQualitySnapshotSweepJobData>(
@@ -904,7 +912,17 @@ export function startWorkers(): Worker[] {
     instrument(
       tracedWorker<EnrichmentJobData>(
         ENRICHMENT_QUEUE,
-        withDeadline(ENRICHMENT_QUEUE, deadlineMs(ENRICHMENT_QUEUE), processEnrichment),
+        withDeadline(
+          ENRICHMENT_QUEUE,
+          deadlineMs(ENRICHMENT_QUEUE),
+          makeProcessEnrichment({
+            enrich: { breaker: enrichBreaker, gate: enrichGate },
+            // Throttle deferral (v2): re-enqueue with the vendor-suggested delay — deferred, never dropped.
+            defer: async (data, delayMs) => {
+              await enrichmentQueue.add("enrich", data, { ...ENRICHMENT_RETRY, delay: delayMs });
+            },
+          }),
+        ),
         { connection, ...eventTuning(ENRICHMENT_QUEUE) },
       ),
       ENRICHMENT_QUEUE,
@@ -1651,6 +1669,8 @@ export function startWorkers(): Worker[] {
           },
           // The chunk phase feeds these vendor adapters to enrichContact — the SAME set processEnrichment uses.
           providers: defaultProviders(),
+          // …and the SAME Redis-shared breaker/gate (waterfall v2), so bulk spend is fleet-bounded too.
+          enrichDeps: { breaker: enrichBreaker, gate: enrichGate },
         }),
         // SPEND PATH — explicitly serial (re-audit F3 hard gate): do not raise until the atomic daily
         // budget breaker + per-batch credit lease land (plan 15 §7 Phase-5 entry gate; tuning.ts header).

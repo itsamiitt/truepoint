@@ -18,6 +18,8 @@ export const sourceName = z.enum([
   "salesforce",
   "clearbit",
   "manual",
+  "pdl",
+  "coresignal",
 ]);
 export type SourceName = z.infer<typeof sourceName>;
 

@@ -24,9 +24,18 @@ import {
   sourceName as sourceNameEnum,
 } from "@leadwolf/types";
 import { buildPhoneChannelValue, isChannelDualWriteEnabled } from "../channels/channelDualWrite.ts";
+import { defaultEmailVerifier } from "../data-health/reacherVerifier.ts";
+import { defaultPhoneVerifier } from "../data-health/twilioPhoneVerifier.ts";
 import { decryptPii, encryptPii } from "../import/encryptPii.ts";
 import { planFieldWrite } from "../prospect/fieldProvenance.ts";
+import { inMemoryBreakerStore } from "./breakerStore.ts";
+import {
+  type EnrichV2Deps,
+  runEnrichmentV2,
+  waterfallV2EnabledForScope,
+} from "./enrichContactV2.ts";
 import { type AutoEnrichDenyReason, enforceAutoEnrichPolicy } from "./policy.ts";
+import { passThroughGate } from "./providerGate.ts";
 import type { EnrichRequest, EnrichmentProvider, ProviderFieldResult } from "./providerPort.ts";
 import { requestHash } from "./requestHash.ts";
 import { runWaterfall } from "./waterfall.ts";
@@ -44,6 +53,8 @@ export interface EnrichContactInput {
    * default), which bypasses the policy exactly as before — this keeps the change additive.
    */
   trigger?: EnrichTrigger;
+  /** Per-RUN provider-order override (waterfall v2; validated at the API edge). Ignored on the legacy path. */
+  providerOrder?: string[];
 }
 
 export interface EnrichContactResult {
@@ -53,7 +64,22 @@ export interface EnrichContactResult {
   costMicros: number;
   /** Set only when `status` is `policy_skipped` — why the auto-enrich policy denied the run (G-ENR-1). */
   policyReason?: AutoEnrichDenyReason;
+  /** waterfall v2 (0111): which provider won each filled field. Absent on the legacy path. */
+  filledBy?: Partial<Record<EnrichField, string>>;
+  /** waterfall v2: the verify-before-accept verdict persisted for a won email. */
+  emailStatus?: string;
+  /** waterfall v2: nothing filled AND every capable provider throttle-denied — the worker defers. */
+  allThrottled?: boolean;
+  retryAfterMs?: number;
 }
+
+/** Injectable v2 infrastructure (Redis breaker/gate + verifiers). Absent pieces fall back to in-process
+ *  defaults, keeping the (flag-retired) inline API path and unit tests dependency-free. */
+export type EnrichDeps = Partial<EnrichV2Deps>;
+
+// One module-level in-memory breaker — parity with waterfall.ts's process-wide Map when no Redis store
+// is injected (state shared across calls in this process, exactly as before).
+const processBreaker = inMemoryBreakerStore();
 
 function startOfUtcDay(now = new Date()): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -81,7 +107,10 @@ function toWriteValues(fields: ProviderFieldResult[]): Partial<ContactWriteValue
   return values;
 }
 
-export async function enrichContact(input: EnrichContactInput): Promise<EnrichContactResult> {
+export async function enrichContact(
+  input: EnrichContactInput,
+  deps?: EnrichDeps,
+): Promise<EnrichContactResult> {
   // 0) Auto-enrich policy gate (G-ENR-1) — ONLY for system-initiated runs (a `trigger` is set). The guard
   //    runs BEFORE the work transaction: it denies a disabled policy / non-enabled trigger, narrows the
   //    requested fields to the allowlist, and stops at the monthly budget cap. A manual enrich (no trigger)
@@ -102,6 +131,25 @@ export async function enrichContact(input: EnrichContactInput): Promise<EnrichCo
       };
     }
     fields = decision.allowedFields; // only the allowlisted fields reach the waterfall
+  }
+
+  // Waterfall v2 dual gate (0111, D10): env kill-switch (zero queries while off) AND the per-tenant
+  // canary flag (fail-closed). Off ⇒ the legacy single-tx body below runs byte-identically.
+  if (env.WATERFALL_V2_ENABLED && (await waterfallV2EnabledForScope(input.scope))) {
+    return runEnrichmentV2({
+      scope: input.scope,
+      contactId: input.contactId,
+      fields,
+      providers: input.providers,
+      requestedByUserId: input.requestedByUserId ?? null,
+      providerOrder: input.providerOrder,
+      deps: {
+        breaker: deps?.breaker ?? processBreaker,
+        gate: deps?.gate ?? passThroughGate,
+        emailVerifier: deps?.emailVerifier ?? defaultEmailVerifier(),
+        phoneVerifier: deps?.phoneVerifier ?? defaultPhoneVerifier(),
+      },
+    });
   }
 
   return withTenantTx(input.scope, async (tx) => {

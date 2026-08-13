@@ -41,6 +41,28 @@ export function deriveProviderHealth(counts: ProviderCallStatusCounts): Provider
   return "healthy";
 }
 
+/**
+ * Waterfall telemetry per provider over a bounded window (0111, P6; 06 §4's expectedHitRate substrate).
+ * READ-ONLY in v1 — visible in the staff console and learned from `provider_calls`, but it feeds ordering
+ * only as a future `version: 2` priority mode, never implicitly. `verifiedValid` counts hits whose email
+ * verdict was `valid` (the S-08 quality signal); `costPerVerifiedValidMicros` is the metric that matters
+ * (cost-per-usable-record, not cost-per-call). Rates are null when the denominator is 0 — never a
+ * fabricated 0%.
+ */
+export const providerWaterfallStatsSchema = z.object({
+  windowDays: z.number().int().positive(),
+  attempts: z.number().int().nonnegative(),
+  hits: z.number().int().nonnegative(),
+  hitRate: z.number().min(0).max(1).nullable(),
+  verifiedValid: z.number().int().nonnegative(),
+  verifiedValidRate: z.number().min(0).max(1).nullable(),
+  avgLatencyMs: z.number().nonnegative().nullable(),
+  p95LatencyMs: z.number().nonnegative().nullable(),
+  totalCostMicros: z.number().int().nonnegative(),
+  costPerVerifiedValidMicros: z.number().int().nonnegative().nullable(),
+});
+export type ProviderWaterfallStats = z.infer<typeof providerWaterfallStatsSchema>;
+
 /** The masked provider row shown in the staff console. `keyHint` is a non-reversible indicator, never the secret. */
 export const providerConfigViewSchema = z.object({
   provider: z.string(),
@@ -51,6 +73,8 @@ export const providerConfigViewSchema = z.object({
   monthlyBudgetCents: z.number().int().nullable(),
   monthToDateCents: z.number().int().nullable(),
   health: providerHealth,
+  /** 30-day waterfall telemetry (0111). Optional-additive; null when the window holds no rows. */
+  stats: providerWaterfallStatsSchema.nullable().optional(),
 });
 export type ProviderConfigView = z.infer<typeof providerConfigViewSchema>;
 

@@ -145,6 +145,54 @@ describe("G-ENR-1 auto-enrich policy DoD", () => {
     }
   });
 
+  test("provider_prefs round-trips: priority + verification survive applyPartial and re-read (0111)", async () => {
+    const scope = { tenantId: tenantA, workspaceId: wsA };
+    const written = await dbApi.enrichmentPolicyRepository.applyPartial(
+      scope,
+      { tenantId: tenantA, workspaceId: wsA },
+      {
+        providerPriority: {
+          version: 1,
+          email: ["pdl", "apollo"],
+          phone: ["apollo"],
+          disabled: ["clearbit"],
+        },
+        verification: {
+          verifyEmailBeforeAccept: true,
+          acceptCatchAll: "continue",
+          verifyPhone: false,
+        },
+      },
+      { userId: null },
+    );
+    expect(written.providerPriority.email).toEqual(["pdl", "apollo"]);
+    expect(written.providerPriority.disabled).toEqual(["clearbit"]);
+    expect(written.verification.acceptCatchAll).toBe("continue");
+
+    const got = await dbApi.enrichmentPolicyRepository.get(scope);
+    expect(got?.providerPriority.email).toEqual(["pdl", "apollo"]);
+    expect(got?.providerPriority.phone).toEqual(["apollo"]);
+    expect(got?.verification.acceptCatchAll).toBe("continue");
+    // The patch touched only prefs — the pre-existing policy fields survive the merge.
+    expect(got?.triggers).toEqual(["on_stale"]);
+
+    // The audited change: applyPartial with an actor writes the audit row in the SAME tx.
+    const audits = await admin`
+      SELECT action, entity_type, metadata FROM audit_log
+      WHERE workspace_id = ${wsA} AND action = 'enrichment.policy_updated'`;
+    expect(audits.length).toBe(1);
+    expect((audits[0] as { entity_type: string }).entity_type).toBe("enrichment_policy");
+  });
+
+  test("an unparseable/legacy provider_prefs jsonb degrades to engine defaults, never leaks", async () => {
+    await admin`
+      UPDATE enrichment_policy SET provider_prefs = '{"providerPriority":{"version":99,"bogus":true}}'::jsonb
+      WHERE workspace_id = ${wsA}`;
+    const got = await dbApi.enrichmentPolicyRepository.get({ tenantId: tenantA, workspaceId: wsA });
+    expect(got?.providerPriority).toEqual({ version: 1, email: [], phone: [], disabled: [] });
+    expect(got?.verification.verifyEmailBeforeAccept).toBe(true);
+  });
+
   test("monthlySpentMicros sums only THIS month's provider_calls for the scoped workspace", async () => {
     const now = new Date();
     const thisMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 15, 12, 0, 0));
@@ -170,6 +218,8 @@ describe("G-ENR-1 auto-enrich policy DoD", () => {
         triggers: ["on_import"],
         fieldAllowlist: ["email"],
         monthlyBudgetMicros: 500_000,
+        providerPriority: { version: 1, email: [], phone: [], disabled: [] },
+        verification: { verifyEmailBeforeAccept: true, acceptCatchAll: "flag", verifyPhone: false },
       },
       { trigger: "on_import", requestedFields: ["email"], monthlySpentMicros: 500_000 },
     );

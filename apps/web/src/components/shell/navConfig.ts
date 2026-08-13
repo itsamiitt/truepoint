@@ -84,6 +84,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
       { label: "Members", href: "/settings/members", match: "/settings/members" },
       { label: "Teams", href: "/settings/teams", match: "/settings/teams" },
       { label: "Auto-enrich", href: "/settings/auto-enrich", match: "/settings/auto-enrich" },
+      {
+        label: "Enrichment providers",
+        href: "/settings/enrichment-providers",
+        match: "/settings/enrichment-providers",
+      },
       { label: "Sessions", href: "/settings/sessions", match: "/settings/sessions" },
       { label: "Custom fields", href: "/settings/custom-fields", match: "/settings/custom-fields" },
       { label: "Email & mailboxes", href: "/settings/mailboxes", match: "/settings/mailboxes" },

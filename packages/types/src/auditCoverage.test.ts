@@ -65,6 +65,9 @@ const WRITTEN = new Set<string>([
   // Import visibility P0 (import-redesign 10 §3, S-V4): the audited per-workspace import-policy change —
   // written in-tx by PUT /settings/import-policy (apps/api settings routes → writeAudit).
   "import.policy_updated",
+  // Waterfall v2 (0111): the audited per-workspace enrichment-policy change — written in-tx by
+  // enrichmentPolicyRepository.applyPartial (PATCH /settings/auto-enrich passes the actor).
+  "enrichment.policy_updated",
   // Import lifecycle writers (import-redesign 08/10): commit + cancel + retry (apps/api import routes),
   // PII-artifact download (artifactRoutes), infected-upload refusal (packages/core runBulkImport), and the
   // draft reaper's in-tx audit row (apps/workers importReaperSweep).
