@@ -610,6 +610,15 @@ What is NOT correct is the schema comment. `packages/db/src/schema/platformOps.t
 can author "contacts.email — 400 days" in the admin console, see it saved and active, and reasonably believe
 personal data is being deleted on that schedule. Nothing deletes it.
 
+**A sequencing constraint found alongside it.** `legal_holds` is planned (13a Area 8) and **does not exist** —
+no table, no repository, no code. A legal hold is the standard exception to automated deletion, so no retention
+class may be flipped to `enforce` until it does, or the sweep can destroy records under a litigation hold with
+nothing able to stop it. Nothing is at risk today: every seeded class ships `shadow` and deletes nothing. The
+note is recorded at `packages/types/src/retention.ts`, in the comment that already enumerates the gates on the
+`enforce` flip — that is where whoever flips it will be reading. The same missing control already touches a
+**live** path, DSAR erasure (`queues/dsar.ts` → `deleteFanout` → `purgeDependents`), which cannot check a hold
+either; that is a right-to-erasure-versus-litigation-hold conflict and a legal call, not an implementation one.
+
 **Why this is flagged rather than fixed.** Wiring the register into the sweep changes what gets deleted and
 when — it is a change to the deletion of personal data, which CLAUDE.md rule 3 puts on the human, and the
 entity/field model would first need a defined mapping onto the engine's data classes and modes. Silently
