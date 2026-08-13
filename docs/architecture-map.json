@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2023,
-  "fileSetHash": "sha256:a1a39b911936d2746da7d6f074bbc8741ad13303096cace8388237e3f75513a7",
+  "fileCount": 2025,
+  "fileSetHash": "sha256:f8b4f979e5a6fa61e8007a51027c34e13efce204d6250c450b15093d2dd50cb7",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2675,6 +2675,8 @@
       "packages/auth/src/code.ts",
       "packages/auth/src/emailVerification.ts",
       "packages/auth/src/flow.ts",
+      "packages/auth/src/guardDegradedLog.test.ts",
+      "packages/auth/src/guardDegradedLog.ts",
       "packages/auth/src/identifierLookup.test.ts",
       "packages/auth/src/identifierLookup.ts",
       "packages/auth/src/index.ts",

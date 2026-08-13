@@ -759,7 +759,7 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2023-file** JSON (86 domains with code, 38 shared areas,
+- **Map hygiene:** this prose was last refreshed from the **2025-file** JSON (86 domains with code, 38 shared areas,
   **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
@@ -767,8 +767,10 @@ flowchart TD
   (the CRM queue-name fix, the RFC-9457 404, 29 role-gated writes, migration 0109's FK indexes, `withSystemTx`,
   the retired `requireStaffRole`, and the configuration-list safety cap). The web files bucketed to
   `features.prospect.web` and added no new unassigned entries or warnings.
-  **Added since that refresh** (+2 files, no new unassigned entries or warnings): `apps/web/src/lib/problemMessage.ts`
-  and `apps/web/src/lib/maybeList.ts`, closing audit 32 · F4 — plus the audit-register cleanup that came with it
+  **Added since that refresh** (+4 files, no new unassigned entries or warnings): `apps/web/src/lib/problemMessage.ts`
+  and `apps/web/src/lib/maybeList.ts`, closing audit 32 · F4; and `packages/auth/src/guardDegradedLog.ts` (+ test)
+  closing C11's observability half — the one marker shape every fail-open guard emits, so a single alert
+  expression (`] DEGRADED `) catches all four. Its alert is defined in `docs/planning/19-observability-reliability.md` §3 — plus the audit-register cleanup that came with it
   (C7's last 50 inline workspace guards folded into the one `requireWorkspace`, and C9's extension grant for a
   contact-detail endpoint that does not exist). §9B of plan 32 now records the **seven** audit findings that did
   not survive contact with the code; read it before acting on that register, particularly §6.4, §9.4, C6 and C10.
