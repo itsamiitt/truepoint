@@ -2,6 +2,14 @@
 // Pure, leaf-package, so every layer reuses one implementation: the badge, the re-verify priority queue, and
 // (Phase 2) the bounce-rate-by-confidence chart 06 calls "the product's proof".
 //
+// ⚠ THIS IS THE LIVE CONFIDENCE ENGINE — the numbers below are the ones customers see, via
+// buildConfidenceBadgeV1 (revealContact.ts, the account-intelligence provenance route). There is a SECOND,
+// more capable model in packages/core/src/prospect/confidence.ts: Noisy-OR corroboration parameterised per
+// (field, source_type) from master_confidence_policy, so staff can tune it without a deploy. It has zero
+// production consumers. This file's half-lives are hardcoded (FIELD_HALF_LIFE_DAYS) and its corroboration is
+// capped at 1.25×, so the two disagree by 0.09–0.17 on the same fact. Do not "unify" them casually — the
+// swap re-scores every displayed record. Audit 32 §9D states the decision.
+//
 // NOT THE SAME THING AS dataHealth.ts, and conflating them is the easy mistake:
 //   dataHealth   = RECORD-level data_quality_score — completeness + verification + freshness, 0-100, answers
 //                  "how complete and current is this record".

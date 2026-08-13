@@ -623,6 +623,44 @@ failure modes. The alternatives, in increasing cost:
 3. **Wire it into the sweep** — a real feature: map entity/field to data class, decide the mode it enters
    at (`shadow` first, per the engine's own contract), and re-run the compliance checklist.
 
+## 9D. Two confidence engines ship; the better one is dead (NEEDS A HUMAN DECISION)
+
+Found by working the roadmap rather than the register: 06-roadmap Phase 2 lists "per-field decay curves",
+and CLAUDE.md/08-architecture say **"Decay curves are Phase 2 — not built."** That is half true, and the half
+that is false is the load-bearing half. A decay curve ships and drives what customers see. A *second*,
+policy-driven one is built, tested, exported — and called by nothing.
+
+| | `packages/types/src/confidence.ts` | `packages/core/src/prospect/confidence.ts` |
+|---|---|---|
+| **Status** | **LIVE** — `buildConfidenceBadgeV1` → `revealContact.ts` + the account-intelligence provenance route | **DORMANT** — `resolvePolicy`, `evidenceFactor`, `daysUntilStale` have **zero** consumers; `scoreConfidence`'s only repo hit is a comment in an itest |
+| **Corroboration** | multiplicative boost, **capped at 1.25×** | **Noisy-OR** `1-(1-w)ⁿ` (TruthFinder KDD'07 / Knowledge Vault KDD'14) |
+| **Half-lives** | **hardcoded** `FIELD_HALF_LIFE_DAYS` — changing one means shipping code | **from `master_confidence_policy`** (0107), per `(field, source_type)` with `'*'` wildcards — staff-tunable, no deploy |
+| **Decay math** | identical `2^(-age/halfLife)` | identical |
+
+**They disagree materially.** Same fact — an email, three independent sources, 180 days old — computed both
+ways: 0.5315 (types) vs 0.6217 / 0.6650 / 0.7048 (core, at source weights 0.5 / 0.6 / 0.8). A gap of **0.09 to
+0.17**, which is enough to move a record across a badge band. Switching engines silently re-scores the entire
+graph in front of customers, so this is a product decision, not a refactor.
+
+**Two consequences while it stands.** `master_confidence_policy` is staff-tunable configuration that tunes
+nothing — the third such surface this audit has found, after `retention_policies` (§9C) and the dark
+`/crm-sync` console (F5). And the live half-lives can only be changed by shipping code, which is the opposite
+of what a Phase-2 tuning loop needs.
+
+**Not decided here** (CLAUDE.md rule 5 — the confidence/provenance model is the product's spine, and rule 6 —
+surface the conflict, never silently reinterpret). The options:
+
+1. **Correct the claim only.** Both files now carry headers saying which is live, which is dormant, and by how
+   much they differ. Done — it stops the next author wiring the wrong one or assuming they agree.
+2. **Wire the policy engine behind a flag, shadow-first** — compute both, log the delta, flip nobody. This is
+   exactly the pattern `retention_class_policies` already uses (`disabled|shadow|enforce`) and the entitlement
+   gate uses (shadow disagreement metric), so the precedent is in-house. Costs a worker path and a metric.
+3. **Delete the dormant model.** Cheapest, and defensible if the capped-boost model is the intended one — but
+   it discards the only implementation that reads the policy table the schema already ships and seeds.
+
+Option 2 is the one this codebase's own precedents point at, but it changes how customer-facing confidence is
+computed, so it is the human's call.
+
 ## 10. Implementation order
 
 Slices are sized to ship independently to main (pre-prod convention), each with its gates

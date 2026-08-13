@@ -2,10 +2,27 @@
 // the same contract: same input → same output, no mutation of arguments, no DB. The caller loads policy rows
 // (master_confidence_policy, migration 0107) and persists whatever it decides; this module only computes.
 //
-// 08-architecture states plainly that "Decay curves are Phase 2 — not built". This is that curve. Until it is
-// wired, a five-year-old assertion and one verified this morning score identically, which undermines three
-// outcomes at once: [S-09] has the person left the company · [S-10] confidence visible at a glance ·
-// [S-13] fast job-change detection.
+// 08-architecture states plainly that "Decay curves are Phase 2 — not built". This is that curve.
+//
+// ⚠ STILL NOT WIRED, AND THE "not built" CLAIM IS NOW MISLEADING (audit 32 §9D). A decay curve DOES ship and
+// DOES drive what users see — but it is the OTHER one, packages/types/src/confidence.ts, reached through
+// buildConfidenceBadgeV1 from revealContact.ts and the account-intelligence provenance route. Nothing in
+// production calls anything in THIS file: resolvePolicy, evidenceFactor and daysUntilStale have zero
+// consumers, and scoreConfidence's only hit in the repo is a comment in an itest. Verified by name across
+// apps/ and packages/, excluding this file, its test, and the barrel re-export.
+//
+// The two models are NOT interchangeable, so wiring this one is a product decision, not a refactor:
+//   • this file  — noisyOr(source_weight, source_count) × decay, parameterised per (field, source_type) from
+//                  master_confidence_policy (0107), i.e. tunable by staff WITHOUT a deploy.
+//   • types      — METHOD_PRIOR × decay × corroborationBoost, where the boost is CAPPED at 1.25× and the
+//                  half-lives are hardcoded constants (FIELD_HALF_LIFE_DAYS).
+// On the same fact — an email, three independent sources, 180 days old — they differ by 0.09 to 0.17
+// depending on source weight. That is enough to move a record across a badge band, so switching engines
+// silently re-scores the whole graph in front of customers. See plan 32 §9D before wiring it.
+//
+// What the gap costs while it stands: master_confidence_policy is staff-tunable config that tunes NOTHING,
+// and the live half-lives can only be changed by shipping code. The outcomes at stake are unchanged —
+// [S-09] has the person left the company · [S-10] confidence visible at a glance · [S-13] job-change speed.
 //
 // ── THE MODEL, AND ONE DELIBERATE DEVIATION FROM THE PHASE-3 DESIGN ──────────────────────────────────────
 // 03-target-architecture.md §4 wrote the model as THREE factors:
