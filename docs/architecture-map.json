@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2029,
-  "fileSetHash": "sha256:a2d36b4fbe11f5abc3e18bad76196f8dc764e5006d23bafa3b21e862df5279ab",
+  "fileCount": 2030,
+  "fileSetHash": "sha256:76e321573684851e3014e17417d822e1e68d21b56711e727432ff910c699398b",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -1463,6 +1463,7 @@
         "packages/core/src/prospect/bulkActions.ts",
         "packages/core/src/prospect/confidence.test.ts",
         "packages/core/src/prospect/confidence.ts",
+        "packages/core/src/prospect/confidenceDivergence.test.ts",
         "packages/core/src/prospect/conflictDetect.test.ts",
         "packages/core/src/prospect/conflictDetect.ts",
         "packages/core/src/prospect/contactMergeGate.ts",

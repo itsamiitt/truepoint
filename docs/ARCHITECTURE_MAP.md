@@ -275,7 +275,13 @@ apps/                           # deployable processes (thin transport adapters)
   workspace-visible ids + audit), `tags.ts`, `lists.ts`,
   `contributionGate.ts` (`evaluateContribution` — may this row MINT a node in the SHARED graph? Gates the
   mint only: a denied row still LINKs to what the graph already holds. An opt-OUT over the ADR-0021 identity
-  mint, not an opt-in — decisions.md D13), `backfillMaster.ts` (applies that gate per row)
+  mint, not an opt-in — decisions.md D13), `backfillMaster.ts` (applies that gate per row),
+  `confidence.ts` — ⚠ **the DORMANT confidence engine** (Noisy-OR over `master_confidence_policy`; zero
+  production callers. The LIVE one customers see is `packages/types/src/confidence.ts` via
+  `buildConfidenceBadgeV1` — audit 32 §9D) + `confidenceDivergence.test.ts`, which measures the two against the
+  real seeded 0107 policy rows: switching engines is a **redistribution**, provider-sourced records +0.20 to
+  +0.26 and crawl-sourced −0.10, not a uniform lift. **Read that test before proposing to unify them**;
+  `fieldProvenance.ts` (the pure provenance fold)
 - **web:** `features/prospect/` — masked grid + `RecordDetail`/`QuickViewDrawer` slide-overs + `RevealDialog`; **bulk
   reveal** (`useBulkSelection`, `BulkActionBar`, `BulkRevealDialog`, pure `bulkReveal.ts` policy: stop on 402 / skip 403);
   **filter rail** (`FilterRail` + `FilterPanel`/`AccountFilterPanel` over `filterGroups.ts`/`accountFilterGroups.ts`, with
@@ -778,7 +784,7 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2029-file** JSON (86 domains with code, 38 shared areas,
+- **Map hygiene:** this prose was last refreshed from the **2030-file** JSON (86 domains with code, 38 shared areas,
   **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
