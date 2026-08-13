@@ -131,9 +131,22 @@ export const announcements = pgTable(
 );
 
 // retention_policies — staff-authored data-retention SLAs (13a Area 8, 13 §3.8): how long an entity (optionally
-// a specific field) is retained, the input to the retention sweep (a separate worker). PLATFORM config, owner-
-// written (withPlatformTx), deny-all to leadwolf_app (rls/platformOps.sql + the applyMigrations REVOKE). field
-// null = the whole entity.
+// a specific field) is retained. PLATFORM config, owner-written (withPlatformTx), deny-all to leadwolf_app
+// (rls/platformOps.sql + the applyMigrations REVOKE). field null = the whole entity.
+//
+// ⚠ ADVISORY TODAY — NOTHING EXECUTES THIS TABLE (audit 32 §9C). This header used to call it "the input to the
+// retention sweep", which is not true: `runRetentionSweep` reads retention_class_policies ONLY, and no worker,
+// core path or query outside the /admin/compliance/retention routes reads this table at all. That matters more
+// than a stale comment usually would, because a compliance officer can author "contacts.email — 400 days",
+// see it saved and active, and reasonably conclude personal data is being deleted on that schedule.
+//
+// It is NOT a duplicate of retention_class_policies, which is why the audit's "consolidate the two retention
+// stores" was refused: that one is the ENGINE's config, keyed by data class with a disabled|shadow|enforce
+// rollout mode; this one is an SLA REGISTER keyed by entity+field with staff attribution and a reason, which
+// is how 13a Area 8 specifies it — grouped with the sub-processor registry and legal holds.
+//
+// Whether to wire it into the sweep is a HUMAN decision (CLAUDE.md rule 3 — it changes what personal data is
+// deleted and when) and needs an entity/field → data-class mapping first. See plan 32 §9C for the options.
 export const retentionPolicies = pgTable(
   "retention_policies",
   {

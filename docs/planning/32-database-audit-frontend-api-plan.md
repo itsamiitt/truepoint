@@ -548,11 +548,11 @@ P2: C11 observability, F-flagged items pending decisions.
 
 ## 9B. Corrections — findings this audit got WRONG (recorded during implementation)
 
-Seven items in the register above did not survive contact with the code. They are listed here rather than
+Eight items in the register above did not survive contact with the code. They are listed here rather than
 quietly edited, because the pattern in them is more useful than any single correction: **this audit
 repeatedly flagged a SHAPE (a raw owner connection, a dark route, two tables with similar columns, a number
 that looked like a cap) without reading the reasoning already present at the site.** Where the code carried a documented decision, the code
-was right every time. Treat §6.4, §9.4, C6 and C10 as the least reliable parts of this document.
+was right every time. Treat §6.4, §9.4, C6 and C10 as the least reliable parts of this document. §9.4 in particular is now 3-for-3 wrong: both OAuth-state tables, all three outboxes, and both retention stores were each filed as duplication on column-shape resemblance alone.
 
 | # | The audit said | What was actually true |
 |---|---|---|
@@ -561,6 +561,7 @@ was right every time. Treat §6.4, §9.4, C6 and C10 as the least reliable parts
 | **§6.4** | `schedulerRepository`'s claim is an unaudited cross-tenant write. | It is a 60-second lease, not a privileged action. One audit row per tick would bury the real entries. **Not changed.** |
 | **§9.3** | `teamRepository.listTeams` is unbounded. | Already bounded. (The other six named reads genuinely were not — those are fixed.) |
 | **§9.4** | The two OAuth-state tables "are the same table". | They are not. `crm_oauth_states` carries `environment` and `scopes` (sandbox-vs-production, requested grants) that email OAuth has no use for; `oauth_connect_state`'s PKCE verifier is **NOT NULL** where CRM's is nullable; and `redirect_uri` (an OAuth protocol parameter) is a different thing from `redirect_after` (in-app navigation state), not a rename. Merging would add meaningless columns to both and weaken a NOT NULL. Same reasoning that keeps `master_employment` and `master_education` apart: shared shape, different payload. **Not merged.** |
+| **§9.4** | The two retention stores are duplication with only one execution path — consolidate them. | They are not duplicates. `retention_class_policies` is the ENGINE's config: keyed by **data class** (natural PK), carries the `disabled\|shadow\|enforce` rollout mode, is read by `runRetentionSweep`, and writes `retention_runs`. `retention_policies` is keyed by **entity + field** with staff attribution and a reason, and doc 13a Area 8 specifies it as a *"retention SLA per field/entity"* — a `compliance_officer` register, listed beside the sub-processor registry and legal holds. Different key, different author, different purpose. **Not merged.** The real defect underneath is narrower and is recorded in §9C. |
 | **C6 (second half)** | "`GET /contacts` caps at 500 with no cursor" — a breaking fix needing a coordinated API+web deploy. | **There is no `GET /contacts` list endpoint.** Contact listing is `POST /api/v1/search/contacts`, which is keyset-paged by design: `cursor` in (`packages/types/src/search.ts:151-156` — "never offset"), `nextCursor` out, and the cursor chain is covered by tests (`inMemorySearchPort.test.ts:109-115`). The audit read a cap in the bulk-mutation footprint as a cap on the list. **Nothing to fix — C6 is fully closed by the six configuration-list caps.** |
 | **§9.4** | Three near-identical outbox tables should converge on one with a `lane` discriminator. | `projection_outbox` has **no tenant column at all** — it is a Layer-0 table keyed on `cluster_id`. Merging it into the tenant-scoped outboxes would either put a Layer-0 queue under tenant RLS or nullify the tenant columns and lose RLS on the rest, breaking the one boundary the schema exists to hold. `event_outbox` and `worker_outbox` ARE close and could merge, but they are drained by different relays with different delivery semantics, so the gain is cosmetic. **Not merged.** The one real defect here stands: `worker_outbox` omits the FKs its sibling declares — deferred, see below. |
 
@@ -571,6 +572,35 @@ a third unverified schema change on two unverified ones trades a small cleanup f
 these wait for CI's verdict rather than being written blind.
 
 ---
+
+## 9C. Found while disproving §9.4 — an unenforced retention SLA register (NEEDS A HUMAN DECISION)
+
+`retention_policies` has a complete staff CRUD surface — `GET/POST/PATCH /admin/compliance/retention` plus
+`setActive`, all `compliance_officer`-gated and audited through `withPlatformTx` — and **nothing executes it.**
+`runRetentionSweep` reads `retentionClassPolicyRepository` only; a repository-wide search finds no worker, no
+core path and no SQL that reads `retention_policies` outside those admin routes.
+
+That may well be correct. A records-retention schedule kept as a documented commitment, shown to an auditor
+and enforced by other means, is ordinary compliance practice — and doc 13a describes this table as an
+**SLA register**, grouped with the sub-processor registry and legal holds rather than with the sweep.
+
+What is NOT correct is the schema comment. `packages/db/src/schema/platformOps.ts` describes the table as
+"the input to the retention sweep (a separate worker)". It is not an input to anything. A compliance officer
+can author "contacts.email — 400 days" in the admin console, see it saved and active, and reasonably believe
+personal data is being deleted on that schedule. Nothing deletes it.
+
+**Why this is flagged rather than fixed.** Wiring the register into the sweep changes what gets deleted and
+when — it is a change to the deletion of personal data, which CLAUDE.md rule 3 puts on the human, and the
+entity/field model would first need a defined mapping onto the engine's data classes and modes. Silently
+enforcing an SLA someone authored under the assumption it was advisory is the more dangerous of the two
+failure modes. The alternatives, in increasing cost:
+
+1. **Correct the comment only** — state plainly that this is an advisory register with no execution path.
+   Cheapest, removes the false belief in the code, leaves the product gap.
+2. **Say so in the UI** — label the panel advisory, so the officer authoring the SLA sees what it does.
+   Removes the false belief where it actually matters.
+3. **Wire it into the sweep** — a real feature: map entity/field to data class, decide the mode it enters
+   at (`shadow` first, per the engine's own contract), and re-run the compliance checklist.
 
 ## 10. Implementation order
 
