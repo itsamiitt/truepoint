@@ -5,6 +5,11 @@ import { RateLimitedError } from "@leadwolf/types";
 // outage so a cache blip can't brick authentication.
 import Redis from "ioredis";
 import { RateLimiterRedis } from "rate-limiter-flexible";
+import { type OpenGuard, guardDegradedLog, makeDegradedThrottle } from "./guardDegradedLog.ts";
+
+// One throttle for this module's fail-open markers (audit 32 · C11). Module-scoped on purpose: during a Redis
+// outage EVERY limiter in here opens at once, and the operator needs to know that, not to be told once per key.
+const allowDegradedLog = makeDegradedThrottle();
 
 // Lazy: constructing ioredis (and the limiters that capture it) opens a socket + retry loop. Defer it so
 // importing this module is side-effect-free — it is reachable from the auth Next app's module graph, and
@@ -70,14 +75,23 @@ const revealLimiter = (): RateLimiterRedis =>
 
 // Throw RateLimitedError if `limiter` is exhausted for `key` (consuming `points`, default 1); fail OPEN on a Redis
 // outage (shared helper).
-async function consume(limiter: RateLimiterRedis, key: string, points = 1): Promise<void> {
+async function consume(
+  limiter: RateLimiterRedis,
+  key: string,
+  points = 1,
+  guard: OpenGuard = "rate-limit",
+): Promise<void> {
   try {
     await limiter.consume(key, points);
   } catch (e) {
     if (e && typeof e === "object" && "msBeforeNext" in e) {
       throw new RateLimitedError(Math.ceil((e as { msBeforeNext: number }).msBeforeNext / 1000));
     }
-    // Infra error (e.g. Redis unavailable) — fail open so an outage can't brick the platform.
+    // Infra error (e.g. Redis unavailable) — fail open so an outage can't brick the platform. Behavior
+    // unchanged; it is no longer SILENT (audit 32 · C11). Throttled: during an outage this runs per request,
+    // and a log line per request buries the very signal it exists to raise. `key` is never logged — it is an
+    // IP, an email, or a subject id.
+    if (allowDegradedLog(Date.now())) console.error(guardDegradedLog(guard, e));
   }
 }
 
@@ -109,7 +123,9 @@ export async function checkCaptureRate(key: string, recordCount: number): Promis
  * Additive: a separate keyspace from the coarse rl:api throttle, so it never weakens it.
  */
 export async function checkRevealRate(key: string): Promise<void> {
-  await consume(revealLimiter(), key);
+  // Named distinctly in the DEGRADED marker: this is the guard whose opening matters most (C11). When it and
+  // the entitlement gate open together, credit balance is the only remaining control on reveal spend.
+  await consume(revealLimiter(), key, 1, "reveal-rate-limit");
 }
 
 // ── Email-OTP send throttle (AUTH-025) ─────────────────────────────────────────────────────────────────
@@ -170,8 +186,11 @@ async function assertNotBlocked(limiter: RateLimiterRedis, key: string): Promise
   let res: Awaited<ReturnType<RateLimiterRedis["get"]>>;
   try {
     res = await limiter.get(key);
-  } catch {
-    return; // fail open — a Redis blip must not lock everyone out
+  } catch (e) {
+    // Fail open — a Redis blip must not lock everyone out. Now marked (audit 32 · C11): this path admits a
+    // caller who may ALREADY be locked out for credential stuffing, which is the fail-open that matters most.
+    if (allowDegradedLog(Date.now())) console.error(guardDegradedLog("rate-limit", e));
+    return;
   }
   if (res && res.remainingPoints <= 0) {
     throw new RateLimitedError(Math.ceil(res.msBeforeNext / 1000));
