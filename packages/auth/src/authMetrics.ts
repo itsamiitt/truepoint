@@ -41,7 +41,13 @@ export interface AuthMetricLabels {
    *
    *  Deliberately NO tenant id: the PII rule above forbids it and it would be unbounded cardinality. The
    *  `[tenant-suspension]` LOG line carries the tenant — that is the right split, counter for "how much",
-   *  log for "which". */
+   *  log for "which".
+   *
+   *  WHERE TO SCRAPE IT: **apps/auth `/metrics`**, not apps/api's. This registry is in-process, and all four
+   *  call sites (finishLogin, org/switch, workspace/switch, extension/refresh) run in apps/auth — verified,
+   *  not assumed. apps/api renders the same function but will show this series empty, because nothing there
+   *  increments it. That is the same split the auth /metrics route header already documents for policy-block
+   *  and token-mint. */
   auth_tenant_suspension_total: {
     mode: "shadow" | "enforce";
     path: "login" | "refresh" | "switch_org" | "switch_workspace";
