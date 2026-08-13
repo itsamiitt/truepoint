@@ -12,6 +12,22 @@
 // declares the tenancy column and the rls/ directory declares the policy, so the two lists can simply be
 // compared. It runs on every commit, on a laptop, in milliseconds — which matters because the alternative
 // (an itest) cannot run on a host without Docker, and this repo has one.
+//
+// KNOWN LIMITATION — IT ONLY SEES `pgTable`. A table created by hand-authored migration SQL with no Drizzle
+// definition is invisible here. That is not hypothetical: migration 0097's contribution-control tables had no
+// pgTable at all until one was added later, and `contributionControls.test.ts` exists to pin those definitions
+// against the SQL for exactly this reason.
+//
+// MEASURED 13 Aug 2026 so the gap is sized rather than merely admitted: of 140 tables created across the
+// migration chain and never dropped, 117 have a pgTable and 23 do not. All 23 are accounted for —
+//   • 15 forge-plane tables (0073), isolated by SCHEMA + the leadwolf_forge role, deliberately not by RLS;
+//   • 6 partition children (*_default), which inherit their parent's ACL via mirror_partition_acl (0102);
+//   • platform_audit_log, platform-owned and REVOKE'd from leadwolf_app.
+// Only three of the 23 carry a tenant key at all (raw_captures, extraction_runs, platform_audit_log), and each
+// is one of the postures above. So the blind spot is real but currently empty of defects.
+//
+// If you hand-author a tenant-scoped table, this guard will NOT catch a missing policy. Give it a pgTable —
+// which the schema barrel wants anyway — and it will.
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
