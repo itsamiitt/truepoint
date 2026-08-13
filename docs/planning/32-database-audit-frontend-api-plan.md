@@ -278,7 +278,7 @@ restoring with the flag is the cheaper path.
 | C3 | `PATCH /admin/crm/dead-letters/:id` is a cross-tenant write behind only the `pa` claim (`admin/routes.ts:153`). | Add `requireCapability("data:manage")`. |
 | C4 | No `app.notFound()` — 404s return Hono plain text, breaking RFC 9457 exactly where clients hit it (forge-api does it right). | Register a problem+json notFound handler. |
 | C5 | Idempotency implemented 4 ways; `POST /credits/checkout` + `/credits/subscribe` have **none**. | Adopt the shared middleware on all money/create routes; keep DB-unique as defence-in-depth (already the pattern for imports). |
-| C6 | No shared pagination transport; 9+ endpoints return unbounded arrays (`/tags`, `/custom-fields`, `/saved-searches`, `/teams`, `/workspaces`, `/crm/connections`, `/contacts/reveal-jobs`, `/enrichment/jobs`, `/pipeline-stages`); `GET /contacts` caps at 500 with no cursor. | Add `lib/pagination.ts` (Zod query schema + hard max + flat `nextCursor` envelope). Normalize the unbounded lists now, coordinated with the web slices in the same deploy (pre-production — cheap now, breaking later). |
+| C6 | No shared pagination transport; 9+ endpoints return unbounded arrays (`/tags`, `/custom-fields`, `/saved-searches`, `/teams`, `/workspaces`, `/crm/connections`, `/contacts/reveal-jobs`, `/enrichment/jobs`, `/pipeline-stages`); ~~`GET /contacts` caps at 500 with no cursor~~ (**wrong — no such endpoint; see §9B**). | Add `lib/pagination.ts` (Zod query schema + hard max + flat `nextCursor` envelope). Normalize the unbounded lists now, coordinated with the web slices in the same deploy (pre-production — cheap now, breaking later). |
 | C7 | `requireWorkspace` copy-pasted 3× + inlined ~40×. | Promote to middleware beside `tenancy`. |
 | C8 | Two parallel staff-authz systems (`requireStaffRole` vs `requireCapability`) mid-migration. | Finish the capability migration; delete `requireStaffRole` per its own file comment. |
 | C9 | Extension allow-list grants `GET /contacts/:id` which does not exist. | Resolved by A4 (build the endpoint) — until then remove the entry. |
@@ -534,11 +534,11 @@ P2: C11 observability, F-flagged items pending decisions.
 
 ## 9B. Corrections — findings this audit got WRONG (recorded during implementation)
 
-Six items in the register above did not survive contact with the code. They are listed here rather than
+Seven items in the register above did not survive contact with the code. They are listed here rather than
 quietly edited, because the pattern in them is more useful than any single correction: **this audit
-repeatedly flagged a SHAPE (a raw owner connection, a dark route, two tables with similar columns) without
-reading the reasoning already present at the site.** Where the code carried a documented decision, the code
-was right every time. Treat §6.4, §9.4 and C10 as the least reliable parts of this document.
+repeatedly flagged a SHAPE (a raw owner connection, a dark route, two tables with similar columns, a number
+that looked like a cap) without reading the reasoning already present at the site.** Where the code carried a documented decision, the code
+was right every time. Treat §6.4, §9.4, C6 and C10 as the least reliable parts of this document.
 
 | # | The audit said | What was actually true |
 |---|---|---|
@@ -547,6 +547,7 @@ was right every time. Treat §6.4, §9.4 and C10 as the least reliable parts of 
 | **§6.4** | `schedulerRepository`'s claim is an unaudited cross-tenant write. | It is a 60-second lease, not a privileged action. One audit row per tick would bury the real entries. **Not changed.** |
 | **§9.3** | `teamRepository.listTeams` is unbounded. | Already bounded. (The other six named reads genuinely were not — those are fixed.) |
 | **§9.4** | The two OAuth-state tables "are the same table". | They are not. `crm_oauth_states` carries `environment` and `scopes` (sandbox-vs-production, requested grants) that email OAuth has no use for; `oauth_connect_state`'s PKCE verifier is **NOT NULL** where CRM's is nullable; and `redirect_uri` (an OAuth protocol parameter) is a different thing from `redirect_after` (in-app navigation state), not a rename. Merging would add meaningless columns to both and weaken a NOT NULL. Same reasoning that keeps `master_employment` and `master_education` apart: shared shape, different payload. **Not merged.** |
+| **C6 (second half)** | "`GET /contacts` caps at 500 with no cursor" — a breaking fix needing a coordinated API+web deploy. | **There is no `GET /contacts` list endpoint.** Contact listing is `POST /api/v1/search/contacts`, which is keyset-paged by design: `cursor` in (`packages/types/src/search.ts:151-156` — "never offset"), `nextCursor` out, and the cursor chain is covered by tests (`inMemorySearchPort.test.ts:109-115`). The audit read a cap in the bulk-mutation footprint as a cap on the list. **Nothing to fix — C6 is fully closed by the six configuration-list caps.** |
 | **§9.4** | Three near-identical outbox tables should converge on one with a `lane` discriminator. | `projection_outbox` has **no tenant column at all** — it is a Layer-0 table keyed on `cluster_id`. Merging it into the tenant-scoped outboxes would either put a Layer-0 queue under tenant RLS or nullify the tenant columns and lose RLS on the rest, breaking the one boundary the schema exists to hold. `event_outbox` and `worker_outbox` ARE close and could merge, but they are drained by different relays with different delivery semantics, so the gain is cosmetic. **Not merged.** The one real defect here stands: `worker_outbox` omits the FKs its sibling declares — deferred, see below. |
 
 **Deferred rather than dropped.** `worker_outbox`'s missing FKs are a genuine integrity gap, and the two
@@ -579,7 +580,7 @@ the relevant skills open (any data-path slice: platform + data + security).
 **Wave 3 — structural debt:**
 8. 9.2 schema backfills (SQL-only tables → pgTable; platform_audit_log migration; parity itests).
 9. §6.4-1 `withSystemTx` + worker sweep migration + stop exporting raw `db`. [A-01]
-10. C6 pagination normalization + C7 + F4 (coordinated API+web deploy).
+10. ~~C6 pagination normalization~~ **— DONE, and smaller than scheduled.** The six unbounded configuration lists now carry `LIST_SAFETY_CAP`; the "contacts cursor" half was a misread (see §9B) — that surface was always keyset-paged, so no coordinated deploy is needed. C7 + F4 remain.
 11. 9.5-P0 email cleartext remediation (after compliance-checklist sign-off). [A-01][A-02]
 
 **Wave 4 — consolidation & deletions (each needs a small decision recorded in decisions.md):**
