@@ -695,11 +695,20 @@ flowchart TD
   tables all take the `master_` prefix so the generator's `^master_` REVOKE loop makes them fail closed by
   default), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
   (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility) +
-  `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate).
+  `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate)
+  + `repositories/arrayParamBinding.test.ts` (static, DB-free: renders repository SQL through `PgDialect` offline and
+  asserts array binds are ONE parameter. Drizzle's `sql` template SPREADS a bare JS array into one bind per element,
+  so `ANY(${ids})` becomes the row constructor `ANY(($1,$2))` and Postgres fails at runtime with 22P02 — invisible to
+  types, lint and unit tests. Use `sql.param(arr)` + a cast, or hand-build the `'{a,b}'` literal as `dsarRepository`
+  documents. **If you write a raw `sql` query binding an array, add it to this test.**).
 - **`packages/core`** — `index.ts` is the public surface; domain code bucketed per feature above. Owns all ports
   (enrichment/sender/SearchPort/AiPort/MatchPort/DnsResolverPort) — never imports `integrations`.
 - **`packages/auth`** — the self-built auth primitives (login/registration/invitations/password+policy+breach/MFA/SSO/switch/
-  session-hardening) + `ipBinding`/`ipAllowlist`/`sessionTimeout`/`revocation`/`auditEvent`/`log`.
+  session-hardening) + `ipBinding`/`ipAllowlist`/`sessionTimeout`/`revocation`/`auditEvent`/`log`; plus
+  `guardDegradedLog.ts` — the one marker shape every FAIL-OPEN guard emits (both rate limiters, the reveal limiter,
+  `apps/api`'s entitlement gate), so a single alert expression `] DEGRADED ` catches all of them and two firing in one
+  window is the composite "Redis down ⇒ guards open" condition. Defined in `docs/planning/19-observability-reliability.md` §3.
+  `revocationLog.ts` is the older sibling marker and keeps its own prefix (its shape is test-pinned).
 - **`packages/search`** — `index.ts` (the SearchPort adapter/types seam), `inMemorySearchPort.ts` (dev/test), `fields.ts`
   (facet projection). *Only the in-memory adapter exists; OpenSearch/Typesense land behind the same seam (ADR-0002/0035).*
 - **`packages/integrations`** — `enrichment/{httpProvider,providers}.ts` (Apollo/ZoomInfo/Clearbit) + `anthropic/nlSearchAdapter.ts` (the AI port adapter).
@@ -759,7 +768,7 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2025-file** JSON (86 domains with code, 38 shared areas,
+- **Map hygiene:** this prose was last refreshed from the **2026-file** JSON (86 domains with code, 38 shared areas,
   **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
@@ -770,7 +779,11 @@ flowchart TD
   **Added since that refresh** (+4 files, no new unassigned entries or warnings): `apps/web/src/lib/problemMessage.ts`
   and `apps/web/src/lib/maybeList.ts`, closing audit 32 · F4; and `packages/auth/src/guardDegradedLog.ts` (+ test)
   closing C11's observability half — the one marker shape every fail-open guard emits, so a single alert
-  expression (`] DEGRADED `) catches all four. Its alert is defined in `docs/planning/19-observability-reliability.md` §3 — plus the audit-register cleanup that came with it
+  expression (`] DEGRADED `) catches all four. Its alert is defined in `docs/planning/19-observability-reliability.md` §3;
+  and `packages/db/src/repositories/arrayParamBinding.test.ts`, which converts a CI-only failure class into a
+  DB-free unit test after migration 0108's repositories cost three CI round-trips (a missing `leadwolf_er` GRANT,
+  then bare-JS-array binds). Both defects were invisible to typecheck, biome and every unit test — the standing
+  hazard on a host with no Docker, where "local gates green" is not the same claim as "CI green" — plus the audit-register cleanup that came with it
   (C7's last 50 inline workspace guards folded into the one `requireWorkspace`, and C9's extension grant for a
   contact-detail endpoint that does not exist). §9B of plan 32 now records the **seven** audit findings that did
   not survive contact with the code; read it before acting on that register, particularly §6.4, §9.4, C6 and C10.

@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2025,
-  "fileSetHash": "sha256:f8b4f979e5a6fa61e8007a51027c34e13efce204d6250c450b15093d2dd50cb7",
+  "fileCount": 2026,
+  "fileSetHash": "sha256:0fa3fe0476f9dcaefc555d158a5e1c7d7207d1ce9b0802ea2d9fe257db86adae",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2769,6 +2769,7 @@
       "packages/db/src/provenanceVocabularyParity.test.ts",
       "packages/db/src/repositories/accountChildPlan.test.ts",
       "packages/db/src/repositories/accountChildPlan.ts",
+      "packages/db/src/repositories/arrayParamBinding.test.ts",
       "packages/db/src/repositories/contactChannelPlan.test.ts",
       "packages/db/src/repositories/contactChannelPlan.ts",
       "packages/db/src/repositories/crmDeadLetterRepository.test.ts",
