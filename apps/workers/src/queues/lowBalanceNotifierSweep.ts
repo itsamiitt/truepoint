@@ -10,10 +10,10 @@
 
 import { env } from "@leadwolf/config";
 import {
-  db,
   notificationRepository,
   platformBillingReadRepository,
   withPlatformReadTx,
+  withTenantTx,
 } from "@leadwolf/db";
 import type { Job } from "bullmq";
 import type IORedis from "ioredis";
@@ -49,7 +49,11 @@ export function makeProcessLowBalanceNotifierSweep(redis: IORedis) {
         const workspaceId = t.defaultWorkspaceId;
         if (!ownerUserId || !workspaceId) continue;
         try {
-          const created = await db.transaction(async (tx) => {
+          // withTenantTx, NOT the owner connection — and not merely an audited bypass either. The rows this
+          // writes are tenant-scoped `notifications` under RLS, and by this point the tenant AND workspace are
+          // both known, so the correct fix is to stop bypassing RLS rather than to trace the bypass. The
+          // cross-tenant part of this sweep is the READ above, which legitimately needs the owner seam.
+          const created = await withTenantTx({ tenantId: t.tenantId, workspaceId }, async (tx) => {
             // Dedup: skip while a prior low-credits note is still unread (avoids daily spam).
             if (
               await notificationRepository.existsUnreadOfType(
