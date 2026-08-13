@@ -11,7 +11,7 @@ import { tenantMemberRepository, userRepository, workspaceRepository } from "@le
 import { ForbiddenError, InvalidTokenError } from "@leadwolf/types";
 import { findActiveSessionOrDetectReuse, rotateSession } from "./session.ts";
 import {
-  suspensionEnforced,
+  suspensionMode,
   tenantSuspensionDecision,
   tenantSuspensionLog,
 } from "./tenantSuspension.ts";
@@ -49,7 +49,7 @@ export async function switchOrg(args: {
   // what lets an operator size that set before flipping it.
   const decision = tenantSuspensionDecision(
     target.tenantStatus,
-    suspensionEnforced(env.TENANT_SUSPENSION_ENFORCED),
+    suspensionMode(env.TENANT_SUSPENSION_ENFORCED),
   );
   if (decision.suspended) {
     console.warn(tenantSuspensionLog(target.tenantId, target.tenantStatus, decision.refuse));

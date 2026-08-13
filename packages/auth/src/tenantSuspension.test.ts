@@ -4,51 +4,64 @@
 
 import { describe, expect, test } from "bun:test";
 import {
-  suspensionEnforced,
+  suspensionMode,
   tenantSuspensionDecision,
   tenantSuspensionLog,
 } from "./tenantSuspension.ts";
 
 describe("tenantSuspensionDecision", () => {
-  test("an active tenant is neither suspended nor refused, armed or not", () => {
-    expect(tenantSuspensionDecision("active", false)).toEqual({ suspended: false, refuse: false });
-    expect(tenantSuspensionDecision("active", true)).toEqual({ suspended: false, refuse: false });
+  test("an active tenant is neither suspended nor refused, in any mode", () => {
+    for (const mode of ["disabled", "shadow", "enforce"] as const) {
+      expect(tenantSuspensionDecision("active", mode)).toEqual({ suspended: false, refuse: false });
+    }
   });
 
   test("SHADOW: a suspended tenant is detected but NOT refused while disarmed", () => {
     // This is the whole point of the observe-first rollout — the gap is measured without ejecting anyone.
-    expect(tenantSuspensionDecision("suspended", false)).toEqual({
+    expect(tenantSuspensionDecision("suspended", "shadow")).toEqual({
       suspended: true,
       refuse: false,
     });
   });
 
   test("ENFORCE: a suspended tenant is refused once armed", () => {
-    expect(tenantSuspensionDecision("suspended", true)).toEqual({ suspended: true, refuse: true });
+    expect(tenantSuspensionDecision("suspended", "enforce")).toEqual({
+      suspended: true,
+      refuse: true,
+    });
   });
 
   test("an UNRECOGNISED status classifies as suspended — a new status must not become an access grant", () => {
     // Fail closed on classification. If someone adds 'archived' or 'pending_deletion' to the vocabulary, it
     // must not silently be treated as permitted the day it ships.
     for (const status of ["archived", "pending_deletion", "", "ACTIVE"]) {
-      expect(tenantSuspensionDecision(status, true).refuse).toBe(true);
+      expect(tenantSuspensionDecision(status, "enforce").refuse).toBe(true);
     }
   });
 
   test("null/undefined status classifies as suspended, not as permitted", () => {
-    expect(tenantSuspensionDecision(null, true).refuse).toBe(true);
-    expect(tenantSuspensionDecision(undefined, true).refuse).toBe(true);
+    expect(tenantSuspensionDecision(null, "enforce").refuse).toBe(true);
+    expect(tenantSuspensionDecision(undefined, "enforce").refuse).toBe(true);
   });
 });
 
-describe("suspensionEnforced", () => {
-  test('only the literal "true" arms it', () => {
-    expect(suspensionEnforced("true")).toBe(true);
-    // Everything else is disarmed — including the values someone might reasonably expect to work, which is
-    // exactly why the flag's declared contract says "only the literal true".
-    for (const v of [undefined, "", "false", "1", "yes", "TRUE", "True"]) {
-      expect(suspensionEnforced(v)).toBe(false);
+describe("suspensionMode", () => {
+  test("only 'true' or 'enforce' arm it — 'true' kept for the flag's original contract", () => {
+    expect(suspensionMode("true")).toBe("enforce");
+    expect(suspensionMode("enforce")).toBe("enforce");
+  });
+
+  test("SHADOW IS THE DEFAULT — an unset flag observes rather than going blind", () => {
+    // This is the load-bearing default of the whole rollout. If an absent flag meant "disabled", the gate
+    // would ship producing no data and nobody would ever have the numbers needed to arm it.
+    for (const v of [undefined, "", "false", "1", "yes", "TRUE", "True", "shadow"]) {
+      expect(suspensionMode(v)).toBe("shadow");
     }
+  });
+
+  test('only the exact literal "disabled" turns the read off', () => {
+    expect(suspensionMode("disabled")).toBe("disabled");
+    expect(suspensionMode("DISABLED")).toBe("shadow");
   });
 });
 

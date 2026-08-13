@@ -14,6 +14,11 @@ import {
 } from "@leadwolf/db";
 import { ForbiddenError, InvalidTokenError } from "@leadwolf/types";
 import { findActiveSessionOrDetectReuse, rotateSession } from "./session.ts";
+import {
+  suspensionMode,
+  tenantSuspensionDecision,
+  tenantSuspensionLog,
+} from "./tenantSuspension.ts";
 import { mintAccessToken } from "./token.ts";
 
 export interface SwitchWorkspaceResult {
@@ -34,6 +39,19 @@ export async function switchWorkspace(args: {
   if (!user || user.status !== "active") throw new InvalidTokenError();
 
   if (!session.tenantId) throw new InvalidTokenError();
+
+  // Tenant suspension (audit 32 §9E) — same decision as refresh/switchOrg, consumed from the shared module
+  // rather than re-derived. A workspace switch mints a fresh access token, so a suspended tenant must not be
+  // able to obtain one here either.
+  const suspension = suspensionMode(env.TENANT_SUSPENSION_ENFORCED);
+  if (suspension !== "disabled") {
+    const tenantStatus = await tenantMemberRepository.getTenantStatus(session.tenantId);
+    const decision = tenantSuspensionDecision(tenantStatus, suspension);
+    if (decision.suspended) {
+      console.warn(tenantSuspensionLog(session.tenantId, tenantStatus, decision.refuse));
+      if (decision.refuse) throw new InvalidTokenError();
+    }
+  }
 
   // AUTHZ: the target must be a workspace the user actively belongs to, WITHIN the session's tenant. The
   // role read is scoped to session.tenantId, so a workspace in another tenant simply yields no membership

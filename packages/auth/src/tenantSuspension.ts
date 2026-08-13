@@ -13,7 +13,7 @@
 // always, refuse only when someone deliberately arms it. Reading the shadow marker for a week tells an operator
 // the blast radius BEFORE anyone is locked out, which is the whole point.
 //
-// Kept pure — no env read, no DB, no I/O — so the caller injects `enforced` and this stays unit-testable.
+// Kept pure — no env read, no DB, no I/O — so the caller injects the mode and this stays unit-testable.
 // The env flag is read at the call site (see switchOrg.ts).
 
 /** What to do about a membership whose tenant is not active. */
@@ -33,15 +33,33 @@ export interface SuspensionDecision {
  */
 export function tenantSuspensionDecision(
   tenantStatus: string | null | undefined,
-  enforced: boolean,
+  mode: SuspensionMode,
 ): SuspensionDecision {
   const suspended = tenantStatus !== "active";
-  return { suspended, refuse: suspended && enforced };
+  return { suspended, refuse: suspended && mode === "enforce" };
 }
 
-/** Is enforcement armed? Only the literal "true", matching the flag's declared contract. */
-export function suspensionEnforced(flag: string | undefined): boolean {
-  return flag === "true";
+/**
+ * How the gate behaves. Three modes rather than a boolean, borrowing the vocabulary
+ * `retention_class_policies` already uses (`disabled|shadow|enforce`), because a boolean cannot express the
+ * distinction that matters on a hot path:
+ *
+ *   shadow (DEFAULT)  — read the status, log what would be refused, refuse nothing. Costs one indexed PK
+ *                       lookup per session rotation on `refresh`. This is the point of the rollout: no data,
+ *                       no way to size the affected set before arming.
+ *   disabled          — do not even read. The escape hatch if that lookup ever shows up in a latency budget;
+ *                       it buys back the cost at the price of going blind.
+ *   enforce           — refuse. Ejects every currently-suspended tenant, so it is a deliberate human act.
+ *
+ * `"true"` maps to enforce for compatibility with the flag's original declared contract ("only the literal
+ * true arms it"), so an operator who already set it gets what they asked for.
+ */
+export type SuspensionMode = "disabled" | "shadow" | "enforce";
+
+export function suspensionMode(flag: string | undefined): SuspensionMode {
+  if (flag === "true" || flag === "enforce") return "enforce";
+  if (flag === "disabled") return "disabled";
+  return "shadow";
 }
 
 /**

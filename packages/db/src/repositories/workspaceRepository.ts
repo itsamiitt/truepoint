@@ -291,6 +291,23 @@ export const tenantMemberRepository = {
     }));
   },
 
+  /**
+   * One tenant's status, for the §9E suspension gate on paths that hold a tenantId but no membership row
+   * (refresh, switchWorkspace). Global client, like listForUser: this is a PRE-tenant read the auth service
+   * makes before any RLS GUC is set, so it cannot go through withTenantTx.
+   *
+   * Returns null when the row does not exist. The caller must treat null as NOT active — a missing tenant is
+   * not a permitted one — which is exactly what tenantSuspensionDecision(null, …) already does.
+   */
+  async getTenantStatus(tenantId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ status: tenants.status })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    return row?.status ?? null;
+  },
+
   // The active org role (owner|billing_admin|security_admin|compliance_admin|member) for a member, or null
   // if not an active member of the tenant (ADR-0030). RLS-scoped: read under the caller's tenant GUC, so a
   // user in another tenant simply has no membership row here. Enforced by requireOrgRole.

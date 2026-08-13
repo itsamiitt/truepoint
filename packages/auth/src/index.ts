@@ -100,7 +100,8 @@ export { type OpenGuard, guardDegradedLog, makeDegradedThrottle } from "./guardD
 // switchWorkspace, and finalizeLogin's org pick) can adopt the same decision rather than re-deriving it.
 export {
   type SuspensionDecision,
-  suspensionEnforced,
+  type SuspensionMode,
+  suspensionMode,
   tenantSuspensionDecision,
   tenantSuspensionLog,
 } from "./tenantSuspension.ts";

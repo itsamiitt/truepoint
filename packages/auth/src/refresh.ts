@@ -3,7 +3,7 @@
 // the route handler stays thin. Throws InvalidTokenError on any failure (unknown / expired / revoked).
 
 import { env } from "@leadwolf/config";
-import { authPolicyRepository, userRepository } from "@leadwolf/db";
+import { authPolicyRepository, tenantMemberRepository, userRepository } from "@leadwolf/db";
 import { InvalidTokenError } from "@leadwolf/types";
 import { recordAuthMetric } from "./authMetrics.ts";
 import {
@@ -12,6 +12,11 @@ import {
   revokeSession,
   rotateSession,
 } from "./session.ts";
+import {
+  suspensionMode,
+  tenantSuspensionDecision,
+  tenantSuspensionLog,
+} from "./tenantSuspension.ts";
 import { mintAccessToken } from "./token.ts";
 
 export interface RefreshResult {
@@ -33,6 +38,24 @@ export async function refreshAccessToken(args: {
   if (!user || user.status !== "active") throw new InvalidTokenError();
 
   if (!session.tenantId) throw new InvalidTokenError();
+
+  // ── Tenant suspension (audit 32 §9E) ────────────────────────────────────────────────────────────────
+  // The session already survived the USER status check above; the TENANT's status was never consulted, so a
+  // suspended tenant refreshed forever. Wired here rather than only on switchOrg because refresh is what
+  // makes the shadow numbers representative — an org switch is rare, a rotation happens on every session.
+  // `disabled` skips the read entirely (the escape hatch); shadow pays one indexed PK lookup per rotation.
+  const suspension = suspensionMode(env.TENANT_SUSPENSION_ENFORCED);
+  if (suspension !== "disabled") {
+    const tenantStatus = await tenantMemberRepository.getTenantStatus(session.tenantId);
+    const decision = tenantSuspensionDecision(tenantStatus, suspension);
+    if (decision.suspended) {
+      console.warn(tenantSuspensionLog(session.tenantId, tenantStatus, decision.refuse));
+      // InvalidTokenError, not Forbidden: refresh's whole contract is "this token no longer buys a session",
+      // and every caller already handles it by sending the user back to auth. A novel error shape here would
+      // strand clients that only know the one.
+      if (decision.refuse) throw new InvalidTokenError();
+    }
+  }
 
   // ── P1-01 Gate D — session-timeout enforcement on refresh (ADR-0018) ─────────────────────────────────
   // LOCKOUT-CAPABLE: enforced ONLY when BOTH the global env master-arm is the literal string "true" AND the
