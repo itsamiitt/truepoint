@@ -784,8 +784,8 @@ flowchart TD
   `tags`, `tenants`, `users`, `webhooks`. All bucket correctly (nothing is lost); they surface as warnings so the canonical
   list can be reconciled (add the slugs, the way `settings-billing`/`settings-compliance` were declared) or the folders renamed.
   Left as flagged warnings — the established handling — not papered over.
-- **Map hygiene:** this prose was last refreshed from the **2030-file** JSON (86 domains with code, 38 shared areas,
-  **7** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
+- **Map hygiene:** this prose was last refreshed from the **2030-file** JSON (86 domains with code, 39 shared areas,
+  **3** unassigned, **54** warnings) after migration 0108 — `org_kind` on `master_companies`, the `master_education`
   edge, the dropped `technographics` blob, and the `account-intelligence` read surface end to end (contract in
   `packages/types`, two routers in `apps/api`, drawer sections in `apps/web`) — then plan 33's Tracks A–C
   (provenance, employment, org-kind, signals, displacement, alumni, peer adopters) and audit 32's Waves 1/3
@@ -809,6 +809,16 @@ flowchart TD
   (C7's last 50 inline workspace guards folded into the one `requireWorkspace`, and C9's extension grant for a
   contact-detail endpoint that does not exist). §9B of plan 32 now records the **seven** audit findings that did
   not survive contact with the code; read it before acting on that register, particularly §6.4, §9.4, C6 and C10.
+
+  **Unassigned went 7 → 3, and the four that left were never violations.** `next.config.mjs` (×3) and
+  `postcss.config.mjs` sat permanently in `unassigned`, which the navigation-map spec renders as *"Violations
+  to fix"* — but a Next config is at exactly the path Next requires. `classify()` now places root-level
+  `*.config.*` as shared tooling. The point is not the number: a violations list that can never reach zero
+  trains readers to ignore it, and a genuinely misplaced file then hides among the furniture. The remaining
+  **3** are honest gaps — `entitlementRepository`, `usageEventRepository`, `outcomeMetricsRepository` have no
+  clearly-right domain in the canonical list, and mapping them to `billing` would contradict decision D2
+  (entitlements are a cap layer ABOVE credits and never read a balance). `REPO_DOMAIN`'s own header says a
+  confidently wrong home is worse than an honest gap; that judgement stands.
 
   **Deleted this cycle:** `apps/api/src/middleware/requireStaffRole.ts` — audit 32 · C8 migrated every endpoint
   to `requireCapability`, so `StaffRoleVariables` now lives with the guard that sets it. Three references to

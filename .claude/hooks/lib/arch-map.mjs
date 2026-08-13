@@ -464,6 +464,15 @@ export function classify(p) {
   )
     return { kind: "shared", area: `packages/${m[1]}` };
 
+  // Build/tooling config at an app or package ROOT (next.config.mjs, postcss.config.mjs, …). This is not
+  // domain code and never can be — Next.js requires next.config at exactly this path — so reporting it as a
+  // placement violation is noise. It mattered: four such files sat permanently in `unassigned`, which the
+  // navigation-map spec renders as "Violations to fix". A violations list that can never reach zero trains
+  // readers to ignore it, and then a genuinely misplaced file hides among the furniture. Scoped to *.config.*
+  // at a ROOT only, so a stray file inside src/ still surfaces loudly.
+  if ((m = p.match(/^(apps|packages)\/([^/]+)\/[^/]*\.config\.(c|m)?[tj]s$/)))
+    return { kind: "shared", area: `${m[1]}/${m[2]}` };
+
   return { kind: "unassigned" };
 }
 

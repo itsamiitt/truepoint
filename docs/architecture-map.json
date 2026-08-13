@@ -2198,6 +2198,9 @@
     }
   },
   "shared": {
+    "apps/admin": [
+      "apps/admin/next.config.mjs"
+    ],
     "apps/admin/app": [
       "apps/admin/src/app/(shell)/ai-usage/page.tsx",
       "apps/admin/src/app/(shell)/audit-log/page.tsx",
@@ -2289,6 +2292,8 @@
       "apps/api/src/middleware/tenancy.ts"
     ],
     "apps/auth": [
+      "apps/auth/next.config.mjs",
+      "apps/auth/postcss.config.mjs",
       "apps/auth/src/bootSelfTest.ts",
       "apps/auth/src/instrumentation.ts",
       "apps/auth/src/middleware.ts"
@@ -2539,6 +2544,7 @@
       "apps/forge/src/features/sync-status/types.ts"
     ],
     "apps/web": [
+      "apps/web/next.config.mjs",
       "apps/web/src/securityHeaders.test.ts"
     ],
     "apps/web/app": [
@@ -3167,10 +3173,6 @@
     ]
   },
   "unassigned": [
-    "apps/admin/next.config.mjs",
-    "apps/auth/next.config.mjs",
-    "apps/auth/postcss.config.mjs",
-    "apps/web/next.config.mjs",
     "packages/db/src/repositories/entitlementRepository.ts",
     "packages/db/src/repositories/outcomeMetricsRepository.ts",
     "packages/db/src/repositories/usageEventRepository.ts"
