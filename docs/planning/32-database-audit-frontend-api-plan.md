@@ -675,7 +675,19 @@ one property that matters most — a fact with no observation date is not scored
 
 **Two consequences while it stands.** `master_confidence_policy` is staff-tunable configuration that tunes
 nothing — the third such surface this audit has found, after `retention_policies` (§9C) and the dark
-`/crm-sync` console (F5). And the live half-lives can only be changed by shipping code, which is the opposite
+`/crm-sync` console (F5).
+
+> **A FOURTH instance turned up independently, and has been FIXED — which is the useful part.** The
+> `feat/enrichment-waterfall-v2` merge (62265efd, migration 0111) states in `redisProviderGate.ts` that
+> `provider_configs.rate_limit_per_min` and `monthly_budget_cents` are "columns platform admins have written
+> since 13 §3.6 that the engine never read". Verified against the pre-merge tree: those columns appeared only
+> in the admin UI that writes them, the admin API that writes them, and migrations — no engine reader
+> anywhere. They are now read by `enrichContactV2`, `fieldWaterfall`, `providerGate` and `redisProviderGate`.
+>
+> That matters twice over. It is independent confirmation that "staff-facing configuration that configures
+> nothing" is a real, recurring shape in this codebase rather than an artefact of how this audit looked. And
+> it demonstrates the fix: wire the column to the engine that should have been honouring it, rather than
+> removing the surface. §9C, §9D and F5 are the three still outstanding. And the live half-lives can only be changed by shipping code, which is the opposite
 of what a Phase-2 tuning loop needs.
 
 **Not decided here** (CLAUDE.md rule 5 — the confidence/provenance model is the product's spine, and rule 6 —
