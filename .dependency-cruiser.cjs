@@ -23,9 +23,14 @@ module.exports = {
   //   config-imports-only-types       packages/config -> packages/core
   //   extension-stays-thin            apps/extension -> packages/db
   //   forge-capture-sdk-stays-thin    packages/forge-capture-sdk -> packages/core
+  //   no-deep-import-from-app         apps/api -> packages/db/src/repositories/listCaps.ts
+  //   no-deep-import-cross-package    packages/core -> packages/db/src/repositories/listCaps.ts
+  //   no-cross-feature-import         web features/inbox -> web features/sequences
   //
-  // NOT yet exercised: no-deep-import-from-app, no-deep-import-cross-package, no-cross-feature-import. They
-  // are stated here as unverified rather than left to look covered by the list above.
+  // ALL TEN fire. Nothing here is taken on trust: each was made to fail on purpose and named the exact edge.
+  // The two deep-import rules matter most to re-check if this file is ever refactored — their `pathNot`
+  // carries a `$1` backreference and an index.ts exemption, which is the kind of expression that keeps
+  // matching after it has stopped meaning what it says.
   forbidden: [
     {
       name: "no-circular",
