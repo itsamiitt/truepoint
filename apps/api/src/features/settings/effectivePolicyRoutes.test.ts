@@ -8,6 +8,7 @@
 
 import { describe, expect, it, mock } from "bun:test";
 import * as realDb from "@leadwolf/db";
+import * as realTenancy from "../../middleware/tenancy.ts";
 
 // authn / tenancy / requireOrgRole: pass through, stash the tenant + actor so the handlers proceed.
 mock.module("../../middleware/authn.ts", () => ({
@@ -16,7 +17,11 @@ mock.module("../../middleware/authn.ts", () => ({
     await next();
   },
 }));
+// `...realTenancy` is load-bearing, exactly like the `...realDb` spread below: mock.module REPLACES the whole
+// module, so listing only `tenancy` deletes `requireWorkspace` from it — and routes in settingsRoutes' import
+// graph use that, so the FILE fails to link with an error naming a symbol this test never mentions.
 mock.module("../../middleware/tenancy.ts", () => ({
+  ...realTenancy,
   tenancy: async (c: { set: (k: string, v: unknown) => void }, next: () => Promise<void>) => {
     c.set("tenantId", "t1");
     await next();

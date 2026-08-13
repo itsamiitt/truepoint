@@ -82,10 +82,16 @@ beforeAll(async () => {
     INSERT INTO master_technology_vendors (technology_id, master_company_id, relationship, confidence)
     VALUES (${techIntacct}, ${orgSage}, 'current_owner', 0.95)`;
   // … and USES WordPress (adoption edge). Same company, different fact, different table.
+  //
+  // `web_fingerprint` — NOT the name of the scanner that produced it. `detection_method` is a closed
+  // vocabulary (0101's master_technology_adoptions_method_enum: web_fingerprint | job_posting | dns |
+  // self_declared | integration | filing | manual) describing HOW the adoption was observed, because that is
+  // what confidence weighting keys on. Which tool did the fingerprinting belongs in the provenance event, not
+  // here — and putting a vendor name in this column is exactly what the CHECK exists to stop.
   await admin`
     INSERT INTO master_technology_adoptions
       (master_company_id, technology_id, detection_method, first_seen_at, last_seen_at, observed_at, confidence)
-    VALUES (${orgSage}, ${techWordpress}, 'webappanalyzer', now() - interval '90 days', now(), now(), 0.88)`;
+    VALUES (${orgSage}, ${techWordpress}, 'web_fingerprint', now() - interval '90 days', now(), now(), 0.88)`;
 }, 180_000);
 
 afterAll(async () => {
