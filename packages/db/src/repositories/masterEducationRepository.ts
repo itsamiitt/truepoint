@@ -71,6 +71,10 @@ export async function recordEducation(tx: Tx, input: RecordEducationInput): Prom
 
   // The conflict target must match whichever partial unique applies, so the two cases are written out
   // rather than unified behind a clever COALESCE — a wrong target silently degrades to "always insert".
+  // `::text[]` on the fields_of_study binds below: an INSERT usually lets Postgres infer a parameter's type
+  // from the target column, so these would probably work uncast — but "probably" is not worth a CI round-trip
+  // on a host with no Docker, and the sibling ANY() in masterTechnologyRepository proved what an uninferred
+  // array parameter costs (22P02, malformed array literal). Explicit is free here.
   if (input.masterCompanyId) {
     const rows = (await tx.execute(sql`
       INSERT INTO master_education (
@@ -80,7 +84,7 @@ export async function recordEducation(tx: Tx, input: RecordEducationInput): Prom
       ) VALUES (
         ${input.masterPersonId}, ${input.masterCompanyId}, ${input.schoolNameRaw ?? null},
         ${input.schoolNameNormalized ?? null}, ${input.degree ?? null},
-        ${input.fieldsOfStudy ?? null}, ${startedOn}, ${input.endedOn ?? null},
+        ${input.fieldsOfStudy ?? null}::text[], ${startedOn}, ${input.endedOn ?? null},
         ${input.assertingSource ?? null}, ${input.matchMethod ?? null},
         ${input.confidence ?? null}, ${input.observedAt ?? null}
       )
@@ -107,7 +111,7 @@ export async function recordEducation(tx: Tx, input: RecordEducationInput): Prom
       asserting_source, match_method, confidence, observed_at
     ) VALUES (
       ${input.masterPersonId}, ${input.schoolNameRaw ?? null}, ${input.schoolNameNormalized},
-      ${input.degree ?? null}, ${input.fieldsOfStudy ?? null}, ${startedOn}, ${input.endedOn ?? null},
+      ${input.degree ?? null}, ${input.fieldsOfStudy ?? null}::text[], ${startedOn}, ${input.endedOn ?? null},
       ${input.assertingSource ?? null}, ${input.matchMethod ?? null},
       ${input.confidence ?? null}, ${input.observedAt ?? null}
     )

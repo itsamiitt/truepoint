@@ -353,6 +353,13 @@ const GRANTS = `
                                    master_signals, master_company_locations,
                                    master_company_contact_points, master_company_funding,
                                    master_person_identifiers TO leadwolf_er;
+  -- master_education (0108) — the education stint edge, the sibling of master_employment above and written by
+  -- the same resolver path (masterEducationRepository.recordEducation runs under withErTx). Same posture:
+  -- SELECT/INSERT/UPDATE, never DELETE. It was created without this grant, and the failure mode is worth
+  -- recording: the table existed, its RLS/revoke posture was correct, every unit test passed, and the FIRST
+  -- write from the ER role got SQLSTATE 42501 "permission denied for table master_education". A missing GRANT
+  -- is invisible to everything except a real Postgres — which is why only CI caught it.
+  GRANT SELECT, INSERT, UPDATE ON master_education TO leadwolf_er;
   -- Reference/config data the resolver READS but must never rewrite: the signal vocabulary and the scoring
   -- policy are authored by staff, not by an ingest path.
   GRANT SELECT ON master_signal_types, master_confidence_policy TO leadwolf_er;
