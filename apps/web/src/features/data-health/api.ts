@@ -4,6 +4,7 @@
 // the same workspace-scoped, PII-safe rollups the Home cockpit cards read. The slice's only seam to the backend.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { DuplicatePairView } from "@leadwolf/types";
 import type {
@@ -12,11 +13,6 @@ import type {
   ReverificationRun,
   WorkspaceDataQuality,
 } from "./types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 /** Load the per-workspace Data Health rollup (coverage / deliverability / freshness counts). */
 export async function fetchDataQuality(): Promise<WorkspaceDataQuality> {

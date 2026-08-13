@@ -3,15 +3,11 @@
 // parallel via fetchWithAuth and the in-memory access token (ADR-0016). The slice's only seam to the backend.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import { type ReportsSummary, reportsSummarySchema } from "@leadwolf/types";
 import type { MaskedContact } from "@leadwolf/types";
 import type { UsageReveal } from "./types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 /** The raw inputs every report dashboard derives from (see rollups.ts). */
 export interface ReportsSource {

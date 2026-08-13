@@ -5,6 +5,7 @@
 // server-side (the UI never computes the rollup). 404/501 → not-built, surfaced honestly like the rest of the slice.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { isUnavailable } from "@/lib/maybeList";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   AssignStageResult,
@@ -12,7 +13,7 @@ import type {
   PipelineStage,
   UpdatePipelineStageRequest,
 } from "@leadwolf/types";
-import { notBuilt, toApiError } from "./api";
+import { toApiError } from "./api";
 
 /** The stage list the management panel + StageSelector render. `available:false` ⇒ the backend isn't built. */
 export interface StageList {
@@ -25,7 +26,7 @@ export async function fetchStages(includeArchived = false): Promise<StageList> {
   const res = await fetchWithAuth(
     `${API_BASE}/api/v1/pipeline-stages${includeArchived ? "?includeArchived=true" : ""}`,
   );
-  if (notBuilt(res.status)) return { available: false, stages: [] };
+  if (isUnavailable(res.status)) return { available: false, stages: [] };
   if (!res.ok) throw await toApiError(res, "Could not load stages");
   const data = (await res.json()) as { stages: PipelineStage[] };
   return { available: true, stages: data.stages };

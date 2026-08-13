@@ -7,6 +7,7 @@
 "use client";
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { MergeFieldDecision, MergePreview, MergeResult } from "@leadwolf/types";
 import { mergePreviewSchema, mergeResultSchema } from "@leadwolf/types";
@@ -26,12 +27,6 @@ export class MergeNotEnabledError extends Error {
     super(message);
     this.name = "MergeNotEnabledError";
   }
-}
-
-/** RFC-9457 problem body → a human message (mirrors the data-health api.ts / apiV2 seam). */
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
 }
 
 /** GET /contacts/:survivorId/merge-preview?loser=<loserId> — the side-by-side field matrix + child-impact

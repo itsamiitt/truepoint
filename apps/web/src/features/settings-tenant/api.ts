@@ -8,6 +8,8 @@
 //   GET   /settings/tenant/members    → tenant-wide members directory                (09 §3, 12 §4)
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { isUnavailable } from "@/lib/maybeList";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { AuthAuditEntry, AuthPolicy } from "@leadwolf/types";
 import type {
@@ -18,18 +20,9 @@ import type {
   WorkspacesFeed,
 } from "./types";
 
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
-
-function notBuilt(status: number): boolean {
-  return status === 404 || status === 501;
-}
-
 export async function fetchOrganization(): Promise<Organization | null> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/settings/tenant`);
-  if (notBuilt(res.status)) return null;
+  if (isUnavailable(res.status)) return null;
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load organization settings"));
   return (await res.json()) as Organization;
 }
@@ -40,14 +33,14 @@ export async function saveOrganization(patch: Partial<Organization>): Promise<{ 
     headers: { "content-type": "application/json" },
     body: JSON.stringify(patch),
   });
-  if (notBuilt(res.status)) return { ok: false };
+  if (isUnavailable(res.status)) return { ok: false };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not save organization settings"));
   return { ok: true };
 }
 
 export async function fetchWorkspaces(): Promise<WorkspacesFeed> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/workspaces`);
-  if (notBuilt(res.status)) return { available: false, workspaces: [] };
+  if (isUnavailable(res.status)) return { available: false, workspaces: [] };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load workspaces"));
   const body = (await res.json()) as { workspaces?: TenantWorkspace[] };
   return { available: true, workspaces: body.workspaces ?? [] };
@@ -65,7 +58,7 @@ export async function fetchAuthPolicy(): Promise<{
 }> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/settings/security/auth-policy`);
   if (res.status === 403) return { policy: null, forbidden: true };
-  if (notBuilt(res.status)) return { policy: null, forbidden: false };
+  if (isUnavailable(res.status)) return { policy: null, forbidden: false };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load the security policy"));
   return { policy: (await res.json()) as AuthPolicy, forbidden: false };
 }
@@ -78,7 +71,7 @@ export async function saveAuthPolicy(policy: AuthPolicy): Promise<{ ok: boolean 
   });
   if (res.status === 403)
     throw new Error("You need the owner or security-admin role to change this.");
-  if (notBuilt(res.status)) return { ok: false };
+  if (isUnavailable(res.status)) return { ok: false };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not save the security policy"));
   return { ok: true };
 }
@@ -86,7 +79,7 @@ export async function saveAuthPolicy(policy: AuthPolicy): Promise<{ ok: boolean 
 /** The org's recent auth events for the Security view. 403/not-built → [] (the panel gates on the policy). */
 export async function fetchAuthAudit(): Promise<AuthAuditEntry[]> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/settings/security/auth-audit`);
-  if (res.status === 403 || notBuilt(res.status)) return [];
+  if (res.status === 403 || isUnavailable(res.status)) return [];
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load the auth audit log"));
   const body = (await res.json()) as { events?: AuthAuditEntry[] };
   return body.events ?? [];
@@ -94,7 +87,7 @@ export async function fetchAuthAudit(): Promise<AuthAuditEntry[]> {
 
 export async function fetchMembersSummary(): Promise<MembersSummary> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/settings/tenant/members?limit=5`);
-  if (notBuilt(res.status)) {
+  if (isUnavailable(res.status)) {
     return { available: false, total: 0, activeCount: 0, invitedCount: 0, sample: [] };
   }
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load members directory"));

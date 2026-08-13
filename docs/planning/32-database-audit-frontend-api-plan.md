@@ -231,10 +231,24 @@ Job-change notifications deep-link to `/prospect?contact=<id>`; keep that as the
 address (no new route — consolidation rule) but make it robust: on load with `?contact=`, the
 drawer must open even when the contact isn't in the current result page (fetch by id via A4).
 
-**F4 — Contract-shape normalization.** Move `MaybeList<T>` (duplicated in two slices) into
-`@leadwolf/types` or eliminate it once §4.4-P2 response envelopes are normalized; consolidate the
-three import clients (`api.ts`, `apiV2.ts`, `apiDrafts.ts`) behind one barrel with deprecation
-notes.
+**F4 — Contract-shape normalization. DONE, but not as scoped.** Both halves as written were
+wrong, and the duplication that mattered was one neither half named.
+
+- `MaybeList<T>` does **not** belong in `@leadwolf/types`. No endpoint returns `{items, available}`
+  — the server returns a list or a 404/501, and `available` is synthesized client-side from the
+  status. Putting it in the shared contract package would assert something untrue about the wire
+  format. It now lives in `apps/web/src/lib/maybeList.ts`, a web concern in a web location.
+- The three import clients should **not** be consolidated. `apiV2.ts` says in its own header that
+  it is "separate from the legacy api.ts so the two transport contracts (legacy poll vs v2 durable)
+  stay visibly distinct" — they share no function names and return different types. There is also
+  nothing to deprecate: all three are live, and the slice barrel correctly exports only components,
+  so a barrel over the data layer would *enlarge* the public surface. Left alone.
+- **What was actually duplicated:** `problemMessage` existed as **24 byte-identical private
+  copies**, and the 404/501 predicate as **11 more** under two names (`notBuilt` ×10,
+  `isUnavailable` ×1). `problemMessage` decides what the app *says* when something fails, so any
+  improvement to it reached one slice in twenty-four and the same failure was explained differently
+  depending on the screen. Both now have one definition (`lib/problemMessage.ts`,
+  `lib/maybeList.ts`); 29 files, −151 lines net.
 
 **F5 — Orphaned routes decision.** `/crm-sync` exists in both apps but is reachable from neither
 nav nor palette. Either wire it behind the `CRM_SYNC_ENABLED` flag surface or delete the pages
@@ -580,7 +594,7 @@ the relevant skills open (any data-path slice: platform + data + security).
 **Wave 3 — structural debt:**
 8. 9.2 schema backfills (SQL-only tables → pgTable; platform_audit_log migration; parity itests).
 9. §6.4-1 `withSystemTx` + worker sweep migration + stop exporting raw `db`. [A-01]
-10. ~~C6 pagination normalization~~ **— DONE, and smaller than scheduled.** The six unbounded configuration lists now carry `LIST_SAFETY_CAP`; the "contacts cursor" half was a misread (see §9B) — that surface was always keyset-paged, so no coordinated deploy is needed. F4 remains (C7 is done — see its row).
+10. ~~C6 pagination normalization~~ **— DONE, and smaller than scheduled.** The six unbounded configuration lists now carry `LIST_SAFETY_CAP`; the "contacts cursor" half was a misread (see §9B) — that surface was always keyset-paged, so no coordinated deploy is needed. C7 and F4 are both done — see their entries.
 11. 9.5-P0 email cleartext remediation (after compliance-checklist sign-off). [A-01][A-02]
 
 **Wave 4 — consolidation & deletions (each needs a small decision recorded in decisions.md):**

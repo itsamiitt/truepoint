@@ -11,19 +11,12 @@
 //   DELETE /settings/security/identity/scim/tokens/:id     → revoke a token
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { isUnavailable } from "@/lib/maybeList";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { DomainView, ScimTokenCreated, ScimTokenView } from "@leadwolf/types";
 
 const BASE = `${API_BASE}/api/v1/settings/security/identity`;
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
-
-function notBuilt(status: number): boolean {
-  return status === 404 || status === 501;
-}
 
 // ── Domains ──────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -35,7 +28,7 @@ export async function fetchDomains(): Promise<{
 }> {
   const res = await fetchWithAuth(`${BASE}/domains`);
   if (res.status === 403) return { forbidden: true, available: true, domains: [] };
-  if (notBuilt(res.status)) return { forbidden: false, available: false, domains: [] };
+  if (isUnavailable(res.status)) return { forbidden: false, available: false, domains: [] };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load domains"));
   const body = (await res.json()) as { domains?: DomainView[] };
   return { forbidden: false, available: true, domains: body.domains ?? [] };
@@ -73,7 +66,7 @@ export async function fetchScimTokens(): Promise<{
 }> {
   const res = await fetchWithAuth(`${BASE}/scim/tokens`);
   if (res.status === 403) return { forbidden: true, available: true, tokens: [] };
-  if (notBuilt(res.status)) return { forbidden: false, available: false, tokens: [] };
+  if (isUnavailable(res.status)) return { forbidden: false, available: false, tokens: [] };
   if (!res.ok) throw new Error(await problemMessage(res, "Could not load SCIM tokens"));
   const body = (await res.json()) as { tokens?: ScimTokenView[] };
   return { forbidden: false, available: true, tokens: body.tokens ?? [] };
@@ -98,6 +91,6 @@ export async function revokeScimToken(id: string): Promise<void> {
   });
   if (res.status === 403)
     throw new Error("You need the owner or security-admin role to revoke a SCIM token.");
-  if (!res.ok && !notBuilt(res.status))
+  if (!res.ok && !isUnavailable(res.status))
     throw new Error(await problemMessage(res, "Could not revoke the SCIM token"));
 }

@@ -2,6 +2,7 @@
 // workspace-scoped endpoints, using the same fetchWithAuth + problemMessage pattern as the other slices.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   CrmConflictView,
@@ -10,11 +11,6 @@ import type {
   CrmSyncRunView,
   CrmSyncStreamView,
 } from "./types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 export async function fetchCrmConnections(): Promise<CrmConnectionView[]> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/crm/connections`);

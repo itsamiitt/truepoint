@@ -14,6 +14,7 @@
 "use client";
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { homeKeys } from "../keys";
@@ -23,11 +24,6 @@ const ENDPOINT = `${API_BASE}/api/v1/home/summary`;
 
 /** The ETag of whatever is currently in the query cache under `homeKeys.summary()`. */
 let etag: string | null = null;
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 export function useHomeSummary() {
   const qc = useQueryClient();

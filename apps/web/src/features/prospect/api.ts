@@ -4,6 +4,7 @@
 // backend. Reveal carries an Idempotency-Key so a retried POST never double-charges (07 §3).
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { isUnavailable } from "@/lib/maybeList";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   ActivityRow,
@@ -49,15 +50,6 @@ export async function toApiError(res: Response, fallback: string): Promise<ApiEr
   const message = body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
   const code = body?.code ?? "error";
   return new ApiError(message, res.status, code, body ?? {});
-}
-
-/**
- * A route that isn't built yet answers 404/501 — that's "no data here / not wired", not a failure to surface.
- * The activity timeline (M8) + lists/enroll/export backends gate behind later milestones, so the slice treats
- * those as not-built (empty / honest "not available yet") rather than fabricating data or faking a mutation.
- */
-export function notBuilt(status: number): boolean {
-  return status === 404 || status === 501;
 }
 
 /** The masked search/list (05 §6): no PII — emailDomain is the only email facet until reveal. */
@@ -311,7 +303,7 @@ export interface ActivityFeed {
  */
 export async function fetchActivities(id: string): Promise<ActivityFeed> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/contacts/${id}/activities`);
-  if (notBuilt(res.status)) return { available: false, activities: [] };
+  if (isUnavailable(res.status)) return { available: false, activities: [] };
   if (!res.ok) throw await toApiError(res, "Could not load activity");
   const data = (await res.json()) as { activities?: ActivityRow[] };
   return { available: true, activities: data.activities ?? [] };
@@ -330,7 +322,7 @@ export interface CustomFieldsFeed {
  */
 export async function fetchCustomFields(id: string): Promise<CustomFieldsFeed> {
   const res = await fetchWithAuth(`${API_BASE}/api/v1/custom-fields/values/contact/${id}`);
-  if (notBuilt(res.status)) return { available: false, values: [] };
+  if (isUnavailable(res.status)) return { available: false, values: [] };
   if (!res.ok) throw await toApiError(res, "Could not load custom fields");
   const data = (await res.json()) as { values?: CustomFieldValueDto[] };
   return { available: true, values: data.values ?? [] };
@@ -349,7 +341,7 @@ export async function setCustomFields(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ values }),
   });
-  if (notBuilt(res.status)) return { available: false, values: [] };
+  if (isUnavailable(res.status)) return { available: false, values: [] };
   if (!res.ok) throw await toApiError(res, "Could not save custom fields");
   const data = (await res.json()) as { values?: CustomFieldValueDto[] };
   return { available: true, values: data.values ?? [] };
@@ -366,7 +358,7 @@ export async function enrollContacts(contactIds: string[]): Promise<{ ok: boolea
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ contactIds }),
   });
-  if (notBuilt(res.status)) return { ok: false };
+  if (isUnavailable(res.status)) return { ok: false };
   if (!res.ok) throw await toApiError(res, "Could not enroll");
   return { ok: true };
 }

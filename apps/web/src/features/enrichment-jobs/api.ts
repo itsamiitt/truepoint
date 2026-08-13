@@ -4,13 +4,9 @@
 // to the backend; the response shapes are the @leadwolf/types contract so producer + consumer can't drift.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { EnrichmentJobListResponse, EnrichmentJobSummary } from "@leadwolf/types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 /** List this workspace's enrichment jobs (most-recent first). */
 export async function fetchEnrichmentJobs(): Promise<EnrichmentJobSummary[]> {

@@ -3,13 +3,9 @@
 // latest-20 view; this slice is the full, paginated history. The slice's only seam to the backend.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { NotificationsPage } from "@leadwolf/types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 /** GET /notifications — one keyset page of the caller's history (+ the live unread count). */
 export async function fetchNotificationsPage(cursor?: string): Promise<NotificationsPage> {

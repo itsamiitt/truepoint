@@ -4,13 +4,9 @@
 // subject is not a signed-in user. The slice's only seam to the backend.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type { SuppressionListItem, SuppressionMatchType, SuppressionScope } from "@leadwolf/types";
-
-async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
-}
 
 /** The suppression scopes a workspace/tenant admin can add (global rows are platform-managed — 08 §3). */
 export type AddableScope = Exclude<SuppressionScope, "global">;

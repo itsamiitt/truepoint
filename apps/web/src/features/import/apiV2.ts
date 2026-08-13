@@ -5,6 +5,7 @@
 // api.ts so the two transport contracts (legacy poll vs v2 durable) stay visibly distinct.
 
 import { fetchWithAuth } from "@/lib/authClient";
+import { problemMessage } from "@/lib/problemMessage";
 import { API_BASE } from "@/lib/publicConfig";
 import type {
   ImportJobDetailV2,
@@ -24,12 +25,6 @@ export class ImportsNotEnabledError extends Error {
     super(message);
     this.name = "ImportsNotEnabledError";
   }
-}
-
-/** RFC-9457 problem body → a human message (shared with the S-U7 draft fetchers in apiDrafts.ts). */
-export async function problemMessage(res: Response, fallback: string): Promise<string> {
-  const body = (await res.json().catch(() => null)) as { detail?: string; title?: string } | null;
-  return body?.detail ?? body?.title ?? `${fallback} (${res.status})`;
 }
 
 /** The GET /imports/:jobId shape: the legacy poll response ALWAYS, plus the additive v2 members when the dual
