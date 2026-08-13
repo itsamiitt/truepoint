@@ -107,7 +107,23 @@ module.exports = {
     },
     {
       name: "no-orphans",
-      comment: "Flag unreachable modules (dead code).",
+      // WARNING — DO NOT TREAT THIS RULE'S OUTPUT AS EVIDENCE OF DEAD CODE. It cannot see `@/...` imports.
+      //
+      // Every app defines its own `@/*` -> `./src/*` alias in its OWN tsconfig, and tsconfig.base.json has no
+      // `paths` entry for dependency-cruiser's `tsConfig` option to point at. So alias imports never resolve
+      // and every alias-imported module looks unreachable. Measured on the current tree: ALL 14 reported
+      // orphans are false positives. apps/web/src/lib/problemMessage.ts has 25 importers, maybeList.ts 14,
+      // queryKeys.ts 6; apps/auth's authUrl / OtpInput / magicCarry are referenced by 8 / 5 / 2 files. The
+      // remainder are next.config.mjs entry points and one build artifact under apps/extension/dist.
+      //
+      // A 100% false-positive rate, and the failure mode is not noise but DELETION: someone tidying "dead
+      // code" on this rule's say-so would remove a module that 25 files import. Grep for the module name
+      // before acting on any entry here.
+      //
+      // Left enabled rather than removed: it still covers non-aliased locations, and the eight error-level
+      // boundary rules above are what this cruise is really for. Fixing it properly means a per-app cruise
+      // using that app's tsconfig -- a build-tooling change, not a rule tweak.
+      comment: "Flag unreachable modules (dead code). NOTE: blind to `@/...` alias imports -- see above.",
       severity: "warn",
       from: { orphan: true, pathNot: "\\.(d\\.ts|test\\.[tj]sx?)$" },
       to: {},
