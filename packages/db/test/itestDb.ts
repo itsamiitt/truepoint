@@ -9,6 +9,22 @@
 // applyMigrations() call the tests still make is a fast no-op on a clone — the drizzle journal is cloned
 // with the database, and the role/rls/grant steps are idempotent.
 
+// ── THE SHAPE AN ISOLATION PROOF MUST HAVE ────────────────────────────────────────────────────────────────
+// A test whose only assertion is "the wrong scope sees zero rows" proves nothing on its own: it passes when
+// RLS works, and equally when the seed never wrote the row, when the predicate is wrong, or when a GUC the
+// policy needs was never set. Those are indistinguishable from `expect(n).toBe(0)`.
+//
+// So every isolation proof pairs its zero with a POSITIVE CONTROL — the right scope sees 1 — either in the
+// same test or in an adjacent one (crmIsolation's "workspace A does read its own ciphertext (the read path
+// works at all)" is the canonical example of the sibling form; both shapes are fine).
+//
+// Swept 13 Aug 2026: 647 test blocks across packages/db/test/*.itest.ts, 38 asserted only emptiness. Most are
+// legitimately negative — "an unknown slug resolves to null", "a second consume returns null", a 42501 REVOKE
+// proof — where the null IS the behaviour under test and there is nothing to control for. Every
+// isolation-critical one had its control, in-block or sibling, except email_event in emailIsolation, which
+// was fixed. Re-run that reasoning if you add one; a zero without a control is the easiest vacuous test to
+// write and the hardest to notice, because it is green from the day it stops meaning anything.
+
 import { createHash } from "node:crypto";
 import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
