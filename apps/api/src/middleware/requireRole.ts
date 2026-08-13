@@ -6,7 +6,7 @@
 import { ForbiddenError, type WorkspaceRole } from "@leadwolf/types";
 import type { Context, MiddlewareHandler } from "hono";
 import { getRoleCached } from "../lib/roleCache.ts";
-import type { TenancyVariables } from "./tenancy.ts";
+import { type TenancyVariables, requireWorkspace } from "./tenancy.ts";
 
 export type RoleVariables = TenancyVariables & { role: WorkspaceRole };
 
@@ -15,8 +15,9 @@ export function requireRole(...allowed: WorkspaceRole[]): MiddlewareHandler {
   return async (c, next) => {
     const claims = c.get("claims");
     const tenantId = c.get("tenantId") as string;
-    const workspaceId = c.get("workspaceId") as string | undefined;
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+    // This is the guard that fires FIRST for any role-gated route, so the requireWorkspace call in those
+    // handlers is type-narrowing rather than a second check — see the note on the helper itself.
+    const workspaceId = requireWorkspace(c);
 
     // Reads the database directly unless ROLE_CACHE_TTL_MS is set; see lib/roleCache.ts for why that is off
     // by default and what a membership mutation does to the cached entry.

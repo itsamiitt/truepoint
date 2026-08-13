@@ -19,14 +19,13 @@ import {
   AiBudgetExhaustedError,
   type AiRequestOutcome,
   AiUnavailableError,
-  ForbiddenError,
   ValidationError,
   aiSearchRequest,
 } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
-import { tenancy } from "../../middleware/tenancy.ts";
+import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { getAiBudgetStore, getAiPort } from "./aiPortProvider.ts";
 
 export const aiSearchRoutes = new Hono<{ Variables: RoleVariables }>();
@@ -41,8 +40,7 @@ aiSearchRoutes.use("*", tenancy);
  */
 aiSearchRoutes.post("/", requireRole("owner", "admin", "member", "viewer"), async (c) => {
   const tenantId = c.get("tenantId");
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 
   const parsed = aiSearchRequest.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Describe what you're looking for.");

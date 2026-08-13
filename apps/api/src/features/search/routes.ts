@@ -3,16 +3,10 @@
 // SearchPort (packages/search). POST is used for contacts/facets (structured query bodies); suggest is GET.
 
 import { searchCount } from "@leadwolf/core";
-import {
-  ForbiddenError,
-  ValidationError,
-  contactQuery,
-  facetCountsRequest,
-  suggestQuery,
-} from "@leadwolf/types";
+import { ValidationError, contactQuery, facetCountsRequest, suggestQuery } from "@leadwolf/types";
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { buildWorkspaceSearchPort } from "./searchPortProvider.ts";
 
 export const searchRoutes = new Hono<{ Variables: TenancyVariables }>();
@@ -22,8 +16,7 @@ searchRoutes.use("*", tenancy);
 
 /** Filtered, keyset-paged contact search (24 §5/§6). Body = ContactQuery. */
 searchRoutes.post("/contacts", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 
   const parsed = contactQuery.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid search query.");
@@ -42,8 +35,7 @@ searchRoutes.post("/contacts", async (c) => {
  * — only the per-request bulk mutation footprint is capped). Powers the "Select all N results" affordance.
  */
 searchRoutes.post("/count", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 
   const parsed = contactQuery.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid search query.");
@@ -54,8 +46,7 @@ searchRoutes.post("/count", async (c) => {
 
 /** Typeahead suggestions drawn from indexed values (24 §3). field + prefix as query params. */
 searchRoutes.get("/suggest", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 
   const limitRaw = c.req.query("limit");
   const parsed = suggestQuery.safeParse({
@@ -76,8 +67,7 @@ searchRoutes.get("/suggest", async (c) => {
 
 /** Live facet counts for the current query (24 §5). Body = { query, fields }. */
 searchRoutes.post("/facets", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to search.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to search.");
 
   const parsed = facetCountsRequest.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError("Invalid facet request (need query + fields).");

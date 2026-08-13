@@ -279,7 +279,7 @@ restoring with the flag is the cheaper path.
 | C4 | No `app.notFound()` — 404s return Hono plain text, breaking RFC 9457 exactly where clients hit it (forge-api does it right). | Register a problem+json notFound handler. |
 | C5 | Idempotency implemented 4 ways; `POST /credits/checkout` + `/credits/subscribe` have **none**. | Adopt the shared middleware on all money/create routes; keep DB-unique as defence-in-depth (already the pattern for imports). |
 | C6 | No shared pagination transport; 9+ endpoints return unbounded arrays (`/tags`, `/custom-fields`, `/saved-searches`, `/teams`, `/workspaces`, `/crm/connections`, `/contacts/reveal-jobs`, `/enrichment/jobs`, `/pipeline-stages`); ~~`GET /contacts` caps at 500 with no cursor~~ (**wrong — no such endpoint; see §9B**). | Add `lib/pagination.ts` (Zod query schema + hard max + flat `nextCursor` envelope). Normalize the unbounded lists now, coordinated with the web slices in the same deploy (pre-production — cheap now, breaking later). |
-| C7 | `requireWorkspace` copy-pasted 3× + inlined ~40×. | Promote to middleware beside `tenancy`. |
+| ~~C7~~ **DONE** | `requireWorkspace` copy-pasted 3× + inlined ~40×. | Promoted to one helper in `middleware/tenancy.ts` (one signature — the three copies had two incompatible ones). All **50** inline sites migrated across 18 files, −62 lines; the only remaining `if (!workspaceId) throw` is the helper's own body. Five bare `ForbiddenError("no_workspace")` sites gained the default detail — a response-body change, and an improvement: a 403 with no `detail` tells the caller nothing. |
 | C8 | Two parallel staff-authz systems (`requireStaffRole` vs `requireCapability`) mid-migration. | Finish the capability migration; delete `requireStaffRole` per its own file comment. |
 | C9 | Extension allow-list grants `GET /contacts/:id` which does not exist. | Resolved by A4 (build the endpoint) — until then remove the entry. |
 | C10 | `POST /master-sync` is a permanently-dark orphaned second write path into the master graph (superseded by ADR-0047 in-process promotion; `app.ts:200` says so itself). | Delete route + `syncPrincipal` wiring; keep `forgeSyncRepository.applyItem` (the live in-process path). |
@@ -580,7 +580,7 @@ the relevant skills open (any data-path slice: platform + data + security).
 **Wave 3 — structural debt:**
 8. 9.2 schema backfills (SQL-only tables → pgTable; platform_audit_log migration; parity itests).
 9. §6.4-1 `withSystemTx` + worker sweep migration + stop exporting raw `db`. [A-01]
-10. ~~C6 pagination normalization~~ **— DONE, and smaller than scheduled.** The six unbounded configuration lists now carry `LIST_SAFETY_CAP`; the "contacts cursor" half was a misread (see §9B) — that surface was always keyset-paged, so no coordinated deploy is needed. C7 + F4 remain.
+10. ~~C6 pagination normalization~~ **— DONE, and smaller than scheduled.** The six unbounded configuration lists now carry `LIST_SAFETY_CAP`; the "contacts cursor" half was a misread (see §9B) — that surface was always keyset-paged, so no coordinated deploy is needed. F4 remains (C7 is done — see its row).
 11. 9.5-P0 email cleartext remediation (after compliance-checklist sign-off). [A-01][A-02]
 
 **Wave 4 — consolidation & deletions (each needs a small decision recorded in decisions.md):**

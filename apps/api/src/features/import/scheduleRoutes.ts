@@ -57,7 +57,7 @@ import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
-import { tenancy } from "../../middleware/tenancy.ts";
+import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { bulkFileStore } from "./bulkStore.ts";
 import { requireImportCreateGrant } from "./createGrant.ts";
 import { scanImportUpload } from "./malwareScan.ts";
@@ -277,8 +277,7 @@ importScheduleRoutes.post("/schedules", requireImportCreateGrant(), async (c) =>
 
 // ── GET /imports/schedules — list (member+) ───────────────────────────────────────────────────────────────
 importScheduleRoutes.get("/schedules", requireRole("owner", "admin", "member"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
   const tenantId = c.get("tenantId");
   const scope = { tenantId, workspaceId };
   if (!(await scheduledImportsEnabledForScope(scope))) throw new NotFoundError("Not found.");
@@ -293,8 +292,7 @@ importScheduleRoutes.get("/schedules", requireRole("owner", "admin", "member"), 
 // Enabling a disabled schedule clears its failure state (disabled_reason:null + consecutiveFailures:0 — a fresh
 // start, 08 §9). A cadence change recomputes next_run_at from now (the new interval anchors on this edit).
 importScheduleRoutes.patch("/schedules/:id", requireRole("owner", "admin", "member"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
   const tenantId = c.get("tenantId");
   const scope = { tenantId, workspaceId };
   const id = c.req.param("id");
@@ -352,8 +350,7 @@ importScheduleRoutes.delete(
   "/schedules/:id",
   requireRole("owner", "admin", "member"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+    const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
     const tenantId = c.get("tenantId");
     const scope = { tenantId, workspaceId };
     const id = c.req.param("id");

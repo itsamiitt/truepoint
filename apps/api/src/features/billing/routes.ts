@@ -38,7 +38,7 @@ import { setCsvDownloadHeaders } from "../../lib/csvDownload.ts";
 import { authn } from "../../middleware/authn.ts";
 import { idempotency } from "../../middleware/idempotency.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { getStripePort } from "./stripePortProvider.ts";
 
 // ── /api/v1/billing — the webhook (unauthenticated; signature is the trust boundary) ───────────────────
@@ -136,8 +136,7 @@ creditsRoutes.post("/checkout", requireRole("owner", "admin"), idempotency, asyn
   if (!env.BILLING_CHECKOUT_ENABLED || !env.STRIPE_SECRET_KEY) {
     return c.json({ available: false }, 501);
   }
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to buy credits.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to buy credits.");
   const parsed = creditCheckoutSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const tenantId = c.get("tenantId");
@@ -188,8 +187,7 @@ creditsRoutes.post("/subscribe", requireRole("owner", "admin"), idempotency, asy
   if (!env.BILLING_SUBSCRIPTIONS_ENABLED || !env.STRIPE_SECRET_KEY) {
     return c.json({ available: false }, 501);
   }
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to subscribe.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to subscribe.");
   const parsed = subscribeSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) throw new ValidationError(parsed.error.issues[0]?.message);
   const tenantId = c.get("tenantId");
@@ -322,8 +320,7 @@ function csvField(value: string): string {
 // Usage history: a keyset page (?cursor&limit&revealType?&dataSource?&from?&to?) or, with ?format=csv, the
 // filtered set as a bounded CSV download. Workspace-scoped via RLS; PII-free (ids/type/source/cost/timestamp).
 creditsRoutes.get("/usage", requireRole("owner", "admin", "member", "viewer"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to view usage.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to view usage.");
   const parsed = usageQuerySchema.safeParse({
     limit: c.req.query("limit"),
     cursor: c.req.query("cursor"),

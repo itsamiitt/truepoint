@@ -10,7 +10,6 @@
 
 import { env } from "@leadwolf/config";
 import {
-  ForbiddenError,
   NotFoundError,
   RateLimitedError,
   type RealtimeEvent,
@@ -20,7 +19,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import IORedis from "ioredis";
 import { authn } from "../../middleware/authn.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { type RealtimeHub, createConnectionCap, createRealtimeHub } from "./hub.ts";
 
 const HEARTBEAT_MS = 15_000;
@@ -50,8 +49,7 @@ eventsRoutes.use("*", tenancy);
 
 eventsRoutes.get("/stream", (c) => {
   if (!env.REALTIME_SSE_ENABLED) throw new NotFoundError("Realtime delivery is not enabled.");
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to subscribe.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to subscribe.");
   const channel = workspaceEventChannel(workspaceId);
 
   // Per-user cap BEFORE the stream opens — refusing with a status is honest, whereas accepting and then

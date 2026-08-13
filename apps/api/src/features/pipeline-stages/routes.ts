@@ -17,7 +17,7 @@ import {
 import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { requireRole } from "../../middleware/requireRole.ts";
-import { type TenancyVariables, tenancy } from "../../middleware/tenancy.ts";
+import { type TenancyVariables, requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const pipelineStagesRoutes = new Hono<{ Variables: TenancyVariables }>();
 
@@ -49,8 +49,7 @@ function toDto(s: {
 
 // GET /pipeline-stages?includeArchived=true — the workspace's stages in display order.
 pipelineStagesRoutes.get("/", async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to view stages.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to view stages.");
   const includeArchived = c.req.query("includeArchived") === "true";
   const stages = await pipelineStageRepository.list(
     { tenantId: c.get("tenantId"), workspaceId },

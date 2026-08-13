@@ -7,7 +7,6 @@
 // core (previewContactMerge / runContactMerge) does the work; RLS is the tenant wall.
 import { contactMergeEnabledForScope, previewContactMerge, runContactMerge } from "@leadwolf/core";
 import {
-  ForbiddenError,
   NotFoundError,
   ValidationError,
   mergePreviewSchema,
@@ -18,7 +17,7 @@ import { Hono } from "hono";
 import { authn } from "../../middleware/authn.ts";
 import { idempotency } from "../../middleware/idempotency.ts";
 import { type RoleVariables, requireRole } from "../../middleware/requireRole.ts";
-import { tenancy } from "../../middleware/tenancy.ts";
+import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 
 export const contactsMergeRoutes = new Hono<{ Variables: RoleVariables }>();
 contactsMergeRoutes.use("*", authn);
@@ -30,8 +29,7 @@ contactsMergeRoutes.get(
   "/:id/merge-preview",
   requireRole("owner", "admin", "member", "viewer"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to merge.");
+    const workspaceId = requireWorkspace(c, "Select a workspace to merge.");
     const scope = { tenantId: c.get("tenantId"), workspaceId };
     if (!(await contactMergeEnabledForScope(scope))) throw new NotFoundError();
 
@@ -54,8 +52,7 @@ contactsMergeRoutes.post(
   requireRole("owner", "admin", "member"),
   idempotency,
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to merge.");
+    const workspaceId = requireWorkspace(c, "Select a workspace to merge.");
     const scope = { tenantId: c.get("tenantId"), workspaceId };
     if (!(await contactMergeEnabledForScope(scope))) throw new NotFoundError();
 

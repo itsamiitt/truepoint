@@ -24,7 +24,6 @@ import {
 } from "@leadwolf/core";
 import { retentionRunRepository, withTenantTx } from "@leadwolf/db";
 import {
-  ForbiddenError,
   dataQualityTrendSchema,
   homeSummarySchema,
   retentionRunSchema,
@@ -38,7 +37,7 @@ import { authn } from "../../middleware/authn.ts";
 import { buildJobViewer } from "../../middleware/jobViewer.ts";
 import { rateLimit } from "../../middleware/rateLimit.ts";
 import { type RoleVariables, getWorkspaceRole, requireRole } from "../../middleware/requireRole.ts";
-import { tenancy } from "../../middleware/tenancy.ts";
+import { requireWorkspace, tenancy } from "../../middleware/tenancy.ts";
 import { enqueueReverification } from "./reverificationQueue.ts";
 
 export const homeRoutes = new Hono<{ Variables: RoleVariables }>();
@@ -63,8 +62,7 @@ function ifNoneMatch(header: string | undefined, etag: string): boolean {
 const HOME_SUMMARY_TTL_SECONDS = 30;
 
 homeRoutes.get("/summary", requireRole("owner", "admin", "member", "viewer"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
 
   const tenantId = c.get("tenantId");
   const userId = c.get("claims").sub;
@@ -119,8 +117,7 @@ homeRoutes.get("/summary", requireRole("owner", "admin", "member", "viewer"), as
  * lifting is one RLS-scoped aggregate (contactRepository.dataQualitySummary). Short private cache like /summary.
  */
 homeRoutes.get("/data-quality", requireRole("owner", "admin", "member", "viewer"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
 
   // Same 30s memo, and here it is the whole point: this rollup is a single aggregate scan with ~23 FILTER
   // clauses over every live contact in the workspace, re-run on each render.
@@ -148,8 +145,7 @@ homeRoutes.get(
   "/data-quality/history",
   requireRole("owner", "admin", "member", "viewer"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+    const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
 
     const trend = await recentDataQualityTrend({ tenantId: c.get("tenantId"), workspaceId });
     c.header("Cache-Control", "private, max-age=300");
@@ -166,8 +162,7 @@ homeRoutes.get(
   "/data-quality/reverification-runs",
   requireRole("owner", "admin", "member", "viewer"),
   async (c) => {
-    const workspaceId = c.get("workspaceId");
-    if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+    const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
 
     const runs = await recentReverificationRuns({ tenantId: c.get("tenantId"), workspaceId });
     c.header("Cache-Control", "private, max-age=60");
@@ -184,8 +179,7 @@ homeRoutes.get(
  * operation, not a new cost surface. Enqueue-only: no flag bypass; returns 202 + a job ref.
  */
 homeRoutes.post("/data-quality/reverify", rateLimit, requireRole("owner", "admin"), async (c) => {
-  const workspaceId = c.get("workspaceId");
-  if (!workspaceId) throw new ForbiddenError("no_workspace", "Select a workspace to continue.");
+  const workspaceId = requireWorkspace(c, "Select a workspace to continue.");
 
   const jobId = await enqueueReverification({ tenantId: c.get("tenantId"), workspaceId });
   return c.json(reverificationTriggerAckSchema.parse({ queued: true, jobId }), 202);
