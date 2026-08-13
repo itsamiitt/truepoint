@@ -670,6 +670,13 @@ surface the conflict, never silently reinterpret). The options:
 Option 2 is the one this codebase's own precedents point at, but it changes how customer-facing confidence is
 computed, so it is the human's call.
 
+**This decision blocks real work, not just tidiness.** Plan 33 §5 requires a `confidence_band` chip on search
+rows. It cannot be built until §9D is settled: the drawer badge reads Layer 0 (`provenance_event`, via
+`withErTx`), while search runs Layer 1 under RLS where the only reachable confidence data is
+`contacts.field_provenance` / `email_status` / `last_verified_at` — a different store. Deriving the chip
+in-query would put a "high" chip beside a "medium" badge for the same contact, which is precisely the failure
+`badgeV1.ts` warns about. So §9D is not an abstract cleanup: one shipped plan is waiting on it.
+
 ## 9E. Tenant suspension suspends nothing (NEEDS A HUMAN DECISION — highest severity found)
 
 `tenants.status` can be set to `'suspended'` by two paths, and **no runtime code reads it.**
