@@ -398,18 +398,21 @@ export async function listCreatorsForTechnologies(
   technologyIds: string[],
 ): Promise<Map<string, { masterCompanyId: string; companyName: string }>> {
   if (technologyIds.length === 0) return new Map();
-  // The `::uuid[]` cast below is REQUIRED, not decoration. This is a raw tx.execute, so Postgres has no column
-  // context to infer the bound array's type from and the driver sends it untyped — the planner then tries to
-  // read it as a single uuid and fails with 22P02 "malformed array literal". Every raw ANY() in this codebase
-  // casts for this reason (see dsarRepository); the uncast form in accountRepository is safe only because it
-  // sits in a drizzle builder where the column type is known. Nothing but a real database catches this.
+  // `sql.param` + the cast are BOTH required, and the reason is not obvious: drizzle's sql template SPREADS a
+  // plain JS array into one bind per element, so `ANY(${"${ids}"})` renders as `ANY(($1, $2))` — a row
+  // constructor, not an array — and Postgres fails with 22P02 "malformed array literal". Verified against the
+  // dialect offline, not guessed. sql.param binds the array as ONE parameter, giving `ANY($1::uuid[])`.
+  //
+  // dsarRepository solves the same problem by hand-building the literal string '{a,b}'. That is fine for uuids
+  // and documented there; sql.param is used here instead because it needs no hand-rolled quoting, which
+  // matters for the text[] binds in masterEducationRepository where a value can legitimately contain a comma.
   const rows = (await tx.execute(sql`
     SELECT v.technology_id, v.master_company_id, c.name AS company_name
       FROM master_technology_vendors v
       JOIN master_companies c ON c.id = v.master_company_id
      WHERE v.relationship = 'creator'
        AND v.ended_on IS NULL
-       AND v.technology_id = ANY(${technologyIds}::uuid[])
+       AND v.technology_id = ANY(${sql.param(technologyIds)}::uuid[])
   `)) as unknown as Array<{
     technology_id: string;
     master_company_id: string;
