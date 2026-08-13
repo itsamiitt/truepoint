@@ -720,6 +720,14 @@ flowchart TD
   default), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
   (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility) +
   `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate)
+  + `grantOrder.test.ts` (static, DB-free: guards two things in `applyMigrations`' grant block that only a
+  comment held. **The partition-ACL mirror must run LAST** — partition ACLs do not inherit, so a parent REVOKE
+  says nothing about `provenance_event_2026_08`, and `mirror_partition_acl` has to follow every GRANT/REVOKE
+  that could change a parent. That ordering has already failed once (the mirror sat above the `leadwolf_er`
+  grants; fresh databases mirrored a parent ACL that did not yet carry them). **Anything appended to that block
+  goes ABOVE the mirror.** Also pins the forge firewall in both directions — `leadwolf_forge` gets nothing in
+  `public`, `leadwolf_app` nothing in `forge` — with a positive control, since granting nothing at all would
+  satisfy both negatives.)
   + `layerZeroWall.test.ts` (static, DB-free: Layer 0 has no tenant column so it cannot have an RLS predicate —
   its isolation is the REVOKE in `applyMigrations`, "grant-off is the wall". The `^master_` catch-all covers
   future `master_*` tables; an EXPLICIT list is the only thing covering `source_records`, `match_links`,
