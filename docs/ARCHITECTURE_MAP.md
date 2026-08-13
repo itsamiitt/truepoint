@@ -720,6 +720,13 @@ flowchart TD
   default), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
   (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility) +
   `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate)
+  + `rawClientRatchet.test.ts` (static, DB-free: pins the **25** files under `repositories/` that use the
+  module-level `db` client instead of a seam — audit 32 §6.4. The seam is what SETS the RLS GUCs, so a raw
+  client runs with no tenant. Several are deliberate and documented at their call site (retention purge,
+  scheduler lease, partition DDL, the pre-tenant auth reads); fixing the list is a project, so this only stops
+  it GROWING. **The audit said ~18 — the real count is 25**, because a grep for `db.` on one line misses a
+  chained call split across lines. Refactor one onto a seam and DELETE it from the set; a third assertion
+  catches stale entries.)
   + `dataAccessBoundary.test.ts` (static, DB-free: enforces CLAUDE.md's "repositories are the ONLY data-access
   layer" — no `drizzle-orm`/`postgres` import outside `packages/db`, because a raw client skips the tenancy
   seams that SET the RLS GUCs. **Note for anyone reaching for dependency-cruiser instead: it cannot express
