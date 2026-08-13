@@ -51,7 +51,12 @@ export function makeProcessEnrichment(deps: EnrichmentProcessorDeps = {}) {
     // throttled vendor set can't turn one request into an infinite re-enqueue cycle — the final
     // `unfilled` result stands and the ledger's rate_limited rows say why.
     const deferrals = job.data.deferrals ?? 0;
-    if (result.status === "unfilled" && result.allThrottled && deps.defer && deferrals < MAX_DEFERRALS) {
+    if (
+      result.status === "unfilled" &&
+      result.allThrottled &&
+      deps.defer &&
+      deferrals < MAX_DEFERRALS
+    ) {
       await deps.defer(
         { ...job.data, deferrals: deferrals + 1 },
         result.retryAfterMs ?? DEFAULT_DEFER_MS,

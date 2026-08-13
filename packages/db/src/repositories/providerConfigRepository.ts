@@ -120,7 +120,7 @@ export const providerConfigRepository = {
              (percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms))::float8   AS p95_latency_ms,
              coalesce(sum(cost_micros), 0)::bigint                                AS total_cost_micros
       FROM provider_calls
-      WHERE called_at >= ${since}
+      WHERE called_at >= ${since.toISOString()}::timestamptz
         AND provider_name NOT LIKE 'verify:%'
       GROUP BY provider_name
     `)) as unknown as Array<{

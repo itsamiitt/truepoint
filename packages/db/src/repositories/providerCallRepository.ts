@@ -130,10 +130,7 @@ export const providerCallRepository = {
       })
       .from(providerCalls)
       .where(
-        and(
-          eq(providerCalls.workspaceId, workspaceId),
-          eq(providerCalls.requestHash, requestHash),
-        ),
+        and(eq(providerCalls.workspaceId, workspaceId), eq(providerCalls.requestHash, requestHash)),
       );
     const answeredProviders = rows
       .filter((r) => r.status === "hit" || r.status === "miss")
