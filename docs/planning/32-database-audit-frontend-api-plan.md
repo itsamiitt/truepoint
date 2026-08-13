@@ -704,6 +704,35 @@ surface the conflict, never silently reinterpret). The options:
 Option 2 is the one this codebase's own precedents point at, but it changes how customer-facing confidence is
 computed, so it is the human's call.
 
+**How to size it before deciding — this is a count, not a percentage.** The delta table says provider-sourced
+records gain 0.20–0.26 and crawl-sourced lose ~0.10. What it does not say is how many records are in each
+bucket, and that is what decides whether the switch is a rounding error or a visible event. Run against a
+replica:
+
+```sql
+-- How the graph's assertions are distributed across source types. `source_weight` is what the dormant engine
+-- would apply; the live engine has no equivalent knob, which is the whole point of the choice.
+SELECT pe.source_type,
+       count(*)                          AS assertions,
+       count(DISTINCT pe.entity_id)      AS entities,
+       round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct,
+       mcp.source_weight
+  FROM provenance_event pe
+  LEFT JOIN master_confidence_policy mcp
+         ON mcp.source_type = pe.source_type AND mcp.field = '*'
+ GROUP BY pe.source_type, mcp.source_weight
+ ORDER BY assertions DESC;
+```
+
+Read it this way: rows with `source_weight >= 0.85` (provider, reveal, user_edit, mailbox) are the ones that
+score HIGHER under the dormant engine; `crawl` at 0.55 is the one that scores lower. If crawl is a rounding
+error in that distribution, option 1 is close to a pure improvement and the "records get less confident" worry
+mostly evaporates. If crawl is a large share, a visible subset of records drops a band on switch day and that
+needs saying out loud before it happens, not after.
+
+`provenance_event` is Layer 0 and REVOKE'd from `leadwolf_app`, so run this as the owner or through
+`withErTx` — not from an app connection.
+
 **This decision blocks real work, not just tidiness.** Plan 33 §5 requires a `confidence_band` chip on search
 rows. It cannot be built until §9D is settled: the drawer badge reads Layer 0 (`provenance_event`, via
 `withErTx`), while search runs Layer 1 under RLS where the only reachable confidence data is

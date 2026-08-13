@@ -18,7 +18,9 @@
 //                  half-lives are hardcoded constants (FIELD_HALF_LIFE_DAYS).
 // On the same fact — an email, three independent sources, 180 days old — they differ by 0.09 to 0.17
 // depending on source weight. That is enough to move a record across a badge band, so switching engines
-// silently re-scores the whole graph in front of customers. See plan 32 §9D before wiring it.
+// silently re-scores the whole graph in front of customers. See plan 32 §9D before wiring it — it carries
+// the measured deltas AND the SQL that turns them into counts (how many assertions sit at each
+// source_weight), which is what decides whether the switch is a rounding error or a visible event.
 //
 // What the gap costs while it stands: master_confidence_policy is staff-tunable config that tunes NOTHING,
 // and the live half-lives can only be changed by shipping code. The outcomes at stake are unchanged —
