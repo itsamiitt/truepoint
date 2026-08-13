@@ -20,6 +20,7 @@ import {
 import { notifications } from "../schema/notifications.ts";
 import { planTemplates } from "../schema/platformOps.ts";
 import { creditRepository } from "./creditRepository.ts";
+import { LIST_SAFETY_CAP } from "./listCaps.ts";
 
 // ── Workspaces (RLS-scoped) ──────────────────────────────────────────────────────────────────────────
 export interface WorkspaceSummary {
@@ -52,7 +53,8 @@ export const workspaceRepository = {
         // DETERMINISTIC order (creation order, id tiebreak). Without it Postgres returns rows in an
         // unstable order, so the `[0]` single-workspace auto-select (flow.ts) and the picker default could
         // change between logins → "logged into the wrong workspace" (Issue 2c).
-        .orderBy(asc(workspaces.createdAt), asc(workspaces.id));
+        .orderBy(asc(workspaces.createdAt), asc(workspaces.id))
+        .limit(LIST_SAFETY_CAP);
       return rows.map((r) => ({ id: r.id, name: r.name, role: r.role }));
     });
   },

@@ -9,6 +9,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { type TenantScope, type Tx, withTenantTx } from "../client.ts";
 import { accounts, contacts } from "../schema/contacts.ts";
 import { customFieldDefinitions } from "../schema/customFields.ts";
+import { LIST_SAFETY_CAP } from "./listCaps.ts";
 
 /** A jsonb leaf value a custom field may hold (validated by type at the core layer before it reaches here). */
 export type CustomFieldValue = string | number | boolean | null;
@@ -135,7 +136,8 @@ export const customFieldRepository = {
       .select(DEF_COLUMNS)
       .from(customFieldDefinitions)
       .where(where)
-      .orderBy(asc(customFieldDefinitions.ordering), asc(customFieldDefinitions.key));
+      .orderBy(asc(customFieldDefinitions.ordering), asc(customFieldDefinitions.key))
+      .limit(LIST_SAFETY_CAP);
   },
 
   /** Workspace-scoped list of an entity's definitions (own withTenantTx) for the settings/read surfaces. */

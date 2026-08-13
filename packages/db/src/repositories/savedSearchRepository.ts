@@ -9,6 +9,7 @@ import type { ContactQuery, SavedSearchVisibility } from "@leadwolf/types";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import type { Tx } from "../client.ts";
 import { savedSearches } from "../schema/savedSearches.ts";
+import { LIST_SAFETY_CAP } from "./listCaps.ts";
 
 /** A saved-search row as stored (filters is the contactQuery blob; timestamps are Date). */
 export interface SavedSearchRow {
@@ -111,7 +112,8 @@ export const savedSearchRepository = {
       .where(
         or(eq(savedSearches.visibility, "workspace"), eq(savedSearches.ownerUserId, callerUserId)),
       )
-      .orderBy(desc(savedSearches.createdAt));
+      .orderBy(desc(savedSearches.createdAt))
+      .limit(LIST_SAFETY_CAP);
     return rows.map(toRow);
   },
 
