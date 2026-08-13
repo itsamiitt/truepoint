@@ -104,8 +104,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2020,
-  "fileSetHash": "sha256:7ef72bc16801c223179379ef48f416169c6f41b111b7146ff3d925937d3636e9",
+  "fileCount": 2019,
+  "fileSetHash": "sha256:12844e1939893ef5697bee6b6c60f9c58bd2ae90656b73ed9d13c1cdf0b4688e",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2282,7 +2282,6 @@
       "apps/api/src/middleware/requireEntitlement.ts",
       "apps/api/src/middleware/requireOrgRole.ts",
       "apps/api/src/middleware/requireRole.ts",
-      "apps/api/src/middleware/requireStaffRole.ts",
       "apps/api/src/middleware/revealRateLimit.ts",
       "apps/api/src/middleware/roleGuards.test.ts",
       "apps/api/src/middleware/syncPrincipal.ts",

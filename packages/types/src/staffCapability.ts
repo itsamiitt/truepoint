@@ -35,6 +35,15 @@ export const staffCapability = z.enum([
   "data:review", // approve / reject a maker-checker data-ops request (requester != approver, server-enforced)
   "data:export", // initiate an audited cross-tenant data export (PII egress; suppression-checked, approval-gated)
   "flags:manage", // create / toggle feature flags + per-tenant overrides (super_admin-only)
+  // ── READ-side capabilities added to COMPLETE the requireStaffRole → requireCapability migration
+  // (audit 32 · C8). They exist because the vocabulary had write capabilities for these surfaces
+  // (tenants:notes:write, tenants:hold, compliance:manage) but no way to express "may LOOK at this", so
+  // fifteen read routes had no capability they could migrate to. Each is granted below to EXACTLY the roles
+  // its route already admitted, so this expresses the existing policy — it does not change who can see what.
+  "tenants:read", // read a tenant's overview / notes / holds / lists (staff oversight, cross-tenant)
+  "system:read", // read fleet health, trust-abuse, AI-usage and data-quality rollups (counts, non-PII)
+  "retention:read", // read retention policies + cross-tenant retention run evidence
+  "platform:configure", // change platform-wide auth policy and retention policy (granted to NO role → super_admin only)
 ]);
 export type StaffCapability = z.infer<typeof staffCapability>;
 
@@ -44,6 +53,8 @@ const ALL_CAPABILITIES: StaffCapability[] = staffCapability.options;
 // it is intentionally absent here. Keep this in sync with the per-endpoint requireCapability gates.
 const ROLE_CAPABILITIES: Record<Exclude<StaffRole, "super_admin">, StaffCapability[]> = {
   support: [
+    "tenants:read",
+    "system:read",
     "users:deactivate",
     "tenants:notes:write",
     "tenants:hold",
@@ -51,15 +62,18 @@ const ROLE_CAPABILITIES: Record<Exclude<StaffRole, "super_admin">, StaffCapabili
     "content:manage",
     "data:read",
   ],
-  billing_ops: ["tenants:credits", "billing:read", "elevation:request"],
+  billing_ops: ["system:read", "tenants:credits", "billing:read", "elevation:request"],
   compliance_officer: [
+    "tenants:read",
+    "system:read",
+    "retention:read",
     "audit:read",
     "compliance:read",
     "compliance:manage",
     "data:read",
     "data:review",
   ],
-  read_only: ["data:read"],
+  read_only: ["tenants:read", "system:read", "retention:read", "data:read"],
   // The Database Management team (database-management-research 11) — the data:* write tier. Holds BOTH data:manage
   // (file requests) AND data:review (approve): separation of duties is enforced per-USER (requested_by != decided_by),
   // so two data_ops members maker/check each other while a single member can never decide their own request.
