@@ -860,7 +860,9 @@
         "packages/core/src/entitlements/resolveEntitlement.test.ts",
         "packages/core/src/entitlements/resolveEntitlement.ts"
       ],
-      "db": [],
+      "db": [
+        "packages/db/src/repositories/entitlementRepository.ts"
+      ],
       "workers": [],
       "integrations": []
     },
@@ -3163,7 +3165,6 @@
     ]
   },
   "unassigned": [
-    "packages/db/src/repositories/entitlementRepository.ts",
     "packages/db/src/repositories/outcomeMetricsRepository.ts",
     "packages/db/src/repositories/usageEventRepository.ts"
   ],

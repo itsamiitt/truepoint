@@ -135,6 +135,11 @@ export const REPO_DOMAIN = {
   platformStaff: "staff",
   staff: "staff",
   domain: "tenants",
+  // entitlements ALREADY has code in the map (packages/core/src/entitlements/{entitlementGate,resolveEntitlement}),
+  // so this is the db layer of an existing domain, not a new vocabulary invented to fit a file. Deliberately NOT
+  // "billing": decision D2 makes entitlements a cap layer ABOVE credits that never reads a balance, and filing it
+  // under billing would encode in the map the exact conflation the code refuses to make.
+  entitlement: "entitlements",
   accountHold: "billing",
   creditPack: "pricing",
   planTemplate: "plans",

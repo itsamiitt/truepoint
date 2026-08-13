@@ -819,15 +819,21 @@ flowchart TD
   contact-detail endpoint that does not exist). §9B of plan 32 now records the **seven** audit findings that did
   not survive contact with the code; read it before acting on that register, particularly §6.4, §9.4, C6 and C10.
 
-  **Unassigned went 7 → 3, and the four that left were never violations.** `next.config.mjs` (×3) and
+  **Unassigned went 7 → 2, and the four config files that left were never violations.** `next.config.mjs` (×3) and
   `postcss.config.mjs` sat permanently in `unassigned`, which the navigation-map spec renders as *"Violations
   to fix"* — but a Next config is at exactly the path Next requires. `classify()` now places root-level
   `*.config.*` as shared tooling. The point is not the number: a violations list that can never reach zero
   trains readers to ignore it, and a genuinely misplaced file then hides among the furniture. The remaining
-  **3** are honest gaps — `entitlementRepository`, `usageEventRepository`, `outcomeMetricsRepository` have no
-  clearly-right domain in the canonical list, and mapping them to `billing` would contradict decision D2
-  (entitlements are a cap layer ABOVE credits and never read a balance). `REPO_DOMAIN`'s own header says a
-  confidently wrong home is worse than an honest gap; that judgement stands.
+  **2** are honest gaps. *(I first wrote 3, claiming `entitlementRepository` had no clearly-right domain. Wrong:
+  I checked `CANONICAL_DOMAINS` — the declared vocabulary — when `REPO_DOMAIN`'s rule is "a domain that ALREADY
+  has code in the map". `entitlements` has code, `packages/core/src/entitlements/*`, so the repository is simply
+  that domain's db layer and is now mapped. Still deliberately NOT `billing`: decision D2 makes entitlements a cap
+  layer ABOVE credits that never reads a balance, and filing it under billing would encode in the map the exact
+  conflation the code refuses to make.)* The two that remain are genuinely ambiguous, not un-triaged:
+  `usageEventRepository` is WRITTEN by three domains (contacts-resolve, prospect, reveal) and read by the
+  entitlement gate — cross-cutting metering, where any single home would be wrong; `outcomeMetricsRepository` has
+  no production caller at all, only an itest. `REPO_DOMAIN`'s header — a confidently wrong home is worse than an
+  honest gap — is why these two stay put.
 
   **Deleted this cycle:** `apps/api/src/middleware/requireStaffRole.ts` — audit 32 · C8 migrated every endpoint
   to `requireCapability`, so `StaffRoleVariables` now lives with the guard that sets it. Three references to
