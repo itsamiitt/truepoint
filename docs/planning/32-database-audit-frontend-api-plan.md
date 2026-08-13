@@ -774,8 +774,18 @@ have reached them anyway.
 
 **What to do, in order:**
 
-1. **Fix the snippet inconsistency** — either stop storing it, encrypt it with the body, or write down why a
-   280-character excerpt is materially less sensitive than the body it comes from. Cheap, no legal input needed.
+1. **Fix the snippet inconsistency.** *(Correcting my own note from the commit that added this section: I
+   called it "cheap, no legal input needed". RECOGNISING it is free; FIXING it is not, and I should not have
+   written that.)* The snippet is consumed — `apps/web/src/features/inbox/components/ThreadList.tsx:63`
+   renders it as the thread preview — so every option has a real cost, and each changes PII storage or display,
+   which CLAUDE.md rule 3 puts behind the compliance checklist:
+   - **Stop storing it** — the inbox thread list loses its preview line. Smallest code change, real UX loss.
+   - **Encrypt it with the body** — preserves the feature, but the thread list must now decrypt every row it
+     renders, on a list path that currently reads a plain column. Needs a look at the envelope scheme before
+     anyone promises it is cheap.
+   - **Justify it in writing** — argue that a 280-character excerpt is materially less exposing than the full
+     body. That is a defensible position, but it has to be *written down*, because right now the codebase
+     asserts both things at once and neither is recorded as a decision.
 2. **Decide the erasure scope explicitly** and record it in `09-compliance.md`: are `email_message` rows in or
    out of DSAR erasure? Either answer is defensible; the current implicit "out" is not, because it was never
    chosen.
