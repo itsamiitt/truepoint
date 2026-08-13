@@ -250,10 +250,30 @@ wrong, and the duplication that mattered was one neither half named.
   depending on the screen. Both now have one definition (`lib/problemMessage.ts`,
   `lib/maybeList.ts`); 29 files, −151 lines net.
 
-**F5 — Orphaned routes decision.** `/crm-sync` exists in both apps but is reachable from neither
-nav nor palette. Either wire it behind the `CRM_SYNC_ENABLED` flag surface or delete the pages
-(removal-cleanup rule). Flagged for decision — CRM sync is dark, so deleting UI now and
-restoring with the flag is the cheaper path.
+**F5 — Orphaned routes decision. STILL A HUMAN DECISION, but one of the two options as written does
+not exist.** Verified state: `/crm-sync` exists in `apps/web` and `apps/admin`, the feature slice is
+complete (`api.ts`, four components, hooks, keys, CSS module), and a repo-wide search finds **zero**
+references to the path outside the route file and the slice itself — no nav entry, no palette entry,
+no link from settings. Next.js still serves the URL, so it is reachable by typing it.
+
+- **"Wire it behind the `CRM_SYNC_ENABLED` flag surface" is not implementable as described.**
+  `apps/web` has **no per-tenant flag reader** — `components/shell/navConfig.ts` says so at the
+  `IMPORTS_DESTINATION` note, where the same thing was wanted for the IMPORT_V2 dual gate and could not
+  be done. The shipped precedent is the opposite of strict-dark nav: show the rail entry to everyone and
+  let the page degrade to an honest "not enabled yet" state off the API's 404.
+- `/crm-sync` does **not** currently degrade that way. It renders whatever `problemMessage` returns as a
+  footnote, so with the backend dark it reads as a broken page rather than an unreleased one.
+
+Accurate options, in increasing cost:
+1. **Delete the pages + slice** (removal-cleanup rule), restore when the flag flips. Cheapest, and what
+   this audit originally leaned toward. Destructive, so it needs the human call.
+2. **Leave it** — dead but URL-reachable. Free, but anyone who reaches it sees a page that looks broken.
+3. **Rail it on the IMPORTS precedent** — add to `DESTINATIONS` and first replace the raw-error footnote
+   with a purpose-built "not enabled yet" state. This surfaces an unreleased feature to every user, which
+   is a product decision, not a cleanup.
+
+Not done either way: options 1 and 3 are both product calls, and doing option 3's UI work before the
+decision would be wasted if the answer is 1.
 
 **Flagged, not scheduled** (no current-outcome backing — need a human decision):
 - Technology-stack panel on account drawer: the catalog/adoption schema has **no producer**, so
@@ -548,7 +568,7 @@ P2: C11 observability, F-flagged items pending decisions.
 
 ## 9B. Corrections — findings this audit got WRONG (recorded during implementation)
 
-Eight items in the register above did not survive contact with the code. They are listed here rather than
+Nine items in the register above did not survive contact with the code. They are listed here rather than
 quietly edited, because the pattern in them is more useful than any single correction: **this audit
 repeatedly flagged a SHAPE (a raw owner connection, a dark route, two tables with similar columns, a number
 that looked like a cap) without reading the reasoning already present at the site.** Where the code carried a documented decision, the code
@@ -561,6 +581,7 @@ was right every time. Treat §6.4, §9.4, C6 and C10 as the least reliable parts
 | **§6.4** | `schedulerRepository`'s claim is an unaudited cross-tenant write. | It is a 60-second lease, not a privileged action. One audit row per tick would bury the real entries. **Not changed.** |
 | **§9.3** | `teamRepository.listTeams` is unbounded. | Already bounded. (The other six named reads genuinely were not — those are fixed.) |
 | **§9.4** | The two OAuth-state tables "are the same table". | They are not. `crm_oauth_states` carries `environment` and `scopes` (sandbox-vs-production, requested grants) that email OAuth has no use for; `oauth_connect_state`'s PKCE verifier is **NOT NULL** where CRM's is nullable; and `redirect_uri` (an OAuth protocol parameter) is a different thing from `redirect_after` (in-app navigation state), not a rename. Merging would add meaningless columns to both and weaken a NOT NULL. Same reasoning that keeps `master_employment` and `master_education` apart: shared shape, different payload. **Not merged.** |
+| **F5** | Either wire `/crm-sync` behind the `CRM_SYNC_ENABLED` flag surface, or delete it. | The first option does not exist. `apps/web` has **no per-tenant flag reader** — `navConfig.ts` records that the same gating was wanted for IMPORT_V2 and could not be done, and the shipped precedent is to rail the entry for everyone and degrade honestly on a 404. The decision is real; the menu was wrong. See F5 for the corrected options. |
 | **§9.4** | The two retention stores are duplication with only one execution path — consolidate them. | They are not duplicates. `retention_class_policies` is the ENGINE's config: keyed by **data class** (natural PK), carries the `disabled\|shadow\|enforce` rollout mode, is read by `runRetentionSweep`, and writes `retention_runs`. `retention_policies` is keyed by **entity + field** with staff attribution and a reason, and doc 13a Area 8 specifies it as a *"retention SLA per field/entity"* — a `compliance_officer` register, listed beside the sub-processor registry and legal holds. Different key, different author, different purpose. **Not merged.** The real defect underneath is narrower and is recorded in §9C. |
 | **C6 (second half)** | "`GET /contacts` caps at 500 with no cursor" — a breaking fix needing a coordinated API+web deploy. | **There is no `GET /contacts` list endpoint.** Contact listing is `POST /api/v1/search/contacts`, which is keyset-paged by design: `cursor` in (`packages/types/src/search.ts:151-156` — "never offset"), `nextCursor` out, and the cursor chain is covered by tests (`inMemorySearchPort.test.ts:109-115`). The audit read a cap in the bulk-mutation footprint as a cap on the list. **Nothing to fix — C6 is fully closed by the six configuration-list caps.** |
 | **§9.4** | Three near-identical outbox tables should converge on one with a `lane` discriminator. | `projection_outbox` has **no tenant column at all** — it is a Layer-0 table keyed on `cluster_id`. Merging it into the tenant-scoped outboxes would either put a Layer-0 queue under tenant RLS or nullify the tenant columns and lose RLS on the rest, breaking the one boundary the schema exists to hold. `event_outbox` and `worker_outbox` ARE close and could merge, but they are drained by different relays with different delivery semantics, so the gain is cosmetic. **Not merged.** The one real defect here stands: `worker_outbox` omits the FKs its sibling declares — deferred, see below. |
