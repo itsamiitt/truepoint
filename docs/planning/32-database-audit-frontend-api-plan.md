@@ -532,6 +532,31 @@ P2: C11 observability, F-flagged items pending decisions.
 
 ---
 
+## 9B. Corrections — findings this audit got WRONG (recorded during implementation)
+
+Six items in the register above did not survive contact with the code. They are listed here rather than
+quietly edited, because the pattern in them is more useful than any single correction: **this audit
+repeatedly flagged a SHAPE (a raw owner connection, a dark route, two tables with similar columns) without
+reading the reasoning already present at the site.** Where the code carried a documented decision, the code
+was right every time. Treat §6.4, §9.4 and C10 as the least reliable parts of this document.
+
+| # | The audit said | What was actually true |
+|---|---|---|
+| **C10** | Delete the dark `/master-sync` ingress — an orphaned second write path. | `app.ts` already documents a considered decision to KEEP it flag-gated: it is an ADR-0047 ingress an **externally-hosted Forge** could still need, and gating makes enabling it a reviewable act. Deleting it would have thrown away a deliberate choice. **Not done.** |
+| **§6.4** | `retentionScanRepository`'s purge is a "destructive, cross-tenant, **unaudited** seam". | It is audited, and better than a generic row would be: `runRetentionSweep` appends an immutable `retention_runs` row per class under a tenant-scoped tx, recording candidate count, deleted count, cutoff, mode and timing. The owner connection is deliberate (explicit tenant predicate, double-gated upstream). **Not changed.** |
+| **§6.4** | `schedulerRepository`'s claim is an unaudited cross-tenant write. | It is a 60-second lease, not a privileged action. One audit row per tick would bury the real entries. **Not changed.** |
+| **§9.3** | `teamRepository.listTeams` is unbounded. | Already bounded. (The other six named reads genuinely were not — those are fixed.) |
+| **§9.4** | The two OAuth-state tables "are the same table". | They are not. `crm_oauth_states` carries `environment` and `scopes` (sandbox-vs-production, requested grants) that email OAuth has no use for; `oauth_connect_state`'s PKCE verifier is **NOT NULL** where CRM's is nullable; and `redirect_uri` (an OAuth protocol parameter) is a different thing from `redirect_after` (in-app navigation state), not a rename. Merging would add meaningless columns to both and weaken a NOT NULL. Same reasoning that keeps `master_employment` and `master_education` apart: shared shape, different payload. **Not merged.** |
+| **§9.4** | Three near-identical outbox tables should converge on one with a `lane` discriminator. | `projection_outbox` has **no tenant column at all** — it is a Layer-0 table keyed on `cluster_id`. Merging it into the tenant-scoped outboxes would either put a Layer-0 queue under tenant RLS or nullify the tenant columns and lose RLS on the rest, breaking the one boundary the schema exists to hold. `event_outbox` and `worker_outbox` ARE close and could merge, but they are drained by different relays with different delivery semantics, so the gain is cosmetic. **Not merged.** The one real defect here stands: `worker_outbox` omits the FKs its sibling declares — deferred, see below. |
+
+**Deferred rather than dropped.** `worker_outbox`'s missing FKs are a genuine integrity gap, and the two
+retention-policy stores (§9.4) are genuine duplication with only one execution path. Both need a migration,
+and **migrations 0108 and 0109 have not yet been verified by CI** (no Docker on the authoring host). Stacking
+a third unverified schema change on two unverified ones trades a small cleanup for a compounding risk, so
+these wait for CI's verdict rather than being written blind.
+
+---
+
 ## 10. Implementation order
 
 Slices are sized to ship independently to main (pre-prod convention), each with its gates
