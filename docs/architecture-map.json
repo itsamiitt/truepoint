@@ -101,8 +101,8 @@
     "webhooks",
     "workspaces"
   ],
-  "fileCount": 2049,
-  "fileSetHash": "sha256:8a3ca072420e4e1e72f5c3977e9664394457d57b6fdc223df5adc27700909a88",
+  "fileCount": 2050,
+  "fileSetHash": "sha256:d1eccdb615771f8e664987ea8fe58c54542ab95925c0ab2e61c1d2dc21bb1f44",
   "features": {
     "account-intelligence": {
       "web": [],
@@ -2743,6 +2743,7 @@
       "packages/db/src/bootstrapAdmin.ts",
       "packages/db/src/client.ts",
       "packages/db/src/index.ts",
+      "packages/db/src/layerZeroWall.test.ts",
       "packages/db/src/migrate.ts",
       "packages/db/src/migrationShape.test.ts",
       "packages/db/src/migrationSnapshots.test.ts",

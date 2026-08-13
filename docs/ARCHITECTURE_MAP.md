@@ -720,6 +720,13 @@ flowchart TD
   default), one RLS `.sql` each, `NULLIF(current_setting(…, true), '')::uuid` fail-closed idiom); `repositories/*.ts`; `test/*.itest.ts`
   (35+ DoD suites, run in **separate** processes — the db client is a module singleton; isolation itests prove cross-tenant invisibility) +
   `test/migrationSeedLengths.test.ts` (static, DB-free: every migration flag-seed description must fit `feature_flags.description varchar(500)` — a longer one kills the prod migrate)
+  + `layerZeroWall.test.ts` (static, DB-free: Layer 0 has no tenant column so it cannot have an RLS predicate —
+  its isolation is the REVOKE in `applyMigrations`, "grant-off is the wall". The `^master_` catch-all covers
+  future `master_*` tables; an EXPLICIT list is the only thing covering `source_records`, `match_links`,
+  `projection_outbox`, `provenance_event`, and nothing enforced that list. Delete a name and `leadwolf_app`
+  regains DML on Layer 0 — `provenance_event` carries `contributor_ref`, so that reaches contributor identity
+  (C-02). Also pins that `leadwolf_er` never gets DELETE and no GRANT pairs `leadwolf_app` with a `master_`
+  table. **Adding a non-`master_`-prefixed Layer-0 table means adding it here AND to the REVOKE.**)
   + `rlsCoverage.test.ts` (static, DB-free: compares the tenant-scoped tables declared in `schema/*.ts` against
   the `CREATE POLICY` statements in `rls/*.sql`. The isolation itests prove the policies that EXIST work; this
   proves the SET is complete — add a table with a `tenant_id` and forget its policy and every isolation itest
